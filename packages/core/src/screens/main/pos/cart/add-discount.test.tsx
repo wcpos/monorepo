@@ -79,7 +79,11 @@ jest.mock('@wcpos/components/form', () => {
 					}
 				/>
 			) : (
-				<input value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+				<input
+					data-testid={testID}
+					value={value ?? ''}
+					onChange={(e) => onChange(e.target.value)}
+				/>
 			),
 		FormSwitch: ({
 			value,
@@ -111,13 +115,37 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/property-row', () => ({
 	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	PropertyRow: ({
+		label,
 		children,
 		trailing,
-	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
+	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode }>) => (
 		<div>
+			<span>{label}</span>
 			{children}
 			{trailing}
 		</div>
+	),
+}));
+// The select's options as a native select: a change picks that option's value.
+jest.mock('@wcpos/components/select', () => ({
+	OptionSelect: ({
+		options,
+		value,
+		onChange,
+		triggerTestID,
+	}: {
+		options: { value: string; label: string }[];
+		value?: string;
+		onChange: (value: string) => void;
+		triggerTestID?: string;
+	}) => (
+		<select data-testid={triggerTestID} value={value} onChange={(e) => onChange(e.target.value)}>
+			{options.map((option) => (
+				<option key={option.value} value={option.value}>
+					{option.label}
+				</option>
+			))}
+		</select>
 	),
 }));
 // The real control's segments as buttons: a press on a segment's testID selects that segment.
@@ -193,7 +221,13 @@ jest.mock('../../components/editable-number', () => ({
 		return <NumberInput {...props} />;
 	},
 }));
-jest.mock('../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
+jest.mock('../../components/tax-class-select', () => ({
+	TaxClassSelect: () => null,
+	useTaxClassOptions: () => [
+		{ label: 'Standard', value: 'standard' },
+		{ label: 'Reduced rate', value: 'reduced-rate' },
+	],
+}));
 jest.mock('../../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
@@ -312,3 +346,49 @@ it.each([false, true])(
 		expect(mockUpdate).toHaveBeenCalledWith('fee_lines', 'fee', { amount: '5' });
 	}
 );
+
+describe('Add Fee', () => {
+	it('is four rows: Fee name, Amount, Amount includes tax, Tax', () => {
+		render(<AddFee />);
+		for (const label of ['Fee Name', 'Amount', 'Amount Includes Tax', 'Tax'])
+			expect(screen.getByText(label)).toBeTruthy();
+		expect(screen.getByTestId('fee-name-input')).toBeTruthy();
+		expect(screen.getByTestId('fee-includes-tax-switch')).toBeTruthy();
+		expect((screen.getByTestId('fee-tax-select') as HTMLSelectElement).value).toBe(
+			'class:standard'
+		);
+	});
+	it("the amount row's % segment makes the fee a percentage", async () => {
+		render(<AddFee />);
+		fireEvent.click(screen.getByTestId('fee-percent-switch'));
+		expect(screen.getByTestId('fee-percent-switch').getAttribute('aria-checked')).toBe('true');
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: '5' } });
+		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+		await waitFor(() =>
+			expect(mockFee).toHaveBeenCalledWith(expect.objectContaining({ amount: '5', percent: true }))
+		);
+	});
+	it('Not taxable writes tax_status none and leaves the class', async () => {
+		render(<AddFee />);
+		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'status:none' } });
+		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+		await waitFor(() =>
+			expect(mockFee).toHaveBeenCalledWith(
+				expect.objectContaining({ tax_status: 'none', tax_class: '' })
+			)
+		);
+	});
+	it('a class makes the fee taxable in that class', async () => {
+		render(<AddFee />);
+		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'status:none' } });
+		fireEvent.change(screen.getByTestId('fee-tax-select'), {
+			target: { value: 'class:reduced-rate' },
+		});
+		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+		await waitFor(() =>
+			expect(mockFee).toHaveBeenCalledWith(
+				expect.objectContaining({ tax_status: 'taxable', tax_class: 'reduced-rate' })
+			)
+		);
+	});
+});

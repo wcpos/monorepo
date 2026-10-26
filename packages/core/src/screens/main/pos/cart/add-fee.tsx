@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
@@ -7,23 +6,16 @@ import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
-import {
-	Form,
-	FormField,
-	FormInput,
-	FormRadioGroup,
-	FormSelect,
-	FormSwitch,
-} from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormItem, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
+import { AmountUnitToggle } from '../../components/amount-unit-toggle';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { NumberInput } from '../../components/number-input';
-import { TaxClassSelect } from '../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { TaxSelect } from '../../components/tax-select';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddFee } from '../hooks/use-add-fee';
 
@@ -93,100 +85,78 @@ export function AddFee() {
 	 */
 	const onAdd = form.handleSubmit(handleAdd);
 
-	/**
-	 * Watch for changes to `percent`
-	 */
-	const togglePercentage = useWatch({ control: form.control, name: 'percent' });
+	const [percent, taxStatus, taxClass] = useWatch({
+		control: form.control,
+		name: ['percent', 'tax_status', 'tax_class'],
+	});
 
-	/**
-	 *
-	 */
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="name"
-					render={({ field }) => (
-						<FormInput
-							label={t('pos_cart.fee_name')}
-							placeholder={t('pos_cart.fee')}
-							testID="fee-name-input"
-							{...field}
-						/>
-					)}
-				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={togglePercentage ? NumberInput : CurrencyInput}
-									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
-									testID="fee-amount-input"
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<VStack className="flex-1 justify-center">
+				<PropertyList>
+					<PropertyRow label={t('pos_cart.fee_name')} nativeID="fee-name-form-item">
 						<FormField
 							control={form.control}
-							name="percent"
+							name="name"
 							render={({ field }) => (
-								<FormSwitch
-									label={t('pos_cart.percentage_of_cart_total')}
-									testID="fee-percent-switch"
-									{...field}
-								/>
+								<FormItem nativeID="fee-name">
+									<FormInput placeholder={t('pos_cart.fee')} testID="fee-name-input" {...field} />
+								</FormItem>
 							)}
 						/>
-						<FormField
-							control={form.control}
-							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch
-									label={t('pos_cart.amount_includes_tax')}
-									testID="fee-includes-tax-switch"
-									{...field}
-								/>
-							)}
+					</PropertyRow>
+					<PropertyRow label={t('pos_cart.amount')} nativeID="fee-amount-form-item">
+						<HStack className="gap-2">
+							<FormField
+								control={form.control}
+								name="amount"
+								render={({ field }) => (
+									<FormItem nativeID="fee-amount" className="flex-1">
+										<FormInput
+											customComponent={percent ? NumberInput : CurrencyInput}
+											testID="fee-amount-input"
+											{...field}
+										/>
+									</FormItem>
+								)}
+							/>
+							<AmountUnitToggle
+								percent={percent}
+								onChange={(next) => form.setValue('percent', next)}
+								testID="fee-percent-switch"
+								aria-labelledby="fee-amount-form-item"
+							/>
+						</HStack>
+					</PropertyRow>
+					<PropertyRow
+						label={t('pos_cart.amount_includes_tax')}
+						nativeID="fee-includes-tax-form-item"
+						trailing={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormItem nativeID="fee-includes-tax">
+										<FormSwitch testID="fee-includes-tax-switch" {...field} />
+									</FormItem>
+								)}
+							/>
+						}
+					/>
+					<PropertyRow label={t('common.tax')} nativeID="fee-tax-form-item">
+						<TaxSelect
+							status={taxStatus}
+							taxClass={taxClass ?? 'standard'}
+							onChange={(next) => {
+								form.setValue('tax_status', next.tax_status);
+								form.setValue('tax_class', next.tax_class);
+							}}
+							testID="fee-tax-select"
+							aria-labelledby="fee-tax-form-item"
 						/>
-					</VStack>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									customComponent={TaxClassSelect}
-									label={t('common.tax_class')}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
+					</PropertyRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter
 				close

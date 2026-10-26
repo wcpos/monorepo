@@ -19,20 +19,18 @@ interface Props extends SelectSingleRootProps {
 }
 
 /**
+ * The store's tax classes as select options, with the variation's 'parent' sentinel when asked.
  *
+ * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
+ * so we need to send an empty string instead.
+ * BUT! A select item can't have an empty string as a value, so we need to use 'standard'.
+ * It's a mess.
  */
-export function TaxClassSelect({ value, onValueChange, includeParent, ...props }: Props) {
+export function useTaxClassOptions(includeParent?: boolean) {
 	const t = useT();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses);
-
-	/**
-	 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
-	 * so we need to send an empty string instead.
-	 * BUT! A select item can't have an empty string as a value, so we need to use 'standard'.
-	 * It's a mess.
-	 */
-	const options = React.useMemo(() => {
+	return React.useMemo(() => {
 		const classOptions = ((taxClasses || []) as { name: string; slug: string }[]).map(
 			(taxClass: { name: string; slug: string }) => ({
 				label: taxClass.name,
@@ -44,6 +42,14 @@ export function TaxClassSelect({ value, onValueChange, includeParent, ...props }
 			? [{ label: t('common.tax_class_same_as_parent'), value: PARENT_TAX_CLASS }, ...classOptions]
 			: classOptions;
 	}, [includeParent, t, taxClasses]);
+}
+
+/**
+ *
+ */
+export function TaxClassSelect({ value, onValueChange, includeParent, ...props }: Props) {
+	const t = useT();
+	const options = useTaxClassOptions(includeParent);
 
 	/**
 	 *

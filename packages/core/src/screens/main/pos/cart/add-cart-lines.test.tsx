@@ -54,6 +54,9 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/property-row', () => ({
 	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	PropertyRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAdd: () => null,
+	PropertyVerb: () => null,
 }));
 
 jest.mock('@wcpos/components/hstack', () => ({
@@ -84,7 +87,8 @@ jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../components/number-input', () => ({ NumberInput: () => null }));
 jest.mock('../../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
 jest.mock('../../components/shipping-method-select', () => ({ ShippingMethodSelect: () => null }));
-jest.mock('../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
+jest.mock('../../components/tax-select', () => ({ TaxSelect: () => null }));
+jest.mock('../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
 jest.mock('../../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: mockAddFee }) }));
 jest.mock('../hooks/use-add-product', () => ({

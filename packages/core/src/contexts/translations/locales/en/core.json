@@ -701,6 +701,7 @@
 	"common.no_variation_found": "No variation found",
 	"common.none": "None",
 	"common.not_created": "{title} not created",
+	"common.not_taxable": "Not taxable",
 	"common.not_updated": "{title} not updated",
 	"common.notifications": "Notifications",
 	"common.on_backorder": "On Backorder",
