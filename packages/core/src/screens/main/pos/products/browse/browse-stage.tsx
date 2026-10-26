@@ -412,6 +412,7 @@ export function BrowseStage(props: BrowseStageProps) {
 		const showProducts = display !== 'subcategories' || children.length === 0;
 		// The grid's and the table's level take the same props (`children` is the child terms).
 		const level = {
+			source,
 			narrowed: props.narrowed,
 			term,
 			children,

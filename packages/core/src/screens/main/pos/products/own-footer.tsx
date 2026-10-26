@@ -10,6 +10,7 @@ import { ProductsFooter, type ProductsFooterProps } from './footer';
 export type OwnFooterNumbers = {
 	drawnCount: number;
 	total?: number | null;
+	prefix?: string;
 };
 
 export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ drawnCount: 0 });
@@ -21,11 +22,12 @@ export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ drawnCou
  * and its sync button, mid-sync — on every page.
  */
 export function OwnFooter(props: ProductsFooterProps) {
-	const { drawnCount, total } = React.useContext(OwnFooterContext);
+	const { drawnCount, total, prefix } = React.useContext(OwnFooterContext);
 	return (
 		<ProductsFooter
 			{...props}
 			drawnCount={drawnCount}
+			prefix={prefix}
 			total={total === undefined ? props.total : total}
 		/>
 	);
