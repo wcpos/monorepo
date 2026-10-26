@@ -82,6 +82,8 @@ export type PosterTileProps = {
 	grow?: boolean;
 	/** The Deal has its copy out on the stage. */
 	lifted?: boolean;
+	/** The frame's own layout: the Deal re-measures a lifted tile when it reflows. */
+	onLayout?: React.ComponentProps<typeof Pressable>['onLayout'];
 	onPress: () => void;
 	accessibilityLabel: string;
 	testID: string;
@@ -214,6 +216,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 		stackStyle,
 		grow,
 		lifted,
+		onLayout,
 		onPress,
 		accessibilityLabel,
 		testID,
@@ -233,6 +236,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 	return (
 		<Pressable
 			ref={ref}
+			onLayout={onLayout}
 			onPress={onPress}
 			style={lifted ? LIFTED : undefined}
 			accessibilityRole="button"

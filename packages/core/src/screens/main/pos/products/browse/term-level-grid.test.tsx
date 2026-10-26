@@ -100,6 +100,7 @@ jest.mock('../handle-footer', () => ({
 }));
 const placeGrid = jest.fn();
 jest.mock('../deal-stack', () => ({
+	useLiftedLayout: () => undefined,
 	DealCell: ({
 		children,
 		index,

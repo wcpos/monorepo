@@ -29,6 +29,7 @@ jest.mock('@wcpos/components/text', () => ({
 const mockCopyPicture = jest.fn(() => undefined);
 const mockDealCards = jest.fn(() => null);
 jest.mock('../deal-stack', () => ({
+	useLiftedLayout: () => undefined,
 	useCopyPicture: () => mockCopyPicture(),
 	useDealCards: () => mockDealCards(),
 }));

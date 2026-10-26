@@ -172,6 +172,7 @@ function MockStack({
 	);
 }
 jest.mock('../deal-stack', () => ({
+	useLiftedLayout: () => undefined,
 	DealStack: (props: Parameters<typeof MockStack>[0]) => <MockStack {...props} />,
 	DealStagedContext: jest.requireActual('react').createContext(null),
 	DealCell: ({ children }: React.PropsWithChildren) => <div>{children}</div>,

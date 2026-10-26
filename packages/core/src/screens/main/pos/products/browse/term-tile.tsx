@@ -14,7 +14,7 @@ import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
-import { type Measurable, useCopyPicture, useDealCards } from '../deal-stack';
+import { type Measurable, useCopyPicture, useDealCards, useLiftedLayout } from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
 
 // All products and a shortcut are not a category: their glyph on the last tint.
@@ -147,6 +147,7 @@ export function TermTile({
 	const tile = React.useRef<ViewInstance>(null);
 	const { label, mark, title, sub } = useTermWords(term);
 	const picture = useTermPicture(term);
+	const onLayout = useLiftedLayout(lifted);
 	return (
 		<PosterTile
 			ref={tile}
@@ -158,6 +159,7 @@ export function TermTile({
 			stacked
 			grow={dealt}
 			lifted={lifted}
+			onLayout={onLayout}
 			onPress={() => onPress(term, tile.current)}
 			accessibilityLabel={label}
 			testID={termTestId(term)}
