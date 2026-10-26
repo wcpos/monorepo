@@ -2,6 +2,13 @@ export const BROWSE_BY = ['all', 'categories', 'tags', 'brands', 'shortcuts'] as
 export type BrowseBy = (typeof BROWSE_BY)[number];
 export type TaxonomySource = 'categories' | 'tags' | 'brands';
 
+// Literal keys: the extractor skips a template key (scripts/extract-js-strings.js).
+export const TERMS_KEY = {
+	categories: 'pos_products.n_categories',
+	tags: 'pos_products.n_tags',
+	brands: 'pos_products.n_brands',
+} as const;
+
 /**
  * What a till browses by until the cashier chooses: categories (owner, 2026-10-07). The seed in
  * `ui-settings/initial-settings.json` carries the same literal; a test keeps the two together.

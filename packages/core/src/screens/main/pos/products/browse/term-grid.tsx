@@ -7,6 +7,7 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 
+import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { useUISettings } from '../../../contexts/ui-settings';
 import {
@@ -26,7 +27,7 @@ import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey, TERMS_KEY } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -122,6 +123,7 @@ export function TermLevelGrid({
 	children,
 	answer,
 	narrowed = false,
+	source,
 	settled,
 	showProducts,
 	crumb,
@@ -140,6 +142,7 @@ export function TermLevelGrid({
 	/** The products query's answer, attributed by the stage; `undefined` while it gathers. */
 	answer: LevelAnswer | undefined;
 	narrowed?: boolean;
+	source: Exclude<BrowseBy, 'all'>;
 	/** This level is the deepest: the query is its own (the stage's word). */
 	settled: boolean;
 	/** The display type is not `subcategories`. */
@@ -157,6 +160,11 @@ export function TermLevelGrid({
 	/** Shown under slot 0 when the level answered with no products and no child terms. */
 	empty: React.ReactNode;
 }) {
+	const t = useT();
+	const prefix =
+		children.length > 0 && source !== 'shortcuts'
+			? t(TERMS_KEY[source], { count: children.length })
+			: undefined;
 	// A level can be thousands of products: rows virtualise, and a `DealCell` in a row that has
 	// scrolled out is unmounted (its deal timing is by index, nothing is lost).
 	const scroller = useAnimatedRef<Animated.FlatList<number[]>>();
@@ -356,7 +364,12 @@ export function TermLevelGrid({
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (
 					<DealFade>
-						<HandleProductsFooter handle={handle} total={total} drawnCount={loaded} />
+						<HandleProductsFooter
+							handle={handle}
+							total={total}
+							drawnCount={loaded}
+							prefix={prefix}
+						/>
 					</DealFade>
 				)}
 			</View>

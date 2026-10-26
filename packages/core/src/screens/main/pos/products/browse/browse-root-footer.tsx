@@ -5,17 +5,11 @@ import type { QueryHandle } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryHandleFields } from '../../../../../query';
 import { HandleProductsFooter } from '../handle-footer';
+import { type BrowseBy, TERMS_KEY } from './browse-source';
 
 import type { SnapshotFields } from '../../../../../query';
-import type { BrowseBy } from './browse-source';
 
 type Shown = { drawn: number; total: number | null };
-// Literal keys: the extractor skips a template key (scripts/extract-js-strings.js).
-const TERMS_KEY = {
-	categories: 'pos_products.n_categories',
-	tags: 'pos_products.n_tags',
-	brands: 'pos_products.n_brands',
-} as const;
 const TOTAL_FIELD: SnapshotFields = ['total'];
 
 /**

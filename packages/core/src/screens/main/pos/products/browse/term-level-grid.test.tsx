@@ -8,8 +8,7 @@ import { TermLevelGrid } from './term-grid';
 // The shared loading row stays real; its animated native leaf does not run in jsdom.
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => <span /> }));
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (key: string, vars?: { count?: number }) =>
-		vars?.count !== undefined ? `${vars.count} ${key}` : key,
+	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
@@ -92,12 +91,18 @@ jest.mock('../handle-footer', () => ({
 	HandleProductsFooter: ({
 		drawnCount: count,
 		total,
+		prefix,
 	}: {
 		drawnCount: number;
 		total: number | null;
+		prefix?: string;
 	}) => {
 		mockFooterRenders.push({ count, total });
-		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
+		return (
+			<footer data-testid="products-footer" data-count={count} data-total={String(total)}>
+				{prefix && `${prefix} · `}Showing {count} of {total}
+			</footer>
+		);
 	},
 }));
 const placeGrid = jest.fn();
@@ -252,6 +257,7 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 // `total` is the live snapshot's census — never a level's denominator (the level hands its own).
 const handle = fakeQueryHandle({ total: 220 });
 const base = () => ({
+	source: 'categories',
 	term: drinks,
 	children: [hot],
 	answer: { hits: [{ record: latte }, { record: flat }], total: 80 },
@@ -565,9 +571,7 @@ it('Escape goes back one level', () => {
 it('is the All products level too: the All products tile in slot 0, no children', () => {
 	render(<TermLevelGrid {...level({ term: { kind: 'all' }, children: [] })} />);
 	expect(screen.getByTestId('cell-0').contains(screen.getByTestId('browse-parent'))).toBe(true);
-	expect(screen.getByTestId('browse-parent').textContent).toContain(
-		'pos_products.browse_all_products'
-	);
+	expect(screen.getByTestId('browse-parent').textContent).toContain('All products');
 	expect(screen.queryByTestId('browse-term-2')).toBeNull();
 	expect(screen.getByTestId('cell-2').contains(screen.getByTestId('product-f'))).toBe(true);
 });
@@ -589,4 +593,9 @@ it('shows loading for a short place, but not narrowed or empty answers', () => {
 	rerender(<TermLevelGrid {...props} answer={{ hits: [], total: 0 }} />);
 	expect(screen.getByTestId('no-data-message')).toBeTruthy();
 	expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+});
+
+it('includes two child terms alongside the level’s own product tally', () => {
+	render(<TermLevelGrid {...level({ children: [hot, { ...hot, id: 3, name: 'Cold' }] })} />);
+	expect(screen.getByTestId('products-footer').textContent).toBe('2 categories · Showing 2 of 80');
 });

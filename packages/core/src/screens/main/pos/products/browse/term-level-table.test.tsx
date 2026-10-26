@@ -11,8 +11,7 @@ jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { columns: [{ key: 'image', show: true }] } }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (key: string, vars?: { count?: number }) =>
-		vars?.count !== undefined ? `${vars.count} ${key}` : key,
+	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => 'fine',
@@ -178,9 +177,21 @@ jest.mock('../rows/variable-product-row', () => ({
 // would have painted, not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
-	ProductsFooter: ({ drawnCount: count, total }: { drawnCount: number; total: number | null }) => {
+	ProductsFooter: ({
+		drawnCount: count,
+		total,
+		prefix,
+	}: {
+		drawnCount: number;
+		total: number | null;
+		prefix?: string;
+	}) => {
 		mockFooterRenders.push({ count, total });
-		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
+		return (
+			<footer data-testid="products-footer" data-count={count} data-total={String(total)}>
+				{prefix && `${prefix} · `}Showing {count} of {total}
+			</footer>
+		);
 	},
 }));
 // The handle as a reader sees it (one snapshot, driven with `set`): the level reads the paging
@@ -248,6 +259,7 @@ const hot = { kind: 'term' as const, id: 2, name: 'Hot', count: 6, parent: 1 };
 const latte = { uuid: 'l', payload: { type: 'variable' } };
 const flat = { uuid: 'f', payload: { type: 'simple' } };
 const base = () => ({
+	source: 'categories',
 	term: drinks,
 	children: [hot],
 	answer: {
@@ -626,4 +638,9 @@ it('shows loading for a short place, but not narrowed or empty answers', () => {
 	rerender(<TermLevelTable {...props} answer={{ hits: [], total: 0 }} />);
 	expect(screen.getByTestId('no-data-message')).toBeTruthy();
 	expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+});
+
+it('includes two child terms alongside the level’s own product tally', () => {
+	render(<TermLevelTable {...level({ children: [hot, { ...hot, id: 3, name: 'Cold' }] })} />);
+	expect(screen.getByTestId('products-footer').textContent).toBe('2 categories · Showing 2 of 80');
 });

@@ -13,7 +13,10 @@ import { useCollectionReset } from '../../hooks/use-collection-reset';
 import type { DataTableFooterProps } from '../../components/data-table/footer';
 
 /** The footer contract every table footer takes (`DataTableFooterProps`): values only. */
-export type ProductsFooterProps = Omit<DataTableFooterProps, 'children'> & { label?: string };
+export type ProductsFooterProps = Omit<DataTableFooterProps, 'children'> & {
+	label?: string;
+	prefix?: string;
+};
 
 /**
  * The products caption row, values in: the table hands them from its handles, a browse level or
@@ -26,11 +29,14 @@ export function ProductsFooter({
 	sync,
 	drawnCount,
 	label,
+	prefix,
 }: ProductsFooterProps) {
 	const { calcTaxes } = useTaxSettings();
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();
 	const t = useT();
+	const withPrefix = (products: string) =>
+		prefix === undefined ? products : t('pos_products.root_tally', { terms: prefix, products });
 	return (
 		// Same caption row as the data-table footer: on the ground, no rule, its content's height (the
 		// `xs` sync button, 6 units); its mount aligns the text with the card's cells (`CaptionRowInset`).
@@ -44,19 +50,21 @@ export function ProductsFooter({
 				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{label ??
-						(total === null
-							? t('common.showing_n', { shown: drawnCount.toLocaleString() })
-							: drawnCount < total
-								? t('common.showing_of', {
-										shown: drawnCount.toLocaleString(),
-										total: total.toLocaleString(),
-									})
-								: t(
-										collectionName === 'variations'
-											? 'pos_products.n_options'
-											: 'pos_products.n_products',
-										{ count: total }
-									))}
+						withPrefix(
+							total === null
+								? t('common.showing_n', { shown: drawnCount.toLocaleString() })
+								: drawnCount < total
+									? t('common.showing_of', {
+											shown: drawnCount.toLocaleString(),
+											total: total.toLocaleString(),
+										})
+									: t(
+											collectionName === 'variations'
+												? 'pos_products.n_options'
+												: 'pos_products.n_products',
+											{ count: total }
+										)
+						)}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{drawnCount}

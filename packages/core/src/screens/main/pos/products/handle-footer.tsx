@@ -22,6 +22,7 @@ export function HandleProductsFooter({
 	drawnCount,
 	collectionName = 'products',
 	label,
+	prefix,
 }: {
 	handle: QueryHandle;
 	total: number | null;
@@ -29,6 +30,7 @@ export function HandleProductsFooter({
 	/** The collection the sync button's clear-and-sync resets: the variations pane's own. */
 	collectionName?: ProductsFooterProps['collectionName'];
 	label?: string;
+	prefix?: string;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	// Mounted outside DataTable, under the POS grid or card: the inset DataTable's own footer
@@ -42,6 +44,7 @@ export function HandleProductsFooter({
 				sync={handle.sync}
 				drawnCount={drawnCount}
 				label={label}
+				prefix={prefix}
 			/>
 		</CaptionRowInset>
 	);

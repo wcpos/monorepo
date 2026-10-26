@@ -82,7 +82,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
+	useT: jest.fn(() => (key: string, values?: object) => JSON.stringify({ key, ...values })),
 }));
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
@@ -391,6 +391,7 @@ it('a label replaces the sentence without changing the raw markers', () => {
 			total={218}
 			drawnCount={16}
 			label="3 categories · 16 products"
+			prefix="7 categories"
 			active={false}
 			sync={jest.fn()}
 		/>
@@ -399,3 +400,32 @@ it('a label replaces the sentence without changing the raw markers', () => {
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('16');
 	expect(screen.getByTestId('data-table-total-count').textContent).toBe('218');
 });
+
+it.each([
+	[16, 16, '7 categories · 16 products'],
+	[161, 16, '7 categories · Showing 16 of 161'],
+	[0, 0, '7 categories · 0 products'],
+	[null, 16, '7 categories · Showing 16'],
+] as const)(
+	'prefixes the product sentence for total %s and drawn %s',
+	(total, drawnCount, text) => {
+		jest
+			.requireMock('../../../../contexts/translations')
+			.useT.mockReturnValueOnce(jest.requireActual('../../../../../jest/translate').createTestT());
+		render(
+			<ProductsFooter
+				collectionName="products"
+				total={total}
+				drawnCount={drawnCount}
+				prefix="7 categories"
+				active={false}
+				sync={jest.fn()}
+			/>
+		);
+		expect(screen.getByTestId('data-table-count').textContent).toBe(text);
+		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe(String(drawnCount));
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe(
+			total === null ? '' : String(total)
+		);
+	}
+);

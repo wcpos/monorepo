@@ -6,6 +6,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { Suspense } from '@wcpos/components/suspense';
 
+import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { DataTable } from '../../../components/data-table';
 import { TableSurface } from '../../../components/data-table/surface';
@@ -16,7 +17,7 @@ import { OwnFooter, OwnFooterContext } from '../own-footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey, TERMS_KEY } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow, useImageColumnShown } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -174,6 +175,7 @@ export function TermLevelTable({
 	children,
 	answer,
 	narrowed = false,
+	source,
 	settled,
 	showProducts,
 	crumb,
@@ -194,6 +196,7 @@ export function TermLevelTable({
 	/** The products query's answer, attributed by the stage; `undefined` while it gathers. */
 	answer: LevelAnswer | undefined;
 	narrowed?: boolean;
+	source: Exclude<BrowseBy, 'all'>;
 	/** This level is the deepest: the query is its own (the stage's word). */
 	settled: boolean;
 	/** The display type is not `subcategories`. */
@@ -214,6 +217,11 @@ export function TermLevelTable({
 	/** index.tsx's `noDataMessage`: the level answered with no products and has no child terms. */
 	empty: React.ReactNode;
 }) {
+	const t = useT();
+	const prefix =
+		children.length > 0 && source !== 'shortcuts'
+			? t(TERMS_KEY[source], { count: children.length })
+			: undefined;
 	const showImage = useImageColumnShown();
 	// This pane's own answer, held while the shared query is another level's (level-snapshot.ts).
 	const shown = useLevelSnapshot(answer, settled);
@@ -235,7 +243,10 @@ export function TermLevelTable({
 				: Math.max(placeSize ?? 0, shown.total);
 	// The table's footer counts the pane's own rows, never the live handle's window — through
 	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
-	const footer = React.useMemo(() => ({ total, drawnCount: loaded }), [total, loaded]);
+	const footer = React.useMemo(
+		() => ({ total, drawnCount: loaded, prefix }),
+		[total, loaded, prefix]
+	);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
 	// its own rows, as the level grid does — and an end-reached while the demand is pending is
 	// armed and fired once it clears (FlashList will not fire again for the same rows):
