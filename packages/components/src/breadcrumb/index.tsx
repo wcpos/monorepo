@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { View, type ViewInstance, type ViewProps } from 'react-native';
+import { Pressable, View, type ViewInstance, type ViewProps } from 'react-native';
 
-import { Button } from '../button';
 import { HStack } from '../hstack';
 import { Icon } from '../icon';
+import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -11,20 +11,19 @@ type Crumb = { label: string; onPress: () => void; testID?: string };
 export type BreadcrumbProps = ViewProps & {
 	parents: readonly [Crumb, ...Crumb[]];
 	here?: string;
-	detail?: string;
 	autoFocus?: boolean;
 };
 
 export function Breadcrumb({
 	parents,
 	here,
-	detail,
 	autoFocus,
 	children,
 	testID,
 	className,
 	...props
 }: BreadcrumbProps) {
+	const phone = useIsPhone();
 	const backRef = React.useRef<ViewInstance>(null);
 	const focusOnMount = React.useRef(autoFocus);
 	// Drill-in focus is a mount action, never a response to changing parents.
@@ -39,9 +38,7 @@ export function Breadcrumb({
 	}, []);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const separator = (
-		<Text className="text-border text-lg" aria-hidden>
-			›
-		</Text>
+		<Icon name="chevronRight" size="xs" className="text-muted-foreground" aria-hidden />
 	);
 	return (
 		<HStack
@@ -49,38 +46,41 @@ export function Breadcrumb({
 			className={cn('min-h-ctl flex-wrap items-center gap-1 pr-2', className)}
 			{...props}
 		>
-			{parents.map((parent, index) => (
-				<React.Fragment key={index}>
-					{index > 0 && separator}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="min-h-ctl h-auto py-1"
-						onPress={parent.onPress}
-						testID={parent.testID ?? id(`parent-${index}`)}
-						{...{ ref: index === parents.length - 1 ? backRef : undefined }}
-					>
-						<TextClassContext.Provider value={undefined}>
-							<HStack className="max-w-full gap-1">
-								{index === parents.length - 1 && <Icon name="chevronLeft" size="sm" />}
-								<Text className="text-foreground shrink font-medium">{parent.label}</Text>
-							</HStack>
-						</TextClassContext.Provider>
-					</Button>
-				</React.Fragment>
-			))}
+			{parents.map((parent, index) =>
+				phone && index < parents.length - 1 ? null : (
+					<React.Fragment key={index}>
+						{!phone && index > 0 && separator}
+						{/* The Pressable is the target: the row's height (`min-h-ctl`), because React Native
+						    Web ignores `hitSlop` (lib/min-target.ts). The hover surface is the inner view,
+						    drawn to the word (ledger line 8). */}
+						<Pressable
+							role="button"
+							className="min-h-ctl max-w-full justify-center"
+							onPress={parent.onPress}
+							testID={parent.testID ?? id(`parent-${index}`)}
+							{...{ ref: index === parents.length - 1 ? backRef : undefined }}
+						>
+							{({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => (
+								<View className={cn('rounded-md px-2 py-1', (hovered || pressed) && 'bg-muted')}>
+									<TextClassContext.Provider value={undefined}>
+										<HStack className="max-w-full gap-1">
+											{phone && <Icon name="chevronLeft" size="sm" />}
+											<Text className="text-foreground shrink font-medium">{parent.label}</Text>
+										</HStack>
+									</TextClassContext.Provider>
+								</View>
+							)}
+						</Pressable>
+					</React.Fragment>
+				)
+			)}
 			{here !== undefined && (
 				<>
-					{separator}
+					{!phone && separator}
 					<Text testID={id('here')} className="text-foreground shrink px-1 font-semibold">
 						{here}
 					</Text>
 				</>
-			)}
-			{detail !== undefined && (
-				<Text testID={id('detail')} className="text-muted-foreground">
-					{detail}
-				</Text>
 			)}
 			{children && <View className="ml-auto flex-row items-center gap-2">{children}</View>}
 		</HStack>

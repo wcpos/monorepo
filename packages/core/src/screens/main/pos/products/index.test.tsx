@@ -84,6 +84,8 @@ jest.mock('../../../../query', () => {
 	return {
 		...actual,
 		useProductsQueryHandle: (state: unknown) => mockUseProductsQueryHandle(state),
+		// The empty state's census; the fake handle has no snapshot to read.
+		useQueryHandleFields: () => ({ ready: false, total: null }),
 		useScopeKey: () => mockScopeKey,
 	};
 });
@@ -158,6 +160,7 @@ jest.mock('./filter-bar/filter-bar', () => ({
 		mockFilterBarProps = props;
 		return null;
 	},
+	useActiveConditionLabels: () => [],
 }));
 jest.mock('../../components/query-search-input', () => ({
 	QuerySearchInput: ({ ref, testID }: { ref?: React.Ref<HTMLInputElement>; testID?: string }) => (
@@ -180,6 +183,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 			gridColumns$: mockGridColumns,
 			browseBy$: mockBrowseBy,
 		},
+		getUILabel: (id: string) => id,
 	}),
 }));
 jest.mock('../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));

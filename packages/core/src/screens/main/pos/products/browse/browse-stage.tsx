@@ -67,6 +67,9 @@ export type BrowseStageProps = {
 	empty: React.ReactNode;
 	variationsStyle: string;
 	stockStatus?: string;
+	/** Something narrows the query beyond the place (level-place.ts `narrowedBeyondPlace`): the
+	 * footers count the matches, not the place's size. */
+	narrowed?: boolean;
 	/** The root products handle, state, actions and table config, as index.tsx hands its own. */
 	handle: QueryHandle;
 	state: { sort: QueryStateOf<'products'>['sort'] };
@@ -145,7 +148,9 @@ export function BrowseStage(props: BrowseStageProps) {
 		if (!deepestEntry) return null;
 		const quickFilter =
 			deepestEntry.term.kind === 'shortcut' ? terms.quickFilterFor(deepestEntry.term) : undefined;
-		return quickFilter ? { field, quickFilter } : { field };
+		const term =
+			terms.all?.find((term) => termKey(term) === termKey(deepestEntry.term)) ?? deepestEntry.term;
+		return { field, quickFilter, term };
 	}, [deepestEntry, field, terms]);
 	React.useLayoutEffect(() => onLevelChange?.(place), [place, onLevelChange]);
 	React.useLayoutEffect(() => () => onLevelChange?.(null), [onLevelChange]);
@@ -368,6 +373,8 @@ export function BrowseStage(props: BrowseStageProps) {
 	const renderRoot = () =>
 		viewMode === 'grid' ? (
 			<BrowseRootGrid
+				source={source}
+				narrowed={props.narrowed}
 				terms={roots}
 				onOpen={openRootTerm}
 				handle={handle}
@@ -375,6 +382,8 @@ export function BrowseStage(props: BrowseStageProps) {
 			/>
 		) : (
 			<BrowseRootTable
+				source={source}
+				narrowed={props.narrowed}
 				terms={roots}
 				onOpen={openRootTerm}
 				handle={handle}
@@ -403,6 +412,7 @@ export function BrowseStage(props: BrowseStageProps) {
 		const showProducts = display !== 'subcategories' || children.length === 0;
 		// The grid's and the table's level take the same props (`children` is the child terms).
 		const level = {
+			narrowed: props.narrowed,
 			term,
 			children,
 			answer,

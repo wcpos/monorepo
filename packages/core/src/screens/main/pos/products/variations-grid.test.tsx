@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { ProductsFooter } from './footer';
 import { VariationsGrid } from './variations-grid';
 import { ParentTile, VariationTile } from './tiles/variation-tile';
 
@@ -19,6 +20,10 @@ const order = {
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('../hooks/use-add-product', () => ({ useAddProduct: () => ({}) }));
 jest.mock('../../components/data-table/rows', () => ({ DataTableRow: () => null }));
+jest.mock('../../../../query', () => ({
+	...jest.requireActual('../../../../query'),
+	useQueryStateActions: () => ({}),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 	useRecordField: (record: object, select: (value: object) => unknown) => select(record),
@@ -83,7 +88,9 @@ jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -97,26 +104,28 @@ jest.mock('@wcpos/components/status-badge', () => ({
 }));
 // The footer row as the handle footer hands it values: the real HandleProductsFooter reads
 // `active` from the handle and passes the grid's count and denominator through.
+jest.mock('../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
+jest.mock('../../hooks/use-collection-reset', () => ({
+	useCollectionReset: () => ({ clearAndSync: jest.fn() }),
+}));
+jest.mock('../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
+jest.mock('../../components/sync-button', () => ({ SyncButton: () => null }));
 jest.mock('./footer', () => ({
-	ProductsFooter: ({
-		children,
-		drawnCount: count,
-		total,
-		active,
-		collectionName,
-	}: React.PropsWithChildren<{
-		drawnCount: number;
-		total: number | null;
-		active: boolean;
-		collectionName: string;
-	}>) => (
-		<footer data-testid="footer" data-active={String(active)} data-collection={collectionName}>
-			{children}
-			<output>
-				{count} of {String(total)}
-			</output>
-		</footer>
-	),
+	ProductsFooter: (props: React.ComponentProps<typeof import('./footer').ProductsFooter>) => {
+		const { ProductsFooter } = jest.requireActual('./footer');
+		return (
+			<footer
+				data-testid="footer"
+				data-active={String(props.active)}
+				data-collection={props.collectionName}
+			>
+				<ProductsFooter {...props} />
+				<output>
+					{props.drawnCount} of {String(props.total)}
+				</output>
+			</footer>
+		);
+	},
 }));
 jest.mock('../../components/product/price-with-tax', () => ({
 	PriceWithTax: ({ price, strikethrough }: { price: string; strikethrough?: boolean }) => (
@@ -234,7 +243,7 @@ it('holds a slot for every variation until the query answers, so the deal never 
 	expect(screen.getByTestId('cell-1').contains(screen.getByTestId('variation-tile-1'))).toBe(true);
 	expect(screen.getByTestId('cell-2').contains(screen.getByTestId('variation-tile-2'))).toBe(true);
 	expect(screen.getByTestId('footer').textContent).toContain('2 of 4');
-	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_variations_of');
+	expect(screen.getByTestId('footer').textContent).toContain('common.showing_of');
 });
 
 it('keeps a slot for what a cold refresh has not brought yet, and only while it runs', () => {
@@ -267,7 +276,7 @@ it('filters displayed stock like the rows do and counts shown of the parent tota
 	);
 	expect(screen.getAllByTestId('variation-tile')).toHaveLength(1);
 	expect(screen.getByTestId('variation-tile-1')).not.toBeNull();
-	expect(screen.getByTestId('footer').textContent).toContain('1 of 4');
+	expect(screen.getByTestId('footer').textContent).toContain('1 of 1');
 });
 
 it('without a parent list, counts against the handle total once it has answered, and resets variations', () => {
@@ -338,4 +347,55 @@ it('shows managed stock as a pill and low stock from the variation’s own thres
 		'"count":2'
 	);
 	expect(screen.queryByTestId('stock')).toBeNull();
+});
+
+it('uses the stock matches as the footer denominator and collapses the sentence', () => {
+	render(
+		<VariationsGrid
+			parent={parent}
+			back={jest.fn()}
+			handle={handle}
+			hits={hits}
+			stockStatus="instock"
+		/>
+	);
+	expect(screen.getByTestId('footer').textContent).toContain('1 of 1');
+	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_options');
+});
+
+it.each([
+	[null, 2, 'common.showing_n'],
+	[4, 2, 'common.showing_of'],
+	[2, 2, 'pos_products.n_products'],
+	[2, 3, 'pos_products.n_products'],
+] as const)('renders the footer sentence for total %s and drawn %s', (total, drawnCount, key) => {
+	render(
+		<ProductsFooter
+			collectionName="products"
+			total={total}
+			drawnCount={drawnCount}
+			active={false}
+			sync={jest.fn()}
+		/>
+	);
+	expect(screen.getByTestId('data-table-count').textContent).toContain(key);
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe(String(drawnCount));
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe(
+		total === null ? '' : String(total)
+	);
+});
+it('a label replaces the sentence without changing the raw markers', () => {
+	render(
+		<ProductsFooter
+			collectionName="products"
+			total={218}
+			drawnCount={16}
+			label="3 categories · 16 products"
+			active={false}
+			sync={jest.fn()}
+		/>
+	);
+	expect(screen.getByTestId('data-table-count').textContent).toBe('3 categories · 16 products');
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('16');
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe('218');
 });

@@ -310,7 +310,7 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	expect(props.onDrillProduct).toHaveBeenCalledWith(latte);
 });
 
-it('puts the crumb in a row of its own above the grid, its detail the query total', () => {
+it('puts the crumb in a row of its own above the grid, the footer alone owns the count', () => {
 	const props = level();
 	render(<TermLevelGrid {...props} />);
 	const crumb = screen.getByTestId('products-breadcrumb');
@@ -320,9 +320,7 @@ it('puts the crumb in a row of its own above the grid, its detail the query tota
 	expect(crumb.compareDocumentPosition(slots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	expect(screen.getAllByTestId('fades')[0].contains(crumb)).toBe(true);
 	// The query TOTAL, not the two loaded rows.
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'80 pos_products.n_products'
-	);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
 	// The last parent is the crumb's way back and keeps the stable back testID.
 	fireEvent.click(screen.getByTestId('products-breadcrumb-back'));
@@ -395,9 +393,7 @@ it('keeps its own products while a child level is over it', () => {
 	);
 	expect(screen.getByTestId('product-f')).not.toBeNull();
 	expect(screen.queryByTestId('product-x')).toBeNull();
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'80 pos_products.n_products'
-	);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 });
 
 it('shows only child terms, and no products footer, for a subcategories display type', () => {
@@ -572,4 +568,12 @@ it('is the All products level too: the All products tile in slot 0, no children'
 	);
 	expect(screen.queryByTestId('browse-term-2')).toBeNull();
 	expect(screen.getByTestId('cell-2').contains(screen.getByTestId('product-f'))).toBe(true);
+});
+
+it('uses the place size until conditions narrow the level to local matches', () => {
+	const props = level({ term: { ...drinks, count: 200 } });
+	const { rerender } = render(<TermLevelGrid {...props} />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('200');
+	rerender(<TermLevelGrid {...props} narrowed />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 });

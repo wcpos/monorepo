@@ -13,11 +13,11 @@ import { useCollectionReset } from '../../hooks/use-collection-reset';
 import type { DataTableFooterProps } from '../../components/data-table/footer';
 
 /** The footer contract every table footer takes (`DataTableFooterProps`): values only. */
-export type ProductsFooterProps = DataTableFooterProps;
+export type ProductsFooterProps = Omit<DataTableFooterProps, 'children'> & { label?: string };
 
 /**
  * The products caption row, values in: the table hands them from its handles, a browse level or
- * the variations grid from its own (`HandleProductsFooter`). The tax notice unless given children.
+ * the variations grid from its own (`HandleProductsFooter`). The tax notice is the left slot.
  */
 export function ProductsFooter({
 	collectionName,
@@ -25,7 +25,7 @@ export function ProductsFooter({
 	total,
 	sync,
 	drawnCount,
-	children,
+	label,
 }: ProductsFooterProps) {
 	const { calcTaxes } = useTaxSettings();
 	const { clearAndSync } = useCollectionReset(collectionName);
@@ -38,17 +38,25 @@ export function ProductsFooter({
 			{/* The caption slot fills the row; its child keeps its own width (shrinkable, never grown),
 			    so the tax trigger is pressable on its text and icons alone, not across the footer. */}
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">
-				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}
+				{calcTaxes ? <TaxBasedOn /> : null}
 			</HStack>
 			<HStack className="shrink-0 gap-0">
 				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
-					{total === null
-						? t('common.showing_n', { shown: drawnCount.toLocaleString() })
-						: t('common.showing_of', {
-								shown: drawnCount.toLocaleString(),
-								total: total.toLocaleString(),
-							})}
+					{label ??
+						(total === null
+							? t('common.showing_n', { shown: drawnCount.toLocaleString() })
+							: drawnCount < total
+								? t('common.showing_of', {
+										shown: drawnCount.toLocaleString(),
+										total: total.toLocaleString(),
+									})
+								: t(
+										collectionName === 'variations'
+											? 'pos_products.n_options'
+											: 'pos_products.n_products',
+										{ count: total }
+									))}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{drawnCount}

@@ -2,12 +2,20 @@ import * as React from 'react';
 
 import type { QueryHandle } from '@wcpos/query';
 
+import { useT } from '../../../../../contexts/translations';
 import { useQueryHandleFields } from '../../../../../query';
 import { HandleProductsFooter } from '../handle-footer';
 
 import type { SnapshotFields } from '../../../../../query';
+import type { BrowseBy } from './browse-source';
 
 type Shown = { drawn: number; total: number | null };
+// Literal keys: the extractor skips a template key (scripts/extract-js-strings.js).
+const TERMS_KEY = {
+	categories: 'pos_products.n_categories',
+	tags: 'pos_products.n_tags',
+	brands: 'pos_products.n_brands',
+} as const;
 const TOTAL_FIELD: SnapshotFields = ['total'];
 
 /**
@@ -27,19 +35,45 @@ const TOTAL_FIELD: SnapshotFields = ['total'];
 export function BrowseRootFooter({
 	handle,
 	settled = true,
+	source,
+	termCount,
+	narrowed,
 }: {
 	handle: QueryHandle;
+	source: Exclude<BrowseBy, 'all'>;
+	termCount: number;
+	narrowed: boolean;
 	/** The stage's path is empty: the shared query is the root's own. */
 	settled?: boolean;
 }) {
+	const t = useT();
 	const snapshot = useQueryHandleFields(handle, TOTAL_FIELD);
+	const matches = snapshot.result.count ?? snapshot.hits.length;
 	const live: Shown | undefined =
 		settled && snapshot.ready
-			? { drawn: snapshot.total ?? snapshot.hits.length, total: snapshot.total }
+			? {
+					drawn: narrowed ? matches : (snapshot.total ?? matches),
+					total: snapshot.total,
+				}
 			: undefined;
 	// The last root numbers (React's "previous render" pattern: settles in one pass).
 	const [held, setHeld] = React.useState<Shown>();
 	if (live && (held?.drawn !== live.drawn || held.total !== live.total)) setHeld(live);
 	const shown = live ?? held ?? { drawn: snapshot.ready ? snapshot.hits.length : 0, total: null };
-	return <HandleProductsFooter handle={handle} total={shown.total} drawnCount={shown.drawn} />;
+	const products = t('pos_products.n_products', { count: shown.drawn });
+	const label =
+		source === 'shortcuts'
+			? products
+			: t('pos_products.root_tally', {
+					terms: t(TERMS_KEY[source], { count: termCount }),
+					products,
+				});
+	return (
+		<HandleProductsFooter
+			handle={handle}
+			total={shown.total}
+			drawnCount={shown.drawn}
+			label={label}
+		/>
+	);
 }

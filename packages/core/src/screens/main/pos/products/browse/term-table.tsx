@@ -6,7 +6,6 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { Suspense } from '@wcpos/components/suspense';
 
-import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { DataTable } from '../../../components/data-table';
 import { TableSurface } from '../../../components/data-table/surface';
@@ -16,7 +15,7 @@ import { OwnFooter, OwnFooterContext } from '../own-footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseTerm, termKey } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow, useImageColumnShown } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -25,7 +24,7 @@ import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../.
 
 // Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
 // the table reads the rows from the stage's answer, the footer the spinner itself.
-const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
+const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted', 'total'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
 const ALL: BrowseTerm = { kind: 'all' };
@@ -36,8 +35,12 @@ export function BrowseRootTable({
 	onOpen,
 	handle,
 	settled,
+	source = 'categories',
+	narrowed = false,
 }: {
 	terms: BrowseTerm[];
+	source?: Exclude<BrowseBy, 'all'>;
+	narrowed?: boolean;
 	onOpen: (term: BrowseTerm) => void;
 	/** The root products handle: the till's footer under the term set. */
 	handle?: QueryHandle;
@@ -64,7 +67,15 @@ export function BrowseRootTable({
 					/>
 				</VirtualizedList.Root>
 			</TableSurface>
-			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
+			{handle && (
+				<BrowseRootFooter
+					handle={handle}
+					settled={settled}
+					source={source}
+					termCount={terms.length}
+					narrowed={narrowed}
+				/>
+			)}
 		</View>
 	);
 }
@@ -158,8 +169,10 @@ function HeldRows({
  * children. The rows travel with their pane; none animates on its own.
  */
 export function TermLevelTable({
+	term,
 	children,
 	answer,
+	narrowed = false,
 	settled,
 	showProducts,
 	crumb,
@@ -179,11 +192,12 @@ export function TermLevelTable({
 	children: BrowseTerm[];
 	/** The products query's answer, attributed by the stage; `undefined` while it gathers. */
 	answer: LevelAnswer | undefined;
+	narrowed?: boolean;
 	/** This level is the deepest: the query is its own (the stage's word). */
 	settled: boolean;
 	/** The display type is not `subcategories`. */
 	showProducts: boolean;
-	/** The crumb's detail (`N products`) is the level's own, from its snapshot. */
+	/** The place, without a second count. */
 	crumb: { parents: Crumb[]; here: string };
 	/** Escape / edge swipe; the crumb's last parent is the same step. */
 	back: () => void;
@@ -200,18 +214,22 @@ export function TermLevelTable({
 	empty: React.ReactNode;
 }) {
 	const showImage = useImageColumnShown();
-	const t = useT();
 	// This pane's own answer, held while the shared query is another level's (level-snapshot.ts).
 	const shown = useLevelSnapshot(answer, settled);
 	const loaded = shown?.hits.length ?? 0;
-	const detail =
-		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this pane's too (as the variations footer takes its parent's count),
 	// not the live handle's, which may already be another level's; `null` (no denominator)
 	// until it has one. Handed as a value (the footer's `total`), never wrapped as a stream: a
 	// stream lands one commit after the count, and a changed answer would paint the new count over
 	// the old denominator for a frame.
-	const total = shown?.total ?? null;
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	const placeSize = term.kind === 'term' ? term.count : term.kind === 'all' ? snapshot.total : 0;
+	const total =
+		shown?.total === undefined
+			? null
+			: narrowed
+				? shown.total
+				: Math.max(placeSize ?? 0, shown.total);
 	// The table's footer counts the pane's own rows, never the live handle's window — through
 	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
 	const footer = React.useMemo(() => ({ total, drawnCount: loaded }), [total, loaded]);
@@ -222,7 +240,6 @@ export function TermLevelTable({
 	// kept mounted but inactive (native small screens, Cart showing) lays out at zero size, and
 	// zero geometry reads as end-reached. A pane a child is over does not own the query: it may
 	// not move it.
-	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
 	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
 	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
 	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
@@ -260,13 +277,7 @@ export function TermLevelTable({
 		<LevelBack onBack={back} testID="browse-level">
 			{/* The crumb is a row of its own on the ground above the table (drill-in.tsx): never
 			    over the rows, never inside the card. */}
-			<Breadcrumb
-				parents={parents}
-				here={crumb.here}
-				detail={detail}
-				autoFocus
-				testID="products-breadcrumb"
-			/>
+			<Breadcrumb parents={parents} here={crumb.here} autoFocus testID="products-breadcrumb" />
 			<View
 				className="min-h-0 flex-1"
 				testID="browse-level-rows"

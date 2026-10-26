@@ -1,6 +1,7 @@
 import { quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
 import { filtersAtBaseline, sameFilterValue, type TaxonomyField } from './use-browse-path';
 
+import type { BrowseTerm } from './browse-source';
 import type { FiltersOf, QueryStateActions } from '../../../../../query';
 import type { QuickFilter } from '../filter-bar/filter-bar-layout';
 
@@ -13,6 +14,7 @@ import type { QuickFilter } from '../filter-bar/filter-bar-layout';
 export type LevelPlace = {
 	/** The source's own field (a Categories, Tags or Brands stage); null under Shortcuts. */
 	field: TaxonomyField | null;
+	term?: BrowseTerm;
 	/** The shortcut the level is, when it is one: its own conditions are the place's. */
 	quickFilter?: QuickFilter;
 };
@@ -58,6 +60,22 @@ export function conditionsBeyond(
 		state.search.trim() !== own.search.trim() || !filtersAtBaseline(state.filters, own.filters)
 	);
 }
+
+/**
+ * Whether anything narrows the query beyond the place and the bare baseline (published products):
+ * the footer's denominator follows the matches when it does, the place's server number when it does
+ * not ("containers show size, lists show results", 2026-10-26). Unlike `conditionsBeyond`, the
+ * store's hide-out-of-stock setting counts: it is not a condition the cashier can clear, but it
+ * narrows what the grid can ever show, and a denominator above it would promise products that never
+ * come.
+ */
+export function narrowedBeyondPlace(
+	place: LevelPlace | null,
+	state: { search: string; filters: FiltersOf<'products'> }
+): boolean {
+	return conditionsBeyond(place, state, BARE_BASELINE);
+}
+const BARE_BASELINE: Record<string, unknown> = { status: 'publish' };
 
 /**
  * Clear filters, as the filter bar's Clear all and the empty state's Clear filters both mean it:

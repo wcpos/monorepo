@@ -38,7 +38,6 @@ export function DrillIn({
 	renderPane?: (parent: EngineRecord<'products'>) => React.ReactNode;
 }) {
 	const name = useDocField(parent, (value) => value.payload.name);
-	const count = useDocField(parent, (value) => value.payload.variations?.length ?? 0);
 	const t = useT();
 	// The Breadcrumb's last parent is its back control; it keeps the stable back testID.
 	const crumbParents: [Crumb, ...Crumb[]] =
@@ -54,13 +53,7 @@ export function DrillIn({
 					},
 				];
 	const crumb = (
-		<Breadcrumb
-			parents={crumbParents}
-			here={name}
-			detail={t('pos_products.n_variations', { count })}
-			autoFocus
-			testID="products-breadcrumb"
-		/>
+		<Breadcrumb parents={crumbParents} here={name} autoFocus testID="products-breadcrumb" />
 	);
 	return (
 		<LevelBack onBack={back} testID="products-variations-pane">
