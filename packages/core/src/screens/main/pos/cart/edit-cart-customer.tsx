@@ -241,7 +241,7 @@ function EditCartCustomerFields() {
 								)
 						)}
 						{rows}
-						<TaxIdsForm rows testID="cart-address" />
+						<TaxIdsForm testID="cart-address" />
 						<PropertyAddRow>
 							{offered.map((name) => (
 								<PropertyAdd

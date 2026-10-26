@@ -7,25 +7,24 @@ import { useForm, useWatch } from 'react-hook-form';
 import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormCombobox,
 	FormField,
-	FormInput,
-	FormItem,
-	FormLabel,
 	FormSelect,
 	FormTextarea,
 	SavedFieldProvider,
-	SavedMark,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+} from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import {
 	type EngineRecord,
 	useRecordField,
@@ -43,16 +42,33 @@ import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
+import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
+import { billingAddressSchema } from '../../components/billing-address-form';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
-import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
+import {
+	ADDRESS_FACTS,
+	ADDRESS_PARTS,
+	asShipping,
+	useAddressFacts,
+} from '../../components/customer/address-rows';
+import {
+	TAX_ID_DEFAULT_ROW,
+	TaxIdsForm,
+	taxIdsFormSchema,
+} from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
+import {
+	META_DATA_DEFAULT_ROW,
+	MetaDataForm,
+	metaDataSchema,
+} from '../../components/meta-data-form';
 import { useRecordAutosave } from '../../components/use-record-autosave';
+import { OrderRow, useCurrencyRow } from '../../components/order/order-rows';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
-import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
+import { shippingAddressSchema } from '../../components/shipping-address-form';
+import { useFieldPresence } from '../../components/use-field-presence';
 import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useOrderRecord } from '../commands/use-order-record';
@@ -67,27 +83,35 @@ interface Props {
 }
 
 const formSchema = z.object({
-	parent_id: z.number().optional(),
 	customer_id: z.number().default(GUEST_CUSTOMER_ID),
 	customer_note: z.string().optional(),
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
-	payment_method: z.string().optional(),
-	payment_method_title: z.string().optional(),
 	currency: z.string().optional(),
-	transaction_id: z.string().optional(),
 	meta_data: metaDataSchema,
 	tax_ids: taxIdsFormSchema,
 });
 
 const statusSchema = z.object({ status: z.string() });
-const READ_ONLY_ROOTS = ['parent_id', 'payment_method', 'payment_method_title', 'transaction_id'];
 type FormValues = z.infer<typeof formSchema>;
+/** Company is a billing part on an order, not an offered fact: the add row offers the addresses. */
+const ORDER_ADDRESS_FACTS = ADDRESS_FACTS.filter((fact) => fact.name !== 'company');
+/** The order's identity lives in its billing: the open Billing row carries it as parts. */
+const ORDER_BILLING_PARTS = [
+	'first_name',
+	'last_name',
+	'email',
+	'phone',
+	'company',
+	...ADDRESS_PARTS,
+] as const;
 
 export function EditOrderForm({ order }: Props) {
 	return (
 		<SavedFieldProvider>
-			<EditOrderFormFields order={order} />
+			<CountriesProvider>
+				<EditOrderFormFields order={order} />
+			</CountriesProvider>
 		</SavedFieldProvider>
 	);
 }
@@ -124,15 +148,11 @@ function EditOrderFormFields({ order }: Props) {
 	const [formData] = React.useState(() => {
 		const latest = order.toMutableJSON().payload;
 		return {
-			parent_id: latest.parent_id,
 			currency: latest.currency,
 			customer_id: latest.customer_id,
 			customer_note: latest.customer_note,
 			billing: latest.billing,
 			shipping: latest.shipping,
-			payment_method: latest.payment_method,
-			payment_method_title: latest.payment_method_title,
-			transaction_id: latest.transaction_id,
 			meta_data: latest.meta_data,
 			tax_ids: latest.tax_ids ?? [],
 		};
@@ -142,15 +162,24 @@ function EditOrderFormFields({ order }: Props) {
 		defaultValues: formData as FormValues,
 	});
 	const markSaved = useMarkSaved();
+	const { linked, ...address } = useAddressFacts(form, 'order');
+	// Read at write time, like `stored`: a debounced billing write lands after the verb that
+	// broke the link, and must not copy billing over the shipping the owner is now editing.
+	const linkedRef = React.useRef(linked);
+	React.useEffect(() => {
+		linkedRef.current = linked;
+	}, [linked]);
 	const { flush } = useRecordAutosave({
 		form,
 		stored: () => order.getLatest().payload,
-		persist: (data) => saveOrderFields(order, data),
-		before: (root) => {
-			if (READ_ONLY_ROOTS.includes(root)) return false;
-			// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.
-			return !blockIfDegraded('save-order', { orderId: order.uuid });
-		},
+		// While Shipping reads "Same as billing", a billing write carries its copy (rule 5).
+		persist: (data) =>
+			saveOrderFields(
+				order,
+				linkedRef.current && data.billing ? { ...data, shipping: asShipping(data.billing) } : data
+			),
+		// #163 ruling R5: localPatch swallows storage failures, so the guard runs first.
+		before: () => !blockIfDegraded('save-order', { orderId: order.uuid }),
 		metaDraft: (rows) =>
 			rows.filter((row) => !PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? ''))),
 	});
@@ -329,88 +358,64 @@ function EditOrderFormFields({ order }: Props) {
 		? PUSHABLE_ORDER_STATUSES
 		: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
 
-	/**
-	 *
-	 */
+	// Billing holds the order's contact facts too, so a name or an email alone is a Billing row
+	// (never hidden behind an add that would write the store's country), and Remove clears them all.
+	const presence = useFieldPresence(
+		ORDER_ADDRESS_FACTS,
+		(name) =>
+			name === 'billing'
+				? !ORDER_BILLING_PARTS.some((part) => !!billing?.[part])
+				: address.isEmpty(name),
+		(name) =>
+			name === 'billing'
+				? form.setValue('billing', {
+						...form.getValues('billing'),
+						...Object.fromEntries(ORDER_BILLING_PARTS.map((part) => [part, ''])),
+					})
+				: address.clear(name)
+	);
+	const { offered, rows } = address.layout(presence, {
+		billingMark: true,
+		billingParts: ORDER_BILLING_PARTS,
+	});
+	const currencyRow = useCurrencyRow(useWatch({ control: form.control, name: 'currency' }));
+	const append = (name: 'tax_ids' | 'meta_data', row: object) =>
+		form.setValue(name, [...(form.getValues(name) ?? []), row] as never);
+	// Set at checkout, so read from the record and locked (property rows rule 6).
+	const payload = useRecordField(order, (record) => record.payload);
+	const paymentMethod = payload.payment_method_title || payload.payment_method;
+
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<VStack className="gap-4">
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="parent_id"
-							render={({ field: { value, ...fieldRest } }) => (
-								<View className="flex-1">
-									<FormInput
-										label={t('orders.parent_id')}
-										editable={false}
-										value={value as never}
-										{...fieldRest}
-									/>
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
+				<PropertyList testID="order-form">
+					<OrderRow prefix="order" id="customer" label={t('common.customer')} mark="customer_id">
 						<FormField
 							control={form.control}
 							name="customer_id"
 							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('common.customer')}</FormLabel>
-										<SavedMark name="customer_id" label={t('settings.saved')} />
-									</HStack>
-									<FormCombobox
-										customComponent={CustomerSelect}
-										withGuest
-										{...field}
-										onChange={(value: string) => {
-											const customerId = Number(value);
-											setCustomerIdToLoad(customerId);
-										}}
-										// The field holds a customer id; its label is resolved separately, so
-										// the pair is passed through rather than derived from the scalar.
-										value={{ value: String(field.value), label: customerLabel }}
-									/>
-								</FormItem>
+								<FormCombobox
+									customComponent={CustomerSelect}
+									withGuest
+									{...field}
+									onChange={(value: string) => {
+										const customerId = Number(value);
+										setCustomerIdToLoad(customerId);
+									}}
+									// The field holds a customer id; its label is resolved separately, so
+									// the pair is passed through rather than derived from the scalar.
+									value={{ value: String(field.value), label: customerLabel }}
+								/>
 							)}
 						/>
-						<FormField
-							control={form.control}
-							name="customer_note"
-							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('common.customer_note')}</FormLabel>
-										<SavedMark name="customer_note" label={t('settings.saved')} />
-									</HStack>
-									<FormTextarea {...field} />
-								</FormItem>
-							)}
-						/>
-					</HStack>
+					</OrderRow>
 					<Form {...statusForm}>
-						{/* The intent's own card (the cart sheet's Hand over): the select's label names it. */}
-						<View className="border-border gap-3 rounded-lg border p-4">
-							<FormField
-								control={statusForm.control}
-								name="status"
-								render={({ field }) => (
-									<View testID="order-edit-status">
-										<FormSelect
-											label={t('common.status')}
-											customComponent={OrderStatusSelect}
-											allowed={allowedStatuses}
-											disabled={!statusPushable}
-											{...field}
-										/>
-									</View>
-								)}
-							/>
-							<HStack className="justify-end">
+						<OrderRow
+							prefix="order"
+							id="status"
+							label={t('common.status')}
+							verb={
 								<Button
 									variant="outline"
 									testID="order-edit-update-status"
@@ -419,89 +424,103 @@ function EditOrderFormFields({ order }: Props) {
 								>
 									{t('orders.update_status')}
 								</Button>
-							</HStack>
-						</View>
+							}
+						>
+							<FormField
+								control={statusForm.control}
+								name="status"
+								render={({ field }) => (
+									<View testID="order-edit-status">
+										<FormSelect
+											customComponent={OrderStatusSelect}
+											allowed={allowedStatuses}
+											disabled={!statusPushable}
+											{...field}
+										/>
+									</View>
+								)}
+							/>
+						</OrderRow>
 					</Form>
-					<Collapsible>
-						<HStack className="justify-between">
-							<CollapsibleTrigger>
-								<Text>{t('common.billing_address')}</Text>
-							</CollapsibleTrigger>
-							<SavedMark name="billing" label={t('settings.saved')} />
-						</HStack>
-						<CollapsibleContent>
-							<BillingAddressForm />
-						</CollapsibleContent>
-					</Collapsible>
-					<Collapsible>
-						<HStack className="justify-between">
-							<CollapsibleTrigger>
-								<Text>{t('common.shipping_address')}</Text>
-							</CollapsibleTrigger>
-							<SavedMark name="shipping" label={t('settings.saved')} />
-						</HStack>
-						<CollapsibleContent>
-							<ShippingAddressForm />
-						</CollapsibleContent>
-					</Collapsible>
-					<HStack className="gap-4">
+					<OrderRow
+						prefix="order"
+						id="customer_note"
+						label={t('common.customer_note')}
+						mark="customer_note"
+						align="top"
+					>
 						<FormField
 							control={form.control}
-							name="payment_method"
+							name="customer_note"
 							render={({ field }) => (
-								<View className="flex-1">
-									<FormInput label={t('orders.payment_method_id')} editable={false} {...field} />
-								</View>
+								<FormTextarea
+									{...field}
+									placeholder={t('common.add_value', { label: t('common.customer_note') })}
+								/>
 							)}
 						/>
-						<FormField
-							control={form.control}
-							name="payment_method_title"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormInput label={t('orders.payment_method_title')} editable={false} {...field} />
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="currency"
-							render={({ field: { value, ...fieldRest } }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('common.currency')}</FormLabel>
-										<SavedMark name="currency" label={t('settings.saved')} />
-									</HStack>
+					</OrderRow>
+					{rows}
+					<PropertyRow
+						testID="order-row-payment"
+						label={t('common.payment')}
+						trailing={
+							<Text className="text-muted-foreground text-sm">{t('orders.set_at_checkout')}</Text>
+						}
+					>
+						{paymentMethod ? (
+							<Text>
+								{paymentMethod}
+								{payload.transaction_id ? (
+									<Text className="text-muted-foreground">{` · ${payload.transaction_id}`}</Text>
+								) : null}
+							</Text>
+						) : null}
+					</PropertyRow>
+					<TaxIdsForm testID="order" />
+					{currencyRow.shown && (
+						<OrderRow prefix="order" id="currency" label={t('common.currency')} mark="currency">
+							<FormField
+								control={form.control}
+								name="currency"
+								render={({ field: { value, ...fieldRest } }) => (
 									<FormSelect customComponent={CurrencySelect} value={value} {...fieldRest} />
-								</FormItem>
-							)}
+								)}
+							/>
+						</OrderRow>
+					)}
+					<MetaDataForm rows testID="order" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					<PropertyAddRow>
+						{offered.map((name) => (
+							<PropertyAdd
+								key={name}
+								testID={`order-add-${name}`}
+								label={address.labels[name]}
+								onPress={() => {
+									presence.add(name);
+									address.added(name);
+								}}
+							/>
+						))}
+						<PropertyAdd
+							testID="order-add-tax_id"
+							label={t('tax_id.tax_id')}
+							onPress={() => append('tax_ids', TAX_ID_DEFAULT_ROW)}
 						/>
-						<FormField
-							control={form.control}
-							name="transaction_id"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormInput label={t('common.transaction_id')} editable={false} {...field} />
-								</View>
-							)}
+						{!currencyRow.shown && (
+							<PropertyAdd
+								testID="order-add-currency"
+								label={t('common.currency')}
+								onPress={currencyRow.show}
+							/>
+						)}
+						<PropertyAdd
+							testID="order-add-meta_data"
+							label={t('common.custom_field')}
+							onPress={() => append('meta_data', META_DATA_DEFAULT_ROW)}
 						/>
-					</HStack>
-					<HStack className="items-start justify-between">
-						<View className="flex-1">
-							<TaxIdsForm name="tax_ids" />
-						</View>
-						<SavedMark name="tax_ids" label={t('settings.saved')} />
-					</HStack>
-					<View className="relative">
-						<MetaDataForm name="meta_data" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
-						{/* Out of flow, beside the component's own heading: the mark never moves the rows. */}
-						<View className="pointer-events-none absolute top-0 right-0">
-							<SavedMark name="meta_data" label={t('settings.saved')} />
-						</View>
-					</View>
-				</VStack>
+					</PropertyAddRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter close={{ testID: 'order-edit-close-button' }} />
 		</Form>

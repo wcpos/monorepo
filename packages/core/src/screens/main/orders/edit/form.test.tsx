@@ -96,6 +96,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedMark: () => null,
+	useSavedName: () => '',
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
@@ -106,13 +107,19 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTextarea: () => null,
 }));
 
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	CollapsibleContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyRow: ({
+		children,
+		trailing,
+	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
+		<>
+			{children}
+			{trailing}
+		</>
+	),
+	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAdd: () => null,
 }));
 function mockAction({
 	children,
@@ -138,13 +145,27 @@ jest.mock('@wcpos/components/dialog', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
 
 jest.mock('../../components/billing-address-form', () => ({
-	BillingAddressForm: () => null,
 	billingAddressSchema: { shape: {} },
+}));
+jest.mock('../../components/customer/address-rows', () => ({
+	useAddressFacts: () => ({
+		linked: false,
+		focus: null,
+		labels: {},
+		isEmpty: () => true,
+		clear() {},
+		added() {},
+		layout: () => ({ offered: [], rows: null }),
+	}),
+	ADDRESS_FACTS: [{ name: 'company' }, { name: 'billing' }, { name: 'shipping' }],
+	ADDRESS_PARTS: [],
+	asShipping: (billing: unknown) => billing,
+	TextPart: () => null,
+}));
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ store: null }),
 }));
 jest.mock('../../components/currency-select', () => ({ CurrencySelect: () => null }));
 jest.mock('../../components/customer-select', () => ({ CustomerSelect: () => null }));
@@ -159,7 +180,6 @@ jest.mock('../../components/meta-data-form', () => ({
 }));
 jest.mock('../../components/order/order-status-select', () => ({ OrderStatusSelect: () => null }));
 jest.mock('../../components/shipping-address-form', () => ({
-	ShippingAddressForm: () => null,
 	shippingAddressSchema: { shape: {} },
 }));
 
@@ -431,16 +451,6 @@ describe('EditOrderForm autosave', () => {
 			data: { tax_ids: [{ type: 'vat', value: 'ABC' }] },
 		});
 	});
-
-	it.each(['parent_id', 'payment_method', 'payment_method_title', 'transaction_id'])(
-		'refuses the read-only %s root',
-		async (root) => {
-			render(<EditOrderForm order={order} />);
-			expect(await editField(root, 'changed')).toBe(false);
-			expect(mockLocalPatch).not.toHaveBeenCalled();
-			expect(mockMarkSaved).not.toHaveBeenCalled();
-		}
-	);
 
 	it('does not mark an edit when its local patch fails', async () => {
 		mockLocalPatch.mockResolvedValue(undefined);

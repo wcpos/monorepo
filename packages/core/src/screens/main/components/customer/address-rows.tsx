@@ -22,7 +22,14 @@ import { EditableField } from '../editable-field';
 import { shippingAddressSchema } from '../shipping-address-form';
 
 /** An address's parts in row order; the closed line reads them in postal order. */
-const ADDRESS_PARTS = ['address_1', 'address_2', 'city', 'postcode', 'country', 'state'] as const;
+export const ADDRESS_PARTS = [
+	'address_1',
+	'address_2',
+	'city',
+	'postcode',
+	'country',
+	'state',
+] as const;
 const LINE_PARTS = ['address_1', 'address_2', 'city', 'state', 'postcode', 'country'] as const;
 const SHIPPING_PARTS = ['first_name', 'last_name', 'company', 'phone', ...ADDRESS_PARTS] as const;
 /** A customer's billing may carry its own name and email (distinct from the account's). */
