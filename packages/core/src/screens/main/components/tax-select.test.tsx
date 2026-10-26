@@ -24,7 +24,8 @@ const mockOptions = [
 	{ label: 'Reduced rate', value: 'reduced-rate' },
 ];
 jest.mock('./tax-class-select', () => ({
-	useTaxClassOptions: () => mockOptions,
+	useTaxClassOptions: (includeParent?: boolean) =>
+		includeParent ? [{ label: 'Same as parent', value: 'parent' }, ...mockOptions] : mockOptions,
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
@@ -69,4 +70,14 @@ it("a store's class whose slug is none is a class, not the Not taxable option", 
 	props.onChange('class:none');
 	expect(onChange).toHaveBeenCalledWith({ tax_status: 'taxable', tax_class: 'none' });
 	mockOptions.pop();
+});
+
+it("includeParent offers Same as parent, which round-trips as tax_class 'parent' and taxable", () => {
+	const onChange = jest.fn();
+	render(<TaxSelect includeParent status="taxable" taxClass="parent" onChange={onChange} />);
+	const props = mockOptionSelect.mock.calls.at(-1)![0];
+	expect(props.options[1]).toEqual({ label: 'Same as parent', value: 'class:parent' });
+	expect(props.value).toBe('class:parent');
+	props.onChange('class:parent');
+	expect(onChange).toHaveBeenCalledWith({ tax_status: 'taxable', tax_class: 'parent' });
 });

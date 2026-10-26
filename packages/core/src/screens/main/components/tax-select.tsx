@@ -14,6 +14,8 @@ interface TaxSelectProps {
 	status: TaxValue['tax_status'];
 	taxClass: string;
 	onChange: (value: TaxValue) => void;
+	/** A variation's 'parent' sentinel as a class option ("Same as parent"); it stays taxable. */
+	includeParent?: boolean;
 	testID?: string;
 	'aria-labelledby'?: string;
 }
@@ -31,9 +33,16 @@ const classSlug = (value: string) => value.slice('class:'.length);
  * store's classes. Not taxable keeps the class as it is, as Woo does; a class makes it taxable.
  * The class keeps the app's 'standard' spelling; `taxClassToWire` maps it on the way out.
  */
-export function TaxSelect({ status, taxClass, onChange, testID, ...props }: TaxSelectProps) {
+export function TaxSelect({
+	status,
+	taxClass,
+	onChange,
+	includeParent,
+	testID,
+	...props
+}: TaxSelectProps) {
 	const t = useT();
-	const classes = useTaxClassOptions();
+	const classes = useTaxClassOptions(includeParent);
 	const options = React.useMemo(
 		() => [
 			{ label: t('common.not_taxable'), value: NOT_TAXABLE },

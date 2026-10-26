@@ -1,36 +1,27 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	Form,
-	FormField,
-	FormInput,
-	FormItem,
-	FormLabel,
-	FormRadioGroup,
-	FormSelect,
-	FormSwitch,
-	SavedFieldProvider,
-	SavedMark,
-} from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import { Form, SavedFieldProvider } from '@wcpos/components/form';
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyAddRow, PropertyList } from '@wcpos/components/property-row';
 import type { EngineRecord, VariationPayload } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useAppInfo } from '../../../../../hooks/use-app-info';
-import { CurrencyInput } from '../../../components/currency-input';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
-import { NumberInput } from '../../../components/number-input';
-import { ProductStatusSelect } from '../../../components/product/status-select';
-import { TaxClassSelect } from '../../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
+import {
+	CatalogueKind,
+	CustomFieldAdd,
+	PriceRow,
+	StatusRow,
+	StockRow,
+	TaxRow,
+	useOfferedRows,
+} from '../../../components/product/catalogue-rows';
 import { DeleteVariationDialog, useVariationActions } from '../../product-actions';
 import { taxClassFromWire } from '../../../hooks/tax-class';
 import { useCatalogueAutosave } from '../use-catalogue-autosave';
@@ -52,7 +43,12 @@ type FormValues = z.infer<typeof schema>;
 
 interface Props {
 	variation: EngineRecord<'variations'>;
+	/** The parent product's tax class, for a variation that follows it ("Same as parent"). */
+	parentClass?: string;
 }
+
+/** The variation's offered facts in canonical order; Custom field follows. */
+const OFFERED = ['sale_price', 'sku', 'barcode'] as const;
 
 /** The form's values for a payload: at open, and again when Sync lands the store's copy. */
 function formValues(variationData: VariationPayload): z.infer<typeof schema> {
@@ -81,7 +77,7 @@ export function EditVariationForm(props: Props) {
 	);
 }
 
-function EditVariationFormFields({ variation }: Props) {
+function EditVariationFormFields({ variation, parentClass }: Props) {
 	const t = useT();
 	const { close } = useDialog();
 	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
@@ -94,13 +90,12 @@ function EditVariationFormFields({ variation }: Props) {
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: formValues(variation.toMutableJSON().payload),
 	});
-	// Woo ignores a quantity on a record that does not manage stock; the list cell's rule.
-	const manageStock = useWatch({ control: form.control, name: 'manage_stock' });
 	const { flush } = useCatalogueAutosave({
 		record: variation,
 		form,
 		readOnly,
 	});
+	const offered = useOfferedRows(form, 'variation', OFFERED);
 	// Sync flushes the pending edit first, then takes the store's copy; resetting the draft
 	// prevents a debounced write from putting stale values back over the pulled ones.
 	const actions = useVariationActions(variation, {
@@ -116,156 +111,22 @@ function EditVariationFormFields({ variation }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="sku"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.sku')}</FormLabel>
-									<SavedMark name="sku" label={t('settings.saved')} />
-								</HStack>
-								<FormInput {...field} />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.barcode')}</FormLabel>
-									<SavedMark name="barcode" label={t('settings.saved')} />
-								</HStack>
-								<FormInput {...field} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="regular_price"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.regular_price')}</FormLabel>
-									<SavedMark name="regular_price" label={t('settings.saved')} />
-								</HStack>
-								<FormInput customComponent={CurrencyInput} {...field} />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="sale_price"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.sale_price')}</FormLabel>
-									<SavedMark name="sale_price" label={t('settings.saved')} />
-								</HStack>
-								<FormInput customComponent={CurrencyInput} {...field} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="status"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.status')}</FormLabel>
-									<SavedMark name="status" label={t('settings.saved')} />
-								</HStack>
-								<FormSelect
-									customComponent={ProductStatusSelect}
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</FormItem>
-						)}
-					/>
-					<VStack className="flex-1">
-						<FormField
-							control={form.control}
-							name="stock_quantity"
-							render={({ field: { value, ...rest } }) => (
-								<FormItem>
-									<HStack className="justify-between">
-										<FormLabel>{t('products.stock_quantity')}</FormLabel>
-										<SavedMark name="stock_quantity" label={t('settings.saved')} />
-									</HStack>
-									<FormInput
-										customComponent={NumberInput}
-										type="numeric"
-										value={value != null ? String(value) : undefined}
-										{...rest}
-										disabled={!manageStock}
-									/>
-								</FormItem>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="manage_stock"
-							render={({ field }) => (
-								<HStack className="items-center justify-between">
-									<View className="flex-1">
-										<FormSwitch label={t('products.manage_stock')} {...field} />
-									</View>
-									<SavedMark name="manage_stock" label={t('settings.saved')} />
-								</HStack>
-							)}
-						/>
-					</VStack>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.tax_class')}</FormLabel>
-									<SavedMark name="tax_class" label={t('settings.saved')} />
-								</HStack>
-								<FormSelect
-									customComponent={TaxClassSelect}
-									includeParent
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.tax_status')}</FormLabel>
-									<SavedMark name="tax_status" label={t('settings.saved')} />
-								</HStack>
-								<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<View className="relative">
-					<MetaDataForm />
-					{/* Out of flow, beside the component's own heading: the mark never moves the rows. */}
-					<View className="pointer-events-none absolute top-0 right-0">
-						<SavedMark name="meta_data" label={t('settings.saved')} />
-					</View>
-				</View>
+				<CatalogueKind.Provider value="variation">
+					<PropertyList testID="variation-form">
+						<PriceRow name="regular_price" label={t('common.regular_price')} />
+						{offered.row('sale_price')}
+						{offered.row('sku')}
+						{offered.row('barcode')}
+						<StockRow />
+						<TaxRow includeParent parentClass={parentClass} />
+						<StatusRow />
+						<MetaDataForm rows testID="variation" />
+						<PropertyAddRow>
+							{offered.adds}
+							<CustomFieldAdd />
+						</PropertyAddRow>
+					</PropertyList>
+				</CatalogueKind.Provider>
 			</DialogBody>
 			<DialogFooter
 				destructive={
