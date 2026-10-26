@@ -8,6 +8,8 @@ const cacheOpen = jest.fn();
 const cacheMatch = jest.fn();
 const cachePut = jest.fn();
 let cachedBlobs: Map<string, Blob>;
+// URLs the browser cannot draw as an <img> either (offline, blocked).
+const undrawable = new Set<string>();
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	useHttpClient: () => ({ get: mockGet }),
@@ -56,6 +58,17 @@ beforeAll(() => {
 	});
 	URL.createObjectURL = jest.fn((blob: Blob) => `blob:${blob.type.replace('image/', '')}`);
 	URL.revokeObjectURL = jest.fn();
+	// jsdom loads no pictures: an <img> probe draws every URL but those a test says it cannot.
+	Object.defineProperty(globalThis, 'Image', {
+		configurable: true,
+		value: class {
+			onload: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+			set src(url: string) {
+				queueMicrotask(() => (undrawable.has(url) ? this.onerror?.() : this.onload?.()));
+			}
+		},
+	});
 });
 
 beforeEach(() => {
@@ -270,6 +283,49 @@ describe('useImageAttachment (web)', () => {
 
 		expect(await screen.findByText(`blob:${operation}`)).toBeTruthy();
 		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+
+	it('draws a picture the browser will not let script read from its URL, for the session', async () => {
+		jest.useFakeTimers();
+		// What the client throws for a CORS refusal: an AxiosError with no response. The uploads are
+		// static files the web server sends without CORS headers (owner, 2026-10-26).
+		const url = 'https://store.example/wp-content/uploads/no-cors.jpg';
+		mockGet.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+		const first = render(probeTree(makeDocument(), url));
+		expect(await screen.findByText(url)).toBeTruthy();
+		first.unmount();
+
+		await act(async () => {
+			jest.advanceTimersByTime(ERROR_RETRY_DELAY_MS);
+		});
+		render(probeTree(makeDocument(), url));
+		expect(await screen.findByText(url)).toBeTruthy();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		jest.useRealTimers();
+	});
+
+	it('falls back to the placeholder when the browser cannot draw the URL either', async () => {
+		const url = 'https://store.example/wp-content/uploads/offline.jpg';
+		undrawable.add(url);
+		mockGet.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+		render(probeTree(makeDocument(), url));
+
+		expect(await screen.findByText(`error:Image unavailable: ${url}`)).toBeTruthy();
+	});
+
+	it('reports an HTTP failure as an error, not as the URL', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 404'), {
+				isAxiosError: true,
+				response: { status: 404 },
+			})
+		);
+
+		render(probeTree(makeDocument(), 'd-missing-upload.jpg'));
+
+		expect(await screen.findByText('error:Request failed with status code 404')).toBeTruthy();
 	});
 
 	it('reports a non-image content type as an error', async () => {

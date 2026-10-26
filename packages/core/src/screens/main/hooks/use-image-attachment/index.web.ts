@@ -102,6 +102,26 @@ async function fetchImageBlob(
 	return blob;
 }
 
+/** An HTTP client failure with no response: the request never got a reply script may read. */
+function isTransportFailure(err: unknown): boolean {
+	const failure = err as { isAxiosError?: boolean; response?: unknown } | null;
+	return !!failure?.isAxiosError && !failure.response;
+}
+
+/**
+ * Whether the browser can draw the URL as an <img>, which needs no CORS. Resolves once it has
+ * loaded (the consumer's <img> then paints it from the browser's cache) and rejects if it cannot
+ * be drawn, so every consumer falls back to its placeholder rather than a broken image.
+ */
+function drawsFromUrl(imageUrl: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const probe = new Image();
+		probe.onload = () => resolve();
+		probe.onerror = () => reject(new Error(`Image unavailable: ${imageUrl}`));
+		probe.src = imageUrl;
+	});
+}
+
 function getImageResource(
 	source: ImageAttachmentSource,
 	imageUrl: string,
@@ -109,20 +129,32 @@ function getImageResource(
 ): ImageResource {
 	let resource = imageResourceCache.get(imageUrl);
 	if (!resource) {
+		const failed = (err: unknown) => {
+			// Keep the errored resource cached: a Suspense retry re-renders with
+			// an uncommitted useMemo, so immediate eviction would refetch in a
+			// tight loop. Evict after a delay so a later mount can retry.
+			setTimeout(() => {
+				imageResourceCache.delete(imageUrl);
+			}, ERROR_RETRY_DELAY_MS);
+			const error = err instanceof Error ? err : new Error('Unknown error');
+			return of({ uri: undefined, error });
+		};
 		const state$ = defer(() => fetchImageBlob(source, imageUrl, get)).pipe(
 			// "No picture" is kept like a success, for the session: never evicted, never refetched.
 			map((blob): ImageAttachmentState =>
 				blob ? { uri: URL.createObjectURL(blob), error: null } : EMPTY_STATE
 			),
 			catchError((err) => {
-				// Keep the errored resource cached: a Suspense retry re-renders with
-				// an uncommitted useMemo, so immediate eviction would refetch in a
-				// tight loop. Evict after a delay so a later mount can retry.
-				setTimeout(() => {
-					imageResourceCache.delete(imageUrl);
-				}, ERROR_RETRY_DELAY_MS);
-				const error = err instanceof Error ? err : new Error('Unknown error');
-				return of({ uri: undefined, error });
+				if (!isTransportFailure(err)) return failed(err);
+				// No reply at all: the browser refused to let script read it — an upload served
+				// without CORS headers to a page on another origin (the REST API sends them, the
+				// web server's static files do not), mixed content, or offline. An <img> needs
+				// no CORS, so a picture the browser can draw is drawn from its URL, as the cart's
+				// are (owner, 2026-10-26), and kept for the session: a refetch would fail the same way.
+				return defer(() => drawsFromUrl(imageUrl)).pipe(
+					map((): ImageAttachmentState => ({ uri: imageUrl, error: null })),
+					catchError(failed)
+				);
 			})
 		);
 		resource = new ObservableResource(state$);
