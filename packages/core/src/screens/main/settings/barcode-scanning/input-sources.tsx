@@ -455,6 +455,11 @@ export function InputSources() {
 									</View>
 								) : null}
 
+								{/* Electron answers a connect press with its serial/HID chooser: it lives in the
+								    sheet that asked, so the pick is in reach and closing the sheet cancels the
+								    pending request (the chooser replies on unmount). Inert elsewhere. */}
+								<ScannerDeviceChooser />
+
 								{/* Manual UUID entry is the "my scanner isn't listed" escape hatch —
 								    a 128-bit UUID is plumbing, so it sits last in the sheet as a
 								    labelled block (rule 9), never on the page itself. */}
@@ -505,9 +510,6 @@ export function InputSources() {
 						</DialogBody>
 					</DirectConnection>
 				)}
-
-				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
-				<ScannerDeviceChooser />
 
 				{registration.available && registration.candidate ? (
 					<VStack space="sm">

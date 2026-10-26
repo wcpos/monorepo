@@ -30,7 +30,9 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('@wcpos/components/form', () => ({
-	FormItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	FormItem: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<div data-form-item={nativeID ?? ''}>{children}</div>
+	),
 	FormLabel: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 	SavedMark: () => null,
 	FormField: ({
@@ -308,6 +310,26 @@ describe('NetworkFields discovery states', () => {
 		expect(screen.getByTestId('add-printer-endpoint-explanation')).toHaveTextContent(
 			'Using Epson ePOS over HTTPS'
 		);
+	});
+
+	it('gives the port its own form item beside the address (Codex, #2978)', () => {
+		// Both inputs share the Address row; the port must not be named by the Address label
+		// or share its validation-message id, so it carries its own item and label.
+		render(
+			<NetworkFields
+				form={makeForm()}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[]}
+			/>
+		);
+
+		const port = screen.getByTestId('add-printer-port-input').closest('[data-form-item]');
+		expect(port?.getAttribute('data-form-item')).toBe('printer-port');
+		expect(port?.textContent).toContain('Port');
+		const address = screen.getByTestId('add-printer-ip-input').closest('[data-form-item]');
+		expect(address?.getAttribute('data-form-item')).not.toBe('printer-port');
 	});
 
 	it('clears stale port state when the selected target has no port', () => {

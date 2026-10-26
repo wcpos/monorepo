@@ -82,6 +82,9 @@ jest.mock('@wcpos/components/hstack', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('./scanner-device-chooser', () => ({
+	ScannerDeviceChooser: () => <div data-testid="scanner-device-chooser" />,
+}));
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
@@ -226,6 +229,20 @@ describe('InputSources — quiet by default', () => {
 		expect(screen.getByTestId('scanner-advanced-content')).toBeTruthy();
 		expect(screen.getByTestId('serial-connect-button')).toBeTruthy();
 		expect(screen.getByTestId('hid-connect-button')).toBeTruthy();
+	});
+
+	it('hosts the Electron device chooser inside the sheet whose connect press it answers (Codex, #2978)', () => {
+		mockProfiles = [];
+		mockSerialControl = { ...unavailableControl, available: true };
+		render(<InputSources />);
+
+		expect(screen.queryByTestId('scanner-device-chooser')).toBeNull();
+		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
+		expect(
+			screen
+				.getByTestId('scanner-advanced-content')
+				.querySelector('[data-testid="scanner-device-chooser"]')
+		).toBeTruthy();
 	});
 
 	it('shows the raw UUID field unfolded at the end of the sheet, never on the page', () => {

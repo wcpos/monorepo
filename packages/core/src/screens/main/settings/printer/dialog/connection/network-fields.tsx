@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput, FormItem, FormLabel } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Progress } from '@wcpos/components/progress';
@@ -106,21 +106,28 @@ export function NetworkFields({
 							)}
 						/>
 					</VStack>
-					<VStack className="w-24 shrink-0">
-						<FormField
-							control={form.control}
-							name="port"
-							render={({ field: { value, ...rest } }) => (
-								<FormInput
-									testID="add-printer-port-input"
-									type="numeric"
-									accessibilityLabel={t('settings.printer_port')}
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							)}
-						/>
-					</VStack>
+					{/* The port is its own fact in the row (the board's "· port 9100"): its own form item,
+					    so its label, message and aria wiring are not the address's (Codex, #2978). */}
+					<FormItem nativeID="printer-port">
+						<HStack className="items-center gap-2">
+							<FormLabel className="text-muted-foreground text-xs">
+								{t('settings.printer_port')}
+							</FormLabel>
+							<FormField
+								control={form.control}
+								name="port"
+								render={({ field: { value, ...rest } }) => (
+									<FormInput
+										testID="add-printer-port-input"
+										type="numeric"
+										className="w-20"
+										value={value != null ? String(value) : undefined}
+										{...rest}
+									/>
+								)}
+							/>
+						</HStack>
+					</FormItem>
 				</HStack>
 			</PrinterRow>
 			{probing && (
