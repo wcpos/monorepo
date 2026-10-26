@@ -8,6 +8,8 @@ const cacheOpen = jest.fn();
 const cacheMatch = jest.fn();
 const cachePut = jest.fn();
 let cachedBlobs: Map<string, Blob>;
+// URLs the browser cannot draw as an <img> either (offline, blocked).
+const undrawable = new Set<string>();
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	useHttpClient: () => ({ get: mockGet }),
@@ -56,6 +58,17 @@ beforeAll(() => {
 	});
 	URL.createObjectURL = jest.fn((blob: Blob) => `blob:${blob.type.replace('image/', '')}`);
 	URL.revokeObjectURL = jest.fn();
+	// jsdom loads no pictures: an <img> probe draws every URL but those a test says it cannot.
+	Object.defineProperty(globalThis, 'Image', {
+		configurable: true,
+		value: class {
+			onload: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+			set src(url: string) {
+				queueMicrotask(() => (undrawable.has(url) ? this.onerror?.() : this.onload?.()));
+			}
+		},
+	});
 });
 
 beforeEach(() => {
@@ -290,6 +303,16 @@ describe('useImageAttachment (web)', () => {
 		expect(await screen.findByText(url)).toBeTruthy();
 		expect(mockGet).toHaveBeenCalledTimes(1);
 		jest.useRealTimers();
+	});
+
+	it('falls back to the placeholder when the browser cannot draw the URL either', async () => {
+		const url = 'https://store.example/wp-content/uploads/offline.jpg';
+		undrawable.add(url);
+		mockGet.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+		render(probeTree(makeDocument(), url));
+
+		expect(await screen.findByText(`error:Image unavailable: ${url}`)).toBeTruthy();
 	});
 
 	it('reports an HTTP failure as an error, not as the URL', async () => {
