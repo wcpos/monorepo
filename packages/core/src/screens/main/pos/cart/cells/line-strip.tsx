@@ -399,6 +399,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					pointerEvents={armed ? 'none' : 'auto'}
 					aria-hidden={armed}
 				>
+					{/* The grey reaches a little under the body: react-native-web reports layout widths
+					    rounded to whole pixels, so the open row can stop a fraction past Edit's edge and
+					    would show a hairline of the strip's red there. */}
+					<View className="bg-muted absolute inset-y-0 right-full w-1" />
 					<EditCartItemButton title={title} trigger="label">
 						{type === 'line_items' ? (
 							<EditLineItem
