@@ -7,7 +7,6 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 
-import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { useUISettings } from '../../../contexts/ui-settings';
 import {
@@ -26,7 +25,7 @@ import { TileGround } from '../../../components/data-table/surface';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseTerm, termKey } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -36,7 +35,7 @@ import type { GridFields } from '../tiles/product-tile';
 
 // Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
 // the footer reads the spinner itself, the stage hands the answer down as state.
-const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
+const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted', 'total'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
 const ALL: BrowseTerm = { kind: 'all' };
@@ -47,8 +46,12 @@ export function BrowseRootGrid({
 	onOpen,
 	handle,
 	settled,
+	source = 'categories',
+	narrowed = false,
 }: {
 	terms: BrowseTerm[];
+	source?: Exclude<BrowseBy, 'all'>;
+	narrowed?: boolean;
 	onOpen: (term: BrowseTerm, target?: Measurable) => void;
 	/** The root products handle: the till's footer under the term set. */
 	handle?: QueryHandle;
@@ -80,7 +83,15 @@ export function BrowseRootGrid({
 					)}
 				/>
 			</TileGround>
-			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
+			{handle && (
+				<BrowseRootFooter
+					handle={handle}
+					settled={settled}
+					source={source}
+					termCount={terms.length}
+					narrowed={narrowed}
+				/>
+			)}
 		</View>
 	);
 }
@@ -109,6 +120,7 @@ export function TermLevelGrid({
 	term,
 	children,
 	answer,
+	narrowed = false,
 	settled,
 	showProducts,
 	crumb,
@@ -126,11 +138,12 @@ export function TermLevelGrid({
 	children: BrowseTerm[];
 	/** The products query's answer, attributed by the stage; `undefined` while it gathers. */
 	answer: LevelAnswer | undefined;
+	narrowed?: boolean;
 	/** This level is the deepest: the query is its own (the stage's word). */
 	settled: boolean;
 	/** The display type is not `subcategories`. */
 	showProducts: boolean;
-	/** The crumb's detail (`N products`) is the level's own, from its snapshot. */
+	/** The place, without a second count. */
 	crumb: { parents: Crumb[]; here: string };
 	back: () => void;
 	onOpenTerm: (term: BrowseTerm, target?: Measurable) => void;
@@ -159,23 +172,26 @@ export function TermLevelGrid({
 	// The stage stages the path entry itself (`{ kind: 'term', term, target }`) or the product drill.
 	const staged = React.useContext(DealStagedContext) as { kind?: string; term?: BrowseTerm } | null;
 	const lifted = staged?.kind === 'term' && staged.term ? termKey(staged.term) : null;
-	const t = useT();
 
 	// This level's own answer, held while the shared query is another level's.
 	const shown = useLevelSnapshot(answer, settled);
 	const loaded = shown?.hits.length ?? 0;
-	const detail =
-		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this level's too (as the variations footer takes its parent's count),
 	// not the live handle's, which may already be another level's. Handed as a value (the
 	// footer's `total`), never wrapped as a stream: a stream lands one commit after the count,
 	// and a changed answer (a sync, the query settling on a return) would paint the new count
 	// over the old denominator for a frame. `null` while the level has no answer: no denominator.
-	const total = shown?.total ?? null;
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	const placeSize = term.kind === 'term' ? term.count : term.kind === 'all' ? snapshot.total : 0;
+	const total =
+		shown?.total === undefined
+			? null
+			: narrowed
+				? shown.total
+				: Math.max(placeSize ?? 0, shown.total);
 	// The query is windowed (#1221): the level asks for more as the cashier nears its end, as the
 	// products grid does. A level of subcategories alone has nothing to page, and a level a child
 	// is over does not own the query: neither may move it.
-	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
 	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
 	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
 	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
@@ -267,13 +283,7 @@ export function TermLevelGrid({
 			{/* The crumb is a row of its own on the ground above the grid (drill-in.tsx): never
 			    over the grid, never inside a card. */}
 			<DealFade>
-				<Breadcrumb
-					parents={parents}
-					here={crumb.here}
-					detail={detail}
-					autoFocus
-					testID="products-breadcrumb"
-				/>
+				<Breadcrumb parents={parents} here={crumb.here} autoFocus testID="products-breadcrumb" />
 			</DealFade>
 			<View className="min-h-0 flex-1" testID="browse-level-surface">
 				<TileGround>

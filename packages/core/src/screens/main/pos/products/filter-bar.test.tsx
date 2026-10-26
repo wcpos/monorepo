@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { POSFilterBar } from './filter-bar/filter-bar';
+import { activeFilterLabels, POSFilterBar } from './filter-bar/filter-bar';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
 
 const push = jest.fn();
@@ -435,4 +435,37 @@ it('restores the baseline when removal of an active quick filter is confirmed', 
 		sort: { field: 'name', direction: 'asc' },
 	});
 	expect(JSON.parse(screen.getByTestId('state').textContent!).filters.featured).toBeUndefined();
+});
+
+it('names lit visible pills and quick filters in bar order, excluding the place', () => {
+	const state = {
+		search: 'hat',
+		filters: { categories: [1], tags: [], brands: [], featured: true },
+		sort: { field: 'name', direction: 'asc' },
+	} as const;
+	const typed = state as unknown as Parameters<typeof activeFilterLabels>[1];
+	const quick = {
+		id: 'hats',
+		type: 'quick' as const,
+		label: 'Hats',
+		conditions: [
+			{ field: 'search' as const, value: 'hat' },
+			{ field: 'featured' as const, value: true },
+			{ field: 'categories' as const, value: [1] },
+		],
+	};
+	expect(
+		activeFilterLabels(
+			[
+				{ id: 'categories', type: 'pill', show: true },
+				quick,
+				{ id: 'featured', type: 'pill', show: true },
+				{ id: 'tags', type: 'pill', show: true },
+			],
+			typed,
+			{ filters: { categories: [], tags: [], brands: [] }, sort: typed.sort },
+			{ field: 'categories' },
+			(id) => `label:${id}`
+		)
+	).toEqual(['Hats', 'label:featured']);
 });

@@ -10,12 +10,6 @@ export const stories = [
 		render: () => <Breadcrumb testID="place" parents={parents} here="Tote bag" />,
 	},
 	{
-		id: 'detail',
-		render: () => (
-			<Breadcrumb testID="detail" parents={parents} here="Tote bag" detail="· 12 variations" />
-		),
-	},
-	{
 		id: 'back',
 		render: () => <Breadcrumb testID="back" parents={[{ label: 'Closures', onPress: () => {} }]} />,
 	},

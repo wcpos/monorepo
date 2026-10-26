@@ -313,9 +313,7 @@ it('renders the crumb above the table, then child term rows, then product rows',
 it('puts the query total in the crumb, and keeps the stable back testID on the last parent', () => {
 	const props = level();
 	render(<TermLevelTable {...props} />);
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'80 pos_products.n_products'
-	);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
 	fireEvent.click(screen.getByTestId('products-breadcrumb-back'));
 	expect(props.crumb.parents[0].onPress).toHaveBeenCalled();
@@ -476,9 +474,7 @@ it('keeps its own rows while a child pane is over it', () => {
 	);
 	expect(screen.getByTestId('row-f')).not.toBeNull();
 	expect(screen.queryByTestId('row-x')).toBeNull();
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'80 pos_products.n_products'
-	);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
 		count: '2',
 		total: '80',
@@ -609,4 +605,12 @@ it('draws no loading strip under its rows: the pane moves, and the live sync is 
 	// Held slots too: the strip would sit under them through the push.
 	render(<TermLevelTable {...level({ answer: undefined })} />);
 	expect(screen.queryByTestId('list-loading-strip')).toBeNull();
+});
+
+it('uses the place size until conditions narrow the level to local matches', () => {
+	const props = level({ term: { ...drinks, count: 200 } });
+	const { rerender } = render(<TermLevelTable {...props} />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('200');
+	rerender(<TermLevelTable {...props} narrowed />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('80');
 });

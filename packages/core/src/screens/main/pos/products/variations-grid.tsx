@@ -3,10 +3,8 @@ import { View } from 'react-native';
 
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 
-import { Text } from '@wcpos/components/text';
 import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 
-import { useT } from '../../../../contexts/translations';
 import { useQueryHandleFields } from '../../../../query';
 import { matchesStockStatusFilter } from '../../components/product/stock-filter';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -25,34 +23,35 @@ const ACTIVE_FIELD: SnapshotFields = ['active'];
 
 function VariationsFooter({
 	handle,
-	name,
+	stockStatus,
 	parentCount,
 	shownCount,
 }: {
 	handle: QueryHandle;
-	name?: string;
+	stockStatus?: string;
 	parentCount: number | undefined;
 	shownCount: number;
 }) {
-	const t = useT();
 	// One unconditional read (hooks run every render): the footer re-renders for the answer
 	// and for `total`, used only when the parent lists no variations.
 	const { ready, total: handleTotal } = useQueryHandleFields(handle, TOTAL_FIELD);
 	// The parent is the denominator, floored at resident count; an absent list uses the
 	// handle's total, and only once it has answered (no denominator before the first answer).
 	const total =
-		parentCount === undefined ? (ready ? handleTotal : null) : Math.max(parentCount, shownCount);
+		parentCount === undefined
+			? ready
+				? handleTotal
+				: null
+			: stockStatus
+				? shownCount
+				: Math.max(parentCount, shownCount);
 	return (
 		<HandleProductsFooter
 			collectionName="variations"
 			handle={handle}
 			total={total}
 			drawnCount={shownCount}
-		>
-			<Text className="text-muted-foreground text-sm" numberOfLines={1}>
-				{t('pos_products.n_variations_of', { count: parentCount ?? shownCount, name })}
-			</Text>
-		</HandleProductsFooter>
+		/>
 	);
 }
 
@@ -86,7 +85,6 @@ export function VariationsGrid({
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
-	const name = useDocField(parent, (value) => value.payload.name);
 	const parentCount = useDocField(parent, (value) => value.payload.variations?.length);
 	// The source filters resident variations with the shared stock resolver, not a query filter.
 	const shown = hits?.filter((hit) => matchesStockStatusFilter(hit.record.payload, stockStatus));
@@ -169,7 +167,7 @@ export function VariationsGrid({
 			<DealFade>
 				<VariationsFooter
 					handle={handle}
-					name={name}
+					stockStatus={stockStatus}
 					parentCount={parentCount}
 					shownCount={shownCount}
 				/>

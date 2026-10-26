@@ -61,6 +61,27 @@ import { clearConditions, isPlaceCondition, type LevelPlace } from '../browse/le
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { getPOSProductSort } from '../pos-product-sort';
 
+/** The lit, visible pills in bar order, named as the filter-bar editor names them. */
+export function activeFilterLabels(
+	items: FilterBarItem[],
+	state: Parameters<typeof isQuickFilterActive>[1],
+	resetState: Parameters<typeof isQuickFilterActive>[2],
+	place: LevelPlace | null,
+	getUILabel: (id: string) => string
+): string[] {
+	return items
+		.filter((item) => {
+			if (item.type === 'quick') return isQuickFilterActive(item, state, resetState);
+			const value = state.filters[item.id];
+			return (
+				item.show &&
+				!isPlaceCondition(place, item.id, value) &&
+				(Array.isArray(value) ? value.length > 0 : !!value)
+			);
+		})
+		.map((item) => (item.type === 'pill' ? getUILabel(item.id) : item.label));
+}
+
 function BarSlot({
 	item,
 	dimmed,

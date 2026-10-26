@@ -6,6 +6,7 @@ import type { TextProps, ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Breadcrumb } from './index';
+import { DeviceScope } from '../lib/device';
 
 jest.mock('react-native', () => {
 	const native = jest.requireActual<typeof import('react-native')>('react-native');
@@ -66,23 +67,36 @@ it('one parent is Back and activates its callback', () => {
 	render(<Breadcrumb testID="crumb" parents={[parents[1]]} />);
 	const back = screen.getByTestId('crumb-parent-0');
 	expect(back).toHaveTextContent('Products');
-	expect(back.querySelector('[data-icon="chevronLeft"]')).not.toBeNull();
+	expect(back.querySelector('[data-icon="chevronLeft"]')).toBeNull();
+	expect(back).toHaveAttribute('role', 'button');
 	fireEvent.click(back);
 	expect(parents[1].onPress).toHaveBeenCalledTimes(1);
 });
 
-it('two parents put the chevron on the last only and separate every place', () => {
-	render(<Breadcrumb testID="crumb" parents={parents} here="Tote bag" detail="· 12 variations" />);
-	expect(screen.getByTestId('crumb-parent-0').querySelector('[data-icon]')).toBeNull();
-	expect(
-		screen.getByTestId('crumb-parent-1').querySelector('[data-icon="chevronLeft"]')
-	).not.toBeNull();
-	const separators = screen.getByTestId('crumb').querySelectorAll('[aria-hidden="true"]');
-	expect([...separators].map((node) => node.textContent)).toEqual(['›', '›']);
+it('the regular trail separates every place with right chevrons only', () => {
+	render(<Breadcrumb testID="crumb" parents={parents} here="Tote bag" />);
+	expect(screen.getByTestId('crumb').querySelector('[data-icon="chevronLeft"]')).toBeNull();
+	expect(screen.getByTestId('crumb').querySelectorAll('[data-icon="chevronRight"]')).toHaveLength(
+		2
+	);
 	expect(screen.getByTestId('crumb-here')).toHaveTextContent('Tote bag');
-	expect(screen.getByTestId('crumb-detail')).toHaveTextContent('· 12 variations');
 	const label = screen.getByTestId('crumb-parent-1').querySelector('span:not([data-icon])');
 	expect(label?.className).not.toMatch(/truncate|whitespace-nowrap/);
+});
+
+it('the phone shows only the immediate parent back control and the title', () => {
+	render(
+		<DeviceScope phone>
+			<Breadcrumb testID="crumb" parents={parents} here="Tote bag" autoFocus />
+		</DeviceScope>
+	);
+	expect(screen.queryByText('Catalog')).toBeNull();
+	const back = screen.getByTestId('crumb-parent-1');
+	expect(back).toHaveTextContent('Products');
+	expect(back.querySelector('[data-icon="chevronLeft"]')).not.toBeNull();
+	expect(screen.getByTestId('crumb').querySelector('[data-icon="chevronRight"]')).toBeNull();
+	expect(screen.getByTestId('crumb-here')).toHaveTextContent('Tote bag');
+	expect(document.activeElement).toBe(back);
 });
 
 it('autoFocus focuses the last parent through its ref once, not on parents changes', () => {
@@ -115,7 +129,7 @@ it('does not constrain labels to a line count', () => {
 });
 
 it('grows with a wrapped label and keeps every crumb at the pointer floor', () => {
-	// react-native-web compiles HStack's and Button's classes away in this harness, so the
+	// react-native-web compiles HStack's and Pressable's classes away in this harness, so the
 	// contract is read from source: a fixed row height cannot honour the wrapping contract
 	// (ledger line 3), and a crumb is the phone page's back control, so it meets the floor
 	// (Codex review on #2188).
@@ -126,6 +140,6 @@ it('grows with a wrapped label and keeps every crumb at the pointer floor', () =
 	expect(root).toContain('min-h-ctl');
 	expect(root).toContain('flex-wrap');
 	expect(root).not.toContain('h-ctl');
-	const crumb = source.match(/className="([^"]*min-h-ctl[^"]*)"/)?.[1]?.split(' ') ?? [];
-	expect(crumb).toEqual(expect.arrayContaining(['h-auto', 'min-h-ctl']));
+	expect(source).toContain('hitSlop={{ top: 8, bottom: 8 }}');
+	expect(source).toContain('role="button"');
 });

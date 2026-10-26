@@ -113,14 +113,22 @@ jest.mock('../../components/data-table', () => ({
 	DataTable: (props: {
 		tableConfig: { data: typeof hits };
 		handle: unknown;
-		TableFooterComponent: React.ComponentType<{ drawnCount: number; total: number | null }>;
+		TableFooterComponent: React.ComponentType<{
+			collectionName: string;
+			drawnCount: number;
+			total: number | null;
+		}>;
 	}) => {
 		mockTableProps.value = props;
 		const { tableConfig, TableFooterComponent } = props;
 		return (
 			<>
 				<output data-testid="hits">{tableConfig.data.map((hit) => hit.id).join(',')}</output>
-				<TableFooterComponent drawnCount={tableConfig.data.length} total={99} />
+				<TableFooterComponent
+					collectionName="variations"
+					drawnCount={tableConfig.data.length}
+					total={99}
+				/>
 			</>
 		);
 	},
@@ -138,19 +146,28 @@ jest.mock('./variations-grid', () => ({
 	),
 }));
 // The footer takes values: the denominator is whatever `total` it is handed.
+jest.mock('../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
+jest.mock('../../hooks/use-collection-reset', () => ({
+	useCollectionReset: () => ({ clearAndSync: jest.fn() }),
+}));
+jest.mock('../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
+jest.mock('../../components/sync-button', () => ({ SyncButton: () => null }));
 jest.mock('./footer', () => ({
-	ProductsFooter: ({
-		children,
-		drawnCount: count,
-		total,
-	}: React.PropsWithChildren<{ drawnCount: number; total: number | null }>) => (
-		<footer data-testid="footer">
-			{children}
-			<output>
-				{count} of {String(total)}
-			</output>
-		</footer>
-	),
+	ProductsFooter: (props: React.ComponentProps<typeof import('./footer').ProductsFooter>) => {
+		const { ProductsFooter } = jest.requireActual('./footer');
+		return (
+			<footer
+				data-testid="footer"
+				data-active={String(props.active)}
+				data-collection={props.collectionName}
+			>
+				<ProductsFooter {...props} />
+				<output>
+					{props.drawnCount} of {String(props.total)}
+				</output>
+			</footer>
+		);
+	},
 }));
 jest.mock('./cells/price', () => ({ Price: () => null }));
 jest.mock('./cells/variation-image', () => ({ PosVariationImage: () => null }));
@@ -208,8 +225,8 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 	);
 	expect(mockTableProps.value.handle).toBe(mockHandle);
 	expect(screen.getByTestId('hits').textContent).toBe('one');
-	expect(screen.getByTestId('footer').textContent).toContain('1 of 2');
-	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_variations_of');
+	expect(screen.getByTestId('footer').textContent).toContain('1 of 1');
+	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_options');
 	rerender(<VariationsPane parent={parent} />);
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
 	expect(screen.getByTestId('footer').textContent).toContain('2 of 2');
@@ -219,11 +236,11 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 it('keeps the same footer node across a count change: the footer is never remounted', () => {
 	const { rerender } = render(<VariationsPane parent={parent} stockStatus="instock" />);
 	const footer = screen.getByTestId('footer');
-	expect(footer.textContent).toContain('1 of 2');
+	expect(footer.textContent).toContain('1 of 1');
 	rerender(<VariationsPane parent={parent} />);
 	expect(screen.getByTestId('footer')).toBe(footer);
 	expect(footer.textContent).toContain('2 of 2');
-	expect(footer.textContent).toContain('pos_products.n_variations_of');
+	expect(footer.textContent).toContain('pos_products.n_options');
 });
 
 it('adds a variation with exactly the old cell’s sanitised metadata', () => {

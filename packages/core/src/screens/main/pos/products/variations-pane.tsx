@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
@@ -116,7 +115,6 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 	const hits = (result.hits as Hit[]).filter((hit) =>
 		matchesStockStatusFilter(hit.record.payload, stockStatus)
 	);
-	const name = useDocField(parent, (value) => value.payload.name);
 	const parentCount = useDocField(parent, (value) => value.payload.variations?.length);
 	const t = useT();
 	// The footer's numbers are the pane's own (own-footer.tsx): the shown rows, and the parent as
@@ -125,14 +123,14 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 	const footer = React.useMemo<OwnFooterNumbers>(
 		() => ({
 			drawnCount: hits.length,
-			total: parentCount === undefined ? undefined : Math.max(parentCount, hits.length),
-			children: (
-				<Text className="text-muted-foreground text-sm" numberOfLines={1}>
-					{t('pos_products.n_variations_of', { count: parentCount ?? hits.length, name })}
-				</Text>
-			),
+			total:
+				parentCount === undefined
+					? undefined
+					: stockStatus
+						? hits.length
+						: Math.max(parentCount, hits.length),
 		}),
-		[hits.length, parentCount, name, t]
+		[hits.length, parentCount, stockStatus]
 	);
 	return (
 		<OwnFooterContext.Provider value={footer}>

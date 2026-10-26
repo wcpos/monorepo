@@ -267,7 +267,11 @@ jest.mock('../tiles/variable-product-tile', () => ({
 }));
 // The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
-jest.mock('../handle-footer', () => ({ HandleProductsFooter: () => null }));
+jest.mock('../handle-footer', () => ({
+	HandleProductsFooter: ({ total }: { total: number | null }) => (
+		<output data-testid="products-footer">{String(total)}</output>
+	),
+}));
 // As the real DataTable: rows are `tableConfig.data`, drawn through `renderItem`; a header sort
 // is the `setSort` it was handed.
 jest.mock('../../../components/data-table', () => ({
@@ -465,9 +469,7 @@ it('the crumb back steps one level; a live level shows the products with its own
 	fireEvent.click(backs[backs.length - 1]); // Drinks, from Hot
 	expect(screen.getAllByTestId('browse-level').length).toBe(1);
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'80 pos_products.n_products'
-	);
+	expect(screen.getAllByTestId('products-footer').at(-1)?.textContent).toBe('80');
 	expect(screen.getByTestId('variable-product-drill')).toBeTruthy();
 	expect(screen.getByTestId('product-s')).toBeTruthy();
 });
@@ -494,7 +496,12 @@ it('a Brand pill pressed under All products keeps its crumb: the level is All pr
 	render(<BrowseStage {...stageProps({ onLevelChange })} />);
 	fireEvent.click(screen.getByTestId('browse-all-products'));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
-	expect(onLevelChange).toHaveBeenLastCalledWith({ field: 'categories' });
+	expect(onLevelChange).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			field: 'categories',
+			term: { kind: 'all' },
+		})
+	);
 	act(() => queryActions.setFilter('brands', [8]));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('products-breadcrumb')).toBeTruthy();
@@ -514,6 +521,7 @@ it('hands the screen a shortcut level’s place with the shortcut itself, so Cle
 	expect(onLevelChange).toHaveBeenLastCalledWith({
 		field: null,
 		quickFilter: expect.objectContaining({ id: 'qf-breakfast' }),
+		term: expect.objectContaining({ kind: 'shortcut', id: 'qf-breakfast' }),
 	});
 });
 
@@ -874,13 +882,11 @@ it('a new projection shows held slots until ITS query answers, never the last qu
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	expect(screen.getAllByTestId('product-placeholder').length).toBeGreaterThan(0);
 	expect(screen.queryByTestId('variable-product-drill')).toBeNull();
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe('');
+	expect(screen.getAllByTestId('products-footer').at(-1)?.textContent).toBe('null');
 	act(() => second.set({ result: { hits: [HITS[1]], count: 12 }, total: 220, ready: true }));
 	expect(screen.queryByTestId('product-placeholder')).toBeNull();
 	expect(screen.getByTestId('product-s')).toBeTruthy();
-	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
-		'12 pos_products.n_products'
-	);
+	expect(screen.getAllByTestId('products-footer').at(-1)?.textContent).toBe('12');
 });
 
 it('a table level already on stage keeps its place when the query changes to a handle that has not answered', () => {

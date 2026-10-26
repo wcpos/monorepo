@@ -9,8 +9,12 @@ import { BrowseRootGrid } from './term-grid';
 import { BrowseRootTable } from './term-table';
 
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (key: string, vars?: { count?: number }) =>
-		vars?.count !== undefined ? `${vars.count} ${key}` : key,
+	useT: () => (key: string, vars?: { count?: number; terms?: string; products?: string }) =>
+		vars?.terms
+			? `${vars.terms} · ${vars.products}`
+			: vars?.count !== undefined
+				? `${vars.count} ${key}`
+				: key,
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
@@ -59,7 +63,9 @@ jest.mock('../handle-footer', () => ({
 	HandleProductsFooter: ({
 		drawnCount: count,
 		total,
+		label,
 	}: {
+		label?: string;
 		drawnCount: number;
 		total: number | null;
 	}) => {
@@ -69,6 +75,7 @@ jest.mock('../handle-footer', () => ({
 				data-testid="products-footer"
 				data-count={count}
 				data-total={String(total)}
+				data-label={label}
 				data-collection="products"
 			/>
 		);
@@ -251,3 +258,25 @@ it('the root table carries the till’s footer under its card: the catalogue tot
 	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} handle={answered(null)} />);
 	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });
+
+it.each(['categories', 'tags', 'brands', 'shortcuts'] as const)(
+	'labels the %s root with rendered terms and the products number',
+	(source) => {
+		const handle = fakeQueryHandle({ result: { hits: [{}, {}, {}], count: 16 }, total: 218 });
+		const { rerender } = render(
+			<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={handle} source={source} />
+		);
+		const prefix = source === 'shortcuts' ? '' : `3 pos_products.n_${source} · `;
+		expect(screen.getByTestId('products-footer').dataset.label).toBe(
+			`${prefix}218 pos_products.n_products`
+		);
+		rerender(
+			<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={handle} source={source} narrowed />
+		);
+		expect(screen.getByTestId('products-footer').dataset).toMatchObject({
+			label: `${prefix}16 pos_products.n_products`,
+			count: '16',
+			total: '218',
+		});
+	}
+);

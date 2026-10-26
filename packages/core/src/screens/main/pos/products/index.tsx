@@ -28,7 +28,7 @@ import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
 import { usePanelSide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
-import { POSFilterBar } from './filter-bar/filter-bar';
+import { activeFilterLabels, POSFilterBar } from './filter-bar/filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
 import { useBarcode } from './use-barcode';
 import { useFitPageSize } from './use-fit-page-size';
@@ -46,6 +46,7 @@ import { createReadonlyView, Slot } from '../../../../extensions/slots';
 import {
 	QueryStateProvider,
 	useProductsQueryHandle,
+	useQueryHandleFields,
 	useQueryState,
 	useQueryStateActions,
 	useQueryStateStore,
@@ -58,10 +59,16 @@ import { ProductsFooter } from './footer';
 import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
+import { normalizeFilterBar } from './filter-bar/filter-bar-layout';
 import { BrowseStage } from './browse/browse-stage';
 import { useReleaseBrowsePath } from './browse/use-browse-path';
 import { usePersistedState } from '../../../../contexts/persisted-state';
-import { clearConditions, conditionsBeyond, type LevelPlace } from './browse/level-place';
+import {
+	clearConditions,
+	conditionsBeyond,
+	type LevelPlace,
+	narrowedBeyondPlace,
+} from './browse/level-place';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { TileGround } from '../../components/data-table/surface';
@@ -72,7 +79,12 @@ import { useMountProbe, useRenderProbe } from './render-probe';
 
 import type { Row } from '../../../../table-types';
 import type { DataTableFeatures } from '../../components/data-table';
-import type { QueryHandle, QueryStateActions, QueryStateOf } from '../../../../query';
+import type {
+	QueryHandle,
+	QueryStateActions,
+	QueryStateOf,
+	SnapshotFields,
+} from '../../../../query';
 import type { SlotContracts } from '../../../../extensions/slots';
 export { cellsForRow };
 type ProductRow = { record: EngineRecord<'products'> };
@@ -172,6 +184,9 @@ const POSTER_ROW_MARGIN_PX = 8;
 // size and the skeleton only: the band itself is drawn from the type scale's variables.
 const POSTER_BAND_ESTIMATE_PX = 48;
 const POSTER_ROW_EXTRA_PX = POSTER_BAND_ESTIMATE_PX + POSTER_ROW_MARGIN_PX;
+// The census the empty state names (`None of the 218 products…`).
+const TOTAL_FIELD: SnapshotFields = ['total'];
+
 function POSProductsContent({
 	showOutOfStock,
 	initialFilters,
@@ -200,7 +215,7 @@ function POSProductsContent({
 		searchPending.current = true;
 		router.navigate(tillHref(true, 'products'));
 	});
-	const { uiSettings } = useUISettings('pos-products');
+	const { uiSettings, getUILabel } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const handle = useProductsQueryHandle(state);
@@ -326,16 +341,36 @@ function POSProductsContent({
 	// level the place stays and only the conditions go, so a level empty with no condition beyond
 	// its place offers no Clear filters (the press would change nothing); its way back is the
 	// crumb and the parent tile.
+	const filterItems = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const { total: census } = useQueryHandleFields(handle, TOTAL_FIELD);
+	const resetState = {
+		filters: { categories: [], tags: [], brands: [], ...initialFilters },
+		sort: getPOSProductSort(sortBy, sortDirection),
+	};
+	const conditions = [
+		...(state.search.trim() ? [`“${state.search.trim()}”`] : []),
+		...activeFilterLabels(filterItems, state, resetState, browsePlace, getUILabel),
+	].join(', ');
+	const placeTerm = browsePlace?.term;
+	const placeCount = placeTerm?.kind === 'term' ? placeTerm.count : census;
+	const placeName = placeTerm?.kind === 'term' ? placeTerm.name : '';
+	const emptyKey = placeName ? 'pos_products.none_match_in' : 'pos_products.none_match';
 	const conditionsOn = conditionsBeyond(browsePlace, state, initialFilters);
+	// The footer's denominator follows the matches under any narrowing, the setting's included.
+	const narrowed = narrowedBeyondPlace(browsePlace, state);
 	const emptyStore = !browsePlace && !conditionsOn;
 	const noDataMessage = (
 		<EmptyState
 			testID="no-data-message"
 			size="surface"
 			kind={emptyStore ? 'empty' : 'no-results'}
-			title={t(
-				emptyStore ? 'pos_products.no_products_yet' : 'pos_products.nothing_matches_filters'
-			)}
+			title={
+				emptyStore
+					? t('pos_products.no_products_yet')
+					: conditionsOn && placeCount !== null && conditions
+						? t(emptyKey, { count: placeCount, place: placeName, conditions })
+						: t('pos_products.nothing_matches_filters')
+			}
 			description={emptyStore ? t('pos_products.no_products_yet_description') : undefined}
 			action={
 				conditionsOn
@@ -597,6 +632,7 @@ function POSProductsContent({
 							{browseBy !== 'all' ? (
 								<BrowseStage
 									key={stageKey}
+									narrowed={narrowed}
 									source={browseBy}
 									viewMode={viewMode}
 									renderProducts={renderProducts}

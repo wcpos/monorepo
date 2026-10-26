@@ -9,7 +9,10 @@ import { VariableProductRow } from './rows/variable-product-row';
 jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => false,
+	usePointer: () => 'fine',
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./deal-stack', () => ({
 	DealFade: ({ children }: React.PropsWithChildren) => (

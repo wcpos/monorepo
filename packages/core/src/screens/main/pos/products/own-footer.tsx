@@ -5,13 +5,11 @@ import { ProductsFooter, type ProductsFooterProps } from './footer';
 /**
  * The caller's own numbers for a DataTable's footer: its own loaded count (DataTable stamps
  * `drawnCount` from the drawn handle's rows, which are not a browse level's or a variations pane's
- * own rows), its total (undefined: the table's, the drawn handle's `total`), and the caption
- * under the counts.
+ * own rows), and its total (undefined: the table's, the drawn handle's `total`).
  */
 export type OwnFooterNumbers = {
 	drawnCount: number;
 	total?: number | null;
-	children?: React.ReactNode;
 };
 
 export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ drawnCount: 0 });
@@ -23,14 +21,12 @@ export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ drawnCou
  * and its sync button, mid-sync — on every page.
  */
 export function OwnFooter(props: ProductsFooterProps) {
-	const { drawnCount, total, children } = React.useContext(OwnFooterContext);
+	const { drawnCount, total } = React.useContext(OwnFooterContext);
 	return (
 		<ProductsFooter
 			{...props}
 			drawnCount={drawnCount}
 			total={total === undefined ? props.total : total}
-		>
-			{children ?? props.children}
-		</ProductsFooter>
+		/>
 	);
 }
