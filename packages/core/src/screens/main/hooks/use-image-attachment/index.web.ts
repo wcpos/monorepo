@@ -102,6 +102,12 @@ async function fetchImageBlob(
 	return blob;
 }
 
+/** An HTTP client failure with no response: the request never got a reply script may read. */
+function isTransportFailure(err: unknown): boolean {
+	const failure = err as { isAxiosError?: boolean; response?: unknown } | null;
+	return !!failure?.isAxiosError && !failure.response;
+}
+
 function getImageResource(
 	source: ImageAttachmentSource,
 	imageUrl: string,
@@ -115,6 +121,14 @@ function getImageResource(
 				blob ? { uri: URL.createObjectURL(blob), error: null } : EMPTY_STATE
 			),
 			catchError((err) => {
+				// No reply at all: the browser refused to let script read it — an upload served
+				// without CORS headers to a page on another origin (the REST API sends them, the
+				// web server's static files do not), mixed content, or offline. An <img> needs
+				// no CORS, so the picture is drawn from its URL, as the cart's are (owner,
+				// 2026-10-26). Kept for the session: a refetch would fail the same way.
+				if (isTransportFailure(err)) {
+					return of({ uri: imageUrl, error: null });
+				}
 				// Keep the errored resource cached: a Suspense retry re-renders with
 				// an uncommitted useMemo, so immediate eviction would refetch in a
 				// tight loop. Evict after a delay so a later mount can retry.
