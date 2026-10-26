@@ -33,14 +33,48 @@ export const billingAddressSchema = z.object({
 		.optional(),
 });
 
+type AddressPrefix = 'billing' | 'shipping';
+
+/** An address's country: the combobox. A property row passes no label (the row's key is it). */
+export function AddressCountryField({ prefix, label }: { prefix: AddressPrefix; label?: string }) {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name={`${prefix}.country`}
+			render={({ field }) => (
+				<FormCombobox customComponent={CountryCombobox} label={label} {...field} />
+			)}
+		/>
+	);
+}
+
+/** An address's state: a combobox, a select or text by the country's state count (StateFormInput). */
+export function AddressStateField({ prefix, label }: { prefix: AddressPrefix; label?: string }) {
+	const { control, watch, getValues } = useFormContext();
+	const countryCode = watch(`${prefix}.country`, getValues(`${prefix}.country`));
+	return (
+		<FormField
+			control={control}
+			name={`${prefix}.state`}
+			render={({ field }) => (
+				<FormInput
+					customComponent={StateFormInput}
+					label={label}
+					{...field}
+					{...({ countryCode } as Record<string, unknown>)}
+				/>
+			)}
+		/>
+	);
+}
+
 /**
  *
  */
 export function BillingAddressForm() {
-	const { control, watch, getValues } = useFormContext();
+	const { control } = useFormContext();
 	const t = useT();
-
-	const countryCode = watch('billing.country', getValues('billing.country'));
 
 	/**
 	 *
@@ -112,35 +146,14 @@ export function BillingAddressForm() {
 						</View>
 					)}
 				/>
-				<FormField
-					control={control}
-					name="billing.state"
-					render={({ field }) => (
-						<View className="flex-1">
-							<FormInput
-								customComponent={StateFormInput}
-								label={t('common.state')}
-								{...field}
-								{...({ countryCode } as Record<string, unknown>)}
-							/>
-						</View>
-					)}
-				/>
+				<View className="flex-1">
+					<AddressStateField prefix="billing" label={t('common.state')} />
+				</View>
 			</HStack>
 			<HStack className="gap-4">
-				<FormField
-					control={control}
-					name="billing.country"
-					render={({ field }) => (
-						<View className="flex-1">
-							<FormCombobox
-								customComponent={CountryCombobox}
-								label={t('common.country')}
-								{...field}
-							/>
-						</View>
-					)}
-				/>
+				<View className="flex-1">
+					<AddressCountryField prefix="billing" label={t('common.country')} />
+				</View>
 				<FormField
 					control={control}
 					name="billing.postcode"

@@ -18,9 +18,10 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
+import { FormField, FormInput, FormSelect, SavedMark, useSavedName } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
@@ -40,13 +41,17 @@ import {
 interface TaxIdsFormProps {
 	/** RHF field path (e.g. `tax_ids` for customer form, also `tax_ids` for order). */
 	name?: string;
+	/** Property rows: a row per tax ID with its Remove; no fold, no add (the caller's add row). */
+	rows?: boolean;
+	/** The rows' testID prefix. */
+	testID?: string;
 }
 
 /**
  * Default value for a freshly-appended row. EU VAT covers the most common case;
  * users can immediately switch type via the select.
  */
-const DEFAULT_ROW = {
+export const TAX_ID_DEFAULT_ROW = {
 	type: 'eu_vat' as TaxIdType,
 	value: '',
 	country: '',
@@ -81,10 +86,11 @@ function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootPro
 	);
 }
 
-export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
+export function TaxIdsForm({ name = 'tax_ids', rows, testID }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
 	const { fields, append, remove } = useFieldArray({ control, name });
+	const savedName = useSavedName();
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;
 		value?: string;
@@ -99,20 +105,24 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 		[name, setValue]
 	);
 
+	const Fold = rows ? React.Fragment : Collapsible;
+	const FoldContent = rows ? React.Fragment : CollapsibleContent;
 	return (
-		<Collapsible>
-			<CollapsibleTrigger>
-				<Text>{t('tax_id.section_label')}</Text>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
-				<VStack className="gap-2">
+		<Fold>
+			{!rows && (
+				<CollapsibleTrigger>
+					<Text>{t('tax_id.section_label')}</Text>
+				</CollapsibleTrigger>
+			)}
+			<FoldContent>
+				<VStack className={rows ? 'gap-0' : 'gap-2'}>
 					{fields.map((field, index) => {
 						const row = watched[index];
 						const type = (row?.type ?? 'eu_vat') as TaxIdType;
 						const value = row?.value ?? '';
 						const showFormatWarning = value.length > 0 && !isValidTaxIdFormat(type, value);
-						return (
-							<HStack key={field.id} className="items-start gap-0">
+						const inputs = (
+							<>
 								<View className="w-40 p-2">
 									<FormField
 										control={control}
@@ -158,6 +168,35 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 										)}
 									/>
 								</View>
+							</>
+						);
+						if (rows) {
+							return (
+								<PropertyRow
+									key={field.id}
+									testID={`${testID}-row-tax_id-${index}`}
+									label={t('tax_id.tax_id')}
+									align="top"
+									trailing={
+										index === 0 && savedName === name ? (
+											<SavedMark name={name} label={t('settings.saved')} />
+										) : (
+											<PropertyVerb
+												testID={`${testID}-remove-tax_id-${index}`}
+												onPress={() => remove(index)}
+											>
+												{t('common.remove')}
+											</PropertyVerb>
+										)
+									}
+								>
+									<HStack className="flex-wrap items-start gap-0">{inputs}</HStack>
+								</PropertyRow>
+							);
+						}
+						return (
+							<HStack key={field.id} className="items-start gap-0">
+								{inputs}
 								<View className="p-2">
 									<Tooltip>
 										<TooltipTrigger asChild>
@@ -176,14 +215,16 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 							</HStack>
 						);
 					})}
-					<HStack>
-						<Button variant="outline" onPress={() => append({ ...DEFAULT_ROW })}>
-							<ButtonText>{t('tax_id.add')}</ButtonText>
-						</Button>
-					</HStack>
+					{!rows && (
+						<HStack>
+							<Button variant="outline" onPress={() => append({ ...TAX_ID_DEFAULT_ROW })}>
+								<ButtonText>{t('tax_id.add')}</ButtonText>
+							</Button>
+						</HStack>
+					)}
 				</VStack>
-			</CollapsibleContent>
-		</Collapsible>
+			</FoldContent>
+		</Fold>
 	);
 }
 

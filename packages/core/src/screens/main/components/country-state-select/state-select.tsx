@@ -13,7 +13,7 @@ export function StateSelectBase({
 	value,
 	onValueChange,
 	...props
-}: Omit<SelectSingleRootProps, 'children'>) {
+}: Omit<SelectSingleRootProps, 'children'> & { 'aria-labelledby'?: string }) {
 	const t = useT();
 	const states = useStates();
 	const options: { label: string; value: string }[] = React.useMemo(
@@ -43,7 +43,7 @@ export function StateSelectBase({
 export function StateSelect({
 	countryCode,
 	...props
-}: Omit<SelectSingleRootProps, 'children'> & { countryCode: string }) {
+}: Omit<SelectSingleRootProps, 'children'> & { countryCode: string; 'aria-labelledby'?: string }) {
 	return (
 		<StatesProvider countryCode={countryCode}>
 			<StateSelectBase {...props} />
