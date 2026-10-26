@@ -119,7 +119,8 @@ export function DataTableRow<TData extends RowData>({
 				className={
 					pointer === 'fine'
 						? 'min-h-row active:bg-muted flex-1 flex-row items-center'
-						: 'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3'
+						: // The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
+							'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3 py-1.5'
 				}
 			>
 				{/* A tooltip in a cell (the price's tax) is a hint here, not a control: the press is the row's. */}
@@ -150,7 +151,13 @@ export function DataTableRow<TData extends RowData>({
 			</Pressable>
 			{trailingNode !== undefined && trailingNode !== null ? (
 				pointer === 'fine' && actions ? (
-					<TableCell style={getColumnStyle(actions.column.columnDef.meta)}>
+					// The trailing control is a row-sized target (`+`, the in-cart count, a chevron), wider
+					// than a cell's padding leaves: it sits centred in the column, so every row's control
+					// shares one centre line, the browse rows' chevron included (`TermRow`).
+					<TableCell
+						className="px-0"
+						style={getColumnStyle({ ...actions.column.columnDef.meta, align: 'center' })}
+					>
 						{trailingNode}
 					</TableCell>
 				) : (

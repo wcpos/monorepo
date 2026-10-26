@@ -60,7 +60,7 @@ export function ProductRow({
 					onPress={() => void addProduct(record)}
 					empty={
 						<IconButton
-							name="increment"
+							name="plus"
 							accessibilityLabel={t('common.add_to_cart')}
 							testID="add-to-cart-button"
 							onPress={(event) => {

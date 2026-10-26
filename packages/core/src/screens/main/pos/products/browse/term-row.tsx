@@ -15,6 +15,8 @@ import { termTestId } from './term-tile';
 
 // Must match initial-settings.json: pos-products.columns[image].width.
 export const TERM_IMAGE_COLUMN_WIDTH = 68;
+// Must match initial-settings.json: pos-products.columns[actions].width.
+export const TERM_ACTIONS_COLUMN_WIDTH = 60;
 
 /** A term as a row of the products card: thumb, name and count, a chevron at the end. */
 /**
@@ -55,10 +57,24 @@ export function TermRow({
 			accessibilityLabel={name}
 			// It sits among the products table's rows, so it keeps their height; on a fine pointer
 			// its thumb and name sit in the table's own columns, which carry the padding.
-			className={pointer === 'fine' ? 'gap-0 px-0 py-0' : 'py-0'}
+			className={pointer === 'fine' ? 'gap-0 px-0 py-0' : 'py-1.5'}
 			bodyClassName={pointer === 'fine' ? 'gap-0.5 px-3 py-1.5' : 'gap-0.5'}
 			testID={termTestId(term)}
-			trailing={<Icon name="chevronRight" className="text-muted-foreground" />}
+			// The chevron sits where a product row's `+` does: a row-sized target, centred in the
+			// table's actions column on a fine pointer (`DataTableRow`).
+			trailing={
+				<View
+					style={
+						pointer === 'fine'
+							? getColumnStyle({ width: TERM_ACTIONS_COLUMN_WIDTH, align: 'center' })
+							: undefined
+					}
+				>
+					<View className="min-w-row items-center">
+						<Icon name="chevronRight" className="text-muted-foreground" />
+					</View>
+				</View>
+			}
 			leading={
 				showImage && (
 					<View

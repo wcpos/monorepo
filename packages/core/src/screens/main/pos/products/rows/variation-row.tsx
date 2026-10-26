@@ -50,7 +50,7 @@ export function VariationRow({ item, parent }: Props) {
 					onPress={add}
 					empty={
 						<IconButton
-							name="increment"
+							name="plus"
 							accessibilityLabel={t('common.add_to_cart')}
 							testID="add-variation-to-cart-button"
 							onPress={(e) => {

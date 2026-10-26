@@ -20,7 +20,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> 
 	return (
 		<IconButton
 			testID="add-to-cart-button"
-			name="increment"
+			name="plus"
 			variant="success"
 			size="4xl"
 			accessibilityLabel={t('common.add_to_cart')}

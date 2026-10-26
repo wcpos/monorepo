@@ -28,6 +28,9 @@ export function PosterThumb({
 	return (
 		<View
 			className={`relative overflow-visible ${size === 'md' ? 'size-14' : 'size-10'}`}
+			// The cards under a stack reach FAR past the thumb's own square; the box keeps that room,
+			// so a row's padding is measured from the last card, not from a square it draws past.
+			style={stacked ? { marginRight: FAR.top, marginBottom: FAR.top } : undefined}
 			testID={testID}
 		>
 			{stacked && (
