@@ -78,6 +78,7 @@ export function AddDiscount() {
 								percent={percent}
 								onChange={(next) => form.setValue('percent', next)}
 								testID="discount-percent-switch"
+								aria-labelledby="discount-amount-form-item"
 							/>
 						</HStack>
 					</PropertyRow>

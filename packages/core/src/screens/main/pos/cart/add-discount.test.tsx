@@ -126,22 +126,27 @@ jest.mock('@wcpos/components/segmented-control', () => ({
 		segments,
 		value,
 		onValueChange,
+		...props
 	}: {
 		segments: { value: string; label: string; testID?: string }[];
 		value: string;
 		onValueChange: (value: string) => void;
-	}) =>
-		segments.map((segment) => (
-			<button
-				key={segment.value}
-				role="radio"
-				aria-checked={segment.value === value}
-				data-testid={segment.testID}
-				onClick={() => onValueChange(segment.value)}
-			>
-				{segment.label}
-			</button>
-		)),
+		'aria-labelledby'?: string;
+	}) => (
+		<div role="radiogroup" aria-labelledby={props['aria-labelledby']}>
+			{segments.map((segment) => (
+				<button
+					key={segment.value}
+					role="radio"
+					aria-checked={segment.value === value}
+					data-testid={segment.testID}
+					onClick={() => onValueChange(segment.value)}
+				>
+					{segment.label}
+				</button>
+			))}
+		</div>
+	),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '$', currency: 'USD' }),
@@ -255,6 +260,10 @@ it.each([
 it("Add Discount's unit is the amount row's toggle: the store's symbol, then %", async () => {
 	render(<AddDiscount />);
 	expect(screen.getAllByRole('radio').map((segment) => segment.textContent)).toEqual(['$', '%']);
+	// The group is named by the row's key, not by a label of its own.
+	expect(screen.getByRole('radiogroup').getAttribute('aria-labelledby')).toBe(
+		'discount-amount-form-item'
+	);
 	fireEvent.click(screen.getByTestId('discount-percent-switch'));
 	expect(screen.getByTestId('discount-percent-switch').getAttribute('aria-checked')).toBe('true');
 });
