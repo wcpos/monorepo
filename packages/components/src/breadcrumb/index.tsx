@@ -50,20 +50,26 @@ export function Breadcrumb({
 				phone && index < parents.length - 1 ? null : (
 					<React.Fragment key={index}>
 						{!phone && index > 0 && separator}
+						{/* The Pressable is the target: the row's height (`min-h-ctl`), because React Native
+						    Web ignores `hitSlop` (lib/min-target.ts). The hover surface is the inner view,
+						    drawn to the word (ledger line 8). */}
 						<Pressable
 							role="button"
-							className="web:hover:bg-muted active:bg-muted rounded-md px-2 py-1"
-							hitSlop={{ top: 8, bottom: 8 }}
+							className="min-h-ctl max-w-full justify-center"
 							onPress={parent.onPress}
 							testID={parent.testID ?? id(`parent-${index}`)}
 							{...{ ref: index === parents.length - 1 ? backRef : undefined }}
 						>
-							<TextClassContext.Provider value={undefined}>
-								<HStack className="max-w-full gap-1">
-									{phone && <Icon name="chevronLeft" size="sm" />}
-									<Text className="text-foreground shrink font-medium">{parent.label}</Text>
-								</HStack>
-							</TextClassContext.Provider>
+							{({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => (
+								<View className={cn('rounded-md px-2 py-1', (hovered || pressed) && 'bg-muted')}>
+									<TextClassContext.Provider value={undefined}>
+										<HStack className="max-w-full gap-1">
+											{phone && <Icon name="chevronLeft" size="sm" />}
+											<Text className="text-foreground shrink font-medium">{parent.label}</Text>
+										</HStack>
+									</TextClassContext.Provider>
+								</View>
+							)}
 						</Pressable>
 					</React.Fragment>
 				)

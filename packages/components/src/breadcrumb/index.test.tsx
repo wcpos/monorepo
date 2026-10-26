@@ -140,6 +140,9 @@ it('grows with a wrapped label and keeps every crumb at the pointer floor', () =
 	expect(root).toContain('min-h-ctl');
 	expect(root).toContain('flex-wrap');
 	expect(root).not.toContain('h-ctl');
-	expect(source).toContain('hitSlop={{ top: 8, bottom: 8 }}');
+	// The Pressable itself is row-high: React Native Web ignores hitSlop (lib/min-target.ts).
+	const pressable = source.match(/<Pressable[\s\S]*?className="([^"]*)"/)?.[1]?.split(' ') ?? [];
+	expect(pressable).toContain('min-h-ctl');
+	expect(source).not.toContain('hitSlop=');
 	expect(source).toContain('role="button"');
 });
