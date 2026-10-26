@@ -66,5 +66,5 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 		})
 	);
 
-	return { ...numberFormat, currencySymbol, prefix, suffix };
+	return { ...numberFormat, currency, currencySymbol, prefix, suffix };
 };

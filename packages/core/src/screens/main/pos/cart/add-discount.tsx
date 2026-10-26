@@ -1,16 +1,16 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormItem } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
+import { AmountUnitToggle } from '../../components/amount-unit-toggle';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { NumberInput } from '../../components/number-input';
@@ -58,35 +58,30 @@ export function AddDiscount() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={percent ? NumberInput : CurrencyInput}
-									label={percent ? t('pos_cart.percent') : t('pos_cart.amount')}
-									testID="discount-amount-input"
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<VStack className="flex-1 justify-center">
-						<FormField
-							control={form.control}
-							name="percent"
-							render={({ field }) => (
-								<FormSwitch
-									label={t('pos_cart.percent')}
-									testID="discount-percent-switch"
-									{...field}
-								/>
-							)}
-						/>
-					</VStack>
-				</HStack>
+				<PropertyList>
+					<PropertyRow label={t('pos_cart.amount')} nativeID="discount-amount-form-item">
+						<HStack className="gap-2">
+							<FormField
+								control={form.control}
+								name="amount"
+								render={({ field }) => (
+									<FormItem nativeID="discount-amount" className="flex-1">
+										<FormInput
+											customComponent={percent ? NumberInput : CurrencyInput}
+											testID="discount-amount-input"
+											{...field}
+										/>
+									</FormItem>
+								)}
+							/>
+							<AmountUnitToggle
+								percent={percent}
+								onChange={(next) => form.setValue('percent', next)}
+								testID="discount-percent-switch"
+							/>
+						</HStack>
+					</PropertyRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter
 				close

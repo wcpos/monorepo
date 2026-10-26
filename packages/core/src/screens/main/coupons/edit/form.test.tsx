@@ -13,6 +13,7 @@ const mockFlush = jest.fn(async () => true);
 const mockPushDocument = jest.fn();
 let capturedChange: (changes: Record<string, unknown>) => boolean | Promise<boolean>;
 let mockIsPro = true;
+let mockSavedName = '';
 let mockBeforeSync: (() => Promise<boolean>) | undefined;
 let mockOnSynced: (() => void) | undefined;
 const formValues: Record<string, unknown> = {};
@@ -52,6 +53,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useMarkSaved: () => mockMarkSaved,
+	useSavedName: () => mockSavedName,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
 		return { flush: mockFlush };
@@ -231,24 +233,29 @@ jest.mock('../../components/coupon/discount-amount-input', () => ({
 }));
 jest.mock('../../components/coupon/expiry-preset-chips', () => ({ ExpiryPresetChips: () => null }));
 jest.mock('../../components/coupon/status-select', () => ({ StatusSelect: () => null }));
+// Each mark sits in its row's trailing slot (the custom field rows' mark is MetaDataForm's own).
 it('renders the newly covered Saved roots after their matching writes', async () => {
 	const { CouponForm } = jest.requireActual('../../components/coupon/coupon-form');
-	renderForm();
-	render(<CouponForm form={form} footer={{}} />);
-	for (const [root, value] of Object.entries({
+	const roots = {
 		discount_type: 'percent',
 		usage_limit: 1,
 		individual_use: true,
 		free_shipping: true,
 		status: 'draft',
-		meta_data: [{ key: 'colour', value: 'red' }],
-	})) {
-		formValues[root] = value;
+	};
+	Object.assign(formValues, roots);
+	renderForm();
+	const view = render(<CouponForm form={form} footer={{}} />);
+	for (const [root, value] of Object.entries(roots)) {
 		await capturedChange({ [root]: value });
 		expect(mockLocalPatch).toHaveBeenLastCalledWith({ document: record, data: { [root]: value } });
 		expect(mockMarkSaved).toHaveBeenLastCalledWith([root]);
-		expect(screen.getAllByTestId(`saved-${root}`)).toHaveLength(root === 'usage_limit' ? 2 : 1);
+		mockSavedName = root;
+		view.rerender(<CouponForm form={form} footer={{}} />);
+		// One-time use is a total of one: Total uses is withdrawn, so its mark shows once.
+		expect(screen.getAllByTestId(`saved-${root}`)).toHaveLength(1);
 	}
+	mockSavedName = '';
 });
 
 // A shared form must hand roles to the real footer, not render the descriptor as a child.

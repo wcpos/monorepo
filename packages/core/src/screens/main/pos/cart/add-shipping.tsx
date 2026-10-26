@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
@@ -11,11 +10,12 @@ import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
@@ -92,76 +92,79 @@ export function AddShipping() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="method_title"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('pos_cart.shipping_method_title')}
-									placeholder={t('common.shipping')}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="method_id"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									customComponent={ShippingMethodSelect}
-									label={t('pos_cart.shipping_method')}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('pos_cart.amount')}
-									testID="shipping-amount-input"
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<View className="flex-1 justify-center">
+				<PropertyList>
+					<PropertyRow
+						label={t('pos_cart.shipping_method_title')}
+						nativeID="shipping-title-form-item"
+					>
 						<FormField
 							control={form.control}
-							name="prices_include_tax"
+							name="method_title"
 							render={({ field }) => (
-								<FormSwitch
-									label={t('pos_cart.amount_includes_tax')}
-									testID="shipping-includes-tax-switch"
-									{...field}
-								/>
+								<FormItem nativeID="shipping-title">
+									<FormInput placeholder={t('common.shipping')} {...field} />
+								</FormItem>
 							)}
 						/>
-					</View>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="tax_status"
-					render={({ field }) => (
-						<FormRadioGroup
-							label={t('common.tax_status')}
-							customComponent={TaxStatusRadioGroup}
-							{...field}
+					</PropertyRow>
+					<PropertyRow label={t('pos_cart.shipping_method')} nativeID="shipping-method-form-item">
+						<FormField
+							control={form.control}
+							name="method_id"
+							render={({ field: { value, onChange, ...rest } }) => (
+								<FormItem nativeID="shipping-method">
+									<FormSelect
+										customComponent={ShippingMethodSelect}
+										value={value ?? ''}
+										onChange={onChange}
+										{...rest}
+									/>
+								</FormItem>
+							)}
 						/>
-					)}
-				/>
+					</PropertyRow>
+					<PropertyRow label={t('pos_cart.amount')} nativeID="shipping-amount-form-item">
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
+								<FormItem nativeID="shipping-amount">
+									<FormInput
+										customComponent={CurrencyInput}
+										testID="shipping-amount-input"
+										{...field}
+									/>
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+					<PropertyRow
+						label={t('pos_cart.amount_includes_tax')}
+						nativeID="shipping-includes-tax-form-item"
+						trailing={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormItem nativeID="shipping-includes-tax">
+										<FormSwitch testID="shipping-includes-tax-switch" {...field} />
+									</FormItem>
+								)}
+							/>
+						}
+					/>
+					<PropertyRow label={t('common.tax')} nativeID="shipping-tax-form-item">
+						<FormField
+							control={form.control}
+							name="tax_status"
+							render={({ field }) => (
+								<FormItem nativeID="shipping-tax">
+									<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter
 				close
