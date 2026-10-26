@@ -28,7 +28,7 @@ import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
 import { usePanelSide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
-import { activeFilterLabels, POSFilterBar } from './filter-bar/filter-bar';
+import { POSFilterBar, useActiveConditionLabels } from './filter-bar/filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
 import { useBarcode } from './use-barcode';
 import { useFitPageSize } from './use-fit-page-size';
@@ -215,7 +215,7 @@ function POSProductsContent({
 		searchPending.current = true;
 		router.navigate(tillHref(true, 'products'));
 	});
-	const { uiSettings, getUILabel } = useUISettings('pos-products');
+	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const handle = useProductsQueryHandle(state);
@@ -347,9 +347,10 @@ function POSProductsContent({
 		filters: { categories: [], tags: [], brands: [], ...initialFilters },
 		sort: getPOSProductSort(sortBy, sortDirection),
 	};
+	const conditionLabels = useActiveConditionLabels(filterItems, state, resetState, browsePlace);
 	const conditions = [
 		...(state.search.trim() ? [`“${state.search.trim()}”`] : []),
-		...activeFilterLabels(filterItems, state, resetState, browsePlace, getUILabel),
+		...conditionLabels,
 	].join(', ');
 	const placeTerm = browsePlace?.term;
 	const placeCount = placeTerm?.kind === 'term' ? placeTerm.count : census;

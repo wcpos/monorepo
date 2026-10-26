@@ -2,7 +2,7 @@ import * as React from 'react';
 import { type ScrollViewInstance, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import {
 	DropdownMenu,
@@ -61,25 +61,67 @@ import { clearConditions, isPlaceCondition, type LevelPlace } from '../browse/le
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { getPOSProductSort } from '../pos-product-sort';
 
-/** The lit, visible pills in bar order, named as the filter-bar editor names them. */
-export function activeFilterLabels(
+/** The lit, visible pills and active quick filters, in bar order, the place's own excluded. */
+export function activeConditions(
 	items: FilterBarItem[],
 	state: Parameters<typeof isQuickFilterActive>[1],
 	resetState: Parameters<typeof isQuickFilterActive>[2],
-	place: LevelPlace | null,
-	getUILabel: (id: string) => string
+	place: LevelPlace | null
+): FilterBarItem[] {
+	return items.filter((item) => {
+		if (item.type === 'quick') return isQuickFilterActive(item, state, resetState);
+		const value = state.filters[item.id];
+		return (
+			item.show &&
+			!isPlaceCondition(place, item.id, value) &&
+			(Array.isArray(value) ? value.length > 0 : !!value)
+		);
+	});
+}
+
+const TAXONOMY_FIELDS = ['categories', 'tags', 'brands'] as const;
+
+/** The resident names of the selected terms, read as state: the empty state is composed in render. */
+function useResidentTermNames(
+	field: (typeof TAXONOMY_FIELDS)[number],
+	ids: number[] | undefined
 ): string[] {
-	return items
-		.filter((item) => {
-			if (item.type === 'quick') return isQuickFilterActive(item, state, resetState);
-			const value = state.filters[item.id];
-			return (
-				item.show &&
-				!isPlaceCondition(place, item.id, value) &&
-				(Array.isArray(value) ? value.length > 0 : !!value)
-			);
-		})
-		.map((item) => (item.type === 'pill' ? getUILabel(item.id) : item.label));
+	const resource = useEngineRecordsByWooId(field, ids ?? []);
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; same exception as use-first-answer.ts (2026-10-01).
+	const value = useObservableEagerState(resource.valueRef$$);
+	return (value?.current ?? []).flatMap((record) =>
+		record.payload.name ? [record.payload.name] : []
+	);
+}
+
+/**
+ * The active conditions as the empty state names them: a quick filter by its label, the stock
+ * pill by its selected status (In stock, not "Stock Status"), a taxonomy pill by the selected
+ * terms' names (the field's label until they are resident), the rest by their pill label.
+ */
+export function useActiveConditionLabels(
+	items: FilterBarItem[],
+	state: Parameters<typeof isQuickFilterActive>[1],
+	resetState: Parameters<typeof isQuickFilterActive>[2],
+	place: LevelPlace | null
+): string[] {
+	const { getUILabel } = useUISettings('pos-products');
+	const { getLabel: stockLabel } = useStockStatusLabel();
+	const names = {
+		categories: useResidentTermNames(
+			'categories',
+			state.filters.categories as number[] | undefined
+		),
+		tags: useResidentTermNames('tags', state.filters.tags as number[] | undefined),
+		brands: useResidentTermNames('brands', state.filters.brands as number[] | undefined),
+	};
+	return activeConditions(items, state, resetState, place).map((item) => {
+		if (item.type === 'quick') return item.label;
+		if (item.id === 'stock_status') return stockLabel(String(state.filters.stock_status));
+		const field = TAXONOMY_FIELDS.find((name) => name === item.id);
+		if (field) return names[field].length ? names[field].join(', ') : getUILabel(item.id);
+		return getUILabel(item.id);
+	});
 }
 
 function BarSlot({

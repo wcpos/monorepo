@@ -160,7 +160,7 @@ jest.mock('./filter-bar/filter-bar', () => ({
 		mockFilterBarProps = props;
 		return null;
 	},
-	activeFilterLabels: () => [],
+	useActiveConditionLabels: () => [],
 }));
 jest.mock('../../components/query-search-input', () => ({
 	QuerySearchInput: ({ ref, testID }: { ref?: React.Ref<HTMLInputElement>; testID?: string }) => (
