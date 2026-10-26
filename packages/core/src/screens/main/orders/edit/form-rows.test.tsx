@@ -185,6 +185,17 @@ it('is property rows: Customer, Status, Customer note, Billing, Shipping, a lock
 	expect(offered()).toEqual(['tax_id.tax_id', 'common.currency', 'common.custom_field']);
 });
 
+it('a billing with only a name and an email is a Billing row, never an add button (Codex, #2975)', () => {
+	render(
+		<EditOrderForm
+			order={order({ billing: { first_name: 'Ada', email: 'ada@example.com' }, shipping: {} })}
+		/>
+	);
+	expect(row('billing')).toBeTruthy();
+	expect(screen.queryByTestId('order-add-billing')).toBeNull();
+	expect(mockSaveOrderFields).not.toHaveBeenCalled();
+});
+
 it('a currency other than the store’s is a row; an added Currency is a row with no Remove', () => {
 	const view = render(<EditOrderForm order={order({ currency: 'EUR' })} />);
 	expect(row('currency')).toBeTruthy();

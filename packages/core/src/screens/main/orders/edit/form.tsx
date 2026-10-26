@@ -352,7 +352,22 @@ function EditOrderFormFields({ order }: Props) {
 		? PUSHABLE_ORDER_STATUSES
 		: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
 
-	const presence = useFieldPresence(ORDER_ADDRESS_FACTS, address.isEmpty, address.clear);
+	// Billing holds the order's contact facts too, so a name or an email alone is a Billing row
+	// (never hidden behind an add that would write the store's country), and Remove clears them all.
+	const presence = useFieldPresence(
+		ORDER_ADDRESS_FACTS,
+		(name) =>
+			name === 'billing'
+				? !ORDER_BILLING_PARTS.some((part) => !!billing?.[part])
+				: address.isEmpty(name),
+		(name) =>
+			name === 'billing'
+				? form.setValue('billing', {
+						...form.getValues('billing'),
+						...Object.fromEntries(ORDER_BILLING_PARTS.map((part) => [part, ''])),
+					})
+				: address.clear(name)
+	);
 	const { offered, rows } = address.layout(presence, {
 		billingMark: true,
 		billingParts: ORDER_BILLING_PARTS,
