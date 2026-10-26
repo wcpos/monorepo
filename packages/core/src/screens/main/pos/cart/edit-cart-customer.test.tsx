@@ -181,14 +181,17 @@ jest.mock('../../components/editable-field', () => ({
 		onChangeDraft,
 		placeholder,
 		startEditing,
+		testID,
 	}: {
 		value: string;
 		onChangeText: (value: string) => void;
 		onChangeDraft?: (value: string) => void;
 		placeholder: string;
 		startEditing?: boolean;
+		testID?: string;
 	}) => (
 		<input
+			data-testid={testID}
 			aria-label={placeholder}
 			value={value}
 			autoFocus={startEditing}
@@ -379,6 +382,13 @@ describe('EditCartCustomerForm', () => {
 			.requireActual('fs')
 			.readFileSync(require.resolve('./edit-cart-customer'), 'utf8');
 		expect(source).not.toMatch(/Collapsible|Accordion/);
+	});
+
+	it('every text part carries a stable testID, so the two name parts are told apart', () => {
+		render(<EditCartCustomerForm />);
+		expect(screen.getByTestId('cart-address-field-billing-first_name')).toBeTruthy();
+		expect(screen.getByTestId('cart-address-field-billing-last_name')).toBeTruthy();
+		expect(screen.getByTestId('cart-address-field-billing-email')).toBeTruthy();
 	});
 
 	it('adding a billing address opens its parts in place with Address 1 focused', () => {

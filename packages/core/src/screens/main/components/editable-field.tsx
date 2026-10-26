@@ -122,6 +122,8 @@ export function EditableField({
 			}
 			onPress={() => setEditing(true)}
 			disabled={!editable}
+			// One stable id in both modes: the resting button here, the editor through `props`.
+			testID={props.testID}
 		>
 			{/* The field's value is data, not a quiet action: on a ghost it keeps the foreground
 			    over the variant's muted label (a cart line's name must not read as disabled). */}

@@ -399,6 +399,7 @@ function TextPart(props: { name: string; placeholder: string; autoFocus?: boolea
 						onChangeDraft={field.onChange}
 						placeholder={props.placeholder}
 						startEditing={props.autoFocus}
+						testID={`cart-address-field-${props.name.replace('.', '-')}`}
 					/>
 					<FormMessage />
 				</FormItem>
