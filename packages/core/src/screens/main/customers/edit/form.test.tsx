@@ -28,6 +28,8 @@ const form = {
 	setValue: jest.fn(),
 	reset: jest.fn(),
 	trigger: jest.fn(async () => true),
+	// The address rows subscribe to resets; this fake form never fires one.
+	watch: jest.fn(() => ({ unsubscribe: jest.fn() })),
 };
 const mockUseForm = jest.fn(() => form);
 jest.mock('react-hook-form', () => ({

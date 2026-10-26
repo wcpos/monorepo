@@ -24,6 +24,8 @@ import { EditableField } from '../editable-field';
 const ADDRESS_PARTS = ['address_1', 'address_2', 'city', 'postcode', 'country', 'state'] as const;
 const LINE_PARTS = ['address_1', 'address_2', 'city', 'state', 'postcode', 'country'] as const;
 const SHIPPING_PARTS = ['first_name', 'last_name', 'company', 'phone', ...ADDRESS_PARTS] as const;
+/** A customer's billing may carry its own name and email (distinct from the account's). */
+export const BILLING_PARTS = ['first_name', 'last_name', 'email', ...ADDRESS_PARTS] as const;
 /** The address facts a customer offers, in canonical order: Company, then the two addresses. */
 export const ADDRESS_FACTS = [
 	{ name: 'company' },
@@ -68,10 +70,16 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 		state: t('common.state'),
 	};
 	const { country: storeCountry } = useBaseTaxLocation();
-	const [linked, setLinked] = React.useState(() => {
-		const { billing, shipping } = form.getValues();
-		return !hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing);
-	});
+	const isLinked = ({ billing, shipping }: { billing?: Address; shipping?: Address }) =>
+		!hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing);
+	const [linked, setLinked] = React.useState(() => isLinked(form.getValues()));
+	// A reset (Sync took the store's copy) fires the watch with no name: the link is read again.
+	React.useEffect(() => {
+		const subscription = form.watch((values, { name }) => {
+			if (!name) setLinked(isLinked(values));
+		});
+		return () => subscription.unsubscribe();
+	}, [form]);
 	const [open, setOpen] = React.useState({ billing: false, shipping: false });
 	const [focus, setFocus] = React.useState<string | null>(null);
 	const { billing: b, shipping: s } = useWatch({ control: form.control });
@@ -108,7 +116,7 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 	/** The address rows and the offered facts left for the add row, from the record's presence. */
 	const layout = <N extends string>(
 		presence: { present: readonly N[]; offered: readonly N[]; withdraw: (name: N) => void },
-		options: { input?: boolean; billingMark?: boolean } = {}
+		options: { input?: boolean; billingMark?: boolean; billingParts?: readonly string[] } = {}
 	) => {
 		const has = (name: string) => presence.present.includes(name as N);
 		// Shipping is a row whenever billing is: it derives from billing until a verb breaks the link.
@@ -132,6 +140,7 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 						<AddressRows
 							{...common}
 							prefix="billing"
+							parts={options.billingParts}
 							mark={options.billingMark}
 							open={open.billing}
 							onOpen={openPart('billing')}
@@ -191,6 +200,8 @@ export function TextPart(props: {
 							placeholder={props.placeholder}
 							autoFocus={props.autoFocus}
 							secureTextEntry={props.secureTextEntry}
+							// A customer's new password, never the cashier's saved login.
+							autoComplete={props.secureTextEntry ? 'new-password' : undefined}
 							testID={props.testID}
 						/>
 					) : (
@@ -229,6 +240,7 @@ function AddressRows(props: {
 	verbs: Verb[];
 	input?: boolean;
 	mark?: boolean;
+	parts?: readonly string[];
 }) {
 	const { testID, prefix, labels } = props;
 	const t = useT();
@@ -262,7 +274,7 @@ function AddressRows(props: {
 				)}
 			</PropertyRow>
 			{props.open &&
-				(prefix === 'billing' ? ADDRESS_PARTS : SHIPPING_PARTS).map((part) => (
+				(props.parts ?? (prefix === 'billing' ? ADDRESS_PARTS : SHIPPING_PARTS)).map((part) => (
 					<PropertyRow
 						key={part}
 						indent

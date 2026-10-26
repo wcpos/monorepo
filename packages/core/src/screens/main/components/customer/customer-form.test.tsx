@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { CustomerForm, type CustomerFormValues } from './customer-form';
@@ -20,16 +20,19 @@ jest.mock('@wcpos/components/form', () => ({
 		onChange,
 		placeholder,
 		secureTextEntry,
+		autoComplete,
 	}: {
 		testID?: string;
 		value: string;
 		onChange: (value: string) => void;
 		placeholder?: string;
 		secureTextEntry?: boolean;
+		autoComplete?: string;
 	}) => (
 		<input
 			data-testid={testID}
 			type={secureTextEntry ? 'password' : 'text'}
+			autoComplete={autoComplete}
 			placeholder={placeholder}
 			value={value}
 			onChange={(event) => onChange(event.target.value)}
@@ -211,5 +214,31 @@ describe('CustomerForm', () => {
 		expect(value('billing.company')).toBe('');
 		expect(screen.queryByTestId('customer-row-company')).toBeNull();
 		expect(adds()[0]).toBe('customer-add-company');
+	});
+	it("an open billing address shows billing's own name and email parts", () => {
+		render(<Harness values={{ id: 7, billing: { ...ADDRESS, first_name: 'Bill' } }} />);
+		fireEvent.click(screen.getByTestId('customer-edit-billing'));
+		expect(screen.getByTestId('customer-field-billing-first_name')).toBeTruthy();
+		expect(screen.getByTestId('customer-field-billing-email')).toBeTruthy();
+	});
+	it('a reset with a different shipping address (Sync) breaks the Same as billing link', async () => {
+		render(<Harness values={{ id: 7, billing: ADDRESS, shipping: ADDRESS }} />);
+		expect(screen.getByTestId('customer-shipping-different')).toBeTruthy();
+		await act(async () => {
+			harness.form!.reset({
+				id: 7,
+				billing: ADDRESS,
+				shipping: { ...ADDRESS, city: 'York' },
+			} as never);
+		});
+		expect(screen.queryByTestId('customer-shipping-different')).toBeNull();
+		expect(screen.getByTestId('customer-edit-shipping')).toBeTruthy();
+	});
+	it('the password row never takes the cashier’s saved login', () => {
+		render(<Harness values={{}} />);
+		fireEvent.click(screen.getByTestId('customer-add-password'));
+		expect(screen.getByTestId('customer-password-input').getAttribute('autocomplete')).toBe(
+			'new-password'
+		);
 	});
 });

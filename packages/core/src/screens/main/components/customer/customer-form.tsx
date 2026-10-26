@@ -15,7 +15,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { ADDRESS_FACTS, TextPart, useAddressFacts } from './address-rows';
+import { ADDRESS_FACTS, BILLING_PARTS, TextPart, useAddressFacts } from './address-rows';
 import { TAX_ID_DEFAULT_ROW, TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
@@ -92,7 +92,11 @@ export function CustomerForm(props: CustomerFormProps) {
 	);
 	const has = (name: string) => presence.present.includes(name as never);
 	const labels: Record<string, string> = { ...address.labels, password: t('common.password') };
-	const { offered, rows } = address.layout(presence, { input: !editing, billingMark: true });
+	const { offered, rows } = address.layout(presence, {
+		input: !editing,
+		billingMark: true,
+		billingParts: BILLING_PARTS,
+	});
 	const append = (name: 'tax_ids' | 'meta_data', row: object) =>
 		form.setValue(name, [...(form.getValues(name) ?? []), row] as never);
 	const removeVerb = (name: (typeof OFFERED)[number]['name']) => (
