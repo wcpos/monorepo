@@ -14,21 +14,22 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { DialogBody, useDialog } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormCombobox,
 	FormField,
-	FormItem,
-	FormLabel,
 	FormSelect,
 	FormTextarea,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+} from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
 import {
@@ -44,6 +45,7 @@ import { useStoreSession } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
 import { CashierSelect } from '../../../../components/cashier-select';
+import { OrderRow, useCurrencyRow } from '../../../../components/order/order-rows';
 import { OrderStatusSelect } from '../../../../components/order/order-status-select';
 import { pushFailureCode } from '../../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../../contexts/use-push-document';
@@ -51,7 +53,11 @@ import { useCashierLabel } from '../../../../hooks/use-cashier-label';
 import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
 import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import {
+	META_DATA_DEFAULT_ROW,
+	MetaDataForm,
+	metaDataSchema,
+} from '../../../../components/meta-data-form';
 import { useOrderFieldsWrite } from '../../../commands/use-order-fields-write';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
@@ -295,37 +301,41 @@ export function EditOrderMetaForm({
 		}
 	}
 
-	/**
-	 *
-	 */
+	const currencyRow = useCurrencyRow(useWatch({ control: form.control, name: 'currency' }));
+
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="customer_note"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('common.customer_note')}</FormLabel>
-								<SavedMark name="customer_note" label={t('settings.saved')} />
-							</HStack>
-							<FormTextarea testID="order-note-input" minHeight={80} {...field} />
-						</FormItem>
-					)}
-				/>
-				<Form {...handOverForm}>
-					<View className="border-border gap-3 rounded-lg border p-4">
-						<Text className="font-semibold">{t('pos_cart.hand_over')}</Text>
-						<HStack className="gap-4">
+				<PropertyList testID="order-meta-form">
+					<OrderRow
+						prefix="order-meta"
+						id="customer_note"
+						label={t('common.customer_note')}
+						mark="customer_note"
+						align="top"
+					>
+						<FormField
+							control={form.control}
+							name="customer_note"
+							render={({ field }) => (
+								<FormTextarea
+									testID="order-note-input"
+									minHeight={80}
+									{...field}
+									placeholder={t('common.add_value', { label: t('common.customer_note') })}
+								/>
+							)}
+						/>
+					</OrderRow>
+					<Form {...handOverForm}>
+						<OrderRow prefix="order-meta" id="status" label={t('common.status')}>
 							<FormField
 								control={handOverForm.control}
 								name="status"
 								render={({ field }) => (
-									<View className="flex-1" testID="order-meta-status">
+									<View testID="order-meta-status">
 										<FormSelect
-											label={t('common.status')}
 											customComponent={OrderStatusSelect}
 											allowed={allowedStatuses}
 											disabled={!statusPushable}
@@ -334,13 +344,14 @@ export function EditOrderMetaForm({
 									</View>
 								)}
 							/>
+						</OrderRow>
+						<OrderRow prefix="order-meta" id="cashier" label={t('common.cashier')}>
 							<FormField
 								control={handOverForm.control}
 								name="cashier_id"
 								render={({ field }) => (
-									<View className="flex-1" testID="order-meta-cashier">
+									<View testID="order-meta-cashier">
 										<FormCombobox
-											label={t('common.cashier')}
 											customComponent={CashierSelect}
 											portalHost="pos"
 											{...field}
@@ -353,51 +364,68 @@ export function EditOrderMetaForm({
 									</View>
 								)}
 							/>
-						</HStack>
-						<HStack>
-							<Text className="text-muted-foreground flex-1 text-sm">
-								{t('pos_cart.hand_over_hint')}
-							</Text>
-							<Button
-								variant="outline"
-								testID="order-meta-send"
-								disabled={loading || (status === payload.status && cashierId === currentCashierId)}
-								onPress={() => void onSend()}
-							>
-								{t('common.send')}
-							</Button>
-						</HStack>
-					</View>
-				</Form>
-				<Collapsible>
-					<HStack className="justify-between">
-						<CollapsibleTrigger>
-							<Text>{t('common.more')}</Text>
-						</CollapsibleTrigger>
-						{/* The meta rows have no label row of their own; their mark sits on the disclosure. */}
-						<SavedMark name="meta_data" label={t('settings.saved')} />
-					</HStack>
-					<CollapsibleContent className="gap-4">
-						<FormField
-							control={form.control}
-							name="currency"
-							render={({ field }) => (
-								<FormItem>
-									<HStack className="justify-between">
-										<FormLabel>{t('common.currency')}</FormLabel>
-										<SavedMark name="currency" label={t('settings.saved')} />
-									</HStack>
+						</OrderRow>
+						{/* An intent keeps its verb button (property rows rule 12). */}
+						<PropertyRow
+							testID="order-meta-row-hand_over"
+							label={t('pos_cart.hand_over')}
+							trailing={
+								<Button
+									variant="outline"
+									testID="order-meta-send"
+									disabled={
+										loading || (status === payload.status && cashierId === currentCashierId)
+									}
+									onPress={() => void onSend()}
+								>
+									{t('common.send')}
+								</Button>
+							}
+						>
+							<Text className="text-muted-foreground text-sm">{t('pos_cart.hand_over_hint')}</Text>
+						</PropertyRow>
+					</Form>
+					{currencyRow.shown && (
+						<OrderRow
+							prefix="order-meta"
+							id="currency"
+							label={t('common.currency')}
+							mark="currency"
+						>
+							<FormField
+								control={form.control}
+								name="currency"
+								render={({ field }) => (
 									<FormCombobox
 										customComponent={CurrencySelect}
 										{...field}
 										value={field.value ?? ''}
 									/>
-								</FormItem>
-							)}
+								)}
+							/>
+						</OrderRow>
+					)}
+					<MetaDataForm rows testID="order-meta" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					<PropertyAddRow>
+						{!currencyRow.shown && (
+							<PropertyAdd
+								testID="order-meta-add-currency"
+								label={t('common.currency')}
+								onPress={currencyRow.show}
+							/>
+						)}
+						<PropertyAdd
+							testID="order-meta-add-meta_data"
+							label={t('common.custom_field')}
+							onPress={() =>
+								form.setValue('meta_data', [
+									...(form.getValues('meta_data') ?? []),
+									META_DATA_DEFAULT_ROW,
+								])
+							}
 						/>
-						<MetaDataForm hiddenKeys={PROTECTED_ORDER_META_KEYS} />
-					</CollapsibleContent>
-				</Collapsible>
+					</PropertyAddRow>
+				</PropertyList>
 			</DialogBody>
 			<AlertDialog
 				open={!!pending}

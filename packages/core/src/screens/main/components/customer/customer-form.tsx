@@ -184,7 +184,7 @@ export function CustomerForm(props: CustomerFormProps) {
 						{rows}
 						{has('password') &&
 							textRow('password', labels.password, { input: true, verb: removeVerb('password') })}
-						<TaxIdsForm rows testID="customer" />
+						<TaxIdsForm testID="customer" />
 						<MetaDataForm rows testID="customer" />
 						<PropertyAddRow>
 							{offered.map((name) => (

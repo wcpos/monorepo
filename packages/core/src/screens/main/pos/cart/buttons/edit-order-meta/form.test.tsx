@@ -114,10 +114,30 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
+// MetaDataForm's fold mode (the cart lines' consumer) still imports it.
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: mockWrap,
 	CollapsibleContent: mockWrap,
 	CollapsibleTrigger: mockWrap,
+}));
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: mockWrap,
+	PropertyRow: ({
+		label,
+		children,
+		trailing,
+		testID,
+	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode; testID?: string }>) => (
+		<div data-testid={testID}>
+			<span>{label}</span>
+			{children}
+			{trailing}
+		</div>
+	),
+	PropertyVerb: mockButton,
+	PropertyAddRow: mockWrap,
+	PropertyAdd: ({ label, ...props }: { label: string; testID?: string; onPress?: () => void }) =>
+		mockButton({ ...props, children: label }),
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: mockWrap,
@@ -497,7 +517,7 @@ it('a meta row deleted after the store numbered it is written as a tombstone', a
 		meta_data: [...meta, { key: 'custom', value: 'x' }],
 	};
 	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
-	await act(async () => fireEvent.click(screen.getByLabelText('common.remove_item')));
+	await act(async () => fireEvent.click(screen.getByTestId('order-meta-remove-meta-4')));
 	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 	expect(resident.payload.meta_data).toEqual(
 		expect.arrayContaining([{ id: 9, key: 'custom', value: null }, ...meta])
@@ -521,4 +541,31 @@ it('a meta row that arrived from the store while the sheet was open is never tom
 	expect(resident.payload.meta_data).not.toEqual(
 		expect.arrayContaining([expect.objectContaining({ id: 11, value: null })])
 	);
+});
+
+it('is property rows: Customer note, Status, Cashier and the Hand over row with its Send; no More', () => {
+	render(
+		<EditOrderMetaForm order={order as never} {...formProps({ ...payload, cashier_id: '7' })} />
+	);
+	const rows = ['customer_note', 'status', 'cashier', 'hand_over'];
+	for (const id of rows) expect(screen.getByTestId(`order-meta-row-${id}`)).toBeTruthy();
+	expect(screen.getByTestId('order-meta-row-hand_over').textContent).toContain(
+		'pos_cart.hand_over_hint'
+	);
+	expect(
+		screen.getByTestId('order-meta-row-hand_over').contains(screen.getByTestId('order-meta-send'))
+	).toBe(true);
+	expect(screen.queryByText('common.more')).toBeNull();
+	expect(screen.queryByTestId('order-meta-row-currency')).toBeNull();
+});
+
+it('the add row offers Currency and Custom field; an added Currency is a row with no Remove', () => {
+	render(
+		<EditOrderMetaForm order={order as never} {...formProps({ ...payload, cashier_id: '7' })} />
+	);
+	const offered = () => screen.getAllByTestId(/^order-meta-add-/).map((add) => add.textContent);
+	expect(offered()).toEqual(['common.currency', 'common.custom_field']);
+	fireEvent.click(screen.getByTestId('order-meta-add-currency'));
+	expect(screen.getByTestId('order-meta-row-currency').querySelector('button')).toBeNull();
+	expect(offered()).toEqual(['common.custom_field']);
 });
