@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormatAddress } from '@wcpos/components/format';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
@@ -57,7 +56,9 @@ const LABEL = 'text-muted-foreground mb-1 text-xs tracking-wide uppercase';
 
 /**
  * The customer, last as on a receipt: avatar and name, the customer's note right under it,
- * then the addresses and tax ids folded behind one disclosure, closed by default.
+ * then the addresses and tax ids in full. Nothing folds: the section is the end of the
+ * document, so the addresses push nothing out of view, and a receipt prints them whole
+ * (Paul, 2026-10-26: the fold has to justify itself; here it did not).
  */
 export function CustomerSection({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
@@ -71,7 +72,7 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 	const shipping = order.shipping;
 	const same = addressKey(billing) === addressKey(shipping);
 	const taxIds = orderTaxIds(order);
-	const folded = hasAddress(billing) || hasAddress(shipping) || taxIds.length > 0;
+	const facts = hasAddress(billing) || hasAddress(shipping) || taxIds.length > 0;
 
 	return (
 		<Section title={t('common.customer')} last={last}>
@@ -100,48 +101,37 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 					<Text className="text-foreground/80 mt-0.5 text-xs">{order.customer_note}</Text>
 				</View>
 			) : null}
-			{folded ? (
-				<Collapsible className="mt-3">
-					{/* The only way to the addresses on a phone: a full 44 pt target (§ Design 2). */}
-					<CollapsibleTrigger testID="order-modal-addresses-trigger" className="min-h-ctl">
-						<Text className="text-foreground text-sm font-medium">{t('common.addresses')}</Text>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<View className="gap-3 pt-1">
-							{hasAddress(billing) ? (
-								<View>
-									<Text className={LABEL}>{t('common.billing_address')}</Text>
-									<FormatAddress address={billing as Record<string, string>} showName />
-								</View>
-							) : null}
-							{!same && hasAddress(shipping) ? (
-								<View>
-									<Text className={LABEL}>{t('common.shipping_address')}</Text>
-									<FormatAddress address={shipping as Record<string, string>} showName />
-								</View>
-							) : null}
-							{taxIds.length > 0 ? (
-								<View className="gap-1">
-									<Text className={LABEL}>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
-									{taxIds.map((entry, index) => {
-										const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
-										return (
-											<View
-												key={`${entry.type}-${entry.value}-${index}`}
-												className="flex-row gap-2"
-											>
-												<Text className="text-muted-foreground text-xs">
-													{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
-												</Text>
-												<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
-											</View>
-										);
-									})}
-								</View>
-							) : null}
+			{facts ? (
+				<View testID="order-modal-addresses" className="mt-3 gap-3">
+					{hasAddress(billing) ? (
+						<View>
+							<Text className={LABEL}>{t('common.billing_address')}</Text>
+							<FormatAddress address={billing as Record<string, string>} showName />
 						</View>
-					</CollapsibleContent>
-				</Collapsible>
+					) : null}
+					{!same && hasAddress(shipping) ? (
+						<View>
+							<Text className={LABEL}>{t('common.shipping_address')}</Text>
+							<FormatAddress address={shipping as Record<string, string>} showName />
+						</View>
+					) : null}
+					{taxIds.length > 0 ? (
+						<View className="gap-1">
+							<Text className={LABEL}>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
+							{taxIds.map((entry, index) => {
+								const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
+								return (
+									<View key={`${entry.type}-${entry.value}-${index}`} className="flex-row gap-2">
+										<Text className="text-muted-foreground text-xs">
+											{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
+										</Text>
+										<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
+									</View>
+								);
+							})}
+						</View>
+					) : null}
+				</View>
 			) : null}
 		</Section>
 	);
