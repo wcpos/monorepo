@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
@@ -11,22 +10,26 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormRadioGroup,
-	FormSelect,
+	FormItem,
 	FormSwitch,
 	FormTreeCombobox,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+	PropertyVerb,
+} from '@wcpos/components/property-row';
 import { MISC_PRODUCT_ID } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { CategoryTreeLoader } from '../../components/product/category-select';
-import { TaxClassSelect } from '../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { TaxSelect } from '../../components/tax-select';
+import { useFieldPresence } from '../../components/use-field-presence';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddProduct } from '../hooks/use-add-product';
 
@@ -44,6 +47,15 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+/** The offered facts in canonical order, and what Remove writes back. */
+const OFFERED = [
+	{ name: 'sku', cleared: '' },
+	{ name: 'categories', cleared: [] },
+	{ name: 'virtual', cleared: false },
+	{ name: 'downloadable', cleared: false },
+] as const;
+type Offered = (typeof OFFERED)[number]['name'];
 
 /**
  *
@@ -94,31 +106,56 @@ export function AddMiscProduct() {
 		[addProduct, closeDialog, t]
 	);
 
-	/**
-	 * Form submission handlers that include validation
-	 */
 	const onAdd = form.handleSubmit(handleAdd);
-
-	/**
-	 *
-	 */
-	return (
-		<Form {...form}>
-			<DialogBody contentContainerClassName="gap-4">
-				<FormErrors />
-				<FormField
-					control={form.control}
-					name="name"
-					render={({ field }) => (
-						<FormInput label={t('common.name')} placeholder={t('common.product')} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="categories"
-					render={({ field }) => (
+	const values = useWatch({ control: form.control });
+	const write = (name: Offered, value: unknown) =>
+		form.setValue(name, value as never, { shouldDirty: true });
+	const presence = useFieldPresence(
+		OFFERED,
+		(name) => (name === 'categories' ? !values.categories?.length : !values[name]),
+		(name) => write(name, OFFERED.find((field) => field.name === name)?.cleared)
+	);
+	const add = (name: Offered) => {
+		presence.add(name);
+		// An off-by-default switch arrives switched on (property rows rule 7).
+		if (name === 'virtual' || name === 'downloadable') write(name, true);
+	};
+	const labels: Record<Offered, string> = {
+		sku: t('common.sku'),
+		categories: t('common.categories'),
+		virtual: t('products.virtual'),
+		downloadable: t('products.downloadable'),
+	};
+	const toggle = (name: 'virtual' | 'downloadable') => (
+		<FormField
+			control={form.control}
+			name={name}
+			render={({ field }) => (
+				<FormItem nativeID={`misc-product-${name}`}>
+					<FormSwitch testID={`misc-product-${name}-switch`} {...field} />
+				</FormItem>
+			)}
+		/>
+	);
+	const offeredValue: Record<Offered, React.ReactNode> = {
+		sku: (
+			<FormField
+				control={form.control}
+				name="sku"
+				render={({ field }) => (
+					<FormItem nativeID="misc-product-sku">
+						<FormInput testID="misc-product-sku-input" {...field} />
+					</FormItem>
+				)}
+			/>
+		),
+		categories: (
+			<FormField
+				control={form.control}
+				name="categories"
+				render={({ field }) => (
+					<FormItem nativeID="misc-product-categories">
 						<FormTreeCombobox
-							label={t('common.categories')}
 							options={categoryOptions}
 							cascadeSelection={false}
 							placeholder={t('common.select_category')}
@@ -128,76 +165,102 @@ export function AddMiscProduct() {
 						>
 							<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
 						</FormTreeCombobox>
-					)}
-				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="sku"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('common.sku')} {...field} />
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="price"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('common.price')}
-									placeholder="0"
-									testID="misc-product-price-input"
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									customComponent={TaxClassSelect}
-									label={t('common.tax_class')}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<VStack>
-					<FormField
-						control={form.control}
-						name="virtual"
-						render={({ field }) => <FormSwitch label={t('products.virtual')} {...field} />}
-					/>
-					<FormField
-						control={form.control}
-						name="downloadable"
-						render={({ field }) => <FormSwitch label={t('products.downloadable')} {...field} />}
-					/>
-				</VStack>
+					</FormItem>
+				)}
+			/>
+		),
+		virtual: null,
+		downloadable: null,
+	};
+
+	return (
+		<Form {...form}>
+			<DialogBody contentContainerClassName="gap-4">
+				<FormErrors />
+				<PropertyList>
+					<PropertyRow
+						label={t('common.name')}
+						nativeID="misc-product-name-form-item"
+						testID="misc-product-row-name"
+					>
+						<FormField
+							control={form.control}
+							name="name"
+							render={({ field }) => (
+								<FormItem nativeID="misc-product-name">
+									<FormInput placeholder={t('common.product')} {...field} />
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+					<PropertyRow
+						label={t('common.price')}
+						nativeID="misc-product-price-form-item"
+						testID="misc-product-row-price"
+					>
+						<FormField
+							control={form.control}
+							name="price"
+							render={({ field }) => (
+								<FormItem nativeID="misc-product-price">
+									<FormInput
+										customComponent={CurrencyInput}
+										placeholder="0"
+										testID="misc-product-price-input"
+										{...field}
+									/>
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+					<PropertyRow
+						label={t('common.tax')}
+						nativeID="misc-product-tax-form-item"
+						testID="misc-product-row-tax"
+					>
+						<TaxSelect
+							status={values.tax_status ?? 'taxable'}
+							taxClass={values.tax_class ?? 'standard'}
+							onChange={(next) => {
+								form.setValue('tax_status', next.tax_status);
+								form.setValue('tax_class', next.tax_class);
+							}}
+							testID="misc-product-tax-select"
+							aria-labelledby="misc-product-tax-form-item"
+						/>
+					</PropertyRow>
+					{presence.present.map((name) => (
+						<PropertyRow
+							key={name}
+							label={labels[name]}
+							nativeID={`misc-product-${name}-form-item`}
+							testID={`misc-product-row-${name}`}
+							trailing={
+								<>
+									{(name === 'virtual' || name === 'downloadable') && toggle(name)}
+									<PropertyVerb
+										testID={`misc-product-remove-${name}`}
+										onPress={() => presence.withdraw(name)}
+									>
+										{t('common.remove')}
+									</PropertyVerb>
+								</>
+							}
+						>
+							{offeredValue[name]}
+						</PropertyRow>
+					))}
+					<PropertyAddRow>
+						{presence.offered.map((name) => (
+							<PropertyAdd
+								key={name}
+								testID={`misc-product-add-${name}`}
+								label={labels[name]}
+								onPress={() => add(name)}
+							/>
+						))}
+					</PropertyAddRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter
 				close
