@@ -27,7 +27,8 @@ export function VariableProductRow({
 					accessibilityRole="button"
 					accessibilityLabel={name}
 					onPress={() => onDrill(props.item.original.record)}
-					className="min-h-row justify-center"
+					// The same row-sized target as the `+` and the in-cart count, so the column lines up.
+					className="min-h-row min-w-row items-center justify-center"
 				>
 					<Icon name="chevronRight" />
 				</Pressable>
