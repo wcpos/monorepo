@@ -1,22 +1,29 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { Form, FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
+import { Form, SavedMark, useSavedName } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter, type DialogFooterProps } from '@wcpos/components/dialog';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+	PropertyVerb,
+} from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { ADDRESS_FACTS, BILLING_PARTS, TextPart, useAddressFacts } from './address-rows';
+import { TAX_ID_DEFAULT_ROW, TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
+import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { BillingAddressForm, billingAddressSchema } from '../billing-address-form';
+import { billingAddressSchema } from '../billing-address-form';
 import { FormErrors } from '../form-errors';
-import { MetaDataForm, metaDataSchema } from '../meta-data-form';
-import { ShippingAddressForm, shippingAddressSchema } from '../shipping-address-form';
-import { TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
+import { META_DATA_DEFAULT_ROW, MetaDataForm, metaDataSchema } from '../meta-data-form';
+import { shippingAddressSchema } from '../shipping-address-form';
+import { useFieldPresence } from '../use-field-presence';
 
 /**
  *
@@ -59,160 +66,139 @@ interface CustomerFormProps {
 	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
 }
 
+/** The offered facts in canonical order after the asked ones; Tax ID and Custom field follow. */
+const OFFERED = [...ADDRESS_FACTS, { name: 'password' }] as const;
+/** The lists (rows + add): the add button appends one empty row. */
+const LISTS = [
+	['tax_ids', 'tax_id.tax_id', TAX_ID_DEFAULT_ROW],
+	['meta_data', 'common.custom_field', META_DATA_DEFAULT_ROW],
+] as const;
+type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode; input?: boolean };
+
+/**
+ * A customer as property rows. A creation form is typed into; an edit (the record has an id,
+ * ledger line 2) shows values at rest that the modal autosaves, with Username and Role locked.
+ */
 export function CustomerForm(props: CustomerFormProps) {
 	const { form, footer, renderLayout } = props;
 	const t = useT();
+	const saved = useSavedName();
+	const editing = !!(form.getValues() as Record<string, unknown>).id;
+	const { focus, ...address } = useAddressFacts(form, 'customer');
+	const presence = useFieldPresence(
+		OFFERED,
+		(name) => (name === 'password' ? !form.getValues('password') : address.isEmpty(name)),
+		(name) => (name === 'password' ? form.setValue('password', '') : address.clear(name))
+	);
+	const has = (name: string) => presence.present.includes(name as never);
+	const labels: Record<string, string> = { ...address.labels, password: t('common.password') };
+	const { offered, rows } = address.layout(presence, {
+		input: !editing,
+		billingMark: true,
+		billingParts: BILLING_PARTS,
+	});
+	const append = (name: 'tax_ids' | 'meta_data', row: object) =>
+		form.setValue(name, [...(form.getValues(name) ?? []), row] as never);
+	const removeVerb = (name: (typeof OFFERED)[number]['name']) => (
+		<PropertyVerb testID={`customer-remove-${name}`} onPress={() => presence.withdraw(name)}>
+			{t('common.remove')}
+		</PropertyVerb>
+	);
+	/** One fact; its verb hides while one of its Saved marks shows, `field` names its control. */
+	const row = (id: string, label: string, value: React.ReactNode, o: RowOptions = {}) => {
+		const mark = (o.marks ?? [id]).find((name) => name === saved);
+		return (
+			<PropertyRow
+				testID={`customer-row-${id}`}
+				label={label}
+				nativeID={o.field && `${o.field.replace('.', '-')}-form-item`}
+				trailing={mark ? <SavedMark name={mark} label={t('settings.saved')} /> : o.verb}
+			>
+				{value}
+			</PropertyRow>
+		);
+	};
+	/** A text part; its id (`customer-first-name-input`) is the field's, billing's prefix dropped. */
+	const part = (field: string, placeholder: string, input = !editing) => {
+		const id = field.replace('billing.', '');
+		return (
+			<TextPart
+				key={id}
+				name={field}
+				placeholder={placeholder}
+				input={input}
+				autoFocus={focus === id}
+				secureTextEntry={id === 'password'}
+				testID={`customer-${id.replace('_', '-')}-input`}
+			/>
+		);
+	};
+	const textRow = (field: string, label: string, o: RowOptions = {}) => {
+		const value = part(field, t('common.add_value', { label }), o.input);
+		return row(field.replace('billing.', ''), label, value, { field, ...o });
+	};
+	// Set elsewhere is locked: the value and where it is set (property rows rule 6).
+	const locked = (id: 'username' | 'role', label: string, where: string) =>
+		row(id, label, String(form.getValues(id) ?? ''), {
+			verb: <Text className="text-muted-foreground text-sm">{where}</Text>,
+		});
 
-	/**
-	 *
-	 */
-	const handleCopyBillingToShipping = React.useCallback(() => {
-		const billingAddress = form.getValues().billing;
-		form.setValue('shipping', billingAddress);
-	}, [form]);
-
-	/**
-	 * The username is editable on create, but not on edit.
-	 * We can check whether the customer has an ID to determine if we are on an edit.
-	 */
-	const hasUsername = !!(form.getValues() as Record<string, unknown>).id;
-
-	/**
-	 *
-	 */
 	const body = (
 		<Form {...form}>
-			<VStack className="gap-4">
-				<FormErrors />
-				<HStack className="w-full gap-4">
-					<FormField
-						control={form.control}
-						name="first_name"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.first_name')}</FormLabel>
-									<SavedMark name="first_name" label={t('settings.saved')} />
-								</HStack>
-								<FormInput
-									testID="customer-first-name-input"
-									{...field}
-									value={field.value ?? ''}
+			<CountriesProvider>
+				<VStack className="gap-4">
+					<FormErrors />
+					<PropertyList testID="customer-form">
+						{row(
+							'name',
+							t('common.name'),
+							<HStack className="gap-2">
+								{part('first_name', labels.first_name)}
+								{part('last_name', labels.last_name)}
+							</HStack>,
+							{ field: 'first_name', marks: ['first_name', 'last_name'] }
+						)}
+						{textRow('email', labels.email)}
+						{/* Billing's Saved mark sits on its address row, or here while that is not a row. */}
+						{textRow('billing.phone', labels.phone, { marks: has('billing') ? [] : ['billing'] })}
+						{editing
+							? locked('username', t('common.username'), t('customers.set_at_creation'))
+							: textRow('username', t('common.username'))}
+						{editing && locked('role', t('common.role'), t('customers.set_in_wordpress'))}
+						{has('company') &&
+							textRow('billing.company', labels.company, { verb: removeVerb('company') })}
+						{rows}
+						{has('password') &&
+							textRow('password', labels.password, { input: true, verb: removeVerb('password') })}
+						<TaxIdsForm rows testID="customer" />
+						<MetaDataForm rows testID="customer" />
+						<PropertyAddRow>
+							{offered.map((name) => (
+								<PropertyAdd
+									key={name}
+									// The perf spec presses Billing address by this id to open its parts.
+									testID={
+										name === 'billing' ? 'customer-billing-address-toggle' : `customer-add-${name}`
+									}
+									label={labels[name]}
+									onPress={() => {
+										presence.add(name);
+										address.added(name);
+									}}
 								/>
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="last_name"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.last_name')}</FormLabel>
-									<SavedMark name="last_name" label={t('settings.saved')} />
-								</HStack>
-								<FormInput testID="customer-last-name-input" {...field} value={field.value ?? ''} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="w-full gap-4">
-					<FormField
-						control={form.control}
-						name="email"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.email')}</FormLabel>
-									<SavedMark name="email" label={t('settings.saved')} />
-								</HStack>
-								<FormInput testID="customer-email-input" {...field} />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="role"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('common.role')}
-									{...field}
-									value={field.value ?? ''}
-									editable={false}
+							))}
+							{LISTS.map(([name, label, row]) => (
+								<PropertyAdd
+									key={name}
+									testID={`customer-add-${name === 'tax_ids' ? 'tax_id' : name}`}
+									label={t(label)}
+									onPress={() => append(name, row)}
 								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="w-full items-stretch gap-4">
-					<FormField
-						control={form.control}
-						name="username"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.username')}</FormLabel>
-									<SavedMark name="username" label={t('settings.saved')} />
-								</HStack>
-								<FormInput {...field} value={field.value ?? ''} editable={!hasUsername} />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="password"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.password')}</FormLabel>
-									<SavedMark name="password" label={t('settings.saved')} />
-								</HStack>
-								<FormInput {...field} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<Collapsible>
-					<HStack className="justify-between">
-						<CollapsibleTrigger testID="customer-billing-address-toggle">
-							<Text>{t('common.billing_address')}</Text>
-						</CollapsibleTrigger>
-						<SavedMark name="billing" label={t('settings.saved')} />
-					</HStack>
-					<CollapsibleContent>
-						<BillingAddressForm />
-					</CollapsibleContent>
-				</Collapsible>
-				<Collapsible>
-					<HStack className="justify-between">
-						<CollapsibleTrigger>
-							<Text>{t('common.shipping_address')}</Text>
-						</CollapsibleTrigger>
-						<SavedMark name="shipping" label={t('settings.saved')} />
-					</HStack>
-					<CollapsibleContent>
-						<VStack className="gap-4">
-							<Button variant="outline" onPress={handleCopyBillingToShipping}>
-								<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
-							</Button>
-							<ShippingAddressForm />
-						</VStack>
-					</CollapsibleContent>
-				</Collapsible>
-				<HStack className="items-start justify-between">
-					<VStack className="flex-1">
-						<TaxIdsForm />
-					</VStack>
-					<SavedMark name="tax_ids" label={t('settings.saved')} />
-				</HStack>
-				<View className="relative">
-					<MetaDataForm />
-					<View className="pointer-events-none absolute top-0 right-0">
-						<SavedMark name="meta_data" label={t('settings.saved')} />
-					</View>
-				</View>
-			</VStack>
+							))}
+						</PropertyAddRow>
+					</PropertyList>
+				</VStack>
+			</CountriesProvider>
 		</Form>
 	);
 	const footerElement = <DialogFooter {...footer} />;

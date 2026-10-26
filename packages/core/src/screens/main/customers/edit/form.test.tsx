@@ -28,9 +28,16 @@ const form = {
 	setValue: jest.fn(),
 	reset: jest.fn(),
 	trigger: jest.fn(async () => true),
+	// The address rows subscribe to resets; this fake form never fires one.
+	watch: jest.fn(() => ({ unsubscribe: jest.fn() })),
 };
 const mockUseForm = jest.fn(() => form);
-jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm() }));
+jest.mock('react-hook-form', () => ({
+	useForm: () => mockUseForm(),
+	// The shared form's rows read the draft (its address facts watch the whole form).
+	useFormContext: () => mockUseForm(),
+	useWatch: ({ name }: { name?: string }) => (name ? undefined : {}),
+}));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -53,6 +60,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useMarkSaved: () => mockMarkSaved,
+	useSavedName: () => '',
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
 		return { flush: mockFlush };
@@ -315,7 +323,11 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../components/meta-data-form', () => ({
-	MetaDataForm: () => null,
+	// The custom-field rows carry their own Saved mark.
+	MetaDataForm: () => {
+		const { SavedMark } = jest.requireMock('@wcpos/components/form');
+		return <SavedMark name="meta_data" />;
+	},
 	metaDataSchema: {},
 }));
 jest.mock('../../components/billing-address-form', () => ({
@@ -330,6 +342,8 @@ jest.mock('../../components/customer/tax-ids-form', () => ({
 	TaxIdsForm: () => null,
 	taxIdsFormSchema: {},
 }));
+// The form's address rows read the store country; its app-state chain loads ESM uuid.
+jest.mock('../../hooks/use-base-tax-location', () => ({ useBaseTaxLocation: () => ({}) }));
 it('renders the meta_data Saved root after its matching write, but none for read-only role', async () => {
 	const { CustomerForm } = jest.requireActual('../../components/customer/customer-form');
 	renderForm();
