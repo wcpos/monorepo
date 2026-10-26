@@ -92,8 +92,13 @@ jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('@rn-primitives/dialog', () => ({
 	Close: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
+// The row's link, as the real form reports it (`onShippingLink`).
+let mockShippingLinked = false;
 jest.mock('../../components/customer/customer-form', () => ({
-	CustomerForm: () => null,
+	CustomerForm: ({ onShippingLink }: { onShippingLink?: (linked: boolean) => void }) => {
+		onShippingLink?.(mockShippingLinked);
+		return null;
+	},
 	customerFormSchema: {},
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -135,11 +140,15 @@ beforeEach(() => {
 	Object.assign(formValues, {
 		first_name: 'Ada',
 		billing: { first_name: '', city: 'London' },
+		// An own shipping address (the row unlinked): the pins below are about billing.
+		shipping: { city: 'Leeds' },
 		meta_data: [],
 	});
 	delete (payload as { first_name?: string }).first_name;
+	delete (payload as { billing?: unknown }).billing;
 	payload.meta_data = [];
 	mockIsPro = true;
+	mockShippingLinked = false;
 	mockBeforeSync = undefined;
 	mockLocalPatch.mockResolvedValue({ document: record, changes: {} });
 });
@@ -233,6 +242,83 @@ it('a failed write does not level the draft', async () => {
 	renderForm();
 	await capturedChange({ first_name: 'Ada' });
 	expect(form.setValue).not.toHaveBeenCalled();
+});
+describe("a shipping that reads Same as billing is stored as billing's copy", () => {
+	const levelled = () =>
+		form.setValue.mock.calls.some(([name]) => String(name).startsWith('shipping')) ||
+		form.reset.mock.calls.length > 0;
+	beforeEach(() => {
+		mockShippingLinked = true;
+		formValues.shipping = {};
+	});
+	it('a billing edit carries shipping in the SAME patch; the draft is not levelled', async () => {
+		renderForm();
+		await expect(capturedChange({ 'billing.city': 'London' })).resolves.toBe(true);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: record,
+			data: {
+				billing: { first_name: '', city: 'London' },
+				shipping: { first_name: '', city: 'London' },
+			},
+		});
+		expect(levelled()).toBe(false);
+	});
+	it('every billing edit carries the new shipping though the draft still holds the old one', async () => {
+		formValues.shipping = { first_name: 'Ada', city: 'Lo' };
+		formValues.billing = { first_name: 'Ada', city: 'Lon', email: 'a@x.io' };
+		renderForm();
+		await capturedChange({ 'billing.city': 'Lon' });
+		formValues.billing = { first_name: 'Ada', city: 'London', email: 'a@x.io' };
+		await capturedChange({ 'billing.city': 'London' });
+		expect(mockLocalPatch).toHaveBeenLastCalledWith({
+			document: record,
+			data: { billing: formValues.billing, shipping: { first_name: 'Ada', city: 'London' } },
+		});
+		expect(levelled()).toBe(false);
+	});
+	it('an own shipping (the row unlinked) is not touched by a billing edit', async () => {
+		mockShippingLinked = false;
+		formValues.shipping = { first_name: '', city: 'London' };
+		renderForm();
+		await capturedChange({ 'billing.city': 'London' });
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: record,
+			data: { billing: { first_name: '', city: 'London' } },
+		});
+	});
+	it("a first-name edit whose billing copy follows carries shipping's first name too", async () => {
+		renderForm();
+		await capturedChange({ first_name: 'Ada' });
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: record,
+			data: {
+				first_name: 'Ada',
+				billing: { first_name: 'Ada', city: 'London' },
+				shipping: { first_name: 'Ada', city: 'London' },
+			},
+		});
+	});
+	it('a billing recipient set apart stays apart in shipping as well', async () => {
+		formValues.billing = { first_name: 'Grace', city: 'London' };
+		renderForm();
+		await capturedChange({ first_name: 'Ada' });
+		expect(mockLocalPatch).toHaveBeenLastCalledWith({
+			document: record,
+			data: { first_name: 'Ada' },
+		});
+		await capturedChange({ 'billing.city': 'London' });
+		expect(mockLocalPatch).toHaveBeenLastCalledWith({
+			document: record,
+			data: { billing: formValues.billing, shipping: { first_name: 'Grace', city: 'London' } },
+		});
+	});
+	it('a failed write levels nothing', async () => {
+		mockLocalPatch.mockResolvedValue(undefined);
+		renderForm();
+		await expect(capturedChange({ 'billing.city': 'London' })).resolves.toBe(false);
+		expect(levelled()).toBe(false);
+	});
 });
 it('a nested billing path validates and writes the whole address root', async () => {
 	renderForm();
@@ -336,7 +422,9 @@ jest.mock('../../components/billing-address-form', () => ({
 }));
 jest.mock('../../components/shipping-address-form', () => ({
 	ShippingAddressForm: () => null,
-	shippingAddressSchema: { shape: {} },
+	// The real schema: a linked shipping is billing's copy through it (`asShipping`).
+	shippingAddressSchema: jest.requireActual('../../components/shipping-address-form')
+		.shippingAddressSchema,
 }));
 jest.mock('../../components/customer/tax-ids-form', () => ({
 	TaxIdsForm: () => null,

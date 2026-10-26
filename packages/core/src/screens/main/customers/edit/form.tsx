@@ -10,12 +10,9 @@ import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
+import { asShipping } from '../../components/customer/address-rows';
 import { useRecordAutosave } from '../../components/use-record-autosave';
-import {
-	CustomerForm,
-	customerFormSchema,
-	type CustomerFormValues,
-} from '../../components/customer/customer-form';
+import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { useCustomerRecord } from '../commands/use-customer-record';
 import { DeleteCustomerDialog, useCustomerActions } from '../customer-actions';
 
@@ -56,6 +53,14 @@ function EditCustomerFormFields({ customer }: Props) {
 	// patch, so a close or a Sync cannot drop it. Writes overlap (even two of one root), so each
 	// write's capture lives in its own `after` closure, never in a shared slot.
 	type Identity = 'first_name' | 'last_name' | 'email';
+	// While the Shipping row reads "Same as billing" (the row's own `linked`) the stored shipping is
+	// billing's copy (rule 5), in the SAME patch as billing. The draft's shipping is never levelled:
+	// a reset would cancel a pending edit and re-read the link against a billing typed ahead.
+	const shippingLinked = React.useRef(true);
+	const withShipping = (data: Partial<CustomerPayload>) =>
+		shippingLinked.current
+			? ({ ...data, shipping: asShipping(data.billing as Record<string, string>) } as typeof data)
+			: data;
 	const { flush } = useRecordAutosave({
 		form,
 		readOnly,
@@ -67,6 +72,7 @@ function EditCustomerFormFields({ customer }: Props) {
 			const follows =
 				identity &&
 				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
+			if (root === 'billing') return withShipping({ billing: value } as Partial<CustomerPayload>);
 			if (!follows) return { [root]: value } as Partial<CustomerPayload>;
 			const key = root as Identity;
 			const was = mirrored as string;
@@ -76,7 +82,7 @@ function EditCustomerFormFields({ customer }: Props) {
 				? form.getValues('billing')
 				: customer.getLatest().payload.billing;
 			return {
-				data: { [root]: value, billing: { ...base, [root]: value } } as Partial<CustomerPayload>,
+				data: withShipping({ [root]: value, billing: { ...base, [root]: value } }),
 				after: (written: boolean) => {
 					// Level the draft only if the cashier has not typed into the billing field meanwhile.
 					if (written && String(form.getValues(`billing.${key}`) ?? '') === was) {
@@ -98,6 +104,9 @@ function EditCustomerFormFields({ customer }: Props) {
 		<>
 			<CustomerForm
 				form={form}
+				onShippingLink={(linked) => {
+					shippingLinked.current = linked;
+				}}
 				footer={{
 					destructive: !readOnly &&
 						actions.canDelete && {

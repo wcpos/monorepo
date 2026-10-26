@@ -29,7 +29,12 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { billingAddressSchema } from '../../components/billing-address-form';
-import { ADDRESS_FACTS, TextPart, useAddressFacts } from '../../components/customer/address-rows';
+import {
+	ADDRESS_FACTS,
+	asShipping,
+	TextPart,
+	useAddressFacts,
+} from '../../components/customer/address-rows';
 import {
 	TAX_ID_DEFAULT_ROW,
 	TaxIdsForm,
@@ -54,10 +59,7 @@ const formSchema = z.object({
 	tax_ids: taxIdsFormSchema,
 });
 
-type Address = Record<string, string | undefined> | undefined;
 type Verb = [id: string, label: string, onPress: () => void];
-/** Billing as the shipping address: Woo's checkout with "Ship to a different address?" off. */
-const asShipping = (billing: Address) => shippingAddressSchema.shape.shipping.parse(billing ?? {});
 const verb = ([id, label, onPress]: Verb) => (
 	<PropertyVerb key={id} testID={`cart-address-${id}`} onPress={onPress}>
 		{label}

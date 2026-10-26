@@ -19,6 +19,7 @@ import { useT } from '../../../../contexts/translations';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import { AddressCountryField, AddressStateField } from '../billing-address-form';
 import { EditableField } from '../editable-field';
+import { shippingAddressSchema } from '../shipping-address-form';
 
 /** An address's parts in row order; the closed line reads them in postal order. */
 const ADDRESS_PARTS = ['address_1', 'address_2', 'city', 'postcode', 'country', 'state'] as const;
@@ -40,6 +41,12 @@ type Verb = [id: string, label: string, onPress: () => void];
 const hasAny = (address: Address, parts: readonly string[]) => parts.some((p) => !!address?.[p]);
 const sameAddress = (a: Address, b: Address) =>
 	SHIPPING_PARTS.every((p) => (a?.[p] ?? '') === (b?.[p] ?? ''));
+/** Billing as the shipping address: Woo's checkout with "Ship to a different address?" off. */
+export const asShipping = (billing: Address) =>
+	shippingAddressSchema.shape.shipping.parse(billing ?? {});
+/** Shipping follows billing (the row's "Same as billing") while it is empty or billing's copy. */
+export const shipsToBilling = (shipping: Address, billing: Address) =>
+	!hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing);
 /** A row's verb; its testID is `<prefix>-<id>`. */
 const verb = (testID: string, [id, label, onPress]: Verb) => (
 	<PropertyVerb key={id} testID={`${testID}-${id}`} onPress={onPress}>
@@ -71,7 +78,7 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 	};
 	const { country: storeCountry } = useBaseTaxLocation();
 	const isLinked = ({ billing, shipping }: { billing?: Address; shipping?: Address }) =>
-		!hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing);
+		shipsToBilling(shipping, billing);
 	const [linked, setLinked] = React.useState(() => isLinked(form.getValues()));
 	// A reset (Sync took the store's copy) fires the watch with no name: the link is read again.
 	React.useEffect(() => {

@@ -6,7 +6,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 
-import { CustomerForm, type CustomerFormValues } from './customer-form';
+import { CustomerForm, type CustomerFormValues, fillBillingFromIdentity } from './customer-form';
 
 type Pressable = { onPress?: () => void; testID?: string };
 
@@ -127,12 +127,13 @@ jest.mock('./tax-ids-form', () => ({
 }));
 
 const harness: { form?: UseFormReturn<CustomerFormValues> } = {};
+const onShippingLink = jest.fn();
 function Harness({ values }: { values: Partial<CustomerFormValues> & { id?: number } }) {
 	const form = useForm<CustomerFormValues>({ defaultValues: values as CustomerFormValues });
 	React.useEffect(() => {
 		harness.form = form;
 	});
-	return <CustomerForm form={form} footer={{}} />;
+	return <CustomerForm form={form} footer={{}} onShippingLink={onShippingLink} />;
 }
 const value = (name: string) => harness.form!.getValues(name as never);
 const rows = () => screen.queryAllByTestId(/^customer-row-/).map((row) => row.dataset.testid);
@@ -200,6 +201,14 @@ describe('CustomerForm', () => {
 		expect(screen.getByTestId('customer-shipping-same')).toBeTruthy();
 	});
 
+	it("reports the Shipping row's link to its writer as the verbs change it", () => {
+		render(<Harness values={{ id: 7, billing: ADDRESS }} />);
+		expect(onShippingLink).toHaveBeenLastCalledWith(true);
+		fireEvent.click(screen.getByTestId('customer-shipping-different'));
+		expect(onShippingLink).toHaveBeenLastCalledWith(false);
+		fireEvent.click(screen.getByTestId('customer-shipping-same'));
+		expect(onShippingLink).toHaveBeenLastCalledWith(true);
+	});
 	it('adding Password renders a secure input', () => {
 		render(<Harness values={{ id: 7 }} />);
 		fireEvent.click(screen.getByTestId('customer-add-password'));
@@ -240,5 +249,30 @@ describe('CustomerForm', () => {
 		expect(screen.getByTestId('customer-password-input').getAttribute('autocomplete')).toBe(
 			'new-password'
 		);
+	});
+});
+
+describe('fillBillingFromIdentity', () => {
+	const identity = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@x.io' };
+	const filled = { ...ADDRESS, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@x.io' };
+	const fill = (values: Partial<CustomerFormValues>) =>
+		fillBillingFromIdentity({ ...identity, ...values } as CustomerFormValues);
+	it("an empty shipping is stored as the filled billing's copy", () => {
+		const data = fill({ billing: ADDRESS, shipping: {} });
+		expect(data.billing).toEqual(filled);
+		expect(data.shipping).toEqual({ ...ADDRESS, first_name: 'Ada', last_name: 'Lovelace' });
+		expect(fill({}).shipping).toEqual({ first_name: 'Ada', last_name: 'Lovelace' });
+	});
+	it('an own shipping address is kept', () => {
+		const own = { address_1: 'Unit 4', city: 'York' };
+		expect(fill({ billing: ADDRESS, shipping: own }).shipping).toEqual(own);
+	});
+	it("a shipping equal to billing's copy is derived again after the identity fill", () => {
+		const data = fill({
+			billing: { ...ADDRESS, first_name: 'Grace' },
+			shipping: { ...ADDRESS, first_name: 'Grace' },
+		});
+		expect(data.billing).toEqual({ ...filled, first_name: 'Grace' });
+		expect(data.shipping).toEqual({ ...ADDRESS, first_name: 'Grace', last_name: 'Lovelace' });
 	});
 });

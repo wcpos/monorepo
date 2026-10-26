@@ -15,7 +15,14 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { ADDRESS_FACTS, BILLING_PARTS, TextPart, useAddressFacts } from './address-rows';
+import {
+	ADDRESS_FACTS,
+	asShipping,
+	BILLING_PARTS,
+	shipsToBilling,
+	TextPart,
+	useAddressFacts,
+} from './address-rows';
 import { TAX_ID_DEFAULT_ROW, TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
@@ -47,23 +54,28 @@ export const customerFormSchema = z.object({
  */
 export type CustomerFormValues = z.infer<typeof customerFormSchema>;
 
-/** Billing identity filled from the top-level fields when empty (ledger line 3); the creation screens apply it on submit. */
+/**
+ * Billing identity filled from the top-level fields when empty (ledger line 3); the creation
+ * screens apply it on submit. A shipping that follows billing (empty or billing's copy) is stored
+ * as the filled billing's copy, Woo's "ship to billing"; an own shipping is kept.
+ */
 export function fillBillingFromIdentity(data: CustomerFormValues): CustomerFormValues {
-	return {
-		...data,
-		billing: {
-			...data.billing,
-			first_name: data.billing?.first_name || data.first_name || '',
-			last_name: data.billing?.last_name || data.last_name || '',
-			email: data.billing?.email || data.email || '',
-		},
+	const billing = {
+		...data.billing,
+		first_name: data.billing?.first_name || data.first_name || '',
+		last_name: data.billing?.last_name || data.last_name || '',
+		email: data.billing?.email || data.email || '',
 	};
+	const follows = shipsToBilling(data.shipping, data.billing);
+	return { ...data, billing, shipping: follows ? asShipping(billing) : data.shipping };
 }
 
 interface CustomerFormProps {
 	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof customerFormSchema>>>;
 	footer: DialogFooterProps;
 	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
+	/** The Shipping row's link ("Same as billing"), for a writer that derives shipping from it. */
+	onShippingLink?: (linked: boolean) => void;
 }
 
 /** The offered facts in canonical order after the asked ones; Tax ID and Custom field follow. */
@@ -80,11 +92,13 @@ type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode; in
  * ledger line 2) shows values at rest that the modal autosaves, with Username and Role locked.
  */
 export function CustomerForm(props: CustomerFormProps) {
-	const { form, footer, renderLayout } = props;
+	const { form, footer, renderLayout, onShippingLink } = props;
 	const t = useT();
 	const saved = useSavedName();
 	const editing = !!(form.getValues() as Record<string, unknown>).id;
 	const { focus, ...address } = useAddressFacts(form, 'customer');
+	// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- The writer's ref, not parent state.
+	React.useEffect(() => onShippingLink?.(address.linked), [address.linked, onShippingLink]);
 	const presence = useFieldPresence(
 		OFFERED,
 		(name) => (name === 'password' ? !form.getValues('password') : address.isEmpty(name)),
