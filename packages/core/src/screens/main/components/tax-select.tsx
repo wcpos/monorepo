@@ -18,8 +18,13 @@ interface TaxSelectProps {
 	'aria-labelledby'?: string;
 }
 
-/** Not a tax class: the option that writes `tax_status: 'none'`. */
-const NOT_TAXABLE = 'none';
+/**
+ * Option values live in two namespaces so a store's class whose slug is `none` (or anything
+ * else) can never collide with the Not taxable option: `status:none` and `class:<slug>`.
+ */
+const NOT_TAXABLE = 'status:none';
+const classValue = (slug: string) => `class:${slug}`;
+const classSlug = (value: string) => value.slice('class:'.length);
 
 /**
  * Tax status and tax class as ONE fact, "Tax" (property rows rule 4): Not taxable, then the
@@ -30,18 +35,21 @@ export function TaxSelect({ status, taxClass, onChange, testID, ...props }: TaxS
 	const t = useT();
 	const classes = useTaxClassOptions();
 	const options = React.useMemo(
-		() => [{ label: t('common.not_taxable'), value: NOT_TAXABLE }, ...classes],
+		() => [
+			{ label: t('common.not_taxable'), value: NOT_TAXABLE },
+			...classes.map((option) => ({ ...option, value: classValue(option.value) })),
+		],
 		[classes, t]
 	);
 	return (
 		<OptionSelect
 			options={options}
-			value={status === 'none' ? NOT_TAXABLE : taxClass}
+			value={status === 'none' ? NOT_TAXABLE : classValue(taxClass)}
 			onChange={(next) =>
 				onChange(
-					next === NOT_TAXABLE
+					!next || next === NOT_TAXABLE
 						? { tax_status: 'none', tax_class: taxClass }
-						: { tax_status: 'taxable', tax_class: next ?? taxClass }
+						: { tax_status: 'taxable', tax_class: classSlug(next) }
 				)
 			}
 			placeholder={t('common.select_tax_class')}

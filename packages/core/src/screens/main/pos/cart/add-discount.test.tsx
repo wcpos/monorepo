@@ -354,7 +354,9 @@ describe('Add Fee', () => {
 			expect(screen.getByText(label)).toBeTruthy();
 		expect(screen.getByTestId('fee-name-input')).toBeTruthy();
 		expect(screen.getByTestId('fee-includes-tax-switch')).toBeTruthy();
-		expect((screen.getByTestId('fee-tax-select') as HTMLSelectElement).value).toBe('standard');
+		expect((screen.getByTestId('fee-tax-select') as HTMLSelectElement).value).toBe(
+			'class:standard'
+		);
 	});
 	it("the amount row's % segment makes the fee a percentage", async () => {
 		render(<AddFee />);
@@ -368,7 +370,7 @@ describe('Add Fee', () => {
 	});
 	it('Not taxable writes tax_status none and leaves the class', async () => {
 		render(<AddFee />);
-		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'none' } });
+		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'status:none' } });
 		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 		await waitFor(() =>
 			expect(mockFee).toHaveBeenCalledWith(
@@ -378,8 +380,10 @@ describe('Add Fee', () => {
 	});
 	it('a class makes the fee taxable in that class', async () => {
 		render(<AddFee />);
-		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'none' } });
-		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'reduced-rate' } });
+		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'status:none' } });
+		fireEvent.change(screen.getByTestId('fee-tax-select'), {
+			target: { value: 'class:reduced-rate' },
+		});
 		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 		await waitFor(() =>
 			expect(mockFee).toHaveBeenCalledWith(

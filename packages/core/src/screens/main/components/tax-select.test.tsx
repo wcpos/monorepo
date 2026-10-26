@@ -19,11 +19,12 @@ const mockOptionSelect = jest.fn((_props: MockOptionSelectProps) => null);
 jest.mock('@wcpos/components/select', () => ({
 	OptionSelect: (props: MockOptionSelectProps) => mockOptionSelect(props),
 }));
+const mockOptions = [
+	{ label: 'Standard', value: 'standard' },
+	{ label: 'Reduced rate', value: 'reduced-rate' },
+];
 jest.mock('./tax-class-select', () => ({
-	useTaxClassOptions: () => [
-		{ label: 'Standard', value: 'standard' },
-		{ label: 'Reduced rate', value: 'reduced-rate' },
-	],
+	useTaxClassOptions: () => mockOptions,
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
@@ -40,23 +41,32 @@ beforeEach(() => mockOptionSelect.mockClear());
 it('is ONE select: Not taxable, then the store tax classes', () => {
 	const { props } = renderTaxSelect('taxable', 'reduced-rate');
 	expect(props.options).toEqual([
-		{ label: 'Not taxable', value: 'none' },
-		{ label: 'Standard', value: 'standard' },
-		{ label: 'Reduced rate', value: 'reduced-rate' },
+		{ label: 'Not taxable', value: 'status:none' },
+		{ label: 'Standard', value: 'class:standard' },
+		{ label: 'Reduced rate', value: 'class:reduced-rate' },
 	]);
-	expect(props.value).toBe('reduced-rate');
+	expect(props.value).toBe('class:reduced-rate');
 	expect(props.triggerTestID).toBe('tax');
-	expect(renderTaxSelect('none', 'reduced-rate').props.value).toBe('none');
+	expect(renderTaxSelect('none', 'reduced-rate').props.value).toBe('status:none');
 });
 
 it('Not taxable writes tax_status none and leaves the class as it is', () => {
 	const { props, onChange } = renderTaxSelect('taxable', 'reduced-rate');
-	props.onChange('none');
+	props.onChange('status:none');
 	expect(onChange).toHaveBeenCalledWith({ tax_status: 'none', tax_class: 'reduced-rate' });
 });
 
 it('a class writes tax_status taxable and that class', () => {
 	const { props, onChange } = renderTaxSelect('none', 'reduced-rate');
-	props.onChange('standard');
+	props.onChange('class:standard');
 	expect(onChange).toHaveBeenCalledWith({ tax_status: 'taxable', tax_class: 'standard' });
+});
+
+it("a store's class whose slug is none is a class, not the Not taxable option", () => {
+	mockOptions.push({ label: 'None rate', value: 'none' });
+	const { props, onChange } = renderTaxSelect('taxable', 'none');
+	expect(props.value).toBe('class:none');
+	props.onChange('class:none');
+	expect(onChange).toHaveBeenCalledWith({ tax_status: 'taxable', tax_class: 'none' });
+	mockOptions.pop();
 });
