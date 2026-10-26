@@ -133,7 +133,7 @@ function RegisterBarContent({
 						name="register"
 						accessibilityLabel={t('common.register')}
 						testID="register-bar-drawer"
-						iconClassName={overdue ? 'text-warning' : 'text-foreground'}
+						iconClassName={overdue ? 'text-warning' : undefined}
 						onPress={() => onPanelOpenChange(true)}
 					/>
 				)}
