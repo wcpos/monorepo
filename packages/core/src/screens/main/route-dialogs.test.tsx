@@ -108,7 +108,15 @@ jest.mock('@wcpos/components/tabs', () => ({
 	TabsList: mockView,
 	TabsTrigger: mockView,
 }));
-jest.mock('observable-hooks', () => ({ useObservableSuspense: () => mockRecord }));
+jest.mock('observable-hooks', () => ({
+	useObservableSuspense: () => mockRecord,
+	useObservableState: () => undefined,
+}));
+// The variation modal reads its parent product for the derived Tax row; the shell under test
+// has no query runtime, so the parent is never on the device here.
+jest.mock('@wcpos/query/record-readers', () => ({
+	useEngineRecordByWooId: () => ({ valueRef$$: { pipe: () => undefined } }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: () => [],
 	useRecordField: (

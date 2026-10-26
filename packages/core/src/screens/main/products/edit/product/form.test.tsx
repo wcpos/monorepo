@@ -32,6 +32,7 @@ const formValues: Record<string, unknown> = {
 const form = {
 	control: {},
 	getValues: jest.fn((name?: string) => (name ? formValues[name] : formValues)),
+	setValue: jest.fn(),
 	reset: jest.fn(),
 };
 const mockUseForm = jest.fn((_options: unknown) => form);
@@ -39,7 +40,13 @@ const mockUseForm = jest.fn((_options: unknown) => form);
 jest.mock('react-hook-form', () => ({
 	useForm: (options: unknown) => mockUseForm(options),
 	// The watched field reads the current form value, so a test "toggles" it by setting it.
-	useWatch: ({ name }: { name: string }) => formValues[name],
+	useWatch: ({ name }: { name?: string | string[] }) =>
+		name === undefined
+			? formValues
+			: Array.isArray(name)
+				? name.map((key) => formValues[key])
+				: formValues[name],
+	useFormContext: () => form,
 }));
 
 /** The props each field's control rendered with, by field name. */
@@ -62,6 +69,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
+	useSavedName: () => '',
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
@@ -73,11 +81,29 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
 }));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+jest.mock('@wcpos/components/property-row', () => {
+	function Children({ children }: React.PropsWithChildren) {
+		return <>{children}</>;
+	}
+	function Row({ children, trailing }: React.PropsWithChildren<{ trailing?: React.ReactNode }>) {
+		return (
+			<>
+				{children}
+				{trailing}
+			</>
+		);
+	}
+	return {
+		PropertyList: Children,
+		PropertyRow: Row,
+		PropertyVerb: Children,
+		PropertyAddRow: Children,
+		PropertyAdd: () => null,
+		PropertyPlaceholder: Children,
+	};
+});
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -105,15 +131,16 @@ jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => nu
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
+	META_DATA_DEFAULT_ROW: {},
 	metaDataSchema: {},
 }));
 jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
 jest.mock('../../../components/product/status-select', () => ({
 	ProductStatusSelect: () => null,
 }));
-jest.mock('../../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
-jest.mock('../../../components/tax-status-radio-group', () => ({
-	TaxStatusRadioGroup: () => null,
+jest.mock('../../../components/tax-class-select', () => ({ useTaxClassOptions: () => [] }));
+jest.mock('../../../components/tax-select', () => ({
+	TaxSelect: (props: Record<string, unknown>) => mockControl({ ...props, name: 'tax' }),
 }));
 jest.mock('../../../components/product/category-select', () => ({
 	CategoryTreeLoader: () => null,
@@ -169,6 +196,7 @@ const product = {
 describe('catalogue form autosave', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		for (const name of Object.keys(mockControlProps)) delete mockControlProps[name];
 		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
 		formValues.name = 'Test product';
 		formValues.meta_data = [];
@@ -242,8 +270,16 @@ describe('catalogue form autosave', () => {
 				)
 			);
 
+		// Custom fields carry theirs on each row (MetaDataForm rows, mocked here).
 		it('renders a Saved mark for every writable field root', () => {
-			renderForm();
+			Object.assign(formValues, { sku: 's', barcode: 'b', sale_price: '5' });
+			Object.assign(formValues, { featured: true, virtual: true, downloadable: true });
+			try {
+				renderForm();
+			} finally {
+				Object.assign(formValues, { sku: '', barcode: '', sale_price: '' });
+				Object.assign(formValues, { featured: false, virtual: false, downloadable: false });
+			}
 
 			const fields = [
 				'sku',
@@ -255,7 +291,6 @@ describe('catalogue form autosave', () => {
 				'manage_stock',
 				'tax_class',
 				'tax_status',
-				'meta_data',
 				...(kind === 'product'
 					? ['name', 'categories', 'featured', 'virtual', 'downloadable']
 					: []),
@@ -265,26 +300,20 @@ describe('catalogue form autosave', () => {
 			}
 		});
 
-		it('disables Stock Quantity while Manage Stock is off, and enables it when it is on', () => {
+		it('the quantity is a control only while stock is tracked', () => {
 			formValues.manage_stock = false;
-			const { rerender } = renderForm();
-			expect(mockControlProps.stock_quantity.disabled).toBe(true);
+			const { unmount } = renderForm();
+			expect(mockControlProps.stock_quantity).toBeUndefined();
+			unmount();
 
 			formValues.manage_stock = true;
-			formValues.tax_class = 'standard';
-			rerender(
-				kind === 'product' ? (
-					<EditProductForm product={product} />
-				) : (
-					<EditVariationForm variation={product as unknown as EngineRecord<'variations'>} />
-				)
-			);
-			expect(mockControlProps.stock_quantity.disabled).toBe(false);
+			renderForm();
+			expect(mockControlProps.stock_quantity.type).toBe('numeric');
 		});
 
 		it("offers Woo's 'parent' tax class on a variation only", () => {
 			renderForm();
-			expect(mockControlProps.tax_class.includeParent).toBe(kind === 'variation' || undefined);
+			expect(mockControlProps.tax.includeParent).toBe(kind === 'variation' || undefined);
 		});
 
 		it('tax_class leaves as the wire spelling', async () => {

@@ -76,8 +76,6 @@ jest.mock('react-hook-form', () => ({
 		const { onSynced } = React.useContext(mockCallbacksContext);
 		return { reset: () => onSynced?.() };
 	},
-	// The forms watch Manage Stock to disable the quantity; the actions under test do not care.
-	useWatch: () => undefined,
 }));
 jest.mock('./edit/use-catalogue-autosave', () => ({
 	useCatalogueAutosave: () => {
@@ -118,14 +116,31 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</>
 	),
 }));
-jest.mock('../components/currency-input', () => ({ CurrencyInput: () => null }));
 jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../components/meta-data-form', () => ({ MetaDataForm: () => null, metaDataSchema: {} }));
-jest.mock('../components/number-input', () => ({ NumberInput: () => null }));
-jest.mock('../components/product/status-select', () => ({ ProductStatusSelect: () => null }));
-jest.mock('../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
-jest.mock('../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
+// The rows are `form-rows.test.tsx`'s; here only the footer's actions.
+jest.mock('../components/product/catalogue-rows', () => {
+	function Row() {
+		return null;
+	}
+	return {
+		CatalogueKind: jest.requireActual('react').createContext('product'),
+		CatalogueRow: Row,
+		CustomFieldAdd: Row,
+		PriceRow: Row,
+		StatusRow: Row,
+		StockRow: Row,
+		TaxRow: Row,
+		TextRow: Row,
+		useOfferedRows: () => ({ row: () => null, adds: null }),
+	};
+});
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAddRow: () => null,
+}));
+jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
 
 // Render the migrated forms with their real action hooks and confirmation dialogs.
 function Harness({
