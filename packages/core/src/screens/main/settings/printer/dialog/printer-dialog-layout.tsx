@@ -1,6 +1,6 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { HStack } from '@wcpos/components/hstack';
 import {
 	Dialog,
 	DialogBody,
@@ -10,14 +10,14 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
-import { VStack } from '@wcpos/components/vstack';
+import { Form, FormField, FormInput } from '@wcpos/components/form';
+import { PropertyList } from '@wcpos/components/property-row';
 
-import { PrinterToggleGroup } from './printer-toggle-group';
+import { PrinterRow, PrinterSettingsRows } from './printer-rows';
 import { FormErrors } from '../../../components/form-errors';
 import { useT } from '../../../../../contexts/translations';
 
-import type { PrinterFormValues } from '../schema';
+import type { PrinterFormValues, VendorOption } from '../schema';
 import type { UseFormReturn } from 'react-hook-form';
 
 interface PrinterDialogLayoutProps {
@@ -25,8 +25,13 @@ interface PrinterDialogLayoutProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	banner?: React.ReactNode;
-	connectionSection: React.ReactNode;
-	advancedSettings: React.ReactNode;
+	/** The Connection row (`ConnectionTypeSegmented`), or nothing when one type is all there is. */
+	connectionRow: React.ReactNode;
+	/** What the chosen connection renders under its row: fields, pickers, device lists. */
+	connectionLane: React.ReactNode;
+	/** Native and Electron choose a vendor from these; the web chooses it in its network lane. */
+	vendorOptions?: VendorOption[];
+	onVendorManualChange?: () => void;
 	/** Test failure alert, rendered inside the form body above the footer. */
 	errorSection?: React.ReactNode;
 	footer: DialogFooterProps;
@@ -37,8 +42,10 @@ export function PrinterDialogLayout({
 	open,
 	onOpenChange,
 	banner,
-	connectionSection,
-	advancedSettings,
+	connectionRow,
+	connectionLane,
+	vendorOptions,
+	onVendorManualChange,
 	errorSection,
 	footer,
 }: PrinterDialogLayoutProps) {
@@ -51,31 +58,31 @@ export function PrinterDialogLayout({
 				</DialogHeader>
 				<DialogBody>
 					<Form {...form}>
-						<VStack className="gap-4">
+						<PropertyList testID="printer-form">
 							<FormErrors />
 							{banner}
-							<FormField
-								control={form.control}
-								name="name"
-								render={({ field }) => (
-									<FormItem>
-										<HStack className="justify-between">
-											<FormLabel>{t('settings.printer_name')}</FormLabel>
-											<SavedMark name="name" label={t('settings.saved')} />
-										</HStack>
+							<PrinterRow id="name" label={t('settings.printer_name')} mark="name">
+								<FormField
+									control={form.control}
+									name="name"
+									render={({ field }) => (
 										<FormInput
 											testID="add-printer-name-input"
 											placeholder={t('settings.printer_name_placeholder')}
 											{...field}
 										/>
-									</FormItem>
-								)}
+									)}
+								/>
+							</PrinterRow>
+							{connectionRow}
+							{/* The lane depends on the Connection above it: nested one gutter (rule 8). */}
+							<View className="gap-3 py-2 pl-4">{connectionLane}</View>
+							<PrinterSettingsRows
+								vendorOptions={vendorOptions}
+								onVendorManualChange={onVendorManualChange}
 							/>
-							{connectionSection}
-							{advancedSettings}
-							<PrinterToggleGroup form={form} />
 							{errorSection}
-						</VStack>
+						</PropertyList>
 					</Form>
 				</DialogBody>
 				<DialogFooter {...footer} />

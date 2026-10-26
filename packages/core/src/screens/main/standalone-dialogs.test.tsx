@@ -127,8 +127,9 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 jest.mock('@wcpos/components/form', () => ({ Form: mockView, FormField: () => null }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: mockView }));
-jest.mock('./settings/printer/dialog/printer-toggle-group', () => ({
-	PrinterToggleGroup: () => null,
+jest.mock('./settings/printer/dialog/printer-rows', () => ({
+	PrinterRow: () => null,
+	PrinterSettingsRows: () => null,
 }));
 jest.mock('./components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -237,8 +238,8 @@ function Printer({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 			form={form}
 			open
 			onOpenChange={onOpenChange}
-			connectionSection={<span>Connection</span>}
-			advancedSettings={<span>Options</span>}
+			connectionRow={<span>Connection</span>}
+			connectionLane={<span>Lane</span>}
 			footer={{ record: { label: 'Test print' } }}
 		/>
 	);

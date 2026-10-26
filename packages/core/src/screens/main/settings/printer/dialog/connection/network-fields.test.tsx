@@ -48,6 +48,14 @@ jest.mock('@wcpos/components/form', () => ({
 	),
 }));
 
+jest.mock('../printer-rows', () => ({
+	PrinterRow: ({ children, verb }: { children?: React.ReactNode; verb?: React.ReactNode }) => (
+		<div>
+			{children}
+			{verb}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));

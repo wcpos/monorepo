@@ -35,7 +35,7 @@ import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
 import { WebVendorSegmented } from '../dialog/connection/web-vendor-segmented';
 import { formatDiscoveryError } from '../dialog/discovery-error-message';
-import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
+import { PrinterToggleRows } from '../dialog/printer-rows';
 import { TestPrintError } from '../dialog/test-print-error';
 import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
@@ -537,7 +537,7 @@ export function PrinterSetupDialog({
 					)}
 				/>
 			)}
-			<PrinterToggleGroup form={form} />
+			<PrinterToggleRows />
 		</VStack>
 	);
 	const scanLinks = links(
