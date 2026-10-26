@@ -84,7 +84,7 @@ export function CustomerForm(props: CustomerFormProps) {
 	const t = useT();
 	const saved = useSavedName();
 	const editing = !!(form.getValues() as Record<string, unknown>).id;
-	const { focus, ...address } = useAddressFacts(form, 'customer');
+	const { focus, ...address } = useAddressFacts(form, 'customer', { mirror: true });
 	const presence = useFieldPresence(
 		OFFERED,
 		(name) => (name === 'password' ? !form.getValues('password') : address.isEmpty(name)),

@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { CustomerForm, type CustomerFormValues } from './customer-form';
@@ -240,5 +240,20 @@ describe('CustomerForm', () => {
 		expect(screen.getByTestId('customer-password-input').getAttribute('autocomplete')).toBe(
 			'new-password'
 		);
+	});
+	it('while shipping is Same as billing, a billing edit and the name land in shipping too', async () => {
+		render(<Harness values={{ id: 7, billing: ADDRESS, shipping: ADDRESS }} />);
+		expect(screen.getByTestId('customer-row-shipping')).toBeTruthy();
+		await act(async () => {
+			harness.form!.setValue('billing.city', 'York');
+			harness.form!.setValue('first_name', 'Ada');
+		});
+		await waitFor(() => expect(value('shipping.city')).toBe('York'));
+		expect(value('shipping.first_name')).toBe('Ada');
+		fireEvent.click(screen.getByTestId('customer-shipping-different'));
+		await act(async () => {
+			harness.form!.setValue('billing.city', 'Hull');
+		});
+		expect(value('shipping.city')).toBe('York');
 	});
 });

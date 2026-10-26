@@ -52,7 +52,12 @@ const verb = (testID: string, [id, label, onPress]: Verb) => (
  * and their rows. Shipping reads "Same as billing" while it is empty or equal to billing (`linked`)
  * until a verb says so; open lasts for the form's life.
  */
-export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
+export function useAddressFacts(
+	form: UseFormReturn<any>,
+	testID: string,
+	/** `mirror`: the form's writers read the form, so a linked shipping follows every billing edit. */
+	options: { mirror?: boolean } = {}
+) {
 	const t = useT();
 	const labels: Record<string, string> = {
 		company: t('common.company'),
@@ -73,16 +78,23 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 	const isLinked = ({ billing, shipping }: { billing?: Address; shipping?: Address }) =>
 		!hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing);
 	const [linked, setLinked] = React.useState(() => isLinked(form.getValues()));
-	// A reset (Sync took the store's copy) fires the watch with no name: the link is read again.
-	React.useEffect(() => {
-		const subscription = form.watch((values, { name }) => {
-			if (!name) setLinked(isLinked(values));
-		});
-		return () => subscription.unsubscribe();
-	}, [form]);
 	const [open, setOpen] = React.useState({ billing: false, shipping: false });
 	const [focus, setFocus] = React.useState<string | null>(null);
 	const { billing: b, shipping: s } = useWatch({ control: form.control });
+	// One subscription. A reset (Sync took the store's copy) fires with no name: the link is read
+	// again. With `mirror`, while linked, a billing part (or the name billing's copy follows) lands
+	// in shipping too (rule 5); the cart dialog derives shipping at write time and leaves this off.
+	React.useEffect(() => {
+		const subscription = form.watch((values, { name }) => {
+			if (!name) return setLinked(isLinked(values));
+			if (!options.mirror || !linked) return;
+			const part = name.replace(/^billing\./, '');
+			const identity = name === 'first_name' || name === 'last_name';
+			if ((name !== part || identity) && SHIPPING_PARTS.includes(part as never))
+				form.setValue(`shipping.${part}`, identity ? values[part] : values.billing?.[part]);
+		});
+		return () => subscription.unsubscribe();
+	}, [form, linked, options.mirror]);
 
 	/** Both verbs start from billing's values; an own address with no country takes the store's. */
 	const setShippingOwn = (own: boolean) => {
