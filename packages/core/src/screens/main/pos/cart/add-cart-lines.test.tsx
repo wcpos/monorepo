@@ -44,10 +44,16 @@ jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	FormField: () => null,
 	FormInput: () => null,
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	FormRadioGroup: () => null,
 	FormSelect: () => null,
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
+}));
+
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 jest.mock('@wcpos/components/hstack', () => ({

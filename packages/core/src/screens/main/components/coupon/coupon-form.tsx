@@ -1,381 +1,364 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
 	FormInput,
 	FormItem,
-	FormLabel,
 	FormMessage,
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
 	SavedMark,
+	useSavedName,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+	PropertyVerb,
+} from '@wcpos/components/property-row';
 import { DialogBody, DialogFooter, type DialogFooterProps } from '@wcpos/components/dialog';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
-import { CollapsibleSection } from './collapsible-section';
 import { couponFormSchema } from './coupon-schema';
 import { DiscountAmountInput } from './discount-amount-input';
 import { ExpiryPresetChips } from './expiry-preset-chips';
 import { generateCouponCode } from './generate-code';
-import {
-	hasRestrictions,
-	hasUsageLimits,
-	restrictionsSummary,
-	usageLimitsSummary,
-} from './section-summaries';
 import { StatusSelect } from './status-select';
-import { fromUsageLimit, isOneTimeUse, toggleOneTimeUse, toUsageLimit } from './usage-limit';
+import {
+	fromUsageLimit,
+	isOneTimeUse,
+	NO_USAGE_LIMIT,
+	toggleOneTimeUse,
+	toUsageLimit,
+} from './usage-limit';
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { FormErrors } from '../form-errors';
-import { MetaDataForm } from '../meta-data-form';
+import { META_DATA_DEFAULT_ROW, MetaDataForm } from '../meta-data-form';
+import { useFieldPresence } from '../use-field-presence';
 
 export { couponFormSchema } from './coupon-schema';
 
+type Values = z.infer<typeof couponFormSchema>;
+
 interface CouponFormProps {
-	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof couponFormSchema>>>;
+	form: ReturnType<typeof import('react-hook-form').useForm<Values>>;
 	footer: DialogFooterProps;
 }
 
+/**
+ * The offered facts in canonical order (Custom field follows), and what Remove writes back: no
+ * amount, no limit (0 clears, see usage-limit.ts), a switch off.
+ */
+const OFFERED = [
+	{ name: 'minimum_amount', cleared: '' },
+	{ name: 'maximum_amount', cleared: '' },
+	{ name: 'usage_limit', cleared: NO_USAGE_LIMIT },
+	{ name: 'usage_limit_per_user', cleared: NO_USAGE_LIMIT },
+	{ name: 'limit_usage_to_x_items', cleared: NO_USAGE_LIMIT },
+	{ name: 'individual_use', cleared: false },
+	{ name: 'free_shipping', cleared: false },
+	{ name: 'description', cleared: '' },
+] as const;
+type Offered = (typeof OFFERED)[number]['name'];
+type Limit = 'usage_limit' | 'usage_limit_per_user' | 'limit_usage_to_x_items';
+/** An off-by-default switch arrives switched on (property rows rule 7). */
+const SWITCHES: readonly Offered[] = ['individual_use', 'free_shipping'];
+
 export function CouponForm({ form, footer }: CouponFormProps) {
 	const t = useT();
-	const { format } = useCurrencyFormat();
-
-	// Live values drive affixes, conditional fields, and collapsed summaries.
 	const values = useWatch({ control: form.control });
 	const discountType = values.discount_type ?? 'percent';
 	const showMaxItems = discountType === 'percent' || discountType === 'fixed_product';
+	const write = (name: keyof Values, value: unknown) =>
+		form.setValue(name, value as never, { shouldDirty: true });
 
-	// Sections auto-expand when they already contain configuration (edit mode);
-	// computed once from the mount-time values so typing doesn't collapse/expand.
-	const [initialValues] = React.useState(() => form.getValues());
-	const restrictionsDefaultOpen = hasRestrictions(initialValues);
-	const usageDefaultOpen =
-		hasUsageLimits(initialValues) && !isOneTimeUse(initialValues.usage_limit);
-	const moreDefaultOpen =
-		!!initialValues.description || (initialValues.status ?? 'publish') !== 'publish';
-
-	const statusLabel =
-		values.status === 'draft'
-			? t('coupons.draft')
-			: values.status === 'pending'
-				? t('coupons.pending')
-				: t('coupons.active');
+	// Total uses is a fact only while One-time use is off: one-time IS a total of one.
+	const presence = useFieldPresence(
+		OFFERED.filter(({ name }) => showMaxItems || name !== 'limit_usage_to_x_items'),
+		(name) => !values[name] || (name === 'usage_limit' && isOneTimeUse(values.usage_limit)),
+		(name) => {
+			if (name !== 'usage_limit' || !isOneTimeUse(form.getValues('usage_limit')))
+				write(name, OFFERED.find((field) => field.name === name)?.cleared);
+		}
+	);
+	const add = (name: Offered) => {
+		presence.add(name);
+		if (SWITCHES.includes(name)) write(name, true);
+		if (name === 'usage_limit' && isOneTimeUse(values.usage_limit)) write(name, NO_USAGE_LIMIT);
+	};
+	const labels: Record<Offered, string> = {
+		minimum_amount: t('coupons.minimum_spend'),
+		maximum_amount: t('coupons.maximum_spend'),
+		usage_limit: t('coupons.total_uses'),
+		usage_limit_per_user: t('coupons.uses_per_customer'),
+		limit_usage_to_x_items: t('coupons.max_discounted_items'),
+		individual_use: t('coupons.cannot_be_combined'),
+		free_shipping: t('coupons.grants_free_shipping'),
+		description: t('coupons.internal_note'),
+	};
+	const removeVerb = (name: Offered) => (
+		<PropertyVerb testID={`coupon-remove-${name}`} onPress={() => presence.withdraw(name)}>
+			{t('common.remove')}
+		</PropertyVerb>
+	);
+	const money = (name: 'minimum_amount' | 'maximum_amount', placeholder: string) => (
+		<FormField
+			control={form.control}
+			name={name}
+			render={({ field }) => (
+				<FormInput
+					customComponent={CurrencyInput}
+					placeholder={placeholder}
+					{...field}
+					value={field.value ?? ''}
+					onChange={field.onChange}
+				/>
+			)}
+		/>
+	);
+	const limit = (name: Limit, placeholder: string) => (
+		<FormField
+			control={form.control}
+			name={name}
+			render={({ field }) => (
+				<FormInput
+					placeholder={placeholder}
+					keyboardType="number-pad"
+					{...field}
+					value={fromUsageLimit(field.value)}
+					onChange={(text) => field.onChange(toUsageLimit(text))}
+				/>
+			)}
+		/>
+	);
+	const toggle = (name: 'individual_use' | 'free_shipping') => (
+		<FormField
+			control={form.control}
+			name={name}
+			render={({ field }) => <FormSwitch testID={`coupon-${name}`} {...field} />}
+		/>
+	);
+	const offeredValue: Record<Offered, React.ReactNode> = {
+		minimum_amount: money('minimum_amount', t('coupons.no_minimum')),
+		maximum_amount: money('maximum_amount', t('coupons.no_maximum')),
+		usage_limit: limit('usage_limit', t('coupons.unlimited')),
+		usage_limit_per_user: limit('usage_limit_per_user', t('coupons.unlimited')),
+		limit_usage_to_x_items: limit('limit_usage_to_x_items', t('coupons.all_eligible_items')),
+		individual_use: <Help>{t('coupons.cannot_be_combined_help')}</Help>,
+		free_shipping: null,
+		description: (
+			<FormField
+				control={form.control}
+				name="description"
+				render={({ field }) => (
+					<FormInput
+						description={t('coupons.internal_note_help')}
+						{...field}
+						value={field.value ?? ''}
+						multiline
+					/>
+				)}
+			/>
+		),
+	};
 
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-
-				{/* 1. Code + generate */}
-				<FormField
-					control={form.control}
-					name="code"
-					render={({ field }) => (
-						<HStack className="w-full items-end gap-2">
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('coupons.code')}</FormLabel>
-									<SavedMark name="code" label={t('settings.saved')} />
-								</HStack>
-								<FormInput testID="coupon-code" {...field} />
-							</FormItem>
-							<Button
-								variant="outline"
+				<PropertyList testID="coupon-form">
+					<CouponRow
+						id="code"
+						label={t('coupons.code')}
+						verb={
+							<PropertyVerb
 								testID="coupon-generate-code"
-								onPress={() => form.setValue('code', generateCouponCode(), { shouldDirty: true })}
+								onPress={() => write('code', generateCouponCode())}
 							>
-								<ButtonText>{t('coupons.generate')}</ButtonText>
-							</Button>
-						</HStack>
-					)}
-				/>
-
-				{/* 2. Unified discount control: type before amount */}
-				<FormField
-					control={form.control}
-					name="discount_type"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('coupons.discount')}</FormLabel>
-								<SavedMark name="discount_type" label={t('settings.saved')} />
-							</HStack>
-							<FormSegmentedControl
-								testID="coupon-discount-type"
-								segments={[
-									{ value: 'percent', label: t('coupons.percent_short') },
-									{ value: 'fixed_cart', label: t('coupons.amount_off_order') },
-									{ value: 'fixed_product', label: t('coupons.amount_off_products') },
-								]}
-								{...field}
-								onChange={(value) => {
-									field.onChange(value);
-									if (value === 'fixed_cart') {
-										form.setValue('limit_usage_to_x_items', 0, { shouldDirty: true });
-									}
-								}}
-							/>
-						</FormItem>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="amount"
-					render={({ field }) => (
-						<FormItem>
-							<DiscountAmountInput
-								discountType={discountType}
-								value={field.value ?? ''}
-								onChange={(value) => field.onChange(String(value))}
-							/>
-							<FormMessage />
-						</FormItem>
-					)}
-				/>
-
-				{/* 3. Expiry presets */}
-				<FormField
-					control={form.control}
-					name="date_expires_gmt"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('coupons.expires')}</FormLabel>
-								<SavedMark name="date_expires_gmt" label={t('settings.saved')} />
-							</HStack>
-							<ExpiryPresetChips value={field.value} onChange={field.onChange} />
-							<FormMessage />
-						</FormItem>
-					)}
-				/>
-
-				{/* 4. One-time use */}
-				<FormField
-					control={form.control}
-					name="usage_limit"
-					render={({ field }) => (
-						<HStack className="items-center justify-between">
-							<FormSwitch
-								{...field}
-								label={t('coupons.one_time_use')}
-								description={t('coupons.one_time_use_help')}
-								testID="coupon-one-time-use"
-								value={isOneTimeUse(field.value)}
-								onChange={(checked: boolean) => field.onChange(toggleOneTimeUse(checked))}
-							/>
-							<SavedMark name="usage_limit" label={t('settings.saved')} />
-						</HStack>
-					)}
-				/>
-
-				{/* 5. Restrictions */}
-				<CollapsibleSection
-					title={t('coupons.restrictions')}
-					summary={restrictionsSummary(values, t, (amount) => format(Number(amount)))}
-					defaultOpen={restrictionsDefaultOpen}
-					testID="coupon-section-restrictions"
-				>
-					<HStack className="w-full gap-4">
+								{t('coupons.generate')}
+							</PropertyVerb>
+						}
+					>
 						<FormField
 							control={form.control}
-							name="minimum_amount"
-							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('coupons.minimum_spend')}</FormLabel>
-										<SavedMark name="minimum_amount" label={t('settings.saved')} />
-									</HStack>
-									<FormInput
-										customComponent={CurrencyInput}
-										placeholder={t('coupons.no_minimum')}
-										{...field}
-										value={field.value ?? ''}
-										onChange={field.onChange}
-									/>
-								</FormItem>
-							)}
+							name="code"
+							render={({ field }) => <FormInput testID="coupon-code" {...field} />}
 						/>
-						<FormField
-							control={form.control}
-							name="maximum_amount"
-							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('coupons.maximum_spend')}</FormLabel>
-										<SavedMark name="maximum_amount" label={t('settings.saved')} />
-									</HStack>
-									<FormInput
-										customComponent={CurrencyInput}
-										placeholder={t('coupons.no_maximum')}
-										{...field}
-										value={field.value ?? ''}
-										onChange={field.onChange}
-									/>
-								</FormItem>
-							)}
-						/>
-					</HStack>
-					<FormField
-						control={form.control}
-						name="individual_use"
-						render={({ field }) => (
-							<HStack className="items-center justify-between">
-								<FormSwitch
-									label={t('coupons.cannot_be_combined')}
-									description={t('coupons.cannot_be_combined_help')}
-									{...field}
-								/>
-								<SavedMark name="individual_use" label={t('settings.saved')} />
-							</HStack>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="free_shipping"
-						render={({ field }) => (
-							<HStack className="items-center justify-between">
-								<FormSwitch label={t('coupons.grants_free_shipping')} {...field} />
-								<SavedMark name="free_shipping" label={t('settings.saved')} />
-							</HStack>
-						)}
-					/>
-				</CollapsibleSection>
-
-				{/* 6. Usage limits */}
-				<CollapsibleSection
-					title={t('coupons.usage_limits')}
-					summary={usageLimitsSummary(values, t)}
-					defaultOpen={usageDefaultOpen}
-					testID="coupon-section-usage-limits"
-				>
-					<HStack className="w-full gap-4">
-						<FormField
-							control={form.control}
-							name="usage_limit"
-							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('coupons.total_uses')}</FormLabel>
-										<SavedMark name="usage_limit" label={t('settings.saved')} />
-									</HStack>
-									<FormInput
-										placeholder={t('coupons.unlimited')}
-										keyboardType="number-pad"
-										{...field}
-										value={fromUsageLimit(field.value)}
-										onChange={(text) => field.onChange(toUsageLimit(text))}
-									/>
-								</FormItem>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="usage_limit_per_user"
-							render={({ field }) => (
-								<FormItem className="flex-1">
-									<HStack className="justify-between">
-										<FormLabel>{t('coupons.uses_per_customer')}</FormLabel>
-										<SavedMark name="usage_limit_per_user" label={t('settings.saved')} />
-									</HStack>
-									<FormInput
-										placeholder={t('coupons.unlimited')}
-										keyboardType="number-pad"
-										{...field}
-										value={fromUsageLimit(field.value)}
-										onChange={(text) => field.onChange(toUsageLimit(text))}
-									/>
-								</FormItem>
-							)}
-						/>
-					</HStack>
-					{showMaxItems && (
-						<HStack className="w-full gap-4">
+					</CouponRow>
+					<CouponRow id="discount" mark="discount_type" label={t('coupons.discount')} align="top">
+						<VStack className="gap-2">
 							<FormField
 								control={form.control}
-								name="limit_usage_to_x_items"
+								name="discount_type"
 								render={({ field }) => (
-									<FormItem className="flex-1">
-										<HStack className="justify-between">
-											<FormLabel>{t('coupons.max_discounted_items')}</FormLabel>
-											<SavedMark name="limit_usage_to_x_items" label={t('settings.saved')} />
-										</HStack>
-										<FormInput
-											placeholder={t('coupons.all_eligible_items')}
-											keyboardType="number-pad"
-											{...field}
-											value={fromUsageLimit(field.value)}
-											onChange={(text) => field.onChange(toUsageLimit(text))}
+									<FormSegmentedControl
+										testID="coupon-discount-type"
+										segments={[
+											{ value: 'percent', label: t('coupons.percent_short') },
+											{ value: 'fixed_cart', label: t('coupons.amount_off_order') },
+											{ value: 'fixed_product', label: t('coupons.amount_off_products') },
+										]}
+										{...field}
+										onChange={(value) => {
+											field.onChange(value);
+											if (value === 'fixed_cart') presence.withdraw('limit_usage_to_x_items');
+										}}
+									/>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="amount"
+								render={({ field }) => (
+									<FormItem>
+										<DiscountAmountInput
+											discountType={discountType}
+											value={field.value ?? ''}
+											onChange={(value) => field.onChange(String(value))}
 										/>
+										<FormMessage />
 									</FormItem>
 								)}
 							/>
-							<View className="flex-1" />
-						</HStack>
-					)}
-				</CollapsibleSection>
-
-				{/* 7. More options */}
-				<CollapsibleSection
-					title={t('coupons.more_options')}
-					summary={statusLabel}
-					defaultOpen={moreDefaultOpen}
-					testID="coupon-section-more-options"
-				>
-					<FormField
-						control={form.control}
-						name="description"
-						render={({ field }) => (
-							<FormItem>
-								<HStack className="justify-between">
-									<FormLabel>{t('coupons.internal_note')}</FormLabel>
-									<SavedMark name="description" label={t('settings.saved')} />
-								</HStack>
-								<FormInput
-									description={t('coupons.internal_note_help')}
-									{...field}
-									value={field.value ?? ''}
-									multiline
-								/>
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="status"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem>
-								<HStack className="justify-between">
-									<FormLabel>{t('coupons.status')}</FormLabel>
-									<SavedMark name="status" label={t('settings.saved')} />
-								</HStack>
+						</VStack>
+					</CouponRow>
+					<CouponRow id="expires" mark="date_expires_gmt" label={t('coupons.expires')}>
+						<FormField
+							control={form.control}
+							name="date_expires_gmt"
+							render={({ field }) => (
+								<>
+									<ExpiryPresetChips value={field.value} onChange={field.onChange} />
+									<FormMessage />
+								</>
+							)}
+						/>
+					</CouponRow>
+					<CouponRow
+						id="one_time_use"
+						mark="usage_limit"
+						label={t('coupons.one_time_use')}
+						control={
+							<FormField
+								control={form.control}
+								name="usage_limit"
+								render={({ field }) => (
+									<FormSwitch
+										{...field}
+										testID="coupon-one-time-use"
+										value={isOneTimeUse(field.value)}
+										onChange={(checked: boolean) => {
+											field.onChange(toggleOneTimeUse(checked));
+											if (checked) presence.withdraw('usage_limit');
+										}}
+									/>
+								)}
+							/>
+						}
+					>
+						<Help>{t('coupons.one_time_use_help')}</Help>
+					</CouponRow>
+					<CouponRow id="status" label={t('coupons.status')}>
+						<FormField
+							control={form.control}
+							name="status"
+							render={({ field: { value, onChange, ...rest } }) => (
 								<FormSelect
 									customComponent={StatusSelect}
 									value={value as string}
 									onChange={onChange}
 									{...rest}
 								/>
-							</FormItem>
-						)}
-					/>
-					<View className="relative">
-						<MetaDataForm />
-						<View className="pointer-events-none absolute top-0 right-0">
-							<SavedMark name="meta_data" label={t('settings.saved')} />
-						</View>
-					</View>
-				</CollapsibleSection>
+							)}
+						/>
+					</CouponRow>
+					{presence.present.map((name) => (
+						<CouponRow
+							key={name}
+							id={name}
+							label={labels[name]}
+							align={name === 'description' ? 'top' : undefined}
+							control={SWITCHES.includes(name) && toggle(name as 'individual_use')}
+							verb={removeVerb(name)}
+						>
+							{offeredValue[name]}
+						</CouponRow>
+					))}
+					<MetaDataForm rows testID="coupon" />
+					<PropertyAddRow>
+						{presence.offered.map((name) => (
+							<PropertyAdd
+								key={name}
+								testID={`coupon-add-${name}`}
+								label={labels[name]}
+								onPress={() => add(name)}
+							/>
+						))}
+						<PropertyAdd
+							testID="coupon-add-meta_data"
+							label={t('common.custom_field')}
+							onPress={() =>
+								write('meta_data', [...(form.getValues('meta_data') ?? []), META_DATA_DEFAULT_ROW])
+							}
+						/>
+					</PropertyAddRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter {...footer} />
 		</Form>
+	);
+}
+
+function Help({ children }: { children: string }) {
+	return <Text className="text-muted-foreground text-sm">{children}</Text>;
+}
+
+/**
+ * One coupon fact: its control in the value slot, named by the row's key. A switch sits in the
+ * trailing slot; the row's verb hides while its Saved mark shows.
+ */
+function CouponRow({
+	id,
+	mark = id,
+	label,
+	align,
+	control,
+	verb,
+	children,
+}: {
+	id: string;
+	mark?: string;
+	label: string;
+	align?: 'top';
+	control?: React.ReactNode;
+	verb?: React.ReactNode;
+	children: React.ReactNode;
+}) {
+	const t = useT();
+	const marked = useSavedName() === mark;
+	return (
+		<PropertyRow
+			testID={`coupon-row-${id}`}
+			label={label}
+			align={align}
+			nativeID={`coupon-${id}-form-item`}
+			trailing={
+				<>
+					{control && <FormItem nativeID={`coupon-${id}`}>{control}</FormItem>}
+					{marked ? <SavedMark name={mark} label={t('settings.saved')} /> : verb}
+				</>
+			}
+		>
+			{/* With a trailing control the value is prose (a help line): the id names the control. */}
+			<FormItem nativeID={control ? undefined : `coupon-${id}`}>{children}</FormItem>
+		</PropertyRow>
 	);
 }

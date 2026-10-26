@@ -5,9 +5,10 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput, SavedMark, useSavedName } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
@@ -21,7 +22,14 @@ interface MetaDataFormProps {
 	name?: string;
 	hiddenKeys?: readonly string[];
 	withDisplayValues?: boolean;
+	/** Property rows: a Custom field row per entry with its Remove; no fold, no add (the caller's). */
+	rows?: boolean;
+	/** The rows' testID prefix. */
+	testID?: string;
 }
+
+/** A freshly appended custom field. */
+export const META_DATA_DEFAULT_ROW = { key: '', value: '' };
 
 /**
  *
@@ -30,6 +38,8 @@ export function MetaDataForm({
 	name = 'meta_data',
 	withDisplayValues,
 	hiddenKeys,
+	rows,
+	testID,
 }: MetaDataFormProps) {
 	const t = useT();
 	const { control, setValue, getValues, setError, clearErrors } = useFormContext();
@@ -40,13 +50,27 @@ export function MetaDataForm({
 
 	// Watch the meta_data array to get up-to-date values
 	const watchedFields = useWatch({ name, control }) || [];
+	const savedName = useSavedName();
+	const removeAt = (index: number) => {
+		if (getValues(name)[index].id) {
+			// Set the value to null but keep the item
+			setValue(`${name}.${index}.value`, null);
+		} else {
+			// Remove the item entirely
+			remove(index);
+		}
+	};
 
+	const Fold = rows ? React.Fragment : Collapsible;
+	const FoldContent = rows ? React.Fragment : CollapsibleContent;
 	return (
-		<Collapsible>
-			<CollapsibleTrigger>
-				<Text>{t('common.meta_data')}</Text>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
+		<Fold>
+			{!rows && (
+				<CollapsibleTrigger>
+					<Text>{t('common.meta_data')}</Text>
+				</CollapsibleTrigger>
+			)}
+			<FoldContent>
 				<VStack>
 					{fields.map((field, index) => {
 						const value = watchedFields[index]?.value;
@@ -54,22 +78,16 @@ export function MetaDataForm({
 						if (value === null || hiddenKeys?.includes(watchedFields[index]?.key)) {
 							return null;
 						}
-						return (
-							<HStack key={field.id} className="web:hover:bg-accent items-start gap-0">
-								<View className="w-20 p-2">
-									<FormField
-										control={control}
-										name={`${name}.${index}.id`}
-										render={({ field }) => <FormInput label={t('common.id')} {...field} readOnly />}
-									/>
-								</View>
-								<VStack className="flex-1 flex-col p-2">
+						const inputs = (
+							<>
+								<VStack className={rows ? 'flex-1' : 'flex-1 flex-col p-2'}>
 									<FormField
 										control={control}
 										name={`${name}.${index}.key`}
 										render={({ field }) => (
 											<FormInput
-												label={t('common.key')}
+												label={rows ? undefined : t('common.key')}
+												placeholder={rows ? t('common.key') : undefined}
 												{...field}
 												onChange={(key) => {
 													if (hiddenKeys?.includes(String(key))) {
@@ -95,13 +113,14 @@ export function MetaDataForm({
 										/>
 									)}
 								</VStack>
-								<VStack className="flex-1 flex-col p-2">
+								<VStack className={rows ? 'flex-1' : 'flex-1 flex-col p-2'}>
 									<FormField
 										control={control}
 										name={`${name}.${index}.value`}
 										render={({ field }) => (
 											<FormInput
-												label={t('common.value')}
+												label={rows ? undefined : t('common.value')}
+												placeholder={rows ? t('common.value') : undefined}
 												{...field}
 												value={formatMetaDataValue(field.value)}
 												onChange={(text) => field.onChange(parseMetaDataInput(String(text ?? '')))}
@@ -118,6 +137,41 @@ export function MetaDataForm({
 										/>
 									)}
 								</VStack>
+							</>
+						);
+						if (rows) {
+							return (
+								<PropertyRow
+									key={field.id}
+									testID={`${testID}-row-meta-${index}`}
+									label={t('common.custom_field')}
+									trailing={
+										savedName === name ? (
+											<SavedMark name={name} label={t('settings.saved')} />
+										) : (
+											<PropertyVerb
+												testID={`${testID}-remove-meta-${index}`}
+												onPress={() => removeAt(index)}
+											>
+												{t('common.remove')}
+											</PropertyVerb>
+										)
+									}
+								>
+									<HStack className="gap-2">{inputs}</HStack>
+								</PropertyRow>
+							);
+						}
+						return (
+							<HStack key={field.id} className="web:hover:bg-accent items-start gap-0">
+								<View className="w-20 p-2">
+									<FormField
+										control={control}
+										name={`${name}.${index}.id`}
+										render={({ field }) => <FormInput label={t('common.id')} {...field} readOnly />}
+									/>
+								</View>
+								{inputs}
 								<View className="p-2">
 									<Tooltip>
 										<TooltipTrigger asChild>
@@ -125,17 +179,7 @@ export function MetaDataForm({
 												variant="destructive"
 												name="decrement"
 												accessibilityLabel={t('common.remove_item')}
-												onPress={() => {
-													const metaData = getValues(name);
-													const item = metaData[index];
-													if (item.id) {
-														// Set the value to null but keep the item
-														setValue(`${name}.${index}.value`, null);
-													} else {
-														// Remove the item entirely
-														remove(index);
-													}
-												}}
+												onPress={() => removeAt(index)}
 											/>
 										</TooltipTrigger>
 										<TooltipContent>
@@ -146,13 +190,15 @@ export function MetaDataForm({
 							</HStack>
 						);
 					})}
-					<HStack>
-						<Button variant="outline" onPress={() => append({ key: '', value: '' })}>
-							<ButtonText>{t('common.add_meta_data')}</ButtonText>
-						</Button>
-					</HStack>
+					{!rows && (
+						<HStack>
+							<Button variant="outline" onPress={() => append({ ...META_DATA_DEFAULT_ROW })}>
+								<ButtonText>{t('common.add_meta_data')}</ButtonText>
+							</Button>
+						</HStack>
+					)}
 				</VStack>
-			</CollapsibleContent>
-		</Collapsible>
+			</FoldContent>
+		</Fold>
 	);
 }

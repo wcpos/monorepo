@@ -108,6 +108,49 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyRow: ({
+		children,
+		trailing,
+	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
+		<div>
+			{children}
+			{trailing}
+		</div>
+	),
+}));
+// The real control's segments as buttons: a press on a segment's testID selects that segment.
+jest.mock('@wcpos/components/segmented-control', () => ({
+	SegmentedControl: ({
+		segments,
+		value,
+		onValueChange,
+		...props
+	}: {
+		segments: { value: string; label: string; testID?: string }[];
+		value: string;
+		onValueChange: (value: string) => void;
+		'aria-labelledby'?: string;
+	}) => (
+		<div role="radiogroup" aria-labelledby={props['aria-labelledby']}>
+			{segments.map((segment) => (
+				<button
+					key={segment.value}
+					role="radio"
+					aria-checked={segment.value === value}
+					data-testid={segment.testID}
+					onClick={() => onValueChange(segment.value)}
+				>
+					{segment.label}
+				</button>
+			))}
+		</div>
+	),
+}));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ currencySymbol: '$', currency: 'USD' }),
+}));
 jest.mock('../../components/form-errors', () => ({
 	FormErrors: () => {
 		const { errors } = jest.requireActual('react-hook-form').useFormState();
@@ -213,6 +256,16 @@ it.each([
 		expect(mockAdd).toHaveBeenCalledWith({ discount_type: type, amount: normalized })
 	);
 	await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
+});
+it("Add Discount's unit is the amount row's toggle: the store's symbol, then %", async () => {
+	render(<AddDiscount />);
+	expect(screen.getAllByRole('radio').map((segment) => segment.textContent)).toEqual(['$', '%']);
+	// The group is named by the row's key, not by a label of its own.
+	expect(screen.getByRole('radiogroup').getAttribute('aria-labelledby')).toBe(
+		'discount-amount-form-item'
+	);
+	fireEvent.click(screen.getByTestId('discount-percent-switch'));
+	expect(screen.getByTestId('discount-percent-switch').getAttribute('aria-checked')).toBe('true');
 });
 it('keeps the dialog open and shows a failed application', async () => {
 	mockAdd.mockResolvedValue({ success: false, error: 'cart changed' });
