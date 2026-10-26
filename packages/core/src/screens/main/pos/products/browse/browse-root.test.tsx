@@ -23,6 +23,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 // The stage itself is native motion; the root only reads which term is out on it.
 jest.mock('../deal-stack', () => ({
+	useLiftedLayout: () => undefined,
 	DealStagedContext: jest.requireActual('react').createContext(null),
 	useCopyPicture: () => undefined,
 }));

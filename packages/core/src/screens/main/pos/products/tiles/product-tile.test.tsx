@@ -96,6 +96,7 @@ jest.mock('./tile-image', () => ({
 	TileImageBlurred: () => <span data-testid="tile-image-blurred" />,
 }));
 jest.mock('../deal-stack', () => ({
+	useLiftedLayout: () => undefined,
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
 jest.mock('./inline-variable-tile', () => ({

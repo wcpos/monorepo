@@ -86,6 +86,20 @@ const DealContext = React.createContext<Deal>(AT_REST);
 /** The detail on stage, for the root tile that has to step aside while its copy is out. */
 export const DealStagedContext = React.createContext<unknown>(null);
 
+// The stage's ear for the lifted tile's layout (`useLiftedLayout`).
+const DealRelaidContext = React.createContext<(() => void) | undefined>(undefined);
+
+/**
+ * For the tile whose copy is out: its `onLayout`, so the stage re-measures it when it reflows (a
+ * resize). The copy is pinned to the tile's frame, and the tile's own layout is the only signal
+ * that comes after the tile has moved: native FlashList sizes its rows a render after the stage
+ * hears the new width, so a re-measure on the stage's layout read the old frame.
+ */
+export function useLiftedLayout(lifted: boolean | undefined): (() => void) | undefined {
+	const relaid = React.useContext(DealRelaidContext);
+	return lifted ? relaid : undefined;
+}
+
 export const useDeal = () => React.useContext(DealContext);
 
 // A stack inside a detail that is cross-fading away: it holds what it shows until it goes.
@@ -185,6 +199,9 @@ export function DealStack<T>({
 	const [staged, setStaged] = React.useState<T | null>(null);
 	const [generation, setGeneration] = React.useState(0);
 	const [origin, setOrigin] = React.useState<Rect | null | undefined>(undefined);
+	// Bumped by the lifted tile's layout: the tapped tile is measured again (`useLiftedLayout`).
+	const [relaid, setRelaid] = React.useState(0);
+	const relayOut = React.useCallback(() => setRelaid((times) => times + 1), []);
 	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
 	// Whether the parent's copy stands on the tapped tile on the UI thread: `undefined` while no
 	// copy has said it will report (a detail without one is shown as it is), `false` once it has,
@@ -298,6 +315,9 @@ export function DealStack<T>({
 		opener.current = null;
 	}, [open]);
 
+	// Measured again when the tapped tile reflows: the root grid stays laid out under the level, so
+	// a resize moves the tile, and the copy pinned to its old frame stood at its old size beside
+	// every reflowed slot (owner, 2026-10-26). A tile no longer laid out answers 0 × 0.
 	React.useEffect(() => {
 		if (detail === null) return;
 		let live = true;
@@ -306,7 +326,9 @@ export function DealStack<T>({
 		if (tile?.measureInWindow && frame?.measureInWindow) {
 			tile.measureInWindow((x, y, width, height) =>
 				frame.measureInWindow?.((stageX, stageY) => {
-					if (live) setOrigin({ x: x - stageX, y: y - stageY, width, height });
+					if (live && width > 0 && height > 0) {
+						setOrigin({ x: x - stageX, y: y - stageY, width, height });
+					}
 				})
 			);
 		}
@@ -318,7 +340,7 @@ export function DealStack<T>({
 			live = false;
 			clearTimeout(grace);
 		};
-	}, [detail, target]);
+	}, [detail, target, relaid]);
 
 	// Not before the copy is placed: the deal's first frame moves it off the tapped tile.
 	const armed = origin !== undefined && grid !== undefined && copyPlaced;
@@ -467,13 +489,19 @@ export function DealStack<T>({
 			<DealStagedContext.Provider
 				value={origin && grid !== undefined && copyPlaced && !fading ? staged : null}
 			>
-				<Animated.View
-					className="flex-1"
-					aria-hidden={open}
-					style={[rootStyle, { pointerEvents: open ? 'none' : 'auto' }, open && settled && COVERED]}
-				>
-					{children}
-				</Animated.View>
+				<DealRelaidContext.Provider value={relayOut}>
+					<Animated.View
+						className="flex-1"
+						aria-hidden={open}
+						style={[
+							rootStyle,
+							{ pointerEvents: open ? 'none' : 'auto' },
+							open && settled && COVERED,
+						]}
+					>
+						{children}
+					</Animated.View>
+				</DealRelaidContext.Provider>
 			</DealStagedContext.Provider>
 			{staged !== null && (
 				<DealContext.Provider value={deal}>

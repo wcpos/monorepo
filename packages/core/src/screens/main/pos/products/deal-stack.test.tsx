@@ -165,6 +165,7 @@ import {
 	useCopyPicture,
 	useDeal,
 	useDealCards,
+	useLiftedLayout,
 } from './deal-stack';
 /* eslint-enable import/first */
 
@@ -216,6 +217,11 @@ function Air({ scroll }: { scroll: { value: number } }) {
 	return (
 		<output data-testid="air">{JSON.stringify(useAirspace(scroll as never, airScroller))}</output>
 	);
+}
+// The tapped tile's layout, as the lifted tile reports it to the stage.
+function Relaid() {
+	const relaid = useLiftedLayout(true);
+	return <button data-testid="tile-relaid" onClick={() => relaid?.()} />;
 }
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
@@ -315,6 +321,7 @@ function Stage({
 			)}
 		>
 			<Lifted />
+			<Relaid />
 		</DealStack>
 	);
 }
@@ -1055,6 +1062,30 @@ it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt 
 	rerender(<Stage detail="Tee" target={null} />);
 	act(() => jest.advanceTimersByTime(120));
 	expect(height()).toBeNull();
+});
+
+it('the copy follows the tapped tile when it reflows, and holds when the tile answers 0 × 0', () => {
+	const box = () => screen.getByTestId('cell-0').closest('[data-style]')!;
+	// The root grid stays laid out under the level: a resize reflows the tapped tile with it.
+	let frame = TILE;
+	const reflowing: Measurable = {
+		measureInWindow: (callback) => callback(frame.x, frame.y, frame.width, frame.height),
+	};
+	const { rerender } = render(<Stage detail={null} target={reflowing} />);
+	rerender(<Stage detail="Hoodie" target={reflowing} />);
+	layOut();
+	expect(box().getAttribute('data-width')).toBe(String(TILE.width + 8));
+	// The stage's own layout is not the signal: native FlashList sizes its rows a render later,
+	// so the tile's frame is still the old one when the stage hears the new width.
+	frame = { ...TILE, width: 140, height: 198 };
+	act(() => screen.getByTestId('tile-relaid').click());
+	// Every other slot reflowed with the stage; the copy did not (owner, 2026-10-26).
+	expect(box().getAttribute('data-width')).toBe(String(140 + 8));
+	expect(box().getAttribute('data-height')).toBe(String(198 + 8));
+	// A tile no longer laid out answers 0 × 0: the copy keeps the frame it has.
+	frame = { ...TILE, width: 0, height: 0 };
+	act(() => screen.getByTestId('tile-relaid').click());
+	expect(box().getAttribute('data-width')).toBe(String(140 + 8));
 });
 
 // The scroller clipped the copy of a tile from the products' first row where it overlapped the

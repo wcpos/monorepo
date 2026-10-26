@@ -8,8 +8,7 @@ import { InCartCount, useProductCount } from '../rows/product-row';
 import { useAddProduct } from '../../hooks/use-add-product';
 import { useRenderProbe } from '../render-probe';
 import { type GridFields, useProductPicture, useProductWords } from './tile-words';
-
-import type { Measurable } from '../deal-stack';
+import { type Measurable, useLiftedLayout } from '../deal-stack';
 
 export type { GridFields };
 
@@ -29,6 +28,7 @@ export function ProductTile({ record, gridFields, onDrill, lifted, grow }: Produ
 	const count = useProductCount(record);
 	const { addProduct } = useAddProduct();
 	const picture = useProductPicture(record);
+	const onLayout = useLiftedLayout(lifted);
 	const { t, format, stock, fields, out, mark, title, money, sub, facts } = useProductWords(
 		record,
 		gridFields,
@@ -75,6 +75,7 @@ export function ProductTile({ record, gridFields, onDrill, lifted, grow }: Produ
 			stacked={!!onDrill}
 			grow={grow}
 			lifted={lifted}
+			onLayout={onLayout}
 			onPress={handlePress}
 			accessibilityLabel={fields.name ?? ''}
 			testID={testID}
