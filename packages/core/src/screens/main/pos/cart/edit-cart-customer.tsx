@@ -1,21 +1,16 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { decode } from 'html-entities';
-import { useForm, useFormContext, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
-	FormField,
-	FormItem,
-	FormMessage,
 	SavedFieldProvider,
 	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
-	useSavedName,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
@@ -25,32 +20,26 @@ import {
 	PropertyRow,
 	PropertyVerb,
 } from '@wcpos/components/property-row';
-import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { CountriesProvider, useCountries } from '../../../../contexts/countries';
+import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import {
-	AddressCountryField,
-	AddressStateField,
-	billingAddressSchema,
-} from '../../components/billing-address-form';
+import { billingAddressSchema } from '../../components/billing-address-form';
+import { ADDRESS_FACTS, TextPart, useAddressFacts } from '../../components/customer/address-rows';
 import {
 	TAX_ID_DEFAULT_ROW,
 	TaxIdsForm,
 	taxIdsFormSchema,
 } from '../../components/customer/tax-ids-form';
-import { EditableField } from '../../components/editable-field';
 import { FormErrors } from '../../components/form-errors';
 import { shippingAddressSchema } from '../../components/shipping-address-form';
 import { useFieldPresence } from '../../components/use-field-presence';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
-import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -65,19 +54,8 @@ const formSchema = z.object({
 	tax_ids: taxIdsFormSchema,
 });
 
-/** An address's parts in row order; the closed line reads them in postal order. */
-const ADDRESS_PARTS = ['address_1', 'address_2', 'city', 'postcode', 'country', 'state'] as const;
-const LINE_PARTS = ['address_1', 'address_2', 'city', 'state', 'postcode', 'country'] as const;
-const SHIPPING_PARTS = ['first_name', 'last_name', 'company', 'phone', ...ADDRESS_PARTS] as const;
-/** The offered facts, in canonical order after the asked ones (name, email, phone). */
-const OFFERED = [{ name: 'company' }, { name: 'billing' }, { name: 'shipping' }] as const;
-/** Select parts: each adopts its row's key as its label (`useFormControlAria`, the item's id). */
-const PART_FIELDS = { country: AddressCountryField, state: AddressStateField };
 type Address = Record<string, string | undefined> | undefined;
 type Verb = [id: string, label: string, onPress: () => void];
-const hasAny = (address: Address, parts: readonly string[]) => parts.some((p) => !!address?.[p]);
-const sameAddress = (a: Address, b: Address) =>
-	SHIPPING_PARTS.every((p) => (a?.[p] ?? '') === (b?.[p] ?? ''));
 /** Billing as the shipping address: Woo's checkout with "Ship to a different address?" off. */
 const asShipping = (billing: Address) => shippingAddressSchema.shape.shipping.parse(billing ?? {});
 const verb = ([id, label, onPress]: Verb) => (
@@ -118,13 +96,6 @@ function EditCartCustomerFields() {
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const { caps } = useUserCapabilities();
-	const { country: storeCountry } = useBaseTaxLocation();
-	// Shipping reads "Same as billing" while it is empty or equal to billing, until a verb says so.
-	const [linked, setLinked] = React.useState(
-		() => !hasAny(shipping, SHIPPING_PARTS) || sameAddress(shipping, billing)
-	);
-	const [open, setOpen] = React.useState({ billing: false, shipping: false });
-	const [focus, setFocus] = React.useState<string | null>(null);
 
 	/**
 	 * This form writes what it shows: reactive values would reset the draft when a write lands.
@@ -136,6 +107,7 @@ function EditCartCustomerFields() {
 		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: { billing, shipping, tax_ids },
 	});
+	const { linked, focus, labels, ...address } = useAddressFacts(form, 'cart-address');
 
 	// While linked, a write carries billing as shipping; a verb's own shipping write lands as set.
 	const shippingOf = (values: FormValues) =>
@@ -210,68 +182,12 @@ function EditCartCustomerFields() {
 		}
 	};
 
-	/** Both verbs start from billing's values; an own address with no country takes the store's. */
-	const setShippingOwn = (own: boolean) => {
-		const { billing: from } = form.getValues();
-		const country = own && !from?.country && storeCountry;
-		form.setValue('shipping', country ? { ...from, country } : from);
-		setLinked(!own);
-		setOpen((current) => ({ ...current, shipping: own }));
-	};
-	const openPart = (name: 'billing' | 'shipping') => () =>
-		setOpen((current) => ({ ...current, [name]: true }));
-
-	const { billing: b, shipping: s } = useWatch({ control: form.control });
-	const presence = useFieldPresence(
-		OFFERED,
-		(name) =>
-			({
-				company: !b?.company,
-				billing: !hasAny(b, ADDRESS_PARTS),
-				shipping: linked || !hasAny(s, SHIPPING_PARTS),
-			})[name],
-		(name) => {
-			const parts = name === 'company' ? ['company'] : ADDRESS_PARTS;
-			const cleared = Object.fromEntries(parts.map((part) => [part, '']));
-			form.setValue('billing', { ...form.getValues().billing, ...cleared });
-			if (name === 'billing') setOpen((current) => ({ ...current, billing: false }));
-		}
-	);
+	const presence = useFieldPresence(ADDRESS_FACTS, address.isEmpty, address.clear);
 	const has = (name: string) => presence.present.includes(name as never);
-	// Shipping is a row whenever billing is: it derives from billing until a verb breaks the link.
-	const shippingRow = has('shipping') || has('billing');
-	const offered = presence.offered.filter((name) => name !== 'shipping' || !shippingRow);
+	const { offered, rows } = address.layout(presence);
 	const add = (name: (typeof offered)[number]) => {
 		presence.add(name);
-		setFocus(name);
-		if (name === 'billing' && storeCountry) form.setValue('billing.country', storeCountry);
-		if (name === 'billing') openPart('billing')();
-		if (name === 'shipping') setShippingOwn(true);
-	};
-	const sameAsBilling: Verb = [
-		'shipping-same',
-		t('pos_cart.same_as_billing'),
-		() => setShippingOwn(false),
-	];
-	const shippingVerbs: Verb[] = linked
-		? [['shipping-different', t('pos_cart.use_different_address'), () => setShippingOwn(true)]]
-		: open.shipping
-			? [sameAsBilling]
-			: [['edit-shipping', t('common.edit'), openPart('shipping')], sameAsBilling];
-	const labels: Record<string, string> = {
-		company: t('common.company'),
-		billing: t('common.billing_address'),
-		shipping: t('common.shipping_address'),
-		email: t('common.email'),
-		phone: t('common.phone'),
-		first_name: t('common.first_name'),
-		last_name: t('common.last_name'),
-		address_1: t('common.address_1'),
-		address_2: t('common.address_2'),
-		city: t('common.city'),
-		postcode: t('common.postcode'),
-		country: t('common.country'),
-		state: t('common.state'),
+		address.added(name);
 	};
 
 	/**
@@ -291,8 +207,14 @@ function EditCartCustomerFields() {
 							trailing={<SavedMark name="billing" label={t('settings.saved')} />}
 						>
 							<HStack className="gap-2">
-								<TextPart name="billing.first_name" placeholder={labels.first_name} />
-								<TextPart name="billing.last_name" placeholder={labels.last_name} />
+								{(['first_name', 'last_name'] as const).map((name) => (
+									<TextPart
+										key={name}
+										name={`billing.${name}`}
+										placeholder={labels[name]}
+										testID={`cart-address-field-billing-${name}`}
+									/>
+								))}
 							</HStack>
 						</PropertyRow>
 						{(['email', 'phone', 'company'] as const).map(
@@ -311,34 +233,12 @@ function EditCartCustomerFields() {
 											name={`billing.${name}`}
 											placeholder={t('common.add_value', { label: labels[name] })}
 											autoFocus={focus === name}
+											testID={`cart-address-field-billing-${name}`}
 										/>
 									</PropertyRow>
 								)
 						)}
-						{has('billing') && (
-							<AddressRows
-								prefix="billing"
-								labels={labels}
-								open={open.billing}
-								onOpen={openPart('billing')}
-								autoFocus={focus === 'billing'}
-								verbs={[
-									open.billing
-										? ['remove-billing', t('common.remove'), () => presence.withdraw('billing')]
-										: ['edit-billing', t('common.edit'), openPart('billing')],
-								]}
-							/>
-						)}
-						{shippingRow && (
-							<AddressRows
-								prefix="shipping"
-								labels={labels}
-								open={!linked && open.shipping}
-								onOpen={openPart('shipping')}
-								derived={linked ? t('pos_cart.same_as_billing') : undefined}
-								verbs={shippingVerbs}
-							/>
-						)}
+						{rows}
 						<TaxIdsForm rows testID="cart-address" />
 						<PropertyAddRow>
 							{offered.map((name) => (
@@ -377,105 +277,5 @@ function EditCartCustomerFields() {
 				}
 			/>
 		</Form>
-	);
-}
-
-/** One text fact: the value at rest, a field while editing; it commits on blur or Enter. */
-function TextPart(props: { name: string; placeholder: string; autoFocus?: boolean }) {
-	const { control } = useFormContext();
-	return (
-		<FormField
-			control={control}
-			name={props.name}
-			render={({ field }) => (
-				<FormItem className="min-w-0 flex-1 gap-0">
-					<EditableField
-						variant="ghost"
-						bold={false}
-						value={field.value ?? ''}
-						onChangeText={field.onChange}
-						// The draft reaches the form as it is typed: a footer action or a dismissal
-						// on native does not blur the editor, and must not read the previous value.
-						onChangeDraft={field.onChange}
-						placeholder={props.placeholder}
-						startEditing={props.autoFocus}
-						testID={`cart-address-field-${props.name.replace('.', '-')}`}
-					/>
-					<FormMessage />
-				</FormItem>
-			)}
-		/>
-	);
-}
-
-/**
- * A compound fact: its key row (closed: one line, or the derived value) and, open, its parts as
- * indented rows. Open lasts for the dialog's life; there is no close verb.
- */
-function AddressRows({
-	prefix,
-	labels,
-	open,
-	onOpen,
-	autoFocus,
-	derived,
-	verbs,
-}: {
-	prefix: 'billing' | 'shipping';
-	labels: Record<string, string>;
-	open: boolean;
-	onOpen: () => void;
-	autoFocus?: boolean;
-	derived?: string;
-	verbs: Verb[];
-}) {
-	const t = useT();
-	const countries = useCountries();
-	const marked = useSavedName() === prefix && prefix === 'shipping';
-	const address = useWatch({ name: prefix }) as Address;
-	const line = LINE_PARTS.map((part) =>
-		part === 'country' && address?.country
-			? decode(countries.find(({ code }) => code === address.country)?.name ?? address.country)
-			: address?.[part]
-	)
-		.filter(Boolean)
-		.join(', ');
-	return (
-		<>
-			<PropertyRow
-				testID={`cart-address-row-${prefix}`}
-				label={labels[prefix]}
-				trailing={
-					marked ? <SavedMark name="shipping" label={t('settings.saved')} /> : verbs.map(verb)
-				}
-			>
-				{open ? null : derived ? (
-					<Text className="text-muted-foreground">{derived}</Text>
-				) : (
-					<Text onPress={onOpen}>{line}</Text>
-				)}
-			</PropertyRow>
-			{open &&
-				(prefix === 'billing' ? ADDRESS_PARTS : SHIPPING_PARTS).map((part) => (
-					<PropertyRow
-						key={part}
-						indent
-						label={labels[part]}
-						nativeID={`${prefix}-${part}-form-item`}
-					>
-						{part === 'country' || part === 'state' ? (
-							<FormItem nativeID={`${prefix}-${part}`}>
-								{React.createElement(PART_FIELDS[part], { prefix })}
-							</FormItem>
-						) : (
-							<TextPart
-								name={`${prefix}.${part}`}
-								placeholder={t('common.add_value', { label: labels[part] })}
-								autoFocus={autoFocus && part === 'address_1'}
-							/>
-						)}
-					</PropertyRow>
-				))}
-		</>
 	);
 }

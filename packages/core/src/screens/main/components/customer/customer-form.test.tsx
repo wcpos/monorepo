@@ -1,0 +1,215 @@
+/**
+ * @jest-environment jsdom
+ */
+import * as React from 'react';
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useForm, type UseFormReturn } from 'react-hook-form';
+
+import { CustomerForm, type CustomerFormValues } from './customer-form';
+
+type Pressable = { onPress?: () => void; testID?: string };
+
+jest.mock('@wcpos/components/form', () => ({
+	Form: jest.requireActual('react-hook-form').FormProvider,
+	FormField: jest.requireActual('react-hook-form').Controller,
+	FormItem: jest.requireActual('@wcpos/components/form/common').FormItem,
+	FormInput: ({
+		testID,
+		value,
+		onChange,
+		placeholder,
+		secureTextEntry,
+	}: {
+		testID?: string;
+		value: string;
+		onChange: (value: string) => void;
+		placeholder?: string;
+		secureTextEntry?: boolean;
+	}) => (
+		<input
+			data-testid={testID}
+			type={secureTextEntry ? 'password' : 'text'}
+			placeholder={placeholder}
+			value={value}
+			onChange={(event) => onChange(event.target.value)}
+		/>
+	),
+	FormMessage: () => null,
+	SavedMark: () => null,
+	useSavedName: () => '',
+}));
+jest.mock('@wcpos/components/dialog', () => ({
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: () => null,
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
+		<span onClick={onPress}>{children}</span>
+	),
+}));
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyRow: ({
+		label,
+		children,
+		trailing,
+		testID,
+	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode; testID?: string }>) => (
+		<div data-testid={testID}>
+			<span>{label}</span>
+			{children}
+			{trailing}
+		</div>
+	),
+	PropertyVerb: ({ children, onPress, testID }: React.PropsWithChildren<Pressable>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	PropertyAddRow: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="add-row">{children}</div>
+	),
+	PropertyAdd: ({ label, onPress, testID }: Pressable & { label: string }) => (
+		<button data-testid={testID} onClick={onPress}>
+			{label}
+		</button>
+	),
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string, options?: { label?: string }) =>
+		options?.label ? `${key}:${options.label}` : key,
+}));
+jest.mock('../../hooks/use-base-tax-location', () => ({
+	useBaseTaxLocation: () => ({ country: 'CA' }),
+}));
+jest.mock('../editable-field', () => ({
+	EditableField: ({ value, testID }: { value: string; testID?: string }) => (
+		<span data-testid={testID}>{value}</span>
+	),
+}));
+function mockAddressSchema(root: 'billing' | 'shipping') {
+	const z = jest.requireActual('zod') as typeof import('zod');
+	const keys = ['first_name', 'last_name', 'company', 'phone', 'address_1', 'address_2', 'city'];
+	keys.push('state', 'postcode', 'country', ...(root === 'billing' ? ['email'] : []));
+	const address = z.object(Object.fromEntries(keys.map((key) => [key, z.string().optional()])));
+	return z.object({ [root]: address.optional() });
+}
+jest.mock('../billing-address-form', () => ({
+	AddressCountryField: ({ prefix }: { prefix: string }) => (
+		<button data-testid={`${prefix}-country-select`} />
+	),
+	AddressStateField: () => null,
+	billingAddressSchema: mockAddressSchema('billing'),
+}));
+jest.mock('../shipping-address-form', () => ({
+	shippingAddressSchema: mockAddressSchema('shipping'),
+}));
+jest.mock('../form-errors', () => ({ FormErrors: () => null }));
+jest.mock('../meta-data-form', () => ({
+	MetaDataForm: () => null,
+	META_DATA_DEFAULT_ROW: { key: '', value: '' },
+	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').any()).optional(),
+}));
+jest.mock('./tax-ids-form', () => ({
+	TaxIdsForm: () => null,
+	TAX_ID_DEFAULT_ROW: { type: 'eu_vat', value: '' },
+	taxIdsFormSchema: jest.requireActual('zod').array(jest.requireActual('zod').any()).optional(),
+}));
+
+const harness: { form?: UseFormReturn<CustomerFormValues> } = {};
+function Harness({ values }: { values: Partial<CustomerFormValues> & { id?: number } }) {
+	const form = useForm<CustomerFormValues>({ defaultValues: values as CustomerFormValues });
+	React.useEffect(() => {
+		harness.form = form;
+	});
+	return <CustomerForm form={form} footer={{}} />;
+}
+const value = (name: string) => harness.form!.getValues(name as never);
+const rows = () => screen.queryAllByTestId(/^customer-row-/).map((row) => row.dataset.testid);
+const adds = () =>
+	Array.from(screen.getByTestId('add-row').querySelectorAll('button')).map(
+		(button) => button.dataset.testid
+	);
+const ADDRESS = { address_1: '12 High Street', city: 'Leeds', country: 'GB' };
+
+describe('CustomerForm', () => {
+	it('creation asks Name, Email, Phone and Username, and offers the rest', () => {
+		render(<Harness values={{}} />);
+		expect(rows()).toEqual([
+			'customer-row-name',
+			'customer-row-email',
+			'customer-row-phone',
+			'customer-row-username',
+		]);
+		expect(screen.getByTestId('customer-first-name-input').tagName).toBe('INPUT');
+		expect(screen.getByTestId('customer-last-name-input').tagName).toBe('INPUT');
+		expect(screen.getByTestId('customer-email-input').tagName).toBe('INPUT');
+		expect(screen.queryByTestId('customer-row-role')).toBeNull();
+		expect(adds()).toEqual([
+			'customer-add-company',
+			'customer-billing-address-toggle',
+			'customer-add-shipping',
+			'customer-add-password',
+			'customer-add-tax_id',
+			'customer-add-meta_data',
+		]);
+	});
+
+	it('the billing toggle adds billing and opens its parts', () => {
+		render(<Harness values={{}} />);
+		fireEvent.click(screen.getByTestId('customer-billing-address-toggle'));
+		expect(screen.getByTestId('customer-field-billing-address_1').tagName).toBe('INPUT');
+		expect(screen.getByTestId('billing-country-select')).toBeTruthy();
+		expect(value('billing.country')).toBe('CA');
+	});
+
+	it('an edit shows Username and Role locked, with where they are set', () => {
+		render(<Harness values={{ id: 7, username: 'ada', role: 'customer' }} />);
+		expect(screen.getByTestId('customer-row-username').textContent).toBe(
+			'common.usernameadacustomers.set_at_creation'
+		);
+		expect(screen.getByTestId('customer-row-role').textContent).toBe(
+			'common.rolecustomercustomers.set_in_wordpress'
+		);
+		expect(screen.getByTestId('customer-row-username').querySelector('input')).toBeNull();
+		expect(screen.getByTestId('customer-row-role').querySelector('input')).toBeNull();
+	});
+
+	it('a billing address reads as one line with Edit', () => {
+		render(<Harness values={{ id: 7, billing: ADDRESS }} />);
+		expect(screen.getByTestId('customer-row-billing').textContent).toBe(
+			'common.billing_address12 High Street, Leeds, United Kingdom (UK)common.edit'
+		);
+		expect(screen.getByTestId('customer-edit-billing')).toBeTruthy();
+	});
+
+	it('Use a different address copies billing into shipping', () => {
+		render(<Harness values={{ id: 7, billing: ADDRESS }} />);
+		fireEvent.click(screen.getByTestId('customer-shipping-different'));
+		expect(value('shipping')).toEqual(ADDRESS);
+		expect(screen.getByTestId('customer-shipping-same')).toBeTruthy();
+	});
+
+	it('adding Password renders a secure input', () => {
+		render(<Harness values={{ id: 7 }} />);
+		fireEvent.click(screen.getByTestId('customer-add-password'));
+		expect(screen.getByTestId('customer-password-input').getAttribute('type')).toBe('password');
+		expect(adds()).not.toContain('customer-add-password');
+	});
+
+	it('Remove on Company clears billing.company and returns its add button', () => {
+		render(<Harness values={{ billing: { company: 'Acme' } }} />);
+		expect(adds()).not.toContain('customer-add-company');
+		fireEvent.click(screen.getByTestId('customer-remove-company'));
+		expect(value('billing.company')).toBe('');
+		expect(screen.queryByTestId('customer-row-company')).toBeNull();
+		expect(adds()[0]).toBe('customer-add-company');
+	});
+});
