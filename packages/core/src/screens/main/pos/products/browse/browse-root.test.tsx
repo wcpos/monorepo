@@ -8,6 +8,8 @@ import { DealStagedContext } from '../deal-stack';
 import { BrowseRootGrid } from './term-grid';
 import { BrowseRootTable } from './term-table';
 
+// The shared loading row stays real; its animated native leaf does not run in jsdom.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => <span /> }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number; terms?: string; products?: string }) =>
 		vars?.terms

@@ -24,6 +24,7 @@ import { TileGrid } from '../tiles/tile-grid';
 import { TileGround } from '../../../components/data-table/surface';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
+import { GridLoadingRow } from '../tiles/grid-footer';
 import { BrowseRootFooter } from './browse-root-footer';
 import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
@@ -183,6 +184,8 @@ export function TermLevelGrid({
 	// over the old denominator for a frame. `null` while the level has no answer: no denominator.
 	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
 	const placeSize = term.kind === 'term' ? term.count : term.kind === 'all' ? snapshot.total : 0;
+	const short =
+		showProducts && !narrowed && shown?.total !== undefined && shown.total < (placeSize ?? 0);
 	const total =
 		shown?.total === undefined
 			? null
@@ -342,6 +345,8 @@ export function TermLevelGrid({
 									// Furniture, as the crumb and the footer are: it fades with the deal.
 									isEmpty ? (
 										<DealFade className="items-center justify-center p-4">{empty}</DealFade>
+									) : short ? (
+										<GridLoadingRow />
 									) : undefined
 								}
 							/>

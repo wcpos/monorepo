@@ -12,6 +12,7 @@ import {
 	useQueryHandleFields,
 	useQueryHandleValue,
 	useQuerySnapshot,
+	useQueryState,
 } from '../../../../../query';
 import {
 	logResultEmission,
@@ -28,6 +29,7 @@ import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { CaptionRowInset, TileGround } from '../../../components/data-table/surface';
 import { ProductsFooter } from '../footer';
+import { narrowedBeyondPlace } from '../browse/level-place';
 
 import type { QueryStateActions, SnapshotFields } from '../../../../../query';
 
@@ -93,20 +95,43 @@ function GridStatusFooter({
 	drawnCount: number;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
-	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
+	const { total, result } = useQueryHandleFields(shown, TOTAL_FIELD);
+	const matches = result.count ?? result.hits.length;
+	const state = useQueryState<'products'>();
+	const narrowed = narrowedBeyondPlace(null, state);
+	const denominator = narrowed
+		? matches
+		: total === null && drawnCount === 0
+			? null
+			: Math.max(total ?? 0, matches);
 	// The tile grid's caption row: the inset DataTable's footer mount gives (surface.tsx).
 	return (
 		<CaptionRowInset>
 			<ProductsFooter
 				collectionName="products"
 				active={active}
-				total={total}
+				total={denominator}
 				sync={handle.sync}
 				drawnCount={drawnCount}
 			/>
 		</CaptionRowInset>
 	);
 }
+// Read the census in a leaf: its arrival must not re-render or re-chunk the grid body.
+function GridPagingFooter({
+	shown,
+	...props
+}: { shown: QueryHandle<ProductsResult> } & Omit<
+	React.ComponentProps<typeof ProductGridFooter>,
+	'short'
+>) {
+	const { total, result } = useQueryHandleFields(shown, TOTAL_FIELD);
+	const matches = result.count ?? result.hits.length;
+	const state = useQueryState<'products'>();
+	const short = !narrowedBeyondPlace(null, state) && matches < (total ?? 0);
+	return <ProductGridFooter {...props} short={short} />;
+}
+
 const ACTIVE_FIELD: SnapshotFields = ['active'];
 const TOTAL_FIELD: SnapshotFields = ['total'];
 // The grid body re-renders for the answer and the engine's paging opinion, nothing else.
@@ -250,7 +275,8 @@ export function ProductGrid({
 					}
 					onEndReached={handleEndReached}
 					footer={
-						<ProductGridFooter
+						<GridPagingFooter
+							shown={shown}
 							engine={engine}
 							renderedCount={renderedCount}
 							hitCount={deferredResult.hits.length}

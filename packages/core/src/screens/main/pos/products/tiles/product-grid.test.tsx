@@ -9,7 +9,9 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { ProductGrid } from './product-grid';
 
-let mockResult: { hits: object[] };
+let mockResult: { hits: object[]; count: number };
+let mockTotal: number | null = null;
+let mockSearch = '';
 let mockReady = true;
 let mockError: unknown = null;
 // Settling is `useDrawnHandle(handle) !== handle`: while set, the drawn handle the grid draws
@@ -30,7 +32,7 @@ const mockSnapshot = () => ({
 	active: false,
 	pending: false,
 	exhausted: null,
-	total: null,
+	total: mockTotal,
 	laneProgress: null,
 });
 
@@ -43,6 +45,7 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 }));
 jest.mock('../../../../../query', () => ({
+	useQueryState: () => ({ search: mockSearch, filters: { status: 'publish' } }),
 	// The Suspense-native reader, as the grid sees it: an answer, or a thrown promise / error.
 	useQuerySnapshot: () => {
 		if (mockError) throw mockError;
@@ -90,8 +93,17 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('./grid-footer', () => ({
-	ProductGridFooter: ({ renderedCount, hitCount }: { renderedCount: number; hitCount: number }) => (
+	ProductGridFooter: ({
+		renderedCount,
+		hitCount,
+		short,
+	}: {
+		renderedCount: number;
+		hitCount: number;
+		short: boolean;
+	}) => (
 		<>
+			<span data-testid="product-grid-footer-short">{String(short)}</span>
 			<span data-testid="product-grid-footer-count">{renderedCount}</span>
 			<span data-testid="product-grid-footer-result-count">{hitCount}</span>
 		</>
@@ -137,6 +149,8 @@ function staleHit(uuid: string) {
 
 beforeEach(() => {
 	mockReady = true;
+	mockTotal = null;
+	mockSearch = '';
 	mockSettling = false;
 	mockError = null;
 });
@@ -144,7 +158,7 @@ beforeEach(() => {
 describe('ProductGrid stale-hit reporting', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockResult = { hits: [staleHit('first')] };
+		mockResult = { hits: [staleHit('first')], count: 1 };
 	});
 
 	it('logs a replacement stale-hit set when the skipped count is unchanged', async () => {
@@ -162,7 +176,7 @@ describe('ProductGrid stale-hit reporting', () => {
 			1,
 			expect.objectContaining({ pending: false, exhausted: null })
 		);
-		mockResult = { hits: [staleHit('second')] };
+		mockResult = { hits: [staleHit('second')], count: 1 };
 		rerender(<ProductGrid {...props} />);
 
 		await waitFor(() => expect(getLogger([]).info).toHaveBeenCalledTimes(2));
@@ -191,7 +205,7 @@ jest.mock('./product-tile', () => ({
 it('draws a simple product as the product tile and a variable one as the drill tile', () => {
 	const simple = { uuid: 'simple', payload: { type: 'simple', name: 'Simple' } };
 	const variable = { uuid: 'variable', payload: { type: 'variable', name: 'Variable' } };
-	mockResult = { hits: [{ record: simple }, { record: variable }] };
+	mockResult = { hits: [{ record: simple }, { record: variable }], count: 2 };
 	const onDrill = jest.fn();
 	const props = {
 		handle: { key: 'test', sync: jest.fn() },
@@ -208,6 +222,7 @@ it('draws a simple product as the product tile and a variable one as the drill t
 
 it('with the inline variations style a variable product is the popover tile', () => {
 	mockResult = {
+		count: 1,
 		hits: [{ record: { uuid: 'variable', payload: { type: 'variable', name: 'Variable' } } }],
 	};
 	const props = {
@@ -231,7 +246,7 @@ describe('ProductGrid on the handle snapshot', () => {
 
 	it('suspends until the handle answers, then draws the rows — never the empty state between', () => {
 		mockReady = false;
-		mockResult = { hits: [] };
+		mockResult = { hits: [], count: 0 };
 		const { rerender } = render(
 			<React.Suspense fallback={<div data-testid="grid-loading" />}>
 				<ProductGrid {...props()} />
@@ -242,6 +257,7 @@ describe('ProductGrid on the handle snapshot', () => {
 
 		mockReady = true;
 		mockResult = {
+			count: 1,
 			hits: [{ record: { uuid: 'p1', payload: { type: 'simple', name: 'One' } } }],
 		};
 		rerender(
@@ -255,7 +271,7 @@ describe('ProductGrid on the handle snapshot', () => {
 	});
 
 	it('treats a changed query that has not answered as pending for the paging guard', () => {
-		mockResult = { hits: [] };
+		mockResult = { hits: [], count: 0 };
 		mockSettling = true;
 		render(<ProductGrid {...props()} />);
 		expect(mockGuard).toHaveBeenLastCalledWith(
@@ -266,7 +282,7 @@ describe('ProductGrid on the handle snapshot', () => {
 	});
 
 	it('throws a failed read to the boundary above it', () => {
-		mockResult = { hits: [] };
+		mockResult = { hits: [], count: 0 };
 		mockError = new Error('storage gone');
 		const silence = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 		expect(() => render(<ProductGrid {...props()} />)).toThrow('storage gone');
@@ -276,6 +292,7 @@ describe('ProductGrid on the handle snapshot', () => {
 
 it('draws the products caption row under the tiles, as the table view does, with the rendered count', () => {
 	mockResult = {
+		count: 2,
 		hits: ['one', 'two'].map((uuid) => ({
 			record: { uuid, payload: { type: 'simple', name: uuid } },
 		})),
@@ -291,7 +308,39 @@ it('draws the products caption row under the tiles, as the table view does, with
 	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
 		collection: 'products',
 		count: '2',
-		total: 'null',
+		total: '2',
 		active: 'false',
 	});
+});
+
+it('marks a short local walk and keeps the census only while unnarrowed', () => {
+	mockTotal = 218;
+	mockResult = {
+		count: 69,
+		hits: [{ record: { uuid: 'one', payload: { type: 'simple', name: 'One' } } }],
+	};
+	const props = {
+		handle: { key: 'test', sync: jest.fn() },
+		actions: { extendLimit: jest.fn() },
+	} as unknown as React.ComponentProps<typeof ProductGrid>;
+	const { rerender } = render(<ProductGrid {...props} />);
+	expect(screen.getByTestId('product-grid-footer-short').textContent).toBe('true');
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('218');
+	mockSearch = 'One';
+	rerender(<ProductGrid {...props} />);
+	expect(screen.getByTestId('product-grid-footer-short').textContent).toBe('false');
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('69');
+});
+
+it('keeps an empty unnarrowed footer unknown until the census answers', () => {
+	mockResult = { hits: [], count: 0 };
+	const props = {
+		handle: { key: 'test', sync: jest.fn() },
+		actions: { extendLimit: jest.fn() },
+	} as unknown as React.ComponentProps<typeof ProductGrid>;
+	const { rerender } = render(<ProductGrid {...props} />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('null');
+	mockTotal = 0;
+	rerender(<ProductGrid {...props} />);
+	expect(screen.getByTestId('products-footer').dataset.total).toBe('0');
 });

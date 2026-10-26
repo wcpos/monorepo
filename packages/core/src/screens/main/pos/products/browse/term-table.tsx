@@ -11,6 +11,7 @@ import { DataTable } from '../../../components/data-table';
 import { TableSurface } from '../../../components/data-table/surface';
 import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';
+import { GridLoadingRow } from '../tiles/grid-footer';
 import { OwnFooter, OwnFooterContext } from '../own-footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
@@ -224,6 +225,8 @@ export function TermLevelTable({
 	// the old denominator for a frame.
 	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
 	const placeSize = term.kind === 'term' ? term.count : term.kind === 'all' ? snapshot.total : 0;
+	const short =
+		showProducts && !narrowed && shown?.total !== undefined && shown.total < (placeSize ?? 0);
 	const total =
 		shown?.total === undefined
 			? null
@@ -324,7 +327,7 @@ export function TermLevelTable({
 									);
 								}}
 								estimatedItemSize={100}
-								ListFooterComponent={NoListFooter}
+								ListFooterComponent={short && rows.length > 0 ? GridLoadingRow : NoListFooter}
 								TableFooterComponent={OwnFooter}
 								getItemType={itemType}
 							/>

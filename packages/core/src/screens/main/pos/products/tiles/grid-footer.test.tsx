@@ -23,14 +23,14 @@ jest.mock('react-native', () => ({
 
 type Engine = { pending: boolean; exhausted: boolean | null };
 
-function footer(renderedCount: number, engine: Engine, hitCount = renderedCount) {
+function footer(renderedCount: number, engine: Engine, hitCount = renderedCount, short = false) {
 	return (
 		<QueryStateProvider
 			collection="products"
 			initialPageSize={10}
 			initialSort={{ field: 'name', direction: 'asc' }}
 		>
-			<ProductGridFooter engine={engine} renderedCount={renderedCount} hitCount={hitCount} />
+			<ProductGridFooter {...{ engine, renderedCount, hitCount, short }} />
 		</QueryStateProvider>
 	);
 }
@@ -41,6 +41,18 @@ function renderFooter(renderedCount: number, engine: Engine, hitCount = rendered
 
 describe('ProductGridFooter', () => {
 	const settled = (): Engine => ({ pending: false, exhausted: null });
+
+	it('shows loading at the local end while the place is short', () => {
+		render(footer(4, { pending: false, exhausted: true }, 4, true));
+		expect(screen.getByTestId('pos-products-grid-loading')).toBeTruthy();
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('shows the end row when the place is not short', () => {
+		render(footer(4, { pending: false, exhausted: true }, 4, false));
+		expect(screen.getByTestId('pos-products-grid-end')).toBeTruthy();
+		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+	});
 
 	it('says nothing under an empty grid, even when the engine says exhausted', () => {
 		renderFooter(0, { ...settled(), exhausted: true });
