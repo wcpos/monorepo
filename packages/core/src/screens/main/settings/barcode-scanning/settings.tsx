@@ -38,6 +38,7 @@ import {
 	type ScanSoundTheme,
 } from '../../pos/products/scan-sound-themes';
 import { SettingsRow } from '../components/settings-row';
+import { SettingsSection } from '../components/settings-section';
 
 const formSchema = z.object({
 	barcode_scanning_avg_time_input_threshold: z.coerce.number().default(24),
@@ -156,12 +157,13 @@ function BarcodeSettingsForm() {
 	);
 
 	/**
-	 *
+	 * Two sections, one form: `Form` is a provider with no view, so the sections stack straight
+	 * into the page's `gap-5` column like every other Settings page's.
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-1">
-				<FormErrors />
+			<FormErrors />
+			<SettingsSection first title={t('settings.scanning_section')}>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_avg_time_input_threshold"
@@ -218,6 +220,8 @@ function BarcodeSettingsForm() {
 						</SettingsRow>
 					)}
 				/>
+			</SettingsSection>
+			<SettingsSection title={t('settings.sound_section')}>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_sound_enabled"
@@ -357,7 +361,7 @@ function BarcodeSettingsForm() {
 						) : null}
 					</VStack>
 				) : null}
-			</VStack>
+			</SettingsSection>
 		</Form>
 	);
 }
