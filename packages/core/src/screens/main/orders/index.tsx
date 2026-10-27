@@ -180,7 +180,7 @@ function OrdersList({
 					{pointer === 'coarse' ? (
 						<OrderRow record={record} onSelect={open} />
 					) : (
-						<DataTableRow item={item} onPress={() => open(record.uuid)} />
+						<DataTableRow item={item} pressWhenActionsHidden={() => open(record.uuid)} />
 					)}
 				</View>
 			</VirtualizedList.Item>

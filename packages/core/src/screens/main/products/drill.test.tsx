@@ -447,14 +447,14 @@ it('drills from the variations button into the product’s variations, and the c
 });
 
 it.each(['drill', 'inline'])(
-	'the row press and the caret open the product in the %s style, never its variations',
+	'the caret opens the product in the %s style, the row press nothing, never its variations',
 	(style) => {
 		mockStyle = style;
 		render(<ProductsScreen />);
 		expect(screen.queryByTestId('product-expand-button')).toBeNull();
 		fireEvent.click(screen.getByTestId('press-hoodie'));
 		fireEvent.click(screen.getByTestId('product-open-button'));
-		expect(mockPush.mock.calls).toEqual([[productRoute], [productRoute]]);
+		expect(mockPush.mock.calls).toEqual([[productRoute]]);
 		expect(crumb()).toBeNull();
 		expect(screen.queryByTestId('pane-variations')).toBeNull();
 		expect(variations().getAttribute('aria-expanded')).toBe(style === 'inline' ? 'false' : null);

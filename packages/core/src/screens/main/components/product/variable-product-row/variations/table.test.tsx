@@ -35,14 +35,21 @@ jest.mock('../../../data-table/rows', () => ({
 		item,
 		testID,
 		onPress,
+		pressWhenActionsHidden,
 		renderCell,
 	}: {
 		item: { getVisibleCells: () => unknown[] };
 		testID: string;
-		onPress: () => void;
+		onPress?: () => void;
+		pressWhenActionsHidden?: () => void;
 		renderCell: (cell: unknown) => React.ReactNode;
 	}) => (
-		<div data-testid={testID} onClick={onPress}>
+		// The row's own press stands in for the caret only while the Actions column is hidden.
+		<div
+			data-testid={testID}
+			data-pressable={onPress ? 'true' : undefined}
+			onClick={pressWhenActionsHidden}
+		>
 			{item.getVisibleCells().map((cell, index) => (
 				<React.Fragment key={index}>{renderCell(cell)}</React.Fragment>
 			))}
@@ -173,12 +180,14 @@ describe('VariationsTable on the variations handle', () => {
 });
 
 describe('VariationsTable on the products page', () => {
-	it('a variation row opens that variation when the page hands it an opener', () => {
+	it('a variation row is no press target; its opener is the hidden-Actions fallback', () => {
 		const openVariation = jest.fn();
 		render(<VariationsTable handle={handle} row={row} openVariation={openVariation} />);
 
 		expect(renderedNames()).toEqual(['Black', 'Red', 'Blue', 'Gold']);
-		fireEvent.click(screen.getByTestId('data-table-row-variation-1'));
+		const variationRow = screen.getByTestId('data-table-row-variation-1');
+		expect(variationRow.getAttribute('data-pressable')).toBeNull();
+		fireEvent.click(variationRow);
 		expect(openVariation).toHaveBeenCalledWith(expect.objectContaining({ remoteId: '1' }));
 	});
 });

@@ -4,6 +4,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 import { flexRender, type RowData } from '@tanstack/react-table';
 
 import { usePointer } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell } from '@wcpos/components/table';
@@ -43,7 +44,8 @@ function visibleCells<TData extends RowData>(
 
 export function DataTableRow<TData extends RowData>({
 	item,
-	onPress,
+	onPress: press,
+	pressWhenActionsHidden,
 	testID,
 	trailing,
 	accessibilityLabel,
@@ -51,6 +53,11 @@ export function DataTableRow<TData extends RowData>({
 }: {
 	item: Row<TData, DataTableFeatures>;
 	onPress?: PressableProps['onPress'];
+	/**
+	 * The record's opener on a table whose actions caret is the one control that opens it: with
+	 * the Actions column hidden the caret is gone, so the row takes the press instead.
+	 */
+	pressWhenActionsHidden?: () => void;
 	testID?: string;
 	trailing?: React.ReactNode;
 	/**
@@ -91,6 +98,7 @@ export function DataTableRow<TData extends RowData>({
 	// old table did; a table with no actions column at all shows the caller's control.
 	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
 	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
+	const onPress = press ?? (actionsHidden ? pressWhenActionsHidden : undefined);
 	// A caller may name the row for the case where its trailing control is gone (the Actions
 	// column hidden): then the row is the only add control and takes the button role; with a
 	// trailing button present it stays a plain pressable, so no button nests in a button on web.
@@ -101,9 +109,10 @@ export function DataTableRow<TData extends RowData>({
 		<View
 			testID={testID ?? getRowTestID(item)}
 			// The hover tint is the ROW's, actions cell included: the pressable stops short of
-			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23).
+			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23). A row with
+			// no press (the management tables open a record from its actions icon only) has none.
 			className={
-				pointer === 'fine'
+				pointer === 'fine' && onPress
 					? 'border-border web:hover:bg-muted flex-row items-center border-b'
 					: 'border-border flex-row items-center border-b'
 			}
@@ -134,12 +143,12 @@ export function DataTableRow<TData extends RowData>({
 							}
 						: undefined
 				}
-				className={
-					pointer === 'fine'
-						? 'min-h-row active:bg-muted flex-1 flex-row items-center'
-						: // The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
-							'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3 py-1.5'
-				}
+				className={cn(
+					'min-h-row flex-1 flex-row items-center',
+					onPress && 'active:bg-muted',
+					// The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
+					pointer !== 'fine' && 'gap-3 px-3 py-1.5'
+				)}
 			>
 				{/* A tooltip in a cell (the price's tax) is a hint here, not a control: the press is the row's. */}
 				<TooltipPassiveTriggers>

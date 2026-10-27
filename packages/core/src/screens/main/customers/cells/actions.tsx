@@ -11,9 +11,8 @@ import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-// The orders caret (#2897): it opens the customer like the row does. The cell sits beside the
-// row's pressable (a button cannot nest in a button), so it needs its own. Sync and Delete
-// live in the modal's footer.
+// The orders caret (#2897): on a fine pointer it is the one control that opens the customer; the
+// row is no press target (Paul, 2026-10-27). Sync and Delete live in the modal's footer.
 export function Actions({
 	row,
 }: CellContext<{ record: ReadonlyEngineRecord<'customers'> }, 'actions'>) {
@@ -28,7 +27,6 @@ export function Actions({
 				testID="customer-open-button"
 				name="chevronRight"
 				size="sm"
-				variant="muted"
 				accessibilityLabel={t('customers.open_customer', { _: 'Open customer' })}
 				disabled={!editable}
 				onPress={() =>

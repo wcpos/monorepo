@@ -27,7 +27,6 @@ export function VariationActions({
 				testID="variation-open-button"
 				name="chevronRight"
 				size="sm"
-				variant="muted"
 				accessibilityLabel={t('products.open_variation', { _: 'Open variation' })}
 				disabled={!editable}
 				onPress={() =>

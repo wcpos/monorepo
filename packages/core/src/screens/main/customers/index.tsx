@@ -106,7 +106,7 @@ function CustomersList({
 	const router = useRouter();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	// The row opens the customer modal on every pointer, as the orders row does (#2897).
+	// The caret opens the customer; the row only while the Actions column is hidden.
 	const editable = !readOnly && caps.canEditCustomers;
 	const open = (uuid: string) =>
 		router.push({ pathname: '/customers/edit/[customerId]', params: { customerId: uuid } });
@@ -142,7 +142,9 @@ function CustomersList({
 							) : (
 								<DataTableRow
 									item={item}
-									onPress={editable ? () => open(item.original.record.uuid) : undefined}
+									pressWhenActionsHidden={
+										editable ? () => open(item.original.record.uuid) : undefined
+									}
 								/>
 							)}
 						</VirtualizedList.Item>

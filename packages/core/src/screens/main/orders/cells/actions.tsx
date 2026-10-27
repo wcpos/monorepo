@@ -8,8 +8,8 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
-// The same caret the touch row trails with, and it opens the order like the row does: the
-// cell sits beside the row's pressable (a button cannot nest in a button), so it needs its own.
+// The same caret the touch row trails with. On a fine pointer it is the one control that opens
+// the order; the row is no press target (Paul, 2026-10-27), Enter on a focused row still opens it.
 export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> }, 'actions'>) {
 	const router = useRouter();
 	const t = useT();
@@ -18,7 +18,6 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			testID="order-open-button"
 			name="chevronRight"
 			size="sm"
-			variant="muted"
 			accessibilityLabel={t('orders.open_order')}
 			onPress={() =>
 				router.push({

@@ -472,15 +472,25 @@ jest.mock('../components/data-table/rows', () => ({
 	DataTableRow: ({
 		item,
 		onPress,
+		pressWhenActionsHidden,
 	}: {
 		item: { original: { record: { uuid: string } } };
 		onPress?: () => void;
+		pressWhenActionsHidden?: () => void;
 	}) => (
-		<button
-			data-testid={`products-row-${item.original.record.uuid}`}
-			disabled={!onPress}
-			onClick={onPress}
-		/>
+		<>
+			<button
+				data-testid={`products-row-${item.original.record.uuid}`}
+				disabled={!onPress}
+				onClick={onPress}
+			/>
+			{/* The press the row takes while the Actions column is hidden. */}
+			<button
+				data-testid={`products-row-${item.original.record.uuid}-hidden-actions`}
+				disabled={!pressWhenActionsHidden}
+				onClick={pressWhenActionsHidden}
+			/>
+		</>
 	),
 }));
 
@@ -536,12 +546,14 @@ it('shows the skeleton, not the failure, when a superseded handle fails, then th
 	}
 });
 
+// The caret opens the product (`cells/actions.test.tsx`); the row is no press target, even for a
+// cashier who may edit, and takes the press only while the Actions column is hidden.
 it.each([
 	[false, true, true],
 	[true, true, false],
 	[false, false, false],
 ])(
-	'a fine-pointer simple row opens the edit modal when readOnly=%s canEdit=%s',
+	'a fine-pointer row is no press target; with the Actions column hidden it opens the product when readOnly=%s canEdit=%s',
 	(readOnly, canEdit, opens) => {
 		mockReadOnly = readOnly;
 		mockCanEdit = canEdit;
@@ -550,7 +562,9 @@ it.each([
 		try {
 			render(<ProductsScreen />);
 			mockPush.mockClear();
-			fireEvent.click(screen.getByTestId('products-row-one'));
+			const row = screen.getByTestId('products-row-one');
+			expect((row as HTMLButtonElement).disabled).toBe(true);
+			fireEvent.click(screen.getByTestId('products-row-one-hidden-actions'));
 			if (opens)
 				expect(mockPush).toHaveBeenCalledWith({
 					pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',

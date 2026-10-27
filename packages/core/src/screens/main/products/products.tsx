@@ -171,12 +171,14 @@ function renderFineItem(
 	},
 	openProduct?: (uuid: string) => void
 ) {
-	// The row opens the product on every pointer, as the touch row does, a variable one's too
-	// (its variations open from the button under its name); inert when the cashier may not edit.
+	// The caret opens the product, a variable one's too (its variations open from the button under
+	// its name); the row only while the Actions column is hidden. Inert when the cashier may not edit.
 	const row = (
 		<DataTableRow
 			item={item}
-			onPress={openProduct ? () => openProduct(item.original.record.uuid) : undefined}
+			pressWhenActionsHidden={
+				openProduct ? () => openProduct(item.original.record.uuid) : undefined
+			}
 		/>
 	);
 	if (item.original.record.payload.type === 'variable') {

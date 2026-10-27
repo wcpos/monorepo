@@ -117,7 +117,7 @@ function CouponsList({
 	const router = useRouter();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	// The row opens the coupon modal on every pointer, as the orders row does (#2897).
+	// The caret opens the coupon; the row only while the Actions column is hidden.
 	const editable = !readOnly && caps.canEditCoupons;
 	const open = (uuid: string) =>
 		router.push({ pathname: '/coupons/edit/[couponId]', params: { couponId: uuid } });
@@ -172,7 +172,9 @@ function CouponsList({
 							) : (
 								<DataTableRow
 									item={item}
-									onPress={editable ? () => open(item.original.record.uuid) : undefined}
+									pressWhenActionsHidden={
+										editable ? () => open(item.original.record.uuid) : undefined
+									}
 								/>
 							)}
 						</VirtualizedList.Item>

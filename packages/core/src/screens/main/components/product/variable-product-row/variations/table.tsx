@@ -26,7 +26,7 @@ interface Props {
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
-	/** The products page opens a variation from its row, as its touch row does. */
+	/** The products page's variation opener: the caret's, and the row's while the Actions column is hidden. */
 	openVariation?: (record: EngineRecord<'variations'>) => void;
 }
 
@@ -130,7 +130,7 @@ export function VariationsTable({ handle, row, stockStatus, openVariation }: Pro
 							key={index}
 							item={row}
 							testID={testID ?? `data-table-row-variation-${hit.record.uuid}`}
-							onPress={() => openVariation(hit.record)}
+							pressWhenActionsHidden={() => openVariation(hit.record)}
 							renderCell={(cell) => flexRender(cellRenderer, subrowContext(cell, hit))}
 						/>
 					);
