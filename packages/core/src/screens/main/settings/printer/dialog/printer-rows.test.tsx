@@ -32,7 +32,13 @@ jest.mock('@wcpos/components/form', () => {
 			<input type="checkbox" data-testid={testID} checked={!!value} readOnly />
 		),
 		// The selects are stubs: these tests pin which rows exist and where, not the pickers.
-		FormSelect: () => <span data-testid="select" />,
+		// Each stub records whether an `options` key reached it (even as undefined).
+		FormSelect: (props: Record<string, unknown>) => (
+			<span
+				data-testid="select"
+				data-has-options={String(Object.prototype.hasOwnProperty.call(props, 'options'))}
+			/>
+		),
 		SavedMark: () => null,
 		useSavedName: () => '',
 	};
@@ -118,6 +124,17 @@ describe('Edit Printer rows', () => {
 			expect(screen.queryByTestId('add-printer-advanced-trigger')).toBeNull();
 		}
 	);
+
+	it('hands an options list only to the vendor select, never an undefined one (Codex, #2978)', () => {
+		// LanguageSelect, PaperWidthSelect, CodePageSelect and DrawerConnectorSelect spread the
+		// forwarded props after their own `options`; an `options: undefined` would erase their lists.
+		render(<Layout vendors values={{ language: 'esc-pos', autoOpenDrawer: true }} />);
+		const selects = screen
+			.getAllByTestId('select')
+			.map((el) => el.getAttribute('data-has-options'));
+		expect(selects.filter((v) => v === 'true')).toHaveLength(1);
+		expect(selects.length).toBeGreaterThanOrEqual(5);
+	});
 
 	it('adds the Receipt language row while the language is ESC/POS', () => {
 		render(<Layout values={{ language: 'esc-pos' }} />);

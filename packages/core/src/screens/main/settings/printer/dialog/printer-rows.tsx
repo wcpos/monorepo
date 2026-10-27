@@ -109,7 +109,9 @@ function SelectRow(props: {
 				render={({ field: { value, onChange, ...rest } }) => (
 					<FormSelect
 						customComponent={props.select}
-						options={props.options}
+						// Only the vendor row supplies a list: an `options: undefined` would overwrite the
+						// built-in list the other selects spread after their own (Codex, #2978).
+						{...(props.options ? { options: props.options } : {})}
 						value={value != null ? String(value) : undefined}
 						onChange={(next: string) => {
 							props.onManualChange?.();
