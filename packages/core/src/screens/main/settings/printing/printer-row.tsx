@@ -91,11 +91,11 @@ export function PrinterRow({
 			testID={`printer-row-${profile.id}`}
 			className="web:hover:bg-accent flex-row flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2 py-2.5"
 		>
-			<View className="bg-muted rounded-md p-2">
+			<View className="bg-muted size-10 items-center justify-center rounded-lg">
 				<Icon name={printerIconName(profile)} variant="muted" size="lg" />
 			</View>
 			<VStack className="min-w-40 flex-1 gap-0.5">
-				<Text className="text-sm font-medium" numberOfLines={1}>
+				<Text className="text-lg font-semibold" numberOfLines={1}>
 					{profile.name}
 				</Text>
 				<Text className="text-muted-foreground text-xs" numberOfLines={1}>

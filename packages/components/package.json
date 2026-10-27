@@ -72,6 +72,7 @@
     "./quantity-keypad": "./src/quantity-keypad/index.tsx",
     "./quantity-keypad/reducer": "./src/quantity-keypad/reducer.ts",
     "./radio-group": "./src/radio-group/index.tsx",
+    "./section-heading": "./src/section-heading/index.tsx",
     "./segmented-control": "./src/segmented-control/index.tsx",
     "./select": "./src/select/index.tsx",
     "./skeleton": "./src/skeleton/index.tsx",

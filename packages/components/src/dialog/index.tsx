@@ -220,7 +220,9 @@ export function DialogHeader({ className, ...props }: ViewProps): React.JSX.Elem
 export function DialogTitle(allProps: SlottableTextProps): React.JSX.Element {
 	const { className, asChild, ...props } = allProps;
 	const Component = asChild ? Slot : Text;
-	const title = <Component role={isWeb ? undefined : 'heading'} className={className} {...props} />;
+	// The dialog's own heading: level 1 inside the modal, so a SectionHeading (level 2) in its body
+	// has something above it. On web the Radix Title is slotted onto this Text, so the role is ours.
+	const title = <Component role="heading" aria-level={1} className={className} {...props} />;
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
 			{/* On web the panel is a Radix dialog; slotting the title gives it aria-labelledby.

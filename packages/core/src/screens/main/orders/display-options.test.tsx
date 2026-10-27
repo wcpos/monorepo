@@ -11,6 +11,7 @@ const mockSettings = {
 	columns: [
 		{ key: 'number', show: true },
 		{ key: 'total', show: true },
+		{ key: 'customer', show: true, display: [{ key: 'avatar', show: true }] },
 	],
 };
 jest.mock('../contexts/ui-settings', () => ({
@@ -64,12 +65,15 @@ it('opens the columns in the settings panel, patches immediately and restores fr
 	expect(screen.queryByTestId('ui-settings-restore-defaults')).toBeNull();
 });
 
+it("nests a shown column's display switches under its switch and drops them when it is off", async () => {
+	render(<DisplayOptions />);
+	expect(screen.getByRole('switch', { name: 'avatar' })).toBeTruthy();
+	fireEvent.click(screen.getByRole('switch', { name: 'customer' }));
+	await waitFor(() => expect(screen.queryByRole('switch', { name: 'avatar' })).toBeNull());
+});
+
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: React.PropsWithChildren) => children,
-	CollapsibleContent: ({ children }: React.PropsWithChildren) => children,
-}));
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	const { useFormChangeHandler } = jest.requireActual(

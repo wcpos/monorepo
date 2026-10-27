@@ -1,15 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useFieldArray, useFormContext } from 'react-hook-form';
+import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Collapsible, CollapsibleContent } from '@wcpos/components/collapsible';
 import { DragHandle, type ReorderResult, SortableList } from '@wcpos/components/dnd';
 import { FormField, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { Text } from '@wcpos/components/text';
+import { SectionHeading } from '@wcpos/components/section-heading';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
@@ -43,15 +42,7 @@ interface UISettingsColumnsFormProps {
  */
 export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps) {
 	const t = useT();
-	const [openColumns, setOpenColumns] = React.useState<Record<string, boolean>>({});
 	const form = useFormContext();
-
-	const toggleColumn = (columnKey: string) => {
-		setOpenColumns((prevState) => ({
-			...prevState,
-			[columnKey]: !prevState[columnKey],
-		}));
-	};
 
 	const { fields: rawFields, move } = useFieldArray({
 		control: form.control,
@@ -87,42 +78,13 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
 					name={`columns.${columnIndex}.show`}
 					render={({ field }) => <FormSwitch label={getUILabel(column.key)} {...field} />}
 				/>
-				{column.display && (
-					<Text
-						onPress={() => toggleColumn(column.key)}
-						variant="link"
-						className="text-muted-foreground text-sm leading-none"
-					>
-						{t('common.display_options')}
-						<Icon
-							name={openColumns[column.key] ? 'chevronUp' : 'chevronDown'}
-							size="xs"
-							className="fill-muted-foreground ml-2"
-						/>
-					</Text>
-				)}
 			</HStack>
-			{column?.display && (
-				<Collapsible open={openColumns[column.key]}>
-					<CollapsibleContent>
-						<VStack className="gap-0 pt-2 pl-10">
-							{column.display.map(
-								(displayItem: { key: string; show: boolean }, displayIndex: number) => (
-									<FormField
-										key={displayItem.key}
-										control={form.control}
-										name={`columns.${columnIndex}.display.${displayIndex}.show`}
-										render={({ field }) => (
-											<View className="p-2">
-												<FormSwitch label={getUILabel(displayItem.key)} {...field} />
-											</View>
-										)}
-									/>
-								)
-							)}
-						</VStack>
-					</CollapsibleContent>
-				</Collapsible>
+			{column.display && (
+				<ColumnDisplayOptions
+					columnIndex={columnIndex}
+					display={column.display}
+					getUILabel={getUILabel}
+				/>
 			)}
 		</VStack>
 	);
@@ -132,7 +94,7 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
 	 */
 	return (
 		<VStack className="gap-0">
-			<Text className="font-semibold">{t('common.columns')}</Text>
+			<SectionHeading title={t('common.columns')} />
 			<VStack className="gap-0">
 				<SortableList
 					listId="columns"
@@ -142,6 +104,41 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
 					renderItem={renderColumnItem}
 				/>
 			</VStack>
+		</VStack>
+	);
+}
+
+/**
+ * A shown column's display switches, nested under its switch one gutter in (property rows rule 8:
+ * conditional settings nest under their switch, never behind a fold). Hidden with the column.
+ */
+function ColumnDisplayOptions({
+	columnIndex,
+	display,
+	getUILabel,
+}: {
+	columnIndex: number;
+	display: { key: string; show: boolean }[];
+	getUILabel: (key: string) => string;
+}) {
+	const form = useFormContext();
+	const shown = useWatch({ control: form.control, name: `columns.${columnIndex}.show` });
+	if (!shown) return null;
+
+	return (
+		<VStack className="gap-0 pt-2 pl-10">
+			{display.map((displayItem, displayIndex) => (
+				<FormField
+					key={displayItem.key}
+					control={form.control}
+					name={`columns.${columnIndex}.display.${displayIndex}.show`}
+					render={({ field }) => (
+						<View className="p-2">
+							<FormSwitch label={getUILabel(displayItem.key)} {...field} />
+						</View>
+					)}
+				/>
+			))}
 		</VStack>
 	);
 }

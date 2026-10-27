@@ -21,6 +21,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import { SectionHeading } from '@wcpos/components/section-heading';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
@@ -286,7 +287,7 @@ export function UISettingsForm() {
 								)}
 							/>
 							<View className="gap-2 px-1 pt-2">
-								<Text className="font-medium">{t('common.tile_fields')}</Text>
+								<SectionHeading title={t('common.tile_fields')} />
 								{(
 									[
 										'name',
@@ -331,10 +332,10 @@ export function UISettingsForm() {
 						</Text>
 					</View>
 					<View className="gap-2 px-1 pt-2">
-						<Text className="font-medium">{getUILabel('filterBar')}</Text>
-						<Text className="text-muted-foreground text-sm">
-							{t('pos_products.filter_bar_description')}
-						</Text>
+						<SectionHeading
+							title={getUILabel('filterBar')}
+							description={t('pos_products.filter_bar_description')}
+						/>
 						<Button
 							variant="outline"
 							testID="customize-filter-bar"
