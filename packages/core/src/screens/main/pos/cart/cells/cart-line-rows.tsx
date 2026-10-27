@@ -123,7 +123,7 @@ export function CustomFieldRows(props: {
 	);
 	return (
 		<>
-			<MetaDataForm rows testID={prefix} hiddenKeys={hiddenKeys} />
+			<MetaDataForm testID={prefix} hiddenKeys={hiddenKeys} />
 			<PropertyAddRow>
 				{props.children}
 				<PropertyAdd

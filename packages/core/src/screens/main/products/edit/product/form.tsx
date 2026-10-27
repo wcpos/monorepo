@@ -181,7 +181,7 @@ function EditProductFormFields({ product }: Props) {
 					{offered.row('featured')}
 					{offered.row('virtual')}
 					{offered.row('downloadable')}
-					<MetaDataForm rows testID="product" />
+					<MetaDataForm testID="product" />
 					<PropertyAddRow>
 						{offered.adds}
 						<CustomFieldAdd />

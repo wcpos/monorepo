@@ -405,7 +405,7 @@ export function EditOrderMetaForm({
 							/>
 						</OrderRow>
 					)}
-					<MetaDataForm rows testID="order-meta" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					<MetaDataForm testID="order-meta" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 					<PropertyAddRow>
 						{!currencyRow.shown && (
 							<PropertyAdd

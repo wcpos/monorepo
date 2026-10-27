@@ -292,7 +292,7 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 							{offeredValue[name]}
 						</CouponRow>
 					))}
-					<MetaDataForm rows testID="coupon" />
+					<MetaDataForm testID="coupon" />
 					<PropertyAddRow>
 						{presence.offered.map((name) => (
 							<PropertyAdd
