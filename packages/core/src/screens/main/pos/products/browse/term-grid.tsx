@@ -23,6 +23,7 @@ import { HandleProductsFooter } from '../handle-footer';
 import { ProductTile } from '../tiles/product-tile';
 import { TileGrid } from '../tiles/tile-grid';
 import { TileGround } from '../../../components/data-table/surface';
+import { useGround } from '../../../components/ground';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
@@ -161,6 +162,7 @@ export function TermLevelGrid({
 	empty: React.ReactNode;
 }) {
 	const t = useT();
+	const ground = useGround();
 	const prefix =
 		children.length > 0 && source !== 'shortcuts'
 			? t(TERMS_KEY[source], { count: children.length })
@@ -294,7 +296,13 @@ export function TermLevelGrid({
 			{/* The crumb is a row of its own on the ground above the grid (drill-in.tsx): never
 			    over the grid, never inside a card. */}
 			<DealFade>
-				<Breadcrumb parents={parents} here={crumb.here} autoFocus testID="products-breadcrumb" />
+				<Breadcrumb
+					parents={parents}
+					here={crumb.here}
+					autoFocus
+					className={ground.px}
+					testID="products-breadcrumb"
+				/>
 			</DealFade>
 			<View className="min-h-0 flex-1" testID="browse-level-surface">
 				<TileGround>

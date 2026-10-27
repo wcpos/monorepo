@@ -10,6 +10,7 @@ import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { DataTable } from '../../../components/data-table';
 import { TableSurface } from '../../../components/data-table/surface';
+import { useGround } from '../../../components/ground';
 import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
@@ -218,6 +219,7 @@ export function TermLevelTable({
 	empty: React.ReactNode;
 }) {
 	const t = useT();
+	const ground = useGround();
 	const prefix =
 		children.length > 0 && source !== 'shortcuts'
 			? t(TERMS_KEY[source], { count: children.length })
@@ -291,7 +293,13 @@ export function TermLevelTable({
 		<LevelBack onBack={back} testID="browse-level">
 			{/* The crumb is a row of its own on the ground above the table (drill-in.tsx): never
 			    over the rows, never inside the card. */}
-			<Breadcrumb parents={parents} here={crumb.here} autoFocus testID="products-breadcrumb" />
+			<Breadcrumb
+				parents={parents}
+				here={crumb.here}
+				autoFocus
+				className={ground.px}
+				testID="products-breadcrumb"
+			/>
 			<View
 				className="min-h-0 flex-1"
 				testID="browse-level-rows"

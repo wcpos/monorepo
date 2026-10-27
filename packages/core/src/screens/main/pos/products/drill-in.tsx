@@ -6,6 +6,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { QueryStateProvider } from '../../../../query';
+import { useGround } from '../../components/ground';
 import { DealFade } from './deal-stack';
 import { LevelBack } from './level-back';
 import { VariationsPane } from './variations-pane';
@@ -39,6 +40,7 @@ export function DrillIn({
 }) {
 	const name = useDocField(parent, (value) => value.payload.name);
 	const t = useT();
+	const ground = useGround();
 	// The Breadcrumb's last parent is its back control; it keeps the stable back testID.
 	const crumbParents: [Crumb, ...Crumb[]] =
 		parents && parents.length > 0
@@ -53,7 +55,16 @@ export function DrillIn({
 					},
 				];
 	const crumb = (
-		<Breadcrumb parents={crumbParents} here={name} autoFocus testID="products-breadcrumb" />
+		// On the ground's gutter, as the card or the tiles under it are: the first crumb's hover box
+		// stands on their edge (an inner edge keeps none, so the left-hand column had put the crumb
+		// a gutter off its tiles; owner, 2026-10-27).
+		<Breadcrumb
+			parents={crumbParents}
+			here={name}
+			autoFocus
+			className={ground.px}
+			testID="products-breadcrumb"
+		/>
 	);
 	return (
 		<LevelBack onBack={back} testID="products-variations-pane">
