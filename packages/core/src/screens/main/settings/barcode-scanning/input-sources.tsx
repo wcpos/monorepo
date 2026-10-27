@@ -11,6 +11,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	DialogTrigger,
 } from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
@@ -190,28 +191,27 @@ function DirectConnection(props: {
 }) {
 	const t = useT();
 	return (
-		<>
+		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
 			<PropertyRow
 				testID="scanner-row-direct"
 				label={t('settings.scanner_direct_connection')}
 				trailing={
-					<PropertyVerb testID="scanner-advanced-trigger" onPress={() => props.onOpenChange(true)}>
-						{props.label}
-					</PropertyVerb>
+					// The verb is the dialog's trigger, so closing the sheet returns focus to it.
+					<DialogTrigger asChild>
+						<PropertyVerb testID="scanner-advanced-trigger">{props.label}</PropertyVerb>
+					</DialogTrigger>
 				}
 			>
 				{props.none ? <Text className="text-muted-foreground">{t('common.none')}</Text> : null}
 			</PropertyRow>
-			<Dialog open={props.open} onOpenChange={props.onOpenChange}>
-				<DialogContent side="right" size="lg" closeLabel={t('common.close')}>
-					<DialogHeader>
-						<DialogTitle>{props.label}</DialogTitle>
-					</DialogHeader>
-					{props.children}
-					<DialogFooter close />
-				</DialogContent>
-			</Dialog>
-		</>
+			<DialogContent side="right" size="lg" closeLabel={t('common.close')}>
+				<DialogHeader>
+					<DialogTitle>{props.label}</DialogTitle>
+				</DialogHeader>
+				{props.children}
+				<DialogFooter close />
+			</DialogContent>
+		</Dialog>
 	);
 }
 

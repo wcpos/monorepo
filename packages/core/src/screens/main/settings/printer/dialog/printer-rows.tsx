@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useFormContext, useWatch } from 'react-hook-form';
+import { type ControllerRenderProps, useFormContext, useWatch } from 'react-hook-form';
 
 import {
 	FormField,
@@ -72,7 +72,9 @@ function SwitchRow(props: {
 	children?: React.ReactNode;
 }) {
 	const { control } = useFormContext<PrinterFormValues>();
-	const render = ({ field }: any) => <FormSwitch testID={props.testID} {...field} />;
+	const render = ({ field }: { field: ControllerRenderProps<PrinterFormValues, SwitchName> }) => (
+		<FormSwitch testID={props.testID} {...field} />
+	);
 	return (
 		<PrinterRow
 			id={props.name}
@@ -88,7 +90,10 @@ function SwitchRow(props: {
 function SelectRow(props: {
 	name: 'vendor' | 'language' | 'columns' | 'codePage' | 'drawerConnector';
 	label: string;
-	select: React.ComponentType<any>;
+	/** The select, as `FormSelect`'s own `customComponent` is typed; it types the rest of the props. */
+	select: React.ComponentProps<typeof FormSelect>['customComponent'];
+	/** The vendor list; `FormSelect` hands extra props to its custom component, as the wizard does. */
+	options?: VendorOption[];
 	indent?: boolean;
 	/** Columns is a number in the form and a string in the select. */
 	numeric?: boolean;
@@ -104,6 +109,7 @@ function SelectRow(props: {
 				render={({ field: { value, onChange, ...rest } }) => (
 					<FormSelect
 						customComponent={props.select}
+						options={props.options}
 						value={value != null ? String(value) : undefined}
 						onChange={(next: string) => {
 							props.onManualChange?.();
@@ -174,7 +180,8 @@ export function PrinterSettingsRows(props: {
 				<SelectRow
 					name="vendor"
 					label={t('settings.printer_vendor')}
-					select={(p: any) => <VendorSelect {...p} options={vendorOptions} />}
+					select={VendorSelect}
+					options={vendorOptions}
 					onManualChange={props.onVendorManualChange}
 				/>
 			) : null}

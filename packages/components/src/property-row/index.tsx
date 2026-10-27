@@ -71,8 +71,14 @@ export function PropertyRow(props: {
 
 type ActionProps = { onPress: () => void; testID?: string };
 
-/** The row's verb (Edit, Remove, Use a different address): a link Button, never a chevron. */
-export function PropertyVerb({ children, ...props }: ActionProps & { children: React.ReactNode }) {
+/**
+ * The row's verb (Edit, Remove, Use a different address): a link Button, never a chevron.
+ * `onPress` may come from an `asChild` trigger (a Dialog's) instead of the caller.
+ */
+export function PropertyVerb({
+	children,
+	...props
+}: Partial<ActionProps> & { children: React.ReactNode }) {
 	return (
 		<Button variant="link" size="sm" {...props}>
 			<ButtonText>{children}</ButtonText>

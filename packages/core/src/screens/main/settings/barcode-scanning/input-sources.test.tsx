@@ -94,10 +94,26 @@ jest.mock('@wcpos/components/dialog', () => {
 	function Wrap({ children }: React.PropsWithChildren) {
 		return <div>{children}</div>;
 	}
+	const Ctx = React.createContext<{ open: boolean; onOpenChange: (open: boolean) => void }>({
+		open: false,
+		onOpenChange: () => {},
+	});
 	return {
-		Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
-			open ? <div data-testid="scanner-direct-sheet">{children}</div> : null,
-		DialogContent: Wrap,
+		Dialog: ({
+			open,
+			onOpenChange,
+			children,
+		}: React.PropsWithChildren<{ open: boolean; onOpenChange: (open: boolean) => void }>) => (
+			<Ctx.Provider value={{ open, onOpenChange }}>{children}</Ctx.Provider>
+		),
+		DialogTrigger: ({ children }: { children: React.ReactElement<{ onPress?: () => void }> }) => {
+			const { onOpenChange } = React.useContext(Ctx);
+			return React.cloneElement(children, { onPress: () => onOpenChange(true) });
+		},
+		DialogContent: ({ children }: React.PropsWithChildren) => {
+			const { open } = React.useContext(Ctx);
+			return open ? <div data-testid="scanner-direct-sheet">{children}</div> : null;
+		},
 		DialogHeader: Wrap,
 		DialogTitle: Wrap,
 		DialogBody: Wrap,
