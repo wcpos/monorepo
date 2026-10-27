@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { HStack } from '@wcpos/components/hstack';
-import { FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
+import { PrinterRow } from '../printer-rows';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -57,11 +56,7 @@ export function ConnectionTypeSegmented({
 
 	// A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10).
 	return (
-		<FormItem>
-			<HStack className="justify-between">
-				<FormLabel>{t('settings.printer_connection')}</FormLabel>
-				<SavedMark name="connectionType" label={t('settings.saved')} />
-			</HStack>
+		<PrinterRow id="connection" label={t('settings.printer_connection')} mark="connectionType">
 			<SegmentedControl
 				testID="add-printer-connection-type-segmented"
 				className="w-full"
@@ -74,6 +69,6 @@ export function ConnectionTypeSegmented({
 					}
 				}}
 			/>
-		</FormItem>
+		</PrinterRow>
 	);
 }

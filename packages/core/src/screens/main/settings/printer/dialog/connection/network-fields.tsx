@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput, FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
+import { FormField, FormInput, FormItem, FormLabel } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Progress } from '@wcpos/components/progress';
@@ -13,6 +13,7 @@ import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
 import { DEFAULT_FORM_VALUES } from '../../schema';
+import { PrinterRow } from '../printer-rows';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -74,43 +75,61 @@ export function NetworkFields({
 
 	return (
 		<VStack className="gap-1">
-			<HStack className="items-start gap-3">
-				<VStack className="min-w-0 flex-1">
-					<FormField
-						control={form.control}
-						name="address"
-						render={({ field }) => (
-							<FormItem>
-								<HStack className="justify-between">
-									<FormLabel>{t('settings.printer_address')}</FormLabel>
-									<SavedMark name="address" label={t('settings.saved')} />
-								</HStack>
+			<PrinterRow
+				id="address"
+				label={t('settings.printer_address')}
+				mark={['address', 'port']}
+				verb={
+					onScan && (
+						<Button
+							testID="add-printer-scan-button"
+							variant="outline"
+							size="sm"
+							onPress={onScan}
+							loading={scanning}
+						>
+							<HStack className="items-center gap-1">
+								<Icon name="search" size="sm" />
+								<Text>{t('settings.scan_network')}</Text>
+							</HStack>
+						</Button>
+					)
+				}
+			>
+				<HStack className="items-start gap-3">
+					<VStack className="min-w-0 flex-1">
+						<FormField
+							control={form.control}
+							name="address"
+							render={({ field }) => (
 								<FormInput testID="add-printer-ip-input" placeholder="192.168.1.100" {...field} />
-							</FormItem>
-						)}
-					/>
-				</VStack>
-				<VStack className="w-24 shrink-0">
-					<FormField
-						control={form.control}
-						name="port"
-						render={({ field: { value, ...rest } }) => (
-							<FormItem>
-								<HStack className="justify-between">
-									<FormLabel>{t('settings.printer_port')}</FormLabel>
-									<SavedMark name="port" label={t('settings.saved')} />
-								</HStack>
-								<FormInput
-									testID="add-printer-port-input"
-									type="numeric"
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							</FormItem>
-						)}
-					/>
-				</VStack>
-			</HStack>
+							)}
+						/>
+					</VStack>
+					{/* The port is its own fact in the row (the board's "· port 9100"): its own form item,
+					    so its label, message and aria wiring are not the address's (Codex, #2978). */}
+					<FormItem nativeID="printer-port">
+						<HStack className="items-center gap-2">
+							<FormLabel className="text-muted-foreground text-xs">
+								{t('settings.printer_port')}
+							</FormLabel>
+							<FormField
+								control={form.control}
+								name="port"
+								render={({ field: { value, ...rest } }) => (
+									<FormInput
+										testID="add-printer-port-input"
+										type="numeric"
+										className="w-20"
+										value={value != null ? String(value) : undefined}
+										{...rest}
+									/>
+								)}
+							/>
+						</HStack>
+					</FormItem>
+				</HStack>
+			</PrinterRow>
 			{probing && (
 				<Text className="text-muted-foreground text-xs">{t('settings.detecting_printer')}</Text>
 			)}
@@ -136,21 +155,6 @@ export function NetworkFields({
 						</Text>
 					)}
 				</VStack>
-			)}
-			{onScan && (
-				<Button
-					testID="add-printer-scan-button"
-					variant="outline"
-					size="sm"
-					className="self-start"
-					onPress={onScan}
-					loading={scanning}
-				>
-					<HStack className="items-center gap-1">
-						<Icon name="search" size="sm" />
-						<Text>{t('settings.scan_network')}</Text>
-					</HStack>
-				</Button>
 			)}
 			{scanCandidates.length > 0 && (
 				<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="add-printer-scan-candidates">

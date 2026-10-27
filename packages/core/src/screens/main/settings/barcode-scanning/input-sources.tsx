@@ -4,7 +4,15 @@ import { View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
@@ -17,6 +25,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Notice } from '@wcpos/components/notice';
 import { Input } from '@wcpos/components/input';
+import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -172,15 +181,49 @@ function ScannerProfileRow({
 	);
 }
 
+/** The Direct connection row and its sheet: connecting a scanner directly is a task of its own. */
+function DirectConnection(props: {
+	label: string;
+	none: boolean;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	children: React.ReactNode;
+}) {
+	const t = useT();
+	return (
+		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
+			<PropertyRow
+				testID="scanner-row-direct"
+				label={t('settings.scanner_direct_connection')}
+				trailing={
+					// The verb is the dialog's trigger, so closing the sheet returns focus to it.
+					<DialogTrigger asChild>
+						<PropertyVerb testID="scanner-advanced-trigger">{props.label}</PropertyVerb>
+					</DialogTrigger>
+				}
+			>
+				{props.none ? <Text className="text-muted-foreground">{t('common.none')}</Text> : null}
+			</PropertyRow>
+			<DialogContent side="right" size="lg" closeLabel={t('common.close')}>
+				<DialogHeader>
+					<DialogTitle>{props.label}</DialogTitle>
+				</DialogHeader>
+				{props.children}
+				<DialogFooter close />
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 /**
  * Scanner input sources (architecture: wcpos/monorepo#715).
  *
  * Deliberately quiet when empty: the overwhelmingly common setup is a scanner
  * paired as a Bluetooth or USB keyboard, which needs nothing configured here.
- * The direct-connection apparatus is real but advanced, so it lives behind a
- * disclosure rather than behind two filled buttons that read as required steps.
- * Saved scanners stay OUTSIDE that disclosure — adding one is advanced, seeing
- * and removing what you already have is not.
+ * The direct-connection apparatus is real but advanced, so it lives in the
+ * Direct connection sheet rather than behind two filled buttons that read as
+ * required steps. Saved scanners stay OUTSIDE that sheet — adding one is
+ * advanced, seeing and removing what you already have is not.
  */
 export function InputSources() {
 	const t = useT();
@@ -194,6 +237,7 @@ export function InputSources() {
 	const [name, setName] = React.useState('');
 	const [serviceUuid, setServiceUuid] = React.useState('');
 	const [serviceUuidInvalid, setServiceUuidInvalid] = React.useState(false);
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 
 	const liveKeys = React.useMemo(
 		() =>
@@ -280,6 +324,8 @@ export function InputSources() {
 	};
 
 	const midFlow = registration.available && (registration.capturing || !!registration.candidate);
+	// A registration started from the sheet continues inline: the sheet gives way to it.
+	if (midFlow && sheetOpen) setSheetOpen(false);
 
 	return (
 		<SettingsSection
@@ -320,19 +366,21 @@ export function InputSources() {
 				</DocsLink>
 
 				{midFlow ? null : (
-					<Collapsible className="border-border/50 mt-1 border-t pt-3">
-						<CollapsibleTrigger testID="scanner-advanced-trigger">
-							<Text className="text-primary text-sm font-medium">
-								{registrationLane
-									? profiles.length > 0
-										? t('settings.scanner_advanced_register_more')
-										: t('settings.scanner_advanced_register')
-									: profiles.length > 0
-										? t('settings.scanner_advanced_connect_more')
-										: t('settings.scanner_advanced_connect')}
-							</Text>
-						</CollapsibleTrigger>
-						<CollapsibleContent>
+					<DirectConnection
+						label={
+							registrationLane
+								? profiles.length > 0
+									? t('settings.scanner_advanced_register_more')
+									: t('settings.scanner_advanced_register')
+								: profiles.length > 0
+									? t('settings.scanner_advanced_connect_more')
+									: t('settings.scanner_advanced_connect')
+						}
+						none={profiles.length === 0}
+						open={sheetOpen}
+						onOpenChange={setSheetOpen}
+					>
+						<DialogBody>
 							<VStack space="sm" testID="scanner-advanced-content">
 								<Text className="text-muted-foreground text-xs">
 									{registrationLane
@@ -407,63 +455,61 @@ export function InputSources() {
 									</View>
 								) : null}
 
+								{/* Electron answers a connect press with its serial/HID chooser: it lives in the
+								    sheet that asked, so the pick is in reach and closing the sheet cancels the
+								    pending request (the chooser replies on unmount). Inert elsewhere. */}
+								<ScannerDeviceChooser />
+
 								{/* Manual UUID entry is the "my scanner isn't listed" escape hatch —
-								    a 128-bit UUID is plumbing, and surfacing it by default made the
-								    whole section read as a required setup form. */}
+								    a 128-bit UUID is plumbing, so it sits last in the sheet as a
+								    labelled block (rule 9), never on the page itself. */}
 								{serial.available ? (
-									<Collapsible testID="bluetooth-service-class-id-control">
-										<CollapsibleTrigger testID="scanner-uuid-trigger">
-											<Text className="text-primary text-xs font-medium">
+									<View testID="bluetooth-service-class-id-control">
+										<VStack space="xs">
+											<Text className="text-sm font-medium">
 												{t('settings.scanner_uuid_disclosure')}
 											</Text>
-										</CollapsibleTrigger>
-										<CollapsibleContent>
-											<VStack space="xs">
-												<HStack space="sm">
-													<Input
-														className="flex-1 font-mono"
-														value={serviceUuid}
-														onChangeText={(value) => {
-															setServiceUuid(value);
-															setServiceUuidInvalid(false);
-														}}
-														placeholder={t('settings.scanner_bluetooth_uuid_placeholder')}
-														testID="bluetooth-service-class-id-input"
-													/>
-													<Button
-														size="sm"
-														variant="outline"
-														onPress={handleAddServiceUuid}
-														testID="bluetooth-service-class-id-add"
-													>
-														<ButtonText>{t('settings.scanner_bluetooth_uuid_add')}</ButtonText>
-													</Button>
-												</HStack>
-												{serviceUuidInvalid ? (
-													<Text
-														className="text-destructive text-xs"
-														testID="bluetooth-service-class-id-error"
-													>
-														{t('settings.scanner_bluetooth_uuid_invalid')}
-													</Text>
-												) : null}
-												<DocsLink
-													testID="bluetooth-service-class-id-docs-link"
-													href={WIZARD_DOCS_URL}
+											<HStack space="sm">
+												<Input
+													className="flex-1 font-mono"
+													value={serviceUuid}
+													onChangeText={(value) => {
+														setServiceUuid(value);
+														setServiceUuidInvalid(false);
+													}}
+													placeholder={t('settings.scanner_bluetooth_uuid_placeholder')}
+													testID="bluetooth-service-class-id-input"
+												/>
+												<Button
+													size="sm"
+													variant="outline"
+													onPress={handleAddServiceUuid}
+													testID="bluetooth-service-class-id-add"
 												>
-													{t('settings.scanner_bluetooth_uuid_docs_link')}
-												</DocsLink>
-											</VStack>
-										</CollapsibleContent>
-									</Collapsible>
+													<ButtonText>{t('settings.scanner_bluetooth_uuid_add')}</ButtonText>
+												</Button>
+											</HStack>
+											{serviceUuidInvalid ? (
+												<Text
+													className="text-destructive text-xs"
+													testID="bluetooth-service-class-id-error"
+												>
+													{t('settings.scanner_bluetooth_uuid_invalid')}
+												</Text>
+											) : null}
+											<DocsLink
+												testID="bluetooth-service-class-id-docs-link"
+												href={WIZARD_DOCS_URL}
+											>
+												{t('settings.scanner_bluetooth_uuid_docs_link')}
+											</DocsLink>
+										</VStack>
+									</View>
 								) : null}
 							</VStack>
-						</CollapsibleContent>
-					</Collapsible>
+						</DialogBody>
+					</DirectConnection>
 				)}
-
-				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
-				<ScannerDeviceChooser />
 
 				{registration.available && registration.candidate ? (
 					<VStack space="sm">

@@ -44,7 +44,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 jest.mock('../dialog/connection/web-vendor-segmented', () => ({ WebVendorSegmented: () => null }));
 jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
-jest.mock('../dialog/printer-toggle-group', () => ({ PrinterToggleGroup: () => null }));
+jest.mock('../dialog/printer-rows', () => ({ PrinterToggleRows: () => null }));
 jest.mock('../dialog/test-print-error', () => ({ TestPrintError: () => null }));
 jest.mock('@wcpos/query', () => ({
 	savePrinterProfile: jest.fn().mockResolvedValue({ id: 'saved', created: true }),

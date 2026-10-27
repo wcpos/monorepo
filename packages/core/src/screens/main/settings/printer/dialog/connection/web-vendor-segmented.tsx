@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
-import { FormItem, FormLabel, SavedMark } from '@wcpos/components/form';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
+import { PrinterRow } from '../printer-rows';
 
 import type { PrinterFormValues } from '../../schema';
 
@@ -27,11 +26,7 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 	const t = useT();
 
 	return (
-		<FormItem>
-			<HStack className="justify-between">
-				<FormLabel>{t('settings.printer_vendor')}</FormLabel>
-				<SavedMark name="vendor" label={t('settings.saved')} />
-			</HStack>
+		<PrinterRow id="vendor" label={t('settings.printer_vendor')} mark="vendor">
 			{/* A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10). */}
 			<SegmentedControl
 				testID="add-printer-vendor-segmented"
@@ -47,6 +42,6 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 					}
 				}}
 			/>
-		</FormItem>
+		</PrinterRow>
 	);
 }

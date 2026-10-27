@@ -6,13 +6,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { WebVendorSegmented } from './web-vendor-segmented';
 
-jest.mock('@wcpos/components/form', () => ({
-	FormItem: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	FormLabel: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
-	SavedMark: () => null,
-}));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+jest.mock('../printer-rows', () => ({
+	PrinterRow: ({ children, verb }: { children?: React.ReactNode; verb?: React.ReactNode }) => (
+		<div>
+			{children}
+			{verb}
+		</div>
+	),
 }));
 
 jest.mock('@wcpos/components/segmented-control', () => ({

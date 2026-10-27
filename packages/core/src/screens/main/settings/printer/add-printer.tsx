@@ -8,7 +8,6 @@ import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
 
 import { PrinterSetupDialog } from './setup/printer-setup-dialog';
-import { AdvancedSettings } from './dialog/advanced-settings';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
@@ -158,18 +157,20 @@ function EditPrinterDialog({
 				if (!next) void handleClose();
 				else onOpenChange(next);
 			}}
-			connectionSection={
+			connectionRow={
+				<ConnectionTypeSegmented
+					form={form}
+					value={connectionType}
+					onChange={(v) => {
+						form.setValue('connectionType', v);
+						// The old lane's address must not ride into the new one (a network IP would
+						// autosave as a Bluetooth target); the draft is held until a device is picked.
+						form.setValue('address', '', { shouldDirty: true });
+					}}
+				/>
+			}
+			connectionLane={
 				<>
-					<ConnectionTypeSegmented
-						form={form}
-						value={connectionType}
-						onChange={(v) => {
-							form.setValue('connectionType', v);
-							// The old lane's address must not ride into the new one (a network IP would
-							// autosave as a Bluetooth target); the draft is held until a device is picked.
-							form.setValue('address', '', { shouldDirty: true });
-						}}
-					/>
 					{connectionSection}
 					{discoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
@@ -178,15 +179,8 @@ function EditPrinterDialog({
 					)}
 				</>
 			}
-			advancedSettings={
-				<AdvancedSettings
-					form={form}
-					showVendor
-					vendorOptions={vendorOptions}
-					defaultOpen={false}
-					onVendorManualChange={setManualVendor}
-				/>
-			}
+			vendorOptions={vendorOptions}
+			onVendorManualChange={setManualVendor}
 			errorSection={<TestPrintError error={testError} />}
 			footer={footer}
 		/>

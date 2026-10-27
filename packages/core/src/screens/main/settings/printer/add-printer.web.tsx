@@ -18,7 +18,6 @@ import {
 	usePrinterDiscovery,
 } from '@wcpos/printer';
 
-import { AdvancedSettings } from './dialog/advanced-settings';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
@@ -229,21 +228,23 @@ function EditPrinterDialog({
 				else onOpenChange(next);
 			}}
 			banner={banner}
-			connectionSection={
+			connectionRow={
+				<ConnectionTypeSegmented
+					form={form}
+					value={connectionType}
+					availableTypes={availableTypes}
+					onChange={(v) => {
+						form.setValue('connectionType', v, {
+							shouldDirty: true,
+						});
+						form.setValue('address', '', {
+							shouldDirty: true,
+						});
+					}}
+				/>
+			}
+			connectionLane={
 				<>
-					<ConnectionTypeSegmented
-						form={form}
-						value={connectionType}
-						availableTypes={availableTypes}
-						onChange={(v) => {
-							form.setValue('connectionType', v, {
-								shouldDirty: true,
-							});
-							form.setValue('address', '', {
-								shouldDirty: true,
-							});
-						}}
-					/>
 					{connectionType === 'network' && (
 						<>
 							<WebVendorSegmented vendor={vendor} onSelect={handleVendorSelect} />
@@ -270,9 +271,6 @@ function EditPrinterDialog({
 						</Text>
 					)}
 				</>
-			}
-			advancedSettings={
-				<AdvancedSettings form={form} showVendor={false} vendorOptions={[]} defaultOpen={false} />
 			}
 			errorSection={<TestPrintError error={testError} />}
 			footer={footer}

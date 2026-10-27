@@ -233,11 +233,7 @@ function BarcodeSettingsForm() {
 				/>
 
 				{soundEnabled ? (
-					<VStack
-						space="sm"
-						className="border-border mt-1 rounded-md border p-3"
-						testID="scan-sound-options"
-					>
+					<VStack className="gap-3 pl-4" testID="scan-sound-options">
 						<FormField
 							control={form.control}
 							name="barcode_scanning_sound_theme"

@@ -11,7 +11,6 @@ import { ListItem } from '@wcpos/components/list-item';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
 
 import { PrinterSetupDialog } from './setup/printer-setup-dialog';
-import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import {
 	isBluetoothPickerPrinter,
@@ -290,18 +289,20 @@ function EditPrinterDialog({
 				if (!next) void handleClose();
 				else onOpenChange(next);
 			}}
-			connectionSection={
+			connectionRow={
+				<ConnectionTypeSegmented
+					form={form}
+					value={connectionType}
+					onChange={(v) => {
+						form.setValue('connectionType', v);
+						form.setValue('address', '', {
+							shouldDirty: true,
+						});
+					}}
+				/>
+			}
+			connectionLane={
 				<>
-					<ConnectionTypeSegmented
-						form={form}
-						value={connectionType}
-						onChange={(v) => {
-							form.setValue('connectionType', v);
-							form.setValue('address', '', {
-								shouldDirty: true,
-							});
-						}}
-					/>
 					{connectionSection}
 					{discoveryError && !suppressedDiscoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
@@ -310,15 +311,8 @@ function EditPrinterDialog({
 					)}
 				</>
 			}
-			advancedSettings={
-				<AdvancedSettings
-					form={form}
-					showVendor
-					vendorOptions={vendorOptions}
-					defaultOpen={false}
-					onVendorManualChange={setManualVendor}
-				/>
-			}
+			vendorOptions={vendorOptions}
+			onVendorManualChange={setManualVendor}
 			errorSection={<TestPrintError error={testError} />}
 			footer={footer}
 		/>
