@@ -24,7 +24,15 @@ jest.mock('@wcpos/components/form', () => {
 		SavedMark: () => null,
 		useMarkSaved: () => jest.fn(),
 		useSavedName: () => '',
-		FormItem: mockWrap,
+		FormItem: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+			<div data-form-item={nativeID ?? ''}>{children}</div>
+		),
+		FormLabel: ({
+			children,
+			accessibilityLabel,
+		}: React.PropsWithChildren<{ accessibilityLabel?: string }>) => (
+			<label aria-label={accessibilityLabel}>{children}</label>
+		),
 		FormInput: ({
 			value,
 			onChange,
@@ -150,6 +158,12 @@ it('a catalogue line on sale is Name, Quantity, Price was Regular, Tax; it offer
 	expect((screen.getByTestId('edit-line-item-regular_price-input') as HTMLInputElement).value).toBe(
 		'79'
 	);
+	// Its own form item, named "Regular Price" for a screen reader, never a second "Price" (Codex, #2980).
+	const regular = screen
+		.getByTestId('edit-line-item-regular_price-input')
+		.closest('[data-form-item]');
+	expect(regular?.getAttribute('data-form-item')).toBe('line-item-regular_price');
+	expect(regular?.querySelector('label')?.getAttribute('aria-label')).toBe('Regular Price');
 	for (const row of ['categories', 'virtual', 'downloadable'])
 		expect(has(`line-item-row-${row}`)).toBe(false);
 	const offered = screen

@@ -11,6 +11,8 @@ import {
 	Form,
 	FormField,
 	FormInput,
+	FormItem,
+	FormLabel,
 	FormSwitch,
 	FormTreeCombobox,
 	SavedFieldProvider,
@@ -20,7 +22,6 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import { PropertyAdd, PropertyList, PropertyVerb } from '@wcpos/components/property-row';
-import { Text } from '@wcpos/components/text';
 import { isMiscProductLine } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -239,24 +240,33 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 									)}
 								/>
 							</View>
+							{/* The regular price is its own form item: the screen shows "was", a screen reader
+							    hears "Regular Price", never a second "Price" (Codex, #2980). */}
 							{onSale && (
-								<>
-									<Text className="text-muted-foreground">{t('pos_cart.was')}</Text>
-									<View className="w-28">
-										<FormField
-											control={form.control}
-											name="regular_price"
-											render={({ field }) => (
-												<FormInput
-													customComponent={CurrencyInput}
-													testID="edit-line-item-regular_price-input"
-													type="numeric"
-													{...field}
-												/>
-											)}
-										/>
-									</View>
-								</>
+								<FormItem nativeID="line-item-regular_price">
+									<HStack className="items-center gap-2">
+										<FormLabel
+											className="text-muted-foreground"
+											accessibilityLabel={t('common.regular_price')}
+										>
+											{t('pos_cart.was')}
+										</FormLabel>
+										<View className="w-28">
+											<FormField
+												control={form.control}
+												name="regular_price"
+												render={({ field }) => (
+													<FormInput
+														customComponent={CurrencyInput}
+														testID="edit-line-item-regular_price-input"
+														type="numeric"
+														{...field}
+													/>
+												)}
+											/>
+										</View>
+									</HStack>
+								</FormItem>
 							)}
 						</HStack>
 					</CartLineRow>
