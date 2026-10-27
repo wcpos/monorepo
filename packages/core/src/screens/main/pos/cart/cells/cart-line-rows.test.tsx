@@ -69,7 +69,7 @@ jest.mock('@wcpos/components/form', () => {
 		FormTreeCombobox: () => null,
 	};
 });
-// The real rows; their Button (and MetaDataForm's fold controls) load the icon set's styling.
+// The real rows; their Button loads the icon set's styling.
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -87,11 +87,6 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: mockWrap,
 	TooltipContent: mockWrap,
 	TooltipTrigger: mockWrap,
-}));
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: mockWrap,
-	CollapsibleContent: mockWrap,
-	CollapsibleTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/dialog', () => ({

@@ -270,7 +270,7 @@ describe('catalogue form autosave', () => {
 				)
 			);
 
-		// Custom fields carry theirs on each row (MetaDataForm rows, mocked here).
+		// Custom fields carry theirs on each row (MetaDataForm's rows, mocked here).
 		it('renders a Saved mark for every writable field root', () => {
 			Object.assign(formValues, { sku: 's', barcode: 'b', sale_price: '5' });
 			Object.assign(formValues, { featured: true, virtual: true, downloadable: true });

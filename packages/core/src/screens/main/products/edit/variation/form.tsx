@@ -120,7 +120,7 @@ function EditVariationFormFields({ variation, parentClass }: Props) {
 						<StockRow />
 						<TaxRow includeParent parentClass={parentClass} />
 						<StatusRow />
-						<MetaDataForm rows testID="variation" />
+						<MetaDataForm testID="variation" />
 						<PropertyAddRow>
 							{offered.adds}
 							<CustomFieldAdd />

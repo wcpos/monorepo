@@ -489,7 +489,7 @@ function EditOrderFormFields({ order }: Props) {
 							/>
 						</OrderRow>
 					)}
-					<MetaDataForm rows testID="order" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
+					<MetaDataForm testID="order" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 					<PropertyAddRow>
 						{offered.map((name) => (
 							<PropertyAdd

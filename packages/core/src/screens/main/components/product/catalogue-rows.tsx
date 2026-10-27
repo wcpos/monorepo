@@ -265,7 +265,7 @@ export function OfferedSwitchRow(props: {
 	);
 }
 
-/** Custom field's add button: appends one empty row to the `MetaDataForm rows` above it. */
+/** Custom field's add button: appends one empty row to the `MetaDataForm` above it. */
 export function CustomFieldAdd() {
 	const t = useT();
 	const kind = React.useContext(CatalogueKind);
