@@ -11,7 +11,8 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	icon?: IconName;
 	/** A node in the icon's place, e.g. the cart customer's Avatar; wins over `icon`. */
 	leading?: React.ReactNode;
-	count?: number;
+	/** A number beside the label, or its own text (`+3`). */
+	count?: number | string;
 	on?: boolean;
 	dimmed?: boolean;
 	add?: boolean;
