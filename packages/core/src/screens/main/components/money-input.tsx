@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { cn } from '@wcpos/components/lib/utils';
+
 import { EditableNumber } from './editable-number';
 
 import type { NumberFormatOptions } from '../hooks/use-number-format';
@@ -30,7 +32,17 @@ export function MoneyInput({
 	format,
 	discounts: _discounts,
 	decimals: _decimals,
+	textClassName,
 	...props
 }: MoneyInputProps) {
-	return <EditableNumber {...props} value={value} display={format(Number(value) || 0)} />;
+	// A blank price (no sale price) rests as WooCommerce's `–`, muted, never `0.00`.
+	const blank = value == null || value === '';
+	return (
+		<EditableNumber
+			{...props}
+			value={value}
+			display={blank ? '–' : format(Number(value) || 0)}
+			textClassName={cn(textClassName, blank && 'text-muted-foreground')}
+		/>
+	);
 }

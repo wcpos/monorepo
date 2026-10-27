@@ -33,8 +33,11 @@ export type PriceKeypadLabels = {
 };
 
 export type PriceKeypadProps = {
-	/** The price as stored. */
-	value: number;
+	/**
+	 * The price as stored; `undefined` is a blank one (a product not on sale), which rests as
+	 * WooCommerce's own `–` and writes only what is typed.
+	 */
+	value?: number;
 	/** The order's currency format, for the trigger and the display. */
 	format: (value: number) => string;
 	/** A changed price, 0 included (a free line); a refusal is the write's own toast. */
@@ -92,7 +95,8 @@ export function PriceKeypad({
 		dismiss: () => shell.current?.dismiss(),
 	}));
 
-	const draft = draftPrice(entry, value, decimals);
+	const stored = value ?? 0;
+	const draft = draftPrice(entry, stored, decimals);
 	const onClose = (discarded: boolean) => {
 		// The write presents its own failure (a toast) and the keypad is already closed.
 		if (!discarded && draft !== undefined && draft !== value)
@@ -118,9 +122,11 @@ export function PriceKeypad({
 		on: entry.discount === percent,
 		testID: testID && `${testID}-discount-${percent}`,
 	}));
-	const shown = entry.buffer ? entry.buffer.replace('.', decimalSeparator) : format(draft ?? value);
+	const shown = entry.buffer
+		? entry.buffer.replace('.', decimalSeparator)
+		: format(draft ?? stored);
 	const derivation =
-		entry.discount === undefined ? undefined : `${format(value)} −${entry.discount} %`;
+		entry.discount === undefined ? undefined : `${format(stored)} −${entry.discount} %`;
 	const display: GrowCell[] = [
 		{ display: <Display shown={shown} derivation={derivation} />, span: 3 },
 	];
@@ -154,7 +160,15 @@ export function PriceKeypad({
 				// (dev-next, 2026-10-24).
 				className="-mx-1 max-w-none items-end self-stretch px-1"
 			>
-				<ButtonText className={cn('tabular-nums', textClassName)}>{format(value)}</ButtonText>
+				<ButtonText
+					className={cn(
+						'tabular-nums',
+						textClassName,
+						value === undefined && 'text-muted-foreground'
+					)}
+				>
+					{value === undefined ? '–' : format(value)}
+				</ButtonText>
 			</Button>
 		</GrowKeypad>
 	);

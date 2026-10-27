@@ -11,7 +11,13 @@ import {
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
-import { EMPTY_ENTRY, QUANTITY_PLACES, quantityEntryReducer, typedQuantity } from './reducer';
+import {
+	COUNT_DIGITS,
+	EMPTY_ENTRY,
+	QUANTITY_PLACES,
+	quantityEntryReducer,
+	typedQuantity,
+} from './reducer';
 
 /** Material's minimum touch target (decision 36): the anchored panel is a grid of them. */
 const CELL = 48;
@@ -39,8 +45,13 @@ export type QuantityKeypadProps = {
 	 * says the store refused it (the stock guard), and a − or + step is taken back.
 	 */
 	onChange: (quantity: number) => void | boolean | Promise<void | boolean>;
-	/** − pressed at 1 (the trash). */
-	onRemove: () => void;
+	/**
+	 * − pressed at 1 (the trash). Without it the keypad edits a count (a product's stock): −
+	 * stops at 0, a typed 0 commits, and six whole digits fit.
+	 */
+	onRemove?: () => void;
+	/** The places a quantity may carry (six, a line's); with none there is no decimal key. */
+	decimals?: number;
 	disabled?: boolean;
 	/** The store's decimal separator: the physical key that types a fraction. */
 	decimalSeparator?: string;
@@ -70,6 +81,7 @@ export function QuantityKeypad({
 	format,
 	onChange,
 	onRemove,
+	decimals = QUANTITY_PLACES,
 	disabled = false,
 	decimalSeparator = '.',
 	labels,
@@ -86,8 +98,9 @@ export function QuantityKeypad({
 		dismiss: () => shell.current?.dismiss(),
 	}));
 
-	const base = typedQuantity(entry.buffer) ?? entry.stepped ?? value;
-	const trash = base <= 1;
+	const count = onRemove === undefined;
+	const base = typedQuantity(entry.buffer, count) ?? entry.stepped ?? value;
+	const trash = !count && base <= 1;
 	const step = (quantity: number) => {
 		dispatch({ type: 'step', quantity });
 		const unstep = () => dispatch({ type: 'unstep', quantity });
@@ -95,7 +108,7 @@ export function QuantityKeypad({
 	};
 
 	const onClose = (discarded: boolean) => {
-		const typed = typedQuantity(entry.buffer);
+		const typed = typedQuantity(entry.buffer, count);
 		const shown = entry.stepped ?? value;
 		// The write presents its own failure (a toast) and the keypad is already closed.
 		if (!discarded && typed !== undefined && typed !== shown)
@@ -109,13 +122,22 @@ export function QuantityKeypad({
 			// nothing typed is committed on the way out.
 			if (fromKeyboard) return;
 			shell.current?.dismiss();
-			return onRemove();
+			return onRemove?.();
 		}
+		// A count stops at 0; a negative stock (oversold) still steps up from where it is.
+		if (name === 'decrease' && count && base <= 0) return;
 		if (name === 'backspace') dispatch({ type: 'backspace' });
-		else if (name === 'decimal') dispatch({ type: 'decimal' });
 		else if (name === 'increase') step(onGrid(base + 1));
 		else if (name === 'decrease') step(onGrid(base - 1));
-		else dispatch({ type: 'digit', digit: name });
+		else if (name !== 'decimal')
+			dispatch({
+				type: 'digit',
+				digit: name,
+				places: decimals,
+				whole: count ? COUNT_DIGITS : undefined,
+			});
+		// A whole-number quantity has no fraction to type.
+		else if (decimals > 0) dispatch({ type: 'decimal' });
 	};
 
 	const display = entry.buffer
@@ -125,13 +147,17 @@ export function QuantityKeypad({
 		trash
 			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'destructive' }
 			: { name: 'decrease', label: labels.decrease, icon: 'minus' },
-		{ display: <Value display={display} textClassName={textClassName} /> },
+		{ display: <Value display={display} fit={count} textClassName={textClassName} /> },
 		{ name: 'increase', label: labels.increase, icon: 'plus' },
 	];
 	return (
 		<GrowKeypad
 			ref={shell}
-			rows={[stepper, ...DIGIT_ROWS, ...closingRows(decimalSeparator, labels)]}
+			rows={[
+				stepper,
+				...DIGIT_ROWS,
+				...closingRows(decimals > 0 ? decimalSeparator : undefined, labels),
+			]}
 			ruled={1}
 			cell={CELL}
 			align="center"
@@ -156,17 +182,31 @@ export function QuantityKeypad({
 	);
 }
 
-/** The number, centred in the stepper row's middle cell. */
-function Value({ display, textClassName }: { display: string; textClassName?: string }) {
+/**
+ * The number, centred in the stepper row's middle cell. A count (`fit`) reaches `999,999`,
+ * which the 48 px cell holds only smaller: past five characters it shrinks, never the panel.
+ */
+function Value({
+	display,
+	fit,
+	textClassName,
+}: {
+	display: string;
+	fit: boolean;
+	textClassName?: string;
+}) {
 	const sheet = useOverlayPresentation() === 'bottom';
+	const size = sheet
+		? 'text-xl'
+		: !fit || display.length <= 5
+			? 'text-base'
+			: display.length <= 6
+				? 'text-sm'
+				: 'text-xs';
 	return (
 		<Text
 			testID="quantity-keypad-value"
-			className={cn(
-				'text-center font-semibold tabular-nums',
-				sheet ? 'text-xl' : 'text-base',
-				textClassName
-			)}
+			className={cn('text-center font-semibold tabular-nums', size, textClassName)}
 		>
 			{display}
 		</Text>

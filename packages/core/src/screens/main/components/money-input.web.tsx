@@ -54,7 +54,8 @@ export function MoneyInput({
 			testID={testID}
 			textClassName={textClassName}
 			disabled={disabled}
-			value={Number(value) || 0}
+			// A blank price (no sale price) is not 0: it rests as `–` and writes only what is typed.
+			value={value == null || value === '' ? undefined : Number(value) || 0}
 			format={format}
 			decimals={decimals}
 			decimalSeparator={decimalSeparator || '.'}

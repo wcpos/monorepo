@@ -6,7 +6,8 @@
 export type QuantityEntry = { buffer: string; stepped?: number };
 
 export type QuantityEntryAction =
-	| { type: 'digit'; digit: string }
+	/** `places` and `whole` default to a cart line's: six places, four whole digits. */
+	| { type: 'digit'; digit: string; places?: number; whole?: number }
 	| { type: 'decimal' }
 	| { type: 'backspace' }
 	| { type: 'step'; quantity: number }
@@ -22,6 +23,8 @@ export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
 export const QUANTITY_PLACES = 6;
 // Four: a line never holds 10 000, and "9999" is what the 48 px cell fits.
 const INTEGER_DIGITS = 4;
+/** A count (stock) holds more than a line: six whole digits, the cell's text shrinks for them. */
+export const COUNT_DIGITS = 6;
 
 export function quantityEntryReducer(
 	entry: QuantityEntry,
@@ -30,11 +33,12 @@ export function quantityEntryReducer(
 	const { buffer } = entry;
 	switch (action.type) {
 		case 'digit': {
+			const { places = QUANTITY_PLACES, whole = INTEGER_DIGITS } = action;
 			const point = buffer.indexOf('.');
-			if (point >= 0 && buffer.length - point > QUANTITY_PLACES) return entry;
+			if (point >= 0 && buffer.length - point > places) return entry;
 			// A lone 0 only ever starts a fraction: the next digit takes its place.
 			const next = buffer === '0' ? action.digit : buffer + action.digit;
-			return point < 0 && next.length > INTEGER_DIGITS ? entry : { ...entry, buffer: next };
+			return point < 0 && next.length > whole ? entry : { ...entry, buffer: next };
 		}
 		case 'decimal':
 			return buffer.includes('.') ? entry : { ...entry, buffer: `${buffer || '0'}.` };
@@ -50,8 +54,11 @@ export function quantityEntryReducer(
 	}
 }
 
-/** The typed quantity when it is one a line can hold; nothing typed, or zero, is `undefined`. */
-export function typedQuantity(buffer: string): number | undefined {
+/**
+ * The typed quantity when it is one a line can hold; nothing typed, or zero, is `undefined`.
+ * A count (`zero`) holds 0: out of stock is a real stock level.
+ */
+export function typedQuantity(buffer: string, zero = false): number | undefined {
 	const quantity = Number.parseFloat(buffer);
-	return quantity > 0 ? quantity : undefined;
+	return quantity > 0 || (zero && quantity === 0) ? quantity : undefined;
 }

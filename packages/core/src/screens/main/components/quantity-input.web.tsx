@@ -12,8 +12,11 @@ export interface QuantityInputProps {
 	value?: number | string;
 	/** Resolving `false`: the store refused the quantity, and the keypad takes its step back. */
 	onChangeText: (quantity: number) => void | boolean | Promise<void | boolean>;
-	/** − at 1: the line's own remove path. */
-	onRemove: () => void;
+	/** − at 1: the line's own remove path. Without it the keypad edits a count (stock). */
+	onRemove?: () => void;
+	/** The places the quantity carries; 0 for a whole count (WooCommerce stock is an integer). */
+	decimals?: number;
+	disabled?: boolean;
 	className?: string;
 	textClassName?: string;
 	testID?: string;
@@ -29,6 +32,8 @@ export function QuantityInput({
 	value,
 	onChangeText,
 	onRemove,
+	decimals,
+	disabled,
 	className,
 	textClassName,
 	testID,
@@ -37,7 +42,12 @@ export function QuantityInput({
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) as
 		string | undefined;
-	const { format } = useNumberFormat(QUANTITY_FORMAT);
+	const formatOptions = React.useMemo(
+		() =>
+			decimals === undefined ? QUANTITY_FORMAT : { ...QUANTITY_FORMAT, decimalScale: decimals },
+		[decimals]
+	);
+	const { format } = useNumberFormat(formatOptions);
 	const t = useT();
 	const keypad = React.useRef<QuantityKeypadHandle>(null);
 	React.useImperativeHandle(ref, () => ({ focus: () => keypad.current?.focus() }), []);
@@ -62,6 +72,8 @@ export function QuantityInput({
 			textClassName={textClassName}
 			value={Number(value ?? 0)}
 			format={format}
+			decimals={decimals}
+			disabled={disabled}
 			decimalSeparator={decimalSeparator || '.'}
 			labels={labels}
 			onChange={onChangeText}

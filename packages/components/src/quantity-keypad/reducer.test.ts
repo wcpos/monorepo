@@ -72,3 +72,19 @@ describe('typedQuantity', () => {
 		expect(typedQuantity('')).toBeUndefined();
 	});
 });
+
+describe('a count (stock)', () => {
+	const whole = (text: string): QuantityEntryAction[] =>
+		[...text].map((digit) => ({ type: 'digit', digit, places: 0, whole: 6 }));
+
+	it('takes six whole digits, not four', () => {
+		expect(run(...whole('1234567')).buffer).toBe('123456');
+		expect(run(...digits('12345')).buffer).toBe('1234');
+	});
+
+	it('a typed 0 is a stock level; nothing typed is still nothing', () => {
+		expect(typedQuantity(run(...whole('0')).buffer, true)).toBe(0);
+		expect(typedQuantity('', true)).toBeUndefined();
+		expect(typedQuantity('0')).toBeUndefined();
+	});
+});

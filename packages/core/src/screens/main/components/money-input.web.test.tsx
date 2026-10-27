@@ -68,6 +68,13 @@ it("a quick key's percent keeps its own places on a store that prices to none", 
 	expect(mockKeypad.labels.discount(12.5)).toBe('pos_cart.discount_percent:12,5');
 });
 
+it('hands a blank price on as blank, never 0', () => {
+	render(<MoneyInput value="" format={String} onChangeText={jest.fn()} />);
+	expect(mockKeypad.value).toBeUndefined();
+	render(<MoneyInput value="0" format={String} onChangeText={jest.fn()} />);
+	expect(mockKeypad.value).toBe(0);
+});
+
 it("takes its own places over the store's: a percentage fee on a zero-decimal store", () => {
 	render(<MoneyInput value="2.5" format={String} decimals={2} onChangeText={jest.fn()} />);
 	expect(mockKeypad.decimals).toBe(2);
