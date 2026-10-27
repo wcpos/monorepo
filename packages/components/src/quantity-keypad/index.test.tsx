@@ -427,3 +427,22 @@ describe('without onRemove, a count (stock)', () => {
 		expect(onChange).toHaveBeenCalledWith(123456);
 	});
 });
+
+it('in a form, the trigger is named by the form label, then its own number', () => {
+	render(
+		<DeviceScope phone={false}>
+			<QuantityKeypad
+				testID="stock"
+				value={3}
+				format={String}
+				labels={labels}
+				onChange={onChange}
+				labelledBy="stock-label"
+			/>
+		</DeviceScope>
+	);
+	const trigger = screen.getByTestId('stock');
+	const [label, own] = trigger.getAttribute('aria-labelledby')!.split(' ');
+	expect(label).toBe('stock-label');
+	expect(trigger.id).toBe(own);
+});
