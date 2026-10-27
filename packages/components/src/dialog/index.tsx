@@ -30,6 +30,7 @@ import { Text, TextClassContext } from '../text';
 import { isToastTarget } from '../toast/target';
 import { useDialogLabels } from './labels';
 
+import type { ButtonRef } from '../button';
 import type { IconName } from '../icon';
 import type { OverlayPresentation } from '../lib/overlay';
 import type { SlottableTextProps } from '@rn-primitives/types';
@@ -264,7 +265,7 @@ export type FooterButton = {
 	icon?: IconName;
 	accessibilityLabel?: string;
 	/** The rendered Button, for a caller that must return focus to it (a dialog it opened closing). */
-	ref?: React.Ref<View>;
+	ref?: React.Ref<ButtonRef>;
 };
 /** A slot entry; `false`/`null` is skipped, so a conditional button needs no array juggling. */
 export type FooterSlot = FooterButton | false | null | undefined;

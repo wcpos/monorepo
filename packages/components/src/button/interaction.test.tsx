@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
 
-import { Button } from './index';
+import { Button, type ButtonRef } from './index';
 import { IconButton } from '../icon-button';
 import { TextClassContext } from '../text';
 
@@ -17,7 +17,7 @@ jest.mock('react-native', () => ({
 	Pressable: (props: Record<string, unknown>) => {
 		pressable = props;
 		return (
-			<button>
+			<button ref={props.ref as React.Ref<HTMLButtonElement>}>
 				{typeof props.children === 'function'
 					? props.children({ pressed })
 					: (props.children as React.ReactNode)}
@@ -46,6 +46,12 @@ jest.mock('../text', () => ({
 function Probe() {
 	return <span data-testid="context" className={React.useContext(TextClassContext)} />;
 }
+
+it('hands its ref to the Pressable, so the caller holds the rendered element', () => {
+	const ref = React.createRef<ButtonRef>();
+	render(<Button ref={ref}>Email</Button>);
+	expect(ref.current).toBe(screen.getByRole('button'));
+});
 
 it('lifts pressed and hovered text into the context and clears each on release', () => {
 	const onHoverIn = jest.fn();

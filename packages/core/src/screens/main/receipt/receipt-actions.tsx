@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
 
+import type { ButtonRef } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogContent,
@@ -22,7 +23,7 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 	const t = useT();
 	const { sync: syncOrder, loading, disabled } = useSyncOrder(order);
 	const [emailOpen, setEmailOpen] = React.useState(false);
-	const emailRef = React.useRef<View>(null);
+	const emailRef = React.useRef<ButtonRef>(null);
 	let sync: FooterButton | undefined;
 	let dialog: React.ReactNode = null;
 	let choices: FooterButton[] = [];
@@ -63,7 +64,7 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 					onCloseAutoFocus={(event) => {
 						if (Platform.OS === 'web') {
 							event.preventDefault();
-							(emailRef.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+							(emailRef.current as HTMLElement | null)?.focus({ preventScroll: true });
 						}
 					}}
 				>
