@@ -38,7 +38,16 @@ export function Splash() {
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />
-				<Progress sharedValue={progress} />
+				{/*
+				 * The splash is always light, so the bar pins the light palette's
+				 * secondary/primary (apps/main/global.css) rather than following
+				 * the system dark mode.
+				 */}
+				<Progress
+					sharedValue={progress}
+					className="bg-[#5b748e]/20"
+					indicatorClassName="bg-[#006aa7]"
+				/>
 			</VStack>
 		</View>
 	);
