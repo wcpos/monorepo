@@ -10,3 +10,8 @@ it('uses the controls-tier skin', () => {
 	expect(source).toContain('size-8');
 	expect(source).not.toContain('focus-visible');
 });
+
+it('gives the muted variant the default hover tint, not a near-invisible fraction of it', () => {
+	expect(source).toContain("muted: 'web:hover:bg-muted active:bg-muted'");
+	expect(source).not.toContain('bg-muted/15');
+});
