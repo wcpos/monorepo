@@ -25,6 +25,12 @@ describe('priceEntryReducer', () => {
 		expect(run(...typed('1234567.5')).buffer).toBe('1234567.5');
 	});
 
+	it('a currency with fewer places takes more whole digits, up to what the display fits', () => {
+		expect(run(...typed('12345678901', 0)).buffer).toBe('1234567890');
+		expect(run(...typed('123456789', 1)).buffer).toBe('12345678');
+		expect(run(...typed('12345678', 3)).buffer).toBe('1234567');
+	});
+
 	it("stops the fraction at the currency's places", () => {
 		expect(run(...typed('3.205')).buffer).toBe('3.20');
 		expect(run(...typed('3.205', 3)).buffer).toBe('3.205');

@@ -16,8 +16,12 @@ export type PriceEntryAction =
 
 export const EMPTY_PRICE: PriceEntry = { buffer: '' };
 
-// Seven: "1234567.50" is what the 192 px display fits, and past any till's line.
-const INTEGER_DIGITS = 7;
+// The 192 px display fits ten characters ("1234567.50"). A currency with fewer places gives the
+// whole number the room back: a rupiah or dong price passes 9 999 999 (CodeRabbit on #2984).
+const DISPLAY_CHARS = 10;
+const MIN_INTEGER_DIGITS = 7;
+const integerDigits = (places: number) =>
+	Math.max(MIN_INTEGER_DIGITS, DISPLAY_CHARS - (places > 0 ? places + 1 : 0));
 
 export function priceEntryReducer(entry: PriceEntry, action: PriceEntryAction): PriceEntry {
 	// Typing after a quick key starts over: the discount is gone, the buffer empty.
@@ -28,7 +32,9 @@ export function priceEntryReducer(entry: PriceEntry, action: PriceEntryAction): 
 			if (point >= 0 && buffer.length - point > action.places) return { buffer };
 			// A lone 0 only ever starts a fraction: the next digit takes its place.
 			const next = buffer === '0' ? action.digit : buffer + action.digit;
-			return { buffer: point < 0 && next.length > INTEGER_DIGITS ? buffer : next };
+			return {
+				buffer: point < 0 && next.length > integerDigits(action.places) ? buffer : next,
+			};
 		}
 		case 'decimal':
 			return { buffer: buffer.includes('.') ? buffer : `${buffer || '0'}.` };
