@@ -88,3 +88,15 @@ describe('a count (stock)', () => {
 		expect(typedQuantity('0')).toBeUndefined();
 	});
 });
+
+describe('settle', () => {
+	it('drops the stepped number and keeps what was typed', () => {
+		const stepped = run({ type: 'step', quantity: 4 }, ...digits('2'));
+		expect(quantityEntryReducer(stepped, { type: 'settle' })).toEqual({ buffer: '2' });
+	});
+
+	it('with no step, changes nothing', () => {
+		const typed = run(...digits('2'));
+		expect(quantityEntryReducer(typed, { type: 'settle' })).toBe(typed);
+	});
+});

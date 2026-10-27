@@ -94,3 +94,10 @@ it('the stock keypad is disabled while stock is not managed', () => {
 	renderCell({ type: 'simple', stock_quantity: 4, manage_stock: false });
 	expect(mockQuantity.mock.calls[0]?.[0].disabled).toBe(true);
 });
+
+it('returns whether the stock was saved, so the keypad takes a refused step back', async () => {
+	mockProAccess.readOnly = false;
+	const onChange = jest.fn().mockResolvedValue(false);
+	renderCell({ type: 'simple', stock_quantity: 4, manage_stock: true }, onChange);
+	await expect(mockQuantity.mock.calls[0]?.[0].onChangeText(5)).resolves.toBe(false);
+});

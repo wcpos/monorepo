@@ -12,6 +12,7 @@ export type QuantityEntryAction =
 	| { type: 'backspace' }
 	| { type: 'step'; quantity: number }
 	| { type: 'unstep'; quantity: number }
+	| { type: 'settle' }
 	| { type: 'reset' };
 
 export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
@@ -49,6 +50,9 @@ export function quantityEntryReducer(
 		// The store refused that step: show what it holds again, unless a later step moved on.
 		case 'unstep':
 			return entry.stepped === action.quantity ? { buffer } : entry;
+		// The stored quantity moved with no step in flight: it is the truth, the typing stays.
+		case 'settle':
+			return entry.stepped === undefined ? entry : { buffer };
 		case 'reset':
 			return EMPTY_ENTRY;
 	}

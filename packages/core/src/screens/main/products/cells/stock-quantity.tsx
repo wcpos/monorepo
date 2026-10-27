@@ -36,7 +36,7 @@ export function StockQuantity({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
@@ -55,6 +55,7 @@ export function StockQuantity({
 						value={stockQuantity ?? 0}
 						decimals={0}
 						className="web:px-3 w-full"
+						// Whether it was saved: the keypad takes a refused − or + back.
 						onChangeText={(stock_quantity) =>
 							meta.onChange({ document: product, changes: { stock_quantity } })
 						}
@@ -67,7 +68,7 @@ export function StockQuantity({
 					checked={manageStock ?? false}
 					onCheckedChange={(manage_stock) => {
 						if (!disabled) {
-							meta.onChange({ document: product, changes: { manage_stock } });
+							void meta.onChange({ document: product, changes: { manage_stock } });
 						}
 					}}
 					size="sm"

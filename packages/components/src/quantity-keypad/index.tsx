@@ -101,11 +101,23 @@ export function QuantityKeypad({
 	const count = onRemove === undefined;
 	const base = typedQuantity(entry.buffer, count) ?? entry.stepped ?? value;
 	const trash = !count && base <= 1;
+	// Step writes not yet settled: a stored change that lands meanwhile is one of them catching
+	// up, and must not drop the number a second fast press has already moved on to.
+	const pending = React.useRef(0);
 	const step = (quantity: number) => {
 		dispatch({ type: 'step', quantity });
+		pending.current += 1;
+		const settled = () => (pending.current -= 1);
 		const unstep = () => dispatch({ type: 'unstep', quantity });
-		void Promise.resolve(onChange(quantity)).then((ok) => ok === false && unstep(), unstep);
+		void Promise.resolve(onChange(quantity))
+			.then((ok) => ok === false && unstep(), unstep)
+			.finally(settled);
 	};
+	// Once nothing is in flight the stored quantity is the truth: a later revert (the server
+	// refusing a stock push) shows, and the next step counts from it.
+	React.useEffect(() => {
+		if (pending.current === 0) dispatch({ type: 'settle' });
+	}, [value]);
 
 	const onClose = (discarded: boolean) => {
 		const typed = typedQuantity(entry.buffer, count);

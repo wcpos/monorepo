@@ -33,7 +33,7 @@ export function EditablePrice({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();

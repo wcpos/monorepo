@@ -31,7 +31,7 @@ export function COGS({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
@@ -60,7 +60,7 @@ export function COGS({
 							},
 						],
 					};
-					meta.onChange({
+					void meta.onChange({
 						document: product,
 						changes: { cost_of_goods_sold: updatedCogs },
 					});

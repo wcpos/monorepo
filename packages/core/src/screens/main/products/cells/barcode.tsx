@@ -32,7 +32,7 @@ export function Barcode({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 
 	// Update value if the underlying barcode changes. Implemented as the React
@@ -49,7 +49,7 @@ export function Barcode({
 	 */
 	const handleSubmit = React.useCallback(() => {
 		if (disabled) return;
-		meta.onChange({ document: product, changes: { barcode: value } });
+		void meta.onChange({ document: product, changes: { barcode: value } });
 	}, [product, meta, value, disabled]);
 
 	/**
