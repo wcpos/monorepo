@@ -308,7 +308,7 @@ it('shows the minimum variable price with from and keeps sale strikethrough', ()
 		['10', 'true'],
 	]);
 	expect(screen.getByText('from')).not.toBeNull();
-	expect(screen.getByText('Sale')).not.toBeNull();
+	expect(screen.queryByText('Sale')).toBeNull();
 });
 
 // The words: on the scrim over a picture, straight on the tint without one.
@@ -342,7 +342,7 @@ it('says Sold out in place of the price when out, with no Sale pill, and greys t
 	);
 });
 
-it('shows the Sale pill and the struck price only when on sale and the field is on', () => {
+it('shows the struck price, with no Sale pill, only when on sale and the field is on', () => {
 	const sale = {
 		...record,
 		payload: { ...record.payload, price: '4', regular_price: '5', on_sale: true },
@@ -356,14 +356,14 @@ it('shows the Sale pill and the struck price only when on sale and the field is 
 		<ProductTile record={sale} gridFields={{ ...gridFields, price: true, on_sale: true }} />
 	);
 	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4', '5']);
-	expect(screen.getByText('Sale')).not.toBeNull();
+	expect(screen.queryByText('Sale')).toBeNull();
 	rerender(
 		<ProductTile
 			record={{ ...sale, payload: { ...sale.payload, on_sale: false } }}
 			gridFields={{ ...gridFields, price: true, on_sale: true }}
 		/>
 	);
-	expect(screen.queryByText('Sale')).toBeNull();
+	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4']);
 });
 
 it('lays the facts out Cost, SKU, barcode, categories, each only when on and set', () => {
