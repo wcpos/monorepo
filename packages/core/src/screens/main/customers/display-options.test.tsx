@@ -66,10 +66,6 @@ it('opens the columns in the settings panel, patches immediately and restores fr
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: React.PropsWithChildren) => children,
-	CollapsibleContent: ({ children }: React.PropsWithChildren) => children,
-}));
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	const { useFormChangeHandler } = jest.requireActual(
