@@ -308,7 +308,7 @@ it('shows the minimum variable price with from and keeps sale strikethrough', ()
 		['10', 'true'],
 	]);
 	expect(screen.getByText('from')).not.toBeNull();
-	expect(screen.queryByText('Sale')).toBeNull();
+	expect(screen.queryByText(/^(Sale|common\.sale)$/)).toBeNull();
 });
 
 // The words: on the scrim over a picture, straight on the tint without one.
@@ -351,12 +351,12 @@ it('shows the struck price, with no Sale pill, only when on sale and the field i
 		<ProductTile record={sale} gridFields={{ ...gridFields, price: true, on_sale: false }} />
 	);
 	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4']);
-	expect(screen.queryByText('Sale')).toBeNull();
+	expect(screen.queryByText(/^(Sale|common\.sale)$/)).toBeNull();
 	rerender(
 		<ProductTile record={sale} gridFields={{ ...gridFields, price: true, on_sale: true }} />
 	);
 	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4', '5']);
-	expect(screen.queryByText('Sale')).toBeNull();
+	expect(screen.queryByText(/^(Sale|common\.sale)$/)).toBeNull();
 	rerender(
 		<ProductTile
 			record={{ ...sale, payload: { ...sale.payload, on_sale: false } }}
