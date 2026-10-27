@@ -10,6 +10,13 @@
 @theme static {
   /* Static colors - don't change between themes */
   --color-transparent: transparent;
+
+  /* The JS splash is always light, like the native splash it replaces (expo-splash-screen in
+     app.config.ts has no dark variant), so its bar is the light theme's muted and primary
+     whatever the system or chosen theme. */
+  --color-splash: #F0F4F8;
+  --color-splash-track: oklch(0.955 0.006 250);
+  --color-splash-indicator: oklch(0.50 0.18 240);
 }
 
 /* The page gutter (CODING_STANDARDS § Design, Gutters): three spacing units: the space between

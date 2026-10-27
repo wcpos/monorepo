@@ -34,19 +34,15 @@ export function Splash() {
 	}, [progress.value, hideSplash]);
 
 	return (
-		<View className="absolute inset-0 flex items-center justify-center bg-[#F0F4F8]">
+		<View className="bg-splash absolute inset-0 flex items-center justify-center">
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />
-				{/*
-				 * The splash is always light, so the bar pins the light palette's
-				 * muted/primary (apps/main/global.css) rather than following
-				 * the system dark mode.
-				 */}
+				{/* The splash is always light, so its bar never follows the theme (global.css). */}
 				<Progress
 					sharedValue={progress}
-					className="bg-[#edf0f4]"
-					indicatorClassName="bg-[#006aa7]"
+					className="bg-splash-track"
+					indicatorClassName="bg-splash-indicator"
 				/>
 			</VStack>
 		</View>
