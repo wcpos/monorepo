@@ -36,6 +36,7 @@ export interface GridFields {
 /**
  * The money slot: the price, then the Sale pill and the struck regular price, then the tax
  * line, as one wrapping row. A tile that is out says "Sold out" instead, with no Sale pill.
+ * A table row reads like a shelf tag: the struck regular price, then the price, no pill.
  */
 export function moneyRow({
 	price,
@@ -75,11 +76,21 @@ export function moneyRow({
 	const muted = taxDisplay ? 'text-muted-foreground' : 'text-foreground/70';
 	if (!gridFields.price || (price == null && !struck)) return null;
 	const tax = { taxStatus: (taxStatus || 'none') as TaxStatus, taxClass: taxClass ?? '' };
+	const regular = struck && (
+		<PriceWithTax
+			price={regularPrice}
+			{...tax}
+			taxDisplay="none"
+			className={`${muted} text-xs`}
+			strikethrough
+		/>
+	);
 	return (
 		<View
 			className={`flex-row flex-wrap items-baseline gap-x-1.5 ${taxDisplay ? 'justify-end' : ''}`}
 		>
 			{from && <Text className={`${muted} text-xs`}>{t('common.from')}</Text>}
+			{struck && taxDisplay && regular}
 			{price != null && (
 				<PriceWithTax
 					price={price}
@@ -88,18 +99,12 @@ export function moneyRow({
 					className="font-bold"
 				/>
 			)}
-			{struck && (
+			{struck && !taxDisplay && (
 				<>
 					<View className="bg-foreground self-center rounded-full px-1.5 py-px">
 						<Text className="text-card text-xs font-bold uppercase">{t('common.sale')}</Text>
 					</View>
-					<PriceWithTax
-						price={regularPrice}
-						{...tax}
-						taxDisplay="none"
-						className={`${muted} text-xs`}
-						strikethrough
-					/>
+					{regular}
 				</>
 			)}
 			{!taxDisplay && gridFields.tax && price != null && (
