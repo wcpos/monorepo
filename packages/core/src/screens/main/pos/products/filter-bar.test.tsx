@@ -44,7 +44,7 @@ jest.mock('@wcpos/components/chip', () => ({
 		onLongPress,
 	}: {
 		label: string;
-		count?: number;
+		count?: number | string;
 		on?: boolean;
 		dimmed?: boolean;
 		testID: string;
@@ -56,7 +56,7 @@ jest.mock('@wcpos/components/chip', () => ({
 		<div data-testid={testID} data-on={!!on} data-dimmed={!!dimmed}>
 			<button disabled={dimmed} onClick={onPress} onContextMenu={onLongPress}>
 				{label}
-				{count !== undefined && ` +${count}`}
+				{count !== undefined && ` ${count}`}
 			</button>
 			{onClear && (
 				<button disabled={dimmed} data-testid={clearTestID} onClick={onClear}>

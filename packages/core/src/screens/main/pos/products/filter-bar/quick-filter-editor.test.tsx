@@ -593,14 +593,14 @@ it.each([
 	expect(isQuickFilterValid(onDraftChange.mock.lastCall[0])).toBe(false);
 });
 
-it('shows one live bar chip with a trimmed name and a condition count', () => {
+it('shows one live bar chip with a trimmed name and no count', () => {
 	renderEditor();
 	startScratch();
 	nameDraft();
 	fireEvent.click(screen.getByTestId('quick-filter-row-on_sale'));
 	fireEvent.click(screen.getByTestId('quick-filter-on_sale-option-yes'));
 	const preview = screen.getByTestId('quick-filter-bar-preview');
-	expect(preview.textContent).toBe('Sale wines1');
+	expect(preview.textContent).toBe('Sale wines');
 });
 
 it.each([

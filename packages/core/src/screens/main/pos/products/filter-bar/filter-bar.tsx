@@ -276,7 +276,6 @@ function QuickChip({
 			testID={`quick-filter-${quickFilter.id}`}
 			onLongPress={onLongPress}
 			label={quickFilter.label}
-			count={quickFilter.conditions.length}
 			on={active}
 			onPress={() => {
 				touched();
@@ -324,7 +323,8 @@ function SetChip({
 			label={selected[0]?.payload.name ?? label}
 			icon="category"
 			on={ids.length > 0}
-			count={ids.length > 1 ? ids.length - 1 : undefined}
+			// The selection past the one named: `+N`, so it reads as more of them, not a tally.
+			count={ids.length > 1 ? `+${ids.length - 1}` : undefined}
 			dimmed={dimmed}
 			testID={`filter-pill-${field}`}
 			onLongPress={onLongPress}
@@ -430,14 +430,7 @@ function DimmedChip({ item }: { item: FilterBarItem }) {
 	const state = useQueryState<'products'>();
 	const t = useT();
 	if (item.type === 'quick') {
-		return (
-			<Chip
-				testID={`quick-filter-${item.id}`}
-				label={item.label}
-				count={item.conditions.length}
-				dimmed
-			/>
-		);
+		return <Chip testID={`quick-filter-${item.id}`} label={item.label} dimmed />;
 	}
 	const value = state.filters[item.id as keyof typeof state.filters] as unknown;
 	const on = Array.isArray(value) ? value.length > 0 : !!value;
