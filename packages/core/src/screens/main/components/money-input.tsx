@@ -26,8 +26,16 @@ export interface MoneyInputProps {
 	textClassName?: string;
 	/** Rests as an outlined input field (the keypad's trigger on web), not bare text. */
 	field?: boolean;
+	/** A blank field's rest text. */
+	placeholder?: string;
+	/** A form label's id, naming the web keypad's trigger. */
+	'aria-labelledby'?: string;
+	/** A form's handle (`FormInput`'s label press); the web keypad opens as a field focuses. */
+	ref?: React.Ref<KeypadFieldHandle>;
 	testID?: string;
 }
+
+export type KeypadFieldHandle = { focus: () => void; blur: () => void; isFocused: () => boolean };
 
 /** Native: the price is the plain field in place (decision 16); the web price grows into a keypad. */
 export function MoneyInput({
@@ -37,10 +45,13 @@ export function MoneyInput({
 	decimals: _decimals,
 	textClassName,
 	field,
+	placeholder,
+	'aria-labelledby': _labelledBy,
+	ref: _ref,
 	...props
 }: MoneyInputProps) {
 	// The plain field, outlined at rest.
-	if (field) return <NumberInput {...props} value={value} />;
+	if (field) return <NumberInput {...props} value={value} placeholder={placeholder} />;
 	// A blank price (no sale price) rests as WooCommerce's `–`, muted, never `0.00`.
 	const blank = value == null || value === '';
 	return (

@@ -24,7 +24,7 @@ import { useT } from '../../../../contexts/translations';
 import { PARENT_TAX_CLASS } from '../../hooks/tax-class';
 import { CurrencyInput } from '../currency-input';
 import { META_DATA_DEFAULT_ROW } from '../meta-data-form';
-import { NumberInput } from '../number-input';
+import { CountInput } from '../count-input';
 import { useTaxClassOptions } from '../tax-class-select';
 import { TaxSelect } from '../tax-select';
 import { useFieldPresence } from '../use-field-presence';
@@ -145,7 +145,7 @@ export function StockRow() {
 					name="stock_quantity"
 					render={({ field: { value, ...rest } }) => (
 						<FormInput
-							customComponent={NumberInput}
+							customComponent={CountInput}
 							type="numeric"
 							autoFocus={focus}
 							value={value != null ? String(value) : undefined}

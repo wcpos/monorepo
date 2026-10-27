@@ -21,7 +21,7 @@ import { useT } from '../../../../../../contexts/translations';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
-import { NumberInput } from '../../../../components/number-input';
+import { PercentInput } from '../../../../components/percent-input';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
@@ -146,7 +146,7 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 							name="amount"
 							render={({ field }) => (
 								<FormInput
-									customComponent={togglePercentage ? NumberInput : CurrencyInput}
+									customComponent={togglePercentage ? PercentInput : CurrencyInput}
 									testID="edit-fee-line-amount-input"
 									type="numeric"
 									{...field}

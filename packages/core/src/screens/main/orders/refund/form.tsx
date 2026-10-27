@@ -41,6 +41,8 @@ import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
+import { CountInput } from '../../components/count-input';
+import { CurrencyInput } from '../../components/currency-input';
 import { useT } from '../../../../contexts/translations';
 import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
@@ -492,7 +494,9 @@ export function RefundOrderForm({ order }: Props) {
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => <FormInput type="numeric" {...qtyField} />}
+											render={({ field: qtyField }) => (
+												<FormInput customComponent={CountInput} type="numeric" {...qtyField} />
+											)}
 										/>
 									</TableCell>
 									<TableCell className="flex-1">
@@ -509,6 +513,7 @@ export function RefundOrderForm({ order }: Props) {
 					name="custom_amount"
 					render={({ field }) => (
 						<FormInput
+							customComponent={CurrencyInput}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}

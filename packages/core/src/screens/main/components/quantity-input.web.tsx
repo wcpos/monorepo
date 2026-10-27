@@ -8,6 +8,8 @@ import { useT } from '../../../contexts/translations';
 import { QUANTITY_FORMAT, useNumberFormat } from '../hooks/use-number-format';
 import { useScannerBurstDismiss } from './use-scanner-burst-dismiss';
 
+import type { KeypadFieldHandle } from './money-input';
+
 export interface QuantityInputProps {
 	value?: number | string;
 	/** Resolving `false`: the store refused the quantity, and the keypad takes its step back. */
@@ -20,8 +22,10 @@ export interface QuantityInputProps {
 	className?: string;
 	textClassName?: string;
 	testID?: string;
-	/** `focus()` opens the keypad, as a press does. */
-	ref?: React.Ref<{ focus: () => void }>;
+	/** A form label's id, naming the trigger. */
+	'aria-labelledby'?: string;
+	/** `focus()` opens the keypad, as a press does; a form's label press toggles it. */
+	ref?: React.Ref<KeypadFieldHandle>;
 	// The native field's props; the keypad has no text field to style or select.
 	inputClassName?: string;
 	selectTextOnFocus?: boolean;
@@ -37,6 +41,7 @@ export function QuantityInput({
 	className,
 	textClassName,
 	testID,
+	'aria-labelledby': labelledBy,
 	ref,
 }: QuantityInputProps) {
 	const { store } = useAppState();
@@ -50,8 +55,16 @@ export function QuantityInput({
 	const { format } = useNumberFormat(formatOptions);
 	const t = useT();
 	const keypad = React.useRef<QuantityKeypadHandle>(null);
-	React.useImperativeHandle(ref, () => ({ focus: () => keypad.current?.focus() }), []);
 	const [open, setOpen] = React.useState(false);
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			focus: () => keypad.current?.focus(),
+			blur: () => keypad.current?.dismiss(),
+			isFocused: () => open,
+		}),
+		[open]
+	);
 	useScannerBurstDismiss(open, keypad);
 	const labels = React.useMemo(
 		() => ({
@@ -70,6 +83,7 @@ export function QuantityInput({
 			testID={testID}
 			className={className}
 			textClassName={textClassName}
+			labelledBy={labelledBy}
 			value={Number(value ?? 0)}
 			format={format}
 			decimals={decimals}

@@ -4,6 +4,7 @@ import { log } from '@wcpos/utils/logger';
 
 import { getStoreUrl, openOrderSheet, tryAddProductBySku } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
+import { fillKeypadField } from './keypad-field';
 import {
 	assertDiscriminating,
 	assertMixedTaxTreatment,
@@ -94,11 +95,9 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
 }
 
 /**
- * Type an amount into a `CurrencyInput`, a plain number field on every platform.
- *
- * Enter commits (the field blurs and emits the parsed number). Type `.` for the decimal:
- * the field accepts the store's separator or a dot (dev-free is fr_FR and shows `9,99`),
- * because `stringToNumber` normalises either. A negative amount is typed with a leading `-`.
+ * Enter an amount into a `CurrencyInput` or `PercentInput`: on web, the price keypad its
+ * outlined field grows into (`fillKeypadField`). Type `.` for the decimal: the keypad takes
+ * the store's separator or a dot (dev-free is fr_FR and shows `9,99`).
  *
  * The read-back below is not decoration. An earlier version of this file drove a numpad
  * whose value did not live in the input, and the whole oracle went green against a
@@ -111,17 +110,9 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
  * So this helper asserts the amount actually landed, at the point of interaction,
  * instead of letting a silent no-op surface three steps later as a green test.
  */
-async function fillCurrencyField(
-	page: Page,
-	testID: string,
-	value: string,
-	options: { negative?: boolean } = {}
-) {
+async function fillCurrencyField(page: Page, testID: string, value: string) {
+	await fillKeypadField(page, testID, value);
 	const field = page.getByTestId(testID);
-	await expect(field).toBeVisible({ timeout: 15_000 });
-	await field.click();
-	await field.fill(options.negative ? `-${value}` : value);
-	await field.press('Enter');
 
 	// The field renders the committed amount, formatted. Locale-agnostic on purpose:
 	// dev-free is fr_FR and formats "1,00", so this asserts "a non-zero digit is showing"
@@ -131,7 +122,7 @@ async function fillCurrencyField(
 		`${testID}: the field committed nothing — it still shows no non-zero digit after ` +
 			`entering "${value}". The amount never reached the form, so any assertion ` +
 			`downstream would be comparing zero against zero.`
-	).toHaveValue(/[1-9]/, { timeout: 10_000 });
+	).toHaveText(/[1-9]/, { timeout: 10_000 });
 }
 
 async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' | 'none') {

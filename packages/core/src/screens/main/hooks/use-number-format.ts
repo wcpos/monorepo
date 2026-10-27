@@ -20,6 +20,11 @@ export const QUANTITY_FORMAT: NumberFormatOptions = {
 	decimalScale: QUANTITY_PLACES,
 };
 
+/** A percentage is typed to hundredths (12.75 %), whatever the currency's places. */
+export const PERCENT_PLACES = 2;
+/** And reads at them: a store pricing to 0 places never shows 12.5 % as "12". */
+export const PERCENT_FORMAT: NumberFormatOptions = { decimalScale: PERCENT_PLACES };
+
 /**
  * Custom hook to format numbers based on application state and provided options.
  */

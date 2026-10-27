@@ -102,6 +102,7 @@ jest.mock('../../../../../hooks/use-app-info', () => ({
 }));
 jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
 jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
+jest.mock('../../../components/count-input', () => ({ CountInput: () => null }));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../components/product/status-select', () => ({ ProductStatusSelect: () => null }));
 jest.mock('../../../components/tax-class-select', () => ({

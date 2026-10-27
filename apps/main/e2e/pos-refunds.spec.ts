@@ -9,6 +9,7 @@ import {
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { fillKeypadField } from './keypad-field';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
 	expectFullPrecision,
@@ -65,11 +66,7 @@ async function addTestProductToCart(page: Page) {
 	} else {
 		await page.getByTestId('add-cart-item-menu').click();
 		await page.getByTestId('menu-add-misc-product').click();
-		const priceInput = page.getByTestId('misc-product-price-input');
-		await expect(priceInput).toBeVisible({ timeout: 15_000 });
-		await priceInput.click();
-		await priceInput.fill('15');
-		await priceInput.press('Enter');
+		await fillKeypadField(page, 'misc-product-price-input', '15');
 		await page.getByTestId('add-to-cart-submit').click();
 	}
 	await expect(page.getByTestId('checkout-button')).toBeVisible({
@@ -182,7 +179,7 @@ async function openRefundModalForNewOrder(page: Page) {
 		timeout: 30_000,
 	});
 	expect(total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
-	await page.getByTestId('refund-custom-amount').fill(Math.min(total, 1).toFixed(2));
+	await fillKeypadField(page, 'refund-custom-amount', Math.min(total, 1).toFixed(2));
 }
 
 /** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */
@@ -379,9 +376,8 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			).toBeGreaterThan(Number(refundAmount));
 
 			await page.goto(`/orders/refund/${uuid}`);
-			const amountInput = page.getByTestId('refund-custom-amount');
-			await expect(amountInput).toBeVisible({ timeout: 60_000 });
-			await amountInput.fill(refundAmount);
+			await expect(page.getByTestId('refund-custom-amount')).toBeVisible({ timeout: 60_000 });
+			await fillKeypadField(page, 'refund-custom-amount', refundAmount);
 
 			const refunded = page.waitForResponse(
 				(response) =>

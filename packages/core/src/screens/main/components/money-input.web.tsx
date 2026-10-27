@@ -20,6 +20,9 @@ export function MoneyInput({
 	disabled,
 	textClassName,
 	field,
+	placeholder,
+	'aria-labelledby': labelledBy,
+	ref,
 	testID,
 }: MoneyInputProps) {
 	const { store } = useAppState();
@@ -38,6 +41,16 @@ export function MoneyInput({
 	const keypad = React.useRef<PriceKeypadHandle>(null);
 	const [open, setOpen] = React.useState(false);
 	useScannerBurstDismiss(open, keypad);
+	// A form's label press focuses the field, or blurs it: here the keypad opens or closes.
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			focus: () => keypad.current?.focus(),
+			blur: () => keypad.current?.dismiss(),
+			isFocused: () => open,
+		}),
+		[open]
+	);
 	const labels = React.useMemo(
 		() => ({
 			backspace: t('common.backspace'),
@@ -55,6 +68,8 @@ export function MoneyInput({
 			testID={testID}
 			textClassName={textClassName}
 			field={field}
+			placeholder={placeholder}
+			labelledBy={labelledBy}
 			disabled={disabled}
 			// A blank price (no sale price) is not 0: it rests as `–` and writes only what is typed.
 			value={value == null || value === '' ? undefined : Number(value) || 0}

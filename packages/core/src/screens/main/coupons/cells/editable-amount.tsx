@@ -7,13 +7,8 @@ import { MoneyInput } from '../../components/money-input';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useNumberFormat } from '../../hooks/use-number-format';
+import { PERCENT_FORMAT, PERCENT_PLACES, useNumberFormat } from '../../hooks/use-number-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-
-/** A percentage coupon is typed to hundredths (12.75 %), whatever the currency's places. */
-const PERCENT_PLACES = 2;
-/** And rests at them: a store pricing to 0 places never reads 12.5 % as "12". */
-const PERCENT_FORMAT = { decimalScale: PERCENT_PLACES };
 
 export function EditableAmount({
 	row,
