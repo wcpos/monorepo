@@ -131,7 +131,7 @@ export function PriceKeypad({
 	const derivation =
 		entry.discount === undefined ? undefined : `${format(stored)} −${entry.discount} %`;
 	const display: GrowCell[] = [
-		{ display: <Display shown={shown} derivation={derivation} />, span: 3 },
+		{ display: <Display shown={shown} derivation={derivation} field={field} />, span: 3 },
 	];
 
 	return (
@@ -178,11 +178,22 @@ export function PriceKeypad({
 	);
 }
 
-/** Right-aligned over the trigger's text; a quick key adds its derivation above the result. */
-function Display({ shown, derivation }: { shown: string; derivation?: string }) {
+/**
+ * Right-aligned over the trigger's text; a quick key adds its derivation above the result.
+ * A field's text sits inside its padding, so the number does not jump right as it opens.
+ */
+function Display({
+	shown,
+	derivation,
+	field,
+}: {
+	shown: string;
+	derivation?: string;
+	field: boolean;
+}) {
 	const sheet = useOverlayPresentation() === 'bottom';
 	return (
-		<View className={cn('items-end', sheet ? 'px-3' : 'px-1')}>
+		<View className={cn('items-end', sheet || field ? 'px-3' : 'px-1')}>
 			{derivation !== undefined && (
 				<Text className="text-muted-foreground text-xs tabular-nums">{derivation}</Text>
 			)}
