@@ -366,7 +366,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -483,7 +483,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -549,7 +549,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -613,7 +613,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }

@@ -13,10 +13,9 @@ import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 type Props = CellContext<{ record: EngineRecord<'products'> }, 'actions'>;
 
-// The orders caret (#2897): it opens the product like the row does, a variable product's too
-// (its variations open from the button under its name). The cell sits beside the row's
-// pressable (a button cannot nest in a button), so it needs its own. Sync and Delete live in
-// the modal's footer.
+// The orders caret (#2897): on a fine pointer it is the one control that opens the product, a
+// variable product's too (its variations open from the button under its name); the row is no
+// press target (Paul, 2026-10-27). Sync and Delete live in the modal's footer.
 export function Actions({ row }: Props) {
 	const router = useRouter();
 	const t = useT();

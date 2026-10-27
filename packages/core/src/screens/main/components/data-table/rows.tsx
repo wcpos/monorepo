@@ -4,6 +4,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 import { flexRender, type RowData } from '@tanstack/react-table';
 
 import { usePointer } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell } from '@wcpos/components/table';
@@ -101,9 +102,10 @@ export function DataTableRow<TData extends RowData>({
 		<View
 			testID={testID ?? getRowTestID(item)}
 			// The hover tint is the ROW's, actions cell included: the pressable stops short of
-			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23).
+			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23). A row with
+			// no press (the management tables open a record from its actions icon only) has none.
 			className={
-				pointer === 'fine'
+				pointer === 'fine' && onPress
 					? 'border-border web:hover:bg-muted flex-row items-center border-b'
 					: 'border-border flex-row items-center border-b'
 			}
@@ -134,12 +136,12 @@ export function DataTableRow<TData extends RowData>({
 							}
 						: undefined
 				}
-				className={
-					pointer === 'fine'
-						? 'min-h-row active:bg-muted flex-1 flex-row items-center'
-						: // The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
-							'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3 py-1.5'
-				}
+				className={cn(
+					'min-h-row flex-1 flex-row items-center',
+					onPress && 'active:bg-muted',
+					// The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
+					pointer !== 'fine' && 'gap-3 px-3 py-1.5'
+				)}
 			>
 				{/* A tooltip in a cell (the price's tax) is a hint here, not a control: the press is the row's. */}
 				<TooltipPassiveTriggers>

@@ -34,7 +34,6 @@ import { DataTable } from '../components/data-table';
 import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
-import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
 import { useCouponRecord } from './commands/use-coupon-record';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
@@ -114,13 +113,6 @@ function CouponsList({
 	const emptyStore = !state.search && Object.keys(state.filters).length === 0;
 	const pointer = usePointer();
 	const t = useT();
-	const router = useRouter();
-	const { readOnly } = useProAccess();
-	const { caps } = useUserCapabilities();
-	// The row opens the coupon modal on every pointer, as the orders row does (#2897).
-	const editable = !readOnly && caps.canEditCoupons;
-	const open = (uuid: string) =>
-		router.push({ pathname: '/coupons/edit/[couponId]', params: { couponId: uuid } });
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'coupons'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -170,10 +162,8 @@ function CouponsList({
 									<CoarseRow record={item.original.record} />
 								</View>
 							) : (
-								<DataTableRow
-									item={item}
-									onPress={editable ? () => open(item.original.record.uuid) : undefined}
-								/>
+								// Only the actions icon opens the record; the row is not a press target.
+								<DataTableRow item={item} />
 							)}
 						</VirtualizedList.Item>
 					)}

@@ -3,16 +3,13 @@ import * as React from 'react';
 import { flexRender } from '@tanstack/react-table';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
-import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
 import { matchesStockStatusFilter } from '../../stock-filter';
 import { RecordTextCell } from '../../../../components/record-text-cell';
-import { getColumnStyle } from '../../../data-table/column-style';
 import { DataTableRow } from '../../../data-table/rows';
 import { useDrawnHandle, useQuerySnapshot } from '../../../../../../query';
 
@@ -26,8 +23,6 @@ interface Props {
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
-	/** The products page opens a variation from its row, as its touch row does. */
-	openVariation?: (record: EngineRecord<'variations'>) => void;
 }
 
 // The rows re-render for the answer only; the footer reads its own fields.
@@ -68,7 +63,7 @@ const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeature
 /**
  *
  */
-export function VariationsTable({ handle, row, stockStatus, openVariation }: Props) {
+export function VariationsTable({ handle, row, stockStatus }: Props) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
 	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
@@ -124,36 +119,14 @@ export function VariationsTable({ handle, row, stockStatus, openVariation }: Pro
 				const testID = hit.record.remoteId
 					? `data-table-row-variation-${hit.record.remoteId}`
 					: undefined;
-				if (openVariation) {
-					return (
-						<DataTableRow
-							key={index}
-							item={row}
-							testID={testID ?? `data-table-row-variation-${hit.record.uuid}`}
-							onPress={() => openVariation(hit.record)}
-							renderCell={(cell) => flexRender(cellRenderer, subrowContext(cell, hit))}
-						/>
-					);
-				}
+				// Only the actions icon opens the variation; the row is not a press target.
 				return (
-					<TableRow key={index} index={index} testID={testID}>
-						{row
-							.getVisibleCells()
-							.map(
-								(
-									cell: Cell<{ record: EngineRecord<'products'> }, unknown, DataTableFeatures>,
-									cellIndex: number
-								) => (
-									<TableCell
-										key={cellIndex}
-										className={cn(cell.column.id === 'image' && 'relative')}
-										style={getColumnStyle(cell.column.columnDef.meta)}
-									>
-										{flexRender(cellRenderer, subrowContext(cell, hit))}
-									</TableCell>
-								)
-							)}
-					</TableRow>
+					<DataTableRow
+						key={index}
+						item={row}
+						testID={testID ?? `data-table-row-variation-${hit.record.uuid}`}
+						renderCell={(cell) => flexRender(cellRenderer, subrowContext(cell, hit))}
+					/>
 				);
 			})}
 			<VariationTableFooter

@@ -536,49 +536,19 @@ it('shows the skeleton, not the failure, when a superseded handle fails, then th
 	}
 });
 
-it.each([
-	[false, true, true],
-	[true, true, false],
-	[false, false, false],
-])(
-	'a fine-pointer simple row opens the edit modal when readOnly=%s canEdit=%s',
-	(readOnly, canEdit, opens) => {
-		mockReadOnly = readOnly;
-		mockCanEdit = canEdit;
-		const original = mockHandle;
-		mockHandle = answered([productHit('one')]);
-		try {
-			render(<ProductsScreen />);
-			mockPush.mockClear();
-			fireEvent.click(screen.getByTestId('products-row-one'));
-			if (opens)
-				expect(mockPush).toHaveBeenCalledWith({
-					pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-					params: { productId: 'one' },
-				});
-			else expect(mockPush).not.toHaveBeenCalled();
-		} finally {
-			mockHandle = original;
-			mockReadOnly = false;
-			mockCanEdit = true;
-		}
+// Only the actions icon opens the product (`cells/actions.test.tsx`); the row is no press target,
+// even for a cashier who may edit.
+it('a fine-pointer row is not a press target', () => {
+	const original = mockHandle;
+	mockHandle = answered([productHit('one')]);
+	try {
+		render(<ProductsScreen />);
+		mockPush.mockClear();
+		const row = screen.getByTestId('products-row-one');
+		expect((row as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(row);
+		expect(mockPush).not.toHaveBeenCalled();
+	} finally {
+		mockHandle = original;
 	}
-);
-
-it('hands the variations table an opener only when the cashier may edit variations', () => {
-	const meta = () =>
-		(mockDataTableProps.tableConfig as { meta: { openVariation?: (record: unknown) => void } })
-			.meta;
-	mockCanEdit = false;
-	const { unmount } = render(<ProductsScreen />);
-	expect(meta().openVariation).toBeUndefined();
-	unmount();
-	mockCanEdit = true;
-	render(<ProductsScreen />);
-	mockPush.mockClear();
-	meta().openVariation?.({ uuid: 'v1' });
-	expect(mockPush).toHaveBeenCalledWith({
-		pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-		params: { variationId: 'v1' },
-	});
 });

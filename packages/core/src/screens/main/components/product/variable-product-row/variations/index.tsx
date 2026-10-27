@@ -22,14 +22,12 @@ interface Props {
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
-	/** The products page opens a variation from its row. */
-	openVariation?: (record: EngineRecord<'variations'>) => void;
 }
 
 /**
  *
  */
-export function Variations({ row, stockStatus, openVariation }: Props) {
+export function Variations({ row, stockStatus }: Props) {
 	/**
 	 * React Compiler caches the <VariationsTable> element on props that are all
 	 * referentially stable across a columnVisibility change, so React bails out
@@ -77,12 +75,7 @@ export function Variations({ row, stockStatus, openVariation }: Props) {
 				    query (a new handle) clears the fallback on its own. */}
 				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 					<Suspense>
-						<VariationsTable
-							row={row}
-							handle={handle}
-							stockStatus={stockStatus}
-							openVariation={openVariation}
-						/>
+						<VariationsTable row={row} handle={handle} stockStatus={stockStatus} />
 					</Suspense>
 				</ErrorBoundary>
 			</View>

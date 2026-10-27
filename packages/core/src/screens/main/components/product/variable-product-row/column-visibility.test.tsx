@@ -70,7 +70,22 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
-jest.mock('../../data-table/rows', () => ({ DataTableRow: () => null }));
+// The variation subrows draw through the row's `renderCell`, so a hidden column must leave it.
+jest.mock('../../data-table/rows', () => ({
+	DataTableRow: ({
+		item,
+		renderCell,
+	}: {
+		item: { getVisibleCells: () => unknown[] };
+		renderCell: (cell: unknown) => React.ReactNode;
+	}) => (
+		<div>
+			{item.getVisibleCells().map((cell, index) => (
+				<React.Fragment key={index}>{renderCell(cell)}</React.Fragment>
+			))}
+		</div>
+	),
+}));
 jest.mock('../../data-table/column-style', () => ({
 	getColumnStyle: () => ({}),
 }));

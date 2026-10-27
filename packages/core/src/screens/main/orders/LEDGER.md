@@ -81,7 +81,7 @@ Status 2026-10-16 (B2): edit/refund route shells and their form parts now use `v
 
 ## One order surface (added 2026-10-23)
 
-The detail pane (`order-pane.tsx`) and its `order` search param are deleted. The route modal at `/orders/edit/[orderId]` (`edit/modal.tsx`, `OrderModal`) is the one place an order is looked at or changed: tabs View (the default), Edit and JSON, opened on the route's `tab` param. A row press, Enter on a focused row, the attention notice's Open order and the legacy `view/[orderId]` redirect all open it; the ⋮ menu's View and Edit open it on their tab.
+The detail pane (`order-pane.tsx`) and its `order` search param are deleted. The route modal at `/orders/edit/[orderId]` (`edit/modal.tsx`, `OrderModal`) is the one place an order is looked at or changed: tabs View (the default), Edit and JSON, opened on the route's `tab` param. A row press on a touch pointer, the caret on a fine one, Enter on a focused row, the attention notice's Open order and the legacy `view/[orderId]` redirect all open it; the ⋮ menu's View and Edit open it on their tab.
 
 The View tab (`edit/view.tsx`) stacks the pane's sections, and its footer carries Delete and Refund on the left, then the invoice actions, Sync, Re-open and Receipt on the right; read-only shows only Receipt (line 8). The actions are `useOrderActions` and `DeleteOrderDialog` in `order-actions.tsx`, shared with the ⋮ menu, so their guards and toasts are the menu's. Line 45's evidence now lives in `edit/view.tsx`.
 
@@ -89,7 +89,7 @@ Struck: line 40 (the pane is gone; the modal's footer replaces it) and the whole
 
 ## The row is the only door (added 2026-10-23, later the same day)
 
-The ⋮ menu (`order-menu.tsx`) is deleted: every item it held is a footer button in the modal, so it was a second door to the same room. The web table's last column trails the same muted right caret the touch row trails (`cells/actions.tsx`), an affordance and not a control; the row press opens the order. `useOrderActions`'s guards and toasts are covered on the hook itself (`order-actions.test.tsx`, moved from `cells/storage-degraded-block.test.tsx`), wired as `edit/view.tsx` wires them.
+The ⋮ menu (`order-menu.tsx`) is deleted: every item it held is a footer button in the modal, so it was a second door to the same room. The web table's last column trails the same muted right caret the touch row trails (`cells/actions.tsx`), and on a fine pointer it is the one control that opens the order: the row is no press target and carries no hover tint (Paul, 2026-10-27). `useOrderActions`'s guards and toasts are covered on the hook itself (`order-actions.test.tsx`, moved from `cells/storage-degraded-block.test.tsx`), wired as `edit/view.tsx` wires them.
 
 The keyboard focus ring on a web row is `focus-visible` only: a click focuses the row's pressable, so the pointer never draws the ring — evidence: Paul's screenshot 2026-10-23, a clicked row outlined in primary.
 

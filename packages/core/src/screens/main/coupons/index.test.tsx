@@ -555,31 +555,20 @@ jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children }: React.PropsWithChildren) => children,
 }));
 
-it.each([
-	[false, true, true],
-	[true, true, false],
-	[false, false, false],
-])(
-	'a fine-pointer row opens the edit modal when readOnly=%s canEdit=%s',
-	(readOnly, canEdit, opens) => {
-		mockPointer = 'fine';
-		mockReadOnly = readOnly;
-		mockCanEdit = canEdit;
-		const original = mockHandle;
-		mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
-		try {
-			render(<CouponsScreen />);
-			mockPush.mockClear();
-			fireEvent.click(screen.getByTestId('data-table-row-one'));
-			if (opens)
-				expect(mockPush).toHaveBeenCalledWith({
-					pathname: '/coupons/edit/[couponId]',
-					params: { couponId: 'one' },
-				});
-			else expect(mockPush).not.toHaveBeenCalled();
-		} finally {
-			mockHandle = original;
-			mockCanEdit = true;
-		}
+// Only the actions icon opens the coupon (`cells/actions.test.tsx`); the row is no press target,
+// even for a cashier who may edit.
+it('a fine-pointer row is not a press target', () => {
+	mockPointer = 'fine';
+	const original = mockHandle;
+	mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
+	try {
+		render(<CouponsScreen />);
+		mockPush.mockClear();
+		const row = screen.getByTestId('data-table-row-one');
+		expect((row as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(row);
+		expect(mockPush).not.toHaveBeenCalled();
+	} finally {
+		mockHandle = original;
 	}
-);
+});
