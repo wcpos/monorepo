@@ -34,9 +34,9 @@ export interface GridFields {
 }
 
 /**
- * The money slot: the price, then the Sale pill and the struck regular price, then the tax
- * line, as one wrapping row. A tile that is out says "Sold out" instead, with no Sale pill.
- * A table row reads like a shelf tag: the struck regular price, then the price, no pill.
+ * The money slot: the price, then the struck regular price, then the tax line, as one
+ * wrapping row. A tile that is out says "Sold out" instead. A table row reads like a shelf
+ * tag: the struck regular price, then the price. Neither carries a Sale pill.
  */
 export function moneyRow({
 	price,
@@ -99,14 +99,7 @@ export function moneyRow({
 					className="font-bold"
 				/>
 			)}
-			{struck && !taxDisplay && (
-				<>
-					<View className="bg-foreground self-center rounded-full px-1.5 py-px">
-						<Text className="text-card text-xs font-bold uppercase">{t('common.sale')}</Text>
-					</View>
-					{regular}
-				</>
-			)}
+			{struck && !taxDisplay && regular}
 			{!taxDisplay && gridFields.tax && price != null && (
 				<TaxLine price={price} {...tax} className="text-foreground/70 text-xs" />
 			)}
