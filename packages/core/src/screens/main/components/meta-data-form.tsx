@@ -21,7 +21,6 @@ export { metaDataSchema } from './meta-data-schema';
 interface MetaDataFormProps {
 	name?: string;
 	hiddenKeys?: readonly string[];
-	withDisplayValues?: boolean;
 	/** Property rows: a Custom field row per entry with its Remove; no fold, no add (the caller's). */
 	rows?: boolean;
 	/** The rows' testID prefix. */
@@ -34,13 +33,7 @@ export const META_DATA_DEFAULT_ROW = { key: '', value: '' };
 /**
  *
  */
-export function MetaDataForm({
-	name = 'meta_data',
-	withDisplayValues,
-	hiddenKeys,
-	rows,
-	testID,
-}: MetaDataFormProps) {
+export function MetaDataForm({ name = 'meta_data', hiddenKeys, rows, testID }: MetaDataFormProps) {
 	const t = useT();
 	const { control, setValue, getValues, setError, clearErrors } = useFormContext();
 	const { fields, append, remove } = useFieldArray({
@@ -103,15 +96,6 @@ export function MetaDataForm({
 											/>
 										)}
 									/>
-									{withDisplayValues && (
-										<FormField
-											control={control}
-											name={`${name}.${index}.display_key`}
-											render={({ field }) => (
-												<FormInput label={t('common.display_key')} {...field} />
-											)}
-										/>
-									)}
 								</VStack>
 								<VStack className={rows ? 'flex-1' : 'flex-1 flex-col p-2'}>
 									<FormField
@@ -127,18 +111,22 @@ export function MetaDataForm({
 											/>
 										)}
 									/>
-									{withDisplayValues && (
-										<FormField
-											control={control}
-											name={`${name}.${index}.display_value`}
-											render={({ field }) => (
-												<FormInput label={t('common.display_value')} {...field} />
-											)}
-										/>
-									)}
 								</VStack>
 							</>
 						);
+						// A variation's attribute is its identity (rule 6): locked, its display key and value.
+						if (rows && watchedFields[index]?.attr_id != null) {
+							const row = watchedFields[index];
+							return (
+								<PropertyRow
+									key={field.id}
+									testID={`${testID}-row-meta-${index}`}
+									label={String(row.display_key ?? row.key ?? '')}
+								>
+									{formatMetaDataValue(row.display_value ?? value)}
+								</PropertyRow>
+							);
+						}
 						if (rows) {
 							return (
 								<PropertyRow

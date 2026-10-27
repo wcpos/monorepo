@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
@@ -11,30 +10,23 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormItem,
-	FormLabel,
-	FormRadioGroup,
-	FormSelect,
 	FormSwitch,
 	SavedFieldProvider,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyList } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { metaDataSchema } from '../../../../components/meta-data-form';
 import { NumberInput } from '../../../../components/number-input';
-import { TaxClassSelect } from '../../../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
+import { AmountRow, CartLineRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
 
 /**
  *
@@ -125,103 +117,61 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 	 */
 	const togglePercentage = useWatch({ control: form.control, name: 'percent' });
 
-	/**
-	 *
-	 */
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="name"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('pos_cart.fee_name')}</FormLabel>
-								<SavedMark name="name" label={t('settings.saved')} />
-							</HStack>
-							<FormInput
-								testID="edit-fee-line-name-input"
-								placeholder={t('pos_cart.fee')}
-								{...field}
-							/>
-						</FormItem>
-					)}
-				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>
-										{togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
-									</FormLabel>
-									<SavedMark name="amount" label={t('settings.saved')} />
-								</HStack>
+				<PropertyList testID="fee-line-form">
+					<CartLineRow prefix="fee-line" id="name" label={t('pos_cart.fee_name')} mark="name">
+						<FormField
+							control={form.control}
+							name="name"
+							render={({ field }) => (
+								<FormInput
+									testID="edit-fee-line-name-input"
+									placeholder={t('pos_cart.fee')}
+									{...field}
+								/>
+							)}
+						/>
+					</CartLineRow>
+					<AmountRow
+						prefix="fee-line"
+						percent={togglePercentage}
+						onPercent={(next) => form.setValue('percent', next)}
+						mark={['amount', 'percent']}
+					>
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
 									testID="edit-fee-line-amount-input"
 									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
+									{...field}
 								/>
-							</FormItem>
-						)}
-					/>
-					<VStack className="flex-1 justify-center">
-						<FormField
-							control={form.control}
-							name="percent"
-							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.percentage_of_cart_total')} {...field} />
 							)}
 						/>
-						<FormField
-							control={form.control}
-							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
-							)}
-						/>
-					</VStack>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									label={t('common.tax_class')}
-									customComponent={TaxClassSelect}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
+					</AmountRow>
+					<CartLineRow
+						prefix="fee-line"
+						id="includes-tax"
+						label={t('pos_cart.amount_includes_tax')}
+						mark="prices_include_tax"
+						toggle={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormSwitch testID="edit-fee-line-includes-tax-switch" {...field} />
+								)}
+							/>
+						}
 					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<MetaDataForm />
+					<TaxRow prefix="fee-line" />
+					<CustomFieldRows prefix="fee-line" meta={item.meta_data} />
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter close />
 		</Form>
