@@ -38,8 +38,10 @@ export function EditableAmount({
 	return (
 		<CapabilityTooltip show={!readOnly && !caps.canEditCoupons} hint="editCoupons">
 			{/* The cart's price keypad on web, as the Products grid's prices (#2984), without
-			    quick keys: a −10% on a coupon's amount is a different coupon. */}
+			    quick keys: a −10% on a coupon's amount is a different coupon. It keeps its
+			    input field outline (Paul 2026-10-27). */}
 			<MoneyInput
+				field
 				value={amount}
 				format={percent ? formatNumber : format}
 				formatOptions={percent ? undefined : { fixedDecimalScale: true }}

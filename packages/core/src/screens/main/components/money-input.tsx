@@ -3,6 +3,7 @@ import * as React from 'react';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { EditableNumber } from './editable-number';
+import { NumberInput } from './number-input';
 
 import type { NumberFormatOptions } from '../hooks/use-number-format';
 
@@ -23,6 +24,8 @@ export interface MoneyInputProps {
 	disabled?: boolean;
 	/** Rest-state text classes. */
 	textClassName?: string;
+	/** Rests as an outlined input field (the keypad's trigger on web), not bare text. */
+	field?: boolean;
 	testID?: string;
 }
 
@@ -33,8 +36,11 @@ export function MoneyInput({
 	discounts: _discounts,
 	decimals: _decimals,
 	textClassName,
+	field,
 	...props
 }: MoneyInputProps) {
+	// The plain field, outlined at rest.
+	if (field) return <NumberInput {...props} value={value} />;
 	// A blank price (no sale price) rests as WooCommerce's `–`, muted, never `0.00`.
 	const blank = value == null || value === '';
 	return (

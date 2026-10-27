@@ -57,6 +57,8 @@ export type PriceKeypadProps = {
 	testID?: string;
 	/** The trigger's text classes at rest. */
 	textClassName?: string;
+	/** Rests as an outlined input field, as a grid's amount does; bare text otherwise. */
+	field?: boolean;
 	/** Told when the keypad opens and closes. */
 	onOpenChange?: (open: boolean) => void;
 	ref?: React.Ref<PriceKeypadHandle>;
@@ -85,6 +87,7 @@ export function PriceKeypad({
 	disabled = false,
 	testID,
 	textClassName,
+	field = false,
 	onOpenChange,
 	ref,
 }: PriceKeypadProps) {
@@ -152,17 +155,18 @@ export function PriceKeypad({
 			onOpenChange={onOpenChange}
 		>
 			<Button
-				variant="ghost"
+				variant={field ? 'outline' : 'ghost'}
 				testID={testID}
 				disabled={disabled}
 				// The default size is the row's height. The tint reaches past the text (`-mx-1 px-1`),
 				// which `max-w-full` would cap, truncating `55,00 $` in the 56-wide price column
-				// (dev-next, 2026-10-24).
-				className="-mx-1 max-w-none items-end self-stretch px-1"
+				// (dev-next, 2026-10-24). A field keeps the Input's own padding.
+				className={field ? 'w-full items-end px-3' : '-mx-1 max-w-none items-end self-stretch px-1'}
 			>
 				<ButtonText
 					className={cn(
 						'tabular-nums',
+						field && 'font-normal',
 						textClassName,
 						value === undefined && 'text-muted-foreground'
 					)}
