@@ -130,9 +130,13 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 });
 
 /**
- *
+ * The instance a `Button`'s `ref` reaches: the props spread onto the
+ * `Pressable`, so the ref lands on it. A Dialog's `asChild` trigger and a
+ * caller returning focus use it.
  */
-type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
+type ButtonRef = React.ComponentRef<typeof Pressable>;
+
+type ButtonProps = React.ComponentProps<typeof Pressable> &
 	VariantProps<typeof buttonVariants> & {
 		leftIcon?: IconName | React.ReactNode;
 		rightIcon?: IconName | React.ReactNode;
@@ -259,4 +263,4 @@ function Button({
 }
 
 export { Button, ButtonText, buttonTextVariants, buttonVariants };
-export type { ButtonProps };
+export type { ButtonProps, ButtonRef };

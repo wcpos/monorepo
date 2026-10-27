@@ -3,7 +3,7 @@ import { type TextInputInstance, View } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import { Button, type ButtonRef, ButtonText } from '@wcpos/components/button';
 import { cn } from '@wcpos/components/lib/utils';
 import { useDocField } from '@wcpos/query';
 
@@ -51,7 +51,7 @@ export function EditableNumber({
 	// elsewhere keeps its own focus.
 	const refocus = React.useRef(false);
 	const input = React.useRef<TextInputInstance>(null);
-	const rest = React.useRef<{ focus?: () => void }>(null);
+	const rest = React.useRef<ButtonRef>(null);
 
 	React.useEffect(() => {
 		if (!editing && refocus.current) {
@@ -90,7 +90,7 @@ export function EditableNumber({
 	if (!editing) {
 		return (
 			<Button
-				{...{ ref: rest }}
+				ref={rest}
 				variant="ghost"
 				testID={testID}
 				disabled={disabled}
