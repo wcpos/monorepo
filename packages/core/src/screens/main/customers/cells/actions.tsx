@@ -27,7 +27,6 @@ export function Actions({
 				testID="customer-open-button"
 				name="chevronRight"
 				size="sm"
-				variant="muted"
 				accessibilityLabel={t('customers.open_customer', { _: 'Open customer' })}
 				disabled={!editable}
 				onPress={() =>

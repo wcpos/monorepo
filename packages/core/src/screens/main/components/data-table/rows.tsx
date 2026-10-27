@@ -44,7 +44,8 @@ function visibleCells<TData extends RowData>(
 
 export function DataTableRow<TData extends RowData>({
 	item,
-	onPress,
+	onPress: press,
+	pressWhenActionsHidden,
 	testID,
 	trailing,
 	accessibilityLabel,
@@ -52,6 +53,11 @@ export function DataTableRow<TData extends RowData>({
 }: {
 	item: Row<TData, DataTableFeatures>;
 	onPress?: PressableProps['onPress'];
+	/**
+	 * The record's opener on a table whose actions caret is the one control that opens it: with
+	 * the Actions column hidden the caret is gone, so the row takes the press instead.
+	 */
+	pressWhenActionsHidden?: () => void;
 	testID?: string;
 	trailing?: React.ReactNode;
 	/**
@@ -92,6 +98,7 @@ export function DataTableRow<TData extends RowData>({
 	// old table did; a table with no actions column at all shows the caller's control.
 	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
 	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
+	const onPress = press ?? (actionsHidden ? pressWhenActionsHidden : undefined);
 	// A caller may name the row for the case where its trailing control is gone (the Actions
 	// column hidden): then the row is the only add control and takes the button role; with a
 	// trailing button present it stays a plain pressable, so no button nests in a button on web.

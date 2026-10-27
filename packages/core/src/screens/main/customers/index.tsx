@@ -28,6 +28,7 @@ import { DataTable } from '../components/data-table';
 import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
+import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
@@ -102,6 +103,13 @@ function CustomersList({
 	const emptyStore = !state.search;
 	const pointer = usePointer();
 	const t = useT();
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	// The caret opens the customer; the row only while the Actions column is hidden.
+	const editable = !readOnly && caps.canEditCustomers;
+	const open = (uuid: string) =>
+		router.push({ pathname: '/customers/edit/[customerId]', params: { customerId: uuid } });
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'customers'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -132,8 +140,12 @@ function CustomersList({
 									<CoarseRow record={item.original.record} />
 								</View>
 							) : (
-								// Only the actions icon opens the record; the row is not a press target.
-								<DataTableRow item={item} />
+								<DataTableRow
+									item={item}
+									pressWhenActionsHidden={
+										editable ? () => open(item.original.record.uuid) : undefined
+									}
+								/>
 							)}
 						</VirtualizedList.Item>
 					)}

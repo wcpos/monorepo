@@ -28,7 +28,6 @@ export function Actions({ row }: Props) {
 				testID="product-open-button"
 				name="chevronRight"
 				size="sm"
-				variant="muted"
 				accessibilityLabel={t('products.open_product', { _: 'Open product' })}
 				disabled={!editable}
 				onPress={() =>

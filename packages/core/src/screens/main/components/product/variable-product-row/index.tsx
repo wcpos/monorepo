@@ -56,6 +56,7 @@ export function VariableProductRow({
 				expanded$: import('rxjs').Observable<Record<string, boolean>>;
 				setRowExpanded?: (rowId: string, expanded: boolean) => void;
 				variationStockStatus?: string;
+				openVariation?: (record: EngineRecord<'variations'>) => void;
 		  }
 		| undefined;
 	/**
@@ -146,7 +147,11 @@ export function VariableProductRow({
 						}}
 					>
 						{shouldRender ? (
-							<Variations row={item} stockStatus={meta?.variationStockStatus} />
+							<Variations
+								row={item}
+								stockStatus={meta?.variationStockStatus}
+								openVariation={meta?.openVariation}
+							/>
 						) : null}
 					</ScrollView>
 				</Animated.View>

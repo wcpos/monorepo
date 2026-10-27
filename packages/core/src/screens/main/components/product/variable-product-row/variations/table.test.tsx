@@ -9,7 +9,7 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { VariationsTable } from './table';
 
@@ -19,24 +19,37 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children?: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
+jest.mock('@wcpos/components/lib/utils', () => ({ cn: () => '' }));
+jest.mock('@wcpos/components/table', () => ({
+	TableRow: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	TableCell: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+}));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('../../../data-table/column-style', () => ({ getColumnStyle: () => ({}) }));
 jest.mock('../../../record-text-cell', () => ({ RecordTextCell: () => null }));
-// The products page's row: the cells it draws come from `renderCell`.
+// The products page's pressable row: the cells it draws come from `renderCell`.
 jest.mock('../../../data-table/rows', () => ({
 	DataTableRow: ({
 		item,
 		testID,
 		onPress,
+		pressWhenActionsHidden,
 		renderCell,
 	}: {
 		item: { getVisibleCells: () => unknown[] };
 		testID: string;
 		onPress?: () => void;
+		pressWhenActionsHidden?: () => void;
 		renderCell: (cell: unknown) => React.ReactNode;
 	}) => (
-		<div data-testid={testID} data-pressable={onPress ? 'true' : undefined}>
+		// The row's own press stands in for the caret only while the Actions column is hidden.
+		<div
+			data-testid={testID}
+			data-pressable={onPress ? 'true' : undefined}
+			onClick={pressWhenActionsHidden}
+		>
 			{item.getVisibleCells().map((cell, index) => (
 				<React.Fragment key={index}>{renderCell(cell)}</React.Fragment>
 			))}
@@ -167,13 +180,14 @@ describe('VariationsTable on the variations handle', () => {
 });
 
 describe('VariationsTable on the products page', () => {
-	// Only the actions icon opens a variation (`cells/variation-actions.test.tsx`).
-	it('a variation row is not a press target', () => {
-		render(<VariationsTable handle={handle} row={row} />);
+	it('a variation row is no press target; its opener is the hidden-Actions fallback', () => {
+		const openVariation = jest.fn();
+		render(<VariationsTable handle={handle} row={row} openVariation={openVariation} />);
 
 		expect(renderedNames()).toEqual(['Black', 'Red', 'Blue', 'Gold']);
-		expect(
-			screen.getByTestId('data-table-row-variation-1').getAttribute('data-pressable')
-		).toBeNull();
+		const variationRow = screen.getByTestId('data-table-row-variation-1');
+		expect(variationRow.getAttribute('data-pressable')).toBeNull();
+		fireEvent.click(variationRow);
+		expect(openVariation).toHaveBeenCalledWith(expect.objectContaining({ remoteId: '1' }));
 	});
 });

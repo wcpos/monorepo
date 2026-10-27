@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { flexRender } from '@tanstack/react-table';
 import get from 'lodash/get';
 import omit from 'lodash/omit';
+import { useRouter } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 
 import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
@@ -51,7 +52,9 @@ import { useSystemBack } from '../pos/products/browse/use-system-back';
 import { useUISettings } from '../contexts/ui-settings';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
+import { useProAccess } from '../contexts/pro-access';
 import { useTaxSettings } from '../contexts/tax-rates';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import { useCatalogueRecord } from './commands/use-catalogue-record';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
@@ -156,17 +159,28 @@ function variationRenderCell({ column }: { column: { id: string } }) {
 /**
  *
  */
-function renderFineItem({
-	item,
-	index,
-	table,
-}: {
-	item: Row<ProductRow, DataTableFeatures>;
-	index: number;
-	table: Table<ProductRow, DataTableFeatures>;
-}) {
-	// Only the actions icon opens the product on a fine pointer (the touch row stays pressable).
-	const row = <DataTableRow item={item} />;
+function renderFineItem(
+	{
+		item,
+		index,
+		table,
+	}: {
+		item: Row<ProductRow, DataTableFeatures>;
+		index: number;
+		table: Table<ProductRow, DataTableFeatures>;
+	},
+	openProduct?: (uuid: string) => void
+) {
+	// The caret opens the product, a variable one's too (its variations open from the button under
+	// its name); the row only while the Actions column is hidden. Inert when the cashier may not edit.
+	const row = (
+		<DataTableRow
+			item={item}
+			pressWhenActionsHidden={
+				openProduct ? () => openProduct(item.original.record.uuid) : undefined
+			}
+		/>
+	);
 	if (item.original.record.payload.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} row={row} />;
 	}
@@ -177,7 +191,15 @@ function renderFineItem({
  * The management variations under the crumb, as the row's inline expand draws them, under the
  * products table's head row (a fine pointer): the editable price cells need their labels.
  */
-function DrillPane({ target, stockStatus }: { target: Drill; stockStatus?: string }) {
+function DrillPane({
+	target,
+	stockStatus,
+	openVariation,
+}: {
+	target: Drill;
+	stockStatus?: string;
+	openVariation?: (record: EngineRecord<'variations'>) => void;
+}) {
 	// The rows' columns are the products table's: re-read on a column change, with the row
 	// taken from the live table each render, since the row captured at drill time keeps its
 	// cells. No memo, so the rows below re-render with it (facebook/react#33057).
@@ -201,7 +223,7 @@ function DrillPane({ target, stockStatus }: { target: Drill; stockStatus?: strin
 				{pointer === 'fine' && <PaneHeadRow table={table} />}
 				<ScrollView>
 					{pointer === 'fine' ? (
-						<Variations row={row} stockStatus={stockStatus} />
+						<Variations row={row} stockStatus={stockStatus} openVariation={openVariation} />
 					) : (
 						<InlineVariations row={row} stockStatus={stockStatus} />
 					)}
@@ -282,6 +304,29 @@ function ProductsList({
 
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 	const t = useT();
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const openProduct =
+		!readOnly && caps.canEditProducts
+			? (uuid: string) =>
+					router.push({
+						pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+						params: { productId: uuid },
+					})
+			: undefined;
+	const canOpenVariation = !readOnly && caps.canEditVariations;
+	const openVariation = React.useMemo(
+		() =>
+			canOpenVariation
+				? (record: EngineRecord<'variations'>) =>
+						router.push({
+							pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+							params: { variationId: record.uuid },
+						})
+				: undefined,
+		[canOpenVariation, router]
+	);
 
 	// One setting for both product lists: the POS panel's `variationsStyle`.
 	const { uiSettings: posSettings } = useUISettings('pos-products');
@@ -381,6 +426,7 @@ function ProductsList({
 					// and + can take a refused step back.
 					saveCatalogueChange(document, changes).then((saved) => !!saved),
 				variationRenderCell,
+				openVariation,
 				// Read by the variations button and the attribute chips instead of expanding.
 				drill: drillStyle ? drillTo : undefined,
 				/**
@@ -401,6 +447,7 @@ function ProductsList({
 			setRowExpanded,
 			saveCatalogueChange,
 			state.filters.stock_status,
+			openVariation,
 			drillStyle,
 			drillTo,
 		]
@@ -417,7 +464,11 @@ function ProductsList({
 						parent={target.row.original.record}
 						back={() => setDrill(null)}
 						renderPane={() => (
-							<DrillPane target={target} stockStatus={state.filters.stock_status} />
+							<DrillPane
+								target={target}
+								stockStatus={state.filters.stock_status}
+								openVariation={openVariation}
+							/>
 						)}
 					/>
 				)}
@@ -433,7 +484,7 @@ function ProductsList({
 						actions={tableActions}
 						renderItem={(props) =>
 							pointer === 'fine' ? (
-								renderFineItem(props)
+								renderFineItem(props, openProduct)
 							) : (
 								<VirtualizedList.Item>
 									<View

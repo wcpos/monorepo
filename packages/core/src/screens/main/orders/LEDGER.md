@@ -89,7 +89,7 @@ Struck: line 40 (the pane is gone; the modal's footer replaces it) and the whole
 
 ## The row is the only door (added 2026-10-23, later the same day)
 
-The ⋮ menu (`order-menu.tsx`) is deleted: every item it held is a footer button in the modal, so it was a second door to the same room. The web table's last column trails the same muted right caret the touch row trails (`cells/actions.tsx`), and on a fine pointer it is the one control that opens the order: the row is no press target and carries no hover tint (Paul, 2026-10-27). `useOrderActions`'s guards and toasts are covered on the hook itself (`order-actions.test.tsx`, moved from `cells/storage-degraded-block.test.tsx`), wired as `edit/view.tsx` wires them.
+The ⋮ menu (`order-menu.tsx`) is deleted: every item it held is a footer button in the modal, so it was a second door to the same room. The web table's last column trails the same muted right caret the touch row trails (`cells/actions.tsx`), and on a fine pointer it is the one control that opens the order: the row is no press target and carries no hover tint, except while the Actions column is hidden, when the row is the opener (Paul, 2026-10-27). `useOrderActions`'s guards and toasts are covered on the hook itself (`order-actions.test.tsx`, moved from `cells/storage-degraded-block.test.tsx`), wired as `edit/view.tsx` wires them.
 
 The keyboard focus ring on a web row is `focus-visible` only: a click focuses the row's pressable, so the pointer never draws the ring — evidence: Paul's screenshot 2026-10-23, a clicked row outlined in primary.
 

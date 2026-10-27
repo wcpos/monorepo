@@ -25,7 +25,6 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 				testID="coupon-open-button"
 				name="chevronRight"
 				size="sm"
-				variant="muted"
 				accessibilityLabel={t('coupons.open_coupon', { _: 'Open coupon' })}
 				disabled={!editable}
 				onPress={() =>

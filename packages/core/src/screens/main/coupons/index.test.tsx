@@ -159,15 +159,25 @@ jest.mock('../components/data-table/rows', () => ({
 	DataTableRow: ({
 		item,
 		onPress,
+		pressWhenActionsHidden,
 	}: {
 		item: { original: { record: { uuid: string } } };
 		onPress?: () => void;
+		pressWhenActionsHidden?: () => void;
 	}) => (
-		<button
-			data-testid={`data-table-row-${item.original.record.uuid}`}
-			disabled={!onPress}
-			onClick={onPress}
-		/>
+		<>
+			<button
+				data-testid={`data-table-row-${item.original.record.uuid}`}
+				disabled={!onPress}
+				onClick={onPress}
+			/>
+			{/* The press the row takes while the Actions column is hidden. */}
+			<button
+				data-testid={`data-table-row-${item.original.record.uuid}-hidden-actions`}
+				disabled={!pressWhenActionsHidden}
+				onClick={pressWhenActionsHidden}
+			/>
+		</>
 	),
 }));
 jest.mock('../components/data-table/skeleton', () => ({
@@ -555,20 +565,36 @@ jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children }: React.PropsWithChildren) => children,
 }));
 
-// Only the actions icon opens the coupon (`cells/actions.test.tsx`); the row is no press target,
-// even for a cashier who may edit.
-it('a fine-pointer row is not a press target', () => {
-	mockPointer = 'fine';
-	const original = mockHandle;
-	mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
-	try {
-		render(<CouponsScreen />);
-		mockPush.mockClear();
-		const row = screen.getByTestId('data-table-row-one');
-		expect((row as HTMLButtonElement).disabled).toBe(true);
-		fireEvent.click(row);
-		expect(mockPush).not.toHaveBeenCalled();
-	} finally {
-		mockHandle = original;
+// The caret opens the coupon (`cells/actions.test.tsx`); the row is no press target, even for a
+// cashier who may edit, and takes the press only while the Actions column is hidden.
+it.each([
+	[false, true, true],
+	[true, true, false],
+	[false, false, false],
+])(
+	'a fine-pointer row is no press target; with the Actions column hidden it opens the coupon when readOnly=%s canEdit=%s',
+	(readOnly, canEdit, opens) => {
+		mockPointer = 'fine';
+		mockReadOnly = readOnly;
+		mockCanEdit = canEdit;
+		const original = mockHandle;
+		mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
+		try {
+			render(<CouponsScreen />);
+			mockPush.mockClear();
+			const row = screen.getByTestId('data-table-row-one');
+			expect((row as HTMLButtonElement).disabled).toBe(true);
+			fireEvent.click(screen.getByTestId('data-table-row-one-hidden-actions'));
+			if (opens)
+				expect(mockPush).toHaveBeenCalledWith({
+					pathname: '/coupons/edit/[couponId]',
+					params: { couponId: 'one' },
+				});
+			else expect(mockPush).not.toHaveBeenCalled();
+		} finally {
+			mockHandle = original;
+			mockReadOnly = false;
+			mockCanEdit = true;
+		}
 	}
-});
+);

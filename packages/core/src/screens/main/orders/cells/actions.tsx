@@ -18,7 +18,6 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			testID="order-open-button"
 			name="chevronRight"
 			size="sm"
-			variant="muted"
 			accessibilityLabel={t('orders.open_order')}
 			onPress={() =>
 				router.push({

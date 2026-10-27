@@ -57,6 +57,22 @@ it('coarse composes visible cells and a caller trailing slot in a pressable row,
 	fireEvent.click(screen.getByTestId('cell-name'));
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
+it('a row whose caret opens the record takes the press only while the Actions column is hidden', () => {
+	const open = jest.fn();
+	const renderItem = ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+		<DataTableRow item={item} pressWhenActionsHidden={open} />
+	);
+	const { unmount } = renderTable({ renderItem });
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(open).not.toHaveBeenCalled();
+	unmount();
+	state.columns = state.columns.map((column) =>
+		column.key === 'actions' ? { ...column, show: false } : column
+	);
+	renderTable({ renderItem });
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(open).toHaveBeenCalledTimes(1);
+});
 it('a labelled row is itself a button: a press on its cells is the row press', () => {
 	// #2284: the drill-in variation row names itself, so on web the row pressable renders a
 	// <button>. The inner-control guard found that very button and dropped every click.
