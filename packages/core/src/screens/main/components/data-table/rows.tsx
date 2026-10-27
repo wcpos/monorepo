@@ -24,6 +24,23 @@ export function getRowTestID(item: { id: string; original: unknown }) {
 		: undefined;
 }
 
+/**
+ * The table's column layout (visibility, widths, the caller's extra data), as the rows' input.
+ * The compiler caches what a row derives from `item`, and TanStack keeps the row object when a
+ * column is switched off or resized: without this the header changed and every row kept its
+ * old cells (2026-10-27, the POS Price column). A context reaches the row past parents that
+ * the compiler also serves from cache.
+ */
+export const RowLayoutContext = React.createContext<unknown>(null);
+
+/** `layout` is unused on purpose: passing it makes the row's cells depend on it. */
+function visibleCells<TData extends RowData>(
+	item: Row<TData, DataTableFeatures>,
+	_layout: unknown
+) {
+	return item.getVisibleCells();
+}
+
 export function DataTableRow<TData extends RowData>({
 	item,
 	onPress,
@@ -50,7 +67,8 @@ export function DataTableRow<TData extends RowData>({
 	const pointer = usePointer();
 	// On web the pressable's host node: the press guard below must tell it from inner controls.
 	const pressable = React.useRef<React.ElementRef<typeof Pressable>>(null);
-	const cells = item.getVisibleCells();
+	const layout = React.useContext(RowLayoutContext);
+	const cells = visibleCells(item, layout);
 	const content = (cell: (typeof cells)[number]) => (
 		<ErrorBoundary key={cell.id}>
 			<Suspense>

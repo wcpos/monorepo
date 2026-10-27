@@ -43,9 +43,9 @@ module.exports = {
 		// behind a memo sentinel, so the screen never saw the service that started
 		// after it mounted. Uncompiled, the same component passed every test.
 		// Reader dev controls (now on the Card readers settings row) must refresh mutable driver state under compiler memoization too.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$':
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|rows|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|rows|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	// react-hotkeys-hook v5 ships ESM only; the hotkeys module's suite drives the real library.
