@@ -52,6 +52,7 @@ jest.mock('@wcpos/components/form', () => {
 		SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		SavedMark: () => null,
 		useMarkSaved: () => jest.fn(),
+		useSavedName: () => '',
 		FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		FormField: Controller,
@@ -114,6 +115,8 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/property-row', () => ({
 	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	PropertyAdd: () => null,
 	PropertyRow: ({
 		label,
 		children,

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
@@ -11,38 +10,36 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormItem,
-	FormLabel,
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
 	SavedFieldProvider,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import { PropertyList } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
+import { AmountRow, CartLineRow, CustomFieldRows } from '../cart-line-rows';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
  * per-line shipping tax class, so the store's `shipping_tax_class` setting is the only
  * one there is. See `extractShippingLineData` in @wcpos/order-math. Tax STATUS stays:
- * the POS plugin honours it server-side.
+ * the POS plugin honours it server-side. The instance ID is a developer fact: the JSON tab shows it
+ * (property rows rule 10), and the record keeps it because only changed roots are written.
  */
 const formSchema = z.object({
 	method_title: z.string().optional(),
 	method_id: z.string().optional(),
-	instance_id: z.string().optional(),
 	amount: z.number().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
@@ -85,7 +82,6 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		defaultValues: {
 			method_title: item.method_title ?? undefined,
 			method_id: item.method_id ?? undefined,
-			instance_id: item.instance_id,
 			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
@@ -111,101 +107,83 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="method_title"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('pos_cart.shipping_method_title')}</FormLabel>
-								<SavedMark name="method_title" label={t('settings.saved')} />
-							</HStack>
-							<FormInput testID="edit-shipping-line-method_title-input" {...field} />
-						</FormItem>
-					)}
-				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="method_id"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+				<PropertyList testID="shipping-line-form">
+					<CartLineRow
+						prefix="shipping-line"
+						id="method_title"
+						label={t('pos_cart.shipping_method_title')}
+						mark="method_title"
+					>
+						<FormField
+							control={form.control}
+							name="method_title"
+							render={({ field }) => (
+								<FormInput testID="edit-shipping-line-method_title-input" {...field} />
+							)}
+						/>
+					</CartLineRow>
+					<CartLineRow
+						prefix="shipping-line"
+						id="method_id"
+						label={t('pos_cart.shipping_method')}
+						mark="method_id"
+					>
+						<FormField
+							control={form.control}
+							name="method_id"
+							render={({ field }) => (
 								<FormSelect
-									label={t('pos_cart.shipping_method')}
 									customComponent={ShippingMethodSelect}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
+									{...field}
+									value={field.value ?? ''}
 								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="instance_id"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('pos_cart.instance_id')}</FormLabel>
-									<SavedMark name="instance_id" label={t('settings.saved')} />
-								</HStack>
-								<FormInput testID="edit-shipping-line-instance_id-input" {...field} />
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('pos_cart.amount')}</FormLabel>
-									<SavedMark name="amount" label={t('settings.saved')} />
-								</HStack>
+							)}
+						/>
+					</CartLineRow>
+					<AmountRow prefix="shipping-line" mark="amount">
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
 								<FormInput
 									customComponent={CurrencyInput}
 									testID="edit-shipping-line-amount-input"
 									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
+									{...field}
 								/>
-							</FormItem>
-						)}
-					/>
-					<View className="flex-1 justify-center">
-						<FormField
-							control={form.control}
-							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
 							)}
 						/>
-					</View>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="tax_status"
-					render={({ field: { value, onChange, ...rest } }) => (
-						<FormRadioGroup
-							label={t('common.tax_status')}
-							customComponent={TaxStatusRadioGroup}
-							value={value}
-							onChange={onChange}
-							{...rest}
+					</AmountRow>
+					<CartLineRow
+						prefix="shipping-line"
+						id="includes-tax"
+						label={t('pos_cart.amount_includes_tax')}
+						mark="prices_include_tax"
+						toggle={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormSwitch testID="edit-shipping-line-includes-tax-switch" {...field} />
+								)}
+							/>
+						}
+					/>
+					<CartLineRow prefix="shipping-line" id="tax" label={t('common.tax')} mark="tax_status">
+						<FormField
+							control={form.control}
+							name="tax_status"
+							render={({ field }) => (
+								<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
+							)}
 						/>
-					)}
-				/>
-				<MetaDataForm />
+					</CartLineRow>
+					<CustomFieldRows prefix="shipping-line" meta={item.meta_data} />
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter close />
 		</Form>

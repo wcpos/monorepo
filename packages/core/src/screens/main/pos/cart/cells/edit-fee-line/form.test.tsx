@@ -18,6 +18,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedFieldProvider: mockWrap,
 	SavedMark: () => null,
 	useMarkSaved: () => mockMarkSaved,
+	useSavedName: () => '',
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 	FormInput: ({
@@ -49,13 +50,24 @@ jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: jest.fn() }),
 }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
-jest.mock('@wcpos/components/vstack', () => ({ VStack: mockWrap }));
 jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../components/currency-input', () => ({ CurrencyInput: () => null }));
 jest.mock('../../../../components/number-input', () => ({ NumberInput: () => null }));
-jest.mock('../../../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
-jest.mock('../../../../components/tax-status-radio-group', () => ({
-	TaxStatusRadioGroup: () => null,
+jest.mock('../../../../components/tax-select', () => ({ TaxSelect: () => null }));
+jest.mock('../../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
+jest.mock('@wcpos/components/property-row', () => ({
+	PropertyList: mockWrap,
+	PropertyRow: ({
+		children,
+		trailing,
+	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
+		<>
+			{children}
+			{trailing}
+		</>
+	),
+	PropertyAddRow: mockWrap,
+	PropertyAdd: () => null,
 }));
 jest.mock('../../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
@@ -13,34 +13,31 @@ import {
 	FormInput,
 	FormItem,
 	FormLabel,
-	FormRadioGroup,
-	FormSelect,
 	FormSwitch,
 	FormTreeCombobox,
 	SavedFieldProvider,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import { PropertyAdd, PropertyList, PropertyVerb } from '@wcpos/components/property-row';
 import { isMiscProductLine } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CategoryTreeLoader } from '../../../../components/product/category-select';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { metaDataSchema } from '../../../../components/meta-data-form';
 import { NumberInput, type NumberInputProps } from '../../../../components/number-input';
-import { TaxClassSelect } from '../../../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { useFieldPresence } from '../../../../components/use-field-presence';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { QUANTITY_FORMAT } from '../../../../hooks/use-number-format';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { parsePosData } from '../../../hooks/utils';
+import { CartLineRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -65,6 +62,14 @@ const formSchema = z.object({
 	categories: z.array(categoryOptionSchema).default([]),
 	meta_data: metaDataSchema,
 });
+
+/** The offered facts in canonical order; Regular price is the Price row's `was` group. */
+const OFFERED = ['regular_price', 'sku', 'categories', 'virtual', 'downloadable'] as const;
+type Offered = (typeof OFFERED)[number];
+/** Misc-only facts: a catalogue line never acquires them (ledger line 2). */
+const MISC_ONLY: readonly Offered[] = ['categories', 'virtual', 'downloadable'];
+/** What each fact's Remove writes back; Regular price goes back to the price. */
+const CLEARED = { sku: '', categories: [], virtual: false, downloadable: false };
 
 interface Props {
 	uuid: string;
@@ -142,171 +147,181 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
+	const values = useWatch({ control: form.control });
+	const write = (name: Offered, value: unknown) =>
+		form.setValue(name, value as never, { shouldDirty: true });
+	const misc = isMiscProductLine(item);
+	const presence = useFieldPresence(
+		OFFERED.filter((name) => misc || !MISC_ONLY.includes(name)).map((name) => ({ name })),
+		(name) =>
+			name === 'regular_price'
+				? values.regular_price == null || values.regular_price === values.price
+				: name === 'categories'
+					? !values.categories?.length
+					: !values[name],
+		(name) => write(name, name === 'regular_price' ? values.price : CLEARED[name])
+	);
+	const add = (name: Offered) => {
+		presence.add(name);
+		// An off-by-default switch arrives switched on (property rows rule 7).
+		if (name === 'virtual' || name === 'downloadable') write(name, true);
+	};
+	const labels: Record<Offered, string> = {
+		regular_price: t('common.regular_price'),
+		sku: t('common.sku'),
+		categories: t('common.categories'),
+		virtual: t('products.virtual'),
+		downloadable: t('products.downloadable'),
+	};
+	const removeVerb = (name: Offered) => (
+		<PropertyVerb testID={`edit-line-item-remove-${name}`} onPress={() => presence.withdraw(name)}>
+			{t('common.remove')}
+		</PropertyVerb>
+	);
+	const toggle = (name: 'virtual' | 'downloadable') => (
+		<FormField
+			control={form.control}
+			name={name}
+			render={({ field }) => <FormSwitch testID={`edit-line-item-${name}-switch`} {...field} />}
+		/>
+	);
+	const onSale = presence.present.includes('regular_price');
+
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="name"
-					render={({ field }) => (
-						<FormItem>
-							<HStack className="justify-between">
-								<FormLabel>{t('common.name')}</FormLabel>
-								<SavedMark name="name" label={t('settings.saved')} />
-							</HStack>
-							<FormInput testID="edit-line-item-name-input" {...field} />
-						</FormItem>
-					)}
-				/>
-				{isMiscProductLine(item) && (
-					<FormField
-						control={form.control}
-						name="categories"
-						render={({ field }) => (
-							<FormTreeCombobox
-								label={t('common.categories')}
-								options={categoryOptions}
-								cascadeSelection={false}
-								placeholder={t('common.select_category')}
-								searchPlaceholder={t('common.search_categories')}
-								emptyMessage={t('common.no_category_found')}
-								{...field}
-							>
-								<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
-							</FormTreeCombobox>
-						)}
-					/>
-				)}
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="sku"
-						render={({ field }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.sku')}</FormLabel>
-									<SavedMark name="sku" label={t('settings.saved')} />
-								</HStack>
-								<FormInput testID="edit-line-item-sku-input" {...field} />
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="quantity"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('pos_cart.quantity')}</FormLabel>
-									<SavedMark name="quantity" label={t('settings.saved')} />
-								</HStack>
+				<PropertyList testID="line-item-form">
+					<CartLineRow prefix="line-item" id="name" label={t('common.name')} mark="name">
+						<FormField
+							control={form.control}
+							name="name"
+							render={({ field }) => <FormInput testID="edit-line-item-name-input" {...field} />}
+						/>
+					</CartLineRow>
+					<CartLineRow
+						prefix="line-item"
+						id="quantity"
+						label={t('pos_cart.quantity')}
+						mark="quantity"
+					>
+						<FormField
+							control={form.control}
+							name="quantity"
+							render={({ field }) => (
 								<FormInput
 									customComponent={QuantityField}
 									testID="edit-line-item-quantity-input"
 									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
+									{...field}
 								/>
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="price"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.price')}</FormLabel>
-									<SavedMark name="price" label={t('settings.saved')} />
-								</HStack>
-								<FormInput
-									customComponent={CurrencyInput}
-									testID="edit-line-item-price-input"
-									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="regular_price"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<FormItem className="flex-1">
-								<HStack className="justify-between">
-									<FormLabel>{t('common.regular_price')}</FormLabel>
-									<SavedMark name="regular_price" label={t('settings.saved')} />
-								</HStack>
-								<FormInput
-									customComponent={CurrencyInput}
-									testID="edit-line-item-regular_price-input"
-									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</FormItem>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
+							)}
+						/>
+					</CartLineRow>
+					<CartLineRow
+						prefix="line-item"
+						id="price"
+						label={t('common.price')}
+						mark={['price', 'regular_price']}
+						verb={onSale ? removeVerb('regular_price') : undefined}
+					>
+						<HStack className="items-center gap-2">
 							<View className="flex-1">
-								<FormSelect
-									label={t('common.tax_class')}
-									customComponent={TaxClassSelect}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
+								<FormField
+									control={form.control}
+									name="price"
+									render={({ field }) => (
+										<FormInput
+											customComponent={CurrencyInput}
+											testID="edit-line-item-price-input"
+											type="numeric"
+											{...field}
+										/>
+									)}
 								/>
 							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				{isMiscProductLine(item) && (
-					<>
-						<VStack>
-							<FormField
-								control={form.control}
-								name="virtual"
-								render={({ field }) => <FormSwitch label={t('products.virtual')} {...field} />}
+							{/* The regular price is its own form item: the screen shows "was", a screen reader
+							    hears "Regular Price", never a second "Price" (Codex, #2980). */}
+							{onSale && (
+								<FormItem nativeID="line-item-regular_price">
+									<HStack className="items-center gap-2">
+										<FormLabel
+											className="text-muted-foreground"
+											accessibilityLabel={t('common.regular_price')}
+										>
+											{t('pos_cart.was')}
+										</FormLabel>
+										<View className="w-28">
+											<FormField
+												control={form.control}
+												name="regular_price"
+												render={({ field }) => (
+													<FormInput
+														customComponent={CurrencyInput}
+														testID="edit-line-item-regular_price-input"
+														type="numeric"
+														{...field}
+													/>
+												)}
+											/>
+										</View>
+									</HStack>
+								</FormItem>
+							)}
+						</HStack>
+					</CartLineRow>
+					<TaxRow prefix="line-item" />
+					{presence.present
+						.filter((name) => name !== 'regular_price')
+						.map((name) => (
+							<CartLineRow
+								key={name}
+								prefix="line-item"
+								id={name}
+								label={labels[name]}
+								mark={name}
+								verb={removeVerb(name)}
+								toggle={name === 'virtual' || name === 'downloadable' ? toggle(name) : undefined}
+							>
+								{name === 'sku' ? (
+									<FormField
+										control={form.control}
+										name="sku"
+										render={({ field }) => (
+											<FormInput testID="edit-line-item-sku-input" {...field} />
+										)}
+									/>
+								) : name === 'categories' ? (
+									<FormField
+										control={form.control}
+										name="categories"
+										render={({ field }) => (
+											<FormTreeCombobox
+												options={categoryOptions}
+												cascadeSelection={false}
+												placeholder={t('common.select_category')}
+												searchPlaceholder={t('common.search_categories')}
+												emptyMessage={t('common.no_category_found')}
+												{...field}
+											>
+												<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
+											</FormTreeCombobox>
+										)}
+									/>
+								) : null}
+							</CartLineRow>
+						))}
+					<CustomFieldRows prefix="line-item" meta={item.meta_data}>
+						{presence.offered.map((name) => (
+							<PropertyAdd
+								key={name}
+								testID={`edit-line-item-add-${name}`}
+								label={labels[name]}
+								onPress={() => add(name)}
 							/>
-							<FormField
-								control={form.control}
-								name="downloadable"
-								render={({ field }) => <FormSwitch label={t('products.downloadable')} {...field} />}
-							/>
-						</VStack>
-					</>
-				)}
-				<MetaDataForm withDisplayValues />
+						))}
+					</CustomFieldRows>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter close />
 		</Form>

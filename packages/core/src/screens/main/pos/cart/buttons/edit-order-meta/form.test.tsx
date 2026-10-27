@@ -114,7 +114,7 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
-// MetaDataForm's fold mode (the cart lines' consumer) still imports it.
+// MetaDataForm's fold mode (no consumer left since the cart lines' rows) still imports it.
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: mockWrap,
 	CollapsibleContent: mockWrap,
