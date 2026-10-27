@@ -52,6 +52,8 @@ jest.mock('../../../components/quantity-input', () => ({
 jest.mock('../../../components/editable-number', () => ({
 	EditableNumber: () => <input data-testid="cart-price" />,
 }));
+// MoneyInput's outlined field (a coupon's amount); the cart's prices never take it.
+jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<span data-testid={testID}>{children}</span>

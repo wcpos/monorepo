@@ -24,13 +24,18 @@ export function FeePrice(props: CellContext<Props, 'price'>) {
 	return useCartTableReadOnly() ? <ReadOnlyFeePrice {...props} /> : <EditableFeePrice {...props} />;
 }
 
+/** A percentage fee is typed to hundredths (12.75 %), whatever the currency's places. */
+const PERCENT_PLACES = 2;
+/** And rests at them: a store pricing to 0 places never reads 12.5 % as "12". */
+const PERCENT_FORMAT = { decimalScale: PERCENT_PLACES };
+
 /** What the fee's input shows: a percentage beside its icon, or the amount. */
 function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { getFeeLineData } = useFeeLineData();
 	const { percent, amount } = getFeeLineData(row.original.item);
 	const { format } = useCurrentOrderCurrencyFormat();
 	// The store's separators, as the percentage input shows them (`12,5`, not `12.5`).
-	const { format: formatNumber } = useNumberFormat();
+	const { format: formatNumber } = useNumberFormat(PERCENT_FORMAT);
 	return (
 		<HStack space="xs" className="justify-center">
 			<Text className="text-muted-foreground text-right tabular-nums">
@@ -41,16 +46,13 @@ function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
 	);
 }
 
-/** A percentage fee is typed to hundredths (12.75 %), whatever the currency's places. */
-const PERCENT_PLACES = 2;
-
 function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
 	const { getFeeLineData } = useFeeLineData();
 	const { percent, amount } = getFeeLineData(item);
 	const { format } = useCurrentOrderCurrencyFormat();
-	const { format: formatNumber } = useNumberFormat();
+	const { format: formatNumber } = useNumberFormat(PERCENT_FORMAT);
 
 	/**
 	 * The till no longer accepts a NEW negative fee, but historical orders still carry

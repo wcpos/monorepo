@@ -19,6 +19,7 @@ export function MoneyInput({
 	decimals: ownDecimals,
 	disabled,
 	textClassName,
+	field,
 	testID,
 }: MoneyInputProps) {
 	const { store } = useAppState();
@@ -53,6 +54,7 @@ export function MoneyInput({
 			onOpenChange={setOpen}
 			testID={testID}
 			textClassName={textClassName}
+			field={field}
 			disabled={disabled}
 			// A blank price (no sale price) is not 0: it rests as `–` and writes only what is typed.
 			value={value == null || value === '' ? undefined : Number(value) || 0}
