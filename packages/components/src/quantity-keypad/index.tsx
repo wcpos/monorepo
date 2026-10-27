@@ -62,6 +62,9 @@ export type QuantityKeypadProps = {
 	textClassName?: string;
 	/** A form label's id: the trigger is named by the label, then its own number. */
 	labelledBy?: string;
+	/** A form's description and validation message ids, and whether the field is invalid. */
+	describedBy?: string;
+	invalid?: boolean;
 	/** Told when the keypad opens and closes. */
 	onOpenChange?: (open: boolean) => void;
 	ref?: React.Ref<QuantityKeypadHandle>;
@@ -91,6 +94,8 @@ export function QuantityKeypad({
 	className,
 	textClassName,
 	labelledBy,
+	describedBy,
+	invalid,
 	onOpenChange,
 	ref,
 }: QuantityKeypadProps) {
@@ -192,6 +197,8 @@ export function QuantityKeypad({
 				disabled={disabled}
 				nativeID={labelledBy && ownID}
 				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
+				aria-describedby={describedBy}
+				aria-invalid={invalid || undefined}
 				className={cn('min-w-10 items-start', className)}
 			>
 				<ButtonText className={textClassName}>{format(value)}</ButtonText>

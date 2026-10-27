@@ -28,14 +28,23 @@ export interface MoneyInputProps {
 	field?: boolean;
 	/** A blank field's rest text. */
 	placeholder?: string;
-	/** A form label's id, naming the web keypad's trigger. */
+	/** A form's label, description and validation message ids, for the web keypad's trigger. */
 	'aria-labelledby'?: string;
+	'aria-describedby'?: string;
+	'aria-invalid'?: boolean;
 	/** A form's handle (`FormInput`'s label press); the web keypad opens as a field focuses. */
 	ref?: React.Ref<KeypadFieldHandle>;
 	testID?: string;
 }
 
 export type KeypadFieldHandle = { focus: () => void; blur: () => void; isFocused: () => boolean };
+
+/** What `FormInput` hands its control: the label, description and message ids, the error state. */
+export type FormFieldAria = {
+	'aria-labelledby'?: string;
+	'aria-describedby'?: string;
+	'aria-invalid'?: boolean;
+};
 
 /** Native: the price is the plain field in place (decision 16); the web price grows into a keypad. */
 export function MoneyInput({
@@ -47,6 +56,8 @@ export function MoneyInput({
 	field,
 	placeholder,
 	'aria-labelledby': _labelledBy,
+	'aria-describedby': _describedBy,
+	'aria-invalid': _invalid,
 	ref: _ref,
 	...props
 }: MoneyInputProps) {

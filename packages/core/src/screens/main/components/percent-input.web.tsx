@@ -3,7 +3,7 @@ import * as React from 'react';
 import { MoneyInput } from './money-input';
 import { PERCENT_FORMAT, PERCENT_PLACES, useNumberFormat } from '../hooks/use-number-format';
 
-import type { KeypadFieldHandle } from './money-input';
+import type { FormFieldAria, KeypadFieldHandle } from './money-input';
 import type { NumberInputProps } from './number-input';
 
 /**
@@ -18,7 +18,9 @@ export function PercentInput({
 	testID,
 	ref,
 	'aria-labelledby': labelledBy,
-}: Omit<NumberInputProps, 'ref'> & { ref?: React.Ref<KeypadFieldHandle> }) {
+	'aria-describedby': describedBy,
+	'aria-invalid': invalid,
+}: Omit<NumberInputProps, 'ref'> & FormFieldAria & { ref?: React.Ref<KeypadFieldHandle> }) {
 	const { format } = useNumberFormat(PERCENT_FORMAT);
 	return (
 		<MoneyInput
@@ -30,6 +32,8 @@ export function PercentInput({
 			disabled={disabled}
 			placeholder={placeholder}
 			aria-labelledby={labelledBy}
+			aria-describedby={describedBy}
+			aria-invalid={invalid}
 			testID={testID}
 			onChangeText={(next) => onChangeText?.(next)}
 		/>

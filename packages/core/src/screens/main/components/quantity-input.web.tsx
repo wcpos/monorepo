@@ -22,8 +22,12 @@ export interface QuantityInputProps {
 	className?: string;
 	textClassName?: string;
 	testID?: string;
-	/** A form label's id, naming the trigger. */
+	/** A form's label, description and validation message ids, naming and describing the trigger. */
 	'aria-labelledby'?: string;
+	'aria-describedby'?: string;
+	'aria-invalid'?: boolean;
+	/** Opens the keypad as it mounts (a stock row's Track quantity), as a field took focus. */
+	autoFocus?: boolean;
 	/** `focus()` opens the keypad, as a press does; a form's label press toggles it. */
 	ref?: React.Ref<KeypadFieldHandle>;
 	// The native field's props; the keypad has no text field to style or select.
@@ -42,6 +46,9 @@ export function QuantityInput({
 	textClassName,
 	testID,
 	'aria-labelledby': labelledBy,
+	'aria-describedby': describedBy,
+	'aria-invalid': invalid,
+	autoFocus,
 	ref,
 }: QuantityInputProps) {
 	const { store } = useAppState();
@@ -65,6 +72,9 @@ export function QuantityInput({
 		}),
 		[open]
 	);
+	React.useEffect(() => {
+		if (autoFocus) keypad.current?.focus();
+	}, [autoFocus]);
 	useScannerBurstDismiss(open, keypad);
 	const labels = React.useMemo(
 		() => ({
@@ -84,6 +94,8 @@ export function QuantityInput({
 			className={className}
 			textClassName={textClassName}
 			labelledBy={labelledBy}
+			describedBy={describedBy}
+			invalid={invalid}
 			value={Number(value ?? 0)}
 			format={format}
 			decimals={decimals}

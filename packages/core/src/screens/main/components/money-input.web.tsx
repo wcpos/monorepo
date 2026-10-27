@@ -22,6 +22,8 @@ export function MoneyInput({
 	field,
 	placeholder,
 	'aria-labelledby': labelledBy,
+	'aria-describedby': describedBy,
+	'aria-invalid': invalid,
 	ref,
 	testID,
 }: MoneyInputProps) {
@@ -70,6 +72,8 @@ export function MoneyInput({
 			field={field}
 			placeholder={placeholder}
 			labelledBy={labelledBy}
+			describedBy={describedBy}
+			invalid={invalid}
 			disabled={disabled}
 			// A blank price (no sale price) is not 0: it rests as `–` and writes only what is typed.
 			value={value == null || value === '' ? undefined : Number(value) || 0}

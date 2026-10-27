@@ -63,6 +63,9 @@ export type PriceKeypadProps = {
 	placeholder?: string;
 	/** A form label's id: the trigger is named by the label, then its own number. */
 	labelledBy?: string;
+	/** A form's description and validation message ids, and whether the field is invalid. */
+	describedBy?: string;
+	invalid?: boolean;
 	/** Told when the keypad opens and closes. */
 	onOpenChange?: (open: boolean) => void;
 	ref?: React.Ref<PriceKeypadHandle>;
@@ -94,6 +97,8 @@ export function PriceKeypad({
 	field = false,
 	placeholder,
 	labelledBy,
+	describedBy,
+	invalid,
 	onOpenChange,
 	ref,
 }: PriceKeypadProps) {
@@ -167,6 +172,8 @@ export function PriceKeypad({
 				disabled={disabled}
 				nativeID={labelledBy && ownID}
 				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
+				aria-describedby={describedBy}
+				aria-invalid={invalid || undefined}
 				// The default size is the row's height. The tint reaches past the text (`-mx-1 px-1`),
 				// which `max-w-full` would cap, truncating `55,00 $` in the 56-wide price column
 				// (dev-next, 2026-10-24). A field keeps the Input's own padding.

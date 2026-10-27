@@ -136,6 +136,13 @@ export function RefundOrderForm({ order }: Props) {
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
+	// The custom amount types to the places it is validated to, which need not be the store's.
+	const RefundAmountInput = React.useMemo(() => {
+		function Input(props: React.ComponentProps<typeof CurrencyInput>) {
+			return <CurrencyInput {...props} decimals={dp} />;
+		}
+		return Input;
+	}, [dp]);
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 	const orderData = useRecordField(order, (record) => record.payload);
@@ -524,7 +531,7 @@ export function RefundOrderForm({ order }: Props) {
 					name="custom_amount"
 					render={({ field }) => (
 						<FormInput
-							customComponent={WEB_KEYPAD ? CurrencyInput : undefined}
+							customComponent={WEB_KEYPAD ? RefundAmountInput : undefined}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}

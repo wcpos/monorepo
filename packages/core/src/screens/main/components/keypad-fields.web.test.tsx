@@ -16,6 +16,8 @@ type MockKeypadProps = {
 	field?: boolean;
 	placeholder?: string;
 	labelledBy?: string;
+	describedBy?: string;
+	invalid?: boolean;
 	onChange: (value: number) => void;
 	onOpenChange: (open: boolean) => void;
 	ref: React.Ref<{ focus: () => void; dismiss: () => void }>;
@@ -67,6 +69,25 @@ it("a form's money field is the outlined price keypad, at the store's places, wi
 	expect(mockKeypad.labelledBy).toBe('coupon-minimum');
 	mockKeypad.onChange(15);
 	expect(onChangeText).toHaveBeenCalledWith(15);
+});
+
+it("a failed field's message and invalid state reach the trigger", () => {
+	render(
+		<PercentInput
+			value="120"
+			aria-describedby="discount-message"
+			aria-invalid
+			onChangeText={jest.fn()}
+		/>
+	);
+	expect(mockKeypad.describedBy).toBe('discount-message');
+	expect(mockKeypad.invalid).toBe(true);
+});
+
+it('a refund types to the places it is validated to, not the store price places', () => {
+	render(<CurrencyInput value="1.5" decimals={3} onChangeText={jest.fn()} />);
+	expect(mockKeypad.decimals).toBe(3);
+	expect(mockKeypad.format(1.5)).toBe('1,500');
 });
 
 it('a blank money field rests on its placeholder, never 0', () => {
