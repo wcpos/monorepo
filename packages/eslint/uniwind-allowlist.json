@@ -147,8 +147,5 @@
 	},
 	"packages/core/src/screens/main/tax-rates/index.tsx": {
 		"bare-Suspense": 1
-	},
-	"packages/core/src/screens/splash/index.tsx": {
-		"hex-colour": 1
 	}
 }

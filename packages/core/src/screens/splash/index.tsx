@@ -34,11 +34,16 @@ export function Splash() {
 	}, [progress.value, hideSplash]);
 
 	return (
-		<View className="absolute inset-0 flex items-center justify-center bg-[#F0F4F8]">
+		<View className="bg-splash absolute inset-0 flex items-center justify-center">
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />
-				<Progress sharedValue={progress} />
+				{/* The splash is always light, so its bar never follows the theme (global.css). */}
+				<Progress
+					sharedValue={progress}
+					className="bg-splash-track"
+					indicatorClassName="bg-splash-indicator"
+				/>
 			</VStack>
 		</View>
 	);
