@@ -32,7 +32,7 @@ import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
-import { getRowTestID, DataTableRow as RowView } from './rows';
+import { getRowTestID, RowLayoutContext, DataTableRow as RowView } from './rows';
 import { ResizeHead } from './resize';
 import { DataTableSkeletonRows } from './skeleton';
 import { getColumnStyle } from './column-style';
@@ -373,67 +373,69 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 							))}
 						</TableHeader>
 					)}
-					<VirtualizedList.Root
-						testID={`data-table-scroller-${props.collectionName}`}
-						style={{ flex: 1 }}
-					>
-						<VirtualizedList.List
-							ref={listRef}
-							data={table.getRowModel().rows}
-							keyExtractor={(item) => item.id}
-							renderItem={({ item, index }) =>
-								renderItem
-									? renderItem({ item, index, table })
-									: defaultRenderItem({ item, index, table })
-							}
-							estimatedItemSize={estimatedItemSize ?? 50}
-							parentComponent={TableBody as unknown as typeof import('react-native').View}
-							getItemType={getItemType}
-							onEndReachedThreshold={0.1}
-							onEndReached={onEndReached ?? handleEndReached}
-							ListEmptyComponent={() => {
-								/* "No results" may only ever mean the search ANSWERED with nothing.
+					<RowLayoutContext.Provider value={extraData}>
+						<VirtualizedList.Root
+							testID={`data-table-scroller-${props.collectionName}`}
+							style={{ flex: 1 }}
+						>
+							<VirtualizedList.List
+								ref={listRef}
+								data={table.getRowModel().rows}
+								keyExtractor={(item) => item.id}
+								renderItem={({ item, index }) =>
+									renderItem
+										? renderItem({ item, index, table })
+										: defaultRenderItem({ item, index, table })
+								}
+								estimatedItemSize={estimatedItemSize ?? 50}
+								parentComponent={TableBody as unknown as typeof import('react-native').View}
+								getItemType={getItemType}
+								onEndReachedThreshold={0.1}
+								onEndReached={onEndReached ?? handleEndReached}
+								ListEmptyComponent={() => {
+									/* "No results" may only ever mean the search ANSWERED with nothing.
 						   A pending search (index building, engine database not bound yet)
 						   says so instead — rendering the ordinary empty state there reads
 						   as "this record does not exist" (#1733). */
-								const searchPending =
-									deferredResult.searchActive && deferredResult.searchState === 'pending';
-								/* An empty list while the collection is still pulling is not an empty
+									const searchPending =
+										deferredResult.searchActive && deferredResult.searchState === 'pending';
+									/* An empty list while the collection is still pulling is not an empty
 						   store either: the footer's sync spinner is running, and "No customers
 						   yet" beside it told a fresh install it had no data while 5,454
 						   customers were on their way. Rows in flight look like rows in flight
 						   until the pull settles. */
-								if (syncing && !searchPending) {
+									if (syncing && !searchPending) {
+										return (
+											<View testID="data-table-syncing-rows">
+												<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+											</View>
+										);
+									}
 									return (
-										<View testID="data-table-syncing-rows">
-											<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+										<View className="justify-center p-6">
+											{searchPending ? (
+												<Text testID="search-pending-message">{t('common.searching')}</Text>
+											) : React.isValidElement(noDataMessage) ? (
+												noDataMessage
+											) : (
+												<Text testID="no-data-message">
+													{noDataMessage ? noDataMessage : t('common.no_results_found')}
+												</Text>
+											)}
 										</View>
 									);
+								}}
+								ListFooterComponent={() =>
+									ListFooterComponent ? (
+										<ListFooterComponent active={syncing} />
+									) : (
+										<DefaultListFooterComponent active={syncing} />
+									)
 								}
-								return (
-									<View className="justify-center p-6">
-										{searchPending ? (
-											<Text testID="search-pending-message">{t('common.searching')}</Text>
-										) : React.isValidElement(noDataMessage) ? (
-											noDataMessage
-										) : (
-											<Text testID="no-data-message">
-												{noDataMessage ? noDataMessage : t('common.no_results_found')}
-											</Text>
-										)}
-									</View>
-								);
-							}}
-							ListFooterComponent={() =>
-								ListFooterComponent ? (
-									<ListFooterComponent active={syncing} />
-								) : (
-									<DefaultListFooterComponent active={syncing} />
-								)
-							}
-							extraData={extraData}
-						/>
-					</VirtualizedList.Root>
+								extraData={extraData}
+							/>
+						</VirtualizedList.Root>
+					</RowLayoutContext.Provider>
 				</Table>
 			</TableSurface>
 			{showFooter && (

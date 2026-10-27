@@ -306,6 +306,21 @@ it('resolves row cell maps and keeps the text fallback inside the table', () => 
  * runs against the table compiled by the React Compiler, as the app compiles it, so a stale memo
  * fails here rather than reaching a cashier as a column toggle that does nothing.
  */
+it('a row drops a cell when the settings switch its column off', () => {
+	const handle = handleWith();
+	const renderItem = ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+		<DataTableRow item={item} />
+	);
+	const { rerender } = renderTable({ handle, renderItem });
+	expect(screen.getByTestId('cell-price')).toBeTruthy();
+	// The settings toggle keeps the column and turns `show` off.
+	state.columns = state.columns.map((column) =>
+		column.key === 'price' ? { ...column, show: false } : column
+	);
+	rerender(tableTree({ handle, renderItem }));
+	expect(screen.queryByTestId('data-table-header-price')).toBeNull();
+	expect(screen.queryByTestId('cell-price')).toBeNull();
+});
 it('re-renders header cells when the visible column set changes', () => {
 	const handle = handleWith();
 	const { rerender } = renderTable({ handle });
