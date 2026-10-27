@@ -2056,6 +2056,8 @@
 	"settings.scanner_choose_device": "Choose a scanner to connect",
 	"settings.scanner_searching_devices": "Searching for devices…",
 	"settings.scanner_section": "Scanner",
+	"settings.scanning_section": "Scanning",
+	"settings.sound_section": "Sound",
 	"settings.scanner_no_setup_needed": "No setup needed for most scanners.",
 	"settings.scanner_keyboard_mode_intro": "Almost all barcode scanners pair as a Bluetooth or USB keyboard. Pair it in your device’s settings, then scan into the POS — WCPOS recognises the scan automatically.",
 	"settings.scanner_setup_guide": "Scanner setup guide",
