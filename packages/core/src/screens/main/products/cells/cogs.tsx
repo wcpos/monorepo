@@ -5,9 +5,10 @@ import get from 'lodash/get';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../components/currency-input';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
+import { MoneyInput } from '../../components/money-input';
 import { useProAccess } from '../../contexts/pro-access';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 /**
@@ -30,19 +31,23 @@ export function COGS({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const { format } = useCurrencyFormat();
 
 	/**
 	 *
 	 */
 	return (
 		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
-			<CurrencyInput
+			{/* The cart's price (its keypad on web) without quick keys (Paul 2026-10-27). */}
+			<MoneyInput
 				value={defined_value}
+				format={format}
+				formatOptions={{ fixedDecimalScale: true }}
 				disabled={readOnly || !canEdit}
 				onChangeText={(newValue) => {
 					// Construct a plain object update (RxDB Proxy objects can't be cloned)
@@ -55,7 +60,7 @@ export function COGS({
 							},
 						],
 					};
-					meta.onChange({
+					void meta.onChange({
 						document: product,
 						changes: { cost_of_goods_sold: updatedCogs },
 					});

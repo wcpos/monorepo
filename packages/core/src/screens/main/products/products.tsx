@@ -419,9 +419,10 @@ function ProductsList({
 				}: {
 					document: EngineRecord<'products'> | EngineRecord<'variations'>;
 					changes: Record<string, unknown>;
-				}) => {
-					void saveCatalogueChange(document, changes);
-				},
+				}) =>
+					// Whether it was saved (a refusal is already toasted), so the stock keypad's −
+					// and + can take a refused step back.
+					saveCatalogueChange(document, changes).then((saved) => !!saved),
 				variationRenderCell,
 				openVariation,
 				// Read by the variations button and the attribute chips instead of expanding.

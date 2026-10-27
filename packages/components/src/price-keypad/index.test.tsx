@@ -323,3 +323,31 @@ it('disabled: nothing opens', async () => {
 	await open({ disabled: true });
 	expect(isOpen()).toBe(false);
 });
+
+describe('a blank price (a product not on sale)', () => {
+	const blank = () => open({ value: undefined, discounts: [] });
+
+	it('rests as a muted en dash, still pressable', async () => {
+		await blank();
+		expect(screen.getByTestId('cart-price')).toHaveTextContent('–');
+		expect(isOpen()).toBe(true);
+		expect(shown()).toBe('£0.00');
+	});
+
+	it('✓ with nothing typed writes nothing', async () => {
+		await blank();
+		await press('numpad-done-button');
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it('typing writes the typed number, 0 included', async () => {
+		await blank();
+		await press('numpad-key-0');
+		await press('numpad-done-button');
+		expect(onChange).toHaveBeenCalledWith(0);
+		await press('cart-price');
+		await press('numpad-key-4');
+		await press('numpad-done-button');
+		expect(onChange).toHaveBeenLastCalledWith(4);
+	});
+});

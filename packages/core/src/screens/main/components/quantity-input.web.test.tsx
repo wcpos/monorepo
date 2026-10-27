@@ -7,6 +7,9 @@ import { QuantityInput } from './quantity-input.web';
 
 type MockKeypadProps = {
 	format: (value: number) => string;
+	decimals?: number;
+	disabled?: boolean;
+	onRemove?: () => void;
 	onOpenChange: (open: boolean) => void;
 	ref: React.Ref<{ focus: () => void; dismiss: () => void }>;
 };
@@ -47,6 +50,14 @@ it('shows a fractional quantity with its digits, and a whole one without decimal
 	expect(mockKeypad.format(0.001)).toBe('0.001');
 	expect(mockKeypad.format(12)).toBe('12');
 	expect(mockKeypad.format(123)).toBe('123');
+});
+
+it('a stock count: whole numbers grouped, no trash, disabled passed on', () => {
+	render(<QuantityInput value={4} decimals={0} disabled onChangeText={jest.fn()} />);
+	expect(mockKeypad.format(123456)).toBe('123,456');
+	expect(mockKeypad.decimals).toBe(0);
+	expect(mockKeypad.disabled).toBe(true);
+	expect(mockKeypad.onRemove).toBeUndefined();
 });
 
 describe('a scanner burst while the keypad is open', () => {

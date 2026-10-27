@@ -8,7 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
-import { NumberInput } from '../../components/number-input';
+import { QuantityInput } from '../../components/quantity-input';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
@@ -36,7 +36,7 @@ export function StockQuantity({
 		onChange: (arg: {
 			document: EngineRecord<'products'> | EngineRecord<'variations'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
@@ -47,9 +47,15 @@ export function StockQuantity({
 		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
 			<VStack>
 				<View className="flex-row justify-center">
-					<NumberInput
+					{/* Web: the cart's quantity keypad as a count (no `onRemove`: − stops at 0, a
+					    typed 0 commits), whole numbers as WooCommerce stores stock; the box keeps
+					    the field's width and padding so the row does not reflow. */}
+					<QuantityInput
 						testID="stock-quantity-input"
-						value={String(stockQuantity ?? 0)}
+						value={stockQuantity ?? 0}
+						decimals={0}
+						className="web:px-3 w-full"
+						// Whether it was saved: the keypad takes a refused − or + back.
 						onChangeText={(stock_quantity) =>
 							meta.onChange({ document: product, changes: { stock_quantity } })
 						}
@@ -62,7 +68,7 @@ export function StockQuantity({
 					checked={manageStock ?? false}
 					onCheckedChange={(manage_stock) => {
 						if (!disabled) {
-							meta.onChange({ document: product, changes: { manage_stock } });
+							void meta.onChange({ document: product, changes: { manage_stock } });
 						}
 					}}
 					size="sm"

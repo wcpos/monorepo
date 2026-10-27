@@ -36,8 +36,9 @@ function isPushProductsResponse(response: Response): boolean {
 }
 
 /**
- * Locate the probe row's stock cell, a plain number field, and type a new quantity
- * into it (Enter commits). Returns the field locator so callers can assert on its value.
+ * Locate the probe row's stock cell, the box that grows into the cart's quantity keypad on
+ * web, and type a new count on the keypad (✓ commits). Returns the box locator so callers
+ * can assert on its text.
  */
 async function editStockQuantityField(page: Page, rowTestId: string, digit: string) {
 	const screen = page.getByTestId('screen-products').filter({ visible: true });
@@ -46,7 +47,7 @@ async function editStockQuantityField(page: Page, rowTestId: string, digit: stri
 	await expect(cell).toBeVisible({ timeout: 30_000 });
 	// #1094 (capability UI) will disable this cell for cashiers without catalog
 	// write capability — that is a declared-missing environment, not a failure.
-	// A non-editable field renders `readonly` on web, not `disabled`.
+	// The box is a button: a disabled one says so with `aria-disabled`.
 	const disabled = await cell.evaluate(
 		(el) =>
 			el.hasAttribute('disabled') ||
@@ -59,10 +60,10 @@ async function editStockQuantityField(page: Page, rowTestId: string, digit: stri
 			'Stock cell is disabled: the signed-in cashier has no catalog write capability on this store'
 		);
 	}
-	await expect(cell).toHaveValue('0', { timeout: 15_000 });
+	await expect(cell).toHaveText('0', { timeout: 15_000 });
 	await cell.click();
-	await cell.fill(digit);
-	await cell.press('Enter');
+	await page.getByTestId(`numpad-key-${digit}`).click();
+	await page.getByTestId('numpad-done-button').click();
 	return cell;
 }
 
@@ -340,7 +341,7 @@ test.describe('Products Page (Pro)', () => {
 			await expect(page.getByTestId('success-toast').first()).toBeVisible({
 				timeout: 15_000,
 			});
-			await expect(cell).toHaveValue('7', { timeout: 15_000 });
+			await expect(cell).toHaveText('7', { timeout: 15_000 });
 
 			// Server outcome: the drained push must be accepted. A 403 means this
 			// store keeps the signed-in cashier read-only on the catalog — a
@@ -638,7 +639,7 @@ test.describe('Products Page (Pro)', () => {
 			const cell = await editStockQuantityField(page, rowTestId, '9');
 
 			// The optimistic edit lands first…
-			await expect(cell).toHaveValue('9', { timeout: 15_000 });
+			await expect(cell).toHaveText('9', { timeout: 15_000 });
 
 			// …then the rejection surfaces as the SYNC202 "reverted" snackbar (a
 			// warning: the change is gone, not stranded) and the cell auto-reverts to
@@ -646,7 +647,7 @@ test.describe('Products Page (Pro)', () => {
 			await expect(page.getByTestId('toast-SYNC202').first()).toBeVisible({
 				timeout: 30_000,
 			});
-			await expect(cell).toHaveValue('0', { timeout: 30_000 });
+			await expect(cell).toHaveText('0', { timeout: 30_000 });
 		} finally {
 			await page.unroute(routeMatcher, fulfillRejection).catch(() => {});
 			await deleteSearchProbe({

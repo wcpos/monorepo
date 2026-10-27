@@ -31,7 +31,7 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 		onChange: (arg: {
 			document: EngineRecord<'products'>;
 			changes: Record<string, unknown>;
-		}) => void;
+		}) => void | Promise<boolean>;
 	};
 
 	/**

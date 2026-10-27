@@ -320,6 +320,50 @@ it('a step the store takes (true) stands', async () => {
 	expect(onChange).toHaveBeenLastCalledWith(5);
 });
 
+describe('a stored quantity that moves while the keypad is open', () => {
+	afterEach(() => onChange.mockReset());
+	const keypad = (value: number) => (
+		<DeviceScope phone={false}>
+			<QuantityKeypad
+				testID="cart-quantity-input"
+				value={value}
+				format={String}
+				labels={labels}
+				onChange={onChange}
+				onRemove={onRemove}
+			/>
+		</DeviceScope>
+	);
+
+	it('replaces a stepped number once the step has settled (a later server revert)', async () => {
+		const { rerender } = render(keypad(3));
+		await press('cart-quantity-input');
+		await press('numpad-key-increase');
+		expect(shown()).toBe('4');
+		// The store takes 4, then the server refuses it and the record goes back to 3.
+		await act(async () => rerender(keypad(4)));
+		await act(async () => rerender(keypad(3)));
+		expect(shown()).toBe('3');
+		await press('numpad-key-increase');
+		expect(onChange).toHaveBeenLastCalledWith(4);
+	});
+
+	it('never clobbers a step still in flight: two fast presses keep both', async () => {
+		const writes: ((ok: boolean) => void)[] = [];
+		onChange.mockImplementation(() => new Promise((resolve) => writes.push(resolve)));
+		const { rerender } = render(keypad(3));
+		await press('cart-quantity-input');
+		await press('numpad-key-increase');
+		await press('numpad-key-increase');
+		// The first write catching up while the second is pending.
+		await act(async () => rerender(keypad(4)));
+		expect(shown()).toBe('5');
+		await act(async () => writes.forEach((resolve) => resolve(true)));
+		expect(shown()).toBe('5');
+		expect(onChange).toHaveBeenLastCalledWith(5);
+	});
+});
+
 it('a step from a fraction lands on the quantity’s six places', async () => {
 	// In floating point 1.015 + 1 is 2.0149999999999997 and 2.3 - 1 is 1.2999999999999998.
 	await open({ value: 1.015 });
@@ -334,4 +378,52 @@ it('a step keeps a line’s own fraction digits', async () => {
 	await open({ value: 1.2345 });
 	await press('numpad-key-increase');
 	expect(onChange).toHaveBeenLastCalledWith(2.2345);
+});
+
+describe('without onRemove, a count (stock)', () => {
+	const count = (props: Partial<QuantityKeypadProps> = {}) =>
+		open({ onRemove: undefined, decimals: 0, ...props });
+
+	it('− at 0 never becomes the trash and does nothing', async () => {
+		await count({ value: 0 });
+		expect(screen.getByTestId('numpad-key-decrease')).toHaveAttribute('aria-label', 'One fewer');
+		await press('numpad-key-decrease');
+		expect(onChange).not.toHaveBeenCalled();
+		expect(shown()).toBe('0');
+	});
+
+	it('− at 1 steps to 0', async () => {
+		await count({ value: 1 });
+		await press('numpad-key-decrease');
+		expect(onChange).toHaveBeenCalledWith(0);
+		await press('numpad-key-decrease');
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it('a negative stock shows, − does nothing, and + steps up from it', async () => {
+		await count({ value: -3 });
+		expect(shown()).toBe('-3');
+		await press('numpad-key-decrease');
+		expect(onChange).not.toHaveBeenCalled();
+		await press('numpad-key-increase');
+		expect(onChange).toHaveBeenCalledWith(-2);
+	});
+
+	it('a typed 0 commits', async () => {
+		await count({ value: 4 });
+		await press('numpad-key-0');
+		await press('numpad-done-button');
+		expect(onChange).toHaveBeenCalledWith(0);
+	});
+
+	it('whole numbers: no decimal key, the physical separator ignored, six digits', async () => {
+		await count({ value: 4 });
+		expect(screen.queryByTestId('numpad-key-decimal')).toBeNull();
+		await press('numpad-key-1');
+		panelKey('.');
+		for (const digit of '234567') await press(`numpad-key-${digit}`);
+		expect(shown()).toBe('123456');
+		await press('numpad-done-button');
+		expect(onChange).toHaveBeenCalledWith(123456);
+	});
 });
