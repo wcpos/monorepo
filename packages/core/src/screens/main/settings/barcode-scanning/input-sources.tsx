@@ -13,6 +13,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
@@ -132,52 +133,44 @@ function ScannerProfileRow({
 		profile.vendorId !== undefined && profile.productId !== undefined
 			? `${profile.vendorId}:${profile.productId}`
 			: profile.serviceUuid;
-	const identity = detail
-		? `${typeLabel[profile.connectionType]} · ${detail}`
-		: typeLabel[profile.connectionType];
-	// "Not in range" is the normal state of a scanner sitting on a shelf — muted,
-	// never destructive. Only a live link earns colour.
-	const tone = status === 'connected' ? 'text-success' : 'text-muted-foreground';
-
 	return (
-		<HStack
-			className="border-border items-center gap-3 rounded-md border p-2"
+		<DeviceRow
 			testID="scanner-profile-row"
+			icon="barcode"
+			name={profile.name || profile.deviceName || typeLabel[profile.connectionType]}
+			identifiers={[typeLabel[profile.connectionType], detail]}
+			// "Not in range" is the normal state of a scanner sitting on a shelf — muted,
+			// never destructive. Only a live link earns colour.
+			state={{
+				label: statusLabel[status],
+				tone: status === 'connected' ? 'ok' : 'muted',
+				testID: 'scanner-profile-status',
+			}}
 		>
-			<View
-				className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-success' : 'bg-muted-foreground/40'}`}
-			/>
-			<VStack className="flex-1" space="xs">
-				<Text className="text-sm font-medium">
-					{profile.name || profile.deviceName || typeLabel[profile.connectionType]}
-				</Text>
-				<Text className="text-muted-foreground font-mono text-xs">{identity}</Text>
-			</VStack>
-			<Text className={`text-xs font-medium ${tone}`} testID="scanner-profile-status">
-				{statusLabel[status]}
-			</Text>
-			{/* Removing a scanner is the row's only action and it loses the pairing: the last,
-			    red row of the row's ⋮ menu, never a red button on every row of a list. */}
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<IconButton
-						name="more"
-						testID="scanner-profile-menu"
-						accessibilityLabel={t('common.actions')}
-					/>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						variant="destructive"
-						testID="scanner-profile-delete"
-						onPress={() => onRemove(profile)}
-					>
-						<Icon name="delete" className="fill-destructive" />
-						<Text>{t('settings.scanner_remove')}</Text>
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</HStack>
+			<DeviceRowActions>
+				{/* Removing a scanner is the row's only action and it loses the pairing: the last,
+				    red row of the row's ⋮ menu, never a red button on every row of a list. */}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton
+							name="more"
+							testID="scanner-profile-menu"
+							accessibilityLabel={t('common.actions')}
+						/>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							variant="destructive"
+							testID="scanner-profile-delete"
+							onPress={() => onRemove(profile)}
+						>
+							<Icon name="delete" className="fill-destructive" />
+							<Text>{t('settings.scanner_remove')}</Text>
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</DeviceRowActions>
+		</DeviceRow>
 	);
 }
 

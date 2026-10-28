@@ -4,7 +4,9 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import toNumber from 'lodash/toNumber';
 
+import { Card } from '@wcpos/components/card';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { refundValue } from '@wcpos/order-math';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -38,7 +40,7 @@ function RefundCard({
 	const amount = refundValue(refund);
 
 	return (
-		<View className="border-border bg-card overflow-hidden rounded-md border">
+		<Card className="overflow-hidden">
 			{/* Head */}
 			<View className="bg-bad/5 border-border/60 flex-row items-start justify-between gap-3 border-b px-3 py-2.5">
 				<View className="min-w-0 flex-1">
@@ -126,7 +128,7 @@ function RefundCard({
 					))}
 				</View>
 			) : null}
-		</View>
+		</Card>
 	);
 }
 
@@ -156,7 +158,11 @@ export function RefundsFallback({
 	return (
 		<Section title={t('orders.refunds')}>
 			<View className="gap-3">
-				<Text className="text-bad text-sm">{t('orders.refunds_load_failed')}</Text>
+				<Notice
+					tone="bad"
+					title={t('orders.refunds_load_failed')}
+					actions={[{ label: t('common.retry'), onPress: onRetry }]}
+				/>
 				{refunds?.length ? (
 					<View className="gap-2">
 						<Text className="text-muted-foreground text-xs">
@@ -181,9 +187,6 @@ export function RefundsFallback({
 						{t('orders.no_local_refund_summary')}
 					</Text>
 				)}
-				<Button variant="outline" size="sm" onPress={onRetry} className="self-start">
-					<ButtonText>{t('common.retry')}</ButtonText>
-				</Button>
 			</View>
 		</Section>
 	);

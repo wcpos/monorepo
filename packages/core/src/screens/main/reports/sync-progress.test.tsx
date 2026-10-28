@@ -33,6 +33,11 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 
+jest.mock('@wcpos/components/progress', () => ({
+	Progress: ({ testID, value }: { testID?: string; value?: number }) => (
+		<div data-testid={testID} data-value={value} />
+	),
+}));
 jest.mock('./context', () => ({
 	useReportsHandles: () => ({ handle: mockHandle, comparisonHandle: mockComparisonHandle }),
 }));
@@ -68,7 +73,7 @@ describe('ReportsSyncProgress', () => {
 			'reports.downloading_orders:{"downloaded":12400,"total":30000}'
 		);
 		// 12,400 / 30,000 → 41%
-		expect(screen.getByTestId('reports-sync-progress-bar')).toHaveStyle({ width: '41%' });
+		expect(screen.getByTestId('reports-sync-progress-bar')).toHaveAttribute('data-value', '41');
 	});
 
 	// A server that sent no X-WP-Total leaves the denominator unknown; the count is still

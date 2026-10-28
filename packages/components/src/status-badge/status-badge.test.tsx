@@ -67,3 +67,14 @@ describe('status-badge dot + word', () => {
 		expect(source).not.toMatch(/rounded-full px-/);
 	});
 });
+
+it('has a caption size for a row state line or a log level: the small dot and the help rank', () => {
+	render(<StatusBadge testID="badge" size="caption" label="Not in range" variant="muted" />);
+	const dot = screen.getByTestId('badge').querySelector('div');
+	expect(dot).toHaveClass('size-1.5', TONE.muted.dot);
+	expect(dot).not.toHaveClass('size-2');
+	expect(screen.getByTestId('badge').querySelector('span')).toHaveClass(
+		'text-muted-foreground',
+		'text-xs'
+	);
+});

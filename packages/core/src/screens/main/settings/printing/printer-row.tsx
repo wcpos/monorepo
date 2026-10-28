@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -9,12 +9,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
@@ -87,23 +84,14 @@ export function PrinterRow({
 	const showMenu = true; // the setup report is always offered
 
 	return (
-		<View
+		<DeviceRow
 			testID={`printer-row-${profile.id}`}
-			className="web:hover:bg-accent flex-row flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2 py-2.5"
+			icon={printerIconName(profile)}
+			name={profile.name}
+			tag={profile.isDefault ? t('common.default') : undefined}
+			identifiers={[connectionLabel]}
 		>
-			<View className="bg-muted size-10 items-center justify-center rounded-lg">
-				<Icon name={printerIconName(profile)} variant="muted" size="lg" />
-			</View>
-			<VStack className="min-w-40 flex-1 gap-0.5">
-				<Text className="text-lg font-semibold" numberOfLines={1}>
-					{profile.name}
-				</Text>
-				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-					{connectionLabel}
-				</Text>
-			</VStack>
-			<HStack className="ml-auto flex-wrap items-center gap-2">
-				{profile.isDefault && <StatusBadge variant="default" label={t('common.default')} />}
+			<DeviceRowActions>
 				<Button
 					variant="outline"
 					size="sm"
@@ -183,7 +171,7 @@ export function PrinterRow({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
-			</HStack>
-		</View>
+			</DeviceRowActions>
+		</DeviceRow>
 	);
 }

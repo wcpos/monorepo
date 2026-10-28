@@ -33,7 +33,7 @@ jest.mock('../printer/use-available-printer-profiles', () => ({
 }));
 jest.mock('../printer/add-printer', () => ({ PrinterDialog: () => null }));
 jest.mock('./use-ensure-system-printer', () => ({ useEnsureSystemPrinter: () => {} }));
-jest.mock('./printers-empty-state', () => ({ PrintersEmptyState: () => null }));
+jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: () => null }));
 jest.mock('./template-row', () => ({ TemplateRow: () => null }));
 jest.mock('./printer-row', () => ({
 	PrinterRow: ({ onDelete }: { onDelete: (id: string) => void }) => (

@@ -29,6 +29,10 @@ const enqueue = jest.fn().mockResolvedValue(undefined);
 const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
 // PropertyRow renders the Saved mark, whose exit beat imports reanimated's ESM.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
 // The Delete confirm imports the alert dialog, whose overlay shell needs the real react-native;
 // this suite mocks react-native, so the dialog is a passthrough here (its behaviour is index.test.tsx's).
@@ -202,8 +206,8 @@ jest.mock('../printer/add-printer', () => ({
 	PrinterDialog: () => null,
 }));
 
-jest.mock('./printers-empty-state', () => ({
-	PrintersEmptyState: () => <div data-testid="printers-empty-state" />,
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID }: { testID?: string }) => <div data-testid={testID} />,
 }));
 
 jest.mock('../components/settings-section', () => ({

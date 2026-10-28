@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Notice } from '@wcpos/components/notice';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -480,9 +481,11 @@ export function RegistersPanel() {
 				<Text className="text-muted-foreground text-sm">{t('common.loading')}</Text>
 			) : null}
 			{error !== null ? (
-				<Text testID="health-registers-error" className="text-bad text-sm">
-					{t('health.registers.error', { error })}
-				</Text>
+				<Notice
+					testID="health-registers-error"
+					tone="bad"
+					title={t('health.registers.error', { error })}
+				/>
 			) : null}
 			{data?.registers.map((register) => (
 				<RegisterBlock

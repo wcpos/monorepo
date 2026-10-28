@@ -1,12 +1,13 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
 
 import { decode } from 'html-entities';
 
 import * as Alert from '@wcpos/components/alert-dialog';
-import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DeviceRow } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { HStack } from '@wcpos/components/hstack';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
@@ -121,9 +122,12 @@ export function CardReadersSettings() {
 		<VStack className="gap-5">
 			<Text className="text-muted-foreground">{t('settings.card_readers.description')}</Text>
 			{devices.length === 0 ? (
-				<Text testID="card-readers-none" className="text-muted-foreground text-sm">
-					{t('settings.card_readers.no_device_methods')}
-				</Text>
+				<EmptyState
+					testID="card-readers-none"
+					kind="empty"
+					size="inline"
+					title={t('settings.card_readers.no_device_methods')}
+				/>
 			) : (
 				<>
 					{phoneRows.length > 0 || tapToPay.length > 0 ? (
@@ -150,14 +154,12 @@ export function CardReadersSettings() {
 						testID="card-readers-list"
 					>
 						{bluetoothRows.length === 0 ? (
-							<View
+							<EmptyState
 								testID="card-readers-empty"
-								className="border-border rounded-lg border border-dashed px-3 py-5"
-							>
-								<Text className="text-muted-foreground text-center text-sm">
-									{t('settings.card_readers.empty_bluetooth')}
-								</Text>
-							</View>
+								kind="empty"
+								icon="card"
+								title={t('settings.card_readers.empty_bluetooth')}
+							/>
 						) : (
 							bluetoothRows.map(row)
 						)}
@@ -263,41 +265,29 @@ function TapToPayRow({
 	// Named for the phone in the cashier's hand: Apple's name on iOS, Android's on Android.
 	const android = Platform.OS === 'android';
 	return (
-		<View
+		<DeviceRow
 			testID={`tap-to-pay-row-${method.id}`}
-			className="bg-card border-border gap-3 rounded-lg border p-3"
+			icon="card"
+			name={
+				android
+					? t('settings.card_readers.tap_to_pay_android')
+					: t('settings.card_readers.tap_to_pay')
+			}
+			tag={decode(method.title)}
+			// One line: not set up, and who can set it up when this user cannot.
+			state={{
+				tone: 'muted',
+				testID: `tap-to-pay-row-${method.id}-line`,
+				label: canAccept
+					? t('settings.card_readers.not_set_up')
+					: t('settings.card_readers.not_set_up_admin'),
+			}}
 		>
-			<HStack className="items-start gap-3">
-				<View className="bg-muted size-10 items-center justify-center rounded-lg">
-					<Icon name="card" variant="muted" size="lg" />
-				</View>
-				<VStack className="flex-1 gap-0.5">
-					<HStack className="items-start gap-2">
-						<Text className="flex-1 text-lg font-semibold" numberOfLines={1}>
-							{android
-								? t('settings.card_readers.tap_to_pay_android')
-								: t('settings.card_readers.tap_to_pay')}
-						</Text>
-						<Badge variant="muted" className="max-w-32">
-							{decode(method.title)}
-						</Badge>
-					</HStack>
-					{/* One line: not set up, and who can set it up when this user cannot. */}
-					<Text
-						className="text-muted-foreground text-sm"
-						testID={`tap-to-pay-row-${method.id}-line`}
-					>
-						{canAccept
-							? t('settings.card_readers.not_set_up')
-							: t('settings.card_readers.not_set_up_admin')}
-					</Text>
-				</VStack>
-			</HStack>
 			{canAccept ? (
 				<Button disabled={busy} onPress={onSetUp} testID={`tap-to-pay-row-${method.id}-set-up`}>
 					<ButtonText>{t('settings.card_readers.set_up_tap_to_pay')}</ButtonText>
 				</Button>
 			) : null}
-		</View>
+		</DeviceRow>
 	);
 }
