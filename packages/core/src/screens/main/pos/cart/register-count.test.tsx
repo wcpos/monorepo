@@ -144,10 +144,10 @@ it('counts two notes, clears their contribution on typing, and clears the tiles'
 	fireEvent.click(screen.getByTestId('count-denominations'));
 	fireEvent.click(screen.getByTestId('den-tile-20'));
 	fireEvent.click(screen.getByTestId('den-tile-20'));
-	expect(screen.getByTestId('den-count-20').textContent).toBe('2');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('2');
 	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.00');
 	enter('7');
-	expect(screen.getByTestId('den-count-20').textContent).toBe('0');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('0');
 	fireEvent.click(screen.getByTestId('den-tile-20'));
 	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('20.00');
 	fireEvent.click(screen.getByTestId('count-clear'));
@@ -160,13 +160,13 @@ it('holds for ten, repeats, and does not also single tap', () => {
 	const tile = screen.getByTestId('den-tile-20');
 	fireEvent.mouseDown(tile);
 	act(() => jest.advanceTimersByTime(400));
-	expect(screen.getByTestId('den-count-20').textContent).toBe('10');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('10');
 	act(() => jest.advanceTimersByTime(150));
-	expect(screen.getByTestId('den-count-20').textContent).toBe('20');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('20');
 	fireEvent.mouseUp(tile);
 	fireEvent.click(tile);
 	act(() => jest.advanceTimersByTime(500));
-	expect(screen.getByTestId('den-count-20').textContent).toBe('20');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('20');
 });
 it('blind cashier sees neither expected nor local manager line', () => {
 	blind = true;

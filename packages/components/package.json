@@ -90,6 +90,7 @@
     "./text": "./src/text/index.tsx",
     "./textarea": "./src/textarea/index.tsx",
     "./tile": "./src/tile/index.tsx",
+    "./tile-grid": "./src/tile-grid/index.tsx",
     "./toast": "./src/toast/index.ts",
     "./tone-disc": "./src/tone-disc/index.tsx",
     "./tooltip": "./src/tooltip/index.tsx",

@@ -94,7 +94,7 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await page.getByTestId('count-denominations').click();
 	await page.getByTestId('den-tile-20').click();
 	await page.getByTestId('den-tile-20').click();
-	await expect(page.getByTestId('den-count-20')).toHaveText('2');
+	await expect(page.getByTestId('den-tile-20-badge')).toHaveText('2');
 	await expect(page.getByTestId('count-amount')).toHaveValue('40.00');
 	await page.getByTestId('count-close').click();
 	await expect(page.getByTestId('closure-sheet')).toBeVisible();

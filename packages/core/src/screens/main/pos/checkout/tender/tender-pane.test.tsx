@@ -65,6 +65,8 @@ jest.mock('@wcpos/components/tile', () => ({
 		selected,
 		onPress,
 		className,
+		title,
+		sub,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
@@ -72,6 +74,8 @@ jest.mock('@wcpos/components/tile', () => ({
 		selected?: boolean;
 		onPress?: () => void;
 		className?: string;
+		title?: React.ReactNode;
+		sub?: React.ReactNode;
 	}) => (
 		<button
 			className={className}
@@ -81,6 +85,8 @@ jest.mock('@wcpos/components/tile', () => ({
 			onClick={onPress}
 		>
 			{children}
+			{title}
+			{sub}
 		</button>
 	),
 }));
@@ -1059,7 +1065,8 @@ it.each([
 		const tiles = screen.getAllByTestId(/^checkout-method-method-/);
 		expect(screen.getByTestId('checkout-commit').textContent === 'Saving order…').toBe(saving);
 		expect(screen.getByTestId('checkout-commit').hasAttribute('data-loading')).toBe(saving);
-		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
+		// Each tile sits in its grid cell (`TileGrid`); the row holds the cells.
+		const rows = [...new Set(tiles.map((tile) => tile.parentElement!.parentElement!))];
 		expect(rows).toHaveLength(phone ? 4 : 2);
 		for (const row of rows) {
 			expect(row.className).toContain('flex-row gap-2');
@@ -1072,9 +1079,9 @@ it.each([
 		}
 		expect(tiles.map((tile) => tile.textContent?.includes('Cash'))).toEqual(Array(7).fill(true));
 		const lastRow = rows.at(-1)!;
-		expect(
-			Array.from(lastRow.children).filter((cell) => !cell.hasAttribute('data-testid'))
-		).toHaveLength(phone ? 1 : 3);
+		expect(Array.from(lastRow.children).filter((cell) => cell.children.length === 0)).toHaveLength(
+			phone ? 1 : 3
+		);
 	}
 	rerender(
 		<DeviceScope phone={phone}>
@@ -1083,7 +1090,7 @@ it.each([
 	);
 	const skeletons = screen.getAllByTestId('checkout-tile-skeleton');
 	expect(skeletons).toHaveLength(4);
-	const rows = [...new Set(skeletons.map((tile) => tile.parentElement!))];
+	const rows = [...new Set(skeletons.map((tile) => tile.parentElement!.parentElement!))];
 	expect(rows).toHaveLength(phone ? 2 : 1);
 	for (const row of rows) {
 		expect(row.className).toContain('flex-row gap-2');

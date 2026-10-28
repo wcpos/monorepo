@@ -6,6 +6,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -48,7 +49,7 @@ export function DenominationTile({
 	return (
 		<Tile
 			testID={`den-tile-${value}`}
-			size="tile"
+			badge={pieces}
 			accessibilityLabel={format(Number(value))}
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
@@ -68,9 +69,6 @@ export function DenominationTile({
 		>
 			<Text className="max-w-full text-sm tabular-nums" numberOfLines={1} adjustsFontSizeToFit>
 				{format(Number(value))}
-			</Text>
-			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
-				{pieces}
 			</Text>
 		</Tile>
 	);
@@ -206,28 +204,18 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			</View>
 			{notesOpen && (
 				<View className="gap-2">
-					{Array.from({ length: Math.ceil(faces.length / 4) }, (_, row) => (
-						<View key={row} className="flex-row gap-2">
-							{Array.from({ length: 4 }, (_, column) => {
-								const value = faces[row * 4 + column];
-								return value ? (
-									<DenominationTile
-										key={value}
-										value={value}
-										pieces={pieces[value] ?? 0}
-										add={(n) =>
-											setPieces((previous) => ({
-												...previous,
-												[value]: (previous[value] ?? 0) + n,
-											}))
-										}
-									/>
-								) : (
-									<View key={column} className="flex-1" />
-								);
-							})}
-						</View>
-					))}
+					<TileGrid columns={4}>
+						{faces.map((value) => (
+							<DenominationTile
+								key={value}
+								value={value}
+								pieces={pieces[value] ?? 0}
+								add={(n) =>
+									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }))
+								}
+							/>
+						))}
+					</TileGrid>
 					<Button
 						testID="count-clear"
 						variant="ghost"

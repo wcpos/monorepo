@@ -13,6 +13,7 @@ import {
 } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
@@ -151,30 +152,21 @@ export function RecountSheet({
 					>
 						{t('register.count_by_denominations')}
 					</Button>
-					{notesOpen &&
-						Array.from({ length: Math.ceil(faces.length / 4) }, (_, index) => (
-							<View key={index} className="flex-row gap-2">
-								{Array.from({ length: 4 }, (_, column) => {
-									const face = faces[index * 4 + column];
-									return face ? (
-										<DenominationTile
-											currencyOptions={currencyOptions}
-											key={face}
-											value={face}
-											pieces={pieces[face] ?? 0}
-											add={(n) => {
-												setPieces((previous) => ({
-													...previous,
-													[face]: (previous[face] ?? 0) + n,
-												}));
-											}}
-										/>
-									) : (
-										<View key={column} className="flex-1" />
-									);
-								})}
-							</View>
-						))}
+					{notesOpen && (
+						<TileGrid columns={4}>
+							{faces.map((face) => (
+								<DenominationTile
+									currencyOptions={currencyOptions}
+									key={face}
+									value={face}
+									pieces={pieces[face] ?? 0}
+									add={(n) =>
+										setPieces((previous) => ({ ...previous, [face]: (previous[face] ?? 0) + n }))
+									}
+								/>
+							))}
+						</TileGrid>
+					)}
 					<Text>{t('reports.recount_reason')}</Text>
 					<Input
 						testID="recount-reason"

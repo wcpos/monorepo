@@ -284,15 +284,13 @@ export function RegisterPanel({
 							className="flex-1"
 							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
+							title={t(`register.${type}`)}
 						>
 							<Icon
 								name={
 									type === 'paid_in' ? 'arrowDown' : type === 'paid_out' ? 'arrowUp' : 'register'
 								}
 							/>
-							<Text numberOfLines={1} className="font-medium">
-								{t(`register.${type}`)}
-							</Text>
 						</Tile>
 					))}
 				</View>

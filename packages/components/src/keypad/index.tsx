@@ -12,7 +12,7 @@ import { Text } from '../text';
 export type KeypadKey = {
 	/** What a press reports: a digit, `decimal`, `backspace`, or the caller's own key. */
 	name: string;
-	/** The accessible name: the digit, or the caller's translated name (an icon's too). */
+	/** The accessible name: the digit, or the caller's translated one. */
 	label: string;
 	/** The key's text when it is not its name (`−10%`, named "Discount (10%)"). */
 	text?: string;
@@ -40,11 +40,7 @@ export function decimalRow(separator: string | undefined, backspace: string): Ke
 	];
 }
 
-/**
- * THE key face (card 17, 2026-10-28): the price keypad's phone key (Paul 2026-10-24), flat
- * `bg-muted` at the control floor, on every keypad that reaches a phone. `cell` is a key under
- * one panel's border (the anchored grow keypads). A quick key is outlined, filled while lit.
- */
+/** THE key face (card 17): the price keypad's phone key; `cell` sits under one panel's border. */
 const keyFace = cva('items-center justify-center', {
 	variants: {
 		face: {
@@ -62,12 +58,7 @@ const keyText = cva('font-semibold', {
 	},
 });
 
-type KeyProps = KeypadKey & {
-	face?: 'key' | 'cell';
-	onPress: () => void;
-	style?: ViewProps['style'];
-	className?: string;
-};
+type KeyProps = KeypadKey & { face?: 'key' | 'cell'; onPress: () => void } & ViewProps;
 
 /** One key: role, name, `keypad-key-<name>` unless the caller names it, the face. */
 export function Key({ face = 'key', name, label, text, icon, variant, on, ...props }: KeyProps) {

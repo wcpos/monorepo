@@ -11,8 +11,8 @@ import {
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
-import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
@@ -57,7 +57,9 @@ function ThemeOptionButton({
 			// min-h-40 clears the tallest possible card — icon + 2-line label cap
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
-			className="min-h-40 flex-1 gap-2 p-3"
+			className="min-h-40 gap-2 p-3"
+			title={t(option.labelKey)}
+			sub={t(option.descriptionKey)}
 		>
 			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
 			<Icon
@@ -65,15 +67,6 @@ function ThemeOptionButton({
 				size="xl"
 				className={isActive ? 'text-primary' : 'text-muted-foreground'}
 			/>
-			<Text
-				className={`text-center text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}
-				numberOfLines={2}
-			>
-				{t(option.labelKey)}
-			</Text>
-			<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
-				{t(option.descriptionKey)}
-			</Text>
 		</Tile>
 	);
 }
@@ -110,34 +103,18 @@ function ThemeGrid({
 					: t('settings.current_theme', { theme: activeThemeLabel })
 			}
 		>
-			<VStack className="gap-3 pt-2">
-				{/* First row: System, Light, Dark. items-stretch so every card in a
-				    row takes the tallest card's height (HStack defaults to
-				    items-center, which lets short-description cards float shorter). */}
-				<HStack className="items-stretch gap-3">
-					{themeOptions.slice(0, 3).map((option) => (
-						<ThemeOptionButton
-							key={option.name}
-							option={option}
-							activeTheme={activeTheme as string}
-							onPress={onThemeChange}
-							t={t}
-						/>
-					))}
-				</HStack>
-				{/* Second row: Ocean, Sunset, Monochrome */}
-				<HStack className="items-stretch gap-3">
-					{themeOptions.slice(3, 6).map((option) => (
-						<ThemeOptionButton
-							key={option.name}
-							option={option}
-							activeTheme={activeTheme as string}
-							onPress={onThemeChange}
-							t={t}
-						/>
-					))}
-				</HStack>
-			</VStack>
+			{/* System, Light, Dark; then Ocean, Sunset, Monochrome. */}
+			<TileGrid columns={3} className="pt-2">
+				{themeOptions.map((option) => (
+					<ThemeOptionButton
+						key={option.name}
+						option={option}
+						activeTheme={activeTheme as string}
+						onPress={onThemeChange}
+						t={t}
+					/>
+				))}
+			</TileGrid>
 		</PropertyRow>
 	);
 }
