@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
 
 import { metaForWrite } from './meta-for-write';
+import { isActionRefusal } from '../../../extensions/actions/types';
 import { taxClassToWire } from '../hooks/tax-class';
 
 import type { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
@@ -31,7 +32,7 @@ export function useRecordAutosave<T extends FieldValues, P extends object>({
 	readOnly?: boolean;
 	/** The record as it stands, read at write time so custom fields see newly numbered rows; a form with custom fields passes it. */
 	stored?: () => P;
-	/** The record command, bound by the caller; a truthy result is a landed write. The names `save`/`patch` are the seam ratchet's. */
+	/** The record command, bound by the caller; a truthy result other than a refusal is a landed write. The names `save`/`patch` are the seam ratchet's. */
 	persist: (data: Partial<P>, root: string) => Promise<unknown>;
 	before?: (root: string) => boolean | Promise<boolean>;
 	wire?: (root: string, value: unknown) => unknown;
@@ -76,7 +77,9 @@ export function useRecordAutosave<T extends FieldValues, P extends object>({
 				'data' in own && typeof own.after === 'function'
 					? (own as { data: Partial<P>; after: (written: boolean) => void })
 					: { data: own as Partial<P>, after: undefined };
-			const written = Boolean(await persist(data, root));
+			// A refusal from the record's hooks is truthy but is not a landed write.
+			const result = await persist(data, root);
+			const written = Boolean(result) && !isActionRefusal(result);
 			after?.(written);
 			if (written) markSaved([root]);
 			return written;

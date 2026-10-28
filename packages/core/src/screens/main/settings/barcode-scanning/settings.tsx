@@ -40,8 +40,8 @@ import {
 import { SettingsSection } from '../components/settings-section';
 
 const formSchema = z.object({
-	barcode_scanning_avg_time_input_threshold: z.coerce.number().default(24),
-	barcode_scanning_min_chars: z.coerce.number().default(8),
+	barcode_scanning_avg_time_input_threshold: z.coerce.number().int().min(0).default(24),
+	barcode_scanning_min_chars: z.coerce.number().int().min(0).default(8),
 	barcode_scanning_prefix: z.string().default(''),
 	barcode_scanning_suffix: z.string().default(''),
 	barcode_scanning_sound_enabled: z.boolean().default(false),

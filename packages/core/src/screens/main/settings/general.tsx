@@ -70,7 +70,8 @@ const formSchema = z.object({
 	currency_pos: z.string().default('left'),
 	price_thousand_sep: z.string().default(','),
 	price_decimal_sep: z.string().default('.'),
-	price_num_decimals: z.coerce.number().default(2),
+	// Woo's own field is a number with min 0, step 1 and no max (class-wc-settings-general.php).
+	price_num_decimals: z.coerce.number().int().min(0).default(2),
 	thousands_group_style: z.enum(['thousand', 'lakh', 'wan']).default('thousand'),
 });
 

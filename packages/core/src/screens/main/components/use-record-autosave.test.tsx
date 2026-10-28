@@ -165,6 +165,13 @@ it('awaits an async patch (the customer mirror validates the billing root first)
 		'first_name'
 	);
 });
+it("a refusal from the record's hooks is not written: no mark, false", async () => {
+	persist.mockResolvedValue({ deny: { reasonKey: 'pos_cart.refused' } });
+	values.name = 'Ada';
+	mount();
+	expect(await change({ name: 'Ada' })).toBe(false);
+	expect(mockMarkSaved).not.toHaveBeenCalled();
+});
 it.each([true, { document: {} }, false, undefined])(
 	'after sees written=%p; only a truthy persist marks the root',
 	async (written) => {
