@@ -21,6 +21,8 @@ const fieldBoxVariants = cva(`border-border bg-card rounded-lg border ${FIELD_TE
 			open: 'border-ring web:ring-1 web:ring-ring',
 			disabled: 'web:cursor-not-allowed opacity-45',
 			invalid: 'border-destructive',
+			/** Its number needs a look (a cart line over stock). */
+			attention: 'border-attention bg-attention/15',
 		},
 		/** A Textarea grows from one control's height. */
 		multiline: { false: 'h-ctl', true: 'min-h-ctl' },
