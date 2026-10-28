@@ -86,7 +86,7 @@ it('describes the cashier by store, register and sign-in time', () => {
 - Test: `user-sheet.test.tsx`, `register-bar.test.tsx`, `cashier-entry/index.test.tsx`
 
 **Interfaces:**
-- Produces: in the sheet, two figure tiles in a `flex-row gap-2`: **Your sales today** (`testID="user-sheet-sales-today"`, `useSalesToday()` formatted) and **In the drawer** (`testID="user-sheet-drawer"`, pressable: `onOpenRegister ? onOpenRegister() : navigate-and-request`, then `onOpenChange(false)`), whose value is `format(expected.cash)` with the sub-line `opened HH:MM by <Avatar size="sm" of the opener>` when a session is open; `t('register.register_closed_last_closure', { n })` when closed with a last closure; the tile absent when `binding.status !== 'bound'`. Blind cashier: the drawer tile shows `t('register.sales_count', { count: salesCount })` instead of the figure.
+- Produces: in the sheet, two figure tiles in a `flex-row gap-2`: **Your sales today** (`testID="user-sheet-sales-today"`, `useSalesToday()` formatted) and **In the drawer** (`testID="user-sheet-drawer"`, pressable: `onOpenRegister ? onOpenRegister() : navigate-and-request`, then `onOpenChange(false)`), whose value is `format(expected.cash)` with the sub-line `opened HH:MM by <Avatar size="sm" of the opener>` when a session is open, or `—` with `t('register.figures_after_sync')` while `figuresPending` (spec § 4.9); `t('register.register_closed_last_closure', { n })` when closed with a last closure; the tile absent when `binding.status !== 'bound'`. Blind cashier: the drawer tile shows `t('register.sales_count', { count: salesCount })` instead of the figure.
 - Consumes: `useRegisterSession()` (`session`, `expected`, `lastClosure`, `blind`, `salesCount`, `binding`), `credentialsListResource(site)` for the opener's name (as `Opener` in `register-panel.tsx:52-60`), `useRouter` from `expo-router`.
 
 - [ ] **Step 1: Failing tests:**
@@ -106,6 +106,11 @@ it('from the rail, the drawer door goes to the POS and asks for the panel', () =
 	fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 	expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
 	expect(consumeRegisterPanelRequest()).toBe(true);
+});
+it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
+	// useRegisterSession mocked with figuresPending true
+	expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('—');
+	expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('Figures arrive with the next sync');
 });
 it('says the register is closed with its last closure when there is no session', () => {
 	// session null, lastClosure { number: 12 }
