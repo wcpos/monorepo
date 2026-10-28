@@ -123,7 +123,6 @@
 	"packages/core/src/screens/main/settings/printing/printer-row.tsx": 1,
 	"packages/core/src/screens/main/settings/printing/printers-empty-state.tsx": 1,
 	"packages/core/src/screens/main/settings/printing/template-row.tsx": 1,
-	"packages/core/src/screens/main/settings/theme.tsx": 2,
 	"packages/core/src/screens/main/tax-rates/footer.tsx": 1,
 	"packages/core/src/screens/main/tax-rates/rate-table.tsx": 3
 }

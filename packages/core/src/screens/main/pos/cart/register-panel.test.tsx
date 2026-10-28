@@ -191,16 +191,23 @@ jest.mock('@wcpos/components/chip', () => ({
 	),
 }));
 jest.mock('@wcpos/components/keypad', () => ({
+	...jest.requireActual('@wcpos/components/keypad'),
 	Keypad: ({
 		rows,
 		onPress,
+		testID,
 	}: {
-		rows: { value: string; testID: string; label?: string }[][];
-		onPress: (value: string) => void;
+		rows: { name: string; label: string }[][];
+		onPress: (name: string) => void;
+		testID: string;
 	}) => (
 		<div>
 			{rows.flat().map((key) => (
-				<button key={key.value} data-testid={key.testID} onClick={() => onPress(key.value)}>
+				<button
+					key={key.name}
+					data-testid={`${testID}-key-${key.name}`}
+					onClick={() => onPress(key.name)}
+				>
 					{key.label}
 				</button>
 			))}

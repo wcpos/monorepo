@@ -109,7 +109,7 @@ test.describe('POS Cart', () => {
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		await page.keyboard.type('3');
-		await page.getByTestId('numpad-done-button').click();
+		await page.getByTestId('keypad-key-done').click();
 		// A keyboard-wedge scanner's Enter used to press the refocused quantity
 		// trigger and reopen the numpad for the wrong row. The burst is shorter than
 		// the store's minimum code length on purpose: it never reaches the catalog,
@@ -133,10 +133,10 @@ test.describe('POS Cart', () => {
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		// The keypad's first digit replaces the quantity and later digits append (decision 36).
-		for (const digit of '123') await page.getByTestId(`numpad-key-${digit}`).click();
+		for (const digit of '123') await page.getByTestId(`keypad-key-${digit}`).click();
 		await expect(page.getByTestId('quantity-keypad-value')).toHaveText('123');
 
-		await page.getByTestId('numpad-done-button').click();
+		await page.getByTestId('keypad-key-done').click();
 		await expect(numpad).toBeHidden();
 		await expect(quantityButton).toHaveText(/123/, { timeout: 15_000 });
 	});

@@ -17,9 +17,14 @@ export const stories = [
 		render: () =>
 			grid(
 				['5', '10', '20', '50'].map((value) => (
-					<Tile key={value} size="tile" onPress={onPress} testID={`tile-key-${value}`}>
+					<Tile
+						key={value}
+						badge={0}
+						onPress={onPress}
+						className="w-16"
+						testID={`tile-key-${value}`}
+					>
 						<Text className="text-sm tabular-nums">{value} €</Text>
-						<Text className="bg-background rounded-full px-1 tabular-nums">0</Text>
 					</Tile>
 				))
 			),

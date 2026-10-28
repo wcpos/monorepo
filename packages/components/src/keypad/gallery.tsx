@@ -2,21 +2,21 @@ import { View } from 'react-native';
 
 import { useT } from '@wcpos/core/contexts/translations';
 
-import { Keypad, type KeypadKeyDescriptor } from './index';
+import { Keypad, type KeypadKey } from './index';
 
 const digits = [
 	['1', '2', '3'],
 	['4', '5', '6'],
 	['7', '8', '9'],
-].map((row) => row.map((value) => ({ value, label: value })));
-const zero: KeypadKeyDescriptor = { value: '0', label: '0', span: 2 };
-const numeric = [...digits, [zero, { value: '.', label: '.' }]];
+].map((row) => row.map((name) => ({ name, label: name })));
+const zero: KeypadKey = { name: '0', label: '0', span: 2 };
+const numeric = [...digits, [zero, { name: '.', label: '.' }]];
 const icons = (t: (key: string) => string) => [
 	...digits,
 	[
-		{ value: 'clear', icon: 'close' as const, accessibilityLabel: t('common.clear') },
-		{ value: '0', label: '0' },
-		{ value: 'backspace', icon: 'backspace' as const, accessibilityLabel: t('common.backspace') },
+		{ name: 'clear', icon: 'close' as const, label: t('common.clear') },
+		{ name: '0', label: '0' },
+		{ name: 'backspace', icon: 'backspace' as const, label: t('common.backspace') },
 	],
 ];
 function TranslatedKeypad({
@@ -30,7 +30,7 @@ export const stories = Object.entries({
 	numeric,
 	icons,
 	shrink: numeric,
-	wide: [[zero, { value: '.', label: '.' }]],
+	wide: [[zero, { name: '.', label: '.' }]],
 }).map(([id, rows]) => ({
 	id,
 	render: () => (

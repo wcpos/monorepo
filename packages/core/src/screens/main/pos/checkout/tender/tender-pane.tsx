@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useCSSVariable } from 'uniwind';
 
 import { Chip } from '@wcpos/components/chip';
-import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
+import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -16,6 +16,7 @@ import { Notice } from '@wcpos/components/notice';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
@@ -123,29 +124,6 @@ export function TenderPane({ flow, format, compact }: Props) {
 	);
 }
 
-// Keep each row at the same column count: percentage bases plus gaps wrap too early. Two on a
-// phone so six gateways' names fit (three rows), never an ellipsis.
-function MethodRows({ children }: React.PropsWithChildren) {
-	const columns = useIsPhone() ? 2 : 5;
-	const tiles = React.Children.toArray(children);
-	const rows: React.ReactNode[][] = [];
-	for (let index = 0; index < tiles.length; index += columns) {
-		rows.push(tiles.slice(index, index + columns));
-	}
-	return (
-		<View className="w-full gap-2">
-			{rows.map((row, index) => (
-				<View key={index} className="flex-row gap-2">
-					{row}
-					{Array.from({ length: columns - row.length }, (_, spacer) => (
-						<View key={`spacer-${spacer}`} className="min-w-0 flex-1" />
-					))}
-				</View>
-			))}
-		</View>
-	);
-}
-
 /**
  * A refused save that is still on screen: the durable dead letter hydrated after a cold
  * restore, or a late rejection on a phone whose modal is still open. Pay's own path leaves
@@ -173,19 +151,12 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	);
 }
 
-const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDescriptor[])[] => [
-	...['123', '456', '789'].map((row) =>
-		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
-	),
+const keypadRows = (backspace: string): KeypadKey[][] => [
+	...DIGIT_ROWS,
 	[
-		{ value: 'clear', label: 'C', testID: 'checkout-key-clear' },
-		{ value: '0', label: '0', testID: 'checkout-key-0' },
-		{
-			value: 'backspace',
-			icon: 'backspace',
-			accessibilityLabel,
-			testID: 'checkout-key-backspace',
-		},
+		{ name: 'clear', label: 'C' },
+		{ name: '0', label: '0' },
+		{ name: 'backspace', label: backspace, icon: 'backspace' },
 	],
 ];
 
@@ -197,6 +168,7 @@ const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDes
 function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const t = useT();
 	const KEYPAD_ROWS = keypadRows(t('common.backspace'));
+	const phone = useIsPhone();
 	const busy = flow.busy || saving;
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
@@ -262,19 +234,16 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			<Tile
 				key={tile.method.id}
 				selected={selected}
-				className="min-w-0 flex-1"
 				testID={`checkout-method-${tile.method.id}`}
 				disabled={busy}
 				onPress={() => {
 					setChoosingReader(null);
 					flow.pickMethod(tile.method.id);
 				}}
+				title={tile.method.title}
+				sub={<MethodStatus tile={tile} selected={selected} />}
 			>
 				<Icon name={methodIcon(tile.method)} />
-				<Text decodeHtml numberOfLines={2} className="text-center font-medium">
-					{tile.method.title}
-				</Text>
-				<MethodStatus tile={tile} selected={selected} />
 			</Tile>
 		);
 	});
@@ -429,18 +398,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</View>
 			) : null}
 
-			<MethodRows>
+			{/* Two columns on a phone so six gateways' names fit (three rows), never an ellipsis. */}
+			<TileGrid columns={phone ? 2 : 5}>
 				{pills.length > 0 || !saving
 					? pills
 					: Array.from({ length: 4 }, (_, index) => (
-							<Skeleton
-								key={index}
-								shape="tile"
-								testID="checkout-tile-skeleton"
-								className="min-w-0 flex-1"
-							/>
+							<Skeleton key={index} shape="tile" testID="checkout-tile-skeleton" />
 						))}
-			</MethodRows>
+			</TileGrid>
 			{slow ? (
 				<Text testID="checkout-save-slow" className="text-warning-text text-sm">
 					{t('pos_checkout.store_not_answering')}
@@ -606,7 +571,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				rows={KEYPAD_ROWS.map((row) =>
 					row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
 				)}
-				onPress={(value) => flow.dispatch({ type: 'key', key: value as TenderKey })}
+				onPress={(name) => flow.dispatch({ type: 'key', key: name as TenderKey })}
 				fit={shrink ? 'shrink' : 'tile'}
 				testID="checkout-keypad"
 				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}

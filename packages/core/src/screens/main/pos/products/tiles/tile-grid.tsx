@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { chunk } from '@wcpos/components/tile-grid';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { useDocField } from '@wcpos/query';
 
@@ -56,13 +57,7 @@ export function TileGrid<T>({
 	testID,
 }: TileGridProps<T>): React.ReactElement {
 	const columns = useGridColumns();
-	const rows = React.useMemo(() => {
-		const chunked: T[][] = [];
-		for (let i = 0; i < tiles.length; i += columns) {
-			chunked.push(tiles.slice(i, i + columns));
-		}
-		return chunked;
-	}, [tiles, columns]);
+	const rows = React.useMemo(() => chunk(tiles, columns), [tiles, columns]);
 	return (
 		<VirtualizedList.Root testID={testID} style={{ flex: 1 }}>
 			<VirtualizedList.List

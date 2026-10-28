@@ -28,16 +28,28 @@ it('is a card with a hairline border and the 8 pt radius on the muted-wash surfa
 		expect(classes('tile').split(' ')).toContain(token);
 });
 
-it('has a 64 pt square key and a labelled tile at least 64 tall', () => {
-	render(
-		<>
-			<Tile testID="key" size="tile" />
-			<Tile testID="labelled" />
-		</>
-	);
-	expect(classes('key')).toContain('size-tile');
-	expect(classes('labelled')).toContain('min-h-tile');
-	expect(classes('labelled')).toContain('flex-col');
+it('is at least 64 tall and grows to fill its grid cell', () => {
+	render(<Tile testID="tile" />);
+	for (const token of ['min-h-tile', 'grow', 'flex-col']) expect(classes('tile')).toContain(token);
+});
+
+it('draws its title, sub line and count pill in its own slots', () => {
+	render(<Tile testID="den" title="Cash &amp; change" sub="Each £5.00" badge={0} />);
+	expect(screen.getByText('Cash & change')).toBeInTheDocument();
+	expect(screen.getByText('Each £5.00')).toBeInTheDocument();
+	expect(screen.getByTestId('den-badge')).toHaveTextContent('0');
+});
+
+it.each([
+	['a string', 'Each £5.00'],
+	['a number', 12],
+])('draws %s sub line as text, never a bare text node under the surface', (_, sub) => {
+	render(<Tile testID="tile" title={3} sub={sub} />);
+	// A bare text node would make the surface itself the element holding the text.
+	for (const text of ['3', String(sub)]) {
+		expect(screen.getByText(text)).not.toBe(screen.getByTestId('tile'));
+		expect(screen.getByText(text).parentElement).toBe(screen.getByTestId('tile'));
+	}
 });
 
 it('marks the picked tile with the primary border on bg-muted', () => {

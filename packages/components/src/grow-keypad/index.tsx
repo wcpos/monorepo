@@ -1,12 +1,11 @@
 import * as React from 'react';
-import { type KeyDownEvent, Pressable, View, type ViewInstance } from 'react-native';
+import { type KeyDownEvent, View, type ViewInstance } from 'react-native';
 
 import { Button } from '../button';
-import { Icon, type IconName } from '../icon';
+import { decimalRow, Key, type KeypadKey } from '../keypad';
 import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
-import { Text } from '../text';
 import { type Grow, growFrame, ROW } from './frame';
 
 import type { TriggerRef } from '@rn-primitives/popover';
@@ -14,43 +13,17 @@ import type { TriggerRef } from '@rn-primitives/popover';
 /** The keys every keypad types with; a physical digit is its own name. */
 const KEY_NAMES: Record<string, string> = { Backspace: 'backspace', Enter: 'done' };
 
-type GrowKey = {
-	name: string;
-	/** The accessible name: the digit, or the caller's translated name. */
-	label: string;
-	/** The key's text when it is not its name (`−10%`, named "Discount (10%)"). */
-	text?: string;
-	icon?: IconName;
-	variant?: 'bad' | 'primary';
-	/** Cells wide (anchored), fractions allowed so fewer keys fill a row; 1 when unset. */
-	span?: number;
-	/** A quick key: primary text, lit (`true`) while its value is the draft. */
-	on?: boolean;
-	testID?: string;
-};
 /** The number the keypad edits, drawn by the caller; the row it is in lands on the trigger. */
 type GrowDisplay = { display: React.ReactNode; span?: number };
-export type GrowCell = GrowKey | GrowDisplay;
+export type GrowCell = KeypadKey | GrowDisplay;
 
-export const DIGIT_ROWS: GrowKey[][] = ['123', '456', '789'].map((row) =>
-	[...row].map((d) => ({ name: d, label: d }))
-);
-
-/**
- * The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel.
- * Without a separator (a currency with no decimal places) 0 takes the separator's cell too.
- */
+/** The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. */
 export function closingRows(
 	decimalSeparator: string | undefined,
 	labels: { backspace: string; done: string }
-): GrowKey[][] {
-	const zero: GrowKey = { name: '0', label: '0', span: decimalSeparator ? 1 : 2 };
+): KeypadKey[][] {
 	return [
-		[
-			...(decimalSeparator ? [{ name: 'decimal', label: decimalSeparator }] : []),
-			zero,
-			{ name: 'backspace', label: labels.backspace, icon: 'backspace' },
-		],
+		decimalRow(decimalSeparator, labels.backspace),
 		[{ name: 'done', label: labels.done, icon: 'check', variant: 'primary', span: 3 }],
 	];
 }
@@ -269,54 +242,21 @@ function Keys({
 							) : sheet && key.name === 'done' ? (
 								<Button
 									key="done"
-									testID="numpad-done-button"
+									testID="keypad-key-done"
 									className="flex-1"
 									onPress={() => onPress('done')}
 								>
 									{key.label}
 								</Button>
 							) : (
-								<Pressable
+								<Key
 									key={key.name}
-									role="button"
-									testID={
-										key.testID ??
-										(key.name === 'done' ? 'numpad-done-button' : `numpad-key-${key.name}`)
-									}
-									accessibilityLabel={key.label}
-									aria-pressed={key.on}
+									{...key}
+									face={sheet && !first ? 'key' : 'cell'}
 									onPress={() => onPress(key.name)}
 									style={size(key.span)}
-									className={cn(
-										'items-center justify-center',
-										key.on ? 'bg-primary' : 'web:hover:bg-muted active:bg-muted',
-										sheet &&
-											(first
-												? 'min-h-ctl w-14'
-												: key.on === undefined
-													? 'min-h-ctl bg-muted flex-1 rounded-lg'
-													: cn('min-h-ctl flex-1 rounded-lg', !key.on && 'border-border border'))
-									)}
-								>
-									{key.icon ? (
-										<Icon name={key.icon} variant={key.variant} />
-									) : (
-										<Text
-											className={cn(
-												'font-semibold',
-												key.on === undefined
-													? sheet
-														? 'text-xl'
-														: 'text-lg'
-													: key.on
-														? 'text-primary-foreground text-sm'
-														: 'text-primary text-sm'
-											)}
-										>
-											{key.text ?? key.label}
-										</Text>
-									)}
-								</Pressable>
+									className={sheet ? (first ? 'min-h-ctl w-14' : 'flex-1') : undefined}
+								/>
 							)
 						)}
 					</View>

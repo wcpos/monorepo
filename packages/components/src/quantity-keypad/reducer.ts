@@ -1,3 +1,5 @@
+import { typeDecimal } from '../lib/decimal-entry';
+
 /**
  * The quantity keypad's entry, pure. `buffer` is what has been typed, always with a `.` for
  * the decimal point (the store's separator is the caller's display); `stepped` is the number
@@ -6,10 +8,8 @@
 export type QuantityEntry = { buffer: string; stepped?: number };
 
 export type QuantityEntryAction =
-	/** `places` and `whole` default to a cart line's: six places, four whole digits. */
-	| { type: 'digit'; digit: string; places?: number; whole?: number }
-	| { type: 'decimal' }
-	| { type: 'backspace' }
+	/** A digit, `decimal` or `backspace`, typed by `typeDecimal`. */
+	| { type: 'key'; key: string; places: number; whole: number }
 	| { type: 'step'; quantity: number }
 	| { type: 'unstep'; quantity: number }
 	| { type: 'settle' }
@@ -22,8 +22,8 @@ export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
  * (`QUANTITY_FORMAT`), so a typed fraction or a step never cuts a line's own digits.
  */
 export const QUANTITY_PLACES = 6;
-// Four: a line never holds 10 000, and "9999" is what the 48 px cell fits.
-const INTEGER_DIGITS = 4;
+/** A line's whole digits: it never holds 10 000, and "9999" is what the 48 px cell fits. */
+export const LINE_DIGITS = 4;
 /** A count (stock) holds more than a line: six whole digits, the cell's text shrinks for them. */
 export const COUNT_DIGITS = 6;
 
@@ -33,18 +33,10 @@ export function quantityEntryReducer(
 ): QuantityEntry {
 	const { buffer } = entry;
 	switch (action.type) {
-		case 'digit': {
-			const { places = QUANTITY_PLACES, whole = INTEGER_DIGITS } = action;
-			const point = buffer.indexOf('.');
-			if (point >= 0 && buffer.length - point > places) return entry;
-			// A lone 0 only ever starts a fraction: the next digit takes its place.
-			const next = buffer === '0' ? action.digit : buffer + action.digit;
-			return point < 0 && next.length > whole ? entry : { ...entry, buffer: next };
+		case 'key': {
+			const typed = typeDecimal(buffer, action.key, action.places, action.whole);
+			return typed === buffer ? entry : { ...entry, buffer: typed };
 		}
-		case 'decimal':
-			return buffer.includes('.') ? entry : { ...entry, buffer: `${buffer || '0'}.` };
-		case 'backspace':
-			return { ...entry, buffer: buffer.slice(0, -1) };
 		case 'step':
 			return { buffer: '', stepped: action.quantity };
 		// The store refused that step: show what it holds again, unless a later step moved on.

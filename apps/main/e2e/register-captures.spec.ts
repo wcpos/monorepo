@@ -214,13 +214,13 @@ for (const [device, viewport] of Object.entries({
 						'quantity-keypad-open',
 						async () => {
 							await page.getByTestId('cart-quantity-input').first().click();
-							await expect(page.getByTestId('numpad-done-button')).toBeVisible();
+							await expect(page.getByTestId('keypad-key-done')).toBeVisible();
 						},
 						async () => {
 							// Done commits the unchanged value; on the phone the numpad is a sheet Escape
 							// does not dismiss, and its scrim would block every state after it.
-							await page.getByTestId('numpad-done-button').click();
-							await expect(page.getByTestId('numpad-done-button')).toBeHidden();
+							await page.getByTestId('keypad-key-done').click();
+							await expect(page.getByTestId('keypad-key-done')).toBeHidden();
 						}
 					);
 					await state('order-sheet-open', () => openOrderSheet(page), escape);
@@ -406,9 +406,9 @@ for (const [device, viewport] of Object.entries({
 							if (!cash) throw new Error('Store has no enabled manual cash tender');
 							const balance = await readAmountMinor(page, 'checkout-balance');
 							await page.getByTestId(`checkout-method-${cash.id}`).click();
-							await page.getByTestId('checkout-key-clear').click();
+							await page.getByTestId('checkout-keypad-key-clear').click();
 							for (const digit of String(balance))
-								await page.getByTestId(`checkout-key-${digit}`).click();
+								await page.getByTestId(`checkout-keypad-key-${digit}`).click();
 							await page.getByTestId('checkout-commit').click();
 							await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({
 								timeout: 60_000,

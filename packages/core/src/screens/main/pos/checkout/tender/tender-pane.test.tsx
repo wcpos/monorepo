@@ -65,6 +65,8 @@ jest.mock('@wcpos/components/tile', () => ({
 		selected,
 		onPress,
 		className,
+		title,
+		sub,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
@@ -72,6 +74,8 @@ jest.mock('@wcpos/components/tile', () => ({
 		selected?: boolean;
 		onPress?: () => void;
 		className?: string;
+		title?: React.ReactNode;
+		sub?: React.ReactNode;
 	}) => (
 		<button
 			className={className}
@@ -81,6 +85,8 @@ jest.mock('@wcpos/components/tile', () => ({
 			onClick={onPress}
 		>
 			{children}
+			{title}
+			{sub}
 		</button>
 	),
 }));
@@ -980,9 +986,9 @@ it('preserves every keypad selector and dispatches the original key action', () 
 	const flow = { ...makeFlow(), saveState: null };
 	render(<TenderPane flow={flow} format={String} />);
 	for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'backspace']) {
-		expect(screen.getByTestId(`checkout-key-${key}`)).toBeTruthy();
+		expect(screen.getByTestId(`checkout-keypad-key-${key}`)).toBeTruthy();
 	}
-	fireEvent.click(screen.getByTestId('checkout-key-5'));
+	fireEvent.click(screen.getByTestId('checkout-keypad-key-5'));
 	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '5' });
 });
 
@@ -1059,7 +1065,8 @@ it.each([
 		const tiles = screen.getAllByTestId(/^checkout-method-method-/);
 		expect(screen.getByTestId('checkout-commit').textContent === 'Saving order…').toBe(saving);
 		expect(screen.getByTestId('checkout-commit').hasAttribute('data-loading')).toBe(saving);
-		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
+		// Each tile sits in its grid cell (`TileGrid`); the row holds the cells.
+		const rows = [...new Set(tiles.map((tile) => tile.parentElement!.parentElement!))];
 		expect(rows).toHaveLength(phone ? 4 : 2);
 		for (const row of rows) {
 			expect(row.className).toContain('flex-row gap-2');
@@ -1072,9 +1079,9 @@ it.each([
 		}
 		expect(tiles.map((tile) => tile.textContent?.includes('Cash'))).toEqual(Array(7).fill(true));
 		const lastRow = rows.at(-1)!;
-		expect(
-			Array.from(lastRow.children).filter((cell) => !cell.hasAttribute('data-testid'))
-		).toHaveLength(phone ? 1 : 3);
+		expect(Array.from(lastRow.children).filter((cell) => cell.children.length === 0)).toHaveLength(
+			phone ? 1 : 3
+		);
 	}
 	rerender(
 		<DeviceScope phone={phone}>
@@ -1083,7 +1090,7 @@ it.each([
 	);
 	const skeletons = screen.getAllByTestId('checkout-tile-skeleton');
 	expect(skeletons).toHaveLength(4);
-	const rows = [...new Set(skeletons.map((tile) => tile.parentElement!))];
+	const rows = [...new Set(skeletons.map((tile) => tile.parentElement!.parentElement!))];
 	expect(rows).toHaveLength(phone ? 2 : 1);
 	for (const row of rows) {
 		expect(row.className).toContain('flex-row gap-2');
@@ -1168,7 +1175,7 @@ describe('declared UI (contract 1.2)', () => {
 		expect(screen.queryByText('future')).toBeNull();
 		expect(screen.getByTestId('checkout-commit').textContent).toBe('Send invoice · 9295');
 		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
-		expect(screen.getByTestId('checkout-key-5').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('checkout-keypad-key-5').hasAttribute('disabled')).toBe(true);
 		expect(screen.queryByTestId('checkout-quick-balance')).toBeNull();
 		fireEvent.change(screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address'), {
 			target: { value: 'x@y.z' },

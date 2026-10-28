@@ -11,6 +11,7 @@ import { ListItem } from '@wcpos/components/list-item';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
+import { TileGrid } from '@wcpos/components/tile-grid';
 
 import { evenSplitShareMinor } from './tender-state';
 import { useT } from '../../../../../contexts/translations';
@@ -225,7 +226,7 @@ export function SplitView({
 						) : null}
 					</>
 				) : (
-					<View className="flex-row flex-wrap gap-2">
+					<TileGrid columns={tab === 'even' && !compact ? options.length : 2}>
 						{options.map((value) => {
 							const minor =
 								tab === 'even'
@@ -247,7 +248,6 @@ export function SplitView({
 								<Tile
 									key={value}
 									selected={selected}
-									className={tab === 'even' && !compact ? 'min-w-20 flex-1' : 'grow basis-1/3'}
 									testID={`checkout-split-option-${value}`}
 									disabled={flow.busy || minor <= 0}
 									onPress={() =>
@@ -255,51 +255,38 @@ export function SplitView({
 											? setPlan({ kind: 'even', ways: value, from: flow.rows.length })
 											: fixed(minor, title)
 									}
-								>
-									<Text numberOfLines={1} className="font-medium">
-										{tab === 'even'
+									title={
+										tab === 'even'
 											? t('pos_checkout.n_ways', { ways: value })
-											: (title ?? format(minor))}
-									</Text>
-									<Text numberOfLines={1} className="font-medium opacity-70">
-										{tab === 'even'
+											: (title ?? format(minor))
+									}
+									sub={
+										tab === 'even'
 											? t('pos_checkout.each_amount', { amount: format(minor) })
 											: tab === 'amount'
 												? t('pos_checkout.then_amount', { amount: format(balance - minor) })
-												: format(minor)}
-									</Text>
-								</Tile>
+												: format(minor)
+									}
+								/>
 							);
 						})}
 						{tab === 'amount' ? (
 							<>
 								<Tile
-									className="grow basis-1/3"
 									testID="checkout-split-option-half"
 									onPress={() => fixed(evenSplitShareMinor(balance, 2))}
-								>
-									<Text numberOfLines={1} className="font-medium">
-										{t('pos_checkout.half')}
-									</Text>
-									<Text numberOfLines={1} className="font-medium opacity-70">
-										{format(evenSplitShareMinor(balance, 2))}
-									</Text>
-								</Tile>
+									title={t('pos_checkout.half')}
+									sub={format(evenSplitShareMinor(balance, 2))}
+								/>
 								<Tile
-									className="w-full"
 									testID="checkout-split-option-custom"
 									onPress={() => flow.dispatch({ type: 'arm-custom' })}
-								>
-									<Text numberOfLines={1} className="font-medium">
-										{t('pos_checkout.type_first_payment')}
-									</Text>
-									<Text numberOfLines={1} className="font-medium opacity-70">
-										{t('pos_checkout.type_first_hint')}
-									</Text>
-								</Tile>
+									title={t('pos_checkout.type_first_payment')}
+									sub={t('pos_checkout.type_first_hint')}
+								/>
 							</>
 						) : null}
-					</View>
+					</TileGrid>
 				)}
 				<Text className="text-muted-foreground text-center text-sm">{hint}</Text>
 				{flow.plan ? (

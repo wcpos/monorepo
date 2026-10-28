@@ -19,8 +19,8 @@ export async function fillKeypadField(page: Page, testID: string, value: string)
 	await expect(display).toBeVisible({ timeout: 5_000 });
 	for (const char of value) {
 		const key = char === '.' || char === ',' ? 'decimal' : char;
-		await page.getByTestId(`numpad-key-${key}`).click();
+		await page.getByTestId(`keypad-key-${key}`).click();
 	}
-	await page.getByTestId('numpad-done-button').click();
+	await page.getByTestId('keypad-key-done').click();
 	await expect(display).toBeHidden({ timeout: 5_000 });
 }

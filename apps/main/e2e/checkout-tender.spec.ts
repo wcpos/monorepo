@@ -57,9 +57,9 @@ function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 async function enterAmount(page: Page, methodId: string, amountMinor: number): Promise<void> {
 	await page.getByTestId(`checkout-method-${methodId}`).click();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId('checkout-key-clear').click();
+	await page.getByTestId('checkout-keypad-key-clear').click();
 	for (const digit of String(amountMinor)) {
-		await page.getByTestId(`checkout-key-${digit}`).click();
+		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
 	}
 	await expect
 		.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 10_000 })
@@ -833,7 +833,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
 			// The entry is read-only for a method that takes no part payment.
-			expect(await page.getByTestId('checkout-key-5').isDisabled()).toBe(true);
+			expect(await page.getByTestId('checkout-keypad-key-5').isDisabled()).toBe(true);
 			await expect(page.getByTestId('checkout-commit')).toContainText(
 				gateway!.fields!.verb!.label!
 			);

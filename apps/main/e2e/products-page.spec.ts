@@ -62,8 +62,8 @@ async function editStockQuantityField(page: Page, rowTestId: string, digit: stri
 	}
 	await expect(cell).toHaveText('0', { timeout: 15_000 });
 	await cell.click();
-	await page.getByTestId(`numpad-key-${digit}`).click();
-	await page.getByTestId('numpad-done-button').click();
+	await page.getByTestId(`keypad-key-${digit}`).click();
+	await page.getByTestId('keypad-key-done').click();
 	return cell;
 }
 
