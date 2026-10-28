@@ -18,15 +18,9 @@ const tiles = (children: React.ReactNode): React.ReactNode[] =>
 	);
 
 /** Tiles in fixed columns (§ Design 4): columns in, equal cells out, a short last row padded. */
-export function TileGrid({
-	columns,
-	children,
-	className,
-}: {
-	columns: number;
-	children: React.ReactNode;
-	className?: string;
-}) {
+type TileGridProps = React.PropsWithChildren<{ columns: number; className?: string }>;
+
+export function TileGrid({ columns, children, className }: TileGridProps) {
 	return (
 		<View className={cn('w-full gap-2', className)}>
 			{chunk(tiles(children), columns).map((row, index) => (

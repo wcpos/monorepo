@@ -1,8 +1,6 @@
 /**
- * Typing a decimal number on any keypad, pure; the buffer holds `.` whatever the store shows,
- * and a refused key returns it unchanged. Digits append (a lone `0` only starts a fraction);
- * `decimal` adds the point once (after a `0`, never with no `places`); `backspace` deletes;
- * the fraction stops at `places`, the whole part at `whole` digits.
+ * Typing a decimal on any keypad, pure; the buffer holds `.`, a refused key returns it unchanged.
+ * A lone `0` only starts a fraction; no point without `places`; `whole` caps the whole digits.
  */
 export function typeDecimal(buffer: string, key: string, places: number, whole = Infinity): string {
 	if (key === 'backspace') return buffer.slice(0, -1);

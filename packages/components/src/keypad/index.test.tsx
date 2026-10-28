@@ -70,11 +70,11 @@ it('one testID scheme: keypad-key-<name>, the keypad testID as its prefix, an ex
 it('one Key, its faces: the grid boxed (the digit carries it), the flat key, a quick key', () => {
 	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
 	expect(classes('pad-key-1')).toContain('border-border bg-card');
-	expect(screen.getByText('1').dataset.classes).toContain('text-2xl font-medium');
+	expect(screen.getByText('1').dataset.classes).toMatch(/font-medium.*text-2xl/);
 	render(<Key name="f" label="5" onPress={jest.fn()} />);
 	expect(classes('keypad-key-f')).toMatch(/bg-muted.*min-h-ctl.*rounded-lg/);
 	expect(classes('keypad-key-f')).not.toContain('border');
-	expect(screen.getByText('5').dataset.classes).toContain('font-semibold text-xl');
+	expect(screen.getByText('5').dataset.classes).toContain('text-xl font-semibold');
 	render(<Key name="q" label="Discount" text="−10%" on={false} onPress={jest.fn()} />);
 	render(<Key name="l" label="Discount" text="−5%" on onPress={jest.fn()} />);
 	expect(classes('keypad-key-q')).toContain('border-border border bg-transparent');

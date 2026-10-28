@@ -50,9 +50,10 @@ const keyFace = cva('items-center justify-center', {
 	},
 	compoundVariants: [{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' }],
 });
-const keyText = cva('font-semibold', {
+// `boxed` takes its weight from the `subheading` rank (the ladder fence refuses the literal).
+const keyText = cva('', {
 	variants: {
-		face: { key: 'text-xl', cell: 'text-lg', boxed: 'text-2xl font-medium' },
+		face: { key: 'text-xl font-semibold', cell: 'text-lg font-semibold', boxed: 'text-2xl' },
 		quick: { none: '', off: 'text-primary text-sm', lit: 'text-primary-foreground text-sm' },
 	},
 });
@@ -76,7 +77,12 @@ export function Key({ face = 'key', name, label, text, icon, variant, on, ...pro
 			{icon ? (
 				<Icon name={icon} variant={variant} size={face === 'boxed' ? 'xl' : undefined} />
 			) : (
-				<Text className={cn(keyText({ face, quick }))}>{text ?? label}</Text>
+				<Text
+					variant={face === 'boxed' ? 'subheading' : 'body'}
+					className={cn(keyText({ face, quick }))}
+				>
+					{text ?? label}
+				</Text>
 			)}
 		</PressableSurface>
 	);
