@@ -130,7 +130,7 @@ export function PropertyRow(props: {
 			className={cn(
 				'min-h-ctl relative gap-1 py-1',
 				line && 'flex-row gap-3',
-				!phone && (props.align === 'top' ? 'items-start' : 'items-center')
+				line && (props.align === 'top' ? 'items-start' : 'items-center')
 			)}
 		>
 			<View

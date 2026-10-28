@@ -291,13 +291,15 @@ it.each([
 });
 
 // The one layout boundary (768 × 480, lib/device) decides the hook and the row's classes alike:
-// a phone on its side is a phone, and a DeviceScope (a gallery cell) overrides the window.
+// a phone on its side is a phone, and a DeviceScope (a gallery cell) overrides the window. Only
+// the one-line layout aligns on the cross axis; a stacked column keeps the default stretch.
 it.each([
-	['a tablet', { width: 1024, height: 768 }, undefined, false],
-	['a phone on its side', { width: 844, height: 390 }, undefined, true],
-	['a gallery cell forced to a phone', { width: 1024, height: 768 }, true, true],
-	['a gallery cell forced off a phone', { width: 375, height: 667 }, false, false],
-])('%s: the hook and the row agree', (_case, window, phone, expected) => {
+	['a tablet', { width: 1024, height: 768 }, undefined, false, false],
+	['a phone on its side', { width: 844, height: 390 }, undefined, false, true],
+	['a gallery cell forced to a phone', { width: 1024, height: 768 }, true, false, true],
+	['a gallery cell forced off a phone', { width: 375, height: 667 }, false, false, false],
+	['a stacked row on a tablet', { width: 1024, height: 768 }, undefined, true, false],
+])('%s: the hook and the row agree', (_case, window, phone, stacked, expected) => {
 	Object.assign(mockWindow, window);
 	function Phone() {
 		return <span data-testid="phone">{String(useIsPhone())}</span>;
@@ -305,16 +307,18 @@ it.each([
 	render(
 		<DeviceScope phone={phone}>
 			<Phone />
-			<PropertyRow testID="row" label="Theme">
+			<PropertyRow testID="row" label="Theme" stacked={stacked}>
 				Light
 			</PropertyRow>
 		</DeviceScope>
 	);
 	Object.assign(mockWindow, { width: 1024, height: 768 });
+	const line = !expected && !stacked;
 	expect(screen.getByTestId('phone').textContent).toBe(String(expected));
-	expect(classes(screen.getByTestId('row')).includes('flex-row')).toBe(!expected);
+	expect(classes(screen.getByTestId('row')).includes('flex-row')).toBe(line);
+	expect(classes(screen.getByTestId('row')).includes('items-center')).toBe(line);
 	expect(classes(screen.getByText('Theme').parentElement as HTMLElement).includes('w-32')).toBe(
-		!expected
+		line
 	);
 });
 
