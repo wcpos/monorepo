@@ -57,6 +57,17 @@ export function RegisterBar({
 		overdue,
 		awaitingStore,
 	});
+	const pillLabels: Record<NonNullable<typeof pill>, string> = {
+		'register.choose_register': t('register.choose_register', { count: awaitingStore }),
+		'register.no_register': t('register.no_register', { count: awaitingStore }),
+		'register.offline_to_send': t('register.offline_to_send', { count: awaitingStore }),
+		'register.offline': t('register.offline', { count: awaitingStore }),
+		'register.counting': t('register.counting', { count: awaitingStore }),
+		'register.approval_needed': t('register.approval_needed', { count: awaitingStore }),
+		'register.overdue': t('register.overdue', { count: awaitingStore }),
+		'register.closed': t('register.closed', { count: awaitingStore }),
+		'register.awaiting_store': t('register.awaiting_store', { count: awaitingStore }),
+	};
 	const [storeOpen, setStoreOpen] = React.useState(false);
 	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
 	// and inside the bar's gap row that root was an invisible 8 pt cell pushing the bell and
@@ -99,11 +110,7 @@ export function RegisterBar({
 					)}
 				</View>
 				{pill && (
-					<StatusBadge
-						testID="register-bar-pill"
-						label={t(pill, { count: awaitingStore })}
-						variant="warning"
-					/>
+					<StatusBadge testID="register-bar-pill" label={pillLabels[pill]} variant="warning" />
 				)}
 				<View className="flex-1" />
 				{(session || lastClosure) && (

@@ -28,39 +28,41 @@ import type { CheckKind, RegisterCheck, RegisterReport, RegisterSkew } from './r
 
 type T = ReturnType<typeof useT>;
 
-/** The one title a check shows when it passes. */
-const PASS_TITLE: Record<CheckKind, string> = {
-	gaps: 'health.registers.gaps_pass',
-	duplicates: 'health.registers.duplicates_pass',
-	clock: 'health.registers.clock_pass',
-	closures: 'health.registers.closures_pass',
-};
+/** The one title a check shows when it passes, as literal translation calls. */
+const passTitles = (t: T): Record<CheckKind, string> => ({
+	gaps: t('health.registers.gaps_pass'),
+	duplicates: t('health.registers.duplicates_pass'),
+	clock: t('health.registers.clock_pass'),
+	closures: t('health.registers.closures_pass'),
+});
 
 /** The same, scoped to the newest sales: a truncated report checked only those. */
-const PASS_TITLE_SAMPLED: Record<CheckKind, string> = {
-	gaps: 'health.registers.gaps_pass_sampled',
-	duplicates: 'health.registers.duplicates_pass_sampled',
-	clock: 'health.registers.clock_pass_sampled',
+const sampledPassTitles = (t: T): Record<CheckKind, string> => ({
+	gaps: t('health.registers.gaps_pass_sampled'),
+	duplicates: t('health.registers.duplicates_pass_sampled'),
+	clock: t('health.registers.clock_pass_sampled'),
 	// Closures are not windowed or truncated: the server checks every one.
-	closures: 'health.registers.closures_pass',
-};
+	closures: t('health.registers.closures_pass'),
+});
 
 /** A passing check's title; on a truncated report the sale checks claim only the newest sales. */
-function passTitleKey(kind: CheckKind, truncated: boolean): string {
-	return (truncated ? PASS_TITLE_SAMPLED : PASS_TITLE)[kind];
+function passTitle(t: T, kind: CheckKind, truncated: boolean): string {
+	return (truncated ? sampledPassTitles : passTitles)(t)[kind];
 }
 
 /**
  * The one row a clean register shows. Without closure lists (an older plugin) only the sale
  * checks ran; on a truncated report they ran on the newest sales only.
  */
-function cleanTitleKey(closuresChecked: boolean, truncated: boolean): string {
+function cleanTitle(t: T, closuresChecked: boolean, truncated: boolean): string {
 	if (truncated) {
 		return closuresChecked
-			? 'health.registers.checks_passed_sampled'
-			: 'health.registers.sales_checks_passed_sampled';
+			? t('health.registers.checks_passed_sampled')
+			: t('health.registers.sales_checks_passed_sampled');
 	}
-	return closuresChecked ? 'health.registers.all_passed' : 'health.registers.sales_checks_passed';
+	return closuresChecked
+		? t('health.registers.all_passed')
+		: t('health.registers.sales_checks_passed');
 }
 
 /**
@@ -128,18 +130,19 @@ function CheckRow({
 }
 
 function skewRow(t: T, skew: RegisterSkew, registerId: string) {
-	const row = t(
-		skew.order_number === '' ? 'health.registers.skew_deleted' : 'health.registers.skew',
-		{
-			order: skew.order_number,
-			id: skew.order_id,
-			device: formatStampedTime(skew.sale_time),
-			received: `${formatStampedTime(skew.received_gmt)} UTC`,
-			magnitude: formatSkewMagnitude(skew.skew_seconds),
-			direction:
-				skew.direction === 'behind' ? t('health.registers.behind') : t('health.registers.ahead'),
-		}
-	);
+	const values = {
+		order: skew.order_number,
+		id: skew.order_id,
+		device: formatStampedTime(skew.sale_time),
+		received: `${formatStampedTime(skew.received_gmt)} UTC`,
+		magnitude: formatSkewMagnitude(skew.skew_seconds),
+		direction:
+			skew.direction === 'behind' ? t('health.registers.behind') : t('health.registers.ahead'),
+	};
+	const row =
+		skew.order_number === ''
+			? t('health.registers.skew_deleted', values)
+			: t('health.registers.skew', values);
 	// An older plugin sends no till, so the row names none.
 	let text = row;
 	if (skew.till !== undefined) {
@@ -213,8 +216,8 @@ function CheckView({
 		const behind = check.kind === 'clock' ? check.behind : [];
 		const title =
 			behind.length > 0
-				? 'health.registers.clock_pass_behind'
-				: passTitleKey(check.kind, truncated);
+				? t('health.registers.clock_pass_behind')
+				: passTitle(t, check.kind, truncated);
 		let sub: string | undefined;
 		if (check.kind === 'clock' && behind.length > 0) {
 			sub = t('health.registers.clock_behind', { count: check.behindCount });
@@ -223,7 +226,7 @@ function CheckView({
 			sub = t('health.registers.closures_scope', { days });
 		}
 		return (
-			<CheckRow attention={false} testID={testID} title={t(title)} sub={sub}>
+			<CheckRow attention={false} testID={testID} title={title} sub={sub}>
 				{check.kind === 'clock' && behind.length > 0
 					? skewRows(t, behind, check.behindCount, check.counted, registerId)
 					: null}
@@ -283,29 +286,28 @@ function CheckView({
 						};
 						// Without the server's count the capped sample is only a lower bound.
 						const exact = isExactDuplicateCount(duplicate);
-						const key = isUnstampedTill(duplicate.till, registerId)
+						const line = isUnstampedTill(duplicate.till, registerId)
 							? exact
-								? 'health.registers.duplicate_row_no_till'
-								: 'health.registers.duplicate_row_no_till_atleast'
+								? t('health.registers.duplicate_row_no_till', values)
+								: t('health.registers.duplicate_row_no_till_atleast', values)
 							: exact
-								? 'health.registers.duplicate_row'
-								: 'health.registers.duplicate_row_atleast';
+								? t('health.registers.duplicate_row', values)
+								: t('health.registers.duplicate_row_atleast', values);
 						return (
 							<VStack
 								key={`${duplicate.till}:${duplicate.counter}:${index}`}
 								testID="health-register-duplicate"
 								className="gap-0.5"
 							>
-								<Text className="text-sm">{t(key, values)}</Text>
+								<Text className="text-sm">{line}</Text>
 								{orders !== '' ? (
 									<Text className="text-muted-foreground text-xs">
-										{t(
+										{
 											// The ids are a capped sample whenever the true count is unknown or larger.
 											!exact || duplicateSales(duplicate) > duplicate.order_ids.length
-												? 'health.registers.duplicate_orders_sample'
-												: 'health.registers.duplicate_orders',
-											{ orders }
-										)}
+												? t('health.registers.duplicate_orders_sample', { orders })
+												: t('health.registers.duplicate_orders', { orders })
+										}
 									</Text>
 								) : null}
 							</VStack>
@@ -397,6 +399,7 @@ function RegisterBlock({
 	const t = useT();
 	const state = registerState(register);
 	const { first_counter: first, last_counter: last } = register;
+	const counters = { count: register.orders, first: first ?? '—', last: last ?? '—' };
 	return (
 		<VStack testID={`health-register-${register.id}`} className="gap-1">
 			<HStack className="flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -409,20 +412,17 @@ function RegisterBlock({
 						? truncated
 							? t('health.registers.no_sales_sampled')
 							: t('health.registers.no_sales', { days })
-						: t(
-								// A truncated report counted only the sales it checked, not the window.
-								truncated
-									? 'health.registers.sales_counters_sampled'
-									: 'health.registers.sales_counters',
-								{ count: register.orders, first: first ?? '—', last: last ?? '—' }
-							)}
+						: // A truncated report counted only the sales it checked, not the window.
+							truncated
+							? t('health.registers.sales_counters_sampled', counters)
+							: t('health.registers.sales_counters', counters)}
 				</Text>
 			</HStack>
 			{state.kind === 'clean' ? (
 				<CheckRow
 					attention={false}
 					testID="health-register-clean"
-					title={t(cleanTitleKey(state.closuresChecked, truncated))}
+					title={cleanTitle(t, state.closuresChecked, truncated)}
 					sub={
 						truncated
 							? t('health.registers.checks_passed_sampled_sub')
@@ -469,12 +469,12 @@ export function RegistersPanel() {
 		>
 			{data?.truncated ? (
 				<Text testID="health-registers-truncated" className="text-muted-foreground text-xs">
-					{t(
+					{
 						// The "closures are checked in full" clause holds only if the plugin audits them.
 						closuresSupported(data.registers)
-							? 'health.registers.truncated'
-							: 'health.registers.truncated_sales_only'
-					)}
+							? t('health.registers.truncated')
+							: t('health.registers.truncated_sales_only')
+					}
 				</Text>
 			) : null}
 			{loading ? (
