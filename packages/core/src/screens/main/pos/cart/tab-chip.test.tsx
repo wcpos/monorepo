@@ -7,7 +7,7 @@ import { BehaviorSubject } from 'rxjs';
 import { type PaymentRow, withAwaitingCustomer, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
-import { TabChip } from './tab-chip';
+import { TabChip, TabToneContext } from './tab-chip';
 import {
 	enterCheckout,
 	enterReceipt,
@@ -263,4 +263,37 @@ it('an awaiting sale with nothing due reads Paid · awaiting store whatever its 
 	} as unknown as EngineRecord<'orders'>;
 	render(<TabChip order={order} />);
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · awaiting store');
+});
+
+it('reports warning/error tone changes and clears its registry entry on unmount', () => {
+	const report = jest.fn();
+	const order = {
+		uuid: 'a',
+		payload: {
+			total: '10.00',
+			meta_data: withLedger(
+				[],
+				[
+					{
+						id: 'terminal',
+						status: 'pending',
+						amount: '10.00',
+						capture_mode: 'server',
+						tendered: null,
+					} as PaymentRow,
+				]
+			),
+		},
+	} as EngineRecord<'orders'>;
+	const { unmount } = render(
+		<TabToneContext.Provider value={report}>
+			<TabChip order={order} />
+		</TabToneContext.Provider>
+	);
+	expect(report).toHaveBeenLastCalledWith('a', 'warning');
+	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('warning');
+	act(() => markOrderSaveRejected('a', { status: null, reason: null, message: null }));
+	expect(report).toHaveBeenLastCalledWith('a', 'error');
+	unmount();
+	expect(report).toHaveBeenLastCalledWith('a', null);
 });

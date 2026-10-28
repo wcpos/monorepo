@@ -21,12 +21,12 @@ import { TabChip } from './tab-chip';
 
 // The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows
 // must not re-render every second.
-const AGE_TICK_MS = 60_000;
+export const AGE_TICK_MS = 60_000;
 // From three entries the line leads with its count, so whatever the ellipsis hides is counted.
 const COUNT_FROM = 3;
 // A cart parked for an hour is one somebody forgot: its age turns the warning colour so it
 // stands out from the live ones (Blaze's "parked list grows stale" in one row).
-const STALE_AFTER_MS = 60 * 60_000;
+export const STALE_AFTER_MS = 60 * 60_000;
 
 type Order = { id: string; record: EngineRecord<'orders'> };
 export function OpenOrdersList({
