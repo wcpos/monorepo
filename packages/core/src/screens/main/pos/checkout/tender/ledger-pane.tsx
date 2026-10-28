@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
+import { MoneyList } from '@wcpos/components/money-list';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -62,30 +63,30 @@ export function LedgerLines({
 }) {
 	const t = useT();
 	return (
-		<VStack space="xs">
+		<MoneyList>
 			{lines.map((line, index) => (
-				<HStack key={`${line.name}-${index}`} className="items-start justify-between gap-2">
-					<Text className="text-muted-foreground flex-1 text-sm" decodeHtml>
-						{`${line.quantity ?? 1} × ${line.name ?? ''}`}
-					</Text>
-					{line.id !== undefined && paidBy?.[line.id] ? (
-						<StatusBadge
-							variant="success"
-							label={t('pos_checkout.line_paid_by', { methods: paidBy[line.id].join(' + ') })}
-						/>
-					) : null}
-					<Text className="text-sm tabular-nums">{line.total ?? ''}</Text>
-				</HStack>
+				<MoneyList.Row
+					key={`${line.name}-${index}`}
+					label={`${line.quantity ?? 1} × ${line.name ?? ''}`}
+					beside={
+						line.id !== undefined && paidBy?.[line.id] ? (
+							<StatusBadge
+								variant="success"
+								label={t('pos_checkout.line_paid_by', { methods: paidBy[line.id].join(' + ') })}
+							/>
+						) : null
+					}
+					amount={line.total ?? ''}
+				/>
 			))}
 			{withTotal ? (
-				<HStack className="border-border justify-between border-t pt-2">
-					<Text className="font-semibold">{t('common.total')}</Text>
-					<Text className="font-semibold tabular-nums" testID="checkout-order-total">
-						{format(totalMinor)}
-					</Text>
-				</HStack>
+				<MoneyList.Total
+					label={t('common.total')}
+					amount={format(totalMinor)}
+					amountTestID="checkout-order-total"
+				/>
 			) : null}
-		</VStack>
+		</MoneyList>
 	);
 }
 
@@ -103,15 +104,13 @@ export function BalanceHeadline({
 
 	return (
 		<VStack space="xs">
-			<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-				{partPaid ? t('pos_checkout.remaining') : t('common.total')}
-			</Text>
-			<Text
+			<AmountFigure
 				testID="checkout-balance"
-				className={compact ? 'text-2xl font-bold tabular-nums' : 'text-4xl font-bold tabular-nums'}
+				size={compact ? 'headline' : 'hero'}
+				eyebrow={partPaid ? t('pos_checkout.remaining') : t('common.total')}
 			>
 				{format(flow.balanceMinor)}
-			</Text>
+			</AmountFigure>
 			{partPaid ? (
 				<Text className="text-muted-foreground text-xs">
 					{t('pos_checkout.paid_of_total', {
@@ -182,32 +181,26 @@ export function LedgerLegs({
 	return (
 		<VStack space="xs">
 			{legs}
-			<View testID="checkout-ledger-totals" className="gap-2 pt-2">
-				<HStack className="justify-between">
-					<Text className="text-muted-foreground">{t('common.total')}</Text>
-					<Text testID="checkout-order-total" className="tabular-nums">
-						{format(view.totalMinor)}
-					</Text>
-				</HStack>
-				<HStack className="justify-between">
-					<Text className="text-muted-foreground">{t('pos_checkout.paid')}</Text>
-					<Text className="tabular-nums">{format(view.paidMinor)}</Text>
-				</HStack>
-				<HStack className="border-border justify-between border-t pt-2">
-					{paidInFull ? (
-						<Text className="text-success font-bold">{paidInFullText}</Text>
-					) : (
-						<Text className="font-bold">{t('pos_checkout.remaining')}</Text>
-					)}
-					{/* Paid in full has no amount to show; the zero stays readable for the specs. */}
-					<Text
-						testID="checkout-ledger-remaining"
-						className={paidInFull ? 'hidden' : 'font-bold tabular-nums'}
-					>
+			<MoneyList testID="checkout-ledger-totals" className="pt-2">
+				<MoneyList.Row
+					label={t('common.total')}
+					amount={format(view.totalMinor)}
+					amountTestID="checkout-order-total"
+				/>
+				<MoneyList.Row label={t('pos_checkout.paid')} amount={format(view.paidMinor)} />
+				<MoneyList.Total
+					label={paidInFull ? paidInFullText : t('pos_checkout.remaining')}
+					tone={paidInFull ? 'success' : 'default'}
+					amount={paidInFull ? undefined : format(view.balanceMinor)}
+					amountTestID="checkout-ledger-remaining"
+				/>
+				{/* Paid in full has no amount to show; the zero stays readable for the specs. */}
+				{paidInFull ? (
+					<Text testID="checkout-ledger-remaining" className="hidden">
 						{format(view.balanceMinor)}
 					</Text>
-				</HStack>
-			</View>
+				) : null}
+			</MoneyList>
 		</VStack>
 	);
 }

@@ -5,7 +5,7 @@ import { render, screen, within } from '@testing-library/react';
 
 import type { PaymentRow } from '@wcpos/order-math';
 
-import { LedgerLegs } from './ledger-pane';
+import { BalanceHeadline, LedgerLegs, LedgerLines } from './ledger-pane';
 
 import type { LedgerView } from './use-ledger-view';
 
@@ -157,4 +157,28 @@ it('a sent order with no money taken says where the invoice went instead of the 
 		'Invoice sent to buyer@example.com · awaiting the customer'
 	);
 	expect(screen.queryByText('No payments yet')).toBeNull();
+});
+
+it('lists each line as quantity × name then its total, closed by the order total', () => {
+	render(
+		<LedgerLines
+			lines={[
+				{ name: 'Tea', quantity: 2, total: '£4' },
+				{ name: 'Cake', total: '£26' },
+			]}
+			totalMinor={3000}
+			format={format}
+		/>
+	);
+	expect(document.body.textContent).toBe('2 × Tea£41 × Cake£26Total£30');
+	expect(screen.getByTestId('checkout-order-total').textContent).toBe('£30');
+});
+it('leads with the balance under its caption, and what was paid of the total once part-paid', () => {
+	const flow = { ...view, paidMinor: 0, balanceMinor: 3000 } as never;
+	const { rerender } = render(<BalanceHeadline flow={flow} format={format} />);
+	expect(document.body.textContent).toBe('Total£30');
+	expect(screen.getByTestId('checkout-balance').textContent).toBe('£30');
+	rerender(<BalanceHeadline flow={view as never} format={format} compact />);
+	expect(screen.getByTestId('checkout-balance').textContent).toBe('£10');
+	expect(document.body.textContent).toContain('Remaining£10');
 });
