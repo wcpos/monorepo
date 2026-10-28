@@ -3,6 +3,7 @@
   "exports": {
     "./accordion": "./src/accordion/index.tsx",
     "./alert-dialog": "./src/alert-dialog/index.tsx",
+    "./amount-figure": "./src/amount-figure/index.tsx",
     "./avatar": "./src/avatar/index.tsx",
     "./avatar/gravatar": "./src/avatar/gravatar.ts",
     "./badge": "./src/badge/index.tsx",
@@ -53,6 +54,7 @@
     "./loader": "./src/loader/index.tsx",
     "./logo": "./src/logo/index.tsx",
     "./menu-row": "./src/menu-row/index.tsx",
+    "./money-list": "./src/money-list/index.tsx",
     "./nav-item": "./src/nav-item/index.tsx",
     "./notice": "./src/notice/index.tsx",
     "./page-bar": "./src/page-bar/index.tsx",

@@ -41,9 +41,11 @@ export function FeeAndShippingTotal({ row, column }: CellContext<Props, 'total'>
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text className="text-right">{format(Number(displayTotal) || 0)}</Text>
+			<Text tabular className="text-right">
+				{format(Number(displayTotal) || 0)}
+			</Text>
 			{column.columnDef.meta?.show?.('tax') && (
-				<Text className="text-muted-foreground text-right text-sm">
+				<Text variant="key" tabular className="text-right">
 					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
 				</Text>
 			)}

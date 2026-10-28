@@ -477,3 +477,8 @@ it('shows just the default plan label when the order number is unavailable', () 
 	expect(text).toContain('Payment 1 of 1');
 	expect(text).not.toContain('Order #');
 });
+
+it('leads with the amount on the terminal under its caption', () => {
+	renderLeg({});
+	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain('ON THE TERMINAL$5.00');
+});

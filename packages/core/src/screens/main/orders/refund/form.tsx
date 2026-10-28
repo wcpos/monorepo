@@ -14,7 +14,7 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Table,
@@ -435,16 +435,20 @@ export function RefundOrderForm({ order }: Props) {
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
-				<HStack className="justify-between">
-					<Text className="text-muted-foreground">
-						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
-					</Text>
+				<MoneyList>
+					<MoneyList.Row
+						testID="refund-order-total"
+						label={t('common.total')}
+						amount={format(parseFloat(orderData.total || '0'))}
+					/>
 					{previousRefundTotal > 0 && (
-						<Text className="text-muted-foreground">
-							{t('orders.previously_refunded')}: {format(-previousRefundTotal)}
-						</Text>
+						<MoneyList.Row
+							testID="refund-previously-refunded"
+							label={t('orders.previously_refunded')}
+							amount={format(-previousRefundTotal)}
+						/>
 					)}
-				</HStack>
+				</MoneyList>
 
 				<Table>
 					<TableHeader>
@@ -573,10 +577,7 @@ export function RefundOrderForm({ order }: Props) {
 					</Text>
 				) : null}
 
-				<HStack className="items-center justify-between border-t pt-4">
-					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
-					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
-				</HStack>
+				<MoneyList.Total label={t('orders.refund_total')} amount={formattedRefundTotal} />
 			</DialogBody>
 			<DialogFooter
 				close

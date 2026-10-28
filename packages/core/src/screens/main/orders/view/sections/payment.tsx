@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { StatusBadge } from '@wcpos/components/status-badge';
+import { MoneyList } from '@wcpos/components/money-list';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { isPaidStatus } from '@wcpos/sync-core';
@@ -88,10 +89,12 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 				</Text>
 			) : null}
 			{refunded > 0 ? (
-				<View className="mt-2 flex-row items-baseline justify-between gap-3">
-					<Text className="text-destructive text-sm">{t('orders.refund')}</Text>
-					<Text className="text-destructive text-sm tabular-nums">{format(-refunded)}</Text>
-				</View>
+				<MoneyList.Row
+					className="mt-2"
+					tone="destructive"
+					label={t('orders.refund')}
+					amount={format(-refunded)}
+				/>
 			) : null}
 		</Section>
 	);

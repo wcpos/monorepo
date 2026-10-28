@@ -5,6 +5,7 @@ import get from 'lodash/get';
 
 import { Button } from '@wcpos/components/button';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { MoneyList } from '@wcpos/components/money-list';
 import { Text } from '@wcpos/components/text';
 import {
 	CLOSURE_DOCUMENT_LIMIT,
@@ -163,25 +164,17 @@ export function ClosurePanel({
 					<ReceiptBody doc={doc} hideSelects fullWidth />
 				)}
 				{!documentError && !!corrections.length && touched.size > 0 && (
-					<View testID="closure-settled" className="gap-2 border-t pt-3">
+					<MoneyList testID="closure-settled" className="border-t pt-3">
 						<Text className="font-semibold">{t('reports.recorded_settled')}</Text>
 						{[...touched].map((field) => (
-							<View
+							<MoneyList.Row
 								key={field}
 								testID={`closure-settled-${field}`}
-								className="flex-row justify-between gap-3"
-							>
-								<Text>
-									{labels[field.split('.')[0]]}
-									{field.includes('.') ? ` · ${field.split('.')[1]}` : ''}
-								</Text>
-								<Text className="tabular-nums">
-									{context.formatMoney(get(recorded, field, '0'))} →{' '}
-									{context.formatMoney(get(settled, field, '0'))}
-								</Text>
-							</View>
+								label={`${labels[field.split('.')[0]]}${field.includes('.') ? ` · ${field.split('.')[1]}` : ''}`}
+								amount={`${context.formatMoney(get(recorded, field, '0'))} → ${context.formatMoney(get(settled, field, '0'))}`}
+							/>
 						))}
-					</View>
+					</MoneyList>
 				)}
 				{(documentError ? [] : corrections).map((c) => (
 					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">

@@ -19,6 +19,7 @@ import {
 } from '@wcpos/components/dialog';
 import { MenuRow } from '@wcpos/components/menu-row';
 import { Notice } from '@wcpos/components/notice';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
@@ -220,8 +221,10 @@ export function RegisterPanel({
 				{/* The header block: on the phone the panel is a page, and its padding comes from here. */}
 				<DialogHeader className="flex-row items-start gap-2">
 					<View className="min-w-0 flex-1 gap-1.5">
-						<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
-							{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+						<DialogTitle asChild>
+							<AmountFigure testID="register-panel-amount">
+								{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+							</AmountFigure>
 						</DialogTitle>
 						{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
 						{blind ? (

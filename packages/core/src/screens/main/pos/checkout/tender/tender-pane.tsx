@@ -9,6 +9,7 @@ import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
@@ -362,12 +363,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</Text>
 				) : null}
 			</HStack>
-			<Text
-				testID="checkout-entry"
-				className={`text-foreground text-amt font-bold tabular-nums ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
-			>
+			<AmountFigure testID="checkout-entry" className={flow.state.entryDirty ? '' : 'opacity-70'}>
 				{format(shownMinor)}
-			</Text>
+			</AmountFigure>
 			<Text
 				testID="checkout-entry-hint"
 				className={`min-h-6 text-sm ${noChange ? 'text-warn-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}

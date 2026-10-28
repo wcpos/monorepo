@@ -11,6 +11,7 @@ import Animated, {
 
 import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
@@ -217,16 +218,13 @@ function ReceiptStageDocument({
 			) : null}
 			<PaidMoment sent={sent !== null} awaiting={awaiting}>
 				<View testID={sent ? 'checkout-sent-headline' : 'checkout-paid-headline'}>
-					<Text
-						testID={change > 0 ? 'receipt-change-due' : undefined}
-						className="text-amt text-center font-bold tabular-nums"
-					>
+					<AmountFigure testID={change > 0 ? 'receipt-change-due' : undefined} center>
 						{sent
 							? t('pos_checkout.invoice_sent')
 							: change > 0
 								? t('pos_checkout.change_due', { amount: format(change) })
 								: t('pos_checkout.paid_amount', { amount: format(paid) })}
-					</Text>
+					</AmountFigure>
 				</View>
 				<Text testID="receipt-paid-with" className="text-muted-foreground text-center">
 					{awaiting ? (

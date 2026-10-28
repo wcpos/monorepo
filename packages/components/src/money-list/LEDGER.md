@@ -1,0 +1,17 @@
+# Behaviour ledger: `money-list`
+
+Created 2026-10-28 by card 7 of the component-library architecture review (`~/Projects/wcpos-handoffs/architecture-review-component-library-2026-10-28.html`). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence.
+
+**Job:** Money read as a running account: the cart's totals, the tender ledger's lines and closing rows, the order view's totals and refund line, the refund form's order and refund totals, a closure's recorded → settled rows.
+
+**Not its job:** editing an amount (`core/.../components/amount-field`, card 1); a record's facts (`property-row`); the one figure a screen leads with (`amount-figure`); a table of report rows; the register panel's derivation, which is a list of pressable MenuRow folds.
+
+**Base:** React Native `View` and `Text`; the ladder's `help` rank (`text/ladder.ts`). Interface: `MoneyList` (the column, `gap-2`; `className` is layout only) with `MoneyList.Row` and `MoneyList.Total`, each `label` (a string, entities decoded, or an element), `beside` (a chip, badge or help note after the label), `amount` (a string the caller formatted), `amountTestID`, `tone`.
+
+## Lines
+
+1. A row is the label at the left (muted, body 14) and the amount at the right (foreground, body 14, `tabular-nums`, `text-right`) on one `flex-row items-center justify-between gap-2` line. The list draws and never converts money: every caller keeps its own currency format, so each amount prints the string it printed before — evidence: CODING_STANDARDS § Design 3 ("Tabular numerals for every amount"); card 7 (two cart cells dropped tabular, the order view's private `Row` was the richest copy); tests `money-list.test.tsx`, `pos/cart/totals.test.tsx`, `orders/view/sections/totals.test.tsx`, `checkout/tender/ledger-pane.test.tsx`.
+2. The one total rule: a solid `border-border border-t pt-2` hairline above, label and amount in the foreground, `font-semibold`, at body size. It replaces four recipes (cart `border-dashed pt-1 font-bold`, ledger `pt-2 font-semibold` and `pt-2 font-bold`, order view `mt-2 pt-3 text-lg font-semibold`, and the refund form's `pt-4 text-lg font-bold`). Never a size step: the screen's one figure leads and nothing competes with it in size, weight or colour; hierarchy comes from spacing, weight and colour, and borders are hairlines — evidence: CODING_STANDARDS § Design 1 ("One number, one action") and § Design 7 ("Flat surfaces, hairline borders… hierarchy comes from spacing, weight and colour"); test "closes with the one total rule".
+3. `tone` carries meaning only and colours the label and the amount alike: `destructive` for a refund, `success` for "Paid in full". The words and the minus sign say it too, never colour alone — evidence: CODING_STANDARDS § Design 5 and 7; the order view's private `Row tone`; test matrix in `money-list.test.tsx`.
+4. `indent` is a breakdown of the row above (a tax rate under Tax): inset `pl-3`, label and amount at the ladder's `help` rank (12, muted) — evidence: the order view's tax-rate lines (`orders/view/sections/totals.tsx`); test matrix.
+5. A row may have no amount: the ledger's "Paid in full · time" closes the list with its label alone; the caller keeps the zero readable for the specs in a hidden `Text` — evidence: `checkout/tender/ledger-pane.tsx` `LedgerLegs closing`; test "draws a row with no amount as its label alone".

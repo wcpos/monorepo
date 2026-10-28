@@ -195,3 +195,14 @@ it('read-only (the stilled cart) shows the coupon with no remove control', () =>
 	fireEvent.click(screen.getByTestId('coupon-chip'));
 	expect(mockRemoveCoupon).not.toHaveBeenCalled();
 });
+
+it('prints every row as label then amount, the refunds and the net payment last', () => {
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	orderPayload = { total: '27.97', refunds: [{ id: 5, total: '-2.00' }] };
+	const { container } = render(<Totals />);
+	const text = container.textContent ?? '';
+	for (const row of ['Subtotal$29.97', 'SAVE10$-1.00', 'Refund #5$-2.00', 'Net Payment$25.97']) {
+		expect(text).toContain(row);
+	}
+	expect(text.indexOf('Net Payment')).toBeGreaterThan(text.indexOf('Refund #5'));
+});

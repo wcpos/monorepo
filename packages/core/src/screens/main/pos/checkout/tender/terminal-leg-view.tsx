@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { LogCopyButton, type LogLine, logToText, LogView } from '@wcpos/components/log-view';
 import { StatusBadge } from '@wcpos/components/status-badge';
@@ -200,12 +201,9 @@ export function TerminalLegView({
 				</Text>
 			</HStack>
 			<View className="min-h-4 flex-1" />
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-				{t('pos_checkout.on_the_terminal')}
-			</Text>
-			<Text className={`text-foreground font-bold tabular-nums ${phone ? 'text-5xl' : 'text-7xl'}`}>
+			<AmountFigure eyebrow={t('pos_checkout.on_the_terminal')} center>
 				{format(toMinor(row.amount, flow.dp))}
-			</Text>
+			</AmountFigure>
 			{/* The status is said once, here. The steps show where; the log, behind Details, says why. */}
 			<StatusBadge
 				testID="checkout-terminal-status"

@@ -15,6 +15,7 @@ import {
 } from '@wcpos/components/dialog';
 import { EASE_BEAT, STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import type { ReadonlyClosureDocument } from '@wcpos/query/register-session';
@@ -109,12 +110,17 @@ export function ClosureSheet({
 					{figures.map(([key, label, value]) => (
 						<View key={key} className="border-border min-w-28 flex-1 rounded-lg border px-3 py-2.5">
 							<Text className="text-muted-foreground text-sm">{label}</Text>
-							<Text
+							<AmountFigure
 								testID={`closure-${key}`}
-								className={`text-xl font-bold tabular-nums ${key === 'variance' && countVariance(counted, expected) < 0 ? 'text-destructive' : ''}`}
+								size="tile"
+								tone={
+									key === 'variance' && countVariance(counted, expected) < 0
+										? 'destructive'
+										: 'default'
+								}
 							>
 								{value}
-							</Text>
+							</AmountFigure>
 						</View>
 					))}
 				</View>
