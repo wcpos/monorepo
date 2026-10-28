@@ -11,7 +11,7 @@ import {
 	FormField,
 	FormInput,
 	FormItem,
-	FormRadioGroup,
+	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
 } from '@wcpos/components/form';
@@ -21,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
 import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
-import { TaxStatusRadioGroup } from '../../components/tax-radio-groups';
+import { useTaxSegments } from '../../components/tax-segments';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**
@@ -47,6 +47,7 @@ type FormValues = z.infer<typeof formSchema>;
  */
 export function AddShipping() {
 	const t = useT();
+	const tax = useTaxSegments();
 	const { addShipping } = useAddShipping();
 	const { close: closeDialog } = useDialog();
 
@@ -152,7 +153,7 @@ export function AddShipping() {
 							name="tax_status"
 							render={({ field }) => (
 								<FormItem nativeID="shipping-tax">
-									<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
+									<FormSegmentedControl {...field} segments={tax.status} testID={field.name} />
 								</FormItem>
 							)}
 						/>
