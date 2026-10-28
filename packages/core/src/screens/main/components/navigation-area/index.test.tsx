@@ -47,9 +47,8 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Jane' },
 	}),
 }));
-let mockRedirectLoginUrl: string | null = null;
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => mockRedirectLoginUrl,
+	peekRedirectLoginUrl: () => null,
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
@@ -84,7 +83,6 @@ describe('NavigationAreaLayout', () => {
 		mockPathname = '/settings/tax';
 		mockScreenSize = 'lg';
 		mockHeld = false;
-		mockRedirectLoginUrl = null;
 	});
 
 	it('shows a wide-screen rail, marks the current item, and navigates between pages', () => {
@@ -137,10 +135,9 @@ describe('NavigationAreaLayout', () => {
 	});
 
 	// The bar's other jobs outlive it on `lg`: the upgrade notice and a held session still show
-	// above the rail, and a redirect login still reopens the cashier sheet to claim its result.
-	it('keeps the notice, the held-session banner and the redirect-login sheet on lg', () => {
+	// above the rail (a redirect login is the rail's cashier entry's to claim).
+	it('keeps the notice and the held-session banner on lg', () => {
 		mockHeld = true;
-		mockRedirectLoginUrl = 'login';
 		render(
 			<NavigationAreaLayout
 				items={items}
@@ -166,24 +163,6 @@ describe('NavigationAreaLayout', () => {
 		// page gutter between them (it is flush when it is the column's first row).
 		expect(rows[1]).toBe(notice.parentElement);
 		expect(rows.indexOf(area)).toBe(2);
-		expect(screen.getByTestId('user-sheet')).toBeTruthy();
-	});
-
-	it('leaves the sheet closed on lg when no redirect login is pending for this site', () => {
-		mockRedirectLoginUrl = 'another-site';
-		render(
-			<NavigationAreaLayout
-				items={items}
-				indexHref="/settings"
-				areaLabel="Settings"
-				testID="settings-navigation"
-				barTestID="settings-bar"
-			>
-				<div />
-			</NavigationAreaLayout>
-		);
-		expect(screen.queryByTestId('user-sheet')).toBeNull();
-		expect(screen.queryByTestId('session-hold-banner')).toBeNull();
 	});
 
 	it('shows no bar title and a single bar crumb to navigate a phone deep link to the index', () => {

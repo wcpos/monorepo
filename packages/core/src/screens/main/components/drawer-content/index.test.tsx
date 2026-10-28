@@ -72,7 +72,13 @@ jest.mock('../notification-bell/notification-bell', () => ({
 }));
 jest.mock('./version', () => ({ Version: () => <div data-testid="version" /> }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { display_name: 'Cashier' } }),
+	useStoreSession: () => ({
+		site: { wcpos_login_url: 'login' },
+		wpCredentials: { display_name: 'Cashier' },
+	}),
+}));
+jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
+	peekRedirectLoginUrl: () => null,
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
