@@ -352,7 +352,7 @@ function ComboboxList({
 
 function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	return (
-		<View className={cn('prx-2 py-1.5', className)} {...props}>
+		<View className={cn('px-2 py-1.5', className)} {...props}>
 			<Text className="text-foreground text-base">{children}</Text>
 		</View>
 	);

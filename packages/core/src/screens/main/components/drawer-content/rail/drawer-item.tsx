@@ -18,6 +18,8 @@ export function DrawerItem({ icon, label, focused, onPress, testID }: Props) {
 			testID={testID}
 			accessibilityRole="button"
 			accessibilityLabel={label}
+			accessibilityState={{ selected: !!focused }}
+			aria-selected={!!focused}
 			hitSlop={4}
 			onPress={onPress}
 			className={`active:bg-card size-12 items-center justify-center rounded-lg ${focused ? 'bg-card' : ''}`}

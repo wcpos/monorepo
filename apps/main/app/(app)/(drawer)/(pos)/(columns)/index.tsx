@@ -11,6 +11,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
+import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 
@@ -24,6 +25,7 @@ const TAB_BAR_PADDING = 8;
  */
 export default function ResizablePOSColumns() {
 	const { screenSize } = useTheme();
+	const t = useT();
 	const { top, bottom } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
 
@@ -94,7 +96,7 @@ export default function ResizablePOSColumns() {
 								activeTab === 'products' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
 							}
 						>
-							Products
+							{t('common.products')}
 						</Text>
 					</Pressable>
 					<Pressable
@@ -108,7 +110,7 @@ export default function ResizablePOSColumns() {
 								activeTab === 'cart' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
 							}
 						>
-							Cart
+							{t('pos_cart.tab_cart')}
 						</Text>
 					</Pressable>
 				</View>
