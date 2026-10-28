@@ -184,7 +184,8 @@ export function PriceKeypad({
 					role="button"
 					className={cn(
 						fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
-						'w-full items-end justify-center px-3'
+						// The outline Button's pressed wash: a press shows within 100 ms (§ Design 2).
+						'active:bg-muted w-full items-end justify-center px-3'
 					)}
 				>
 					<Text className={tone}>{text}</Text>

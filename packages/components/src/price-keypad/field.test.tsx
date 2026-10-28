@@ -86,6 +86,7 @@ it("a field rests as the field box with the Input's padding, its display row ins
 	const trigger = screen.getByTestId('price');
 	expect(trigger.className).toContain(fieldBox({ state: 'rest' }));
 	expect(trigger.className).toContain('px-3');
+	expect(trigger.className).toContain('active:bg-muted');
 	expect(displayRow().className).toContain('px-3');
 });
 

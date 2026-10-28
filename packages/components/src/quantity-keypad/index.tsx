@@ -202,7 +202,8 @@ export function QuantityKeypad({
 				aria-invalid={invalid || undefined}
 				className={cn(
 					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
-					'max-w-full min-w-10 items-start justify-center px-3',
+					// The outline Button's pressed wash: a press shows within 100 ms (§ Design 2).
+					'active:bg-muted max-w-full min-w-10 items-start justify-center px-3',
 					className
 				)}
 			>
