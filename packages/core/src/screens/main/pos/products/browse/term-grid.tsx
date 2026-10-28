@@ -6,6 +6,7 @@ import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-rean
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
+import { useGround } from '@wcpos/components/lib/ground';
 
 import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
@@ -23,7 +24,6 @@ import { HandleProductsFooter } from '../handle-footer';
 import { ProductTile } from '../tiles/product-tile';
 import { TileGrid } from '../tiles/tile-grid';
 import { TileGround } from '../../../components/data-table/surface';
-import { useGround } from '../../../components/ground';
 import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { GroundInnerEdge } from '@wcpos/components/lib/ground';
 import { CROSSFADE } from '@wcpos/components/lib/motion';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { type EngineRecord, useDocField } from '@wcpos/query';
@@ -14,7 +15,6 @@ import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mod
 import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
 import { EdgeColumn } from './edge-column';
-import { GroundInnerEdge } from '../../components/ground';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 

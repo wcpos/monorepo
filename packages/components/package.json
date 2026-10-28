@@ -39,6 +39,7 @@
     "./keypad": "./src/keypad/index.tsx",
     "./label": "./src/label/index.tsx",
     "./lib/device": "./src/lib/device.ts",
+    "./lib/ground": "./src/lib/ground.ts",
     "./lib/haptics": "./src/lib/haptics.ts",
     "./lib/motion": "./src/lib/motion.ts",
     "./lib/overlay": "./src/lib/overlay.tsx",

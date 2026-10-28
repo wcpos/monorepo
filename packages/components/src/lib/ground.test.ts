@@ -3,10 +3,10 @@ import * as React from 'react';
 
 import { renderHook } from '@testing-library/react';
 
-import { GroundInnerEdge, useGround, useGroundInnerEdge } from './ground';
+import { GroundInnerEdge, useGround } from './ground';
 
 let mockPhone = false;
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
+jest.mock('./device', () => ({ useIsPhone: () => mockPhone }));
 
 beforeEach(() => {
 	mockPhone = false;
@@ -75,11 +75,4 @@ it('ignores the inner edge on a phone, whose panes are tabs', () => {
 	const wrapper = ({ children }: React.PropsWithChildren) =>
 		React.createElement(GroundInnerEdge, { value: 'right' }, children);
 	expect(renderHook(() => useGround(), { wrapper }).result.current.px).toBe('px-4');
-});
-
-it('tells a surface its inner edge, or null outside a pane', () => {
-	expect(renderHook(() => useGroundInnerEdge()).result.current).toBeNull();
-	const wrapper = ({ children }: React.PropsWithChildren) =>
-		React.createElement(GroundInnerEdge, { value: 'left' }, children);
-	expect(renderHook(() => useGroundInnerEdge(), { wrapper }).result.current).toBe('left');
 });

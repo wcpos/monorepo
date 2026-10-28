@@ -8,8 +8,8 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../ground';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 

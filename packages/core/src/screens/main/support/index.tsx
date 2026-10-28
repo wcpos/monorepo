@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { UpgradeNotice } from '../components/upgrade-notice';

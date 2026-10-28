@@ -15,8 +15,8 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';

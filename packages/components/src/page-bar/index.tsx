@@ -7,6 +7,7 @@ import { Breadcrumb } from '../breadcrumb';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
+import { useGround } from '../lib/ground';
 import { cn } from '../lib/utils';
 import { StatusBadge, type StatusBadgeProps } from '../status-badge';
 import { Text } from '../text';
@@ -35,13 +36,6 @@ export type PageBarProps = ViewProps & {
 	 * pads it (the POS products column's `EdgeColumn`).
 	 */
 	insetTop?: boolean;
-	/**
-	 * The side of this bar's pane that faces another pane across a resize handle: that side keeps
-	 * no inset, because the handle is the gutter (one page gutter wide, `panels`), so the two
-	 * panes' surfaces sit one page gutter apart (the POS products column, with the cart beside
-	 * it; owner, 2026-10-23). The rest of the bar's inset is unchanged.
-	 */
-	innerEdge?: 'left' | 'right';
 };
 
 export function PageBar({
@@ -53,7 +47,6 @@ export function PageBar({
 	back,
 	search,
 	insetTop = true,
-	innerEdge,
 	children,
 	testID,
 	className,
@@ -62,6 +55,7 @@ export function PageBar({
 }: PageBarProps) {
 	const insets = useSafeAreaInsets();
 	const phone = useIsPhone();
+	const ground = useGround();
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	return (
 		<View
@@ -80,13 +74,8 @@ export function PageBar({
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone
-						? 'h-ctl gap-2 pr-2 pl-4'
-						: innerEdge === 'right'
-							? 'pl-gutter pt-gutter gap-4 pr-0'
-							: innerEdge === 'left'
-								? 'pr-gutter pt-gutter gap-4 pl-0'
-								: 'px-gutter pt-gutter gap-4'
+					// The ground's gutter, so a pane's edge that faces another keeps none (`useGround`).
+					phone ? 'h-ctl gap-2 pr-2 pl-4' : cn(ground.px, ground.pt, 'gap-4')
 				)}
 			>
 				{(phone || onMenu) &&

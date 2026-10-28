@@ -8,8 +8,8 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../ground';
 import { useT } from '../../../../contexts/translations';
 
 export function UpgradeNotice({

@@ -8,8 +8,8 @@ import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
 import { Hero } from './hero';

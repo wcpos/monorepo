@@ -7,8 +7,8 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../ground';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useEngineStatus, useMutationCounts } from '../../hooks/use-engine-monitor';

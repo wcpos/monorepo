@@ -81,16 +81,6 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	// no fixed height, with no rule under it (ledger lines 8, 11).
 	const row = screen.getByTestId('bar').firstElementChild;
 	expect(row).toHaveClass('pt-gutter', 'px-gutter');
-	// A pane with another pane across a handle keeps no inset on that edge (ledger line 13).
-	for (const [innerEdge, classes] of [
-		['right', ['pl-gutter', 'pr-0']],
-		['left', ['pl-0', 'pr-gutter']],
-	] as const) {
-		const { unmount } = render(<PageBar testID="inner" title="Inner" innerEdge={innerEdge} />);
-		expect(screen.getByTestId('inner').firstElementChild).toHaveClass(...classes);
-		expect(screen.getByTestId('inner').firstElementChild).not.toHaveClass('px-gutter');
-		unmount();
-	}
 	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
 	expect(row).not.toHaveClass('border-b');
 	// A title-only bar is as tall as one with a control: the title's box is control-height.

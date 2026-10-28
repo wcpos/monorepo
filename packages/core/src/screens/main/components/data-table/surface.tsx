@@ -3,8 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
-
-import { useGround } from '../ground';
+import { useGround } from '@wcpos/components/lib/ground';
 
 /**
  * The one surface every table and tile grid sits on: a white card with a hairline border and

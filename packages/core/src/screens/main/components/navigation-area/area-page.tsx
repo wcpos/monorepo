@@ -7,8 +7,7 @@ import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-
-import { useGround } from '../ground';
+import { useGround } from '@wcpos/components/lib/ground';
 
 export type AreaPageMode = 'scroll' | 'fill';
 

@@ -9,9 +9,9 @@ import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import type * as VirtualizedList from '@wcpos/components/virtualized-list';
+import { useGround } from '@wcpos/components/lib/ground';
 
 import { useDrawnHandle, useQuerySnapshot, useQueryStateActions } from '../../../../query';
-import { useGround } from '../ground';
 import { ChipRowSkeleton } from '../chip-row';
 import { withProAccess } from '../pro-guard';
 

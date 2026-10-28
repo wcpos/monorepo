@@ -15,8 +15,8 @@ import {
 	resolvePaymentAttention,
 } from '@wcpos/query/store-local';
 import { getLogger } from '@wcpos/utils/logger';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';

@@ -3,8 +3,7 @@ import { ScrollView, type ScrollViewInstance, View } from 'react-native';
 
 import { cn } from '@wcpos/components/lib/utils';
 import { Skeleton } from '@wcpos/components/skeleton';
-
-import { useGround } from './ground';
+import { useGround } from '@wcpos/components/lib/ground';
 
 /**
  * The chip row every list surface with pills has (Products, Orders, Coupons, the POS

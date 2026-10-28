@@ -5,12 +5,12 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { Suspense } from '@wcpos/components/suspense';
+import { useGround } from '@wcpos/components/lib/ground';
 
 import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
 import { DataTable } from '../../../components/data-table';
 import { TableSurface } from '../../../components/data-table/surface';
-import { useGround } from '../../../components/ground';
 import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
