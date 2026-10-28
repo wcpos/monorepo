@@ -26,11 +26,7 @@ export function Section({
 		<View className={`px-4 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
 			{title ? (
 				<View className="mb-3 flex-row items-baseline justify-between">
-					{typeof title === 'string' ? (
-						<Text className="text-foreground text-sm font-semibold">{title}</Text>
-					) : (
-						title
-					)}
+					{typeof title === 'string' ? <Text variant="section">{title}</Text> : title}
 					{right}
 				</View>
 			) : null}

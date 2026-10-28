@@ -7,6 +7,7 @@ import * as TablePrimitive from '@rn-primitives/table';
 import { currentRowMark } from '../lib/current-row';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 import { PulseTableRow } from './pulse-row';
 
 import type { SlottableViewProps } from '@rn-primitives/types';
@@ -98,12 +99,10 @@ function TableRow({
 }
 
 /**
- * The one table-header text recipe (decision 9, 2026-10-16). Every column heading in the app
- * reads this, through `TableHead`'s text context; a caller never restyles its header text.
- * Exported for the few headings that sit outside a `TableHead` (a payments label under the
- * cart table) so they cannot drift from it.
+ * The column-head text: the ladder's caption rank (decision 9, 2026-10-16). Every column heading
+ * reads it through `TableHead`'s text context; the few headings outside a `TableHead` import it.
  */
-const TABLE_HEAD_TEXT = 'text-muted-foreground text-xs font-medium tracking-wide uppercase';
+const TABLE_HEAD_TEXT = TEXT_LADDER.caption;
 
 function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 	return (

@@ -6,8 +6,7 @@ import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'reac
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
 
-import { Text } from '../text';
-import { Button } from '../button';
+import { TEXT_LADDER } from '../text/ladder';
 import { Input } from '../input';
 import { DeviceScope } from '../lib/device';
 import { PANEL_SLIDE } from '../lib/motion';
@@ -595,7 +594,10 @@ it('9. titles receive their themed typography through the text context', () => {
 	);
 	expect(screen.getByTestId('d')).toContainElement(screen.getByTestId('title'));
 	expect(screen.getByTestId('title')).toHaveTextContent('Email receipt');
-	expect(screen.getByTestId('title')).toHaveClass('text-lg', 'text-foreground');
+	expect(screen.getByTestId('title')).toHaveClass(
+		...TEXT_LADDER.dialog.split(' '),
+		'text-foreground'
+	);
 	// The dialog's heading is level 1 inside the modal; a SectionHeading in its body is level 2
 	// (CodeRabbit, #2979). On web the Radix Title is slotted onto this Text, so the role is ours.
 	expect(screen.getByRole('heading', { level: 1 })).toBe(screen.getByTestId('title'));

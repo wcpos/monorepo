@@ -3,25 +3,14 @@ import { Text as RNText } from 'react-native';
 
 import { Slot } from '@rn-primitives/slot';
 import { SlottableTextProps } from '@rn-primitives/types';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { type VariantProps } from 'class-variance-authority';
 import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
 import { MAX_FONT_SCALE } from '../lib/scale';
+import { textVariants } from './ladder';
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
-
-const textVariants = cva('text-foreground web:select-text text-base', {
-	variants: {
-		variant: {
-			default: '',
-			link: 'web:hover:underline web:focus:underline web:hover:cursor-pointer',
-		},
-	},
-	defaultVariants: {
-		variant: 'default',
-	},
-});
 
 export type TextProps = SlottableTextProps &
 	VariantProps<typeof textVariants> & { decodeHtml?: boolean };
@@ -29,6 +18,7 @@ export type TextProps = SlottableTextProps &
 function Text({
 	className,
 	variant,
+	tabular,
 	asChild = false,
 	children,
 	decodeHtml,
@@ -45,7 +35,7 @@ function Text({
 
 	return (
 		<Component
-			className={cn(textVariants({ variant }), textClass, className)}
+			className={cn(textVariants({ variant, tabular }), textClass, className)}
 			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			{...props}
 		>

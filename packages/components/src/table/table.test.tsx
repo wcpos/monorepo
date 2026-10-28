@@ -5,7 +5,7 @@ import * as React from 'react';
 import { render } from '@testing-library/react';
 
 import { TextClassContext } from '../text';
-import { PressableTableRow, TABLE_HEAD_TEXT, TableCell, TableHead, TableRow } from './index';
+import { PressableTableRow, TableCell, TableHead, TableRow } from './index';
 
 jest.mock('react-native', () => ({
 	View: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
@@ -63,7 +63,6 @@ it('renders an unfilled uppercase head and padded column cell', () => {
 		'uppercase'
 	);
 	expect(head.firstElementChild).not.toHaveClass('font-semibold');
-	expect(TABLE_HEAD_TEXT).toBe('text-muted-foreground text-xs font-medium tracking-wide uppercase');
 	expect(cell).toHaveClass('flex-col', 'px-3', 'py-1.5');
 });
 

@@ -28,8 +28,8 @@ export function Section({
 		<VStack testID={testID} className={cn('gap-3', first ? '' : 'border-border border-t pt-4')}>
 			<HStack className="items-start justify-between gap-3">
 				<VStack className="flex-1 gap-0.5">
-					<Text className="font-semibold">{title}</Text>
-					{sub ? <Text className="text-muted-foreground text-xs">{sub}</Text> : null}
+					<Text variant="section">{title}</Text>
+					{sub ? <Text variant="help">{sub}</Text> : null}
 				</VStack>
 				{action}
 			</HStack>

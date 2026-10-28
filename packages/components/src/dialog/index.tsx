@@ -27,6 +27,7 @@ import {
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 import { isToastTarget } from '../toast/target';
 import { useDialogLabels } from './labels';
 
@@ -218,6 +219,8 @@ export function DialogHeader({ className, ...props }: ViewProps): React.JSX.Elem
 		/>
 	);
 }
+// The title is the ladder's dialog rank (16 semibold).
+const DIALOG_TITLE_TEXT = `${TEXT_LADDER.dialog} text-foreground leading-none`;
 export function DialogTitle(allProps: SlottableTextProps): React.JSX.Element {
 	const { className, asChild, ...props } = allProps;
 	const Component = asChild ? Slot : Text;
@@ -225,7 +228,7 @@ export function DialogTitle(allProps: SlottableTextProps): React.JSX.Element {
 	// has something above it. On web the Radix Title is slotted onto this Text, so the role is ours.
 	const title = <Component role="heading" aria-level={1} className={className} {...props} />;
 	return (
-		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
+		<TextClassContext.Provider value={DIALOG_TITLE_TEXT}>
 			{/* On web the panel is a Radix dialog; slotting the title gives it aria-labelledby.
 			    The native primitive ignores asChild and would nest the child in its own Text. */}
 			{isWeb ? <DialogPrimitive.Title asChild>{title}</DialogPrimitive.Title> : title}
