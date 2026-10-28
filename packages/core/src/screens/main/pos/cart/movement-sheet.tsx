@@ -138,6 +138,22 @@ export function MovementSheet({
 	const noteRef = React.useRef<TextInputInstance>(null);
 	const [error, setError] = React.useState('');
 	const t = useT();
+	const words: Record<string, string> = {
+		paid_in: t('register.question_paid_in'),
+		paid_out: t('register.question_paid_out'),
+		no_sale: t('register.question_no_sale'),
+		amount: t('register.movement_needs_amount'),
+		reason: t('register.movement_needs_reason'),
+		supplier: t('register.reason_supplier'),
+		petty_cash: t('register.reason_petty_cash'),
+		bank: t('register.reason_bank'),
+		tips: t('register.reason_tips'),
+		change: t('register.reason_change'),
+		float: t('register.reason_float'),
+		mistake: t('register.reason_mistake'),
+		drawer_check: t('register.reason_drawer_check'),
+		other: t('register.reason_other'),
+	};
 	const side = usePanelSide('cart');
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
@@ -190,7 +206,7 @@ export function MovementSheet({
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos">
 				<DialogHeader>
-					<DialogTitle>{type ? t(`register.question_${type}`) : ''}</DialogTitle>
+					<DialogTitle>{type ? words[type] : ''}</DialogTitle>
 				</DialogHeader>
 				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
 				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
@@ -221,7 +237,7 @@ export function MovementSheet({
 					<View className="flex-row flex-wrap gap-2">
 						{type &&
 							[...REASONS[type], 'other'].map((key) => {
-								const label = t(`register.reason_${key}`);
+								const label = words[key];
 								const other = key === 'other';
 								return (
 									<Chip
@@ -246,7 +262,7 @@ export function MovementSheet({
 					/>
 					{!!invalid && (
 						<Text testID="movement-invalid" className="text-muted-foreground text-sm">
-							{t(`register.movement_needs_${invalid}`)}
+							{words[invalid]}
 						</Text>
 					)}
 					{!!error && <Text className="text-destructive text-sm">{error}</Text>}

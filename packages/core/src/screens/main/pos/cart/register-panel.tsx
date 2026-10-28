@@ -84,6 +84,11 @@ export function RegisterPanel({
 	const { print } = useSessionReport();
 	const { print: reprint } = useSessionReport(lastClosure, true);
 	const t = useT();
+	const movementNames = {
+		paid_in: t('register.paid_in'),
+		paid_out: t('register.paid_out'),
+		no_sale: t('register.no_sale'),
+	};
 	const { wpCredentials } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
@@ -284,7 +289,7 @@ export function RegisterPanel({
 							className="flex-1"
 							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
-							title={t(`register.${type}`)}
+							title={movementNames[type]}
 						>
 							<Icon
 								name={
@@ -443,7 +448,7 @@ export function RegisterPanel({
 						}}
 						onDone={(id, type, amount) => {
 							Toast.show({
-								title: `${t(`register.${type}`)}${blind || type === 'no_sale' ? '' : ` ${format(Number(amount))}`}`,
+								title: `${movementNames[type]}${blind || type === 'no_sale' ? '' : ` ${format(Number(amount))}`}`,
 								action: (
 									<Button
 										testID="toast-undo"
