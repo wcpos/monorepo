@@ -8,6 +8,8 @@ import { useT } from '../../../contexts/translations';
 import { QUANTITY_FORMAT, useNumberFormat } from '../hooks/use-number-format';
 import { useScannerBurstDismiss } from './use-scanner-burst-dismiss';
 
+import type { KeypadFieldHandle } from './money-input';
+
 export interface QuantityInputProps {
 	value?: number | string;
 	/** Resolving `false`: the store refused the quantity, and the keypad takes its step back. */
@@ -20,8 +22,14 @@ export interface QuantityInputProps {
 	className?: string;
 	textClassName?: string;
 	testID?: string;
-	/** `focus()` opens the keypad, as a press does. */
-	ref?: React.Ref<{ focus: () => void }>;
+	/** A form's label, description and validation message ids, naming and describing the trigger. */
+	'aria-labelledby'?: string;
+	'aria-describedby'?: string;
+	'aria-invalid'?: boolean;
+	/** Opens the keypad as it mounts (a stock row's Track quantity), as a field took focus. */
+	autoFocus?: boolean;
+	/** `focus()` opens the keypad, as a press does; a form's label press toggles it. */
+	ref?: React.Ref<KeypadFieldHandle>;
 	// The native field's props; the keypad has no text field to style or select.
 	inputClassName?: string;
 	selectTextOnFocus?: boolean;
@@ -37,6 +45,10 @@ export function QuantityInput({
 	className,
 	textClassName,
 	testID,
+	'aria-labelledby': labelledBy,
+	'aria-describedby': describedBy,
+	'aria-invalid': invalid,
+	autoFocus,
 	ref,
 }: QuantityInputProps) {
 	const { store } = useAppState();
@@ -50,8 +62,19 @@ export function QuantityInput({
 	const { format } = useNumberFormat(formatOptions);
 	const t = useT();
 	const keypad = React.useRef<QuantityKeypadHandle>(null);
-	React.useImperativeHandle(ref, () => ({ focus: () => keypad.current?.focus() }), []);
 	const [open, setOpen] = React.useState(false);
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			focus: () => keypad.current?.focus(),
+			blur: () => keypad.current?.dismiss(),
+			isFocused: () => open,
+		}),
+		[open]
+	);
+	React.useEffect(() => {
+		if (autoFocus) keypad.current?.focus();
+	}, [autoFocus]);
 	useScannerBurstDismiss(open, keypad);
 	const labels = React.useMemo(
 		() => ({
@@ -70,6 +93,9 @@ export function QuantityInput({
 			testID={testID}
 			className={className}
 			textClassName={textClassName}
+			labelledBy={labelledBy}
+			describedBy={describedBy}
+			invalid={invalid}
 			value={Number(value ?? 0)}
 			format={format}
 			decimals={decimals}

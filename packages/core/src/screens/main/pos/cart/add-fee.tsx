@@ -14,7 +14,7 @@ import { useT } from '../../../../contexts/translations';
 import { AmountUnitToggle } from '../../components/amount-unit-toggle';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
-import { NumberInput } from '../../components/number-input';
+import { PercentInput } from '../../components/percent-input';
 import { TaxSelect } from '../../components/tax-select';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddFee } from '../hooks/use-add-fee';
@@ -114,7 +114,7 @@ export function AddFee() {
 								render={({ field }) => (
 									<FormItem nativeID="fee-amount" className="flex-1">
 										<FormInput
-											customComponent={percent ? NumberInput : CurrencyInput}
+											customComponent={percent ? PercentInput : CurrencyInput}
 											testID="fee-amount-input"
 											{...field}
 										/>

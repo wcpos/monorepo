@@ -27,12 +27,11 @@ import { isMiscProductLine } from '@wcpos/sync-core';
 import { useT } from '../../../../../../contexts/translations';
 import { CategoryTreeLoader } from '../../../../components/product/category-select';
 import { CurrencyInput } from '../../../../components/currency-input';
+import { QuantityInput } from '../../../../components/quantity-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
-import { NumberInput, type NumberInputProps } from '../../../../components/number-input';
 import { useFieldPresence } from '../../../../components/use-field-presence';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
-import { QUANTITY_FORMAT } from '../../../../hooks/use-number-format';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
@@ -40,11 +39,6 @@ import { parsePosData } from '../../../hooks/utils';
 import { CartLineRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
-
-/** The quantity reads at its own scale, as the cart's box does, never the price's (0.125, not 0.13). */
-function QuantityField(props: NumberInputProps) {
-	return <NumberInput {...props} formatOptions={QUANTITY_FORMAT} />;
-}
 
 /**
  *
@@ -210,7 +204,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 							name="quantity"
 							render={({ field }) => (
 								<FormInput
-									customComponent={QuantityField}
+									customComponent={QuantityInput}
 									testID="edit-line-item-quantity-input"
 									type="numeric"
 									{...field}

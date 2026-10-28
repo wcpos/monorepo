@@ -5,7 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
 import { CurrencyInput } from '../../components/currency-input';
-import { NumberInput } from '../../components/number-input';
+import { PercentInput } from '../../components/percent-input';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface DiscountAmountInputProps {
@@ -37,7 +37,7 @@ export function DiscountAmountInput({
 			{!!before && <Text className="text-muted-foreground text-lg font-semibold">{before}</Text>}
 			<View className="flex-1">
 				{isPercent ? (
-					<NumberInput value={value} onChangeText={onChange} testID={testID} />
+					<PercentInput value={value} onChangeText={onChange} testID={testID} />
 				) : (
 					<CurrencyInput value={value} onChangeText={onChange} testID={testID} />
 				)}

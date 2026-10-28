@@ -13,7 +13,7 @@ import { useT } from '../../../../contexts/translations';
 import { AmountUnitToggle } from '../../components/amount-unit-toggle';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
-import { NumberInput } from '../../components/number-input';
+import { PercentInput } from '../../components/percent-input';
 import { QUICK_DISCOUNT_META_KEY, readQuickDiscountIntent } from '../hooks/quick-discount';
 import { useAddQuickDiscount } from '../hooks/use-add-quick-discount';
 
@@ -67,7 +67,7 @@ export function AddDiscount() {
 								render={({ field }) => (
 									<FormItem nativeID="discount-amount" className="flex-1">
 										<FormInput
-											customComponent={percent ? NumberInput : CurrencyInput}
+											customComponent={percent ? PercentInput : CurrencyInput}
 											testID="discount-amount-input"
 											{...field}
 										/>

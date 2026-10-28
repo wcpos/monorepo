@@ -351,3 +351,28 @@ describe('a blank price (a product not on sale)', () => {
 		expect(onChange).toHaveBeenLastCalledWith(4);
 	});
 });
+
+it('a blank field rests on its placeholder, named by its form label and then its own text', () => {
+	render(
+		<DeviceScope phone={false}>
+			<PriceKeypad
+				testID="coupon-minimum"
+				field
+				placeholder="No minimum"
+				labelledBy="coupon-minimum-label"
+				describedBy="coupon-minimum-message"
+				invalid
+				format={format}
+				labels={labels}
+				onChange={onChange}
+			/>
+		</DeviceScope>
+	);
+	const trigger = screen.getByTestId('coupon-minimum');
+	expect(trigger).toHaveTextContent('No minimum');
+	expect(trigger).toHaveAttribute('aria-describedby', 'coupon-minimum-message');
+	expect(trigger).toHaveAttribute('aria-invalid', 'true');
+	const [label, own] = trigger.getAttribute('aria-labelledby')!.split(' ');
+	expect(label).toBe('coupon-minimum-label');
+	expect(trigger.id).toBe(own);
+});

@@ -135,6 +135,7 @@ jest.mock('../../../components/meta-data-form', () => ({
 	metaDataSchema: {},
 }));
 jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
+jest.mock('../../../components/count-input', () => ({ CountInput: () => null }));
 jest.mock('../../../components/product/status-select', () => ({
 	ProductStatusSelect: () => null,
 }));

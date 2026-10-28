@@ -34,6 +34,7 @@ import {
 	POPOVER_FADE,
 	SHEET_RISE,
 } from './motion';
+import { SheetFocusScope } from './sheet-focus-scope';
 import { cn } from './utils';
 /** The shell's platform verdict; consumers branch on this, never on `Platform` themselves. */
 export const isWeb = Platform.OS === 'web';
@@ -252,26 +253,30 @@ export function OverlaySheetPanel({
 		[onPanelNode]
 	);
 	return (
-		<View
-			ref={setNode}
-			role="dialog"
-			aria-modal
-			// The shell's scrim sizes its Radix `role="dialog"` wrapper as the panel's box
-			// (`SCRIM_WRAPPER`); this panel IS the box, so it marks itself out of that rule.
-			{...SHEET_MARK}
-			// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
-			tabIndex={-1}
-			testID={testID}
-			className={cn(
-				className,
-				OVERLAY_PANEL.bottom,
-				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
-				'z-50'
-			)}
-			style={[inset, style]}
-		>
-			{children}
-		</View>
+		<SheetFocusScope>
+			<View
+				ref={setNode}
+				role="dialog"
+				aria-modal
+				// The shell's scrim sizes its Radix `role="dialog"` wrapper as the panel's box
+				// (`SCRIM_WRAPPER`); this panel IS the box, so it marks itself out of that rule.
+				{...SHEET_MARK}
+				// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
+				tabIndex={-1}
+				testID={testID}
+				className={cn(
+					className,
+					OVERLAY_PANEL.bottom,
+					open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
+					'z-50'
+				)}
+				// One flat object: the scope's Slot spreads the style it is handed, and an RN array
+				// spread that way becomes `{0, 1}`, which the DOM refuses and the page goes blank.
+				style={StyleSheet.flatten([inset, style])}
+			>
+				{children}
+			</View>
+		</SheetFocusScope>
 	);
 }
 const align: Record<OverlayPresentation, string> = {

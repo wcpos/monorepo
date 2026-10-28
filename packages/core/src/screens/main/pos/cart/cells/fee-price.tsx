@@ -10,7 +10,7 @@ import { MoneyInput } from '../../../components/money-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
-import { useNumberFormat } from '../../../hooks/use-number-format';
+import { PERCENT_FORMAT, PERCENT_PLACES, useNumberFormat } from '../../../hooks/use-number-format';
 import { useCartTableReadOnly } from './read-only';
 
 type FeeLine = import('@wcpos/query').OrderFeeLine;
@@ -23,11 +23,6 @@ interface Props {
 export function FeePrice(props: CellContext<Props, 'price'>) {
 	return useCartTableReadOnly() ? <ReadOnlyFeePrice {...props} /> : <EditableFeePrice {...props} />;
 }
-
-/** A percentage fee is typed to hundredths (12.75 %), whatever the currency's places. */
-const PERCENT_PLACES = 2;
-/** And rests at them: a store pricing to 0 places never reads 12.5 % as "12". */
-const PERCENT_FORMAT = { decimalScale: PERCENT_PLACES };
 
 /** What the fee's input shows: a percentage beside its icon, or the amount. */
 function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {

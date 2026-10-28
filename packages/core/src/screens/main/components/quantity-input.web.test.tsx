@@ -5,6 +5,8 @@ import { act, render } from '@testing-library/react';
 
 import { QuantityInput } from './quantity-input.web';
 
+import type { KeypadFieldHandle } from './money-input';
+
 type MockKeypadProps = {
 	format: (value: number) => string;
 	decimals?: number;
@@ -15,11 +17,12 @@ type MockKeypadProps = {
 };
 let mockKeypad: MockKeypadProps;
 const mockDismiss = jest.fn();
+const mockFocus = jest.fn();
 jest.mock('@wcpos/components/quantity-keypad', () => ({
 	QuantityKeypad: (props: MockKeypadProps) => {
 		mockKeypad = props;
 		jest.requireActual('react').useImperativeHandle(props.ref, () => ({
-			focus: jest.fn(),
+			focus: mockFocus,
 			dismiss: mockDismiss,
 		}));
 		return null;
@@ -58,6 +61,24 @@ it('a stock count: whole numbers grouped, no trash, disabled passed on', () => {
 	expect(mockKeypad.decimals).toBe(0);
 	expect(mockKeypad.disabled).toBe(true);
 	expect(mockKeypad.onRemove).toBeUndefined();
+});
+
+it("a form label's press opens the keypad, and pressed again while open closes it", () => {
+	const ref = React.createRef<KeypadFieldHandle>();
+	render(<QuantityInput ref={ref} value={4} decimals={0} onChangeText={jest.fn()} />);
+	expect(ref.current?.isFocused()).toBe(false);
+	act(() => mockKeypad.onOpenChange(true));
+	expect(ref.current?.isFocused()).toBe(true);
+	ref.current?.blur();
+	expect(mockDismiss).toHaveBeenCalled();
+});
+
+it("opens as it mounts when asked, as a stock row's Track quantity focused its field", () => {
+	mockFocus.mockClear();
+	render(<QuantityInput value={0} decimals={0} onChangeText={jest.fn()} />);
+	expect(mockFocus).not.toHaveBeenCalled();
+	render(<QuantityInput value={0} decimals={0} autoFocus onChangeText={jest.fn()} />);
+	expect(mockFocus).toHaveBeenCalledTimes(1);
 });
 
 describe('a scanner burst while the keypad is open', () => {

@@ -76,6 +76,7 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../components/number-input', () => ({ NumberInput: () => null }));
+jest.mock('../../components/percent-input', () => ({ PercentInput: () => null }));
 jest.mock('../../components/tax-select', () => ({ TaxSelect: () => null }));
 jest.mock('../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
 jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: jest.fn() }) }));

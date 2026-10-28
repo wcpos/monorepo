@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -41,6 +42,8 @@ import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
+import { CountInput } from '../../components/count-input';
+import { CurrencyInput } from '../../components/currency-input';
 import { useT } from '../../../../contexts/translations';
 import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
@@ -54,6 +57,12 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { isStorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
+/**
+ * The refund's quantity and amount grow into the cart's keypads on web (Paul 2026-10-27). Native
+ * keeps the plain fields that write as they are typed: the typed number fields write on blur,
+ * and a tap on Process refund does not reliably blur a native field first.
+ */
+const WEB_KEYPAD = Platform.OS === 'web';
 
 type OrderPayload = EngineRecord<'orders'>['payload'];
 type RefundDetail = NonNullable<OrderPayload['refunds']>[number] & {
@@ -127,6 +136,13 @@ export function RefundOrderForm({ order }: Props) {
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
+	// The custom amount types to the places it is validated to, which need not be the store's.
+	const RefundAmountInput = React.useMemo(() => {
+		function Input(props: React.ComponentProps<typeof CurrencyInput>) {
+			return <CurrencyInput {...props} decimals={dp} />;
+		}
+		return Input;
+	}, [dp]);
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 	const orderData = useRecordField(order, (record) => record.payload);
@@ -492,7 +508,13 @@ export function RefundOrderForm({ order }: Props) {
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => <FormInput type="numeric" {...qtyField} />}
+											render={({ field: qtyField }) => (
+												<FormInput
+													customComponent={WEB_KEYPAD ? CountInput : undefined}
+													type="numeric"
+													{...qtyField}
+												/>
+											)}
 										/>
 									</TableCell>
 									<TableCell className="flex-1">
@@ -509,6 +531,7 @@ export function RefundOrderForm({ order }: Props) {
 					name="custom_amount"
 					render={({ field }) => (
 						<FormInput
+							customComponent={WEB_KEYPAD ? RefundAmountInput : undefined}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}
