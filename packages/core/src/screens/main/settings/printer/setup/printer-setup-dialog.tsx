@@ -16,9 +16,11 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
-import { Icon, type IconName } from '@wcpos/components/icon';
+import type { IconName } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
+import { SectionHeading } from '@wcpos/components/section-heading';
 import { Text } from '@wcpos/components/text';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { VStack } from '@wcpos/components/vstack';
 import {
 	isWebBluetoothSupported,
@@ -184,27 +186,25 @@ export function PrinterSetupDialog({
 		disabled?: boolean;
 		variant?: 'outline' | 'default' | 'ghost' | 'link';
 		icon?: IconName;
-		full?: boolean;
+		size?: 'sm' | 'default';
 		label?: string;
 	};
+	// The key names the testID and the label; the look is the Button's own variant and size.
 	const action = (
 		key: string,
 		onPress: () => void,
-		{ disabled = busy, variant = 'outline', icon, full = false, label }: ActionOpts = {}
+		{ disabled = busy, variant = 'outline', icon, size = 'sm', label }: ActionOpts = {}
 	) => (
 		<Button
 			key={key}
 			testID={`printer-setup-${key}`}
 			variant={variant}
-			size={full ? 'default' : 'sm'}
+			size={size}
 			leftIcon={icon}
-			className={full ? 'h-auto w-full justify-start px-4 py-3' : undefined}
 			disabled={disabled}
 			onPress={onPress}
 		>
-			<Text className={full ? 'text-base font-semibold' : 'font-semibold'}>
-				{label ?? t(`settings.${key}`)}
-			</Text>
+			{label ?? t(`settings.${key}`)}
 		</Button>
 	);
 	// Secondary actions are compact buttons in a wrapping row (Paul, 2026-09-05: buttons over links).
@@ -218,11 +218,7 @@ export function PrinterSetupDialog({
 			{t(`settings.setup_${key}`)}
 		</Text>
 	);
-	const heading = (key: string, values?: Record<string, unknown>) => (
-		<Text key={key} variant="section">
-			{t(`settings.setup_${key}`, values)}
-		</Text>
-	);
+	const heading = (key: string) => <SectionHeading title={t(`settings.setup_${key}`)} />;
 	const status = (text: string, help?: string, stop?: () => void) => (
 		<View className="gap-1">
 			<View className="flex-row items-center gap-3">
@@ -230,7 +226,7 @@ export function PrinterSetupDialog({
 				<Text className="flex-1 text-lg font-semibold">{text}</Text>
 				{stop && (
 					<Button testID="printer-setup-stop" variant="ghost" size="sm" onPress={stop}>
-						<Text>{t('settings.setup_stop')}</Text>
+						{t('settings.setup_stop')}
 					</Button>
 				)}
 			</View>
@@ -356,7 +352,7 @@ export function PrinterSetupDialog({
 		action('setup_print_test', () => void flow.testPrint(), {
 			variant: 'default',
 			icon: 'print',
-			full: true,
+			size: 'default',
 			label:
 				printable.length > 1
 					? t('settings.setup_print_test_on', { name: selected?.name })
@@ -448,7 +444,7 @@ export function PrinterSetupDialog({
 						size="sm"
 						onPress={() => setAddressOpen(false)}
 					>
-						<Text>{t('common.cancel')}</Text>
+						{t('common.cancel')}
 					</Button>
 				)}
 			</View>
@@ -471,7 +467,7 @@ export function PrinterSetupDialog({
 				className="self-start"
 				onPress={() => discovery.cancelBluetoothScan?.()}
 			>
-				<Text>{t('common.cancel')}</Text>
+				{t('common.cancel')}
 			</Button>
 		</>
 	);
@@ -621,10 +617,10 @@ export function PrinterSetupDialog({
 										{action('setup_ok', answer('ok'), {
 											variant: 'default',
 											icon: 'check',
-											full: true,
+											size: 'default',
 										})}
-										{action('setup_short', answer('short'), { full: true })}
-										{action('setup_nothing', answer('none'), { icon: 'close', full: true })}
+										{action('setup_short', answer('short'), { size: 'default' })}
+										{action('setup_nothing', answer('none'), { icon: 'close', size: 'default' })}
 									</VStack>
 									<Text testID="printer-setup-footer" className="text-muted-foreground text-xs">
 										{t('settings.setup_footer', { n: testPages, columns })}
@@ -638,7 +634,7 @@ export function PrinterSetupDialog({
 										{PRINTER_TEXT_WIDTHS.map((n) =>
 											action(`setup_width_${n}`, () => void flow.chooseWidth(n), {
 												variant: columns === n ? 'default' : 'outline',
-												full: true,
+												size: 'default',
 											})
 										)}
 									</VStack>
@@ -698,9 +694,7 @@ export function PrinterSetupDialog({
 								)}
 							{phase === 'saved' && (
 								<View className="items-center gap-2 py-4">
-									<View className="bg-success/15 mb-1 size-14 items-center justify-center rounded-full">
-										<Icon name="check" size="xl" className="text-success" />
-									</View>
+									<ToneDisc tone="ok" />
 									<Text className="text-center text-2xl font-bold tracking-tight">
 										{t('settings.setup_saved', { name: draft.name })}
 									</Text>
