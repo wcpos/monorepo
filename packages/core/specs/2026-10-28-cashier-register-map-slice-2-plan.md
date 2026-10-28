@@ -78,7 +78,7 @@ it('describes the cashier by store, register and sign-in time', () => {
 
 **Files:**
 - Modify: `packages/core/src/screens/main/pos/cart/user-sheet.tsx` (the body's first block, replacing the `SalesToday` static row)
-- Create: `packages/core/src/screens/main/pos/cart/register-panel-request.ts` (the exact shape of `register-picker-request.ts`: `requestRegisterPanel()`, `consumeRegisterPanelRequest(): boolean`, `useRegisterPanelRequested(): boolean`)
+- Create: `packages/core/src/screens/main/pos/cart/register-panel-request.ts` (the exact shape of `register-picker-request.ts`: `requestRegisterPanel()`, `consumeRegisterPanelRequest(): boolean`, `useRegisterPanelRequested(): boolean`). **Only a focused consumer claims a request:** the phone POS keeps both tabs mounted (`(tabs)/_layout.tsx`, `lazy: false`), each with a `RegisterBar`, so the consuming effect runs `useIsFocused()` (`@react-navigation/native`) and returns without consuming when false; the claim (`consume…()`) happens before the open, in the same effect.
 - Modify: `packages/core/src/screens/main/pos/cart/register-bar.tsx` (consume the request: `useRegisterPanelRequested()` true → `onPanelOpenChange(true)` and `consumeRegisterPanelRequest()`, in an effect; pass `onOpenRegister={() => onPanelOpenChange(true)}` to `BarControls`)
 - Modify: `packages/core/src/screens/main/components/bar-controls/index.tsx` (prop `onOpenRegister?: () => void` passed to `CashierEntry`)
 - Modify: `packages/core/src/screens/main/components/cashier-entry/index.tsx` (prop `onOpenRegister?: () => void` passed to `UserSheet`; when absent the sheet's door navigates: `router.push('/(app)/(drawer)/(pos)')` then `requestRegisterPanel()`)
@@ -112,10 +112,15 @@ it('says the register is closed with its last closure when there is no session',
 	expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('Register closed · last closure 12');
 });
 // register-bar.test.tsx
-it('opens the register panel when the rail asked for it', () => {
+it('opens the register panel when the rail asked for it, on the focused bar only', () => {
 	requestRegisterPanel();
+	mockFocused = false; // the hidden tab's bar
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={hiddenOpen} />);
+	mockFocused = true;
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	expect(hiddenOpen).not.toHaveBeenCalled();
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	expect(consumeRegisterPanelRequest()).toBe(false);
 });
 ```
 
@@ -153,7 +158,7 @@ it('lists every cashier saved on this device with the current one checked', () =
 - Modify: `user-sheet.tsx` (the Store band; the blocking overlay from `switch-store-sheet.tsx` moves in verbatim: the `Portal name="store-switch-overlay"` block and the `onOpenChange` guard that refuses dismissal while `isSwitching`)
 - Delete: `packages/core/src/screens/main/pos/cart/switch-store-sheet.tsx`, `packages/core/src/screens/main/pos/cart/switch-store-sheet.test.tsx` (trailer `Test-Removal: switch-store-sheet.test.tsx — its three behaviours now run in user-sheet.test.tsx (the Store band)`)
 - Create: `packages/core/src/screens/main/components/cashier-entry/cashier-sheet-request.ts` (the `register-picker-request.ts` shape: `requestCashierSheet()`, `consumeCashierSheetRequest(): boolean`, `useCashierSheetRequested(): boolean`)
-- Modify: `cashier-entry/index.tsx` (an effect: `useCashierSheetRequested()` true → `setOpen(true)` and consume)
+- Modify: `cashier-entry/index.tsx` (an effect: `useCashierSheetRequested()` true and `useIsFocused()` true → consume, then `setOpen(true)`; an unfocused entry never consumes, so on the phone the hidden tab's bar entry leaves the request to the visible one; the rail's entry has no navigator screen of its own and counts as focused)
 - Modify: `register-bar.tsx` (the store title's `onPress` becomes `requestCashierSheet()`; delete the `SwitchStoreSheet` host, `storeOpen` state and import)
 - Modify: `packages/core/src/screens/main/pos/cart/LEDGER.md` line 68 (the overlay now lives in the cashier sheet's Store band)
 - Test: `user-sheet.test.tsx`, `register-bar.test.tsx`, `cashier-entry/index.test.tsx`, `use-switch-store.suspense.test.tsx` (its `describe('user menu store switcher')` renders the sheet; keep it green)
@@ -178,7 +183,13 @@ it("the store title asks for the cashier sheet instead of a sheet of its own", (
 	expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
 });
 // cashier-entry/index.test.tsx
-it('opens the sheet when the bar asked for it', () => { requestCashierSheet(); render(<CashierEntry …/>); expect(screen.getByTestId('user-sheet')).toBeTruthy(); });
+it('opens one sheet for one request when two entries are mounted and one is focused', () => {
+	requestCashierSheet();
+	mockFocused = false; render(<CashierEntry testID="hidden" placement="bar" portalHost="pos" />);
+	mockFocused = true; render(<CashierEntry testID="shown" placement="bar" portalHost="pos" />);
+	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
+	expect(consumeCashierSheetRequest()).toBe(false);
+});
 ```
 
 - [ ] **Step 2: Run the four files, see the new tests fail.** Step 3: Implement; delete the two files. **Step 4: Run the four files: PASS.**

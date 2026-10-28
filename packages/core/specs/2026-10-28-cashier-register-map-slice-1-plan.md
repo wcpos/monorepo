@@ -201,7 +201,7 @@ it('a reconnect that reuses the cached list does not erase a session recorded si
 - Test: create `packages/query/tests/register-session/cycle.test.ts` (harness: a memory `userDB` as in `register-document.test.ts`; a store database with the register collections, as `session-store.test.ts` builds one; `http` a `jest.fn()`; `engine` as `queue.test.ts` fakes it)
 
 **Interfaces:**
-- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists and is not closed, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.business_day ?? live.opened_at_gmt.slice(0, 10) (the UTC date only for a list-sourced, acknowledged row, which the first refresh replaces), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: live.expected_float, counted_float: live.counted_float, opening_variance: null, status_at: live.at`, and then by `acknowledged`:
+- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists and is not closed, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. Before inserting, it reconciles the register's OTHER active rows in this store database (`register_id` = this register, status `open` or `counting`, id ≠ `live.session_id`): a row the server acknowledged (`sync_status === 'synced'`) is over by the server's own word (the list named a different live session), so it is patched `status: 'closed', server_status: 'closed', pending_status: null, closed_at_gmt: live.opened_at_gmt` and the next refresh merges the real closure over it; a pending row (this cashier's own unsent opening) is left alone for the queue. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.business_day ?? live.opened_at_gmt.slice(0, 10) (the UTC date only for a list-sourced, acknowledged row, which the first refresh replaces), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: live.expected_float, counted_float: live.counted_float, opening_variance: null, status_at: live.at`, and then by `acknowledged`:
   - `true` → `sync_status: 'synced', server_status: live.status, pending_status: null` (a placeholder the next refresh merges over; never pushed);
   - `false` → `sync_status: 'pending', server_status: null, pending_status: live.status` (the queue creates it on the server under the same id; session ids are the server's idempotency keys, so the opener's own later upload is deduplicated, not doubled).
 - Consumes: `readLiveSession` (Task 2); `registerCollections` (`store-database.ts`).
@@ -234,9 +234,17 @@ it("seeds only the bound register's cache", async () => {
 it('leaves an existing open row alone', async () => {
 	expect(await seedSessionFromCache(storeDB, live, 'A', 1)).toBe('present');
 });
+it('a return hand-over into a database still holding the previous session closes it and seeds the new one', async () => {
+	// storeDB holds S (register 'A', open, sync_status synced); cache names T for 'A'
+	expect(await seedSessionFromCache(storeDB, liveT, 'A', 1)).toBe('seeded');
+	expect((await sessions.findOne('S').exec())?.toJSON()).toMatchObject({ status: 'closed', server_status: 'closed' });
+	expect((await sessions.findOne('T').exec())?.status).toBe('open');
+	// a pending local opening P for 'A' is not touched
+	expect((await sessions.findOne('P').exec())?.status).toBe('open');
+});
 ```
 
-- [ ] **Step 2: Run the file, see the five fail** (module missing).
+- [ ] **Step 2: Run the file, see the six fail** (module missing).
 
 - [ ] **Step 3: Implement** `seed.ts` and the cycle hook: after the reservation stage, `const live = registerId ? readLiveSession(siteUuid, registerId) : null; if (live) await staged('seed', () => seedSessionFromCache(storeDB, live, registerId!, storeId));` — this runs online too, so a device that comes back online with no row seeds first and the refresh merges the server's figures over it. `readLiveSession` reads the in-memory snapshot, which `readRegister(userDB)` at the reservation stage has just refreshed.
 
@@ -359,7 +367,7 @@ it('says the figures are still to come on a seeded session and will not close th
 ## Self-review
 
 - **Spec coverage (§ 5.1):** the repro (Task 6), per-store pointer (Task 1), the cached session id, opener and opened-at (Task 2), the counting mark (Tasks 2 and 4), the Open register card not offering to open a register the cache says is open (Task 3 makes the row exist, so the card's own condition `!session` handles it: no card change), figures unknown until the refresh and never written into a closure (Task 5). Covered.
-- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4). Second round (two threads): the cache clears when the refresh brings the cached session back closed (Task 4); the store-local business day travels in the cache and the seed (Tasks 2–4). Third round (two threads): the directory bootstrap reads the per-store binding through `getBoundRegister` (Task 1); the registers-list cache write happens only on a fresh response, never on a reused request (Task 2).
+- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4). Second round (two threads): the cache clears when the refresh brings the cached session back closed (Task 4); the store-local business day travels in the cache and the seed (Tasks 2–4). Third round (two threads): the directory bootstrap reads the per-store binding through `getBoundRegister` (Task 1); the registers-list cache write happens only on a fresh response, never on a reused request (Task 2). Fourth round: the seed closes an acknowledged stale active row of the same register before inserting the cached one (Task 3).
 - **Types:** `LiveSession` is defined once (Task 2) and consumed in Tasks 3 and 4 by that name; `seedSessionFromCache` returns the three literals Tasks 3 asserts.
 - **Review focus:** 1 and 2 in Task 3's tests, 3 in Task 2's binding test, 4 in Task 4's hook test, 5 in Task 5.
 - **Proportion:** the plan's code is tests and signatures; the function bodies are left to the implementer.
