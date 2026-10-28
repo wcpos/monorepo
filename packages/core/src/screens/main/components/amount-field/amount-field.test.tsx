@@ -152,6 +152,44 @@ describe('commit, cancel, no-op', () => {
 		expect(written).toHaveBeenCalledWith(12);
 	});
 
+	it('a field whose row is removed (the form clears it, then it unmounts) drops its draft', () => {
+		const written = jest.fn();
+		function Page() {
+			const form = useForm({ defaultValues: { sale: 5 as number | string } });
+			const [shown, setShown] = React.useState(true);
+			React.useEffect(() => {
+				const sub = form.watch((values, { name }) => name && written(values.sale));
+				return () => sub.unsubscribe();
+			}, [form]);
+			return (
+				<FormProvider {...form}>
+					<FormFieldContext.Provider value={{ name: 'sale' }}>
+						{shown && (
+							<Controller
+								control={form.control}
+								name="sale"
+								render={({ field }) => <FormAmountField kind="money" testID="amount" {...field} />}
+							/>
+						)}
+						<button
+							data-testid="remove"
+							onClick={() => {
+								setShown(false);
+								form.setValue('sale', '', { shouldDirty: true });
+							}}
+						/>
+					</FormFieldContext.Provider>
+				</FormProvider>
+			);
+		}
+		render(<Page />);
+		const input = screen.getByTestId('amount') as HTMLInputElement;
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: '4' } });
+		fireEvent.click(screen.getByTestId('remove'));
+		expect(written.mock.calls).toEqual([['']]);
+	});
+
 	it('a field blurred, then removed, does not land its draft twice', () => {
 		const { onCommit, input, unmount } = field({ value: '3' });
 		type(input(), '4');
