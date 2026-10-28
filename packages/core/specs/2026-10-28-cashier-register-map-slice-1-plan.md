@@ -28,7 +28,8 @@ Inputs the spec implies but no task's tests would otherwise exercise; each line'
 2. A cached session for register A while the device is now bound to register B of the same store (rebound while offline is impossible, but the pointer and the cache can disagree after a store switch): the seed reads the cache of the *bound* register only. → Task 3.
 3. The registers list arrives with `session: null` for the bound register after a close elsewhere: the cache is cleared, and `counting_here` with it. → Task 2.
 4. A reload mid-count on this device: the cache says `counting` with `counting_here: true`, and the cart column must reopen the count (today it does, because the session row is local); a reload on *another* device shows Counting elsewhere. This slice only records the mark; the card is slice 5. → Task 4 records; Task 4's test asserts the mark round-trips.
-5. The register panel on a seeded row shows `0,00` for every figure: a reader would take it as an empty drawer. → Task 5's Notice.
+5. The register panel on a seeded row shows `0,00` for every figure, and a close written from it would record a false shortage: a reader would take it as an empty drawer. → Task 5 (the Notice, the disabled intent, the guard in `startCounting`).
+6. Cashier A opens the register offline and hands over to B before the opening is uploaded: B must not be told the server has A's session. → Task 3's unacknowledged seed (a pending create under the same id).
 
 ---
 
@@ -108,6 +109,11 @@ export type LiveSession = {
 	status: 'open' | 'counting';
 	opened_at_gmt: string;
 	opened_by: { id: number; name: string } | null;
+	/** The server has the session (it came from the registers list, or the local row is synced / carries a server_status). */
+	acknowledged: boolean;
+	/** The opening floats, for an unacknowledged session only; null when the server owns the row. */
+	expected_float: string | null;
+	counted_float: string | null;
 	/** This device started the count; cleared by back-to-selling and by any status that is not counting. */
 	counting_here: boolean;
 	/** When the cache was written (ISO). */
@@ -119,19 +125,20 @@ export async function markCountingHere(userDB, siteUuid: string, registerId: str
 ```
 
   Stored at `sites[siteUuid].registers[registerId].live`. `recordLiveSession(…, null)` deletes `live`. `recordLiveSession` with a new `session_id` or a status other than `counting` resets `counting_here` to `false`; with the same `session_id` and status `counting` it keeps the existing `counting_here`.
-- Consumes: `Register.session` as `use-register-binding.ts:19-33` already types it.
+- Consumes: `Register.session` as `use-register-binding.ts:19-33` already types it. The registers list is the server's word: a listed session is `acknowledged: true` with null floats; a listed register with `session: null` clears the cache (the only place besides `closeSession` that clears it).
 
 - [ ] **Step 1: Failing tests in `register-document.test.ts`:**
 
 ```ts
-it('caches a register\'s live session on the device and clears it', async () => {
+it("caches a register's live session on the device and clears it", async () => {
 	await remintRegister(db);
-	await recordLiveSession(db, 'site', 'A', { session_id: 's1', status: 'open', opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' } });
+	const base = { opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' }, acknowledged: true, expected_float: null, counted_float: null };
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'open' });
 	expect(readLiveSession('site', 'A')).toMatchObject({ session_id: 's1', status: 'open', counting_here: false });
 	await markCountingHere(db, 'site', 'A', true);
-	await recordLiveSession(db, 'site', 'A', { session_id: 's1', status: 'counting', opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' } });
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'counting' });
 	expect(readLiveSession('site', 'A')?.counting_here).toBe(true);
-	await recordLiveSession(db, 'site', 'A', { session_id: 's2', status: 'open', opened_at_gmt: '2026-10-28T17:50:00Z', opened_by: null });
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's2', status: 'open', opened_by: null });
 	expect(readLiveSession('site', 'A')?.counting_here).toBe(false);
 	await recordLiveSession(db, 'site', 'A', null);
 	expect(readLiveSession('site', 'A')).toBeNull();
@@ -141,57 +148,64 @@ it('caches a register\'s live session on the device and clears it', async () => 
 - [ ] **Step 2: Failing test in `use-register-binding.test.tsx`** (after `'silently binds the sole register the store lists and filters by store'`; `rows` is the file's fixture):
 
 ```ts
-it('records each listed register\'s live session on the device, and clears a closed one', async () => {
+it("records each listed register's live session on the device, and clears a closed one", async () => {
 	mockHttp.get.mockResolvedValue({
 		data: [
 			{ id: 'a', name: 'a', session: { id: 's1', status: 'open', opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' } } },
 			{ id: 'b', name: 'b', session: null },
 		],
 	});
-	await recordLiveSession(mockDB, mockSite, 'b', { session_id: 'old', status: 'open', opened_at_gmt: '2026-10-27T09:00:00Z', opened_by: null });
+	await recordLiveSession(mockDB, mockSite, 'b', { session_id: 'old', status: 'open', opened_at_gmt: '2026-10-27T09:00:00Z', opened_by: null, acknowledged: true, expected_float: null, counted_float: null });
 	const { result } = mount();
 	await waitFor(() => expect(result.current.loaded).toBe(true));
-	expect(readLiveSession(mockSite, 'a')).toMatchObject({ session_id: 's1', opened_by: { name: 'Demo Cashier' } });
+	expect(readLiveSession(mockSite, 'a')).toMatchObject({ session_id: 's1', acknowledged: true, opened_by: { name: 'Demo Cashier' } });
 	expect(readLiveSession(mockSite, 'b')).toBeNull();
 });
 ```
 
-- [ ] **Step 3: Run both files, see the three new tests fail** (functions undefined / cache empty).
+- [ ] **Step 3: Run both files, see the two new tests fail** (functions undefined / cache empty).
 
-- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `syncBinding` after `if (!entry.loaded) return;` write `recordLiveSession` for every row in `entry.value.registers` (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by } : null`), awaited in series before the bind logic.
+- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `syncBinding` after `if (!entry.loaded) return;` write `recordLiveSession` for every row in `entry.value.registers` (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by, acknowledged: true, expected_float: null, counted_float: null } : null`), awaited in series before the bind logic.
 
 - [ ] **Step 5: Run both files**: PASS. Run the full `use-register-binding.test.tsx` and `register-document.test.ts`: PASS.
 
 - [ ] **Step 6: Commit** `feat(register): the device caches each register's live session from the registers list`.
 
-### Task 3: Seed the session row offline
+### Task 3: Seed the session row
 
 **Files:**
 - Create: `packages/query/src/register-session/seed.ts`
 - Modify: `packages/query/src/register-session/cycle.ts:71` (before `if (!online) return;`)
 - Modify: `packages/query/src/register-session/index.ts` (export `seedSessionFromCache`)
-- Test: create `packages/query/tests/register-session/cycle.test.ts` (harness: a memory `userDB` as in `register-document.test.ts`; a store database with the register collections, as `session-store.test.ts` builds one; `http` a `jest.fn()` that must not be called offline; `engine` as `queue.test.ts` fakes it)
+- Test: create `packages/query/tests/register-session/cycle.test.ts` (harness: a memory `userDB` as in `register-document.test.ts`; a store database with the register collections, as `session-store.test.ts` builds one; `http` a `jest.fn()`; `engine` as `queue.test.ts` fakes it)
 
 **Interfaces:**
-- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.opened_at_gmt.slice(0, 10), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: null, counted_float: null, opening_variance: null, sync_status: 'synced', server_status: live.status, pending_status: null, status_at: live.at` (the server's `business_day` replaces the UTC date on the first refresh; the cycle's `refreshSessions` merges over it).
+- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists and is not closed, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.opened_at_gmt.slice(0, 10), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: live.expected_float, counted_float: live.counted_float, opening_variance: null, status_at: live.at`, and then by `acknowledged`:
+  - `true` → `sync_status: 'synced', server_status: live.status, pending_status: null` (a placeholder the next refresh merges over; never pushed);
+  - `false` → `sync_status: 'pending', server_status: null, pending_status: live.status` (the queue creates it on the server under the same id; session ids are the server's idempotency keys, so the opener's own later upload is deduplicated, not doubled).
 - Consumes: `readLiveSession` (Task 2); `registerCollections` (`store-database.ts`).
 
 - [ ] **Step 1: Failing tests in `cycle.test.ts`:**
 
 ```ts
-it('offline, seeds the bound register\'s cached open session into a store database that has no row', async () => {
-	// userDB with a live session for 'A'; storeDB empty; online: false
+it("offline, seeds the bound register's cached open session into a store database that has no row", async () => {
+	// userDB with an acknowledged live session for 'A'; storeDB empty; online: false
 	await runRegisterSessionCycle({ storeDB, userDB, siteUuid: 'site', storeId: 1, registerId: 'A', online: false, engine, http });
 	const row = await registerCollections(storeDB).register_sessions.findOne('s1').exec();
 	expect(row?.toJSON()).toMatchObject({ status: 'open', register_id: 'A', opened_by: 7, sync_status: 'synced', server_status: 'open', counted_float: null, business_day: '2026-10-28' });
 	expect(http.get).not.toHaveBeenCalled();
+});
+it('seeds an opening the server has not acknowledged as a pending create with its floats', async () => {
+	// live: acknowledged false, expected_float '100.0000', counted_float '100.0000'
+	expect(await seedSessionFromCache(storeDB, live, 'A', 1)).toBe('seeded');
+	expect((await sessions.findOne('s1').exec())?.toJSON()).toMatchObject({ sync_status: 'pending', server_status: null, pending_status: 'open', counted_float: '100.0000' });
 });
 it('does not resurrect a session the store database already holds as closed', async () => {
 	// insert s1 as closed first
 	expect(await seedSessionFromCache(storeDB, live, 'A', 1)).toBe('closed');
 	expect((await sessions.findOne('s1').exec())?.status).toBe('closed');
 });
-it('seeds only the bound register\'s cache', async () => {
+it("seeds only the bound register's cache", async () => {
 	// cache for 'A', bound register 'B': nothing inserted
 	await runRegisterSessionCycle({ …registerId: 'B', online: false… });
 	expect(await sessions.find().exec()).toHaveLength(0);
@@ -201,35 +215,35 @@ it('leaves an existing open row alone', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the file, see the four fail** (module missing).
+- [ ] **Step 2: Run the file, see the five fail** (module missing).
 
 - [ ] **Step 3: Implement** `seed.ts` and the cycle hook: after the reservation stage, `const live = registerId ? readLiveSession(siteUuid, registerId) : null; if (live) await staged('seed', () => seedSessionFromCache(storeDB, live, registerId!, storeId));` — this runs online too, so a device that comes back online with no row seeds first and the refresh merges the server's figures over it. `readLiveSession` reads the in-memory snapshot, which `readRegister(userDB)` at the reservation stage has just refreshed.
 
 - [ ] **Step 4: Run the file: PASS.** Run `queue.test.ts` and `session-store.test.ts`: PASS (unchanged).
 
-- [ ] **Step 5: Commit** `feat(register): seed the cached open session into a store database that has none`.
+- [ ] **Step 5: Commit** `feat(register): seed the cached session into a store database that has none`.
 
 ### Task 4: The session hook writes the cache and the counting mark
 
 **Files:**
 - Modify: `packages/core/src/services/register-session/use-register-session.ts:296-360` (`actions.openSession`, `startCounting`, `backToSelling`, `closeSession`)
 - Modify: `packages/query/src/register-session/cycle.ts` (after the refresh stage)
-- Test: `packages/core/src/services/register-session/use-register-session.test.tsx`, `packages/query/tests/register-session/cycle.test.ts`
+- Test: `packages/core/src/services/register-session/use-register-session.test.tsx` (its harness: the `settled` helper and the `@wcpos/query/register-session` mock, which spreads `requireActual`; add `jest.fn()` spies for `recordLiveSession` and `markCountingHere` on top of the spread), `packages/query/tests/register-session/cycle.test.ts`
 
 **Interfaces:**
-- Consumes: `recordLiveSession`, `markCountingHere`, `readLiveSession` (Task 2); `findOpenSession(storeDB, registerId, true)` (`session-store.ts:43`).
+- Consumes: `recordLiveSession`, `markCountingHere`, `readLiveSession` (Task 2).
 - Produces: nothing new; side effects on the register document:
-  - `openSession` → `recordLiveSession(userDB, site.uuid, registerId, { session_id: row.id, status: 'open', opened_at_gmt: row.opened_at_gmt, opened_by: { id: wpCredentials.id, name: wpCredentials.display_name } })`.
-  - `startCounting` → `recordLiveSession(…status: 'counting'…)` then `markCountingHere(…, true)`.
+  - `openSession` → `recordLiveSession(userDB, site.uuid, registerId, { session_id: row.id, status: 'open', opened_at_gmt: row.opened_at_gmt, opened_by: { id: wpCredentials.id, name: wpCredentials.display_name }, acknowledged: false, expected_float: row.expected_float, counted_float: row.counted_float })`.
+  - `startCounting` → `recordLiveSession(…status: 'counting', acknowledged: <session.sync_status === 'synced' || session.server_status != null>…)` then `markCountingHere(…, true)`.
   - `backToSelling` → `recordLiveSession(…status: 'open'…)` (which resets the mark).
   - `closeSession` (after the closure is written) → `recordLiveSession(…, null)`.
-  - the cycle, after `refreshSessions`: `findOpenSession(storeDB, registerId, true)` → `recordLiveSession` with the row's `status`, `opened_at_gmt`, `opened_by` (name from `live?.opened_by?.name` if the id matches, else the id with an empty name); `RegisterSessionRequiredError` → `recordLiveSession(…, null)`.
+  - the cycle, after `refreshSessions` (and only when `registerId`): look up the register's active row with `sessions.findOne({ selector: { register_id: registerId, status: { $in: ['open', 'counting'] }, sync_status: { $ne: 'failed' } } })`; when found, `recordLiveSession` with the row's `status`, `opened_at_gmt`, `opened_by` (`{ id, name }` where `name` is the cached `opened_by.name` when the id matches, else `''`), `acknowledged: row.sync_status === 'synced' || row.server_status != null`, the row's floats; when none, **leave the cache alone** (the registers list and `closeSession` are the only clearers, and the seed's `'closed'` rule stops a stale cache from resurrecting a closed session).
 
-- [ ] **Step 1: Failing test in `use-register-session.test.tsx`** (use the file's existing harness; `@wcpos/query/register-session` is mocked at line 26, so spy on `recordLiveSession` and `markCountingHere` through that mock):
+- [ ] **Step 1: Failing test in `use-register-session.test.tsx`:**
 
 ```ts
 it('records the live session and the counting mark on the device as the session moves', async () => {
-	const { result } = mountWithOpenSession(); // the file's helper for an open session
+	const { result } = await settled(/* an open session for register 'A' on site 'site', as the file's other tests build one */);
 	await act(() => result.current.actions.startCounting());
 	expect(mockRecordLiveSession).toHaveBeenLastCalledWith(expect.anything(), 'site', 'A', expect.objectContaining({ status: 'counting' }));
 	expect(mockMarkCountingHere).toHaveBeenLastCalledWith(expect.anything(), 'site', 'A', true);
@@ -238,20 +252,22 @@ it('records the live session and the counting mark on the device as the session 
 });
 ```
 
-- [ ] **Step 2: Failing test in `cycle.test.ts`:**
+- [ ] **Step 2: Failing tests in `cycle.test.ts`:**
 
 ```ts
-it('online, after the refresh, records the register\'s open session on the device and clears it when none', async () => {
-	// http.get('sessions', …) returns [{ id: 's9', status: 'open', register_id: 'A', opened_at_gmt: …, opened_by: 7 }] then sessions/s9 detail
+it("online, after the refresh, records the register's active session on the device", async () => {
+	// http.get('sessions', …) returns [{ id: 's9', status: 'open', register_id: 'A', opened_at_gmt: …, opened_by: 7 }] then the sessions/s9 detail
 	await runRegisterSessionCycle({ …online: true… });
-	expect(readLiveSession('site', 'A')).toMatchObject({ session_id: 's9', status: 'open' });
-	// http.get('sessions', …) returns [] on the next cycle
+	expect(readLiveSession('site', 'A')).toMatchObject({ session_id: 's9', status: 'open', acknowledged: true });
+});
+it("a refresh during this device's count keeps the counting mark", async () => {
+	// cache: s9 counting, counting_here true; server list returns s9 as counting
 	await runRegisterSessionCycle({ …online: true… });
-	expect(readLiveSession('site', 'A')).toBeNull();
+	expect(readLiveSession('site', 'A')).toMatchObject({ status: 'counting', counting_here: true });
 });
 ```
 
-- [ ] **Step 3: Run both files, see the two fail.**
+- [ ] **Step 3: Run both files, see the three fail.**
 
 - [ ] **Step 4: Implement** the four action writes and the cycle's post-refresh write.
 
@@ -259,35 +275,45 @@ it('online, after the refresh, records the register\'s open session on the devic
 
 - [ ] **Step 6: Commit** `feat(register): the session hook and the cycle keep the device's live-session cache current`.
 
-### Task 5: The register panel says when figures are still unknown
+### Task 5: Unknown figures never reach a count or a closure
 
 **Files:**
-- Modify: `packages/core/src/screens/main/pos/cart/register-panel.tsx` (above the ledger rows, where the refused-movement `Notice` renders at ~line 262)
+- Modify: `packages/core/src/services/register-session/use-register-session.ts` (the returned object and `actions.startCounting`)
+- Modify: `packages/core/src/screens/main/pos/cart/register-panel.tsx` (above the ledger rows, where the refused-movement `Notice` renders at ~line 262; the footer's intent)
 - Modify: `packages/core/src/contexts/translations/locales/en/core.json` (`register.figures_after_sync`: `Figures arrive with the next sync.`)
-- Test: `packages/core/src/screens/main/pos/cart/register-panel.test.tsx`
+- Test: `packages/core/src/services/register-session/use-register-session.test.tsx`, `packages/core/src/screens/main/pos/cart/register-panel.test.tsx`
 
 **Interfaces:**
-- Consumes: `session` from the mocked `useRegisterSession` (test line 41-44: `currentSession`).
-- Produces: a `Notice` with `testID="register-panel-figures-pending"`, tone info, shown when `session && session.sync_status === 'synced' && session.counted_float == null && session.server_expected_at == null`; the Float step/row shows `—` instead of `0,00` under the same predicate.
+- Produces: `useRegisterSession()` returns `figuresPending: boolean` = `!!session && session.sync_status === 'synced' && session.counted_float == null && session.server_expected_at == null` (an acknowledged seed before its first refresh; an unacknowledged seed carries its floats and is never pending). `actions.startCounting` throws `new Error('register.figures_after_sync')` while pending, so no count and no closure can be written from unknown figures. The panel: a `Notice` with `testID="register-panel-figures-pending"`, tone info, shown while pending; the Float step/row shows `—` instead of `0,00`; the footer intent is `disabled: !session || figuresPending`.
+- Consumes: `session` from the mocked `useRegisterSession` in the panel test (test line 41-44: `currentSession`; add `figuresPending` to that mock's return).
 
-- [ ] **Step 1: Failing test:**
+- [ ] **Step 1: Failing tests:**
 
 ```ts
-it('says the figures are still to come on a session seeded from the device cache', () => {
+// use-register-session.test.tsx
+it("refuses to start counting while a seeded session's figures are pending", async () => {
+	const { result } = await settled(/* an open row with counted_float null, server_expected_at null, sync_status 'synced' */);
+	expect(result.current.figuresPending).toBe(true);
+	await expect(result.current.actions.startCounting()).rejects.toThrow('register.figures_after_sync');
+});
+// register-panel.test.tsx
+it('says the figures are still to come on a seeded session and will not close the register', () => {
 	currentSession = { ...openSession, counted_float: null, expected_float: null, server_expected_at: null, sync_status: 'synced' };
+	currentFiguresPending = true;
 	render(<RegisterPanel open onOpenChange={() => {}} />);
 	expect(screen.getByTestId('register-panel-figures-pending')).toBeTruthy();
 	expect(screen.queryByText('0,00 £')).toBeNull();
+	expect(screen.getByTestId('register-panel-close-register')).toBeDisabled();
 });
 ```
 
-- [ ] **Step 2: Run the file, see it fail.** Run: `NODE_OPTIONS=--max-old-space-size=4096 pnpm -C /Users/kilbot/Projects/monorepo-v2-worktrees/cashier-register-map/packages/core exec jest src/screens/main/pos/cart/register-panel.test.tsx --maxWorkers=2`
+- [ ] **Step 2: Run both files, see the two fail.** Panel: `NODE_OPTIONS=--max-old-space-size=6144 pnpm exec jest --maxWorkers=2 --coverage=false src/screens/main/pos/cart/register-panel.test.tsx` from `packages/core`.
 
-- [ ] **Step 3: Implement** the predicate as `const figuresPending = …` next to `blind`, the `Notice`, and `—` for the float amount when pending.
+- [ ] **Step 3: Implement** `figuresPending` next to `blind`, the guard in `startCounting`, the `Notice`, `—` for the float amount and the disabled intent.
 
-- [ ] **Step 4: Run the file: PASS.**
+- [ ] **Step 4: Run both files: PASS.**
 
-- [ ] **Step 5: Commit** `feat(register): the panel says when a seeded session's figures are still to come`.
+- [ ] **Step 5: Commit** `feat(register): a seeded session's unknown figures never reach a count or a closure`.
 
 ### Task 6: Ledgers, the repro note and the PR
 
@@ -306,7 +332,8 @@ it('says the figures are still to come on a session seeded from the device cache
 
 ## Self-review
 
-- **Spec coverage (§ 5.1):** the repro (Task 6), per-store pointer (Task 1), the cached session id, opener and opened-at (Task 2), the counting mark (Tasks 2 and 4), the Open register card not offering to open a register the cache says is open (Task 3 makes the row exist, so the card's own condition `!session` handles it: no card change), figures unknown until the refresh (Task 5). Covered.
+- **Spec coverage (§ 5.1):** the repro (Task 6), per-store pointer (Task 1), the cached session id, opener and opened-at (Task 2), the counting mark (Tasks 2 and 4), the Open register card not offering to open a register the cache says is open (Task 3 makes the row exist, so the card's own condition `!session` handles it: no card change), figures unknown until the refresh and never written into a closure (Task 5). Covered.
+- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4).
 - **Types:** `LiveSession` is defined once (Task 2) and consumed in Tasks 3 and 4 by that name; `seedSessionFromCache` returns the three literals Tasks 3 asserts.
 - **Review focus:** 1 and 2 in Task 3's tests, 3 in Task 2's binding test, 4 in Task 4's hook test, 5 in Task 5.
 - **Proportion:** the plan's code is tests and signatures; the function bodies are left to the implementer.
