@@ -234,7 +234,7 @@ it('reads the connection warning as a log line', () => {
 // The end of a leg closes the node it stopped on: red with a cross when the payment failed,
 // grey with a dash when nobody lost money (StepProgress `failed` / `stopped`).
 it.each([
-	['failed', 'bg-destructive', 'Declined or cancelled on the terminal'],
+	['failed', 'bg-bad', 'Declined or cancelled on the terminal'],
 	['voided', 'bg-muted-foreground', 'Payment cancelled'],
 	['released', 'bg-muted-foreground', 'Payment released'],
 ] as const)('marks a %s leg on the node', (outcome, tone, status) => {

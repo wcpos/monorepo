@@ -60,7 +60,7 @@ export function RefundsCard() {
 					{ share: summary.keptShare ?? 0, className: 'bg-c1' },
 					{
 						share: totals.total ? summary.refunded / totals.total : 0,
-						className: 'bg-destructive',
+						className: 'bg-bad',
 					},
 				]}
 			/>
@@ -70,7 +70,7 @@ export function RefundsCard() {
 					{
 						label: t('reports.refunded'),
 						value: money(summary.refunded),
-						swatchClassName: 'bg-destructive',
+						swatchClassName: 'bg-bad',
 					},
 				]}
 			/>

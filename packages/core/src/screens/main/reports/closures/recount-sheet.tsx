@@ -184,7 +184,7 @@ export function RecountSheet({
 					{!!error && <Text testID="recount-error">{error}</Text>}
 				</DialogBody>
 				{reasonTooLong && (
-					<Text testID="recount-reason-error" className="text-destructive">
+					<Text testID="recount-reason-error" className="text-bad">
 						{t('reports.recount_reason_too_long', { limit: RECOUNT_REASON_LIMIT })}
 					</Text>
 				)}

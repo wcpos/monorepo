@@ -17,8 +17,8 @@ export function CodeChip({
 	onPress?: () => void;
 	testID?: string;
 }) {
-	const text = <Text className="text-destructive font-mono text-xs font-semibold">{code}</Text>;
-	const chipClass = 'bg-destructive/10 self-end rounded-md px-2 py-0.5';
+	const text = <Text className="text-bad font-mono text-xs font-semibold">{code}</Text>;
+	const chipClass = 'bg-bad/15 self-end rounded-md px-2 py-0.5';
 
 	if (!onPress) {
 		return (
@@ -34,7 +34,7 @@ export function CodeChip({
 			accessibilityRole="button"
 			accessibilityLabel={code}
 			onPress={onPress}
-			className={cn(chipClass, 'web:hover:bg-destructive/20')}
+			className={cn(chipClass, 'web:hover:bg-bad/20')}
 		>
 			{text}
 		</Pressable>

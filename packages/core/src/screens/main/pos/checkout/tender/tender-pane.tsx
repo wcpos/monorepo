@@ -134,7 +134,7 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	const router = useRouter();
 	return (
 		<VStack space="sm" className="flex-1" testID="checkout-refused">
-			<Text className="text-destructive font-semibold">{t('pos_checkout.order_refused')}</Text>
+			<Text className="text-bad font-semibold">{t('pos_checkout.order_refused')}</Text>
 			<Text className="text-muted-foreground text-sm">
 				{rejection.message ?? rejection.reason ?? t('pos_checkout.order_refused_no_reason')}
 			</Text>

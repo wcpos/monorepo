@@ -62,7 +62,7 @@ export function TaxBasedOn() {
 						<Icon size="sm" variant="bad" name="warning" />
 					)}
 					<Text
-						className={rates.length > 0 ? 'shrink text-sm' : 'text-destructive shrink text-sm'}
+						className={rates.length > 0 ? 'shrink text-sm' : 'text-bad shrink text-sm'}
 						numberOfLines={1}
 					>
 						{valueLabel}

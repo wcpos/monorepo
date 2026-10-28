@@ -348,7 +348,7 @@ export function OpenOrderTabs({
 							<View
 								key={tone}
 								testID={`open-orders-${tone}`}
-								className={`size-2 rounded-full ${tone === 'warning' ? 'bg-warning' : 'bg-destructive'}`}
+								className={`size-2 rounded-full ${tone === 'warning' ? 'bg-warning' : 'bg-bad'}`}
 								aria-hidden
 							/>
 						))}

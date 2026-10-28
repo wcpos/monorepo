@@ -71,7 +71,7 @@ export function UrlInput({ onConnected }: UrlInputProps) {
 				</Text>
 			)}
 			{error ? (
-				<Text testID="connect-error-message" className="text-destructive text-sm">
+				<Text testID="connect-error-message" className="text-bad text-sm">
 					{error}
 				</Text>
 			) : null}

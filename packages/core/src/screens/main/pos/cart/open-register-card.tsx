@@ -102,7 +102,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 					})}
 				</Text>
 			)}
-			{!!error && <Text className="text-destructive">{error}</Text>}
+			{!!error && <Text className="text-bad">{error}</Text>}
 			{lastClosure && (
 				<ListRow
 					testID="open-register-last-closure"

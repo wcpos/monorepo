@@ -254,8 +254,8 @@ it('distinguishes short, over and exact drawer results with semantic tokens', ()
 		/>
 	);
 	for (const [id, token] of [
-		['1', 'text-destructive'],
-		['2', 'text-success'],
+		['1', 'text-bad'],
+		['2', 'text-ok'],
 		['3', 'text-muted-foreground'],
 	]) {
 		expect(screen.getByTestId(`closure-result-${id}`).className).toContain(token);

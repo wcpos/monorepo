@@ -164,7 +164,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					<View className="flex-row items-center gap-2">
 						<Text
 							testID="count-variance"
-							className={`font-semibold tabular-nums ${variance < 0 ? 'text-destructive' : variance === 0 ? 'text-success' : 'text-foreground'}`}
+							className={`font-semibold tabular-nums ${variance < 0 ? 'text-bad' : variance === 0 ? 'text-ok' : 'text-foreground'}`}
 						>
 							{varianceText(variance, format, t)}
 						</Text>
@@ -266,7 +266,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				</Text>
 			)}
 			{!!error && (
-				<Text testID="count-error" className="text-destructive">
+				<Text testID="count-error" className="text-bad">
 					{error}
 				</Text>
 			)}

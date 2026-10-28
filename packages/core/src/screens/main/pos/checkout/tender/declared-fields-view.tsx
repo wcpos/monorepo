@@ -55,10 +55,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 				if (!isValueComponent(component)) return null;
 				const error = errors[component.id];
 				const errorLine = error ? (
-					<Text
-						testID={`checkout-field-${component.id}-error`}
-						className="text-destructive text-xs"
-					>
+					<Text testID={`checkout-field-${component.id}-error`} className="text-bad text-xs">
 						{error}
 					</Text>
 				) : null;
@@ -122,7 +119,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 				);
 			})}
 			{errors._form ? (
-				<Text testID="checkout-form-error" className="text-destructive text-sm">
+				<Text testID="checkout-form-error" className="text-bad text-sm">
 					{errors._form}
 				</Text>
 			) : null}

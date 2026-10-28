@@ -491,7 +491,7 @@ export function InputSources() {
 											</HStack>
 											{serviceUuidInvalid ? (
 												<Text
-													className="text-destructive text-xs"
+													className="text-bad text-xs"
 													testID="bluetooth-service-class-id-error"
 												>
 													{t('settings.scanner_bluetooth_uuid_invalid')}

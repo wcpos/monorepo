@@ -15,7 +15,7 @@ const colors = {
 	processing: 'bg-c3',
 	'on-hold': 'bg-warning',
 	pending: 'bg-c5',
-	refunded: 'bg-destructive',
+	refunded: 'bg-bad',
 };
 export function OrdersCard() {
 	const t = useT(),

@@ -238,7 +238,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 										))}
 									</Notice>
 								) : (
-									error && <Text className="text-destructive">{error}</Text>
+									error && <Text className="text-bad">{error}</Text>
 								)}
 							</VStack>
 						)}

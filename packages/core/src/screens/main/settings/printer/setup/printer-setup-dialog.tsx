@@ -689,7 +689,7 @@ export function PrinterSetupDialog({
 							{discovery.error &&
 								discovery.error.code !== 'network-none-found' &&
 								phase === 'results' && (
-									<Text className="text-destructive text-sm">
+									<Text className="text-bad text-sm">
 										{formatDiscoveryError(discovery.error, t)}
 									</Text>
 								)}
