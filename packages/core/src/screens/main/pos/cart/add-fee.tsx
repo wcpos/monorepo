@@ -94,8 +94,8 @@ export function AddFee() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList>
-					<PropertyRow label={t('pos_cart.fee_name')} nativeID="fee-name-form-item">
+				<PropertyList prefix="fee">
+					<PropertyRow label={t('pos_cart.fee_name')} id="name">
 						<FormField
 							control={form.control}
 							name="name"
@@ -106,7 +106,7 @@ export function AddFee() {
 							)}
 						/>
 					</PropertyRow>
-					<PropertyRow label={t('pos_cart.amount')} nativeID="fee-amount-form-item">
+					<PropertyRow label={t('pos_cart.amount')} id="amount">
 						<HStack className="gap-2">
 							<FormField
 								control={form.control}
@@ -131,8 +131,8 @@ export function AddFee() {
 					</PropertyRow>
 					<PropertyRow
 						label={t('pos_cart.amount_includes_tax')}
-						nativeID="fee-includes-tax-form-item"
-						trailing={
+						id="includes-tax"
+						control={
 							<FormField
 								control={form.control}
 								name="prices_include_tax"
@@ -144,7 +144,7 @@ export function AddFee() {
 							/>
 						}
 					/>
-					<PropertyRow label={t('common.tax')} nativeID="fee-tax-form-item">
+					<PropertyRow label={t('common.tax')} id="tax">
 						<TaxSelect
 							status={taxStatus}
 							taxClass={taxClass ?? 'standard'}

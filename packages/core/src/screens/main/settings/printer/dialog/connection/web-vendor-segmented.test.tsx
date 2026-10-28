@@ -6,6 +6,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { WebVendorSegmented } from './web-vendor-segmented';
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
 jest.mock('../printer-rows', () => ({
 	PrinterRow: ({ children, verb }: { children?: React.ReactNode; verb?: React.ReactNode }) => (
 		<div>

@@ -3,14 +3,7 @@ import { View } from 'react-native';
 
 import { type ControllerRenderProps, useFormContext, useWatch } from 'react-hook-form';
 
-import {
-	FormField,
-	FormItem,
-	FormSelect,
-	FormSwitch,
-	SavedMark,
-	useSavedName,
-} from '@wcpos/components/form';
+import { FormField, FormSelect, FormSwitch } from '@wcpos/components/form';
 import { PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
@@ -23,44 +16,6 @@ import { VendorSelect } from '../components/vendor-select';
 import { useT } from '../../../../../contexts/translations';
 
 import type { PrinterFormValues, VendorOption } from '../schema';
-
-/**
- * One printer setting (property rows): its control in the value slot, named by the row's key.
- * A switch sits in the trailing slot (`control`) beside its Saved mark; a verb hides while the
- * mark shows. `mark` lists every field the row holds (Address · port is two).
- */
-export function PrinterRow(props: {
-	id: string;
-	label: string;
-	mark?: string | string[];
-	verb?: React.ReactNode;
-	control?: React.ReactNode;
-	indent?: boolean;
-	children?: React.ReactNode;
-}) {
-	const { id, control } = props;
-	const t = useT();
-	const saved = useSavedName();
-	const marked = !!saved && [props.mark ?? []].flat().includes(saved);
-	return (
-		<PropertyRow
-			testID={`printer-row-${id}`}
-			label={props.label}
-			indent={props.indent}
-			nativeID={`printer-${id}-form-item`}
-			trailing={
-				marked || props.verb || control ? (
-					<>
-						{marked ? <SavedMark name={saved} label={t('settings.saved')} /> : props.verb}
-						{control ? <FormItem nativeID={`printer-${id}`}>{control}</FormItem> : null}
-					</>
-				) : null
-			}
-		>
-			<FormItem nativeID={control ? undefined : `printer-${id}`}>{props.children}</FormItem>
-		</PropertyRow>
-	);
-}
 
 type SwitchName = 'autoCut' | 'autoOpenDrawer' | 'isDefault' | 'fullReceiptRaster';
 
@@ -76,14 +31,14 @@ function SwitchRow(props: {
 		<FormSwitch testID={props.testID} {...field} />
 	);
 	return (
-		<PrinterRow
+		<PropertyRow
+			prefix="printer"
 			id={props.name}
 			label={props.label}
-			mark={props.name}
 			control={<FormField control={control} name={props.name} render={render} />}
 		>
 			{props.children}
-		</PrinterRow>
+		</PropertyRow>
 	);
 }
 
@@ -102,7 +57,7 @@ function SelectRow(props: {
 	const { name, numeric } = props;
 	const { control } = useFormContext<PrinterFormValues>();
 	return (
-		<PrinterRow id={name} label={props.label} mark={name} indent={props.indent}>
+		<PropertyRow prefix="printer" id={name} label={props.label} indent={props.indent}>
 			<FormField
 				control={control}
 				name={name}
@@ -121,7 +76,7 @@ function SelectRow(props: {
 					/>
 				)}
 			/>
-		</PrinterRow>
+		</PropertyRow>
 	);
 }
 

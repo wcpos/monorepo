@@ -92,11 +92,8 @@ export function AddShipping() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList>
-					<PropertyRow
-						label={t('pos_cart.shipping_method_title')}
-						nativeID="shipping-title-form-item"
-					>
+				<PropertyList prefix="shipping">
+					<PropertyRow label={t('pos_cart.shipping_method_title')} id="title">
 						<FormField
 							control={form.control}
 							name="method_title"
@@ -107,7 +104,7 @@ export function AddShipping() {
 							)}
 						/>
 					</PropertyRow>
-					<PropertyRow label={t('pos_cart.shipping_method')} nativeID="shipping-method-form-item">
+					<PropertyRow label={t('pos_cart.shipping_method')} id="method">
 						<FormField
 							control={form.control}
 							name="method_id"
@@ -123,7 +120,7 @@ export function AddShipping() {
 							)}
 						/>
 					</PropertyRow>
-					<PropertyRow label={t('pos_cart.amount')} nativeID="shipping-amount-form-item">
+					<PropertyRow label={t('pos_cart.amount')} id="amount">
 						<FormField
 							control={form.control}
 							name="amount"
@@ -140,8 +137,8 @@ export function AddShipping() {
 					</PropertyRow>
 					<PropertyRow
 						label={t('pos_cart.amount_includes_tax')}
-						nativeID="shipping-includes-tax-form-item"
-						trailing={
+						id="includes-tax"
+						control={
 							<FormField
 								control={form.control}
 								name="prices_include_tax"
@@ -153,7 +150,7 @@ export function AddShipping() {
 							/>
 						}
 					/>
-					<PropertyRow label={t('common.tax')} nativeID="shipping-tax-form-item">
+					<PropertyRow label={t('common.tax')} id="tax">
 						<FormField
 							control={form.control}
 							name="tax_status"

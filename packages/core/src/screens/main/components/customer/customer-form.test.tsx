@@ -57,34 +57,9 @@ jest.mock('@wcpos/components/text', () => ({
 		<span onClick={onPress}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({
-		label,
-		children,
-		trailing,
-		testID,
-	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode; testID?: string }>) => (
-		<div data-testid={testID}>
-			<span>{label}</span>
-			{children}
-			{trailing}
-		</div>
-	),
-	PropertyVerb: ({ children, onPress, testID }: React.PropsWithChildren<Pressable>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => (
-		<div data-testid="add-row">{children}</div>
-	),
-	PropertyAdd: ({ label, onPress, testID }: Pressable & { label: string }) => (
-		<button data-testid={testID} onClick={onPress}>
-			{label}
-		</button>
-	),
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, options?: { label?: string }) =>
 		options?.label ? `${key}:${options.label}` : key,

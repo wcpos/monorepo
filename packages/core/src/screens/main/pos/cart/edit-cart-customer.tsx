@@ -8,7 +8,6 @@ import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	SavedFieldProvider,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
@@ -201,12 +200,12 @@ function EditCartCustomerFields() {
 			<DialogBody>
 				<VStack className="gap-4">
 					<FormErrors />
-					<PropertyList>
+					<PropertyList prefix="billing">
 						<PropertyRow
 							testID="cart-address-row-name"
 							label={t('common.name')}
-							nativeID="billing-first_name-form-item"
-							trailing={<SavedMark name="billing" label={t('settings.saved')} />}
+							id="first_name"
+							name="billing"
 						>
 							<HStack className="gap-2">
 								{(['first_name', 'last_name'] as const).map((name) => (
@@ -227,8 +226,8 @@ function EditCartCustomerFields() {
 										key={name}
 										testID={`cart-address-row-${name}`}
 										label={labels[name]}
-										nativeID={`billing-${name}-form-item`}
-										trailing={
+										id={name}
+										verb={
 											name === 'company' &&
 											verb(['remove-company', t('common.remove'), () => presence.withdraw(name)])
 										}

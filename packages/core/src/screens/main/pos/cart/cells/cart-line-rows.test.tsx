@@ -13,6 +13,9 @@ function mockWrap({ children }: React.PropsWithChildren) {
 function mockField({ testID }: { testID?: string }) {
 	return <span data-testid={testID} />;
 }
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	return {

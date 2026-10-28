@@ -51,13 +51,9 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTreeCombobox: () => null,
 }));
 
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyAdd: () => null,
-	PropertyVerb: () => null,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,

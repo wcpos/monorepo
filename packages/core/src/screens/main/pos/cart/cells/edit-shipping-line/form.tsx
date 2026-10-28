@@ -17,7 +17,7 @@ import {
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { PropertyList } from '@wcpos/components/property-row';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencyInput } from '../../../../components/currency-input';
@@ -28,7 +28,7 @@ import { TaxStatusRadioGroup } from '../../../../components/tax-radio-groups';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { AmountRow, CartLineRow, CustomFieldRows } from '../cart-line-rows';
+import { AmountRow, CustomFieldRows } from '../cart-line-rows';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
@@ -111,13 +111,8 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="shipping-line-form">
-					<CartLineRow
-						prefix="shipping-line"
-						id="method_title"
-						label={t('pos_cart.shipping_method_title')}
-						mark="method_title"
-					>
+				<PropertyList prefix="shipping-line">
+					<PropertyRow id="method_title" label={t('pos_cart.shipping_method_title')}>
 						<FormField
 							control={form.control}
 							name="method_title"
@@ -125,13 +120,8 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 								<FormInput testID="edit-shipping-line-method_title-input" {...field} />
 							)}
 						/>
-					</CartLineRow>
-					<CartLineRow
-						prefix="shipping-line"
-						id="method_id"
-						label={t('pos_cart.shipping_method')}
-						mark="method_id"
-					>
+					</PropertyRow>
+					<PropertyRow id="method_id" label={t('pos_cart.shipping_method')}>
 						<FormField
 							control={form.control}
 							name="method_id"
@@ -143,7 +133,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 								/>
 							)}
 						/>
-					</CartLineRow>
+					</PropertyRow>
 					<AmountRow prefix="shipping-line" mark="amount">
 						<FormField
 							control={form.control}
@@ -158,12 +148,11 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 							)}
 						/>
 					</AmountRow>
-					<CartLineRow
-						prefix="shipping-line"
+					<PropertyRow
 						id="includes-tax"
 						label={t('pos_cart.amount_includes_tax')}
-						mark="prices_include_tax"
-						toggle={
+						name="prices_include_tax"
+						control={
 							<FormField
 								control={form.control}
 								name="prices_include_tax"
@@ -173,7 +162,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 							/>
 						}
 					/>
-					<CartLineRow prefix="shipping-line" id="tax" label={t('common.tax')} mark="tax_status">
+					<PropertyRow id="tax" label={t('common.tax')} name="tax_status">
 						<FormField
 							control={form.control}
 							name="tax_status"
@@ -181,7 +170,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 								<FormRadioGroup customComponent={TaxStatusRadioGroup} {...field} />
 							)}
 						/>
-					</CartLineRow>
+					</PropertyRow>
 					<CustomFieldRows prefix="shipping-line" meta={item.meta_data} />
 				</PropertyList>
 			</DialogBody>

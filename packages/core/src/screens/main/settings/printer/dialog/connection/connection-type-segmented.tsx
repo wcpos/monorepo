@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { PropertyRow } from '@wcpos/components/property-row';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
-import { PrinterRow } from '../printer-rows';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -56,7 +56,12 @@ export function ConnectionTypeSegmented({
 
 	// A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10).
 	return (
-		<PrinterRow id="connection" label={t('settings.printer_connection')} mark="connectionType">
+		<PropertyRow
+			prefix="printer"
+			id="connection"
+			label={t('settings.printer_connection')}
+			name="connectionType"
+		>
 			<SegmentedControl
 				testID="add-printer-connection-type-segmented"
 				className="w-full"
@@ -69,6 +74,6 @@ export function ConnectionTypeSegmented({
 					}
 				}}
 			/>
-		</PrinterRow>
+		</PropertyRow>
 	);
 }

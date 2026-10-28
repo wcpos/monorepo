@@ -37,6 +37,7 @@ const form = {
 };
 const mockUseForm = jest.fn((_options: unknown) => form);
 
+let mockSavedName = '';
 jest.mock('react-hook-form', () => ({
 	useForm: (options: unknown) => mockUseForm(options),
 	// The watched field reads the current form value, so a test "toggles" it by setting it.
@@ -69,7 +70,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
-	useSavedName: () => '',
+	useSavedName: () => mockSavedName,
 	useMarkSaved: () => mockMarkSaved,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
@@ -81,27 +82,9 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
 }));
-jest.mock('@wcpos/components/property-row', () => {
-	function Children({ children }: React.PropsWithChildren) {
-		return <>{children}</>;
-	}
-	function Row({ children, trailing }: React.PropsWithChildren<{ trailing?: React.ReactNode }>) {
-		return (
-			<>
-				{children}
-				{trailing}
-			</>
-		);
-	}
-	return {
-		PropertyList: Children,
-		PropertyRow: Row,
-		PropertyVerb: Children,
-		PropertyAddRow: Children,
-		PropertyAdd: () => null,
-		PropertyPlaceholder: Children,
-	};
-});
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
@@ -272,16 +255,9 @@ describe('catalogue form autosave', () => {
 			);
 
 		// Custom fields carry theirs on each row (MetaDataForm's rows, mocked here).
-		it('renders a Saved mark for every writable field root', () => {
+		it('every writable field root has a row that shows its Saved mark', () => {
 			Object.assign(formValues, { sku: 's', barcode: 'b', sale_price: '5' });
 			Object.assign(formValues, { featured: true, virtual: true, downloadable: true });
-			try {
-				renderForm();
-			} finally {
-				Object.assign(formValues, { sku: '', barcode: '', sale_price: '' });
-				Object.assign(formValues, { featured: false, virtual: false, downloadable: false });
-			}
-
 			const fields = [
 				'sku',
 				'barcode',
@@ -296,8 +272,17 @@ describe('catalogue form autosave', () => {
 					? ['name', 'categories', 'featured', 'virtual', 'downloadable']
 					: []),
 			];
-			for (const name of fields) {
-				expect(screen.getByTestId(`saved-${name}`)).toBeTruthy();
+			try {
+				for (const name of fields) {
+					mockSavedName = name;
+					const { unmount } = renderForm();
+					expect(screen.getByTestId(`saved-${name}`)).toBeTruthy();
+					unmount();
+				}
+			} finally {
+				mockSavedName = '';
+				Object.assign(formValues, { sku: '', barcode: '', sale_price: '' });
+				Object.assign(formValues, { featured: false, virtual: false, downloadable: false });
 			}
 		});
 

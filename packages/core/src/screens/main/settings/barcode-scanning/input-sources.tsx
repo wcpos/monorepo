@@ -195,7 +195,7 @@ function DirectConnection(props: {
 			<PropertyRow
 				testID="scanner-row-direct"
 				label={t('settings.scanner_direct_connection')}
-				trailing={
+				verb={
 					// The verb is the dialog's trigger, so closing the sheet returns focus to it.
 					<DialogTrigger asChild>
 						<PropertyVerb testID="scanner-advanced-trigger">{props.label}</PropertyVerb>

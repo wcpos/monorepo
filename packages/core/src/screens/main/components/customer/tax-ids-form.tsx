@@ -16,7 +16,7 @@ import { View } from 'react-native';
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormField, FormInput, FormSelect, SavedMark, useSavedName } from '@wcpos/components/form';
+import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { OptionSelect } from '@wcpos/components/select';
@@ -83,7 +83,6 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
 	const { fields, remove } = useFieldArray({ control, name });
-	const savedName = useSavedName();
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;
 		value?: string;
@@ -160,17 +159,15 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 						testID={`${testID}-row-tax_id-${index}`}
 						label={t('tax_id.tax_id')}
 						align="top"
-						trailing={
-							index === 0 && savedName === name ? (
-								<SavedMark name={name} label={t('settings.saved')} />
-							) : (
-								<PropertyVerb
-									testID={`${testID}-remove-tax_id-${index}`}
-									onPress={() => remove(index)}
-								>
-									{t('common.remove')}
-								</PropertyVerb>
-							)
+						// The list's one Saved mark sits on its first row.
+						name={index === 0 ? name : []}
+						verb={
+							<PropertyVerb
+								testID={`${testID}-remove-tax_id-${index}`}
+								onPress={() => remove(index)}
+							>
+								{t('common.remove')}
+							</PropertyVerb>
 						}
 					>
 						<HStack className="flex-wrap items-start gap-0">{inputs}</HStack>

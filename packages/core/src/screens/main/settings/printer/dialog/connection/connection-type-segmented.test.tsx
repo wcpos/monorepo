@@ -12,6 +12,9 @@ import { ConnectionTypeSegmented } from './connection-type-segmented';
 import type { PrinterFormValues } from '../../schema';
 import type { Resolver } from 'react-hook-form';
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
 jest.mock('../printer-rows', () => ({
 	PrinterRow: ({ children, verb }: { children?: React.ReactNode; verb?: React.ReactNode }) => (
 		<div>

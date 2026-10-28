@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 
-import { FormField, FormInput, SavedMark, useSavedName } from '@wcpos/components/form';
+import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { VStack } from '@wcpos/components/vstack';
@@ -36,7 +36,6 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 
 	// Watch the meta_data array to get up-to-date values
 	const watchedFields = useWatch({ name, control }) || [];
-	const savedName = useSavedName();
 	const removeAt = (index: number) => {
 		if (getValues(name)[index].id) {
 			// Set the value to null but keep the item
@@ -46,6 +45,11 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 			remove(index);
 		}
 	};
+
+	// The list has one Saved mark, on its first editable row (a tax ID list marks its first too).
+	const shown = (row?: { value?: unknown; key?: string; attr_id?: unknown }) =>
+		row?.value !== null && !hiddenKeys?.includes(row?.key as string) && row?.attr_id == null;
+	const first = fields.findIndex((_, index) => shown(watchedFields[index]));
 
 	return (
 		<VStack>
@@ -73,17 +77,14 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 						key={field.id}
 						testID={`${testID}-row-meta-${index}`}
 						label={t('common.custom_field')}
-						trailing={
-							savedName === name ? (
-								<SavedMark name={name} label={t('settings.saved')} />
-							) : (
-								<PropertyVerb
-									testID={`${testID}-remove-meta-${index}`}
-									onPress={() => removeAt(index)}
-								>
-									{t('common.remove')}
-								</PropertyVerb>
-							)
+						name={index === first ? name : []}
+						verb={
+							<PropertyVerb
+								testID={`${testID}-remove-meta-${index}`}
+								onPress={() => removeAt(index)}
+							>
+								{t('common.remove')}
+							</PropertyVerb>
 						}
 					>
 						<HStack className="gap-2">

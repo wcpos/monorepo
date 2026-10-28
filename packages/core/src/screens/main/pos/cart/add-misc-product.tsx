@@ -177,12 +177,8 @@ export function AddMiscProduct() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList>
-					<PropertyRow
-						label={t('common.name')}
-						nativeID="misc-product-name-form-item"
-						testID="misc-product-row-name"
-					>
+				<PropertyList prefix="misc-product">
+					<PropertyRow label={t('common.name')} id="name" testID="misc-product-row-name">
 						<FormField
 							control={form.control}
 							name="name"
@@ -193,11 +189,7 @@ export function AddMiscProduct() {
 							)}
 						/>
 					</PropertyRow>
-					<PropertyRow
-						label={t('common.price')}
-						nativeID="misc-product-price-form-item"
-						testID="misc-product-row-price"
-					>
+					<PropertyRow label={t('common.price')} id="price" testID="misc-product-row-price">
 						<FormField
 							control={form.control}
 							name="price"
@@ -213,11 +205,7 @@ export function AddMiscProduct() {
 							)}
 						/>
 					</PropertyRow>
-					<PropertyRow
-						label={t('common.tax')}
-						nativeID="misc-product-tax-form-item"
-						testID="misc-product-row-tax"
-					>
+					<PropertyRow label={t('common.tax')} id="tax" testID="misc-product-row-tax">
 						<TaxSelect
 							status={values.tax_status ?? 'taxable'}
 							taxClass={values.tax_class ?? 'standard'}
@@ -233,18 +221,16 @@ export function AddMiscProduct() {
 						<PropertyRow
 							key={name}
 							label={labels[name]}
-							nativeID={`misc-product-${name}-form-item`}
+							id={name}
 							testID={`misc-product-row-${name}`}
-							trailing={
-								<>
-									{(name === 'virtual' || name === 'downloadable') && toggle(name)}
-									<PropertyVerb
-										testID={`misc-product-remove-${name}`}
-										onPress={() => presence.withdraw(name)}
-									>
-										{t('common.remove')}
-									</PropertyVerb>
-								</>
+							control={(name === 'virtual' || name === 'downloadable') && toggle(name)}
+							verb={
+								<PropertyVerb
+									testID={`misc-product-remove-${name}`}
+									onPress={() => presence.withdraw(name)}
+								>
+									{t('common.remove')}
+								</PropertyVerb>
 							}
 						>
 							{offeredValue[name]}

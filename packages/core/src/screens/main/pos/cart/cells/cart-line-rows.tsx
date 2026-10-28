@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { useFormContext, useWatch } from 'react-hook-form';
 
-import { FormItem, SavedMark, useSavedName } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyAdd, PropertyAddRow, PropertyRow } from '@wcpos/components/property-row';
 
@@ -15,54 +14,13 @@ import { TaxSelect } from '../../../components/tax-select';
 type Prefix = 'line-item' | 'fee-line' | 'shipping-line';
 const TAX_MARK = ['tax_status', 'tax_class'];
 
-/**
- * One fact of a cart line (the three edit dialogs), on the `OrderRow` idiom: its control in the
- * value slot, named by the row's key. `toggle` is a switch that sits in the trailing slot and
- * stays there; the verb hides while one of the row's Saved marks shows.
- */
-export function CartLineRow(props: {
-	prefix: Prefix;
-	id: string;
-	label: string;
-	mark?: string | string[];
-	verb?: React.ReactNode;
-	toggle?: React.ReactNode;
-	children?: React.ReactNode;
-}) {
-	const { prefix, id } = props;
-	const t = useT();
-	const saved = useSavedName();
-	const marked = !!saved && ([] as string[]).concat(props.mark ?? []).includes(saved);
-	const end = marked ? <SavedMark name={saved} label={t('settings.saved')} /> : props.verb;
-	const item = <FormItem nativeID={`${prefix}-${id}`}>{props.toggle ?? props.children}</FormItem>;
-	return (
-		<PropertyRow
-			testID={`${prefix}-row-${id}`}
-			label={props.label}
-			nativeID={`${prefix}-${id}-form-item`}
-			trailing={
-				props.toggle ? (
-					<>
-						{item}
-						{end}
-					</>
-				) : (
-					end
-				)
-			}
-		>
-			{props.toggle || !props.children ? null : item}
-		</PropertyRow>
-	);
-}
-
 /** Tax status and class as one fact (property rows rule 4); each change writes its own root. */
 export function TaxRow({ prefix }: { prefix: Prefix }) {
 	const t = useT();
 	const form = useFormContext();
 	const [status, taxClass] = useWatch({ control: form.control, name: ['tax_status', 'tax_class'] });
 	return (
-		<CartLineRow prefix={prefix} id="tax" label={t('common.tax')} mark={TAX_MARK}>
+		<PropertyRow prefix={prefix} id="tax" label={t('common.tax')} name={TAX_MARK}>
 			<TaxSelect
 				status={status}
 				taxClass={taxClass ?? 'standard'}
@@ -73,7 +31,7 @@ export function TaxRow({ prefix }: { prefix: Prefix }) {
 				testID={`${prefix}-tax-select`}
 				aria-labelledby={`${prefix}-tax-form-item`}
 			/>
-		</CartLineRow>
+		</PropertyRow>
 	);
 }
 
@@ -88,7 +46,7 @@ export function AmountRow(props: {
 	const { prefix, onPercent } = props;
 	const t = useT();
 	return (
-		<CartLineRow prefix={prefix} id="amount" label={t('pos_cart.amount')} mark={props.mark}>
+		<PropertyRow prefix={prefix} id="amount" label={t('pos_cart.amount')} name={props.mark}>
 			<HStack className="gap-2">
 				<View className="flex-1">{props.children}</View>
 				{onPercent && (
@@ -100,7 +58,7 @@ export function AmountRow(props: {
 					/>
 				)}
 			</HStack>
-		</CartLineRow>
+		</PropertyRow>
 	);
 }
 

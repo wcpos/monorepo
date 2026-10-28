@@ -8,6 +8,9 @@ import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { NetworkFields } from './network-fields';
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/list-item', () => ({
 	ListItem: ({
 		children,

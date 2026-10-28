@@ -129,40 +129,9 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({
-		label,
-		children,
-		trailing,
-		testID,
-		nativeID,
-	}: React.PropsWithChildren<{
-		label: string;
-		trailing?: React.ReactNode;
-		testID?: string;
-		nativeID?: string;
-	}>) => (
-		<div data-testid={testID}>
-			<span id={nativeID}>{label}</span>
-			{children}
-			{trailing}
-		</div>
-	),
-	PropertyVerb: ({ children, onPress, testID }: React.PropsWithChildren<Pressable>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => (
-		<div data-testid="add-row">{children}</div>
-	),
-	PropertyAdd: ({ label, onPress, testID }: Pressable & { label: string }) => (
-		<button data-testid={testID} onClick={onPress}>
-			{label}
-		</button>
-	),
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
 		<span onClick={onPress}>{children}</span>

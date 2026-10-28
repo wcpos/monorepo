@@ -58,8 +58,8 @@ export function AddDiscount() {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList>
-					<PropertyRow label={t('pos_cart.amount')} nativeID="discount-amount-form-item">
+				<PropertyList prefix="discount">
+					<PropertyRow label={t('pos_cart.amount')} id="amount">
 						<HStack className="gap-2">
 							<FormField
 								control={form.control}
