@@ -17,6 +17,12 @@ type Props = React.PropsWithChildren<{ testID?: string }>;
 function mockDiv({ children, testID }: Props) {
 	return <div data-testid={testID}>{children}</div>;
 }
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('react-native', () => ({ View: mockDiv }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockDiv }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: mockDiv }));

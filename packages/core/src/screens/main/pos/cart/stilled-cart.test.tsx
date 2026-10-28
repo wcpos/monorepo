@@ -12,6 +12,12 @@ let mockPayload: Record<string, unknown> = {};
 const mockCartTable = jest.fn();
 let mockCurrentOrder: { uuid: string } = { uuid: 'order-1' };
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (
 		record: { payload?: unknown } | undefined,

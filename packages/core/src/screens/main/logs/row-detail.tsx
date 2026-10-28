@@ -4,6 +4,7 @@ import { Platform, Share, View } from 'react-native';
 import { type Href, useRouter } from 'expo-router';
 import { decode } from 'html-entities';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -437,7 +438,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 				</HStack>
 			) : null}
 			{!hasProse && !hasFacts && !hasContext ? (
-				<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('health.logs.no_detail')} />
 			) : null}
 		</VStack>
 	);

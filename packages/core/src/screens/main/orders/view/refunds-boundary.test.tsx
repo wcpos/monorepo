@@ -20,6 +20,12 @@ const mockOrder = {
 	payload: { id: 23858, status: 'completed' },
 };
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('react-native', () => ({
 	ScrollView: ({ children }: any) => <div data-testid="modal-scroll">{children}</div>,
 	View: ({ children, className }: any) => <div className={className}>{children}</div>,
