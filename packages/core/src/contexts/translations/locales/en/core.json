@@ -2967,7 +2967,6 @@
 	"orders.display_options": "Display options",
 	"orders.restore_defaults": "Restore defaults",
 	"common.status_offline": "Offline",
-	"common.status_site_unreachable": "Site unreachable",
 	"customers.no_customers_yet": "No customers yet",
 	"customers.no_customers_yet_description": "Customers you add, and anyone who buys from you, will appear here.",
 	"customers.display_options": "Display options",

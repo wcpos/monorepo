@@ -78,7 +78,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => null,
+	takeRedirectReturn: () => false,
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),

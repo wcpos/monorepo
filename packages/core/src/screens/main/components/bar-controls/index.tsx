@@ -28,15 +28,15 @@ export function useBarMenu(): { label: string; onPress: () => void } | undefined
 
 /**
  * The online status in its one form: a named state is a `StatusBadge` (CODING_STANDARDS § Design,
- * Chips, badges and switches), in the warning tone, because red on a till means a loss (§ 7).
- * `undefined` while the store answers.
+ * Chips, badges and switches) reading Offline, in the warning tone, because red on a till means a
+ * loss (§ 7). `undefined` while the store answers.
  */
 export function useOnlineBadge(): { label: string; variant: 'warning' } | undefined {
 	const status = useOnlineStatus().status;
 	const t = useT();
-	if (status === 'offline') return { label: t('common.status_offline'), variant: 'warning' };
-	if (status === 'online-website-unavailable')
-		return { label: t('common.status_site_unreachable'), variant: 'warning' };
+	// An unreachable store reads Offline too: the badge names the cashier's state, not a diagnosis.
+	if (status === 'offline' || status === 'online-website-unavailable')
+		return { label: t('common.status_offline'), variant: 'warning' };
 	return undefined;
 }
 

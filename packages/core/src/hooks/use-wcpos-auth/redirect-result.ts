@@ -47,6 +47,8 @@ interface PendingRedirectResult {
 
 let captured = false;
 let pending: PendingRedirectResult | null = null;
+/** Whether a cashier entry has taken this page load's redirect return (`takeRedirectReturn`). */
+let returnTaken = false;
 
 /**
  * Save the return location, initiating site/consumer, and CSRF state before
@@ -215,9 +217,23 @@ export function peekRedirectClaim(): { loginUrl: string; claimKey: string | null
 }
 
 /**
+ * One-shot: the first caller for the initiating site takes the redirect return, and every later
+ * caller gets `false`. The cashier entry calls it to reopen its sheet so the Add user consumer
+ * mounts to claim the result; on a phone-width POS two entries are mounted (the Products and Cart
+ * tabs' bars), and only one sheet may open. The pending result itself stays for its claimant.
+ */
+export function takeRedirectReturn(loginUrl: string | null | undefined): boolean {
+	captureRedirectResult();
+	if (returnTaken || !loginUrl || pending?.loginUrl !== loginUrl) return false;
+	returnTaken = true;
+	return true;
+}
+
+/**
  * Test-only: reset module state between tests.
  */
 export function __resetRedirectResultForTesting(): void {
 	captured = false;
 	pending = null;
+	returnTaken = false;
 }

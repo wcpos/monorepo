@@ -19,7 +19,7 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => null,
+	takeRedirectReturn: () => false,
 }));
 jest.mock('expo-router', () => ({ useNavigation: () => ({}) }));
 jest.mock('../../../../contexts/app-state', () => ({

@@ -53,11 +53,12 @@ it('puts the bell and the entry on the root host unless the bar names one', () =
 	expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe('null');
 });
 
-// One form for every bar: a StatusBadge in the warning tone, nothing while the store answers.
+// One form for every bar: Offline as a StatusBadge in the warning tone, an unreachable store
+// included; nothing while the store answers.
 it.each([
 	['online-website-available', undefined],
 	['offline', { label: 'common.status_offline', variant: 'warning' }],
-	['online-website-unavailable', { label: 'common.status_site_unreachable', variant: 'warning' }],
+	['online-website-unavailable', { label: 'common.status_offline', variant: 'warning' }],
 ])('reads %s as %j', (status, badge) => {
 	mockStatus = status;
 	const { result } = renderHook(() => useOnlineBadge());
