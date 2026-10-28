@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -15,7 +16,6 @@ import { Text } from '@wcpos/components/text';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { useGround } from '../../components/ground';
-import { useTheme } from '../../../../contexts/theme';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -57,7 +57,7 @@ export function Closures({
 	const { store } = useStoreSession();
 	const binding = useRegisterBinding();
 	const directory = useRegisterDirectory(scope.storeId);
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const ground = useGround();
 	const t = useT();
 	const names = useRegisterNames();
@@ -68,7 +68,7 @@ export function Closures({
 			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
 		);
 	}, []);
-	if (row && screenSize === 'sm')
+	if (row && phone)
 		return (
 			<ClosurePanel
 				key={row.id}
@@ -176,7 +176,7 @@ export function Closures({
 					onClose={close}
 				/>
 			) : (
-				screenSize !== 'sm' && (
+				!phone && (
 					<View
 						testID="closure-panel-placeholder"
 						className="bg-card w-1/3 items-center justify-center border-l p-4"

@@ -341,7 +341,10 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({}),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
 jest.mock('./closure-panel', () => ({ ClosurePanel: () => null }));
 jest.mock('./closure-list', () => ({ ClosureList: () => null }));
 jest.mock('./save-or-share-csv', () => ({ saveOrShareCsv: jest.fn() }));

@@ -25,7 +25,6 @@ jest.mock('expo-haptics', () => ({
 
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
-let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 let mockNumber = '1187';
 const mockUseFlow = jest.fn(() => mockFlow);
@@ -73,8 +72,9 @@ jest.mock('../../../hooks/use-storage-health', () => ({
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
-jest.mock('../../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));

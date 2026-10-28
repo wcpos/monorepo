@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { useTheme } from '../../../../contexts/theme';
+import { useIsPhone } from '@wcpos/components/lib/device';
+
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout, setTenderMethod } from './checkout-mode';
 import { readCheckoutSeed } from './pos-url';
@@ -18,7 +19,7 @@ import { readCheckoutSeed } from './pos-url';
  */
 export function useCheckoutUrlSeed(orderIdParam: string | string[] | undefined) {
 	const { orderId, checkout, methodId } = readCheckoutSeed(orderIdParam);
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const router = useRouter();
 	const lastSeed = React.useRef<string | null>(null);
@@ -31,12 +32,12 @@ export function useCheckoutUrlSeed(orderIdParam: string | string[] | undefined) 
 			enterCheckout(orderId);
 			if (methodId) setTenderMethod(orderId, methodId);
 		}
-		if (screenSize === 'sm' || unsupportedSchema) {
+		if (phone || unsupportedSchema) {
 			// The sheet (phones) or the legacy modal (no contract) is a route of its own.
 			router.replace({
 				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
 				params: { orderId },
 			});
 		}
-	}, [orderId, checkout, methodId, screenSize, loaded, unsupportedSchema, router]);
+	}, [orderId, checkout, methodId, phone, loaded, unsupportedSchema, router]);
 }

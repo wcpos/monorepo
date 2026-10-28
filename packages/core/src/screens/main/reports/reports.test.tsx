@@ -19,7 +19,10 @@ jest.mock('@wcpos/components/error-boundary', () => {
 });
 jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
 jest.mock('@wcpos/components/lib/portal-container', () => ({ registerPortalContainer: jest.fn() }));
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
 jest.mock('./context', () => ({ useReportsScope: () => ({ detail: undefined }) }));
 jest.mock('./panels/panel', () => ({ DetailPanel: () => null }));
 jest.mock('./sync-progress', () => ({ ReportsSyncProgress: () => null }));

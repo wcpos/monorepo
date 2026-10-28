@@ -17,6 +17,7 @@ const mockWriteText = jest.fn().mockResolvedValue(undefined);
 
 const mockOpenURL = jest.fn().mockResolvedValue(undefined);
 
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	Share: { share: jest.fn() },

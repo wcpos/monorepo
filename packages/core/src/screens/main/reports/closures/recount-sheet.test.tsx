@@ -152,7 +152,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => true,
+}));
 jest.mock('@wcpos/query/register-session', () => ({
 	mintUuid: () => mockMint(),
 }));

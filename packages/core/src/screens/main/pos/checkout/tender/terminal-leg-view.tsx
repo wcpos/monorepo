@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { AmountFigure } from '@wcpos/components/amount-figure';
@@ -18,7 +19,6 @@ import { CapturedUnfinishedNotice } from './captured-unfinished-notice';
 import { useDriverStatus } from './use-driver-status';
 import { readerName } from '../../../settings/card-readers/reader-name';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
-import { useTheme } from '../../../../../contexts/theme';
 import { useT } from '../../../../../contexts/translations';
 
 import type { TenderFlow } from './use-tender-flow';
@@ -32,8 +32,7 @@ export function TerminalLegView({
 	format: (minor: number) => string;
 }) {
 	const t = useT();
-	const { screenSize } = useTheme();
-	const phone = screenSize === 'sm';
+	const phone = useIsPhone();
 	const [open, setOpen] = React.useState(false);
 	const leg = flow.terminalLeg!;
 	const { row } = leg;

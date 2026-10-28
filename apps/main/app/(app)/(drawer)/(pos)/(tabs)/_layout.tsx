@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '@wcpos/core/contexts/theme';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 
@@ -45,12 +45,12 @@ function ThemedTabs() {
 }
 
 export default function TabsLayout() {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { top } = useSafeAreaInsets();
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
-	if (screenSize !== 'sm') {
+	if (!phone) {
 		// The columns run edge to edge; each pads its own insets (EdgeColumn).
 		return (
 			<View testID="screen-pos" style={{ flex: 1 }}>

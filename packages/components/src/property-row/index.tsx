@@ -6,6 +6,7 @@ import { DocsLink } from '../docs-link';
 import { FormItem } from '../form/common';
 import { FormItemContext } from '../form/context';
 import { SavedMark, useSavedName } from '../form/saved-mark';
+import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Switch } from '../switch';
 import { Text, TextClassContext } from '../text';
@@ -51,9 +52,10 @@ export function PropertyList(props: {
 }
 
 /**
- * One fact, for a record and a setting alike: key · value · trailing. On `md+` the three share a
- * 44 line; under `md`, or `stacked` (a value too big for the line: a tile grid, a radio list), the
- * key stacks above the value and the trailing slot stays on the key's line.
+ * One fact, for a record and a setting alike: key · value · trailing. Off a phone the three share a
+ * 44 line; on a phone (`useIsPhone`, the one layout boundary), or `stacked` (a value too big for the
+ * line: a tile grid, a radio list), the key stacks above the value and the trailing slot stays on
+ * the key's line.
  *
  * The row is the form item: `id` and the list's `prefix` give it the testID `<prefix>-row-<id>` and
  * the item id `<prefix>-<id>` (minted without them); its key is `<item>-form-item`, the label every
@@ -86,12 +88,15 @@ export function PropertyRow(props: {
 	const labels = React.useContext(Labels);
 	const list = React.useContext(ListContext);
 	const { wide } = list;
+	const phone = useIsPhone();
+	// Key · value · trailing on one line: off a phone, unless the value is too big for it.
+	const line = !phone && !props.stacked;
 	const prefix = props.prefix ?? list.prefix;
 	const minted = React.useId();
 	const item = prefix && id ? `${prefix}-${id}` : minted;
 	const savedName = useSavedName();
 	const marked = !!savedName && [props.name ?? id ?? []].flat().includes(savedName);
-	// A trailing slot that carries words (locked's provenance, a verb) wraps below md.
+	// A trailing slot that carries words (locked's provenance, a verb) wraps on a phone.
 	const words = !marked && (!!locked || !!props.verb);
 	const end = marked ? (
 		<SavedMark name={savedName} label={labels.saved} />
@@ -124,14 +129,14 @@ export function PropertyRow(props: {
 			testID={props.testID ?? (prefix && id ? `${prefix}-row-${id}` : undefined)}
 			className={cn(
 				'min-h-ctl relative gap-1 py-1',
-				!props.stacked && 'md:flex-row md:gap-3',
-				props.align === 'top' ? 'md:items-start' : 'md:items-center'
+				line && 'flex-row gap-3',
+				line && (props.align === 'top' ? 'items-start' : 'items-center')
 			)}
 		>
 			<View
 				className={cn(
 					'min-h-9 justify-center',
-					!props.stacked && (wide ? 'md:w-64 md:shrink-0 lg:w-72' : 'md:w-32 md:shrink-0'),
+					line && (wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
 					props.indent && 'pl-4'
 				)}
 			>
@@ -139,7 +144,7 @@ export function PropertyRow(props: {
 				{props.help ? <Text variant="help">{props.help}</Text> : null}
 			</View>
 			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
-			<View className={cn('min-w-0 md:flex-1', wide && 'md:max-w-80')}>
+			<View className={cn('min-w-0', !phone && 'flex-1', !phone && wide && 'max-w-80')}>
 				<TextClassContext.Provider
 					value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
 				>
@@ -155,9 +160,8 @@ export function PropertyRow(props: {
 					className={cn(
 						'shrink-0 flex-row items-center gap-2',
 						// A mark or a switch is narrow and sits on the key's line; words would lie over a
-						// long key on a phone, so under md they wrap in flow under the value.
-						words ? 'flex-wrap' : 'absolute top-1 right-0',
-						!words && !props.stacked && 'md:relative md:top-0'
+						// long key on a phone, so there they wrap in flow under the value.
+						words ? 'flex-wrap' : !line && 'absolute top-1 right-0'
 					)}
 				>
 					{end}

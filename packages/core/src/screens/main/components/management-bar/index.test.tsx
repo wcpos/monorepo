@@ -8,7 +8,6 @@ jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 let mockPhone = false;
-let mockSize = 'md';
 let mockStatus = 'online-website-available';
 const mockDrawer = jest.fn();
 jest.mock('@wcpos/components/lib/device', () => ({
@@ -17,7 +16,6 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('expo-router', () => ({ useNavigation: () => ({ openDrawer: mockDrawer }) }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
@@ -63,7 +61,6 @@ jest.mock('../../pos/cart/register-picker-request', () => ({
 }));
 beforeEach(() => {
 	mockPhone = false;
-	mockSize = 'md';
 	mockStatus = 'online-website-available';
 	mockHeld = false;
 	jest.clearAllMocks();
@@ -74,7 +71,8 @@ const bar = () =>
 			<button data-testid="display" />
 		</ManagementBar>
 	);
-it('rehosts drawer and avatar below lg and opens the user sheet', () => {
+it('rehosts drawer and avatar on a phone and opens the user sheet', () => {
+	mockPhone = true;
 	bar();
 	fireEvent.click(screen.getByTestId('orders-bar-menu'));
 	expect(mockDrawer).toHaveBeenCalledTimes(1);
@@ -90,7 +88,6 @@ it('rehosts drawer and avatar below lg and opens the user sheet', () => {
 	expect(screen.getByTestId('orders-bar-bell')).toBeTruthy();
 });
 it('leaves drawer and avatar to the wide rail', () => {
-	mockSize = 'lg';
 	bar();
 	expect(screen.queryByTestId('orders-bar-menu')).toBeNull();
 	expect(screen.queryByTestId('orders-bar-avatar')).toBeNull();
@@ -135,11 +132,13 @@ it.each([false, true])('omits the empty search slot (phone: %s)', (phone) => {
 	expect(container.children).toHaveLength(1);
 	expect(screen.getByTestId('settings-bar').children).toHaveLength(1);
 	expect(screen.queryByTestId('settings-bar-search')).toBeNull();
-	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(2);
+	// The bell, then on a phone the avatar the rail carries off a phone.
+	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(
+		phone ? 2 : 1
+	);
 });
 it('passes the phone back crumb through with its label, selector and action', () => {
 	mockPhone = true;
-	mockSize = 'sm';
 	const onBack = jest.fn();
 	render(
 		<ManagementBar
@@ -163,7 +162,6 @@ it("puts a scoped room's control in the title's place", () => {
 // The list pages carry no title (owner, 2026-10-18): the search names the page, so on `lg` it
 // is the first thing in the bar after its left gutter.
 it('puts the search first on a list page that has no title', () => {
-	mockSize = 'lg';
 	render(
 		<ManagementBar testID="products-bar" search={<input data-testid="search" />}>
 			<button data-testid="display" />

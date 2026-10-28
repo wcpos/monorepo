@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -50,7 +51,8 @@ export function PeriodSection() {
 	const enabled = cogsEnabled(selectedOrders, products ?? []);
 	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled);
 	const t = useT(),
-		{ screenSize, roomy } = useTheme(),
+		{ roomy } = useTheme(),
+		phone = useIsPhone(),
 		{ dateRange, storeId, timezone } = useReportsPeriod();
 	const { presets } = useStoreDay(storeId),
 		{ formatDate } = useLocalDate();
@@ -64,7 +66,7 @@ export function PeriodSection() {
 	const [width, setWidth] = React.useState<number | null>(null);
 	const columns =
 		width === null
-			? screenSize === 'sm'
+			? phone
 				? 1
 				: roomy
 					? 3

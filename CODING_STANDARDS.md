@@ -182,9 +182,11 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 
 - There are two layouts and nothing in between (owner, 2026-10-02): the navigation rail with
   the register's two columns in a window at least 768 wide and 480 tall, the phone layout
-  (tabs) below that. The boundary is `isPhoneWindow` in `@wcpos/components/lib/device`. A
-  screen that wants more room for dense content reads the theme's `roomy`; it does not add a
-  breakpoint.
+  (tabs) below that. The boundary is `useIsPhone()` in `@wcpos/components/lib/device`, which a
+  `DeviceScope` (a gallery cell, a test) overrides; layout classes read it too
+  (`cn(phone && 'hidden')`), never a width-only `sm:`/`md:`/`lg:` (a phone on its side is 844
+  wide; the uniwind ratchet refuses new ones). A screen that wants more room for dense content
+  reads the theme's `roomy`; it does not add a breakpoint.
 
 #### 5. State is visible, not explained
 

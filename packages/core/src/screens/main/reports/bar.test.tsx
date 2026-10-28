@@ -6,7 +6,6 @@ import { TZDate } from '@date-fns/tz';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { DeviceScope } from '@wcpos/components/lib/device';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { Bar, CashierButton } from './bar';
@@ -258,6 +257,7 @@ const scope: ClosureScope = { from: '2026-09-16', to: '2026-09-16', storeId: 1, 
 beforeEach(() => {
 	jest.clearAllMocks();
 	isPro = false;
+	mockScreenSize = 'sm';
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
 });
 afterEach(() => jest.useRealTimers());
@@ -314,7 +314,10 @@ jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
 }));
 let mockScreenSize = 'sm';
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockScreenSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
+}));
 jest.mock('../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({}),
 }));
@@ -381,11 +384,8 @@ it.each([
 });
 // Revert: keep the scope beside a private bar instead of in the page bar's title place.
 it('seats the scope in the page bar title place and returns to Sales from an arrow on wide widths', () => {
-	render(
-		<DeviceScope phone={false}>
-			<Controls room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
-		</DeviceScope>
-	);
+	mockScreenSize = 'lg';
+	draw();
 	const slot = screen.getByTestId('reports-bar-title-slot');
 	expect(slot.contains(screen.getByTestId('reports-scope'))).toBe(true);
 	// Wide: no phone crumb (the page bar shows back on a phone only), an arrow before the scope.
@@ -397,11 +397,7 @@ it('seats the scope in the page bar title place and returns to Sales from an arr
 });
 
 it('gives the phone the page bar crumb back to Sales instead of an arrow', () => {
-	render(
-		<DeviceScope phone>
-			<Controls room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
-		</DeviceScope>
-	);
+	draw();
 	expect(screen.getAllByTestId('reports-back-sales')).toHaveLength(1);
 	expect(screen.getByTestId('reports-back-sales').getAttribute('data-crumb')).toBe('phone');
 });

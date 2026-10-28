@@ -8,8 +8,9 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { UpgradeNotice } from './index';
 
 let mockScreenSize = 'lg';
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),

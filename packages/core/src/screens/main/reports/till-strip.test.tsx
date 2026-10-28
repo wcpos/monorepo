@@ -56,9 +56,11 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => (doc ? pick(doc) : undefined),
 }));
 let size = 'lg';
-jest.mock('../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: size === 'md' ? 'lg' : size, roomy: size === 'lg' }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => size === 'sm',
 }));
+jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ roomy: size === 'lg' }) }));
 const initialTerms = () => ({
 	float: '100',
 	cashSales: { amount: '343.70', count: 6 },

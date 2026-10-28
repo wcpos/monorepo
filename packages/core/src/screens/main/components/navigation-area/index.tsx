@@ -4,12 +4,12 @@ import { ScrollView, View } from 'react-native';
 import { Redirect, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { useGround } from '../ground';
-import { useTheme } from '../../../../contexts/theme';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 
@@ -76,14 +76,14 @@ export function NavigationAreaLayout({
 	leafPagesCarryTitle?: boolean;
 	children: React.ReactNode;
 }) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const insets = useSafeAreaInsets();
 	const ground = useGround();
 	const pathname = usePathname();
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
 	const held = useSessionHeld();
-	if (screenSize === 'sm') {
+	if (phone) {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
 		return (
@@ -144,10 +144,10 @@ export function NavigationAreaIndex({
 	defaultHref: Extract<Href, string>;
 	testID: string;
 }) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const ground = useGround();
 
-	if (screenSize !== 'sm') {
+	if (!phone) {
 		return <Redirect href={defaultHref} />;
 	}
 

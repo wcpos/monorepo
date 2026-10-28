@@ -5,10 +5,10 @@ import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Suspense } from '@wcpos/components/suspense';
-import { useTheme } from '@wcpos/core/contexts/theme';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 
@@ -19,7 +19,7 @@ import { POSProductsPane } from '../../../../../components/pos-products-pane';
  *
  */
 export default function ResizablePOSColumns() {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { top } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
 
@@ -47,7 +47,7 @@ export default function ResizablePOSColumns() {
 	// (EdgeColumn, pos/columns/LEDGER.md line 6): here both tabs sit on `bg-background` at the
 	// top, so the container pads the status bar in that colour, and the tab bar pads the home
 	// indicator in its card colour.
-	if (screenSize === 'sm') {
+	if (phone) {
 		return (
 			<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
 				{/* Tab content. Both panes stay MOUNTED and toggle visibility: POSProducts

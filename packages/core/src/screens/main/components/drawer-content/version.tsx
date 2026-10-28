@@ -10,12 +10,12 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { HStack } from '@wcpos/components/hstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useT } from '@wcpos/core/contexts/translations';
-import { useTheme } from '@wcpos/core/contexts/theme';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
@@ -113,7 +113,7 @@ function AboutDialogContent() {
  */
 export function Version() {
 	const t = useT();
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { appVersion } = useAppInfo();
 
 	return (
@@ -123,10 +123,10 @@ export function Version() {
 					<Text
 						className={cn(
 							'text-sidebar-foreground p-2 px-4 text-xs opacity-50 active:opacity-100',
-							screenSize === 'lg' && 'px-0 text-center'
+							!phone && 'px-0 text-center'
 						)}
 					>
-						{screenSize === 'lg' ? `v ${appVersion}` : `Version ${appVersion}`}
+						{phone ? `Version ${appVersion}` : `v ${appVersion}`}
 					</Text>
 				</Pressable>
 			</DialogTrigger>

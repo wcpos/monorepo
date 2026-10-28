@@ -21,10 +21,6 @@ jest.mock('expo-router', () => ({
 	useNavigation: () => ({ openDrawer: jest.fn() }),
 }));
 
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
-}));
-
 jest.mock('expo-haptics', () => ({}));
 // The index re-exports `AreaPage`, whose boundary's fallback pulls the overlay stack in.
 jest.mock('@wcpos/components/error-boundary', () => ({

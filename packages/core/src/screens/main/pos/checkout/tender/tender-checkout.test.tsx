@@ -80,8 +80,9 @@ jest.mock('../../../hooks/use-storage-health', () => ({
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
-jest.mock('../../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));

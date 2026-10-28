@@ -3,8 +3,8 @@ import * as React from 'react';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
+import { useIsPhone } from '@wcpos/components/lib/device';
 
-import { useTheme } from '../../../../contexts/theme';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout } from './checkout-mode';
 import { Checkout } from './checkout';
@@ -18,12 +18,12 @@ export function CheckoutScreen() {
 	const { orderId } = params;
 	const resource = useEngineRecord('orders', orderId);
 
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
 	// A standalone link names an order that may not be an open cart; the columns cart could
 	// not resolve it, so the order's own checkout opens instead.
 	const standalone = params[STANDALONE_CHECKOUT_PARAM] === '1';
-	const redirectToColumns = screenSize !== 'sm' && loaded && !unsupportedSchema && !standalone;
+	const redirectToColumns = !phone && loaded && !unsupportedSchema && !standalone;
 	// Writing the external store during render would notify its subscribers mid-render; the
 	// transition belongs in an effect, with the redirect itself staying in render.
 	React.useEffect(() => {

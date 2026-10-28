@@ -26,6 +26,10 @@ const rules = {
 	'data-axis': /data-\[(?:theme|scale|pointer)(?:[=\]~|^$*])/,
 	'arbitrary-px': /\[[^\]]*(?:\d+(?:\.\d+)?|\.\d+)px(?![a-zA-Z0-9])[^\]]*\]/,
 };
+// CODING_STANDARDS § Design 4: one layout boundary, `useIsPhone()`. A width-only breakpoint on a
+// layout class lays a phone on its side (844 × 390) out as a tablet; type and spacing may step.
+const BREAKPOINT_LAYOUT =
+	/(?:^|:)(?:sm|md|lg|xl|2xl):(?:[^:]+:)*-?(?:flex|grid|hidden|block|inline|absolute|relative|inset|top|right|bottom|left|w|min-w|max-w|h|min-h|max-h|size|basis|grow|shrink|order|items|justify|self)(?:-|$)/;
 
 // Decision 11 (2026-10-16): a pressable outside the design system is a component from
 // packages/components (ListRow, Tile, NavItem, Button…), never a raw React Native one.
@@ -84,6 +88,8 @@ export function scanSource(text, path, tokens = new Set()) {
 			const position = start + match.index;
 			const variants = token.split(/:(?![^\[]*\])/);
 			const utility = variants.pop();
+			if (BREAKPOINT_LAYOUT.test(token)) report(position, 'breakpoint-layout');
+			if (!classRules) continue;
 			if (/^duration-(?:\d+(?:\.\d+)?|\[.+\])$/.test(utility)) report(position, 'duration-literal');
 			if (variants.includes('hover') && !variants.includes('web')) report(position, 'hover:');
 			for (const [name, pattern] of Object.entries(rules))
@@ -115,7 +121,7 @@ export function scanSource(text, path, tokens = new Set()) {
 				visit(declaration.initializer, true);
 			}
 		}
-		if (classRules && classContext && (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)))
+		if (classContext && (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)))
 			classes(node);
 		if (
 			appRules &&

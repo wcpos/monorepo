@@ -29,8 +29,9 @@ let mockAutoPrint = false;
 let mockAutoPrintPending = false;
 let mockBack: () => void;
 let mockScreenSize = 'sm';
-jest.mock('../../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
 }));
 const mockOrder = {
 	uuid: 'paid',

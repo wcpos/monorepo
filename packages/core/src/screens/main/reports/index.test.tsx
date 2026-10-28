@@ -510,7 +510,10 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ setParams: mockSetParams }),
 	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
 }));
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => true,
+}));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
 	Button: ({

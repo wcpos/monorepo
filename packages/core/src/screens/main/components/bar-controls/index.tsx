@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useNavigation } from 'expo-router';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { useIsPhone } from '@wcpos/components/lib/device';
 
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { CashierEntry } from '../cashier-entry';
 import { NotificationBell } from '../notification-bell/notification-bell';
@@ -15,11 +15,11 @@ import { NotificationBell } from '../notification-bell/notification-bell';
  * `RegisterBar` (in its own 48 frame, ruled 2026-09-11) read the same three answers here.
  */
 export function useBarMenu(): { label: string; onPress: () => void } | undefined {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const navigation = useNavigation();
 	const t = useT();
 	// On `lg` the rail is always on screen: there is no drawer to open.
-	if (screenSize === 'lg') return undefined;
+	if (!phone) return undefined;
 	return {
 		label: t('common.menu'),
 		onPress: () => (navigation as unknown as { openDrawer: () => void }).openDrawer(),
@@ -52,11 +52,11 @@ export function BarControls({
 	portalHost?: string | null;
 	onSwitchRegister?: () => void;
 }) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	return (
 		<>
 			<NotificationBell testID={`${testID}-bell`} portalHost={portalHost ?? undefined} />
-			{screenSize !== 'lg' && (
+			{phone && (
 				<CashierEntry
 					testID={`${testID}-avatar`}
 					placement="bar"

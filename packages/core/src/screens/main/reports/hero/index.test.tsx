@@ -62,7 +62,10 @@ jest.mock('@wcpos/query', () => ({
 		select: (v: Record<string, unknown>) => unknown
 	) => source && select(source),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => true,
+}));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));

@@ -35,7 +35,10 @@ jest.mock('react-native', () => ({
 		</div>
 	),
 }));
-jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => true,
+}));
 // The UI-thread animation runtime is unavailable in jsdom; every animation lands on its
 // target at once and the rendered View keeps its className (the step badges are read by it).
 jest.mock('react-native-reanimated', () => ({

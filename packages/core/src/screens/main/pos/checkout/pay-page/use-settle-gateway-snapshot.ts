@@ -5,11 +5,11 @@ import { useRouter } from 'expo-router';
 import { adoptStoreOrderSnapshot, type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { type CategoryLogger, getErrorMessage } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useIsPhone } from '@wcpos/components/lib/device';
 
 import { leaveCheckout } from '../checkout-mode';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { returnToTill } from '../till-route';
-import { useTheme } from '../../../../../contexts/theme';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -29,7 +29,7 @@ export function useSettleGatewaySnapshot(
 	orderLogger: CategoryLogger
 ) {
 	const router = useRouter();
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const completeOrderFlow = useCompleteOrderFlow(order, receiptHost);
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
@@ -80,7 +80,7 @@ export function useSettleGatewaySnapshot(
 						params: { orderId: order.uuid },
 					});
 				} else {
-					returnToTill(router, screenSize === 'sm', 'products');
+					returnToTill(router, phone, 'products');
 				}
 				// Catch-up after a PAID sale that already routed; the order syncs on the next pass, so
 				// a miss is forensic, and only the message path has ever recorded it.
@@ -122,7 +122,7 @@ export function useSettleGatewaySnapshot(
 			receiptHost,
 			orderLogger,
 			router,
-			screenSize,
+			phone,
 			completeOrderFlow,
 			setCurrentOrderID,
 			uiSettings.autoShowReceipt,

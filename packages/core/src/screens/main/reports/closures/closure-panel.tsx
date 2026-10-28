@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import get from 'lodash/get';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { MoneyList } from '@wcpos/components/money-list';
@@ -16,7 +17,6 @@ import {
 import { log } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../contexts/app-state';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { buildClosureDocument } from '../../../../services/register-session/closure-document';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
@@ -46,8 +46,7 @@ export function ClosurePanel({
 	const http = useRestHttpClient();
 	const [recounting, setRecounting] = React.useState(false);
 	const [error, setError] = React.useState('');
-	const { screenSize } = useTheme();
-	const phone = screenSize === 'sm';
+	const phone = useIsPhone();
 	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const { storeDB } = useStoreSession();
 	const getLocalClosure = React.useCallback(

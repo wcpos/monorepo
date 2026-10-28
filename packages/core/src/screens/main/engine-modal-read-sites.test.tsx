@@ -39,7 +39,10 @@ jest.mock('./pos/checkout/checkout', () => ({ Checkout: () => null }));
 jest.mock('./hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
 }));
-jest.mock('../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
 jest.mock('./products/edit/product/modal', () => ({ EditProductModal: () => null }));
 jest.mock('./products/edit/variation/modal', () => ({ EditVariationModal: () => null }));
 jest.mock('./receipt/receipt', () => ({ Receipt: () => null }));

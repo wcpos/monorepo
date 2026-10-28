@@ -6,6 +6,7 @@ import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -16,7 +17,6 @@ import { Text } from '@wcpos/components/text';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useStoreSession } from '../../../../contexts/app-state';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
@@ -312,8 +312,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 }
 export function Hero({ title }: { title: React.ReactNode }) {
 	const t = useT();
-	const { screenSize } = useTheme();
-	const phone = screenSize === 'sm';
+	const phone = useIsPhone();
 	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView, setDetail } =
 		useReportsScope();
 	const { comparisonHandle } = useReportsHandles();

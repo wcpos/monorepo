@@ -5,8 +5,8 @@ import { Drawer } from 'expo-router/drawer';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import type { IconName } from '@wcpos/components/icon';
-import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
@@ -48,11 +48,11 @@ export const unstable_settings = {
  * Uniwind's theme transition).
  */
 function ThemedDrawer({
-	screenSize,
+	phone,
 	t,
 	unreadErrorCount,
 }: {
-	screenSize: string;
+	phone: boolean;
 	t: ReturnType<typeof useT>;
 	unreadErrorCount: number;
 }) {
@@ -69,7 +69,7 @@ function ThemedDrawer({
 	// screens there are already display:none). Never for the permanent rail, which is always on
 	// screen.
 	const panelSettledClosed = useDrawerPanelHidden();
-	const hideDrawerPanel = Platform.OS !== 'web' && screenSize !== 'lg' && panelSettledClosed;
+	const hideDrawerPanel = Platform.OS !== 'web' && phone && panelSettledClosed;
 
 	// Get theme-aware colors for navigation
 	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
@@ -85,7 +85,7 @@ function ThemedDrawer({
 				// Every screen carries its own bar (the register bar, or the page bar), so the
 				// navigator draws none.
 				headerShown: false,
-				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
+				drawerType: phone ? 'front' : 'permanent',
 				drawerStyle: {
 					// Only ever ADDED, never set to 'flex': the library drives `display` itself
 					// while it measures the panel, and we must not override that.
@@ -94,7 +94,7 @@ function ThemedDrawer({
 					// The rail's width is set here, not by a class on its scroll view (which the
 					// vendored view drops): 16 spacing units, the `size-12` item + 2 each side from
 					// the gutter table, so 64 at Regular and the live step's value at the others.
-					width: screenSize === 'lg' ? railWidth : 200,
+					width: phone ? 200 : railWidth,
 					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
@@ -113,7 +113,7 @@ function ThemedDrawer({
 			drawerContent={(props) => (
 				<DrawerContent
 					{...props}
-					presentation={screenSize === 'lg' ? 'rail' : 'front'}
+					presentation={phone ? 'front' : 'rail'}
 					icons={DRAWER_ICONS}
 					badges={{ health: <LogsBadge unread={unreadErrorCount} /> }}
 				/>
@@ -144,7 +144,7 @@ function ThemedSystemBars() {
 }
 
 function DrawerLayoutContent() {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const t = useT();
 
 	const { license } = useAppInfo();
@@ -168,7 +168,7 @@ function DrawerLayoutContent() {
 				<View className="bg-background flex-1">
 					<ThemedSystemBars />
 					<RestartLockOverlay />
-					<ThemedDrawer screenSize={screenSize} t={t} unreadErrorCount={unreadErrorCount} />
+					<ThemedDrawer phone={phone} t={t} unreadErrorCount={unreadErrorCount} />
 				</View>
 			</SessionHoldProvider>
 		</UpgradeNoticeContext.Provider>

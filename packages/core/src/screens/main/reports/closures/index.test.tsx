@@ -61,7 +61,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => screenSize === 'sm',
+}));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r' }),
 	useRegisterDirectory: () => ({ registers: [] }),

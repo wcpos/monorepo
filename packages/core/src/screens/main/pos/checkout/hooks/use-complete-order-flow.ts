@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 
 import { type EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { useIsPhone } from '@wcpos/components/lib/device';
 
-import { useTheme } from '../../../../../contexts/theme';
 import { useT } from '../../../../../contexts/translations';
 import { getCheckoutModeSnapshot, leaveCheckout, selectReceipt } from '../checkout-mode';
 import { returnToTill } from '../till-route';
@@ -41,10 +41,8 @@ export function useCompleteOrderFlowForOrder(
 	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
-	const { screenSize } = useTheme();
-	const leaveHost = useLeaveCheckoutHost(
-		checkoutHost ?? (screenSize === 'sm' ? 'modal' : 'columns')
-	);
+	const phone = useIsPhone();
+	const leaveHost = useLeaveCheckoutHost(checkoutHost ?? (phone ? 'modal' : 'columns'));
 	const t = useT();
 	const { setCurrentOrderID, getCurrentOrderID } = useCurrentOrderActions();
 
@@ -102,7 +100,7 @@ export function useCompleteOrderFlowForOrder(
 						params: { orderId: order.uuid },
 					});
 				} else {
-					returnToTill(router, screenSize === 'sm', 'products');
+					returnToTill(router, phone, 'products');
 				}
 				return result;
 			}
@@ -118,7 +116,7 @@ export function useCompleteOrderFlowForOrder(
 			ctx,
 			receiptHost,
 			router,
-			screenSize,
+			phone,
 			leaveHost,
 			setCurrentOrderID,
 			getCurrentOrderID,
