@@ -487,7 +487,7 @@ describe('safe-area insets belong to the surfaces at the edges', () => {
 		const root = hostStyle('screen-pos');
 		expect(root.paddingTop).toBe(24);
 		expect(root.paddingBottom).toBeUndefined();
-		// The tab bar's own `py-2` (8) stays above the home indicator, inside the card colour.
-		expect(hostStyle('pos-tab-bar').paddingBottom).toBe(20 + 8);
+		// The tab bar pads the home indicator in its card colour; its own `py-2` row sits above it.
+		expect(hostStyle('pos-tab-bar').paddingBottom).toBe(20);
 	});
 });
