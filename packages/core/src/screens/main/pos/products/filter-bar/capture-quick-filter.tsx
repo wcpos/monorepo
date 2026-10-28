@@ -8,7 +8,7 @@ import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { describeCondition, getNamedOrderLabel } from './filter-bar-layout';
+import { conditionWords, describeCondition, getNamedOrderLabel } from './filter-bar-layout';
 import { createQuickFilterId } from './quick-filter-id';
 import { CONDITION_FIELDS, KIND_ICONS, TermSummary } from './quick-filter-editor';
 import { QuickFilterBarPreview } from './quick-filter-bar-preview';
@@ -27,6 +27,7 @@ export function CaptureQuickFilter({
 	onDraftChange: (draft: QuickFilter) => void;
 }) {
 	const t = useT();
+	const words = conditionWords(t);
 	const { format } = useCurrencyFormat();
 	const [draft, setDraft] = React.useState<QuickFilter>(() => ({
 		id: createQuickFilterId(),
@@ -92,7 +93,7 @@ export function CaptureQuickFilter({
 						condition.field === 'tags' ||
 						condition.field === 'brands' ? (
 							<>
-								{t(`pos_products.kind_${condition.field}`)}:{' '}
+								{words.kind[condition.field]}:{' '}
 								<TermSummary taxonomy={condition.field} ids={condition.value} />
 							</>
 						) : (

@@ -31,7 +31,12 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 
-import { getNamedOrderLabel, isQuickFilterValid, NAMED_ORDERS } from './filter-bar-layout';
+import {
+	conditionWords,
+	getNamedOrderLabel,
+	isQuickFilterValid,
+	NAMED_ORDERS,
+} from './filter-bar-layout';
 import { createQuickFilterId } from './quick-filter-id';
 import { DeleteQuickFilterDialog } from './delete-quick-filter-dialog';
 import { QUICK_FILTER_STARTERS } from './quick-filter-starters';
@@ -355,16 +360,16 @@ function ConditionRow({
 	const t = useT();
 	const { format } = useCurrencyFormat();
 	const { items: stockStatuses } = useStockStatusLabel();
+	const words = conditionWords(t);
 	const set = !!condition && hasConditionValue(condition);
-	const placeholder =
+	let summary: React.ReactNode =
 		field === 'price'
-			? 'any_price'
+			? t('pos_products.kind_value_any_price')
 			: field === 'on_sale' || field === 'featured'
-				? 'either'
+				? t('pos_products.kind_value_either')
 				: field === 'search'
-					? 'nothing_typed'
-					: 'any';
-	let summary: React.ReactNode = t(`pos_products.kind_value_${placeholder}`);
+					? t('pos_products.kind_value_nothing_typed')
+					: t('pos_products.kind_value_any');
 	if (set && condition) {
 		if (
 			condition.field === 'categories' ||
@@ -381,10 +386,10 @@ function ConditionRow({
 						? t('pos_products.kind_price_from', { min: format(min) })
 						: t('pos_products.kind_price_up_to', { max: format(max!) });
 		} else if (condition.field === 'on_sale' || condition.field === 'featured') {
-			summary = t(condition.value ? 'common.yes' : 'common.no');
+			summary = condition.value ? t('common.yes') : t('common.no');
 		} else if (condition.field === 'stock_status') {
 			summary = stockStatuses.find((item) => item.value === condition.value)?.label;
-		} else if (condition.field === 'type') summary = t(`common.${condition.value}`);
+		} else if (condition.field === 'type') summary = words.value[condition.value];
 		else summary = `“${condition.value}”`;
 	}
 	const inline = field === 'tags' || field === 'brands' || field === 'price' || field === 'search';
@@ -416,7 +421,7 @@ function ConditionRow({
 				</HStack>
 			}
 		>
-			<Text>{t(`pos_products.kind_${field}`)}</Text>
+			<Text>{words.kind[field]}</Text>
 		</ListRow>
 	);
 	const change = (next: QuickFilterCondition) =>
@@ -463,7 +468,7 @@ function ConditionRow({
 					? stockStatuses
 					: ['simple', 'variable', 'grouped', 'external'].map((value) => ({
 							value,
-							label: t(`common.${value}`),
+							label: words.value[value],
 						}))),
 			];
 	return (
@@ -590,16 +595,14 @@ function QuickFilterEditorBody({
 							setWaiting(starter.waiting);
 							updateDraft((value) => ({
 								...value,
-								label: starter.sort ? t(`pos_products.starter_${starter.id}_title`) : '',
+								label: starter.sort ? starter.title(t) : '',
 								conditions: starter.conditions,
 								sort: starter.sort,
 							}));
 						}}
 					>
-						<Text>{t(`pos_products.starter_${starter.id}_title`)}</Text>
-						<Text className="text-muted-foreground text-sm">
-							{t(`pos_products.starter_${starter.id}_line`)}
-						</Text>
+						<Text>{starter.title(t)}</Text>
+						<Text className="text-muted-foreground text-sm">{starter.line(t)}</Text>
 					</ListRow>
 				))}
 				<ListRow
@@ -654,7 +657,7 @@ function QuickFilterEditorBody({
 				</HStack>
 				<SimpleSelect
 					value={draft.sort ? `${draft.sort.field}-${draft.sort.direction}` : DEFAULT_ORDER}
-					items={NAMED_ORDERS.map((order) => ({ value: order.value, label: t(order.labelKey) }))}
+					items={NAMED_ORDERS.map((order) => ({ value: order.value, label: order.label(t) }))}
 					testID="quick-filter-sort"
 					onChange={(selected) =>
 						updateDraft((value) => ({
