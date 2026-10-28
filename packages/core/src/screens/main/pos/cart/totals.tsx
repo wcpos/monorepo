@@ -3,9 +3,8 @@ import toNumber from 'lodash/toNumber';
 import { Chip } from '@wcpos/components/chip';
 import { getNetPaymentTotal, refundValue } from '@wcpos/order-math';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
+import { MoneyList } from '@wcpos/components/money-list';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 
 import { Taxes } from './totals/taxes';
@@ -85,11 +84,12 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 	return (
 		<>
 			{hasTotals ? (
-				<VStack className="border-border bg-card border-t p-2">
-					<HStack testID="cart-subtotal">
-						<Text className="text-muted-foreground grow">{t('common.subtotal')}</Text>
-						<Text className="tabular-nums">{format(displaySubtotal)}</Text>
-					</HStack>
+				<MoneyList className="border-border bg-card border-t p-2">
+					<MoneyList.Row
+						testID="cart-subtotal"
+						label={t('common.subtotal')}
+						amount={format(displaySubtotal)}
+					/>
 					{
 						// Coupon chips
 						coupon_lines.map((coupon) => {
@@ -102,43 +102,31 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 							const displayCouponDiscount =
 								inclOrExcl === 'incl' ? couponDiscount + couponDiscountTax : couponDiscount;
 							return (
-								<HStack key={code}>
-									<Chip
-										icon="discount"
-										label={label}
-										onClear={readOnly ? undefined : () => removeCoupon(code)}
-										clearTestID={`remove-coupon-${code}`}
-										clearLabel={
-											intent
-												? t('pos_cart.remove_discount_label', { label })
-												: `Remove coupon ${code}`
-										}
-										className="grow-0"
-									/>
-									<Text className="grow" />
-									<Text className="tabular-nums">{format(-1 * displayCouponDiscount)}</Text>
-								</HStack>
+								<MoneyList.Row
+									key={code}
+									label={
+										<Chip
+											icon="discount"
+											label={label}
+											onClear={readOnly ? undefined : () => removeCoupon(code)}
+											clearTestID={`remove-coupon-${code}`}
+											clearLabel={
+												intent
+													? t('pos_cart.remove_discount_label', { label })
+													: `Remove coupon ${code}`
+											}
+											className="grow-0"
+										/>
+									}
+									amount={format(-1 * displayCouponDiscount)}
+								/>
 							);
 						})
 					}
-					{
-						// Fees
-						hasFee && (
-							<HStack>
-								<Text className="text-muted-foreground grow">{t('pos_cart.fees')}</Text>
-								<Text className="tabular-nums">{format(displayFeeTotal)}</Text>
-							</HStack>
-						)
-					}
-					{
-						// Shipping
-						hasShipping && (
-							<HStack>
-								<Text className="text-muted-foreground grow">{t('common.shipping')}</Text>
-								<Text className="tabular-nums">{format(displayShippingTotal)}</Text>
-							</HStack>
-						)
-					}
+					{hasFee && <MoneyList.Row label={t('pos_cart.fees')} amount={format(displayFeeTotal)} />}
+					{hasShipping && (
+						<MoneyList.Row label={t('common.shipping')} amount={format(displayShippingTotal)} />
+					)}
 					{hasTax ? (
 						<ErrorBoundary>
 							<Taxes
@@ -149,24 +137,18 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 					) : null}
 					{hasRefunds && refunds && (
 						<>
-							{refunds.map((refund) => {
-								const refundAmount = refundValue(refund);
-								return (
-									<HStack key={refund.id}>
-										<Text className="text-destructive grow">
-											{t('orders.refund')} #{refund.id}
-										</Text>
-										<Text className="text-destructive tabular-nums">{format(-refundAmount)}</Text>
-									</HStack>
-								);
-							})}
-							<HStack className="border-border border-t border-dashed pt-1">
-								<Text className="grow font-bold">{t('orders.net_payment')}</Text>
-								<Text className="font-bold tabular-nums">{format(netPayment)}</Text>
-							</HStack>
+							{refunds.map((refund) => (
+								<MoneyList.Row
+									key={refund.id}
+									tone="destructive"
+									label={`${t('orders.refund')} #${refund.id}`}
+									amount={format(-refundValue(refund))}
+								/>
+							))}
+							<MoneyList.Total label={t('orders.net_payment')} amount={format(netPayment)} />
 						</>
 					)}
-				</VStack>
+				</MoneyList>
 			) : null}
 			{/*
 			  The till's own money, raw, for E2E — same idea as the data-table

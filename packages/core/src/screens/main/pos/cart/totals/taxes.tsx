@@ -1,8 +1,7 @@
 import React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
+import { MoneyList } from '@wcpos/components/money-list';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
@@ -25,36 +24,27 @@ export function Taxes({ totalTax, taxLines = [] }: Props) {
 	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 	const t = useT();
 
+	// The rate's own label (Woo's itemized display), its incl/excl beside it at the help size.
+	const beside = <Text className="text-muted-foreground text-xs">{String(inclOrExcl)}</Text>;
 	if (taxTotalDisplay === 'itemized') {
-		return (
-			<HStack>
-				<Text className="text-muted-foreground grow">{t('common.taxes')}</Text>
-				<VStack>
-					{taxLines.map((tax, index) => {
-						// tax_total and shipping_tax_total are separate, but we will display together
-						const displayTax =
-							parseFloat(tax.tax_total ?? '0') + parseFloat(tax.shipping_tax_total ?? '0');
-						return (
-							<HStack key={index} className="justify-end">
-								<Text className="text-muted-foreground text-xs">
-									{String(inclOrExcl)} {tax.label}
-								</Text>
-								<Text>{format(displayTax || 0)}</Text>
-							</HStack>
-						);
-					})}
-				</VStack>
-			</HStack>
-		);
+		return taxLines.map((tax, index) => (
+			<MoneyList.Row
+				key={index}
+				label={tax.label ?? t('common.taxes')}
+				beside={beside}
+				// tax_total and shipping_tax_total are separate, but we will display together
+				amount={format(
+					parseFloat(tax.tax_total ?? '0') + parseFloat(tax.shipping_tax_total ?? '0') || 0
+				)}
+			/>
+		));
 	}
 
 	return (
-		<HStack>
-			<Text className="text-muted-foreground grow">{t('common.total_tax')}</Text>
-			<HStack>
-				<Text className="text-muted-foreground text-xs">{String(inclOrExcl)}</Text>
-				<Text>{format(parseFloat(totalTax) || 0)}</Text>
-			</HStack>
-		</HStack>
+		<MoneyList.Row
+			label={t('common.total_tax')}
+			beside={beside}
+			amount={format(parseFloat(totalTax) || 0)}
+		/>
 	);
 }

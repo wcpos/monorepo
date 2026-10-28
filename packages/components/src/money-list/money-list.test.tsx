@@ -91,18 +91,18 @@ describe('MoneyList', () => {
 		expect(rule.some((name) => /^text-(lg|xl|2xl|amt)$/.test(name))).toBe(false);
 	});
 
-	it('insets a breakdown row and gives a node label the row tone', () => {
+	it('insets a breakdown row and draws what sits beside its label', () => {
 		render(
 			<MoneyList.Row
 				testID="tax"
 				indent
-				tone="destructive"
-				label={<Text testID="word">GST</Text>}
+				label="GST"
+				beside={<Text testID="note">incl</Text>}
 				amount="$1.00"
 			/>
 		);
 		expect(classes('tax')).toContain('pl-3');
-		expect(classes('word')).toContain('text-destructive');
+		expect(screen.getByTestId('tax').textContent).toBe('GSTincl$1.00');
 	});
 
 	it('draws a row with no amount as its label alone', () => {

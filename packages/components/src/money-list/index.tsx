@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
 
 /**
  * Money read as a running account (the cart's totals, the tender ledger, an order's totals): a
@@ -20,8 +20,10 @@ const TONE: Record<MoneyTone, string> = {
 };
 
 interface MoneyRowProps extends Omit<ViewProps, 'children'> {
-	/** A string, or nodes whose `Text` takes the label's tone (a coupon chip beside its word). */
-	label: React.ReactNode;
+	/** In the row's tone, HTML entities decoded (a product's name); an element is drawn as given. */
+	label: string | React.ReactElement;
+	/** Beside the label: a coupon chip, a paid-by badge, a muted note. */
+	beside?: React.ReactNode;
 	/** Formatted by the caller. A row with nothing to add up has none. */
 	amount?: string;
 	amountTestID?: string;
@@ -33,6 +35,7 @@ interface MoneyRowProps extends Omit<ViewProps, 'children'> {
 
 function Line({
 	label,
+	beside,
 	amount,
 	amountTestID,
 	tone = 'default',
@@ -57,11 +60,16 @@ function Line({
 			)}
 			{...props}
 		>
-			<TextClassContext.Provider value={text}>
-				<View className="min-w-0 flex-1 flex-row items-center gap-2">
-					{typeof label === 'string' ? <Text>{label}</Text> : label}
-				</View>
-			</TextClassContext.Provider>
+			<View className="min-w-0 flex-1 flex-row items-center gap-2">
+				{typeof label === 'string' ? (
+					<Text className={cn('shrink', text)} decodeHtml>
+						{label}
+					</Text>
+				) : (
+					label
+				)}
+				{beside}
+			</View>
 			{amount === undefined ? null : (
 				<Text
 					testID={amountTestID}
