@@ -3,7 +3,7 @@
  *
  * `useDefaultCustomer` builds its resource in a `useMemo`, which is only safe while the
  * component that calls it COMMITS. Both readers used to call it and read it in the same
- * component — `GeneralSettings` under `SettingsPage`'s boundary, and `useNewOrder` inside the
+ * component — `GeneralSettings` under `AreaPage`'s boundary, and `useNewOrder` inside the
  * `Suspense` that `(pos)/_layout.tsx` puts around `CurrentOrderProvider` — so the resource was
  * discarded with the aborted render and every retry built another one that suspended for
  * exactly the reason its predecessor did (#1707). A customers query's first emission is always

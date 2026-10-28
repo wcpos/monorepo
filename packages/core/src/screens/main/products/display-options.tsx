@@ -42,6 +42,6 @@ function VariationsStyle() {
 	);
 }
 
-export function ProductsDisplayOptions({ title }: { title: string }) {
-	return <DisplayOptions id="products" title={title} before={<VariationsStyle />} />;
+export function ProductsDisplayOptions() {
+	return <DisplayOptions id="products" before={<VariationsStyle />} />;
 }

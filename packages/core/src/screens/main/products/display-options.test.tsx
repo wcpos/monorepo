@@ -61,7 +61,7 @@ jest.mock('@wcpos/components/segmented-control', () => ({
 }));
 
 it('shows the POS panel’s variations style above the columns and writes it to the pos-products doc', () => {
-	render(<ProductsDisplayOptions title="Product settings" />);
+	render(<ProductsDisplayOptions />);
 	// The page's own trigger and panel ids are kept.
 	expect(mockDialogProps).toMatchObject({
 		triggerTestID: 'products-bar-display',

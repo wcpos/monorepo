@@ -10,6 +10,7 @@ import {
 import find from 'lodash/find';
 import get from 'lodash/get';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
 import {
@@ -44,7 +45,6 @@ import { Subtotal } from './cells/subtotal';
 import { useUISettings } from '../../contexts/ui-settings';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
-import { EmptyCart } from './empty-cart';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
 import { type CartTableReadOnly, CartTableReadOnlyProvider } from './cells/read-only';
@@ -392,7 +392,12 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 						{footer}
 					</ScrollView>
 				) : data.length === 0 ? (
-					<EmptyCart />
+					<EmptyState
+						kind="empty"
+						icon="cart"
+						testID="cart-empty"
+						title={t('pos_cart.empty_cart_hint')}
+					/>
 				) : (
 					<ScrollView
 						ref={scrollViewRef}

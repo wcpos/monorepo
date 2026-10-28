@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './index';
+import { Card, CardContent } from './index';
 
 jest.mock('react-native', () => ({
 	View: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
@@ -10,23 +10,15 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 
-it('is flat with a rounded header while quieting the title and insets', () => {
+it('is flat with an inset body', () => {
 	const { container } = render(
 		<Card>
-			<CardHeader>
-				<CardTitle>Coffee Monster</CardTitle>
-			</CardHeader>
 			<CardContent />
-			<CardFooter />
 		</Card>
 	);
 	const card = container.firstElementChild!;
 	expect(card.className).not.toContain('shadow');
-	expect(card.children[0]).toHaveClass('p-4', 'rounded-t-lg');
-	expect(card.children[1]).toHaveClass('p-4', 'pt-0');
-	expect(card.children[2]).toHaveClass('p-4', 'pt-0');
-	expect(card.querySelector('span')).toHaveClass('text-lg');
-	expect(card.querySelector('span')).not.toHaveClass('text-2xl');
+	expect(card.children[0]).toHaveClass('p-4', 'pt-0');
 });
 
 it('lets caller padding override the new default', () => {

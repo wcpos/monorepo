@@ -10,8 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
-import { AddressCountryField, AddressStateField } from '../billing-address-form';
-import { shippingAddressSchema } from '../shipping-address-form';
+import { AddressCountryField, AddressStateField, shippingAddressSchema } from './address';
 
 /** An address's parts in row order; the closed line reads them in postal order. */
 export const ADDRESS_PARTS = [

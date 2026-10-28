@@ -1,5 +1,5 @@
 // Mock react-native primitives hooks to avoid ESM issues
-import { cn, getFlexAlign, getTailwindJustifyClass } from './utils';
+import { cn, getFlexAlign } from './utils';
 
 jest.mock('@rn-primitives/hooks', () => ({
 	useComposedRefs: jest.fn(),
@@ -83,25 +83,6 @@ describe('lib/utils', () => {
 			const result = cn({ active: true, disabled: false });
 			expect(result).toContain('active');
 			expect(result).not.toContain('disabled');
-		});
-	});
-
-	describe('getTailwindJustifyClass', () => {
-		it('should return justify-start for left', () => {
-			expect(getTailwindJustifyClass('left')).toBe('justify-start');
-		});
-
-		it('should return justify-end for right', () => {
-			expect(getTailwindJustifyClass('right')).toBe('justify-end');
-		});
-
-		it('should return justify-center for center', () => {
-			expect(getTailwindJustifyClass('center')).toBe('justify-center');
-		});
-
-		it('should return empty string for invalid input', () => {
-			// @ts-expect-error - testing invalid input
-			expect(getTailwindJustifyClass('invalid')).toBe('');
 		});
 	});
 

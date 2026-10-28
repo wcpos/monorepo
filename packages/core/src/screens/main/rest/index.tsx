@@ -4,13 +4,13 @@
 import * as React from 'react';
 
 import { useT } from '../../../contexts/translations';
+import { AreaPage } from '../components/navigation-area/area-page';
 import {
 	BarcodeScanning,
 	CardReadersSettings,
 	CustomerDisplaySettings,
 	GeneralSettings,
 	PrintingSettings,
-	SettingsPage,
 	TaxSettings,
 	ThemeSettings,
 } from '../settings';
@@ -38,7 +38,6 @@ export {
 	CustomerDisplaySettings,
 	GeneralSettings,
 	PrintingSettings,
-	SettingsPage,
 	TaxSettings,
 	ThemeSettings,
 };
@@ -46,65 +45,65 @@ export {
 export function BarcodeScanningSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.barcode_scanning')} testID="screen-settings-barcode-scanning">
+		<AreaPage title={t('settings.barcode_scanning')} testID="screen-settings-barcode-scanning">
 			<BarcodeScanning />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function CardReadersSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.card_readers')} testID="screen-settings-card-readers">
+		<AreaPage title={t('settings.card_readers')} testID="screen-settings-card-readers">
 			<CardReadersSettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function CustomerDisplaySettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage
+		<AreaPage
 			title={t('settings.customer_display.title')}
 			testID="screen-settings-customer-display"
 		>
 			<CustomerDisplaySettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function GeneralSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.general')} testID="screen-settings-general">
+		<AreaPage title={t('settings.general')} testID="screen-settings-general">
 			<GeneralSettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function PrintingSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.printing')} testID="screen-settings-printing">
+		<AreaPage title={t('settings.printing')} testID="screen-settings-printing">
 			<PrintingSettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function TaxSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.tax')} testID="screen-settings-tax">
+		<AreaPage title={t('settings.tax')} testID="screen-settings-tax">
 			<TaxSettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }
 
 export function ThemeSettingsPage() {
 	const t = useT();
 	return (
-		<SettingsPage title={t('settings.theme')} testID="screen-settings-theme">
+		<AreaPage title={t('settings.theme')} testID="screen-settings-theme">
 			<ThemeSettings />
-		</SettingsPage>
+		</AreaPage>
 	);
 }

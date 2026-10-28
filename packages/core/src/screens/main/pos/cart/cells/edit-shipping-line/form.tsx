@@ -24,7 +24,7 @@ import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
-import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { TaxStatusRadioGroup } from '../../../../components/tax-radio-groups';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';

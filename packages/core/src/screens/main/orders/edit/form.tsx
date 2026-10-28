@@ -44,9 +44,9 @@ import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { billingAddressSchema } from '../../components/billing-address-form';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
+import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
 import {
 	ADDRESS_FACTS,
 	ADDRESS_PARTS,
@@ -67,7 +67,6 @@ import {
 import { useRecordAutosave } from '../../components/use-record-autosave';
 import { OrderRow, useCurrencyRow } from '../../components/order/order-rows';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
-import { shippingAddressSchema } from '../../components/shipping-address-form';
 import { useFieldPresence } from '../../components/use-field-presence';
 import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';

@@ -571,7 +571,7 @@ export function Products() {
 						/>
 					}
 				>
-					<ProductsDisplayOptions title={t('common.product_settings')} />
+					<ProductsDisplayOptions />
 				</ManagementBar>
 			}
 		>

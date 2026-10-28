@@ -3,7 +3,7 @@
  * so that ColumnMeta extensions (width, flex, align, hideLabel, show) are available
  * throughout the core package.
  */
-import '@wcpos/components/data-table/types';
+import '@wcpos/components/table/types';
 
 import type { RefObject } from 'react';
 
@@ -20,7 +20,7 @@ export type {
 	HeaderContext,
 	Row,
 	Table,
-} from '@wcpos/components/data-table/types';
+} from '@wcpos/components/table/types';
 
 declare module '@tanstack/react-table' {
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars

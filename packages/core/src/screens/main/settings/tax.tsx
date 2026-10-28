@@ -32,9 +32,8 @@ import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
-import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
 import { TaxBasedOnSelect } from '../components/tax-based-on-select';
-import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
+import { InclExclRadioGroup, TaxDisplayRadioGroup } from '../components/tax-radio-groups';
 import { useExtraData } from '../contexts/extra-data';
 import { INHERIT_TAX_CLASS, taxClassFromWire } from '../hooks/tax-class';
 

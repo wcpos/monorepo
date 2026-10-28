@@ -33,22 +33,6 @@ export function cn(...inputs: ClassValue[]) {
 /**
  *
  */
-export const getTailwindJustifyClass = (align: 'left' | 'right' | 'center') => {
-	switch (align) {
-		case 'left':
-			return 'justify-start';
-		case 'right':
-			return 'justify-end';
-		case 'center':
-			return 'justify-center';
-		default:
-			return '';
-	}
-};
-
-/**
- *
- */
 export const getFlexAlign = (
 	align: 'left' | 'right' | 'center'
 ): 'flex-start' | 'flex-end' | 'center' => {

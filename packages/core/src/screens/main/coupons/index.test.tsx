@@ -76,7 +76,6 @@ jest.mock('@wcpos/components/input', () => ({
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -382,7 +381,7 @@ jest.mock('../components/management-bar', () => ({
 		</>
 	),
 }));
-jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
 jest.mock('./row', () => ({
 	CouponRow: ({ record }: { record: { uuid: string } }) => (
 		<div data-testid={`coupons-row-${record.uuid}`} />

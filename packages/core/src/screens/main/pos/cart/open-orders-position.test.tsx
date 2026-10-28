@@ -65,7 +65,9 @@ jest.mock('../conditions/use-cart-conditions', () => ({
 	CartConditionsProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('./cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
-jest.mock('./empty-cart', () => ({ EmptyCart: () => <div data-testid="cart-empty" /> }));
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID }: { testID?: string }) => <div data-testid={testID} />,
+}));
 jest.mock('./foot', () => ({
 	CartFoot: ({ onOpenSheet }: { onOpenSheet: () => void }) => (
 		<div data-testid="checkout-button" onClick={onOpenSheet} />
@@ -100,7 +102,6 @@ jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: { children: React.ReactNode }) => (
 		<div data-testid="cart-card">{children}</div>
 	),
-	CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CardContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/hstack', () => ({

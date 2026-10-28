@@ -146,8 +146,9 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
-jest.mock('../../components/billing-address-form', () => ({
+jest.mock('../../components/customer/address', () => ({
 	billingAddressSchema: { shape: {} },
+	shippingAddressSchema: { shape: {} },
 }));
 jest.mock('../../components/customer/address-rows', () => ({
 	useAddressFacts: () => ({
@@ -179,9 +180,6 @@ jest.mock('../../components/meta-data-form', () => ({
 	metaDataSchema: {},
 }));
 jest.mock('../../components/order/order-status-select', () => ({ OrderStatusSelect: () => null }));
-jest.mock('../../components/shipping-address-form', () => ({
-	shippingAddressSchema: { shape: {} },
-}));
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

@@ -4,6 +4,8 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { DisplayOptions } from './display-options';
+
+beforeEach(() => jest.clearAllMocks());
 jest.mock('expo-haptics', () => ({}));
 const mockPatch = jest.fn();
 const mockReset = jest.fn();
@@ -52,21 +54,24 @@ jest.mock('@wcpos/components/dnd', () => ({
 		renderItem: (item: { id: string }, index: number) => React.ReactNode;
 	}) => items.map(renderItem),
 }));
-it('opens the columns in the settings panel, patches immediately and restores from its footer', async () => {
-	render(<DisplayOptions />);
-	expect(screen.getByTestId('orders-display-options')).toBeTruthy();
-	fireEvent.click(screen.getAllByRole('switch')[0]);
-	await waitFor(() => expect(mockPatch).toHaveBeenCalledWith({ 'columns.0.show': false }));
-	fireEvent.click(screen.getByTestId('orders-display-restore'));
-	expect(mockReset).toHaveBeenCalledTimes(1);
-	// Per-page footer ids: the POS panels' generic ids stay unique to them.
-	expect(screen.getByTestId('orders-display-close')).toBeTruthy();
-	expect(screen.queryByTestId('ui-settings-close')).toBeNull();
-	expect(screen.queryByTestId('ui-settings-restore-defaults')).toBeNull();
-});
+it.each(['orders', 'customers', 'coupons', 'products'] as const)(
+	'opens %s columns in the settings panel, patches immediately and restores from its footer',
+	async (id) => {
+		render(<DisplayOptions id={id} />);
+		expect(screen.getByTestId(`${id}-display-options`)).toBeTruthy();
+		fireEvent.click(screen.getAllByRole('switch')[0]);
+		await waitFor(() => expect(mockPatch).toHaveBeenCalledWith({ 'columns.0.show': false }));
+		fireEvent.click(screen.getByTestId(`${id}-display-restore`));
+		expect(mockReset).toHaveBeenCalledTimes(1);
+		// Per-page footer ids: the POS panels' generic ids stay unique to them.
+		expect(screen.getByTestId(`${id}-display-close`)).toBeTruthy();
+		expect(screen.queryByTestId('ui-settings-close')).toBeNull();
+		expect(screen.queryByTestId('ui-settings-restore-defaults')).toBeNull();
+	}
+);
 
 it("nests a shown column's display switches under its switch and drops them when it is off", async () => {
-	render(<DisplayOptions />);
+	render(<DisplayOptions id="orders" />);
 	expect(screen.getByRole('switch', { name: 'avatar' })).toBeTruthy();
 	fireEvent.click(screen.getByRole('switch', { name: 'customer' }));
 	await waitFor(() => expect(screen.queryByRole('switch', { name: 'avatar' })).toBeNull());

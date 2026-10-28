@@ -416,12 +416,10 @@ jest.mock('../../components/meta-data-form', () => ({
 	},
 	metaDataSchema: {},
 }));
-jest.mock('../../components/billing-address-form', () => ({
+jest.mock('../../components/customer/address', () => ({
 	billingAddressSchema: { shape: {} },
-}));
-jest.mock('../../components/shipping-address-form', () => ({
 	// The real schema: a linked shipping is billing's copy through it (`asShipping`).
-	shippingAddressSchema: jest.requireActual('../../components/shipping-address-form')
+	shippingAddressSchema: jest.requireActual('../../components/customer/address')
 		.shippingAddressSchema,
 }));
 jest.mock('../../components/customer/tax-ids-form', () => ({

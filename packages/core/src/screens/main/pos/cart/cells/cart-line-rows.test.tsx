@@ -104,7 +104,7 @@ jest.mock('../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: m
 jest.mock('../../../components/shipping-method-select', () => ({
 	ShippingMethodSelect: () => null,
 }));
-jest.mock('../../../components/tax-status-radio-group', () => ({
+jest.mock('../../../components/tax-radio-groups', () => ({
 	TaxStatusRadioGroup: () => null,
 }));
 jest.mock('../../../components/product/category-select', () => ({

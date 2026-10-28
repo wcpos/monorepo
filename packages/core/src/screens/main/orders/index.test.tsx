@@ -71,7 +71,6 @@ jest.mock('@wcpos/components/input', () => ({
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -456,7 +455,7 @@ jest.mock('../components/management-bar', () => ({
 		</div>
 	),
 }));
-jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
 jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),

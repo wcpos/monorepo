@@ -23,13 +23,12 @@ import {
 	TextPart,
 	useAddressFacts,
 } from './address-rows';
+import { billingAddressSchema, shippingAddressSchema } from './address';
 import { TAX_ID_DEFAULT_ROW, TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { billingAddressSchema } from '../billing-address-form';
 import { FormErrors } from '../form-errors';
 import { META_DATA_DEFAULT_ROW, MetaDataForm, metaDataSchema } from '../meta-data-form';
-import { shippingAddressSchema } from '../shipping-address-form';
 import { useFieldPresence } from '../use-field-presence';
 
 /**

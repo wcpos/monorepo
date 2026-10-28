@@ -8,16 +8,10 @@ import { DeviceScope } from '@wcpos/components/lib/device';
 import { TaxBasedOn } from './index';
 
 // jest resolves the native primitives; hover versus press is a web question, so load the web
-// builds (Radix under react-native-web). The hover card too, so a revert to it is judged on
-// how it behaves in a browser.
+// build (Radix under react-native-web).
 jest.mock('@rn-primitives/popover', () =>
 	jest.requireActual(
 		require.resolve('@rn-primitives/popover').replace(/index\.js$/, 'popover.web.js')
-	)
-);
-jest.mock('@rn-primitives/hover-card', () =>
-	jest.requireActual(
-		require.resolve('@rn-primitives/hover-card').replace(/index\.js$/, 'hover-card.web.js')
 	)
 );
 // The overlay shell's native motion and insets; the web path never uses them.

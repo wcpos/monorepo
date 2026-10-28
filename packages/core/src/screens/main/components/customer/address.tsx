@@ -5,12 +5,10 @@ import * as z from 'zod';
 
 import { FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 
-import { CountryCombobox } from './country-state-select/country-combobox';
-import { StateFormInput } from './country-state-select/state-forminput';
+import { CountryCombobox } from '../country-state-select/country-combobox';
+import { StateFormInput } from '../country-state-select/state-forminput';
 
-/**
- *
- */
+/** A customer's or an order's billing address, every part optional (Woo's shape). */
 export const billingAddressSchema = z.object({
 	billing: z
 		.object({
@@ -25,6 +23,24 @@ export const billingAddressSchema = z.object({
 			state: z.string().optional(),
 			country: z.string().optional(),
 			postcode: z.string().optional(),
+		})
+		.optional(),
+});
+
+/** The shipping address: billing's parts without the email. */
+export const shippingAddressSchema = z.object({
+	shipping: z
+		.object({
+			first_name: z.string().optional(),
+			last_name: z.string().optional(),
+			company: z.string().optional(),
+			address_1: z.string().optional(),
+			address_2: z.string().optional(),
+			city: z.string().optional(),
+			state: z.string().optional(),
+			country: z.string().optional(),
+			postcode: z.string().optional(),
+			phone: z.string().optional(),
 		})
 		.optional(),
 });
