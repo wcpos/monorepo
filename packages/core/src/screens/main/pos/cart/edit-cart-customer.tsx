@@ -206,6 +206,7 @@ function EditCartCustomerFields() {
 						<PropertyRow
 							testID="cart-address-row-name"
 							label={t('common.name')}
+							nativeID="billing-first_name-form-item"
 							trailing={<SavedMark name="billing" label={t('settings.saved')} />}
 						>
 							<HStack className="gap-2">
@@ -214,6 +215,7 @@ function EditCartCustomerFields() {
 										key={name}
 										name={`billing.${name}`}
 										placeholder={labels[name]}
+										label={name === 'last_name' ? labels[name] : undefined}
 										testID={`cart-address-field-billing-${name}`}
 									/>
 								))}
@@ -226,6 +228,7 @@ function EditCartCustomerFields() {
 										key={name}
 										testID={`cart-address-row-${name}`}
 										label={labels[name]}
+										nativeID={`billing-${name}-form-item`}
 										trailing={
 											name === 'company' &&
 											verb(['remove-company', t('common.remove'), () => presence.withdraw(name)])
