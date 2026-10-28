@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { ChipRow, ChipRowSkeleton } from './chip-row';
+import { ChipRow, ChipRowSkeleton } from './index';
 
 jest.mock('react-native', () => {
 	const React = jest.requireActual('react');
@@ -45,11 +45,11 @@ jest.mock('react-native', () => {
 	};
 });
 let mockPhone = false;
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
+jest.mock('../lib/device', () => ({ useIsPhone: () => mockPhone }));
 beforeEach(() => {
 	mockPhone = false;
 });
-jest.mock('@wcpos/components/skeleton', () => ({
+jest.mock('../skeleton', () => ({
 	Skeleton: ({ shape }: { shape: string }) => (
 		<span data-testid="chip-skeleton" data-shape={shape} />
 	),

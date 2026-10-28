@@ -85,7 +85,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore }),
 	useStoreSession: () => ({ store: mockStore }),
 }));
-jest.mock('../../components/editable-field', () => ({ EditableField: () => null }));
+jest.mock('@wcpos/components/editable-field', () => ({ EditableField: () => null }));
 jest.mock('../../components/country-state-select/country-combobox', () => ({
 	CountryCombobox: () => null,
 }));

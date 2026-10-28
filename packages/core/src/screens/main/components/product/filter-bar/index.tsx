@@ -4,9 +4,9 @@ import { Button } from '@wcpos/components/button';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
+import { ChipRow } from '@wcpos/components/chip-row';
 
 import { useT } from '../../../../../contexts/translations';
-import { ChipRow } from '../../chip-row';
 import { BrandsPill } from './brands-pill';
 import { CategoryPill } from './category-pill';
 import { FeaturedPill } from './featured-pill';

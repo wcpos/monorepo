@@ -5,9 +5,9 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
-import { EditableField } from '../../../components/editable-field';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCartTableReadOnly } from './read-only';
 

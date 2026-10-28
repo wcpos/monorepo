@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ScrollView, type ScrollViewInstance, View } from 'react-native';
 
-import { cn } from '@wcpos/components/lib/utils';
-import { Skeleton } from '@wcpos/components/skeleton';
-import { useGround } from '@wcpos/components/lib/ground';
+import { useGround } from '../lib/ground';
+import { cn } from '../lib/utils';
+import { Skeleton } from '../skeleton';
 
 /**
  * The chip row every list surface with pills has (Products, Orders, Coupons, the POS

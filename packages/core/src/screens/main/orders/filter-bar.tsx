@@ -9,13 +9,13 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
+import { ChipRow } from '@wcpos/components/chip-row';
 
 import { useT } from '../../../contexts/translations';
 import { useStoreDay } from '../../../hooks/use-store-day';
 import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useStoreSession } from '../../../contexts/app-state';
 import { type FiltersOf, useQueryState, useQueryStateActions } from '../../../query';
-import { ChipRow } from '../components/chip-row';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';

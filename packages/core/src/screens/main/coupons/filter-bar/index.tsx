@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import { Button } from '@wcpos/components/button';
+import { ChipRow } from '@wcpos/components/chip-row';
 
 import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useT } from '../../../../contexts/translations';
-import { ChipRow } from '../../components/chip-row';
 import { DateRangePill } from './date-range-pill';
 import { DiscountTypePill } from './discount-type-pill';
 import { StatusPill } from './status-pill';

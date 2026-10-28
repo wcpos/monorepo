@@ -10,9 +10,9 @@ import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import type * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { useGround } from '@wcpos/components/lib/ground';
+import { ChipRowSkeleton } from '@wcpos/components/chip-row';
 
 import { useDrawnHandle, useQuerySnapshot, useQueryStateActions } from '../../../../query';
-import { ChipRowSkeleton } from '../chip-row';
 import { withProAccess } from '../pro-guard';
 
 import type {

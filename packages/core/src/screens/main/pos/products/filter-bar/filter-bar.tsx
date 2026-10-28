@@ -36,11 +36,11 @@ import { useDocField } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 import type { FiltersOf } from '@wcpos/query/query-state';
+import { ChipRow } from '@wcpos/components/chip-row';
 
 import { useFilterBarCommands } from './use-filter-bar-commands';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
-import { ChipRow } from '../../../components/chip-row';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
