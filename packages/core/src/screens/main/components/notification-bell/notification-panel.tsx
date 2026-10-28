@@ -16,6 +16,7 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { useAppState } from '../../../../contexts/app-state';
 import { type Notification, useNovuNotifications } from '../../../../contexts/novu';
 import { useT } from '../../../../contexts/translations';
+import { storeDayBounds, useStoreDay } from '../../../../hooks/use-store-day';
 import { useDateFormat } from '../../hooks/use-date-format';
 import { groupByRecency, type NotificationListItem } from './notification-groups';
 import { actionUrl, kindOf } from './notification-kind';
@@ -95,9 +96,10 @@ export function NotificationPanelContent() {
 		useNovuNotifications();
 	const { site } = useAppState();
 	const siteUrl = useDocField(site, (value) => value.url) as string | undefined;
-	// Recency is measured when this panel opens; reopening refreshes the bands.
-	const [now] = React.useState(Date.now);
-	const items = groupByRecency(notifications, now, {
+	const { timezone, today } = useStoreDay();
+	// Measured when the panel opens; reopening refreshes the bands.
+	const [startOfToday] = React.useState(() => storeDayBounds(today(), timezone).from.getTime());
+	const items = groupByRecency(notifications, startOfToday, {
 		today: t('common.today'),
 		earlier: t('notifications.earlier'),
 	});

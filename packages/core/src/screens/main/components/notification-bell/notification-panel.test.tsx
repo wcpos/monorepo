@@ -17,6 +17,13 @@ jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ site:
 jest.mock('@wcpos/query', () => ({ useDocField: jest.fn(() => 'https://store.test') }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/use-date-format', () => ({ useDateFormat: () => 'just now' }));
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({
+		timezone: 'UTC',
+		today: () => ({ year: 2026, month: 10, day: 28 }),
+	}),
+	storeDayBounds: () => ({ from: new Date(0), to: new Date(8.64e15) }),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 function passthrough({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {

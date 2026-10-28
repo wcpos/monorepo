@@ -7,6 +7,8 @@ import { NotificationBell } from './notification-bell';
 
 const mockSeen = jest.fn();
 const mockPanel = jest.fn(() => null);
+let openChange: ((open: boolean) => void) | undefined;
+let triggerChild: React.ReactElement<{ onPress?: () => void; testID?: string }> | undefined;
 jest.mock('../../../../contexts/novu', () => ({
 	useNovuNotificationsSummary: () => ({ unreadCount: 2, markAllAsSeen: mockSeen }),
 }));
@@ -25,7 +27,17 @@ jest.mock('@wcpos/components/icon-button', () => ({ IconButton: opener }));
 jest.mock('@wcpos/components/nav-item', () => ({ NavItem: opener }));
 jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));
 jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: passthrough,
+	Dialog: ({
+		children,
+		onOpenChange,
+	}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => {
+		openChange = onOpenChange;
+		return children;
+	},
+	DialogTrigger: ({ children }: { children: NonNullable<typeof triggerChild> }) => {
+		triggerChild = children;
+		return React.cloneElement(children, { onPress: () => openChange?.(true) });
+	},
 	DialogContent: ({
 		children,
 		testID,
@@ -44,9 +56,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 }));
 
-it.each([false, true])('opens the sheet and marks seen from the opener (label=%s)', (showLabel) => {
+beforeEach(() => {
 	jest.clearAllMocks();
+	triggerChild = undefined;
+});
+
+it.each([false, true])('opens the sheet and marks seen from the opener (label=%s)', (showLabel) => {
 	render(<NotificationBell showLabel={showLabel} portalHost="pos" />);
+	expect(triggerChild?.props.testID).toBe('drawer-item-notifications');
 	expect(mockPanel).not.toHaveBeenCalled();
 	expect(mockSeen).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('drawer-item-notifications'));
