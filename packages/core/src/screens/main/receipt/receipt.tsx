@@ -74,7 +74,7 @@ function ReceiptDocument({
 			<DialogContent side={side} size="xl">
 				<DialogHeader>
 					<DialogTitle>
-						<Text>{t(document ? 'receipt.refund_receipt' : 'common.receipt')}</Text>
+						<Text>{document ? t('receipt.refund_receipt') : t('common.receipt')}</Text>
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody contentContainerStyle={{ height: '100%' }}>

@@ -78,7 +78,7 @@ export function ClosureList({
 										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground'}`}
 									>
 										{variance
-											? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
+											? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
 											: t('reports.exact')}
 									</Text>
 								</>

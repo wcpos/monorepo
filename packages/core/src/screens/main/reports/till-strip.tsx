@@ -123,7 +123,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					: '';
 	const variance = Number(closure?.variance.cash ?? 0);
 	const result = variance
-		? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
+		? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
 		: t('reports.exact');
 	const resultColor =
 		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
@@ -243,7 +243,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				{/* Only a status the strip knows: online, the server's answer; offline, the device's own session. */}
 				{bound && (open || !remote.online || authoritative) && (
 					<Text testID="till-status" className={open ? 'text-success' : 'text-muted-foreground'}>
-						● {t(open ? 'reports.open' : 'register.closed')}
+						● {open ? t('reports.open') : t('register.closed')}
 					</Text>
 				)}
 				{bound && (open || closure) && (
@@ -351,7 +351,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					onPress={dispatch}
 				>
 					<Icon name="print" />
-					<ButtonText>{t(open ? 'register.print_x_report' : 'reports.reprint')}</ButtonText>
+					<ButtonText>{open ? t('register.print_x_report') : t('reports.reprint')}</ButtonText>
 				</Button>
 			)}
 			<IconButton

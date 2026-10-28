@@ -139,15 +139,13 @@ export function Closures({
 
 				{status !== 'ready' && (
 					<Text testID={`closures-${status}`}>
-						{t(
-							status === 'unavailable'
-								? 'reports.unavailable_offline'
-								: status === 'denied'
-									? 'reports.no_access'
-									: status === 'error'
-										? 'reports.load_failed'
-										: 'common.loading'
-						)}
+						{status === 'unavailable'
+							? t('reports.unavailable_offline')
+							: status === 'denied'
+								? t('reports.no_access')
+								: status === 'error'
+									? t('reports.load_failed')
+									: t('common.loading')}
 					</Text>
 				)}
 				{(rows.length > 0 || status === 'ready') && (
@@ -164,7 +162,7 @@ export function Closures({
 						variant="outline"
 						onPress={loadMore}
 					>
-						{t(status === 'error' ? 'common.retry' : 'reports.load_more')}
+						{status === 'error' ? t('common.retry') : t('reports.load_more')}
 					</Button>
 				)}
 			</ScrollView>

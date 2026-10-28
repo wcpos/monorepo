@@ -29,7 +29,7 @@ import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE, laneAcknowledgesPrint } from './utils';
 import { SettingsSection } from '../components/settings-section';
 import { PrinterDialog } from '../printer/add-printer';
-import { describePrinterError } from '../printer/describe-printer-error';
+import { describePrinterError, printerErrorText } from '../printer/describe-printer-error';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -148,10 +148,9 @@ export function PrintingSettings() {
 				}
 				// Only a lane that answers proves the paper moved; everything else was merely sent.
 				Toast.show({
-					title: t(
-						laneAcknowledgesPrint(profile)
-							? 'settings.test_print_done'
-							: 'settings.test_print_dispatched'
+					title: (laneAcknowledgesPrint(profile)
+						? t('settings.test_print_done')
+						: t('settings.test_print_dispatched')
 					).replace('%s', profile.name),
 					type: 'success',
 				});
@@ -159,7 +158,7 @@ export function PrintingSettings() {
 				logTestPrintFailure(printingLogger, err, { source: 'printing-settings' });
 				const { key } = describePrinterError(err);
 				Toast.show({
-					title: t(key),
+					title: printerErrorText(key, t),
 					// The generic line names no next step; the specific ones already do.
 					...(key === 'settings.setup_err_generic'
 						? { description: t('settings.setup_err_generic_hint') }

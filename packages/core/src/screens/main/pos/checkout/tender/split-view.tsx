@@ -76,18 +76,16 @@ export function SplitView({
 	const hint =
 		tab === 'item' && paidCount
 			? t('pos_checkout.items_paid_of', { n: paidCount, total: flow.lines.length })
-			: t(
-					{
-						even: 'pos_checkout.split_even_hint',
-						amount: 'pos_checkout.split_amount_hint',
-						percent: 'pos_checkout.split_percent_hint',
-						item: 'pos_checkout.split_item_hint',
-					}[tab]
-				);
+			: {
+					even: t('pos_checkout.split_even_hint'),
+					amount: t('pos_checkout.split_amount_hint'),
+					percent: t('pos_checkout.split_percent_hint'),
+					item: t('pos_checkout.split_item_hint'),
+				}[tab];
 	return (
 		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
 			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-				{t(flow.paidMinor > 0 ? 'pos_checkout.split_the_remaining' : 'pos_checkout.split')}
+				{flow.paidMinor > 0 ? t('pos_checkout.split_the_remaining') : t('pos_checkout.split')}
 			</Text>
 			<View className="size-48 items-center justify-center">
 				{flow.plan || flow.paidMinor > 0 ? (
@@ -135,9 +133,16 @@ export function SplitView({
 						flow.dispatch({ type: 'set-split-tab', tab: value as SplitTab })
 					}
 					segments={
-						(['even', 'amount', 'percent', 'item'] as const).map((value) => ({
+						(
+							[
+								['even', t('pos_checkout.split_even')],
+								['amount', t('pos_checkout.split_amount')],
+								['percent', t('pos_checkout.split_percent')],
+								['item', t('pos_checkout.split_item')],
+							] as const
+						).map(([value, label]) => ({
 							value,
-							label: t(`pos_checkout.split_${value}`),
+							label,
 							testID: `checkout-split-tab-${value}`,
 						})) as [Segment, Segment, Segment, Segment]
 					}

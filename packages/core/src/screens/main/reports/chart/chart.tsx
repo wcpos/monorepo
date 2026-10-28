@@ -153,7 +153,9 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 				: t('reports.chart_last_weekday', {
 						weekday: formatDate(inZone(timezone, comparisonRange.start), 'EEEE'),
 					})
-			: t(period === 'week' ? 'common.last_week' : 'common.last_month');
+			: period === 'week'
+				? t('common.last_week')
+				: t('common.last_month');
 	const [bounds, setBounds] = React.useState<ChartBounds | null>(null);
 	const [scales, setScales] = React.useState<{
 		x: (n: number) => number;

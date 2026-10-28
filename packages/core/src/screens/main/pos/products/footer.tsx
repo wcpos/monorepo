@@ -44,12 +44,9 @@ export function ProductsFooter({ label, prefix: propsPrefix, ...props }: Product
 									shown: drawnCount.toLocaleString(),
 									total: total.toLocaleString(),
 								})
-							: t(
-									props.collectionName === 'variations'
-										? 'pos_products.n_options'
-										: 'pos_products.n_products',
-									{ count: total }
-								)
+							: props.collectionName === 'variations'
+								? t('pos_products.n_options', { count: total })
+								: t('pos_products.n_products', { count: total })
 				)
 			}
 		>

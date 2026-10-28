@@ -32,9 +32,8 @@ export function useReportPrint(storeId?: number) {
 	const cashier = useReportCashier();
 	// The printed header says which statuses the totals include.
 	const { statusMode } = useReportsScope();
-	const statusScope = t(
-		statusMode === 'all' ? 'reports.every_status' : 'reports.completed_processing'
-	);
+	const statusScope =
+		statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing');
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;

@@ -169,11 +169,10 @@ export function SettlementCoordinatorProvider() {
 					logger.warn('Cart settlement failed', {
 						showToast: true,
 						toast: {
-							title: t(
+							title:
 								failure.code === 'missing_coupon'
-									? 'pos_cart.coupon_not_found'
-									: 'pos_cart.coupon_apply_failed'
-							),
+									? t('pos_cart.coupon_not_found')
+									: t('pos_cart.coupon_apply_failed'),
 						},
 						context: failure,
 					});

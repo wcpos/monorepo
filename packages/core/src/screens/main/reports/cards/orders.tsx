@@ -43,21 +43,21 @@ export function OrdersCard() {
 		refunded: t('reports.refunded'),
 	};
 	const needs = [
-		[status.needsYou.processing, 'reports.n_processing'],
-		[status.needsYou.onHold, 'reports.n_on_hold'],
-		[status.needsYou.pending, 'reports.n_pending'],
+		[status.needsYou.processing, (count: number) => t('reports.n_processing', { count })],
+		[status.needsYou.onHold, (count: number) => t('reports.n_on_hold', { count })],
+		[status.needsYou.pending, (count: number) => t('reports.n_pending', { count })],
 	] as const;
 	const attention = needs
 		.filter(([count]) => count > 0)
-		.map(([count, key]) => t(key, { count }))
+		.map(([count, say]) => say(count))
 		.join(' · ');
 	const stats = [
-		['average', 'average_order', money(summary.average)],
-		['median', 'median', money(summary.median)],
-		['largest', 'largest', summary.largest === null ? '—' : money(summary.largest)],
-		['items', 'items_sold', quantity(summary.items)],
-		['items-per-order', 'items_per_order', percent(summary.itemsPerOrder)],
-		['discounts', 'discounts', money(summary.discounts)],
+		['average', t('reports.average_order'), money(summary.average)],
+		['median', t('reports.median'), money(summary.median)],
+		['largest', t('reports.largest'), summary.largest === null ? '—' : money(summary.largest)],
+		['items', t('reports.items_sold'), quantity(summary.items)],
+		['items-per-order', t('reports.items_per_order'), percent(summary.itemsPerOrder)],
+		['discounts', t('reports.discounts'), money(summary.discounts)],
 	];
 	return (
 		<ReportCard
@@ -69,15 +69,15 @@ export function OrdersCard() {
 			{summary.count === 0 ? (
 				// Nothing counted: either the period has no orders, or every one of them is unticked.
 				<Text testID="card-orders-empty">
-					{t(
-						allOrders.some(included) ? 'reports.all_orders_left_out' : 'reports.no_orders_in_period'
-					)}
+					{allOrders.some(included)
+						? t('reports.all_orders_left_out')
+						: t('reports.no_orders_in_period')}
 				</Text>
 			) : (
 				<>
 					<StatGrid
 						items={stats.map(([id, label, value]) => ({
-							label: t(`reports.${label}`),
+							label,
 							value,
 							testID: `card-orders-${id}`,
 						}))}

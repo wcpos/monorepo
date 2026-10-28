@@ -107,12 +107,10 @@ export function TerminalLegView({
 		status = t('pos_checkout.terminal_cancel_waiting');
 		action = leg.releaseAvailable ? 'release' : 'none';
 	} else if (leg.captureFailed) {
-		status = t(
+		status =
 			row.capture_mode === 'device'
-				? 'pos_checkout.device_confirmation_failed'
-				: 'pos_checkout.capture_failed',
-			{ reason: leg.error?.message ?? reason }
-		);
+				? t('pos_checkout.device_confirmation_failed', { reason: leg.error?.message ?? reason })
+				: t('pos_checkout.capture_failed', { reason: leg.error?.message ?? reason });
 		action = 'capture';
 	} else if (leg.phase === 'polling' && leg.capturing) {
 		status = t('pos_checkout.terminal_capturing');
@@ -123,9 +121,9 @@ export function TerminalLegView({
 		(leg.phase === 'collecting' || leg.phase === 'creating')
 	) {
 		const cancelOnDevice = 'cancelOnDevice' in leg && leg.cancelOnDevice;
-		status = t(
-			cancelOnDevice ? 'pos_checkout.cancel_on_reader' : 'pos_checkout.terminal_cancelling'
-		);
+		status = cancelOnDevice
+			? t('pos_checkout.cancel_on_reader')
+			: t('pos_checkout.terminal_cancelling');
 		action = 'none';
 	} else if (leg.phase === 'collecting') status = t('pos_checkout.present_card');
 	else if (leg.phase === 'confirming' || leg.phase === 'capturing') {
@@ -279,11 +277,9 @@ export function TerminalLegView({
 						onPress={flow.retryTerminalCapture}
 					>
 						<ButtonText>
-							{t(
-								row.capture_mode === 'device'
-									? 'pos_checkout.retry_confirmation'
-									: 'pos_checkout.try_capture_again'
-							)}
+							{row.capture_mode === 'device'
+								? t('pos_checkout.retry_confirmation')
+								: t('pos_checkout.try_capture_again')}
 						</ButtonText>
 					</Button>
 				) : null}
