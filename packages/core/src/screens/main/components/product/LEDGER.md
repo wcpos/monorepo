@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Shared product cells, taxonomy filters/selectors, stock and price interpretation, images, tax information, and expandable variation tables.
 
-**Composes:** `@wcpos/components/button`, `/combobox`, `/error-boundary`, `/hstack`, `/icon`, `/icon-button`, `/image`, `/select`, `/suspense`, `/table`, `/text`, `/tooltip`, `/tree-combobox`, `/virtualized-list`, `/vstack`; utility `/lib/utils`; type-only `/lib/use-hierarchy` and `/combobox/types`.
+**Composes:** `@wcpos/components/button`, `/combobox`, `/error-boundary`, `/hstack`, `/icon`, `/icon-button`, `/image`, `/select`, `/suspense`, `/table`, `/text`, `/tooltip`, `/tree-combobox`, `/virtualized-list`, `/vstack`; utility `/lib/utils`; type-only `/tree-combobox` and `/combobox/types`.
 
 ## Lines
 

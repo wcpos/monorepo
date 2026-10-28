@@ -27,7 +27,7 @@ import {
 } from '@wcpos/components/tree-combobox';
 import { VStack } from '@wcpos/components/vstack';
 import type { Option } from '@wcpos/components/combobox/types';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import type { EngineRecord } from '@wcpos/query';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 

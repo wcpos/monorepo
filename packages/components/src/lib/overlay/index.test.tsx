@@ -3,7 +3,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 
 import { act, render, screen } from '@testing-library/react';
 
-import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from './motion';
+import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from '../motion';
 import {
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
@@ -14,7 +14,7 @@ import {
 	useOverlay,
 	useOverlayPresentation,
 	useSheetInset,
-} from './overlay';
+} from './index';
 
 // Jest resolves the native stub; the web overlay mounts the Radix scope, so this harness does too.
 jest.mock('./sheet-focus-scope', () => jest.requireActual('./sheet-focus-scope.web'));
@@ -34,7 +34,7 @@ jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 const mockUseKeyboardState = jest.fn();
-jest.mock('../keyboard-controller', () => ({
+jest.mock('../../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
 	useKeyboardState: (...args: unknown[]) => mockUseKeyboardState(...args),
 }));

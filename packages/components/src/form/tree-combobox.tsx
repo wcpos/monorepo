@@ -10,7 +10,7 @@ import {
 } from '../tree-combobox';
 
 import type { Option } from '../combobox/types';
-import type { HierarchicalOption } from '../lib/use-hierarchy';
+import type { HierarchicalOption } from '../tree-combobox/use-hierarchy';
 import type { TreeComboboxContentProps } from '../tree-combobox/types';
 import type { FormItemProps } from './common';
 

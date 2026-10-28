@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
 import { useDocField } from '@wcpos/query';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 import type { FiltersOf } from '@wcpos/query/query-state';
 import { ChipRow } from '@wcpos/components/chip-row';

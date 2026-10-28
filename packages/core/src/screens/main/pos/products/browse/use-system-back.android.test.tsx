@@ -58,7 +58,7 @@ it('answers Android back with the latest handler, subscribed once per focus', ()
 });
 
 // The inline variations sheet on the phone owns its dismiss and subscribes to back when it opens
-// (OverlayShell, packages/components/src/lib/overlay.tsx; its own test is overlay.native.test.tsx).
+// (OverlayShell, packages/components/src/lib/overlay; its own test is index.native.test.tsx).
 // Opened over a level, its close must come first, and the level must stay.
 it('a sheet opened over a level closes on back first; the level steps back only after', () => {
 	const level = jest.fn();

@@ -10,7 +10,7 @@ import {
 	TreeComboboxContent,
 	TreeComboboxTrigger,
 } from '@wcpos/components/tree-combobox';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import type { Option } from '@wcpos/components/combobox/types';
 import { useEngineRecordsByWooId } from '@wcpos/query/record-readers';
 

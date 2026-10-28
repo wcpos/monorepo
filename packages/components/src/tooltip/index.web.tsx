@@ -30,7 +30,7 @@ function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: Too
 						<TooltipPrimitive.Content
 							sideOffset={sideOffset}
 							className={cn(
-								// The anchored panel's look and entrance (lib/overlay.tsx): hairline border, no shadow.
+								// The anchored panel's look and entrance (lib/overlay): hairline border, no shadow.
 								OVERLAY_MOTION.anchored.enter,
 								'border-border bg-popover z-50 overflow-hidden rounded-lg border px-3 py-1.5',
 								className

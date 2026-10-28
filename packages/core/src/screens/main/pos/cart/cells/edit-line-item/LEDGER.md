@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Edit cart product data and inspect the underlying line JSON.
 
-**Composes:** `@wcpos/components/{dialog,form,hstack,text,vstack}`; type from `lib/use-hierarchy`. The panel, its title and the Form | JSON tabs are `screens/main/components/record-dialog` (card 8, 2026-10-28); this folder is the Form tab only.
+**Composes:** `@wcpos/components/{dialog,form,hstack,text,vstack}`; type from `tree-combobox`. The panel, its title and the Form | JSON tabs are `screens/main/components/record-dialog` (card 8, 2026-10-28); this folder is the Form tab only.
 
 ## Lines
 

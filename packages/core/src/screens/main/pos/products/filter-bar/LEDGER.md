@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Render and edit merchant-ordered built-in pills and reusable multi-condition filters.
 
-**Composes:** `@wcpos/components/{alert-dialog,button,chip,combobox,dialog,dnd,dropdown-menu,error-boundary,form/saved-mark,hstack,icon,icon-button,input,list-row,pane-stack,segmented-control,select,skeleton,suspense,switch,text,tooltip,tree-combobox,vstack}`; type-only imports from `combobox/types` and `lib/use-hierarchy`.
+**Composes:** `@wcpos/components/{alert-dialog,button,chip,combobox,dialog,dnd,dropdown-menu,error-boundary,form/saved-mark,hstack,icon,icon-button,input,list-row,pane-stack,segmented-control,select,skeleton,suspense,switch,text,tooltip,tree-combobox,vstack}`; type-only imports from `combobox/types` and `tree-combobox`.
 
 ## Lines
 

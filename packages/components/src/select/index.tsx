@@ -16,7 +16,7 @@ import {
 } from './select-multi';
 import { fieldBox } from '../field-box';
 import { Icon } from '../icon';
-import { useLayoutWidth } from '../lib/use-layout-width';
+import { useLayoutWidth } from './use-layout-width';
 import {
 	AnchoredOverlay,
 	type OverlayAnchor,
@@ -25,7 +25,7 @@ import {
 } from '../lib/overlay';
 import { MenuRow } from '../menu-row';
 import { Text } from '../text';
-import { webTestID } from '../lib/test-id';
+import { webTestID } from './test-id';
 import { cn } from '../lib/utils';
 
 import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';

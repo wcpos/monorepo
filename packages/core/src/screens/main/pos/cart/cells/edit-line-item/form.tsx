@@ -18,7 +18,7 @@ import {
 	SavedFieldProvider,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import {
 	PropertyAdd,
 	PropertyList,

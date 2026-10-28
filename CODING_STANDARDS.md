@@ -369,7 +369,7 @@ The ESLint `designSystemOwnershipSelectors` footer selector in `packages/eslint/
 
 #### Situation → overlay
 
-One shell (`lib/overlay.tsx`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
+One shell (`lib/overlay`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
 anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
 becomes a page.
 
@@ -497,7 +497,7 @@ A compound fact (an address) is one line closed and its parts as indented rows o
   edges, top-aligned (`DialogContent` from `dialog` with `size="full"` does this on native).
 - A bottom sheet (a ⋮ menu, a picker, a short choice) sits on the screen edge and paints the
   bottom inset itself in card colour; the shell leaves that strip unpadded. Both live in
-  `lib/overlay.tsx` and `dialog/index.tsx`; a sheet that shows a bar under it is a bug there,
+  `lib/overlay` and `dialog/index.tsx`; a sheet that shows a bar under it is a bug there,
   not a reason for local padding.
 - A sheet's rows are 48 pt, one icon + one verb each; a destructive row is last and red.
 - The sheet header is title + close; a segmented switch (Payments / Legacy) is its own row

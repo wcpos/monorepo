@@ -679,7 +679,7 @@ it('11. center does not defer or focus through the settle path', () => {
 
 it('12. keeps the platform boundary in the shell and exports only the new dialog API', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	const shell = readFileSync(`${__dirname}/../lib/overlay.tsx`, 'utf8');
+	const shell = readFileSync(`${__dirname}/../lib/overlay/index.tsx`, 'utf8');
 	expect(source).toContain("'children' | 'asChild'");
 	expect(source).not.toContain('Platform');
 	expect(shell.match(/Platform\.OS/g)).toHaveLength(1);
