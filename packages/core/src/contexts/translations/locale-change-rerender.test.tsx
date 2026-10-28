@@ -64,6 +64,7 @@ jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	OverlayShell: ({ children }: React.PropsWithChildren) => children,
 	useOverlay: () => ({ presentation: 'center' }),
+	useOverlayPresentation: () => 'center',
 	useSheetInset: () => undefined,
 	OVERLAY_MOTION: { center: {} },
 }));

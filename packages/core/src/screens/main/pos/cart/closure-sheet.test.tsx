@@ -203,6 +203,7 @@ it('updates the title to the server number once acknowledged', () => {
 
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	useOverlay: () => ({ presentation: 'right' }),
+	useOverlayPresentation: () => 'right',
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 it('fills a lone Done at register height and puts Done after Print Z report', () => {

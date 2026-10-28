@@ -1,15 +1,17 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView } from 'react-native';
 
 import { Button, ButtonText } from '../button';
 import { Card } from '../card';
 import { DocsLink } from '../docs-link';
-import { Icon, type IconName } from '../icon';
 import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Logo } from '../logo';
 import { Text } from '../text';
+import { ToneDisc } from '../tone-disc';
 import { VStack } from '../vstack';
+
+import type { IconName } from '../icon';
 
 /**
  * `disabled` keeps the slot while its state changes (Take over → Taking over…), never empties it.
@@ -37,13 +39,6 @@ export type GateScreenProps = {
 	testID?: string;
 };
 
-// The tone lives on the disc; the title stays foreground ink (`bad` is the only red surface).
-const tones = {
-	warn: { disc: 'bg-warn-bg', glyph: 'text-warn-text', icon: 'warning' },
-	bad: { disc: 'bg-bad-bg', glyph: 'text-bad', icon: 'alert' },
-	muted: { disc: 'bg-muted', glyph: 'text-muted-foreground', icon: 'info' },
-} as const;
-
 /**
  * The one screen for a state that replaces the whole app: a protocol refusal, a plugin too old,
  * a missing route. The sign-in mark above one card at the sign-in reading width; no bar, no rail.
@@ -60,7 +55,6 @@ export function GateScreen({
 	testID = 'gate-screen',
 }: GateScreenProps) {
 	const phone = useIsPhone();
-	const style = tones[tone];
 	const mark = phone ? 64 : 80;
 	return (
 		<ScrollView
@@ -72,9 +66,7 @@ export function GateScreen({
 				<Logo width={mark} height={mark} />
 				<Card className={cn('w-full max-w-md', phone ? 'p-4' : 'p-8')}>
 					<VStack className="items-center gap-4">
-						<View className={cn('size-14 items-center justify-center rounded-full', style.disc)}>
-							<Icon name={icon ?? style.icon} size="2xl" className={style.glyph} />
-						</View>
+						<ToneDisc tone={tone} icon={icon} />
 						<Text
 							testID={`${testID}-title`}
 							role="heading"

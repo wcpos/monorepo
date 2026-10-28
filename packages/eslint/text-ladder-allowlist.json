@@ -109,7 +109,6 @@
 	"packages/core/src/screens/main/reports/cards/donut.tsx": 2,
 	"packages/core/src/screens/main/reports/cards/primitives.tsx": 3,
 	"packages/core/src/screens/main/reports/hero/index.tsx": 4,
-	"packages/core/src/screens/main/reports/panels/panel.tsx": 1,
 	"packages/core/src/screens/main/reports/sync-progress.tsx": 1,
 	"packages/core/src/screens/main/reports/till-strip.tsx": 1,
 	"packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": 8,

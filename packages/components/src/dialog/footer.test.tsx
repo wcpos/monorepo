@@ -8,8 +8,8 @@ import { Button } from '../button';
 import { DeviceScope } from '../lib/device';
 import { Dialog, DialogFooter, DialogLabelsProvider, type FooterButton } from './index';
 
-let mockPresentation = 'right';
-jest.mock('../lib/overlay', () => ({ useOverlay: () => ({ presentation: mockPresentation }) }));
+let mockPresentation: string | undefined = 'right';
+jest.mock('../lib/overlay', () => ({ useOverlayPresentation: () => mockPresentation }));
 beforeEach(() => {
 	mockPresentation = 'right';
 });
@@ -147,11 +147,15 @@ it.each([false, null, undefined])('omits the leading group for an absent aside (
 	expect(screen.getByTestId('footer')).toHaveClass('justify-end');
 	expect(screen.getByTestId('footer').children).toHaveLength(1);
 });
-it.each(['center', 'right'])('draws the slot footer top rule only outside center (%s)', (side) => {
-	mockPresentation = side;
-	footer({ close: true });
-	expect(screen.getByTestId('footer').classList.contains('border-t')).toBe(side !== 'center');
-});
+// A footer outside any shell (a Reports panel's phone page) is a page's footer, ruled above.
+it.each(['center', 'right', undefined])(
+	'draws the slot footer top rule only outside center (%s)',
+	(side) => {
+		mockPresentation = side;
+		footer({ close: true });
+		expect(screen.getByTestId('footer').classList.contains('border-t')).toBe(side !== 'center');
+	}
+);
 it('passes size to all roles and forwards icon, loading, disabled and press', () => {
 	const onPress = jest.fn();
 	footer({

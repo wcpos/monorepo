@@ -87,6 +87,7 @@
     "./textarea": "./src/textarea/index.tsx",
     "./tile": "./src/tile/index.tsx",
     "./toast": "./src/toast/index.ts",
+    "./tone-disc": "./src/tone-disc/index.tsx",
     "./tooltip": "./src/tooltip/index.tsx",
     "./tree": "./src/tree/index.tsx",
     "./tree-combobox": "./src/tree-combobox/index.ts",

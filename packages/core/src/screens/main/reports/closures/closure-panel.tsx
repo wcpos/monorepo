@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import get from 'lodash/get';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import {
 	CLOSURE_DOCUMENT_LIMIT,
@@ -27,13 +26,11 @@ import {
 } from '../../../../services/register-session/settled-figures';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { RecountSheet } from './recount-sheet';
+import { ReportPanel } from '../report-panel';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
 import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
-
-// Tablet drawer width; the Reports host already excludes the navigation rail.
-const PANEL_WIDTH = 480;
 
 export function ClosurePanel({
 	row,
@@ -50,7 +47,6 @@ export function ClosurePanel({
 	const [error, setError] = React.useState('');
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
-	const { bottom } = useSafeAreaInsets();
 	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const { storeDB } = useStoreSession();
 	const getLocalClosure = React.useCallback(
@@ -110,33 +106,27 @@ export function ClosurePanel({
 		perpetual_refunds_total: t('register.perpetual_refunds'),
 	};
 	const title = t('reports.closure_n', { n: recorded.number });
-	const content = (
-		<View
-			testID="closure-panel"
-			className="bg-card relative z-50 min-h-0 min-w-0 flex-1 overflow-hidden"
-			style={
-				!phone && Platform.OS === 'web'
-					? {
-							position: 'absolute',
-							top: 0,
-							bottom: 0,
-							right: 0,
-							left: 'auto',
-							transform: 'none',
-							width: PANEL_WIDTH,
-							maxWidth: '100%',
-						}
-					: undefined
-			}
-		>
+	const synced = ['synced', 'superseded'].includes(row.sync_status);
+	const reprint = async () => {
+		setError('');
+		try {
+			if (!(await doc.print())) setError(t('reports.reprint_failed'));
+		} catch (error) {
+			setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
+		}
+	};
+	return (
+		<ReportPanel testID="closure-panel" onClose={onClose}>
 			{phone && (
 				<Button testID="closure-back" variant="ghost" className="self-start" onPress={onClose}>
 					{t('common.back')}
 				</Button>
 			)}
-			<View className={`shrink-0 flex-row items-center gap-3 border-b p-3 ${phone ? '' : 'pr-16'}`}>
+			<DialogHeader className="flex-row items-center gap-3">
 				{phone ? (
-					<Text className="shrink text-lg font-semibold">{title}</Text>
+					<Text variant="dialog" className="shrink">
+						{title}
+					</Text>
 				) : (
 					<DialogTitle className="shrink">{title}</DialogTitle>
 				)}
@@ -155,11 +145,11 @@ export function ClosurePanel({
 						onSelect={doc.setPrinterSelection}
 					/>
 				</View>
-			</View>
+			</DialogHeader>
 			<ScrollView
 				testID="closure-panel-body"
 				className="min-h-0 flex-1"
-				contentContainerClassName="gap-4 p-4"
+				contentContainerClassName="gap-4 px-4"
 				contentContainerStyle={{ overflow: 'hidden' }}
 			>
 				{documentError ? (
@@ -215,46 +205,31 @@ export function ClosurePanel({
 					</View>
 				))}
 			</ScrollView>
-			{(doc.isOffline || !['synced', 'superseded'].includes(row.sync_status)) && (
-				<Text>{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}</Text>
+			{(doc.isOffline || !synced) && (
+				<Text className="px-4">
+					{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}
+				</Text>
 			)}
-			{!!error && <Text testID="closure-action-error">{error}</Text>}
-			<View
+			{!!error && (
+				<Text testID="closure-action-error" className="px-4">
+					{error}
+				</Text>
+			)}
+			<DialogFooter
 				testID="closure-panel-footer"
-				className="bg-card shrink-0 flex-row gap-3 border-t p-4"
-				style={phone ? { paddingBottom: bottom + 16 } : undefined}
-			>
-				<Button
-					testID="closure-recount"
-					variant="outline"
-					className="flex-1"
-					disabled={
-						doc.isOffline ||
-						doc.isSyncing ||
-						!!documentError ||
-						!remote ||
-						!['synced', 'superseded'].includes(row.sync_status)
-					}
-					onPress={() => setRecounting(true)}
-				>
-					{t('reports.recount')}
-				</Button>
-				<Button
-					testID="closure-reprint"
-					className="flex-1"
-					loading={doc.isPrinting}
-					onPress={async () => {
-						setError('');
-						try {
-							if (!(await doc.print())) setError(t('reports.reprint_failed'));
-						} catch (error) {
-							setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
-						}
-					}}
-				>
-					{t('reports.reprint')}
-				</Button>
-			</View>
+				record={{
+					label: t('reports.recount'),
+					testID: 'closure-recount',
+					disabled: doc.isOffline || doc.isSyncing || !!documentError || !remote || !synced,
+					onPress: () => setRecounting(true),
+				}}
+				secondary={{
+					label: t('reports.reprint'),
+					testID: 'closure-reprint',
+					loading: doc.isPrinting,
+					onPress: () => void reprint(),
+				}}
+			/>
 			{recounting && (
 				<RecountSheet
 					row={row}
@@ -270,35 +245,6 @@ export function ClosurePanel({
 					onOpenChange={setRecounting}
 				/>
 			)}
-		</View>
-	);
-	return phone ? (
-		content
-	) : (
-		<Dialog
-			open
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-		>
-			<DialogContent
-				side="right"
-				portalHost="reports"
-				className="bg-card z-50 flex-col gap-0 overflow-hidden p-0"
-				// Keep Dialog focus/close semantics, but no translated box around the web panel.
-				style={
-					Platform.OS === 'web'
-						? { display: 'contents' }
-						: { width: PANEL_WIDTH, maxWidth: '100%', height: '100%' }
-				}
-				closeLabel={t('common.close')}
-				closeButtonProps={{
-					testID: 'closure-close',
-					className: 'h-12 w-12 items-center justify-center',
-				}}
-			>
-				{content}
-			</DialogContent>
-		</Dialog>
+		</ReportPanel>
 	);
 }

@@ -6,6 +6,7 @@ import { Pressable, type ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 
+import { DialogLabelsProvider } from '@wcpos/components/dialog';
 import type { ClosureRow } from '@wcpos/database';
 
 import { useReceiptActions } from './receipt/receipt-actions';
@@ -310,15 +311,15 @@ it.each([false, true])(
 	}
 );
 
-// Reverting either reports panel to `accessibilityLabel` lets the dialog's English default win.
+// The app's DialogLabelsProvider names the panels' close in the store language.
 it('reports panels name their close buttons in the store language', () => {
 	mockPhone = false;
 	render(
-		<>
+		<DialogLabelsProvider labels={{ close: 'common.close', cancel: 'common.cancel' }}>
 			<ClosurePanel row={{ id: 'c', sync_status: 'synced' } as ClosureRow} onClose={jest.fn()} />
 			<DetailPanel />
-		</>
+		</DialogLabelsProvider>
 	);
-	expect(screen.getByTestId('closure-close')).toHaveAttribute('aria-label', 'common.close');
+	expect(screen.getByTestId('closure-panel-close')).toHaveAttribute('aria-label', 'common.close');
 	expect(screen.getByTestId('detail-panel-close')).toHaveAttribute('aria-label', 'common.close');
 });

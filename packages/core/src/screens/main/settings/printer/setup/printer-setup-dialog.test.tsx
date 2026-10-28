@@ -133,9 +133,7 @@ it('pre-selects the sole printer, prints on the button, then asks with three ans
 	for (const key of ['setup_ok', 'setup_short', 'setup_nothing']) {
 		const button = renderer.root.findByProps({ testID: `printer-setup-${key}` });
 		expect(button.props.disabled).toBe(false);
-		expect(button.findByType('Text' as React.ElementType).props.children).toBe(
-			t(`settings.${key}`)
-		);
+		expect(button.props.children).toBe(t(`settings.${key}`));
 	}
 	expect(renderer.root.findByProps({ testID: 'printer-setup-footer' }).props.children).toBe(
 		'Test page 1 · 48 characters per line'

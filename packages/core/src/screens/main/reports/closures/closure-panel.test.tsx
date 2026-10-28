@@ -127,21 +127,23 @@ jest.mock('@wcpos/components/dialog', () => ({
 		children,
 		side,
 		portalHost,
+		testID,
 		closeButtonProps,
-		style,
 	}: {
 		children: React.ReactNode;
 		side: string;
 		portalHost?: string;
-		style?: React.CSSProperties;
-		closeButtonProps?: { testID?: string; onPress?: () => void };
+		testID?: string;
+		closeButtonProps?: { testID?: string };
 	}) => (
-		<div data-testid={`dialog-${side}`} data-host={portalHost} style={style}>
-			{children}
-			<button data-testid={closeButtonProps?.testID} onClick={closeButtonProps?.onPress} />
+		<div data-testid={`dialog-${side}`} data-host={portalHost}>
+			<div data-testid={testID}>{children}</div>
+			<button data-testid={closeButtonProps?.testID ?? `${testID}-close`} />
 		</div>
 	),
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: require('react-native').Text,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('@wcpos/components/select', () => {
 	const C = React.createContext({
@@ -394,38 +396,22 @@ it('hosts the tablet panel in Reports with a full-width document and close actio
 	render(<ClosurePanel row={row} onClose={close} />);
 	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
-	expect(screen.getByTestId('closure-close')).toBeTruthy();
+	expect(screen.getByTestId('closure-panel-close')).toBeTruthy();
 	expect(screen.queryByTestId('closure-back')).toBeNull();
 });
 
-// Revert: restore the boxed Dialog content or let it position the panel from the centre.
-it('bounds the tablet panel beneath the bar with a contained body and separate footer', () => {
+// Revert: put the footer's buttons back in the scrolling body, or the record action in the intent.
+it('pins the tablet footer outside the body, Recount as the record and Reprint beside it', () => {
 	mockPhone = false;
-	const previous = { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
-	Object.assign(window, { innerWidth: 1024, innerHeight: 768 });
-	try {
-		render(<ClosurePanel row={row} onClose={() => {}} />);
-		expect(screen.getByTestId('dialog-right').style.display).toBe('contents');
-		const panel = screen.getByTestId('closure-panel');
-		expect(panel.style.position).toBe('absolute');
-		expect(panel.style.right).toBe('0px');
-		expect(panel.style.top).toBe('0px');
-		expect(panel.style.bottom).toBe('0px');
-		expect(panel.style.left).toBe('auto');
-		expect(panel.style.transform).toBe('none');
-		expect(panel.style.width).toBe('480px');
-		// The Reports host spans viewport minus rail; the panel cannot exceed that host.
-		expect(panel.style.maxWidth).toBe('100%');
-		const body = screen.getByTestId('closure-panel-body');
-		expect(getComputedStyle(body).overflowX).toBe('hidden');
-		expect(getComputedStyle(body.firstElementChild as HTMLElement).overflowX).toBe('hidden');
-		const footer = screen.getByTestId('closure-panel-footer');
-		expect(body.contains(footer)).toBe(false);
-		expect(panel.contains(footer)).toBe(true);
-		expect(footer.contains(screen.getByTestId('closure-reprint'))).toBe(true);
-	} finally {
-		Object.assign(window, previous);
-	}
+	render(<ClosurePanel row={row} onClose={() => {}} />);
+	const panel = screen.getByTestId('closure-panel');
+	const body = screen.getByTestId('closure-panel-body');
+	expect(getComputedStyle(body.firstElementChild as HTMLElement).overflowX).toBe('hidden');
+	const footer = screen.getByTestId('closure-panel-footer');
+	expect(body.contains(footer)).toBe(false);
+	expect(panel.contains(footer)).toBe(true);
+	expect(footer.contains(screen.getByTestId('closure-reprint'))).toBe(true);
+	expect(footer.contains(screen.getByTestId('closure-recount'))).toBe(true);
 });
 
 // Revert: call the document context without row.store_id or coerce null to undefined.
@@ -571,10 +557,10 @@ it.each(['loading', 'failed', 'refreshing'])(
 	}
 );
 
-// Revert: retain only p-4 below the phone actions, ignoring the home indicator.
-it('pads the phone footer above the bottom safe area', () => {
+// Revert: let the phone page run under the home indicator.
+it('pads the phone page above the bottom safe area', () => {
 	render(<ClosurePanel row={row} onClose={jest.fn()} />);
-	expect(screen.getByTestId('closure-panel-footer').style.paddingBottom).toBe('50px');
+	expect(screen.getByTestId('closure-panel').style.paddingBottom).toBe('34px');
 });
 
 // Revert: only schedule refetch, or complete onSaved before its refreshed snapshot write finishes.

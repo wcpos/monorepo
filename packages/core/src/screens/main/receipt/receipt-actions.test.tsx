@@ -18,6 +18,7 @@ jest.mock('@rn-primitives/dialog', () =>
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	OverlayShell: ({ children }: React.PropsWithChildren) => children,
 	useOverlay: () => ({ presentation: 'center' }),
+	useOverlayPresentation: () => 'center',
 	useSheetInset: () => undefined,
 	OVERLAY_MOTION: { center: {} },
 	isWeb: true,

@@ -22,19 +22,21 @@ jest.mock('@wcpos/components/dialog', () => {
 		),
 		DialogContent: ({
 			children,
-			closeButtonProps,
+			testID,
 			side,
 			portalHost,
 		}: React.PropsWithChildren<{
-			closeButtonProps: { testID: string };
+			testID: string;
 			side: string;
 			portalHost: string;
 		}>) => (
 			<div data-testid="dialog-shell" data-side={side} data-host={portalHost}>
-				{children}
-				<button data-testid={closeButtonProps.testID} onClick={React.useContext(Close)} />
+				<div data-testid={testID}>{children}</div>
+				<button data-testid={`${testID}-close`} onClick={React.useContext(Close)} />
 			</div>
 		),
+		DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+		DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	};
 });
 jest.mock('@wcpos/components/table', () => {

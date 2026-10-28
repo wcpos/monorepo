@@ -22,6 +22,7 @@ import {
 	OVERLAY_MOTION,
 	OverlayShell,
 	useOverlay,
+	useOverlayPresentation,
 	useSheetInset,
 } from '../lib/overlay';
 import { usePortalContainer } from '../lib/portal-container';
@@ -300,7 +301,8 @@ export function DialogFooter({
 	size = 'default',
 	testID,
 }: DialogFooterProps): React.JSX.Element {
-	const { presentation } = useOverlay();
+	// Outside a shell (a Reports panel's phone page) the footer is a page's: ruled above.
+	const presentation = useOverlayPresentation();
 	const phone = useIsPhone();
 	const labels = useDialogLabels();
 	const alternatives = [secondary ?? []].flat().filter(isButton);

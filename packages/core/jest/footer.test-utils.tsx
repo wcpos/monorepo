@@ -32,9 +32,10 @@ export function DialogFooter({
 	close,
 	aside,
 	size = 'default',
+	testID,
 }: DialogFooterProps) {
 	const closeProps = typeof close === 'object' ? close : {};
-	return (
+	const buttons = (
 		<>
 			{aside}
 			{[destructive, record]
@@ -56,6 +57,7 @@ export function DialogFooter({
 				.map((action) => actionButton(action, size))}
 		</>
 	);
+	return testID ? <div data-testid={testID}>{buttons}</div> : buttons;
 }
 
 export function AlertDialogFooter({ confirm, cancel = true }: AlertDialogFooterProps) {

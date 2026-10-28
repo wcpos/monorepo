@@ -16,6 +16,7 @@ import {
 import { EASE_BEAT, STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import type { ReadonlyClosureDocument } from '@wcpos/query/register-session';
 
 import { formatClosureDate } from '../../../../services/register-session/closure-document';
@@ -87,9 +88,8 @@ export function ClosureSheet({
 					<Animated.View
 						// Decision 29: the stamp lands on the shared overshoot.
 						entering={ZoomIn.duration(STAMP).easing(EASE_BEAT).reduceMotion(ReduceMotion.System)}
-						className="bg-success/15 size-11 items-center justify-center rounded-full"
 					>
-						<Icon name="check" className="text-success" />
+						<ToneDisc tone="ok" size="sm" />
 					</Animated.View>
 					<View className="flex-1 gap-1">
 						<DialogTitle testID="closure-title">

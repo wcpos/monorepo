@@ -201,6 +201,7 @@ it('leads with the status and one identity line, no big total; the store only wh
 
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	useOverlay: () => ({ presentation: 'right' }),
+	useOverlayPresentation: () => 'right',
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 it('makes Re-open the only primary and groups Sync with Delete', () => {
