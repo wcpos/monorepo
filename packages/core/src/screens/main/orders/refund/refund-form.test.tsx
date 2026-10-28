@@ -231,8 +231,12 @@ describe('RefundOrderForm', () => {
 
 		render(<RefundOrderForm order={order} />);
 
-		await waitFor(() => expect(screen.getByText(/common.total: €155.00/)).toBeInTheDocument());
-		expect(screen.getByText(/orders.previously_refunded: -€10.00/)).toBeInTheDocument();
+		await waitFor(() =>
+			expect(screen.getByTestId('refund-order-total').textContent).toBe('common.total€155.00')
+		);
+		expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+			'orders.previously_refunded-€10.00'
+		);
 		await waitFor(() =>
 			expect(
 				screen.getByLabelText('orders.refund_to_original_method:Stripe Terminal')
@@ -374,7 +378,9 @@ describe('RefundOrderForm', () => {
 		render(<RefundOrderForm order={order} />);
 
 		await waitFor(() =>
-			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€25.00'
+			)
 		);
 	});
 
@@ -395,7 +401,9 @@ describe('RefundOrderForm', () => {
 		render(<RefundOrderForm order={order} />);
 		// The fetched history total proves the refund details have loaded, so the submit is live.
 		await waitFor(() =>
-			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€25.00'
+			)
 		);
 		const processLabel = () =>
 			within(screen.getByTestId('process-refund-button')).getByText('orders.process_refund');
