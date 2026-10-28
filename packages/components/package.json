@@ -23,6 +23,7 @@
     "./docs-link": "./src/docs-link/index.tsx",
     "./dnd": "./src/dnd/index.ts",
     "./dropdown-menu": "./src/dropdown-menu/index.tsx",
+    "./edge-surface": "./src/edge-surface/index.tsx",
     "./editable-field": "./src/editable-field/index.tsx",
     "./empty-state": "./src/empty-state/index.tsx",
     "./error-boundary": "./src/error-boundary/index.tsx",

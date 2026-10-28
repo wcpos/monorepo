@@ -1,15 +1,16 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { Card } from '@wcpos/components/card';
+import { EdgeSurface, useEdgeInsets } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useGround } from '@wcpos/components/lib/ground';
 
 export type AreaPageMode = 'scroll' | 'fill';
+
+const BOTTOM = ['bottom'] as const;
 
 /**
  * A page of a navigation area (Settings, Store health): ONE card on the page ground, its
@@ -33,7 +34,8 @@ export function AreaPage({
 	mode?: AreaPageMode;
 	children: React.ReactNode;
 }) {
-	const insets = useSafeAreaInsets();
+	// The last control on a page sits above the home indicator, never on it.
+	const bottomInset = useEdgeInsets(BOTTOM);
 	// The ground's gutter around the card (`useGround`), on every side: the same gutter the list
 	// pages give their search, chips and card, 16 at a phone's screen edge. The 20/24 verticals
 	// and the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's
@@ -55,19 +57,14 @@ export function AreaPage({
 
 	if (mode === 'fill') {
 		return (
-			<View
-				testID={testID}
-				className="min-h-0 flex-1"
-				// The last control on a page sits above the home indicator, never on it.
-				style={{ paddingBottom: insets.bottom }}
-			>
+			<EdgeSurface testID={testID} edges={BOTTOM} className="min-h-0 flex-1">
 				<View className={`min-h-0 flex-1 ${padding}`}>
 					<Card className="mx-auto min-h-0 w-full max-w-4xl flex-1 overflow-hidden">
 						{heading}
 						<View className="border-border border-t-hairline min-h-0 flex-1 p-4">{body}</View>
 					</Card>
 				</View>
-			</View>
+			</EdgeSurface>
 		);
 	}
 
@@ -75,9 +72,9 @@ export function AreaPage({
 		<ScrollView
 			testID={testID}
 			className="flex-1"
-			// The last control on a page sits above the home indicator, never on it; the page
-			// gutter under the card is the page padding's, so only the inset is added here.
-			contentContainerStyle={{ paddingBottom: insets.bottom }}
+			// The page scrolls under the home indicator; the gutter under the card is the page
+			// padding's, so only the inset is added here.
+			contentContainerStyle={bottomInset}
 		>
 			<View className={`mx-auto w-full max-w-4xl ${padding}`}>
 				<Card className="overflow-hidden">

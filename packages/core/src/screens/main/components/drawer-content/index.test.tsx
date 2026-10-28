@@ -36,9 +36,11 @@ jest.mock('expo-router/drawer', () => ({
 		className?: string;
 		importantForAccessibility?: string;
 		accessibilityElementsHidden?: boolean;
+		contentContainerStyle?: object;
 	}) => (
 		<div
 			data-testid="drawer-scroll"
+			data-content-style={JSON.stringify(props.contentContainerStyle)}
 			data-panel={props.testID}
 			data-class={props.className}
 			data-important={props.importantForAccessibility}
@@ -220,6 +222,20 @@ it('puts the avatar on the rail and the bell in the front drawer', () => {
 	render(<Drawer presentation="front" />);
 	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
 	expect(screen.getByTestId('bell')).toBeTruthy();
+});
+
+// The panel insets its items by the dense-strip gutter, 8 at Regular, on both presentations,
+// and the items carry no margin of their own (CODING_STANDARDS § Gutters).
+it.each(['rail', 'front'] as const)('insets the %s items from its own sides', (presentation) => {
+	mockSpacing = undefined;
+	render(<Drawer presentation={presentation} />);
+	expect(JSON.parse(scroll().dataset.contentStyle!)).toMatchObject({
+		paddingTop: 0,
+		paddingBottom: 0,
+		paddingStart: 8,
+		paddingEnd: 8,
+	});
+	expect(item('orders').parentElement?.className ?? '').not.toContain('mx-2');
 });
 
 it('renders with no visibility provider either', () => {

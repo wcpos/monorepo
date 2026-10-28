@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { Dialog, DialogContent } from '@wcpos/components/dialog';
+import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { useIsPhone } from '@wcpos/components/lib/device';
+
+const BOTTOM = ['bottom'] as const;
 
 /** A Reports panel: a side panel hosted in Reports, on a phone a page in its place (closures ledger 30). */
 export function ReportPanel({
@@ -14,12 +15,11 @@ export function ReportPanel({
 	children,
 }: React.PropsWithChildren<{ testID: string; wide?: boolean; onClose: () => void }>) {
 	const phone = useIsPhone();
-	const { bottom } = useSafeAreaInsets();
 	if (phone)
 		return (
-			<View testID={testID} className="bg-card min-h-0 flex-1" style={{ paddingBottom: bottom }}>
+			<EdgeSurface testID={testID} edges={BOTTOM} className="bg-card min-h-0 flex-1">
 				<View className="min-h-0 flex-1 gap-4 py-4">{children}</View>
-			</View>
+			</EdgeSurface>
 		);
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>

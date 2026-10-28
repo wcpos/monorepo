@@ -37,7 +37,7 @@ it('draws Products and Cart, marks the active tab and hands a press back', () =>
 	expect(labels()).toEqual(expect.arrayContaining(['common.products', 'pos_cart.tab_cart']));
 	expect(tab('pos-tab-cart').props.selected).toBe(true);
 	expect(tab('pos-tab-products').props.selected).toBe(false);
-	expect(tab('pos-tab-bar').props.style).toEqual({ paddingBottom: 28 });
+	expect(tab('pos-tab-bar').props.edges).toEqual(['bottom']);
 	act(() => tab('pos-tab-products').props.onPress());
 	expect(onSelect).toHaveBeenCalledWith('products');
 });

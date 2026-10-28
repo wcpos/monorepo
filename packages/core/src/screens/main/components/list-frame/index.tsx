@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
@@ -37,6 +36,9 @@ const GUARDS: Record<ListPageKey, React.ComponentType<{ children: React.ReactNod
 	coupons: withProAccess(PassThrough, 'coupons'),
 };
 
+const BOTTOM = ['bottom'] as const;
+const NONE = [] as const;
+
 /**
  * The shell a record list page stands in (Products, Orders, Customers, Coupons): the ground,
  * the bottom inset, the bar, then the page's column. `pro` wraps everything under the bar in
@@ -55,21 +57,23 @@ export function ListPage({
 	bar: React.ReactNode;
 	/** The Pro page key: the guard covers what is under the bar. */
 	pro?: ListPageKey;
-	/** Pads the bottom safe-area inset (default); `false` in a column that pads it already. */
+	/**
+	 * The page touches the bottom edge (default); `false` above the phone till's tab bar, which
+	 * pads the home indicator in its own colour. A column that pads it already needs nothing.
+	 */
 	insetBottom?: boolean;
 	children: React.ReactNode;
 }) {
-	const { bottom } = useSafeAreaInsets();
 	const Guard = pro ? GUARDS[pro] : PassThrough;
 	return (
-		<View
+		<EdgeSurface
 			testID={testID}
+			edges={insetBottom ? BOTTOM : NONE}
 			className="bg-background flex-1"
-			style={insetBottom && bottom ? { paddingBottom: bottom } : undefined}
 		>
 			{bar}
 			<Guard>{children}</Guard>
-		</View>
+		</EdgeSurface>
 	);
 }
 

@@ -4,8 +4,9 @@ import { StyleSheet, View } from 'react-native';
 // SDK 56: expo-router vendors react-navigation; @react-navigation/drawer is no longer a dependency.
 import { DrawerContentScrollView, getDrawerStatusFromState } from 'expo-router/drawer';
 import { CommonActions, DrawerActions } from 'expo-router/react-navigation';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useEdgeInsets } from '@wcpos/components/edge-surface';
+import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { NavItem } from '@wcpos/components/nav-item';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -19,6 +20,8 @@ import { CashierEntry } from '../cashier-entry';
 import { NotificationBell } from '../notification-bell/notification-bell';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
+
+const VERTICAL = ['top', 'bottom'] as const;
 
 type Props = DrawerContentComponentProps & {
 	/** `rail`: the wide layout's permanent icon column; `front`: the drawer that slides over. */
@@ -38,12 +41,15 @@ type Props = DrawerContentComponentProps & {
  * NOTE ON HOOKS: the navigator calls `drawerContent(props)` inside `Drawer`'s own render, so a
  * hook here can only read context from providers ABOVE `Drawer`, never the drawer-owned ones
  * (`DrawerProgressContext`, `DrawerGestureContext`). Anything that needs those has to be a
- * rendered element instead. `useSafeAreaInsets` is fine because its provider is far above.
+ * rendered element instead. The insets and the spacing unit are fine: their providers are far above.
  */
 export function DrawerContent({ presentation, icons, badges, ...props }: Props) {
 	const rail = presentation === 'rail';
 	const { state, navigation, descriptors } = props;
-	const insets = useSafeAreaInsets();
+	// The panel touches the top and bottom edges, and insets its items by the dense-strip gutter
+	// (8 at Regular; the rail is the `size-12` item plus that gutter each side), so they carry none.
+	const insets = useEdgeInsets(VERTICAL);
+	const gutter = 2 * useSpacingUnit();
 
 	// The drawer's open/closed status only exists on the navigator's state. Report it upward so
 	// the layout can take a settled-closed panel out of layout entirely (`panel-visibility.tsx`).
@@ -89,7 +95,7 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 			/>
 		);
 		return (
-			<View key={route.key} className={rail ? undefined : 'mx-2'}>
+			<View key={route.key}>
 				{rail && Platform.OS === 'web' ? (
 					<Tooltip>
 						<TooltipTrigger asChild>{item}</TooltipTrigger>
@@ -122,13 +128,12 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 				testID={rail ? 'drawer-panel-permanent' : 'drawer-panel'}
 				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
 				accessibilityElementsHidden={hideFromAssistiveTech}
+				// Every side named: the vendored view adds 4 and the insets under whatever is not.
 				contentContainerStyle={{
-					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
-					paddingLeft: 0,
-					paddingRight: 0,
-					paddingStart: 0,
-					paddingEnd: 0,
+					paddingTop: insets.paddingTop ?? 0,
+					paddingBottom: insets.paddingBottom ?? 0,
+					paddingStart: gutter,
+					paddingEnd: gutter,
 					alignItems: rail ? 'center' : undefined,
 					justifyContent: 'flex-start',
 					// flexGrow (not height: '100%') so the bottom group's auto margin still anchors when

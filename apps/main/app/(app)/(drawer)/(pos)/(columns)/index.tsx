@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
@@ -15,12 +15,11 @@ import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSPhoneTabBar } from '../../../../../components/pos-phone-tab-bar';
 import { POSProductsPane } from '../../../../../components/pos-products-pane';
 
-/**
- *
- */
+/** The phone panes sit on the ground at the top: the container pads the status bar in its colour. */
+const TOP = ['top'] as const;
+
 export default function ResizablePOSColumns() {
 	const phone = useIsPhone();
-	const { top } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
 
 	// Check if we're at a /cart route (with or without orderId)
@@ -49,7 +48,7 @@ export default function ResizablePOSColumns() {
 	// indicator in its card colour.
 	if (phone) {
 		return (
-			<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
+			<EdgeSurface testID="screen-pos" edges={TOP} className="bg-background flex-1">
 				{/* Tab content. Both panes stay MOUNTED and toggle visibility: POSProducts
 				    owns the barcode scan subscription, and the POS section owns scans
 				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
@@ -75,11 +74,11 @@ export default function ResizablePOSColumns() {
 				</View>
 				{/* The same tab bar the (tabs) navigator draws. */}
 				<POSPhoneTabBar active={activeTab} onSelect={setActiveTab} />
-			</View>
+			</EdgeSurface>
 		);
 	}
 
-	// The columns run edge to edge; each pads its own insets (EdgeColumn).
+	// The columns run edge to edge; each pads its own insets.
 	return (
 		<View testID="screen-pos" style={{ flex: 1 }}>
 			<POSColumns />

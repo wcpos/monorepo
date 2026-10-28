@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { Icon, type IconName } from '@wcpos/components/icon';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
@@ -12,8 +11,7 @@ import type { BottomTabBarProps } from 'expo-router/tabs';
 
 export type POSPhoneTab = 'products' | 'cart';
 
-/** The tab bar's own bottom padding (`py-2`), kept above the home indicator. */
-const TAB_BAR_PADDING = 8;
+const BOTTOM = ['bottom'] as const;
 
 const TABS: { tab: POSPhoneTab; icon: IconName }[] = [
 	{ tab: 'products', icon: 'gift' },
@@ -34,35 +32,32 @@ export function POSPhoneTabBar({
 	onSelect: (tab: POSPhoneTab) => void;
 }) {
 	const t = useT();
-	const { bottom } = useSafeAreaInsets();
 	const labels: Record<POSPhoneTab, string> = {
 		products: t('common.products'),
 		cart: t('pos_cart.tab_cart'),
 	};
 	return (
-		<View
-			testID="pos-tab-bar"
-			role="tablist"
-			className="border-border bg-card flex-row justify-around border-t pt-2"
-			style={{ paddingBottom: bottom + TAB_BAR_PADDING }}
-		>
-			{TABS.map(({ tab, icon }) => (
-				<PressableSurface
-					key={tab}
-					role="tab"
-					selected={active === tab}
-					wash="none"
-					testID={`pos-tab-${tab}`}
-					onPress={() => onSelect(tab)}
-					className="flex-1 items-center gap-1 py-2"
-				>
-					<Icon name={icon} variant={active === tab ? 'primary' : 'muted'} />
-					<Text variant="help" className={active === tab ? 'text-primary' : undefined}>
-						{labels[tab]}
-					</Text>
-				</PressableSurface>
-			))}
-		</View>
+		// The bar's own `py-2` sits above the home indicator, which the surface pads in its colour.
+		<EdgeSurface testID="pos-tab-bar" edges={BOTTOM} className="border-border bg-card border-t">
+			<View role="tablist" className="flex-row justify-around py-2">
+				{TABS.map(({ tab, icon }) => (
+					<PressableSurface
+						key={tab}
+						role="tab"
+						selected={active === tab}
+						wash="none"
+						testID={`pos-tab-${tab}`}
+						onPress={() => onSelect(tab)}
+						className="flex-1 items-center gap-1 py-2"
+					>
+						<Icon name={icon} variant={active === tab ? 'primary' : 'muted'} />
+						<Text variant="help" className={active === tab ? 'text-primary' : undefined}>
+							{labels[tab]}
+						</Text>
+					</PressableSurface>
+				))}
+			</View>
+		</EdgeSurface>
 	);
 }
 

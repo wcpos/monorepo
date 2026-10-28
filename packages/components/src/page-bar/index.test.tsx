@@ -5,6 +5,7 @@ import type { TextProps, ViewProps } from 'react-native';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { EdgeSurface } from '../edge-surface';
 import { DeviceScope } from '../lib/device';
 import { PageBar } from './index';
 
@@ -149,9 +150,13 @@ it.each([false, true])('draws no search row or slot without a search (phone: %s)
 	expect(screen.getByTestId('bar').children).toHaveLength(1);
 });
 
-// A bar inside a column that pads the inset itself (the POS products column's EdgeColumn).
-it('leaves the top inset to its column when insetTop is off', () => {
-	render(<PageBar testID="bar" insetTop={false} />);
+// A bar inside a column that pads the inset itself (the POS products column).
+it('leaves the top inset to a column that padded it', () => {
+	render(
+		<EdgeSurface edges={['top']}>
+			<PageBar testID="bar" />
+		</EdgeSurface>
+	);
 	expect(screen.getByTestId('bar').style.paddingTop).toBe('');
 });
 

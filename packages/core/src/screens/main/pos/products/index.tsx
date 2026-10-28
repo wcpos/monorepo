@@ -547,6 +547,7 @@ function POSProductsContent({
 	// body on its card (the table) or on the ground (the tiles), one page gutter apart. The edge
 	// facing the cart keeps no inset: the resize handle is the gutter, one page gutter wide
 	// (`@wcpos/components/lib/ground`, panels ledger line 5); the bar and the rest read the ground.
+	// Never on the bottom edge: the register column pads it, or the phone's tab bar sits there.
 	return (
 		<>
 			<ListPage
@@ -554,7 +555,6 @@ function POSProductsContent({
 				bar={
 					<ErrorBoundary>
 						<PageBar
-							insetTop={false}
 							search={
 								<ErrorBoundary>
 									<QuerySearchInput
