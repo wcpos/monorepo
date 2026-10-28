@@ -148,6 +148,10 @@ const constructs = [
 	['web:duration-200', 'duration-literal'],
 	['duration-[250ms]', 'duration-literal'],
 	['web:focus:duration-[var(--beat)]', 'duration-literal'],
+	['md:flex-row', 'breakpoint-layout'],
+	['sm:hidden', 'breakpoint-layout'],
+	['lg:w-72', 'breakpoint-layout'],
+	['web:md:-left-4', 'breakpoint-layout'],
 ];
 for (const [token, construct] of constructs) {
 	test(`class scanner catches ${token} in JSX, cn, and cva`, () => {
@@ -307,4 +311,14 @@ test('the class rules stay on the packages; the app trees get only the app rules
 		scanSource('<View className="hover:bg-card truncate" />', 'apps/main/app/x.tsx'),
 		[]
 	);
+});
+
+test('a breakpoint on type or spacing is not a layout site; the app trees get the layout rule', () => {
+	assert.deepEqual(
+		scanSource('<View className="md:text-lg sm:text-left md:gap-3 md:whitespace-normal" />', path),
+		[]
+	);
+	assert.deepEqual(scanSource('<View className="md:flex-row" />', 'apps/main/app/x.tsx'), [
+		'apps/main/app/x.tsx:1:18:breakpoint-layout',
+	]);
 });
