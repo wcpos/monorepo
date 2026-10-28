@@ -17,7 +17,6 @@ export type TileProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimme
 	/** A count on its pill under the label (a denomination's pieces), `<testID>-badge`. */
 	badge?: number;
 	className?: string;
-	/** Above the title: an icon, or a label of the caller's own. */
 	children?: React.ReactNode;
 	testID?: string;
 };

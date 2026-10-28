@@ -18,7 +18,6 @@ export type KeypadKey = {
 	text?: string;
 	icon?: IconName;
 	variant?: 'bad' | 'primary';
-	/** Cells wide, fractions allowed so fewer keys fill a row; 1 when unset. */
 	span?: number;
 	/** A quick key: lit (`true`) while its value is the draft. */
 	on?: boolean;
@@ -26,7 +25,6 @@ export type KeypadKey = {
 	testID?: string;
 };
 
-/** Every keypad's digits, 1 2 3 · 4 5 6 · 7 8 9. */
 export const DIGIT_ROWS: KeypadKey[][] = ['123', '456', '789'].map((row) =>
 	[...row].map((digit) => ({ name: digit, label: digit }))
 );
@@ -40,12 +38,13 @@ export function decimalRow(separator: string | undefined, backspace: string): Ke
 	];
 }
 
-/** THE key face (card 17): the price keypad's phone key; `cell` sits under one panel's border. */
+/** Faces: `boxed` the grid's (ledger line 6), `key` the price keypad's phone key, `cell` a panel's. */
 const keyFace = cva('items-center justify-center', {
 	variants: {
 		face: {
 			key: 'bg-muted min-h-ctl rounded-lg active:opacity-70',
 			cell: 'web:hover:bg-muted active:bg-muted',
+			boxed: 'border-border bg-card active:bg-muted web:hover:bg-muted min-h-ctl rounded-lg border',
 		},
 		quick: { none: '', off: '', lit: 'bg-primary' },
 	},
@@ -53,12 +52,12 @@ const keyFace = cva('items-center justify-center', {
 });
 const keyText = cva('font-semibold', {
 	variants: {
-		face: { key: 'text-xl', cell: 'text-lg' },
+		face: { key: 'text-xl', cell: 'text-lg', boxed: 'text-2xl font-medium' },
 		quick: { none: '', off: 'text-primary text-sm', lit: 'text-primary-foreground text-sm' },
 	},
 });
 
-type KeyProps = KeypadKey & { face?: 'key' | 'cell'; onPress: () => void } & ViewProps;
+type KeyProps = KeypadKey & { face?: 'key' | 'cell' | 'boxed'; onPress: () => void } & ViewProps;
 
 /** One key: role, name, `keypad-key-<name>` unless the caller names it, the face. */
 export function Key({ face = 'key', name, label, text, icon, variant, on, ...props }: KeyProps) {
@@ -75,7 +74,7 @@ export function Key({ face = 'key', name, label, text, icon, variant, on, ...pro
 			className={cn(keyFace({ face, quick }), props.className)}
 		>
 			{icon ? (
-				<Icon name={icon} variant={variant} />
+				<Icon name={icon} variant={variant} size={face === 'boxed' ? 'xl' : undefined} />
 			) : (
 				<Text className={cn(keyText({ face, quick }))}>{text ?? label}</Text>
 			)}
@@ -100,6 +99,7 @@ export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...prop
 						<Key
 							key={key.name}
 							{...key}
+							face="boxed"
 							testID={key.testID ?? (testID ? `${testID}-key-${key.name}` : undefined)}
 							style={{ flex: key.span ?? 1 }}
 							className={shrink ? undefined : 'h-tile'}

@@ -242,7 +242,7 @@ function Keys({
 							) : sheet && key.name === 'done' ? (
 								<Button
 									key="done"
-									testID="numpad-done-button"
+									testID="keypad-key-done"
 									className="flex-1"
 									onPress={() => onPress('done')}
 								>
@@ -252,7 +252,6 @@ function Keys({
 								<Key
 									key={key.name}
 									{...key}
-									testID={key.testID ?? (key.name === 'done' ? 'numpad-done-button' : undefined)}
 									face={sheet && !first ? 'key' : 'cell'}
 									onPress={() => onPress(key.name)}
 									style={size(key.span)}

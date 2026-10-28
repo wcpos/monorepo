@@ -214,13 +214,13 @@ for (const [device, viewport] of Object.entries({
 						'quantity-keypad-open',
 						async () => {
 							await page.getByTestId('cart-quantity-input').first().click();
-							await expect(page.getByTestId('numpad-done-button')).toBeVisible();
+							await expect(page.getByTestId('keypad-key-done')).toBeVisible();
 						},
 						async () => {
 							// Done commits the unchanged value; on the phone the numpad is a sheet Escape
 							// does not dismiss, and its scrim would block every state after it.
-							await page.getByTestId('numpad-done-button').click();
-							await expect(page.getByTestId('numpad-done-button')).toBeHidden();
+							await page.getByTestId('keypad-key-done').click();
+							await expect(page.getByTestId('keypad-key-done')).toBeHidden();
 						}
 					);
 					await state('order-sheet-open', () => openOrderSheet(page), escape);

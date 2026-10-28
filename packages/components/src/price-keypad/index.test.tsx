@@ -95,7 +95,7 @@ it('rests as the formatted price and opens on a press, with every key named', as
 		'aria-label',
 		'Delete last digit'
 	);
-	expect(screen.getByTestId('numpad-done-button')).toHaveAttribute('aria-label', 'Done');
+	expect(screen.getByTestId('keypad-key-done')).toHaveAttribute('aria-label', 'Done');
 	const quick = screen.getByTestId('cart-price-discount-10');
 	expect(quick).toHaveAttribute('aria-label', 'Discount (10%)');
 	expect(quick).toHaveTextContent('−10%');
@@ -104,7 +104,7 @@ it('rests as the formatted price and opens on a press, with every key named', as
 it('seven rows: display, quick keys, three of digits, separator 0 ⌫, ✓; no quick row without discounts', async () => {
 	await open();
 	expect(panelNode()!.children).toHaveLength(7);
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	document.body.innerHTML = '';
 	await open({ discounts: [] });
 	expect(panelNode()!.children).toHaveLength(6);
@@ -119,12 +119,12 @@ it('draws three quick keys at most', async () => {
 it('fewer quick keys stretch to fill the row, as ✓ fills its own', async () => {
 	await open({ discounts: [10] });
 	expect(screen.getByTestId('cart-price-discount-10')).toHaveStyle({ width: '192px' });
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	document.body.innerHTML = '';
 	await open({ discounts: [5, 10] });
 	expect(screen.getByTestId('cart-price-discount-5')).toHaveStyle({ width: '96px' });
 	expect(screen.getByTestId('cart-price-discount-10')).toHaveStyle({ width: '96px' });
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	document.body.innerHTML = '';
 	await open();
 	expect(screen.getByTestId('cart-price-discount-15')).toHaveStyle({ width: '64px' });
@@ -137,7 +137,7 @@ it('typing replaces the price, and ✓ commits it', async () => {
 	await press('keypad-key-5');
 	expect(shown()).toBe('4.5');
 	expect(onChange).not.toHaveBeenCalled();
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledTimes(1);
 	expect(onChange).toHaveBeenCalledWith(4.5);
 	expect(isOpen()).toBe(false);
@@ -149,7 +149,7 @@ it('a quick key shows the derivation and the discounted price, and ✓ commits i
 	expect(shown()).toBe('£2.88');
 	expect(display()).toContain('£3.20 −10 %');
 	expect(screen.getByTestId('cart-price-discount-10')).toHaveAttribute('aria-pressed', 'true');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(2.88);
 });
 
@@ -159,7 +159,7 @@ it('the lit key pressed again shows the stored price, and ✓ writes nothing', a
 	await press('cart-price-discount-10');
 	expect(shown()).toBe('£3.20');
 	expect(display()).not.toContain('−10 %');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -169,14 +169,14 @@ it('a digit after a quick key starts fresh', async () => {
 	await press('keypad-key-2');
 	expect(shown()).toBe('2');
 	expect(screen.getByTestId('cart-price-discount-5')).toHaveAttribute('aria-pressed', 'false');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(2);
 });
 
 it('0 is a price: a free line commits', async () => {
 	await open();
 	await press('keypad-key-0');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(0);
 });
 
@@ -205,7 +205,7 @@ it('the decimal key types the store separator, once', async () => {
 	await press('keypad-key-decimal');
 	await press('keypad-key-5');
 	expect(shown()).toBe('1,5');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(1.5);
 });
 
@@ -213,7 +213,7 @@ it("a discount rounds to the currency's places", async () => {
 	await open({ decimals: 0 });
 	await press('cart-price-discount-15');
 	expect(shown()).toBe('£3.00');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(3);
 });
 
@@ -233,7 +233,7 @@ it('no decimal key for a currency without places, and the physical separator is 
 
 it('opened and closed with ✓, nothing pressed: nothing is written', async () => {
 	await open();
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -247,14 +247,14 @@ it('opened and pressed outside, nothing pressed: nothing is written', async () =
 it('typing exactly the stored price writes nothing', async () => {
 	await open();
 	for (const key of ['3', 'decimal', '2']) await press(`keypad-key-${key}`);
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).not.toHaveBeenCalled();
 });
 
 it('a lone decimal press is not typing: a stray tap never zeroes the line', async () => {
 	await open();
 	await press('keypad-key-decimal');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -275,7 +275,7 @@ it('grows down from the price, and up when the panel would leave the window', as
 	await open();
 	const panel = () => screen.getByTestId('price-keypad-value').closest('[data-grow]');
 	expect(panel()).toHaveAttribute('data-grow', 'down');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 
 	rect.mockReturnValue({ top: window.innerHeight - 200, height: 44 } as DOMRect);
 	await press('cart-price');
@@ -304,9 +304,9 @@ it('in a window it fits neither way, it opens the way with more room', async () 
 
 it('on a phone it is the sheet, with Done across the last row', async () => {
 	await open({}, true);
-	expect(screen.getByTestId('numpad-done-button')).toHaveTextContent('Done');
+	expect(screen.getByTestId('keypad-key-done')).toHaveTextContent('Done');
 	await press('cart-price-discount-5');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(3.04);
 });
 
@@ -336,18 +336,18 @@ describe('a blank price (a product not on sale)', () => {
 
 	it('✓ with nothing typed writes nothing', async () => {
 		await blank();
-		await press('numpad-done-button');
+		await press('keypad-key-done');
 		expect(onChange).not.toHaveBeenCalled();
 	});
 
 	it('typing writes the typed number, 0 included', async () => {
 		await blank();
 		await press('keypad-key-0');
-		await press('numpad-done-button');
+		await press('keypad-key-done');
 		expect(onChange).toHaveBeenCalledWith(0);
 		await press('cart-price');
 		await press('keypad-key-4');
-		await press('numpad-done-button');
+		await press('keypad-key-done');
 		expect(onChange).toHaveBeenLastCalledWith(4);
 	});
 });

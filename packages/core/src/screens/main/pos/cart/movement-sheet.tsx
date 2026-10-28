@@ -154,8 +154,7 @@ export function MovementSheet({
 		drawer: holds,
 		after: AFTER_MARK,
 	}).split(AFTER_MARK);
-	// The store's separator and places, as every keypad: the key shows the separator and the state
-	// keeps a point (`normalizeAmount` reads a comma before three digits as a thousands separator).
+	// The store's separator and places; the state keeps a point (`normalizeAmount` reads `1,500` as 1500).
 	const { store } = useAppState();
 	const separator = (useDocField(store, (value) => value.price_decimal_sep) as string) || '.';
 	const places = Number(useDocField(store, (value) => value.price_num_decimals) ?? 2);

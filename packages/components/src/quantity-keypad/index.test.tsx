@@ -88,7 +88,7 @@ it('opens on a press, with every key named and carrying its testID', async () =>
 		'aria-label',
 		'Delete last digit'
 	);
-	expect(screen.getByTestId('numpad-done-button')).toHaveAttribute('aria-label', 'Done');
+	expect(screen.getByTestId('keypad-key-done')).toHaveAttribute('aria-label', 'Done');
 	expect(screen.getByTestId('keypad-key-decimal')).toHaveAttribute('aria-label', '.');
 });
 
@@ -101,7 +101,7 @@ it('six rows: the stepper, three of digits, separator 0 ⌫, and ✓ across the 
 			node.getAttribute('data-testid')
 		);
 	expect(ids(rows[4])).toEqual(['keypad-key-decimal', 'keypad-key-0', 'keypad-key-backspace']);
-	expect(ids(rows[5])).toEqual(['numpad-done-button']);
+	expect(ids(rows[5])).toEqual(['keypad-key-done']);
 });
 
 it('the decimal key is labelled with the store separator and types a fraction once', async () => {
@@ -112,7 +112,7 @@ it('the decimal key is labelled with the store separator and types a fraction on
 	await press('keypad-key-decimal');
 	await press('keypad-key-5');
 	expect(shown()).toBe('1,5');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(1.5);
 });
 
@@ -144,7 +144,7 @@ it('typing 1 2 replaces the number, and ✓ commits 12', async () => {
 	await press('keypad-key-2');
 	expect(screen.getByTestId('quantity-keypad-value')).toHaveTextContent('12');
 	expect(onChange).not.toHaveBeenCalled();
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledTimes(1);
 	expect(onChange).toHaveBeenCalledWith(12);
 	expect(isOpen()).toBe(false);
@@ -184,7 +184,7 @@ it('a press outside commits what was typed: typing replaced the number', async (
 it('a lone 0 commits nothing', async () => {
 	await open({ value: 3 });
 	await press('keypad-key-0');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -194,7 +194,7 @@ it('grows down from the box, and up when the panel would leave the window', asyn
 	await open();
 	const panel = () => screen.getByTestId('quantity-keypad-value').closest('[data-grow]');
 	expect(panel()).toHaveAttribute('data-grow', 'down');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 
 	rect.mockReturnValue({ top: window.innerHeight - 100, height: 36 } as DOMRect);
 	await press('cart-quantity-input');
@@ -202,7 +202,7 @@ it('grows down from the box, and up when the panel would leave the window', asyn
 	// Keys above in their usual order, ✓ under them, the stepper row last, over the box.
 	const rows = Array.from(panelNode()!.children);
 	expect(rows[0].querySelector('[data-testid="keypad-key-1"]')).not.toBeNull();
-	expect(rows[rows.length - 2].querySelector('[data-testid="numpad-done-button"]')).not.toBeNull();
+	expect(rows[rows.length - 2].querySelector('[data-testid="keypad-key-done"]')).not.toBeNull();
 	expect(rows[rows.length - 1].querySelector('[data-testid="keypad-key-decrease"]')).not.toBeNull();
 	expect(
 		rows[rows.length - 1].querySelector('[data-testid="quantity-keypad-value"]')
@@ -217,9 +217,9 @@ it('disabled: nothing opens', async () => {
 
 it('on a phone it is the sheet, with Done in ✓’s place', async () => {
 	await open({ value: 2 }, true);
-	expect(screen.getByTestId('numpad-done-button')).toHaveTextContent('Done');
+	expect(screen.getByTestId('keypad-key-done')).toHaveTextContent('Done');
 	await press('keypad-key-5');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange).toHaveBeenCalledWith(5);
 });
 
@@ -249,7 +249,7 @@ it('a typed number equal to the stored one still commits after a step', async ()
 	await open({ value: 3 });
 	await press('keypad-key-increase'); // 4 committed, the store has not caught up
 	await press('keypad-key-3');
-	await press('numpad-done-button');
+	await press('keypad-key-done');
 	expect(onChange.mock.calls).toEqual([[4], [3]]);
 });
 
@@ -412,7 +412,7 @@ describe('without onRemove, a count (stock)', () => {
 	it('a typed 0 commits', async () => {
 		await count({ value: 4 });
 		await press('keypad-key-0');
-		await press('numpad-done-button');
+		await press('keypad-key-done');
 		expect(onChange).toHaveBeenCalledWith(0);
 	});
 
@@ -423,7 +423,7 @@ describe('without onRemove, a count (stock)', () => {
 		panelKey('.');
 		for (const digit of '234567') await press(`keypad-key-${digit}`);
 		expect(shown()).toBe('123456');
-		await press('numpad-done-button');
+		await press('keypad-key-done');
 		expect(onChange).toHaveBeenCalledWith(123456);
 	});
 });

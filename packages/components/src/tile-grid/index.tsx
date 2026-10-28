@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { cn } from '../lib/utils';
 
-/** Items in rows of `columns`; the last row may be short. */
 export function chunk<T>(items: readonly T[], columns: number): T[][] {
 	return Array.from({ length: Math.ceil(items.length / columns) }, (_, row) =>
 		items.slice(row * columns, (row + 1) * columns)
