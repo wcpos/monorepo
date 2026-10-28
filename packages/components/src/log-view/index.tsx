@@ -113,7 +113,9 @@ export function LogView({
 					)}
 				>
 					{typeof title === 'string' ? (
-						<Text className="text-muted-foreground text-xs font-semibold">{title}</Text>
+						<Text variant="help" className="font-semibold">
+							{title}
+						</Text>
 					) : (
 						(title ?? <View />)
 					)}

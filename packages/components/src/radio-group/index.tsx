@@ -125,7 +125,7 @@ function RadioGroupOption({
 					{label}
 				</Label>
 				{description ? (
-					<Text nativeID={descriptionID} variant="key" className={descriptionClassName}>
+					<Text nativeID={descriptionID} variant="help" className={descriptionClassName}>
 						{description}
 					</Text>
 				) : null}

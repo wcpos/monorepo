@@ -82,7 +82,9 @@ function FormLabel({
 function FormDescription({ className, ...props }: TextProps) {
 	const { formDescriptionNativeID } = useFormField();
 
-	return <Text nativeID={formDescriptionNativeID} variant="key" className={className} {...props} />;
+	return (
+		<Text nativeID={formDescriptionNativeID} variant="help" className={className} {...props} />
+	);
 }
 
 function FormMessage({
