@@ -23,7 +23,6 @@
 	"packages/components/src/select/index.tsx": 1,
 	"packages/components/src/step-progress/index.tsx": 2,
 	"packages/components/src/tile/gallery.tsx": 1,
-	"packages/components/src/tree-combobox/tree-combobox.tsx": 1,
 	"packages/core/src/extensions/hotkeys/help-sheet.tsx": 1,
 	"packages/core/src/screens/auth/components/add-user-button.tsx": 1,
 	"packages/core/src/screens/auth/components/site.tsx": 1,
