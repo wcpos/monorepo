@@ -36,8 +36,8 @@ jest.mock('@wcpos/query/record-readers', () => ({
 jest.mock('../../../components/product/category-select', () => ({
 	CategoryTreeLoader: () => null,
 }));
-jest.mock('../../../components/product/tag-select', () => ({
-	TagSelect: ({
+jest.mock('../../../components/product/collection-search', () => ({
+	CollectionSelect: ({
 		onValueChange,
 	}: {
 		onValueChange: (value: { value: string; label: string }) => void;
@@ -45,7 +45,6 @@ jest.mock('../../../components/product/tag-select', () => ({
 		<button data-testid="pick-tag" onClick={() => onValueChange({ value: '5', label: 'Term 5' })} />
 	),
 }));
-jest.mock('../../../components/product/brand-select', () => ({ BrandSelect: () => null }));
 
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({

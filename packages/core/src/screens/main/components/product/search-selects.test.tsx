@@ -5,9 +5,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { BrandSearch } from './brand-select';
-import { CategorySearch } from './category-select';
-import { TagSearch } from './tag-select';
+import { CollectionSearch } from './collection-search';
 
 // The search-select handle as a reader sees it (one snapshot, driven with `set`).
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
@@ -100,25 +98,24 @@ jest.mock('@wcpos/core/contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-describe('product filter search selects', () => {
+describe('CollectionSearch', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it.each([
-		['category', CategorySearch],
-		['tag', TagSearch],
-		['brand', BrandSearch],
-	] as const)('binds %s search through useSearchSelect', (collection, Search) => {
-		render(<Search />);
+	it.each(['tag', 'brand'] as const)(
+		'binds the %s search through useSearchSelect',
+		(collection) => {
+			render(<CollectionSearch collection={collection} />);
 
-		expect(mockUseSearchSelect).toHaveBeenCalledWith(collection);
-		fireEvent.change(screen.getByRole('textbox'), { target: { value: 'summer' } });
-		expect(setSearch).toHaveBeenCalledWith('summer');
-	});
+			expect(mockUseSearchSelect).toHaveBeenCalledWith(collection);
+			fireEvent.change(screen.getByRole('textbox'), { target: { value: 'summer' } });
+			expect(setSearch).toHaveBeenCalledWith('summer');
+		}
+	);
 
-	it('builds a category option value and label from the engine record payload', () => {
-		render(<CategorySearch />);
+	it("builds an option's value and label from the engine record payload", () => {
+		render(<CollectionSearch collection="tag" />);
 
 		expect(screen.getByTestId('search-option').getAttribute('data-value')).toBe('42');
-		expect(screen.getByTestId('search-option').getAttribute('data-label')).toBe('category name');
+		expect(screen.getByTestId('search-option').getAttribute('data-label')).toBe('tag name');
 	});
 });

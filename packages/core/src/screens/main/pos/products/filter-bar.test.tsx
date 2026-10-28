@@ -103,11 +103,12 @@ jest.mock('@wcpos/components/select', () => ({
 	SelectContent: () => null,
 	SelectItem: () => null,
 }));
+jest.mock('../../components/product/collection-search', () => ({
+	CollectionSearch: () => null,
+}));
 jest.mock('../../components/product/category-select', () => ({
 	CategoryTreeLoader: () => null,
 }));
-jest.mock('../../components/product/tag-select', () => ({ TagSearch: () => null }));
-jest.mock('../../components/product/brand-select', () => ({ BrandSearch: () => null }));
 function State() {
 	const actions = useQueryStateActions();
 	return (

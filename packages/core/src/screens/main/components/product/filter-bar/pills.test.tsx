@@ -124,9 +124,8 @@ jest.mock('../../../hooks/use-stock-status-label', () => ({
 jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: () => ({ value: [] }),
 }));
-jest.mock('../brand-select', () => ({ BrandSearch: () => null }));
+jest.mock('../collection-search', () => ({ CollectionSearch: () => null }));
 jest.mock('../category-select', () => ({ CategoryTreeLoader: () => null }));
-jest.mock('../tag-select', () => ({ TagSearch: () => null }));
 
 function ProductFilterProbe() {
 	const filters = useQueryState<'products', FiltersOf<'products'>>((state) => state.filters);

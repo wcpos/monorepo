@@ -44,8 +44,7 @@ import { ChipRow } from '../../../components/chip-row';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { TagSearch } from '../../../components/product/tag-select';
-import { BrandSearch } from '../../../components/product/brand-select';
+import { CollectionSearch } from '../../../components/product/collection-search';
 import {
 	type FilterBarItem,
 	getFilterPillIcon,
@@ -377,7 +376,9 @@ function SetChip({
 			}}
 		>
 			<ComboboxTrigger asChild>{chip}</ComboboxTrigger>
-			<ComboboxContent>{field === 'tags' ? <TagSearch /> : <BrandSearch />}</ComboboxContent>
+			<ComboboxContent>
+				<CollectionSearch collection={field === 'tags' ? 'tag' : 'brand'} />
+			</ComboboxContent>
 		</Combobox>
 	);
 }
