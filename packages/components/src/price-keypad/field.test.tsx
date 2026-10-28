@@ -3,15 +3,21 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
+import { fieldBox } from '../field-box';
 import { PriceKeypad } from './index';
 
 // The classes are what is under test, and react-native-web keeps them off the DOM: the
 // trigger and the display row render as plain elements carrying their className.
-jest.mock('react-native', () => ({
-	View: ({ className, children }: { className?: string; children?: React.ReactNode }) => (
-		<div className={className}>{children}</div>
-	),
-}));
+jest.mock('react-native', () => {
+	function Box({ className, testID, children }: Record<string, any>) {
+		return (
+			<div className={className} data-testid={testID}>
+				{children}
+			</div>
+		);
+	}
+	return { View: Box, Pressable: Box };
+});
 jest.mock('../button', () => ({
 	Button: ({
 		className,
@@ -62,26 +68,30 @@ const labels = {
 	discount: (percent: number) => `Discount (${percent}%)`,
 	discountKey: (percent: number) => `−${percent}%`,
 };
-const renderKeypad = (field?: boolean) =>
+const renderKeypad = (props: { field?: boolean; invalid?: boolean } = {}) =>
 	render(
 		<PriceKeypad
 			testID="price"
 			value={10}
-			field={field}
 			format={String}
 			labels={labels}
 			onChange={jest.fn()}
+			{...props}
 		/>
 	);
 const displayRow = () => screen.getByTestId('price-keypad-value').parentElement!;
 
-it("a field rests outlined with the Input's padding, its display row inset to match", () => {
-	renderKeypad(true);
+it("a field rests as the field box with the Input's padding, its display row inset to match", () => {
+	renderKeypad({ field: true });
 	const trigger = screen.getByTestId('price');
-	expect(trigger.getAttribute('data-variant')).toBe('outline');
+	expect(trigger.className).toContain(fieldBox({ state: 'rest' }));
 	expect(trigger.className).toContain('px-3');
-	expect(trigger.querySelector('span')!.className).toContain('font-normal');
 	expect(displayRow().className).toContain('px-3');
+});
+
+it('an invalid field draws the field box in its invalid state', () => {
+	renderKeypad({ field: true, invalid: true });
+	expect(screen.getByTestId('price').className).toContain(fieldBox({ state: 'invalid' }));
 });
 
 it('a bare price rests as ghost text, the tint past it, its display row inset as little', () => {

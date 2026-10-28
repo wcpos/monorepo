@@ -61,10 +61,10 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
 				// web QuantityInput renders a button and ignores this.
 				inputClassName="border-0 px-1 text-center tabular-nums"
-				// `web:px-2` only: the native Input already pads its field (px-1 above), and a
-				// second padding on the 36-point box clipped two-digit quantities.
+				// `web:px-2` only: the native Input already pads its field (px-1 above). The box's
+				// height is the field box's own, a control tall, as every other field.
 				className={cn(
-					'web:px-2 h-9 min-w-9 items-center justify-center tabular-nums',
+					'web:px-2 min-w-9 items-center justify-center tabular-nums',
 					overStock && 'border-attention bg-attention/15'
 				)}
 				textClassName="font-semibold"

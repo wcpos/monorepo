@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { Pressable } from 'react-native';
 
-import { Button, ButtonText } from '../button';
+import { fieldBox } from '../field-box';
 import {
 	closingRows,
 	DIGIT_ROWS,
@@ -191,18 +192,22 @@ export function QuantityKeypad({
 			onClose={onClose}
 			onOpenChange={onOpenChange}
 		>
-			<Button
+			<Pressable
 				testID={testID}
-				variant="outline"
+				role="button"
 				disabled={disabled}
 				nativeID={labelledBy && ownID}
 				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
 				aria-describedby={describedBy}
 				aria-invalid={invalid || undefined}
-				className={cn('min-w-10 items-start', className)}
+				className={cn(
+					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
+					'max-w-full min-w-10 items-start justify-center px-3',
+					className
+				)}
 			>
-				<ButtonText className={textClassName}>{format(value)}</ButtonText>
-			</Button>
+				<Text className={cn('tabular-nums', textClassName)}>{format(value)}</Text>
+			</Pressable>
 		</GrowKeypad>
 	);
 }
