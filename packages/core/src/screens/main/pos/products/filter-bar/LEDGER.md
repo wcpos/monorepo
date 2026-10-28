@@ -24,6 +24,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 13. Long-press / right-click opens a chip menu: quick filters offer Edit, Customise filter bar, then Remove from bar (last, destructive); built-ins offer Hide from bar and Customise filter bar. The Customise chip is gone — evidence: this commit; `filter-bar.test.tsx` — platform: all (right-click: web).
 
 14. The editor is nine fixed kind rows in `CONDITION_FIELDS` order, each reading its value or a muted placeholder; a choice kind opens its chooser anchored to the row, while a typed/searched kind expands inline. Order by is a Select of `NAMED_ORDERS`; a stored sort outside the table keeps its fallback label and value until changed (`getNamedOrderLabel`). A new filter opens on `QUICK_FILTER_STARTERS` plus Start from scratch — evidence: this commit; `quick-filter-editor.test.tsx`; `filter-bar-layout.test.ts` — platform: all.
+15. Every word the filter bar shows for a kind, a product type, a named order or a starter is a literal `t()` call — `conditionWords(t)` in `filter-bar-layout.ts`, each `NAMED_ORDERS` entry's `label(t)`, each starter's `title(t)` / `line(t)` — never a key built from an id: the string extractor reads no other form — evidence: `packages/eslint/tests/i18n-literal-fence.test.mjs`; slice W4-G (2026-10-28) — platform: all.
 
 ## Query-handle compat removal (added 2026-10-13)
 

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { DeviceRow } from '@wcpos/components/device-row';
 import {
 	Select,
 	SelectContent,
@@ -9,8 +10,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
-import { StatusBadge } from '@wcpos/components/status-badge';
-import { Text } from '@wcpos/components/text';
 import type { PrinterProfile } from '@wcpos/printer';
 import type { ActiveTemplate } from '@wcpos/query';
 
@@ -44,15 +43,11 @@ export function TemplateRow({
 	const templateId = String(template.id);
 
 	return (
-		<View
+		<DeviceRow
 			testID={`template-row-${templateId}`}
-			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2"
+			name={template.title}
+			tag={templateTypeLabel(template, t('settings.template_type_thermal'))}
 		>
-			<Text className="flex-1 text-sm font-medium">{template.title}</Text>
-			<StatusBadge
-				variant="muted"
-				label={templateTypeLabel(template, t('settings.template_type_thermal'))}
-			/>
 			<View testID={`template-row-${templateId}-printer-select`}>
 				<Select
 					value={{ value: currentValue, label: selectedLabel }}
@@ -81,6 +76,6 @@ export function TemplateRow({
 					</SelectContent>
 				</Select>
 			</View>
-		</View>
+		</DeviceRow>
 	);
 }

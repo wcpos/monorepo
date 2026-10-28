@@ -23,7 +23,7 @@ import {
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { type KVEntry, KVGrid } from '../health/components';
 import { useRecordEditRoute } from '../health/record-edit-route';
 import { useRecordLabel } from '../health/use-record-label';
 import { translateErrorAction } from './generated/error-actions.generated';
@@ -32,6 +32,7 @@ import { translateEventDescription } from './generated/event-titles.generated';
 import {
 	buildLogEntryReport,
 	eventTypeOf,
+	type LevelKind,
 	type LogRow,
 	recordRefOf,
 	rowDetailData,

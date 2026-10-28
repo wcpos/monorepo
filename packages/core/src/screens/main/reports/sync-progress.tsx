@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
@@ -53,16 +54,7 @@ export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comp
 							total: progress.total,
 						})}
 			</Text>
-			{percent === null ? null : (
-				<View className="bg-muted h-1 w-full overflow-hidden rounded-full">
-					<View
-						testID="reports-sync-progress-bar"
-						accessibilityValue={{ now: percent, min: 0, max: 100 }}
-						className="bg-primary h-full rounded-full"
-						style={{ width: `${percent}%` }}
-					/>
-				</View>
-			)}
+			{percent === null ? null : <Progress testID="reports-sync-progress-bar" value={percent} />}
 		</View>
 	);
 }

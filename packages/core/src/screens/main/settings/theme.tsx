@@ -27,9 +27,9 @@ import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
 	name: string;
-	labelKey: string;
+	label: string;
 	icon: IconName;
-	descriptionKey: string;
+	description: string;
 };
 
 /**
@@ -58,8 +58,8 @@ function ThemeOptionButton({
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
 			className="min-h-40 gap-2 p-3"
-			title={t(option.labelKey)}
-			sub={t(option.descriptionKey)}
+			title={option.label}
+			sub={option.description}
 		>
 			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
 			<Icon
@@ -88,9 +88,7 @@ function ThemeGrid({
 }) {
 	const { theme, hasAdaptiveThemes } = useUniwind();
 	const activeTheme = hasAdaptiveThemes ? 'system' : theme;
-	const activeThemeLabel = t(
-		themeOptions.find((option) => option.name === activeTheme)?.labelKey ?? activeTheme
-	);
+	const activeThemeLabel = themeOptions.find((o) => o.name === activeTheme)?.label ?? activeTheme;
 
 	// The status line keys the grid, and the grid's Saved mark sits on that line.
 	return (
@@ -143,6 +141,12 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 		},
 		[t, store, markSaved]
 	);
+	const labels: Record<(typeof SCALE_OPTIONS)[number], string> = {
+		auto: t('settings.scale.auto'),
+		compact: t('settings.scale.compact'),
+		regular: t('settings.scale.regular'),
+		spacious: t('settings.scale.spacious'),
+	};
 
 	return (
 		<PropertyRow label={t('settings.scale')} help={t('settings.scale.description')} name="scale">
@@ -150,7 +154,7 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 				segments={
 					SCALE_OPTIONS.map((option) => ({
 						value: option,
-						label: t(`settings.scale.${option}`),
+						label: labels[option],
 						testID: `settings-scale-${option}`,
 					})) as [Segment, Segment, Segment, Segment]
 				}
@@ -181,6 +185,16 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
 	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
+	const labels: Record<IconSetId, string> = {
+		fontawesome: t('settings.icons.fontawesome'),
+		tabler: t('settings.icons.tabler'),
+		'tabler-2': t('settings.icons.tabler-2'),
+		hugeicons: t('settings.icons.hugeicons'),
+		lucide: t('settings.icons.lucide'),
+		phosphor: t('settings.icons.phosphor'),
+		iconoir: t('settings.icons.iconoir'),
+		solar: t('settings.icons.solar'),
+	};
 
 	const handleIconsChange = React.useCallback(
 		async (value: IconSetId) => {
@@ -213,7 +227,7 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 						key={id}
 						value={id}
 						testID={`settings-icons-${id}`}
-						label={t(`settings.icons.${id}`)}
+						label={labels[id]}
 						className="items-center py-2"
 						labelClassName="text-sm font-medium"
 						// One line at every width: radio, label and a 160 px strip fit a phone.
@@ -261,42 +275,42 @@ function ThemeSettingsContent() {
 		() => [
 			{
 				name: 'system',
-				labelKey: 'settings.theme.system',
+				label: t('settings.theme.system'),
 				icon: 'desktop',
-				descriptionKey: 'settings.theme.system_description',
+				description: t('settings.theme.system_description'),
 			},
 			{
 				name: 'light',
-				labelKey: 'settings.theme.light',
+				label: t('settings.theme.light'),
 				icon: 'sun',
-				descriptionKey: 'settings.theme.light_description',
+				description: t('settings.theme.light_description'),
 			},
 			{
 				name: 'dark',
-				labelKey: 'settings.theme.dark',
+				label: t('settings.theme.dark'),
 				icon: 'moon',
-				descriptionKey: 'settings.theme.dark_description',
+				description: t('settings.theme.dark_description'),
 			},
 			{
 				name: 'ocean',
-				labelKey: 'settings.theme.ocean',
+				label: t('settings.theme.ocean'),
 				icon: 'wave',
-				descriptionKey: 'settings.theme.ocean_description',
+				description: t('settings.theme.ocean_description'),
 			},
 			{
 				name: 'sunset',
-				labelKey: 'settings.theme.sunset',
+				label: t('settings.theme.sunset'),
 				icon: 'sunset',
-				descriptionKey: 'settings.theme.sunset_description',
+				description: t('settings.theme.sunset_description'),
 			},
 			{
 				name: 'monochrome',
-				labelKey: 'settings.theme.monochrome',
+				label: t('settings.theme.monochrome'),
 				icon: 'contrast',
-				descriptionKey: 'settings.theme.monochrome_description',
+				description: t('settings.theme.monochrome_description'),
 			},
 		],
-		[]
+		[t]
 	);
 
 	/**

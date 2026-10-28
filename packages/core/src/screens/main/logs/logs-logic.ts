@@ -1,6 +1,10 @@
 import { logRecordRef } from '@wcpos/query/store-local';
 
-import type { LevelKind } from '../health/components/level-indicator';
+/**
+ * Display kind for a log row. Derived, not stored: `action` is a row with an
+ * actor, `sync` is the sync domain, the rest are the record's level.
+ */
+export type LevelKind = 'info' | 'warn' | 'error' | 'action' | 'sync' | 'debug';
 
 /**
  * The plain-data shape of a log row as the ledger consumes it (schema v2,

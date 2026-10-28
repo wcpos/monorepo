@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 
 type Stat = { label: string; value: string; testID: string };
@@ -84,12 +85,7 @@ export function ShareBar({
 				</Text>
 				<Text className="font-semibold tabular-nums">{value}</Text>
 			</View>
-			<View className="bg-muted h-1 overflow-hidden rounded-md">
-				<View
-					className="bg-primary h-full"
-					style={{ width: `${Math.max(0.02, Math.min(1, share)) * 100}%` }}
-				/>
-			</View>
+			<Progress value={Math.max(0.02, Math.min(1, share)) * 100} />
 			<Text className="text-muted-foreground text-sm">{note}</Text>
 		</View>
 	);

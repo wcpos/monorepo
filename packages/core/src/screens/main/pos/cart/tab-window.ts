@@ -23,15 +23,14 @@ export function centredOffset({
 
 export function rowOverflows({
 	stripWidth,
-	plusWidth,
 	contentWidth,
 }: {
 	stripWidth: number;
-	plusWidth: number;
 	contentWidth: number;
 }): boolean {
-	// Never reserve the tray here: its appearance must not change the fits decision.
-	return stripWidth > 0 && contentWidth > stripWidth - plusWidth;
+	// Reserve the widest + cell so selecting the blank cart cannot toggle the tray.
+	// Never reserve the tray itself: its appearance must not change the fits decision.
+	return stripWidth > 0 && contentWidth > stripWidth - NEW_TAB_WIDTH;
 }
 
 export function snapOffsets({

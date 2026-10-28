@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { Card } from '@wcpos/components/card';
 import { Icon } from '@wcpos/components/icon';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
@@ -21,7 +22,7 @@ export function ReportCard({
 }>) {
 	const Head = onOpen ? Pressable : View;
 	return (
-		<View testID={testID} className="bg-card flex-1 gap-3 rounded-md border p-4">
+		<Card testID={testID} padding="body" className="flex-1 gap-3">
 			<Head
 				className={`flex-row items-center justify-between gap-3 ${onOpen ? 'min-h-11 active:opacity-70' : ''}`}
 				{...(onOpen
@@ -41,7 +42,7 @@ export function ReportCard({
 			</Head>
 			{head}
 			{children}
-		</View>
+		</Card>
 	);
 }
 export function CardSkeleton({ testID, name }: { testID: string; name: string }) {

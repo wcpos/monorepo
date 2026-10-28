@@ -8,6 +8,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -362,7 +363,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		</View>
 	);
 	return (
-		<View testID="reports-till" className="bg-card gap-3 rounded-md border px-4 py-3">
+		<Card testID="reports-till" padding="body" className="gap-3">
 			{phone ? (
 				<>
 					{title}
@@ -387,6 +388,6 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				</Text>
 			)}
 			{phone && actions}
-		</View>
+		</Card>
 	);
 }

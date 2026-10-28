@@ -39,6 +39,10 @@ jest.mock('@wcpos/query', () => ({
 		select(record),
 }));
 
+// The notice's icon and docs link pull uniwind and expo-linking into Jest; this suite reads its title.
+jest.mock('@wcpos/components/notice', () => ({
+	Notice: ({ title }: { title: string }) => <span>{title}</span>,
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, onPress }: any) => <button onClick={onPress}>{children}</button>,
 	ButtonText: ({ children }: any) => <span>{children}</span>,

@@ -19,20 +19,25 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { EASE, INDETERMINATE } from '../lib/motion';
+import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 
 export function Progress({
 	className,
 	value,
 	sharedValue,
-	indicatorClassName,
+	indicatorClassName: indicatorClass,
 	indeterminate,
+	tone,
 	...props
 }: ProgressPrimitive.RootProps & {
 	indicatorClassName?: string;
+	/** A fixed state colour for the fill (the tone map's `dot` face); the accent when unset. */
+	tone?: Tone;
 	indeterminate?: boolean;
 	sharedValue?: SharedValue<number>;
 }) {
+	const indicatorClassName = cn(tone && TONE[tone].dot, indicatorClass);
 	return (
 		<ProgressPrimitive.Root
 			className={cn(

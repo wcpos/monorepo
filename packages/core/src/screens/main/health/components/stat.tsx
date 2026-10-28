@@ -9,7 +9,7 @@ export type StatTone = 'default' | 'good' | 'bad';
 
 const TONE_CLASS: Record<StatTone, string> = {
 	default: '',
-	good: 'text-success',
+	good: 'text-ok',
 	bad: 'text-bad',
 };
 

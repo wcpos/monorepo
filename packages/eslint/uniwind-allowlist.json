@@ -29,9 +29,6 @@
 	"packages/core/src/screens/main/components/drawer-content/version.tsx": {
 		"raw-pressable": 1
 	},
-	"packages/core/src/screens/main/components/notification-bell/notification-panel.tsx": {
-		"raw-pressable": 1
-	},
 	"packages/core/src/screens/main/components/product/variable-image.tsx": {
 		"raw-pressable": 1
 	},

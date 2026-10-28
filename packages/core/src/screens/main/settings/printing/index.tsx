@@ -7,7 +7,7 @@ import { map } from 'rxjs/operators';
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { HStack } from '@wcpos/components/hstack';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -24,7 +24,6 @@ import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { PrinterRow } from './printer-row';
-import { PrintersEmptyState } from './printers-empty-state';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE, laneAcknowledgesPrint } from './utils';
@@ -203,35 +202,45 @@ export function PrintingSettings() {
 				description={t('settings.printers_description')}
 			>
 				{isLoading ? null : !hasVisiblePrinterTargets ? (
-					<PrintersEmptyState onAddPrinter={openAddDialog} />
+					<EmptyState
+						testID="printers-empty-state"
+						kind="empty"
+						icon="print"
+						title={t('settings.no_printers_configured')}
+						description={t('settings.no_printers_body')}
+						docs={{
+							label: t('settings.setup_open_guide'),
+							href: PRINTER_DOCS_URL,
+							testID: 'printing-printer-guide-link',
+						}}
+					/>
 				) : (
-					<>
-						<View>
-							{printers.map((profile) => (
-								<PrinterRow
-									key={profile.id}
-									profile={profile}
-									isTesting={testingPrinterIds.has(profile.id)}
-									onTest={handleTestPrint}
-									onEdit={openEditDialog}
-									onSetDefault={handleSetDefault}
-									onDelete={handleDelete}
-								/>
-							))}
-						</View>
-						<HStack className="gap-2 pt-2">
-							<Button
-								variant="outline"
-								size="sm"
-								leftIcon="plus"
-								className="self-start"
-								onPress={openAddDialog}
-								testID="printing-add-printer-button"
-							>
-								<Text>{t('settings.add_printer')}</Text>
-							</Button>
-						</HStack>
-					</>
+					<View className="gap-2">
+						{printers.map((profile) => (
+							<PrinterRow
+								key={profile.id}
+								profile={profile}
+								isTesting={testingPrinterIds.has(profile.id)}
+								onTest={handleTestPrint}
+								onEdit={openEditDialog}
+								onSetDefault={handleSetDefault}
+								onDelete={handleDelete}
+							/>
+						))}
+					</View>
+				)}
+				{/* The page's add control, not the empty state's: primary until a printer exists. */}
+				{isLoading ? null : (
+					<Button
+						variant={hasVisiblePrinterTargets ? 'outline' : 'default'}
+						size="sm"
+						leftIcon="plus"
+						className="self-start"
+						onPress={openAddDialog}
+						testID="printing-add-printer-button"
+					>
+						<Text>{t('settings.add_printer')}</Text>
+					</Button>
 				)}
 				<DocsLink testID="printing-having-trouble" href={PRINTER_DOCS_URL}>
 					{t('settings.having_trouble')}
@@ -244,9 +253,9 @@ export function PrintingSettings() {
 				description={t('settings.templates_description')}
 			>
 				{templates.length === 0 ? (
-					<Text className="text-muted-foreground text-sm">{t('settings.no_templates')}</Text>
+					<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
 				) : (
-					<View>
+					<View className="gap-2">
 						{templates.map((tmpl) => {
 							const tmplId = String(tmpl.id);
 							const currentOverride = overrides.get(tmplId);

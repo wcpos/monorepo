@@ -138,8 +138,8 @@ jest.mock('../health/components', () => ({
 			{code}
 		</button>
 	),
-	LevelIndicator: () => <span />,
 }));
+jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => <span /> }));
 // The shared table pulls the pulse row's worklets into jest; the heads are plain here.
 jest.mock('@wcpos/components/table', () => {
 	function Head({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {

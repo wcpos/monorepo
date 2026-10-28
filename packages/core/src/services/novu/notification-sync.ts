@@ -49,7 +49,7 @@ function processNotificationBehavior(
 	// Get workflow ID from notification.data (set in Novu workflow config)
 	// WebSocket events don't include notification.workflow, so we use data.workflowId
 	const data = notification.data as { workflowId?: string } | undefined;
-	const workflowId = data?.workflowId;
+	const workflowId = data?.workflowId ?? notification.workflow?.identifier;
 	const severity = notification.severity as string | undefined;
 
 	// Get behavior config for this workflow
@@ -142,7 +142,7 @@ export async function syncNotificationToRxDB(
 
 	// Extract workflow ID for storage from notification.data (use null if undefined - RxDB requires string|null, not undefined)
 	const data = notification.data as { workflowId?: string } | undefined;
-	const workflowId = data?.workflowId ?? null;
+	const workflowId = data?.workflowId ?? notification.workflow?.identifier ?? null;
 
 	try {
 		// Guard against invalid createdAt - Novu v3 types show createdAt as optional string

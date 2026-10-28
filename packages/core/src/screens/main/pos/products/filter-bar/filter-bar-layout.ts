@@ -180,81 +180,96 @@ export function isQuickFilterValid(quickFilter: QuickFilter): boolean {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
-const LABEL_KEYS = {
-	categories: 'common.category',
-	tags: 'common.tag',
-	brands: 'common.brand',
-	instock: 'common.in_stock',
-	outofstock: 'common.out_of_stock',
-	onbackorder: 'common.on_backorder',
-	simple: 'common.simple',
-	variable: 'common.variable',
-	grouped: 'common.grouped',
-	external: 'common.external',
-} as const;
-const SORT_LABEL_KEYS: Record<QuickFilterSort['field'], string> = {
-	name: 'common.name',
-	sku: 'common.sku',
-	barcode: 'common.barcode',
-	type: 'common.type',
-	sortable_price: 'common.price',
-	date_created_gmt: 'common.date_created',
-	date_modified_gmt: 'common.date_modified',
-	total_sales: 'common.popularity',
-	stock_quantity: 'products.stock_quantity',
-	stock_status: 'common.stock_status',
-	menu_order: 'common.menu_order',
-};
-
 export function getQuickFilterSortLabel(field: QuickFilterSort['field'], t: Translate): string {
-	return t(SORT_LABEL_KEYS[field]);
+	return {
+		name: t('common.name'),
+		sku: t('common.sku'),
+		barcode: t('common.barcode'),
+		type: t('common.type'),
+		sortable_price: t('common.price'),
+		date_created_gmt: t('common.date_created'),
+		date_modified_gmt: t('common.date_modified'),
+		total_sales: t('common.popularity'),
+		stock_quantity: t('products.stock_quantity'),
+		stock_status: t('common.stock_status'),
+		menu_order: t('common.menu_order'),
+	}[field];
 }
 
-export const NAMED_ORDERS: { value: string; labelKey: string; sort?: QuickFilterSort }[] = [
-	{ value: 'default', labelKey: 'pos_products.order_default' },
+/** Each condition kind's name, and the name of each value a condition can hold. */
+export function conditionWords(t: Translate) {
+	const kind: Record<QuickFilterCondition['field'], string> = {
+		categories: t('pos_products.kind_categories'),
+		tags: t('pos_products.kind_tags'),
+		brands: t('pos_products.kind_brands'),
+		price: t('pos_products.kind_price'),
+		on_sale: t('pos_products.kind_on_sale'),
+		featured: t('pos_products.kind_featured'),
+		stock_status: t('pos_products.kind_stock_status'),
+		type: t('pos_products.kind_type'),
+		search: t('pos_products.kind_search'),
+	};
+	const value: Record<string, string> = {
+		categories: t('common.category'),
+		tags: t('common.tag'),
+		brands: t('common.brand'),
+		instock: t('common.in_stock'),
+		outofstock: t('common.out_of_stock'),
+		onbackorder: t('common.on_backorder'),
+		simple: t('common.simple'),
+		variable: t('common.variable'),
+		grouped: t('common.grouped'),
+		external: t('common.external'),
+	};
+	return { kind, value };
+}
+
+type NamedOrder = { value: string; label: (t: Translate) => string; sort?: QuickFilterSort };
+export const NAMED_ORDERS: NamedOrder[] = [
+	{ value: 'default', label: (t) => t('pos_products.order_default') },
 	{
 		value: 'sortable_price-asc',
-		labelKey: 'pos_products.order_price_asc',
+		label: (t) => t('pos_products.order_price_asc'),
 		sort: { field: 'sortable_price', direction: 'asc' },
 	},
 	{
 		value: 'sortable_price-desc',
-		labelKey: 'pos_products.order_price_desc',
+		label: (t) => t('pos_products.order_price_desc'),
 		sort: { field: 'sortable_price', direction: 'desc' },
 	},
 	{
 		value: 'total_sales-desc',
-		labelKey: 'pos_products.order_popularity',
+		label: (t) => t('pos_products.order_popularity'),
 		sort: { field: 'total_sales', direction: 'desc' },
 	},
 	{
 		value: 'date_created_gmt-desc',
-		labelKey: 'pos_products.order_newest',
+		label: (t) => t('pos_products.order_newest'),
 		sort: { field: 'date_created_gmt', direction: 'desc' },
 	},
 	{
 		value: 'date_modified_gmt-desc',
-		labelKey: 'pos_products.order_recently_changed',
+		label: (t) => t('pos_products.order_recently_changed'),
 		sort: { field: 'date_modified_gmt', direction: 'desc' },
 	},
 	{
 		value: 'name-asc',
-		labelKey: 'pos_products.order_name_asc',
+		label: (t) => t('pos_products.order_name_asc'),
 		sort: { field: 'name', direction: 'asc' },
 	},
 	{
 		value: 'name-desc',
-		labelKey: 'pos_products.order_name_desc',
+		label: (t) => t('pos_products.order_name_desc'),
 		sort: { field: 'name', direction: 'desc' },
 	},
 	{
 		value: 'stock_quantity-asc',
-		labelKey: 'pos_products.order_fewest_left',
+		label: (t) => t('pos_products.order_fewest_left'),
 		sort: { field: 'stock_quantity', direction: 'asc' },
 	},
 	{
 		value: 'menu_order-asc',
-		labelKey: 'pos_products.order_menu',
+		label: (t) => t('pos_products.order_menu'),
 		sort: { field: 'menu_order', direction: 'asc' },
 	},
 ];
@@ -264,7 +279,7 @@ export function getNamedOrderLabel(sort: QuickFilterSort | undefined, t: Transla
 		(order) => order.sort?.field === sort?.field && order.sort?.direction === sort?.direction
 	);
 	return named
-		? t(named.labelKey)
+		? named.label(t)
 		: `${getQuickFilterSortLabel(sort!.field, t)} ${sort!.direction === 'asc' ? '↑' : '↓'}`;
 }
 
@@ -279,7 +294,7 @@ export function describeCondition(
 		condition.field === 'brands'
 	) {
 		return t('pos_products.quick_filter_selected', {
-			label: t(LABEL_KEYS[condition.field]),
+			label: conditionWords(t).value[condition.field],
 			count: condition.value.length,
 		});
 	}
@@ -290,7 +305,7 @@ export function describeCondition(
 		return condition.value ? t('common.featured') : t('pos_products.quick_filter_not_featured');
 	}
 	if (condition.field === 'stock_status' || condition.field === 'type') {
-		return t(LABEL_KEYS[condition.value]);
+		return conditionWords(t).value[condition.value];
 	}
 	if (condition.field === 'search') {
 		return t('pos_products.quick_filter_search', { term: condition.value });

@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { decode } from 'html-entities';
 
-import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
+import { DeviceRow, DeviceRowActions, type DeviceState } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
@@ -17,8 +16,6 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { cn } from '@wcpos/components/lib/utils';
-import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
@@ -98,12 +95,12 @@ export function ReaderRow({
 	const updating = status.connection === 'updating';
 	const connecting = status.connection === 'connecting' || status.connection === 'discovering';
 	// One line of state under the name; the actions get a full-width row of their own below.
-	let line: React.ReactNode = null;
-	let lineClass = 'text-muted-foreground text-sm';
+	let line: string | null = null;
+	let lineTone: DeviceState['tone'] = 'muted';
 	let below: React.ReactNode = null;
 	if (error) {
 		line = t(ERROR_KEYS[error.kind], { message: error.message });
-		lineClass = 'text-bad text-sm';
+		lineTone = 'bad';
 	} else if (scan && found === null) line = t('settings.card_readers.looking');
 	else if (found)
 		line =
@@ -114,21 +111,10 @@ export function ReaderRow({
 					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
-		lineClass = 'text-warning-text text-sm';
+		lineTone = 'warning';
 	} else if (updating) {
 		line = t('settings.card_readers.installing');
-		below = (
-			<VStack className="gap-1 pt-1">
-				<Progress
-					testID={`reader-row-${method.id}-progress`}
-					value={status.progress == null ? undefined : Math.round(status.progress * 100)}
-					indeterminate={status.progress == null}
-				/>
-				<Text className="text-muted-foreground text-sm">
-					{t('settings.card_readers.installing_hint')}
-				</Text>
-			</VStack>
-		);
+		below = <Text variant="key">{t('settings.card_readers.installing_hint')}</Text>;
 	} else if (connecting) line = t('settings.card_readers.connecting_to', { name });
 	else if (!connected && sdkUi && reader)
 		line = t('settings.card_readers.saved_in_app', { title: method.title });
@@ -193,77 +179,40 @@ export function ReaderRow({
 		typeof method.provider_data.location_name === 'string' && method.provider_data.location_name
 			? method.provider_data.location_name
 			: null;
+	// ONE state line: what is happening wins over a held link, which wins over silence.
+	const battery = status.reader?.battery;
+	const state: DeviceState | null = line
+		? { label: line, tone: lineTone, testID: `reader-row-${method.id}-line` }
+		: connected
+			? {
+					tone: 'ok',
+					testID: `reader-row-${method.id}-status`,
+					label:
+						(reader?.transport === 'tap_to_pay'
+							? t('settings.card_readers.ready')
+							: t('settings.card_readers.connected')) +
+						(battery == null ? '' : ` · ${t('pos_checkout.reader_battery_percent', { battery })}`),
+				}
+			: null;
 	return (
-		<View
+		<DeviceRow
 			testID={`reader-row-${method.id}`}
-			className="bg-card border-border gap-3 rounded-lg border p-3"
+			icon="card"
+			busy={scan !== null && found === null}
+			name={name || method.title}
+			tag={decode(method.title)}
+			identifiers={[serial, locationName]}
+			state={state}
+			progress={
+				updating
+					? { value: status.progress == null ? undefined : Math.round(status.progress * 100) }
+					: null
+			}
 		>
-			{/* Stacked lines, never a wrap: name and provider, serial and location, then the state. */}
-			<HStack className="items-start gap-3">
-				<View
-					className={cn(
-						'size-10 items-center justify-center rounded-lg',
-						error ? 'bg-bad-bg' : connected ? 'bg-success/10' : 'bg-muted'
-					)}
-				>
-					<Icon
-						name="card"
-						variant={error ? 'bad' : connected ? 'ok' : 'muted'}
-						size="lg"
-						loading={scan !== null && found === null}
-					/>
-				</View>
-				<VStack className="flex-1 gap-0.5">
-					<HStack className="items-start gap-2">
-						<Text className="flex-1 text-lg font-semibold" numberOfLines={1}>
-							{name || method.title}
-						</Text>
-						<Badge testID={`reader-row-${method.id}-provider`} variant="muted" className="max-w-32">
-							{decode(method.title)}
-						</Badge>
-					</HStack>
-					{serial || locationName ? (
-						<HStack className="items-center gap-1.5">
-							{serial ? (
-								<Text className="text-muted-foreground shrink font-mono text-sm" numberOfLines={1}>
-									{serial}
-								</Text>
-							) : null}
-							{locationName ? (
-								<Text
-									testID={`reader-row-${method.id}-location`}
-									className="text-muted-foreground shrink text-sm"
-									numberOfLines={1}
-								>
-									{serial ? `· ${locationName}` : locationName}
-								</Text>
-							) : null}
-						</HStack>
-					) : null}
-					{connected ? (
-						<HStack testID={`reader-row-${method.id}-status`} className="items-center gap-1.5">
-							<View className="bg-success size-2 rounded-full" />
-							<Text className="text-sm">
-								{reader?.transport === 'tap_to_pay'
-									? t('settings.card_readers.ready')
-									: t('settings.card_readers.connected')}
-								{status.reader?.battery == null
-									? ''
-									: ` · ${t('pos_checkout.reader_battery_percent', { battery: status.reader.battery })}`}
-							</Text>
-						</HStack>
-					) : null}
-					{line ? (
-						<Text testID={`reader-row-${method.id}-line`} className={lineClass}>
-							{line}
-						</Text>
-					) : null}
-				</VStack>
-			</HStack>
 			{below}
 			{/* The actions are a full-width row of their own: nothing shares a line with free text. */}
 			{!scan || found === null || foundNone ? (
-				<HStack className="w-full items-center gap-2">
+				<DeviceRowActions>
 					{foundNone ? (
 						<Button
 							className="flex-1"
@@ -408,7 +357,7 @@ export function ReaderRow({
 							) : null}
 						</DropdownMenuContent>
 					</DropdownMenu>
-				</HStack>
+				</DeviceRowActions>
 			) : null}
 			{__DEV__ && devControls.length > 0 && connected ? (
 				<HStack className="flex-wrap gap-2">
@@ -433,6 +382,6 @@ export function ReaderRow({
 					))}
 				</HStack>
 			) : null}
-		</View>
+		</DeviceRow>
 	);
 }

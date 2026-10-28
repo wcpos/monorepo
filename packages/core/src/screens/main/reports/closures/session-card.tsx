@@ -6,6 +6,7 @@ import { format as formatDate } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { Card } from '@wcpos/components/card';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
@@ -112,7 +113,7 @@ function SessionCardContent({
 		}
 	};
 	return (
-		<View testID="reports-session-card" className="bg-card gap-3 rounded-md border p-4">
+		<Card testID="reports-session-card" padding="body" className="gap-3">
 			<Text className="font-semibold">
 				{binding.registerName} · {t(active ? 'reports.open' : 'reports.register_closed')}
 			</Text>
@@ -160,7 +161,7 @@ function SessionCardContent({
 					{error}
 				</Text>
 			)}
-		</View>
+		</Card>
 	);
 }
 

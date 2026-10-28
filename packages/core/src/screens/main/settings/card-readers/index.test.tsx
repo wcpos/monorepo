@@ -364,15 +364,17 @@ it('names the Terminal location when the gateway sends one', async () => {
 	];
 	const named = render(<CardReadersSettings />);
 	await flush();
-	expect(screen.getByTestId(`reader-row-${deviceMethod.id}-location`).textContent).toContain(
-		'London Shop'
+	expect(screen.getByTestId(`reader-row-${deviceMethod.id}-identifiers`).textContent).toBe(
+		'sim-approve · London Shop'
 	);
 	named.unmount();
 	// An id alone is not cashier copy: no name, no line.
 	mockMethods = [{ ...deviceMethod, provider_data: { location_id: 'tml_test' } }];
 	render(<CardReadersSettings />);
 	await flush();
-	expect(screen.queryByTestId(`reader-row-${deviceMethod.id}-location`)).toBeNull();
+	expect(screen.getByTestId(`reader-row-${deviceMethod.id}-identifiers`).textContent).toBe(
+		'sim-approve'
+	);
 });
 
 it('Cancel during a scan frees the row and drops the late result', async () => {

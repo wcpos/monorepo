@@ -5,7 +5,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
@@ -25,13 +25,14 @@ import {
 } from '../../../query';
 import { AreaPage } from '../components/navigation-area/area-page';
 import { QuerySearchInput } from '../components/query-search-input';
-import { type LevelKind, Stat, StatHeader } from '../health/components';
+import { Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
 import { LedgerFooter, LedgerPane, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
+	type LevelKind,
 	type LogPreset,
 	presetFilters,
 	shouldExtendLedger,
@@ -99,18 +100,12 @@ function StatusLine() {
 					});
 
 	return (
-		<HStack testID="logs-status-line" className="items-center gap-1.5">
-			<View
-				className={
-					lastTick?.status === 'error'
-						? 'bg-warning h-2 w-2 rounded-full'
-						: 'bg-success h-2 w-2 rounded-full'
-				}
-			/>
-			<Text className="text-muted-foreground text-xs">
-				{cadenceText ? `${watching} · ${cadenceText}` : watching}
-			</Text>
-		</HStack>
+		<StatusBadge
+			testID="logs-status-line"
+			size="caption"
+			variant={lastTick?.status === 'error' ? 'warning' : 'ok'}
+			label={cadenceText ? `${watching} · ${cadenceText}` : watching}
+		/>
 	);
 }
 

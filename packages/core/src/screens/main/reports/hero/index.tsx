@@ -6,6 +6,7 @@ import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -266,14 +267,14 @@ function Figures({
  * slow or stuck all-results request (it is the only way to a smaller range). */
 export function HeroShell({ title }: { title: React.ReactNode }) {
 	return (
-		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-4">
+		<Card testID="reports-hero-loading" padding="body" className="gap-5">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 			</View>
 			<View className="bg-muted h-12 w-64 rounded" />
 			<View className="bg-muted h-10 w-48 rounded" />
 			<View className="bg-muted h-56 w-full rounded" />
-		</View>
+		</Card>
 	);
 }
 /** The print action and its hidden document, under their own boundary: the report's cashier
@@ -431,7 +432,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	// would be wrong money.
 	if (!store) return <HeroShell title={title} />;
 	return (
-		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-4">
+		<Card testID="reports-hero" padding="body" className="gap-5">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 				<View className="flex-row items-center gap-2">
@@ -480,6 +481,6 @@ export function Hero({ title }: { title: React.ReactNode }) {
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>
-		</View>
+		</Card>
 	);
 }

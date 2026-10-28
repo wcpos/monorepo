@@ -53,6 +53,15 @@ const formatCount = (value: number) => value.toLocaleString();
  */
 export function PerformanceScreen() {
 	const t = useT();
+	const paceWords = {
+		'rate-limited': t('health.performance.pace_reason_rate_limited'),
+		'server-error': t('health.performance.pace_reason_server_error'),
+		timeout: t('health.performance.pace_reason_timeout'),
+		slow: t('health.performance.pace_reason_slow'),
+		'server-pressure': t('health.performance.pace_reason_server_pressure'),
+		elevated: t('health.performance.pace_level_elevated'),
+		high: t('health.performance.pace_level_high'),
+	};
 	const { store } = useStoreSession();
 	const status = useEngineStatus();
 
@@ -369,12 +378,12 @@ export function PerformanceScreen() {
 								: pace.kind === 'easing'
 									? t('health.performance.pace_easing', {
 											factor: pace.factor,
-											reason: t(`health.performance.pace_reason_${pace.reason.replace('-', '_')}`),
+											reason: paceWords[pace.reason],
 										})
 									: pace.reported === null
 										? t('health.performance.pace_normal')
 										: t('health.performance.pace_normal_reported_advisory', {
-												level: t(`health.performance.pace_level_${pace.reported}`),
+												level: paceWords[pace.reported],
 											})}
 						</Text>
 						{/* Three states, kept distinct. Asked and never told = a missing

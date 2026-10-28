@@ -144,6 +144,8 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The share bar pulls reanimated's worklets into Jest; no report test reads it.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
 jest.mock('@wcpos/components/calendar', () => ({ Calendar: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: jest.requireActual('react-native').Text,

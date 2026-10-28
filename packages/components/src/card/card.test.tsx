@@ -26,3 +26,14 @@ it('lets caller padding override the new default', () => {
 	expect(container.firstChild).toHaveClass('p-0');
 	expect(container.firstChild).not.toHaveClass('p-4');
 });
+
+it.each([
+	[undefined, []],
+	['row', ['p-3']],
+	['body', ['p-4']],
+] as const)('owns its inset by role (%s)', (padding, classes) => {
+	const { container } = render(<Card padding={padding} />);
+	const card = container.firstElementChild!;
+	expect(card).toHaveClass('bg-card', 'rounded-lg', ...classes);
+	if (!padding) expect(card.className).not.toMatch(/\bp-\d/);
+});
