@@ -20,7 +20,7 @@ import {
 import { PropertyList } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
-import { CurrencyInput } from '../../../../components/currency-input';
+import { FormAmountField } from '../../../../components/amount-field';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
@@ -149,12 +149,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 							control={form.control}
 							name="amount"
 							render={({ field }) => (
-								<FormInput
-									customComponent={CurrencyInput}
-									testID="edit-shipping-line-amount-input"
-									type="numeric"
-									{...field}
-								/>
+								<FormAmountField kind="money" testID="edit-shipping-line-amount-input" {...field} />
 							)}
 						/>
 					</AmountRow>

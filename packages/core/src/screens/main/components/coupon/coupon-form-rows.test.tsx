@@ -106,7 +106,10 @@ jest.mock('@wcpos/components/tooltip', () => ({}));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('./discount-amount-input', () => ({ DiscountAmountInput: () => null }));
 jest.mock('./expiry-preset-chips', () => ({ ExpiryPresetChips: () => null }));
 jest.mock('./status-select', () => ({ StatusSelect: () => null }));

@@ -66,6 +66,8 @@ export type QuantityKeypadProps = {
 	/** A form's description and validation message ids, and whether the field is invalid. */
 	describedBy?: string;
 	invalid?: boolean;
+	/** `attention`: the box marks its number (a line over stock). */
+	tone?: 'attention';
 	/** Told when the keypad opens and closes. */
 	onOpenChange?: (open: boolean) => void;
 	ref?: React.Ref<QuantityKeypadHandle>;
@@ -97,6 +99,7 @@ export function QuantityKeypad({
 	labelledBy,
 	describedBy,
 	invalid,
+	tone,
 	onOpenChange,
 	ref,
 }: QuantityKeypadProps) {
@@ -202,7 +205,7 @@ export function QuantityKeypad({
 				aria-describedby={describedBy}
 				aria-invalid={invalid || undefined}
 				className={cn(
-					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
+					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : (tone ?? 'rest') }),
 					// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
 					'active:bg-muted max-w-full min-w-10 items-start justify-center px-3',
 					className

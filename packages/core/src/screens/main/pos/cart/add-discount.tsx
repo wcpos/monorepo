@@ -5,15 +5,14 @@ import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput, FormItem } from '@wcpos/components/form';
+import { Form, FormField, FormItem } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
 import { AmountUnitToggle } from '../../components/amount-unit-toggle';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
-import { PercentInput } from '../../components/percent-input';
 import { QUICK_DISCOUNT_META_KEY, readQuickDiscountIntent } from '../hooks/quick-discount';
 import { useAddQuickDiscount } from '../hooks/use-add-quick-discount';
 
@@ -66,8 +65,9 @@ export function AddDiscount() {
 								name="amount"
 								render={({ field }) => (
 									<FormItem nativeID="discount-amount" className="flex-1">
-										<FormInput
-											customComponent={percent ? PercentInput : CurrencyInput}
+										<FormAmountField
+											kind={percent ? 'percent' : 'money'}
+											live
 											testID="discount-amount-input"
 											{...field}
 										/>

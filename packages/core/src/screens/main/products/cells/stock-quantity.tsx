@@ -8,7 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
-import { QuantityInput } from '../../components/quantity-input';
+import { AmountField } from '../../components/amount-field';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
@@ -45,13 +45,13 @@ export function StockQuantity({
 					{/* Web: the cart's quantity keypad as a count (no `onRemove`: − stops at 0, a
 					    typed 0 commits), whole numbers as WooCommerce stores stock; the box keeps
 					    the field's width and padding so the row does not reflow. */}
-					<QuantityInput
+					<AmountField
+						kind="count"
 						testID="stock-quantity-input"
-						value={stockQuantity ?? 0}
-						decimals={0}
+						value={stockQuantity}
 						className="web:px-3 w-full"
 						// Whether it was saved: the keypad takes a refused − or + back.
-						onChangeText={(stock_quantity) =>
+						onCommit={(stock_quantity) =>
 							commit?.({ document: product, changes: { stock_quantity } })
 						}
 						disabled={disabled || !manageStock}

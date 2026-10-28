@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -14,7 +13,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
+import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
@@ -42,8 +41,7 @@ import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
-import { CountInput } from '../../components/count-input';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { useT } from '../../../../contexts/translations';
 import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
@@ -57,12 +55,6 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { isStorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
-/**
- * The refund's quantity and amount grow into the cart's keypads on web (Paul 2026-10-27). Native
- * keeps the plain fields that write as they are typed: the typed number fields write on blur,
- * and a tap on Process refund does not reliably blur a native field first.
- */
-const WEB_KEYPAD = Platform.OS === 'web';
 
 type OrderPayload = EngineRecord<'orders'>['payload'];
 type RefundDetail = NonNullable<OrderPayload['refunds']>[number] & {
@@ -136,13 +128,6 @@ export function RefundOrderForm({ order }: Props) {
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
-	// The custom amount types to the places it is validated to, which need not be the store's.
-	const RefundAmountInput = React.useMemo(() => {
-		function Input(props: React.ComponentProps<typeof CurrencyInput>) {
-			return <CurrencyInput {...props} decimals={dp} />;
-		}
-		return Input;
-	}, [dp]);
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 	const orderData = useRecordField(order, (record) => record.payload);
@@ -509,11 +494,7 @@ export function RefundOrderForm({ order }: Props) {
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
 											render={({ field: qtyField }) => (
-												<FormInput
-													customComponent={WEB_KEYPAD ? CountInput : undefined}
-													type="numeric"
-													{...qtyField}
-												/>
+												<FormAmountField kind="count" live {...qtyField} />
 											)}
 										/>
 									</TableCell>
@@ -530,8 +511,11 @@ export function RefundOrderForm({ order }: Props) {
 					control={form.control}
 					name="custom_amount"
 					render={({ field }) => (
-						<FormInput
-							customComponent={WEB_KEYPAD ? RefundAmountInput : undefined}
+						<FormAmountField
+							kind="money"
+							live
+							// Typed to the places it is validated to, which need not be the store's.
+							places={dp}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}

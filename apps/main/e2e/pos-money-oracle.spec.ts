@@ -95,7 +95,7 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
 }
 
 /**
- * Enter an amount into a `CurrencyInput` or `PercentInput`: on web, the price keypad its
+ * Enter an amount into a form's `AmountField` (money or percent): on web, the price keypad its
  * outlined field grows into (`fillKeypadField`). Type `.` for the decimal: the keypad takes
  * the store's separator or a dot (dev-free is fr_FR and shows `9,99`).
  *

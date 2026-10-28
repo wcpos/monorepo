@@ -38,7 +38,7 @@ import { QUICK_FILTER_STARTERS } from './quick-filter-starters';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { QuickFilterBarPreview } from './quick-filter-bar-preview';
 import { QuickFilterPreview } from './quick-filter-preview';
-import { CurrencyInput } from '../../../components/currency-input';
+import { AmountField } from '../../../components/amount-field';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
 import { BrandSelect } from '../../../components/product/brand-select';
 import { TagSelect } from '../../../components/product/tag-select';
@@ -72,7 +72,7 @@ const DEFAULT_ORDER = 'default';
 /**
  * A cleared, unparsable, or zero price input means "no bound".
  *
- * Zero is folded into "no bound" on purpose: the shared NumberInput emits 0 for a field
+ * Zero is folded into "no bound" on purpose: the shared AmountField commits 0 for a field
  * the cashier cleared, so a stored 0 would be a bound nobody meant (a max of 0 matches
  * nothing).
  */
@@ -303,9 +303,10 @@ function ConditionValueEditor({
 			<HStack className="flex-1 items-end">
 				<VStack className="flex-1 gap-1">
 					<Text>{t('pos_products.quick_filter_min')}</Text>
-					<CurrencyInput
+					<AmountField
+						kind="money"
 						value={condition.value.min}
-						onChangeText={(min) =>
+						onCommit={(min) =>
 							onChange({ field: 'price', value: { ...condition.value, min: priceBound(min) } })
 						}
 						testID="quick-filter-price-min"
@@ -313,9 +314,10 @@ function ConditionValueEditor({
 				</VStack>
 				<VStack className="flex-1 gap-1">
 					<Text>{t('pos_products.quick_filter_max')}</Text>
-					<CurrencyInput
+					<AmountField
+						kind="money"
 						value={condition.value.max}
-						onChangeText={(max) =>
+						onCommit={(max) =>
 							onChange({ field: 'price', value: { ...condition.value, max: priceBound(max) } })
 						}
 						testID="quick-filter-price-max"

@@ -4,8 +4,7 @@ import { View } from 'react-native';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
-import { CurrencyInput } from '../../components/currency-input';
-import { PercentInput } from '../../components/percent-input';
+import { AmountField } from '../../components/amount-field';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface DiscountAmountInputProps {
@@ -36,11 +35,12 @@ export function DiscountAmountInput({
 		<HStack className="items-center gap-2">
 			{!!before && <Text className="text-muted-foreground text-lg font-semibold">{before}</Text>}
 			<View className="flex-1">
-				{isPercent ? (
-					<PercentInput value={value} onChangeText={onChange} testID={testID} />
-				) : (
-					<CurrencyInput value={value} onChangeText={onChange} testID={testID} />
-				)}
+				<AmountField
+					kind={isPercent ? 'percent' : 'money'}
+					value={value}
+					onCommit={(next) => onChange?.(next)}
+					testID={testID}
+				/>
 			</View>
 			{!!after && <Text className="text-muted-foreground text-lg font-semibold">{after}</Text>}
 		</HStack>

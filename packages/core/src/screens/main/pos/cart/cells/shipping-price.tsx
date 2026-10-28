@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { MoneyInput } from '../../../components/money-input';
+import { AmountField } from '../../../components/amount-field';
 import { useShippingLineData } from '../../hooks/use-shipping-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -40,19 +40,18 @@ function EditableShippingPrice({ row }: CellContext<Props, 'total'>) {
 	const { updateCartLine } = useUpdateCartLine();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount } = getShippingLineData(item);
-	const { format } = useCurrentOrderCurrencyFormat();
 
 	/**
 	 *
 	 */
 	return (
-		<MoneyInput
+		<AmountField
+			kind="money"
+			look="quiet"
 			testID="cart-shipping-price"
 			value={amount}
-			format={format}
-			formatOptions={{ fixedDecimalScale: true }}
 			textClassName="text-muted-foreground text-right"
-			onChangeText={(amount) => updateCartLine('shipping_lines', uuid, { amount })}
+			onCommit={(amount) => updateCartLine('shipping_lines', uuid, { amount })}
 		/>
 	);
 }

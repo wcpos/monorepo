@@ -6,9 +6,8 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { CapabilityTooltip } from '../../components/capability-tooltip';
-import { MoneyInput } from '../../components/money-input';
+import { AmountField } from '../../components/amount-field';
 import { useProAccess } from '../../contexts/pro-access';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 /**
@@ -31,7 +30,6 @@ export function COGS({
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
-	const { format } = useCurrencyFormat();
 
 	/**
 	 *
@@ -39,12 +37,12 @@ export function COGS({
 	return (
 		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
 			{/* The cart's price (its keypad on web) without quick keys (Paul 2026-10-27). */}
-			<MoneyInput
+			<AmountField
+				kind="money"
+				look="quiet"
 				value={defined_value}
-				format={format}
-				formatOptions={{ fixedDecimalScale: true }}
 				disabled={readOnly || !canEdit}
-				onChangeText={(newValue) => {
+				onCommit={(newValue) => {
 					// Construct a plain object update (RxDB Proxy objects can't be cloned)
 					const updatedCogs = {
 						total_value: cogs?.total_value ?? 0,

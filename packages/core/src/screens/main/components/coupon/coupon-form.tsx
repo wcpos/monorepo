@@ -39,7 +39,7 @@ import {
 	toUsageLimit,
 } from './usage-limit';
 import { useT } from '../../../../contexts/translations';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../form-errors';
 import { META_DATA_DEFAULT_ROW, MetaDataForm } from '../meta-data-form';
 import { useFieldPresence } from '../use-field-presence';
@@ -114,12 +114,11 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 			control={form.control}
 			name={name}
 			render={({ field }) => (
-				<FormInput
-					customComponent={CurrencyInput}
+				<FormAmountField
+					kind="money"
 					placeholder={placeholder}
 					{...field}
 					value={field.value ?? ''}
-					onChange={field.onChange}
 				/>
 			)}
 		/>

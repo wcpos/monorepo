@@ -228,7 +228,10 @@ jest.mock('../../components/meta-data-form', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
-jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('../../components/coupon/discount-amount-input', () => ({
 	DiscountAmountInput: () => null,
 }));

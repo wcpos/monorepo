@@ -25,7 +25,7 @@ import {
 import { MISC_PRODUCT_ID } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { CategoryTreeLoader } from '../../components/product/category-select';
 import { TaxSelect } from '../../components/tax-select';
@@ -203,8 +203,9 @@ export function AddMiscProduct() {
 							name="price"
 							render={({ field }) => (
 								<FormItem nativeID="misc-product-price">
-									<FormInput
-										customComponent={CurrencyInput}
+									<FormAmountField
+										kind="money"
+										live
 										placeholder="0"
 										testID="misc-product-price-input"
 										{...field}

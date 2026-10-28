@@ -51,9 +51,15 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../../components/currency-input', () => ({ CurrencyInput: () => null }));
-jest.mock('../../../../components/number-input', () => ({ NumberInput: () => null }));
-jest.mock('../../../../components/percent-input', () => ({ PercentInput: () => null }));
+// A form's amount stands in as the form's own input mock: the rows are under test, not the field.
+jest.mock('../../../../components/amount-field', () => ({
+	AmountField: () => null,
+	// The line's amount is a number in the form: the field hands it one.
+	FormAmountField: (props: object) => {
+		const { FormInput } = jest.requireMock('@wcpos/components/form');
+		return <FormInput {...props} type="numeric" />;
+	},
+}));
 jest.mock('../../../../components/tax-select', () => ({ TaxSelect: () => null }));
 jest.mock('../../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
 jest.mock('@wcpos/components/property-row', () => ({

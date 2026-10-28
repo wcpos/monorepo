@@ -6,11 +6,11 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { MoneyInput } from '../../../components/money-input';
+import { AmountField } from '../../../components/amount-field';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
-import { PERCENT_FORMAT, PERCENT_PLACES, useNumberFormat } from '../../../hooks/use-number-format';
+import { PERCENT_FORMAT, useNumberFormat } from '../../../hooks/use-number-format';
 import { useCartTableReadOnly } from './read-only';
 
 type FeeLine = import('@wcpos/query').OrderFeeLine;
@@ -46,8 +46,6 @@ function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { updateCartLine } = useUpdateCartLine();
 	const { getFeeLineData } = useFeeLineData();
 	const { percent, amount } = getFeeLineData(item);
-	const { format } = useCurrentOrderCurrencyFormat();
-	const { format: formatNumber } = useNumberFormat(PERCENT_FORMAT);
 
 	/**
 	 * The till no longer accepts a NEW negative fee, but historical orders still carry
@@ -64,14 +62,13 @@ function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 		// The editor takes the cell beside the icon, so its field is the column's width.
 		<HStack space="xs" className="items-center self-stretch">
 			<View className="min-w-0 flex-1">
-				<MoneyInput
+				<AmountField
+					kind={percent ? 'percent' : 'money'}
+					look="quiet"
 					testID="cart-fee-price"
-					value={String(amount)}
-					format={percent ? formatNumber : format}
-					formatOptions={percent ? undefined : { fixedDecimalScale: true }}
-					decimals={percent ? PERCENT_PLACES : undefined}
+					value={amount}
 					textClassName="text-muted-foreground text-right"
-					onChangeText={onAmount}
+					onCommit={onAmount}
 				/>
 			</View>
 			{percent && <Icon name="percent" size="sm" />}

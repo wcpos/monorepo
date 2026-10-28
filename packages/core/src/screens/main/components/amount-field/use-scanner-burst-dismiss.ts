@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../contexts/app-state';
+import { useAppState } from '../../../../contexts/app-state';
 
 /**
  * A scanner burst while a keypad is open closes it, keeping the stored number. The wedge

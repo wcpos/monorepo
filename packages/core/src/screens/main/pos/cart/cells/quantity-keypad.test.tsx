@@ -24,24 +24,24 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react-native').View }));
-// The cell owns the value/id/commit/remove seam; QuantityInput owns its keypad.
-jest.mock('../../../components/quantity-input', () => ({
-	QuantityInput: ({
+// The cell owns the value/id/commit/remove seam; the amount field owns its keypad.
+jest.mock('../../../components/amount-field', () => ({
+	AmountField: ({
 		testID,
 		value,
-		onChangeText,
+		onCommit,
 		onRemove,
 		ref,
 		className,
 	}: {
 		testID: string;
 		value: number;
-		onChangeText: (value: number) => Promise<boolean>;
+		onCommit: (value: number) => Promise<boolean>;
 		onRemove: () => void;
 		ref?: React.Ref<HTMLInputElement>;
 		className?: string;
 	}) => {
-		mockOnChangeText = onChangeText;
+		mockOnChangeText = onCommit;
 		return (
 			<input
 				ref={ref}
@@ -49,7 +49,7 @@ jest.mock('../../../components/quantity-input', () => ({
 				data-testid={testID}
 				defaultValue={value}
 				onKeyDown={(event) => {
-					if (event.key === 'Enter') void onChangeText(Number(event.currentTarget.value));
+					if (event.key === 'Enter') void onCommit(Number(event.currentTarget.value));
 					if (event.key === 'Delete') onRemove();
 				}}
 			/>

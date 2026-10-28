@@ -5,62 +5,45 @@ import { render, screen } from '@testing-library/react';
 
 import { EditableAmount } from './editable-amount';
 
-const store = { price_decimal_sep: ',', price_thousand_sep: '.', price_num_decimals: 0 };
-
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: { payload: object }, select: (r: { payload: object }) => unknown) =>
 		select(record),
-	useDocField: (_doc: unknown, select: (s: typeof store) => unknown) => select(store),
 }));
-jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: {} }) }));
 jest.mock('../../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
 jest.mock('../../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({ caps: { canEditCoupons: true } }),
 }));
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (value: number) => `$${value}` }),
-}));
 jest.mock('../../components/capability-tooltip', () => ({
 	CapabilityTooltip: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../../components/money-input', () => ({
-	MoneyInput: ({
-		value,
-		format,
-		decimals,
-	}: {
-		value: string;
-		format: (value: number) => string;
-		decimals?: number;
-	}) => (
-		<span data-testid="amount" data-decimals={decimals ?? 'store'}>
-			{format(Number(value))}
-		</span>
-	),
+// The amount field owns places and format; the cell names the kind and writes the string.
+let mockOnCommit: (value: number) => void;
+jest.mock('../../components/amount-field', () => ({
+	AmountField: ({ kind, onCommit }: { kind: string; onCommit: (value: number) => void }) => {
+		mockOnCommit = onCommit;
+		return <span data-testid="amount" data-kind={kind} />;
+	},
 }));
 
 function renderAmount(discount_type: string, amount: string) {
+	const commit = jest.fn();
 	const record = { payload: { discount_type, amount } };
 	const props = {
 		row: { original: { record } },
 		column: { id: 'amount' },
-		table: { options: { meta: { commit: jest.fn() } } },
+		table: { options: { meta: { commit } } },
 	} as unknown as Parameters<typeof EditableAmount>[0];
 	render(<EditableAmount {...props} />);
-	return screen.getByTestId('amount');
+	return { amount: screen.getByTestId('amount'), commit };
 }
 
-it('a percentage coupon takes and shows hundredths, even on a store pricing to 0 places', () => {
-	const amount = renderAmount('percent', '12.5');
-	expect(amount.textContent).toBe('12,5');
-	expect(amount.getAttribute('data-decimals')).toBe('2');
+it('a percentage coupon is a percent amount, written back as WooCommerce text', () => {
+	const { amount, commit } = renderAmount('percent', '12.5');
+	expect(amount.getAttribute('data-kind')).toBe('percent');
+	mockOnCommit(12.75);
+	expect(commit).toHaveBeenCalledWith(expect.objectContaining({ changes: { amount: '12.75' } }));
 });
 
-it.each(['fixed_cart', 'fixed_product'])(
-	'a %s coupon is money, at the store currency places',
-	(type) => {
-		const amount = renderAmount(type, '10');
-		expect(amount.textContent).toBe('$10');
-		expect(amount.getAttribute('data-decimals')).toBe('store');
-	}
-);
+it.each(['fixed_cart', 'fixed_product'])('a %s coupon is money', (type) => {
+	expect(renderAmount(type, '10').amount.getAttribute('data-kind')).toBe('money');
+});
