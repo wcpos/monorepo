@@ -270,7 +270,9 @@ export function OverlaySheetPanel({
 					open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
 					'z-50'
 				)}
-				style={[inset, style]}
+				// One flat object: the scope's Slot spreads the style it is handed, and an RN array
+				// spread that way becomes `{0, 1}`, which the DOM refuses and the page goes blank.
+				style={StyleSheet.flatten([inset, style])}
 			>
 				{children}
 			</View>

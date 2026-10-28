@@ -16,6 +16,8 @@ import {
 	useSheetInset,
 } from './overlay';
 
+// Jest resolves the native stub; the web overlay mounts the Radix scope, so this harness does too.
+jest.mock('./sheet-focus-scope', () => jest.requireActual('./sheet-focus-scope.web'));
 const mockScrimProps: PressableProps[] = [];
 jest.mock('react-native', () => {
 	const actual = jest.requireActual<typeof import('react-native')>('react-native');
@@ -130,6 +132,19 @@ it('marks the phone sheet out of the scrim rule that flattens a Radix wrapper', 
 	const sheet = screen.getByTestId('sheet');
 	expect(sheet).toHaveAttribute('role', 'dialog');
 	expect(sheet).toHaveAttribute('data-sheet');
+});
+
+it('keeps the phone sheet style array through its focus scope', () => {
+	// The scope's Slot spreads the panel's style: an RN array became `{0, 1}`, the DOM refused
+	// the indexed keys and the combobox gallery pages rendered nothing (#2995, gallery shards).
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={jest.fn()} testID="m">
+			<OverlaySheetPanel testID="sheet" style={{ width: 320 }}>
+				<View />
+			</OverlaySheetPanel>
+		</OverlayShell>
+	);
+	expect(screen.getByTestId('sheet')).toHaveStyle({ width: '320px' });
 });
 
 it('provides a fallback scrim test ID', () => {
