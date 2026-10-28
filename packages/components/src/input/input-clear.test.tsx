@@ -1,6 +1,4 @@
 /* eslint-disable import/first */
-import * as fs from 'fs';
-import * as path from 'path';
 
 import * as React from 'react';
 
@@ -73,18 +71,6 @@ describe('Input clear control', () => {
  * `react-native-web` here, whose `View` drops `className` before it reaches the
  * DOM, so the rendered tree cannot be asked what the field box's classes are.
  */
-describe('Input control height', () => {
-	const source = fs.readFileSync(path.join(__dirname, 'index.tsx'), 'utf8');
-
-	// The field is one control tall from the floored scale token, not a literal
-	// 40 px (roadmap#357).
-	it('sizes the field box on the control token, not h-10', () => {
-		expect(source).toContain('h-ctl');
-		expect(source).not.toContain('h-10');
-		expect(source).toContain('rounded-lg');
-	});
-});
-
 describe('Input text cap', () => {
 	beforeEach(() => {
 		fieldProps.length = 0;

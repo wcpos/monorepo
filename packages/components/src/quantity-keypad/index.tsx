@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '../button';
+import { fieldBox } from '../field-box';
 import {
 	closingRows,
 	DIGIT_ROWS,
@@ -10,6 +10,7 @@ import {
 } from '../grow-keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
 import {
 	COUNT_DIGITS,
@@ -191,18 +192,24 @@ export function QuantityKeypad({
 			onClose={onClose}
 			onOpenChange={onOpenChange}
 		>
-			<Button
+			<PressableSurface
 				testID={testID}
-				variant="outline"
+				role="button"
+				wash="none"
 				disabled={disabled}
 				nativeID={labelledBy && ownID}
 				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
 				aria-describedby={describedBy}
 				aria-invalid={invalid || undefined}
-				className={cn('min-w-10 items-start', className)}
+				className={cn(
+					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
+					// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
+					'active:bg-muted max-w-full min-w-10 items-start justify-center px-3',
+					className
+				)}
 			>
-				<ButtonText className={textClassName}>{format(value)}</ButtonText>
-			</Button>
+				<Text className={cn('tabular-nums', textClassName)}>{format(value)}</Text>
+			</PressableSurface>
 		</GrowKeypad>
 	);
 }

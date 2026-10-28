@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '../button';
+import { fieldBox } from '../field-box';
 import {
 	closingRows,
 	DIGIT_ROWS,
@@ -11,6 +12,7 @@ import {
 } from '../grow-keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
 import { draftPrice, EMPTY_PRICE, priceEntryReducer } from './reducer';
 
@@ -146,6 +148,16 @@ export function PriceKeypad({
 		{ display: <Display shown={shown} derivation={derivation} field={field} />, span: 3 },
 	];
 
+	const trigger = {
+		testID,
+		disabled,
+		nativeID: labelledBy && ownID,
+		'aria-labelledby': labelledBy && `${labelledBy} ${ownID}`,
+		'aria-describedby': describedBy,
+		'aria-invalid': invalid || undefined,
+	};
+	const tone = cn('tabular-nums', textClassName, value === undefined && 'text-muted-foreground');
+	const text = value === undefined ? (placeholder ?? '–') : format(value);
 	return (
 		<GrowKeypad
 			ref={shell}
@@ -166,30 +178,32 @@ export function PriceKeypad({
 			onClose={onClose}
 			onOpenChange={onOpenChange}
 		>
-			<Button
-				variant={field ? 'outline' : 'ghost'}
-				testID={testID}
-				disabled={disabled}
-				nativeID={labelledBy && ownID}
-				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
-				aria-describedby={describedBy}
-				aria-invalid={invalid || undefined}
-				// The default size is the row's height. The tint reaches past the text (`-mx-1 px-1`),
-				// which `max-w-full` would cap, truncating `55,00 $` in the 56-wide price column
-				// (dev-next, 2026-10-24). A field keeps the Input's own padding.
-				className={field ? 'w-full items-end px-3' : '-mx-1 max-w-none items-end self-stretch px-1'}
-			>
-				<ButtonText
+			{field ? (
+				// A form's price rests as the field box, as an Input does.
+				<PressableSurface
+					{...trigger}
+					role="button"
+					wash="none"
 					className={cn(
-						'tabular-nums',
-						field && 'font-normal',
-						textClassName,
-						value === undefined && 'text-muted-foreground'
+						fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
+						// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
+						'active:bg-muted w-full items-end justify-center px-3'
 					)}
 				>
-					{value === undefined ? (placeholder ?? '–') : format(value)}
-				</ButtonText>
-			</Button>
+					<Text className={tone}>{text}</Text>
+				</PressableSurface>
+			) : (
+				<Button
+					variant="ghost"
+					{...trigger}
+					// The default size is the row's height. The tint reaches past the text (`-mx-1 px-1`),
+					// which `max-w-full` would cap, truncating `55,00 $` in the 56-wide price column
+					// (dev-next, 2026-10-24).
+					className="-mx-1 max-w-none items-end self-stretch px-1"
+				>
+					<ButtonText className={tone}>{text}</ButtonText>
+				</Button>
+			)}
 		</GrowKeypad>
 	);
 }

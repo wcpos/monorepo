@@ -8,6 +8,7 @@ import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
 
+import { FieldBox } from '../field-box';
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
@@ -130,30 +131,24 @@ function ComboboxValue({
 		: (value as Option<any> | undefined)?.value !== undefined;
 
 	return (
-		<View
-			className={cn(
-				'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border px-3',
-				open && 'border-ring',
-				className
-			)}
+		<FieldBox
+			state={open ? 'open' : 'rest'}
+			empty={!hasValue}
+			className={cn('w-full px-3', className)}
 		>
 			<View className="flex-1">
-				<TextClassContext.Provider
-					value={cn('text-base', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
-				>
-					{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
-					    the label shown once chosen is the label that was listed, and a term
-					    or product name arrives from WooCommerce HTML-encoded. Decoding only
-					    in the list made one widget read "Men's" open and "Men&#039;s" closed.
-					    Only on the Text path — `asChild` hands these props to a caller's
-					    component that need not understand `decodeHtml`. */}
-					<Component {...props} {...(asChild ? {} : { decodeHtml: decodeLabels })}>
-						{displayText}
-					</Component>
-				</TextClassContext.Provider>
+				{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
+				    the label shown once chosen is the label that was listed, and a term
+				    or product name arrives from WooCommerce HTML-encoded. Decoding only
+				    in the list made one widget read "Men's" open and "Men&#039;s" closed.
+				    Only on the Text path — `asChild` hands these props to a caller's
+				    component that need not understand `decodeHtml`. */}
+				<Component {...props} {...(asChild ? {} : { decodeHtml: decodeLabels })}>
+					{displayText}
+				</Component>
 			</View>
 			<Icon name="chevronDown" className="text-muted-foreground" />
-		</View>
+		</FieldBox>
 	);
 }
 

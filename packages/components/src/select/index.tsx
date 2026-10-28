@@ -3,7 +3,8 @@ import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
 
-import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
+import { Trigger as SelectPrimitiveTrigger } from './trigger';
+import { Value as SelectPrimitiveValue } from './value';
 import { toControlledSingleProps } from './controlled-value';
 import { resolveOption } from './resolve-option';
 import {
@@ -13,7 +14,7 @@ import {
 	SelectMultiTrigger,
 	SelectMultiValue,
 } from './select-multi';
-import { Button } from '../button';
+import { fieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { useLayoutWidth } from '../lib/use-layout-width';
 import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
@@ -23,7 +24,6 @@ import { webTestID } from '../lib/test-id';
 import { cn } from '../lib/utils';
 
 import type { OverlayScrimProps } from '../lib/overlay';
-import type { ButtonProps } from '../button';
 import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';
 
 /**
@@ -97,10 +97,12 @@ function SelectValue({
 	);
 }
 
+/** The closed face's layout inside the field box: the value, then the chevron at the end. */
+const SELECT_FACE = 'flex-row items-center justify-between gap-2 px-3 py-2 [&>span]:line-clamp-1';
+
 function SelectTrigger({
 	className,
 	children,
-	asChild,
 	onLayout: onLayoutProp,
 	...props
 }: SelectPrimitive.TriggerProps) {
@@ -115,50 +117,20 @@ function SelectTrigger({
 		[layoutHandler, onLayoutProp]
 	);
 
-	if (isMulti) {
-		if (asChild) {
-			return (
-				<SelectMultiTrigger
-					asChild
-					className={className}
-					onLayout={handleLayout}
-					{...(props as any)}
-				>
-					{children}
-				</SelectMultiTrigger>
-			);
-		}
-		return (
-			<SelectMultiTrigger
-				className={cn(
-					'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
-					props.disabled && 'web:cursor-not-allowed opacity-45',
-					className
-				)}
-				onLayout={handleLayout}
-				{...(props as any)}
-			>
-				<>{children}</>
-				<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
-			</SelectMultiTrigger>
-		);
-	}
-
+	const Trigger = isMulti ? SelectMultiTrigger : SingleSelectTrigger;
 	return (
-		<SelectPrimitiveTrigger
-			asChild={asChild}
-			className={cn(
-				'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-45',
-				className
-			)}
-			onLayout={handleLayout}
-			{...props}
-		>
+		<Trigger className={cn(SELECT_FACE, className)} onLayout={handleLayout} {...(props as any)}>
 			<>{children}</>
 			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
-		</SelectPrimitiveTrigger>
+		</Trigger>
 	);
+}
+
+/** The single select's field box, lit while its list is open. */
+function SingleSelectTrigger({ className, ...props }: SelectPrimitive.TriggerProps) {
+	const { open } = SelectPrimitive.useRootContext();
+	const state = props.disabled ? 'disabled' : open ? 'open' : 'rest';
+	return <SelectPrimitiveTrigger className={cn(fieldBox({ state }), className)} {...props} />;
 }
 
 /**
@@ -373,23 +345,6 @@ function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps
 	);
 }
 
-function SelectButton({ className, children, ...props }: ButtonProps) {
-	return (
-		<Button
-			className={cn(
-				'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-45',
-				className
-			)}
-			variant="ghost"
-			{...props}
-		>
-			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
-		</Button>
-	);
-}
-
 /**
  * Platform: WEB ONLY
  */
@@ -508,7 +463,6 @@ export {
 	SelectTrigger,
 	SelectValue,
 	type Option,
-	SelectButton,
 	useRootContext,
 	SelectPrimitiveTrigger,
 };
