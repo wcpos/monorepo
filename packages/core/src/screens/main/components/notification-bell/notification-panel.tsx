@@ -23,7 +23,7 @@ import { actionUrl, kindOf } from './notification-kind';
 
 const TONES = {
 	info: { tile: 'bg-info/10', icon: 'text-info' },
-	warn: { tile: 'bg-warn-bg', icon: 'text-warn-text' },
+	warn: { tile: 'bg-warning-bg', icon: 'text-warning-text' },
 	bad: { tile: 'bg-bad-bg', icon: 'text-bad' },
 	neutral: { tile: 'bg-muted', icon: 'text-foreground' },
 };
