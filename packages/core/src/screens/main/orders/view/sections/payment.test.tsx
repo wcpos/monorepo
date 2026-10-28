@@ -124,6 +124,7 @@ describe('PaymentSection', () => {
 		);
 		expect(screen.getByTestId('checkout-ledger')).not.toBeNull();
 		expect(screen.queryByTestId('checkout-ledger-remaining')).toBeNull();
+		expect(document.body.textContent).toContain('Refund$-2.00');
 	});
 
 	it('a completed order with no journal and no date_paid is settled: the method row, nothing owed', () => {
