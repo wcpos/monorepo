@@ -558,7 +558,8 @@ it('centres selections, list picks and keyboard steps, clamping the first and la
 		layout(560);
 		expect(screen.getAllByTestId(/^open-order-tab-[^-]+$/)).toHaveLength(8);
 		expect(screen.getByTestId('open-orders-count').textContent).toBe('8');
-		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 222, animated: true });
+		// The first centring is the strip finding its place on mount: it lands, never slides.
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 222, animated: false });
 		expect(screen.getByTestId('scroll-row').dataset.snaps).toBe('[0,22,122,222,322,344]');
 		fireEvent.click(screen.getByTestId('open-order-tab-d'));
 		expect(mockSetOrder).toHaveBeenLastCalledWith('d');
@@ -782,7 +783,8 @@ it('uses measured text widths and recentres when the row or active tab changes s
 		act(() => mockContentSizes.get('row')?.(740, 52));
 		expect(mockScrollTo).not.toHaveBeenCalled();
 		layout(560, [100, 200, 240, 200]);
-		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 192, animated: true });
+		// The first centring is the strip finding its place on mount: it lands, never slides.
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 192, animated: false });
 		measure('scroll-row', 400);
 		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 220, animated: true });
 		measure('open-order-tab-c', 280, 300);

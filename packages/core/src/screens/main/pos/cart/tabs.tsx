@@ -207,6 +207,9 @@ export function OpenOrderTabs({
 		contentWidth,
 	});
 	const activePosition = positions.get(activeValue);
+	// The first centring is the strip finding its place on mount, not a move the cashier made:
+	// it lands without a slide. Every later one slides (motion ruling: buttery, never a jump).
+	const settled = React.useRef(false);
 	// Selection can arrive outside the strip (list, keyboard, current-order store); sync the
 	// imperative scroll position after its measured content and viewport have settled.
 	React.useEffect(() => {
@@ -221,8 +224,9 @@ export function OpenOrderTabs({
 						tabX: activePosition!.x,
 						tabWidth: activePosition!.width,
 					}),
-			animated: !reducedMotion,
+			animated: settled.current && !reducedMotion,
 		});
+		settled.current = true;
 	}, [activeValue, activePosition, contentWidth, rowWidth, overflow, fresh, reducedMotion]);
 	// A sole tab has nothing to be selected against: no underline (board, "One cart"). The
 	// unfolded New tab counts: with no carts it is the only tab.
