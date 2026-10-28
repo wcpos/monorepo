@@ -57,21 +57,21 @@ function engineWarningText(code: EngineWarningCode, t: (key: string) => string):
  * alone reads as "1 line amount also differs" and the two figures the cashier
  * needs disappear entirely. Pinned in totals-changed-banner.test.tsx.
  */
-const ORDER_LEVEL_FIELDS: { field: string; labelKey: string }[] = [
-	{ field: 'total', labelKey: 'pos_cart.totals_disagree_field_total' },
-	{ field: 'total_tax', labelKey: 'pos_cart.totals_disagree_field_total_tax' },
-	{ field: 'cart_tax', labelKey: 'pos_cart.totals_disagree_field_cart_tax' },
-	{ field: 'discount_total', labelKey: 'pos_cart.totals_disagree_field_discount' },
-	{ field: 'discount_tax', labelKey: 'pos_cart.totals_disagree_field_discount_tax' },
-	{ field: 'shipping_total', labelKey: 'pos_cart.totals_disagree_field_shipping' },
-	{ field: 'shipping_tax', labelKey: 'pos_cart.totals_disagree_field_shipping_tax' },
+const ORDER_LEVEL_FIELDS: { field: string; label: (t: (key: string) => string) => string }[] = [
+	{ field: 'total', label: (t) => t('pos_cart.totals_disagree_field_total') },
+	{ field: 'total_tax', label: (t) => t('pos_cart.totals_disagree_field_total_tax') },
+	{ field: 'cart_tax', label: (t) => t('pos_cart.totals_disagree_field_cart_tax') },
+	{ field: 'discount_total', label: (t) => t('pos_cart.totals_disagree_field_discount') },
+	{ field: 'discount_tax', label: (t) => t('pos_cart.totals_disagree_field_discount_tax') },
+	{ field: 'shipping_total', label: (t) => t('pos_cart.totals_disagree_field_shipping') },
+	{ field: 'shipping_tax', label: (t) => t('pos_cart.totals_disagree_field_shipping_tax') },
 ];
 
 function partitionFields(fields: OrderMoneyDivergenceField[]) {
 	const byField = new Map(fields.map((entry) => [entry.field, entry]));
-	const named = ORDER_LEVEL_FIELDS.flatMap(({ field, labelKey }) => {
+	const named = ORDER_LEVEL_FIELDS.flatMap(({ field, label }) => {
 		const entry = byField.get(field);
-		return entry ? [{ ...entry, labelKey }] : [];
+		return entry ? [{ ...entry, label }] : [];
 	});
 	const namedFields = new Set(named.map((entry) => entry.field));
 	const lineLevelCount = fields.filter((entry) => !namedFields.has(entry.field)).length;
@@ -207,7 +207,7 @@ function DivergenceNotice({
 		<>
 			{named.map((entry) => (
 				<HStack key={entry.field} testID={`${testID}-field-${entry.field}`} className="gap-2">
-					<Text className="text-muted-foreground text-sm">{t(entry.labelKey)}</Text>
+					<Text className="text-muted-foreground text-sm">{entry.label(t)}</Text>
 					<Text className="text-sm font-medium">
 						{t('pos_cart.totals_disagree_change', {
 							before: entry.expected,

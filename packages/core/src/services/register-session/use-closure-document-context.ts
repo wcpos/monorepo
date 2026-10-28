@@ -4,7 +4,7 @@ import { useT } from '../../contexts/translations';
 import { languageForStoreLocale, useLocale } from '../../hooks/use-locale';
 import { useStoreDay, useViewedStore } from '../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../screens/main/hooks/use-currency-format';
-import { labelKeys } from '../../screens/main/reports/closures/document-labels';
+import { documentLabels } from '../../screens/main/reports/closures/document-labels';
 
 import type { ClosureContext } from './closure-document';
 
@@ -40,7 +40,7 @@ export function useClosureDocumentContext(storeId?: number): ClosureContext {
 		printedAt: new Date().toISOString(),
 		formatMoney: (value) => (value === '' ? '' : format(Number(value))),
 		i18n: {
-			...Object.fromEntries(Object.entries(labelKeys).map(([key, value]) => [key, t(value)])),
+			...documentLabels(t),
 			...data?.receipt_i18n,
 		},
 	};

@@ -25,7 +25,7 @@ import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { selectableReaders } from './tiles';
-import { disabledReasonKey } from './labels';
+import { disabledReasonText } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
@@ -212,6 +212,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	// Exact chip offers it whenever this leg is the whole balance, since tapping it settles.
 	const due = flow.roundingMinor !== 0 ? flow.roundedDueMinor : flow.thisPaymentMinor;
 	const exactMinor = flow.thisPaymentMinor === flow.balanceMinor ? flow.roundedDueMinor : due;
+	const exact = { amount: format(exactMinor) };
 	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
 	const noChange = Boolean(
 		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
@@ -263,16 +264,16 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							})
 						: t('pos_checkout.part_payment_left', { left: format(left) })
 					: '';
+	const entry = { amount: format(flow.entryAppliedMinor), method: method?.title };
 	const commit = method
 		? (fields
 				? t('pos_checkout.send_verb_amount', {
 						label: fields.verb.label,
 						amount: format(flow.entryAppliedMinor),
 					})
-				: t(remote ? 'pos_checkout.send_amount_to' : 'pos_checkout.take_amount_in', {
-						amount: format(flow.entryAppliedMinor),
-						method: method.title,
-					})) +
+				: remote
+					? t('pos_checkout.send_amount_to', entry)
+					: t('pos_checkout.take_amount_in', entry)) +
 			(plan && !groupDone
 				? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
 				: left > 0
@@ -301,11 +302,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				>
 					{plan
 						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
-						: t(
-								flow.balanceMinor < flow.totalMinor
-									? 'pos_checkout.remaining'
-									: 'pos_checkout.to_pay'
-							)}{' '}
+						: flow.balanceMinor < flow.totalMinor
+							? t('pos_checkout.remaining')
+							: t('pos_checkout.to_pay')}{' '}
 					<Text
 						testID="checkout-balance"
 						className={plan || flow.balanceMinor === shownMinor ? 'hidden' : 'tabular-nums'}
@@ -446,12 +445,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 										{tile.method.title}
 									</Text>
 									<Text className="text-muted-foreground flex-1 text-xs">
-										{tile.reason
-											? t(disabledReasonKey(tile.reason), {
-													title: tile.method.title,
-													...(typeof tile.reason === 'object' ? tile.reason : {}),
-												})
-											: ''}
+										{tile.reason ? disabledReasonText(tile.reason, tile.method.title, t) : ''}
 									</Text>
 								</View>
 							))
@@ -552,14 +546,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						/>
 					))}
 					<Chip
-						label={t(
+						label={
 							(givesChange && !remote) || plan
-								? 'pos_checkout.exact_amount'
+								? t('pos_checkout.exact_amount', exact)
 								: exactMinor === shownMinor
-									? 'pos_checkout.full_balance_label'
-									: 'pos_checkout.full_balance',
-							{ amount: format(exactMinor) }
-						)}
+									? t('pos_checkout.full_balance_label', exact)
+									: t('pos_checkout.full_balance', exact)
+						}
 						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 						disabled={busy}
 						onPress={() => flow.dispatch({ type: 'set-entry', minor: exactMinor })}
