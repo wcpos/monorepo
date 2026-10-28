@@ -43,20 +43,9 @@ Inputs the spec implies but no task's tests would otherwise exercise; each line'
 - Consumes: nothing new.
 - Produces: `RegisterDocument.sites[siteUuid].bindings?: Record<string, { register_id: string; register_name: string | null }>` keyed by `String(storeId ?? 0)`; the four functions keep their signatures. A bind writes `bindings[store]` **and** the legacy trio (`register_id`, `register_name`, `register_store_id`) so older readers still see the last bind; a read prefers `bindings[store]`, then the legacy trio when `register_store_id` matches or is null (today's rule). An unbind removes `bindings[store]` and clears the legacy trio only when they point at that store.
 
-- [ ] **Step 1: Write the failing tests** in `register-document.test.ts`, after `'accepts a legacy pointer until the next bind records its store'`:
+- [ ] **Step 1: Move the existing expectation, then add one test** in `register-document.test.ts`. The existing test `'rejects another store pointer after hydration without resetting the site counter'` (line 136) asserts the old one-pointer-per-site rule (`readBoundRegister(db, 'site', 1)` is null after store 2 binds). That assertion is the behaviour this task changes: rename the test `'keeps each store's pointer after a bind for another store, without resetting the site counter'` and make it expect `{ id: 'a', name: 'A' }` for store 1 after store 2 binds, `getCurrentBoundRegisterId()` following the last read, the counter still at 2, and after `unbindRegister(db, 'site', 2)` store 1 still bound. `'does not unbind a pointer another store of the site has written'` and the legacy-pointer test stay as they are. Then add:
 
 ```ts
-it('keeps one pointer per store of a site, so a store switch never drops the other store', async () => {
-	await remintRegister(db);
-	await bindRegister(db, 'site', { id: 'A', name: 'Front counter' }, 1);
-	await bindRegister(db, 'site', { id: 'B', name: 'Back office' }, 2);
-	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'A', name: 'Front counter' });
-	expect(await readBoundRegister(db, 'site', 2)).toEqual({ id: 'B', name: 'Back office' });
-	expect(getBoundRegisterId('site', 1)).toBe('A');
-	await unbindRegister(db, 'site', 2);
-	expect(await readBoundRegister(db, 'site', 2)).toBeNull();
-	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'A', name: 'Front counter' });
-});
 it('still reads a legacy single pointer for its store and nothing for another', async () => {
 	await remintRegister(db);
 	const doc = await db.getLocal('register');
@@ -72,7 +61,7 @@ it('still reads a legacy single pointer for its store and nothing for another', 
 - [ ] **Step 2: Run the file to see the two fail**
 
 Run: `NODE_OPTIONS=--max-old-space-size=4096 pnpm -C /Users/kilbot/Projects/monorepo-v2-worktrees/cashier-register-map/packages/query exec jest tests/register-session/register-document.test.ts --maxWorkers=2`
-Expected: the two new tests FAIL (store 2 reads A, or the legacy pointer is overwritten); the existing tests pass.
+Expected: the moved expectation and the new test FAIL (store 1's pointer is dropped by store 2's bind); every other test passes.
 
 - [ ] **Step 3: Implement** the `bindings` map and the three read/write rules in `register-document.ts`. `getBoundRegisterId(siteUuid, storeId)`: `site.bindings?.[String(storeId ?? 0)]?.register_id ?? <today's legacy rule>`. Keep `getCurrentBoundRegisterId` unchanged.
 
@@ -114,6 +103,8 @@ export type LiveSession = {
 	/** The opening floats, for an unacknowledged session only; null when the server owns the row. */
 	expected_float: string | null;
 	counted_float: string | null;
+	/** The row's store-local business day (`YYYY-MM-DD`); null when it came from the registers list, which has none. */
+	business_day: string | null;
 	/** This device started the count; cleared by back-to-selling and by any status that is not counting. */
 	counting_here: boolean;
 	/** When the cache was written (ISO). */
@@ -132,7 +123,7 @@ export async function markCountingHere(userDB, siteUuid: string, registerId: str
 ```ts
 it("caches a register's live session on the device and clears it", async () => {
 	await remintRegister(db);
-	const base = { opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' }, acknowledged: true, expected_float: null, counted_float: null };
+	const base = { opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: { id: 7, name: 'Demo Cashier' }, acknowledged: true, expected_float: null, counted_float: null, business_day: null };
 	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'open' });
 	expect(readLiveSession('site', 'A')).toMatchObject({ session_id: 's1', status: 'open', counting_here: false });
 	await markCountingHere(db, 'site', 'A', true);
@@ -155,7 +146,7 @@ it("records each listed register's live session on the device, and clears a clos
 			{ id: 'b', name: 'b', session: null },
 		],
 	});
-	await recordLiveSession(mockDB, mockSite, 'b', { session_id: 'old', status: 'open', opened_at_gmt: '2026-10-27T09:00:00Z', opened_by: null, acknowledged: true, expected_float: null, counted_float: null });
+	await recordLiveSession(mockDB, mockSite, 'b', { session_id: 'old', status: 'open', opened_at_gmt: '2026-10-27T09:00:00Z', opened_by: null, acknowledged: true, expected_float: null, counted_float: null, business_day: null });
 	const { result } = mount();
 	await waitFor(() => expect(result.current.loaded).toBe(true));
 	expect(readLiveSession(mockSite, 'a')).toMatchObject({ session_id: 's1', acknowledged: true, opened_by: { name: 'Demo Cashier' } });
@@ -165,7 +156,7 @@ it("records each listed register's live session on the device, and clears a clos
 
 - [ ] **Step 3: Run both files, see the two new tests fail** (functions undefined / cache empty).
 
-- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `syncBinding` after `if (!entry.loaded) return;` write `recordLiveSession` for every row in `entry.value.registers` (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by, acknowledged: true, expected_float: null, counted_float: null } : null`), awaited in series before the bind logic.
+- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `syncBinding` after `if (!entry.loaded) return;` write `recordLiveSession` for every row in `entry.value.registers` (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by, acknowledged: true, expected_float: null, counted_float: null, business_day: null } : null`), awaited in series before the bind logic.
 
 - [ ] **Step 5: Run both files**: PASS. Run the full `use-register-binding.test.tsx` and `register-document.test.ts`: PASS.
 
@@ -180,7 +171,7 @@ it("records each listed register's live session on the device, and clears a clos
 - Test: create `packages/query/tests/register-session/cycle.test.ts` (harness: a memory `userDB` as in `register-document.test.ts`; a store database with the register collections, as `session-store.test.ts` builds one; `http` a `jest.fn()`; `engine` as `queue.test.ts` fakes it)
 
 **Interfaces:**
-- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists and is not closed, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.opened_at_gmt.slice(0, 10), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: live.expected_float, counted_float: live.counted_float, opening_variance: null, status_at: live.at`, and then by `acknowledged`:
+- Produces: `export async function seedSessionFromCache(storeDB: RegisterStoreDatabase, live: LiveSession, registerId: string, storeId: number | null | undefined): Promise<'seeded' | 'present' | 'closed'>` — `'present'` when any row with `live.session_id` exists and is not closed, `'closed'` when that row's status is `closed`, else inserts and returns `'seeded'`. The inserted row: `id: live.session_id, register_id: registerId, store_id: storeId ?? null, status: live.status, business_day: live.business_day ?? live.opened_at_gmt.slice(0, 10) (the UTC date only for a list-sourced, acknowledged row, which the first refresh replaces), opened_at_gmt: live.opened_at_gmt, opened_by: live.opened_by?.id ?? null, expected_float: live.expected_float, counted_float: live.counted_float, opening_variance: null, status_at: live.at`, and then by `acknowledged`:
   - `true` → `sync_status: 'synced', server_status: live.status, pending_status: null` (a placeholder the next refresh merges over; never pushed);
   - `false` → `sync_status: 'pending', server_status: null, pending_status: live.status` (the queue creates it on the server under the same id; session ids are the server's idempotency keys, so the opener's own later upload is deduplicated, not doubled).
 - Consumes: `readLiveSession` (Task 2); `registerCollections` (`store-database.ts`).
@@ -195,10 +186,10 @@ it("offline, seeds the bound register's cached open session into a store databas
 	expect(row?.toJSON()).toMatchObject({ status: 'open', register_id: 'A', opened_by: 7, sync_status: 'synced', server_status: 'open', counted_float: null, business_day: '2026-10-28' });
 	expect(http.get).not.toHaveBeenCalled();
 });
-it('seeds an opening the server has not acknowledged as a pending create with its floats', async () => {
-	// live: acknowledged false, expected_float '100.0000', counted_float '100.0000'
+it('seeds an opening the server has not acknowledged as a pending create with its floats and its business day', async () => {
+	// live: acknowledged false, expected_float '100.0000', counted_float '100.0000', business_day '2026-10-29' (opened 2026-10-28T23:30:00Z in a store east of UTC)
 	expect(await seedSessionFromCache(storeDB, live, 'A', 1)).toBe('seeded');
-	expect((await sessions.findOne('s1').exec())?.toJSON()).toMatchObject({ sync_status: 'pending', server_status: null, pending_status: 'open', counted_float: '100.0000' });
+	expect((await sessions.findOne('s1').exec())?.toJSON()).toMatchObject({ sync_status: 'pending', server_status: null, pending_status: 'open', counted_float: '100.0000', business_day: '2026-10-29' });
 });
 it('does not resurrect a session the store database already holds as closed', async () => {
 	// insert s1 as closed first
@@ -233,11 +224,11 @@ it('leaves an existing open row alone', async () => {
 **Interfaces:**
 - Consumes: `recordLiveSession`, `markCountingHere`, `readLiveSession` (Task 2).
 - Produces: nothing new; side effects on the register document:
-  - `openSession` → `recordLiveSession(userDB, site.uuid, registerId, { session_id: row.id, status: 'open', opened_at_gmt: row.opened_at_gmt, opened_by: { id: wpCredentials.id, name: wpCredentials.display_name }, acknowledged: false, expected_float: row.expected_float, counted_float: row.counted_float })`.
+  - `openSession` → `recordLiveSession(userDB, site.uuid, registerId, { session_id: row.id, status: 'open', opened_at_gmt: row.opened_at_gmt, opened_by: { id: wpCredentials.id, name: wpCredentials.display_name }, acknowledged: false, expected_float: row.expected_float, counted_float: row.counted_float, business_day: row.business_day })`.
   - `startCounting` → `recordLiveSession(…status: 'counting', acknowledged: <session.sync_status === 'synced' || session.server_status != null>…)` then `markCountingHere(…, true)`.
   - `backToSelling` → `recordLiveSession(…status: 'open'…)` (which resets the mark).
   - `closeSession` (after the closure is written) → `recordLiveSession(…, null)`.
-  - the cycle, after `refreshSessions` (and only when `registerId`): look up the register's active row with `sessions.findOne({ selector: { register_id: registerId, status: { $in: ['open', 'counting'] }, sync_status: { $ne: 'failed' } } })`; when found, `recordLiveSession` with the row's `status`, `opened_at_gmt`, `opened_by` (`{ id, name }` where `name` is the cached `opened_by.name` when the id matches, else `''`), `acknowledged: row.sync_status === 'synced' || row.server_status != null`, the row's floats; when none, **leave the cache alone** (the registers list and `closeSession` are the only clearers, and the seed's `'closed'` rule stops a stale cache from resurrecting a closed session).
+  - the cycle, after `refreshSessions` (and only when `registerId`): look up the register's active row with `sessions.findOne({ selector: { register_id: registerId, status: { $in: ['open', 'counting'] }, sync_status: { $ne: 'failed' } } })`; when found, `recordLiveSession` with the row's `status`, `opened_at_gmt`, `opened_by` (`{ id, name }` where `name` is the cached `opened_by.name` when the id matches, else `''`), `acknowledged: row.sync_status === 'synced' || row.server_status != null`, the row's floats and `business_day`; when none, read `sessions.findOne(live.session_id)`: a row that now reads `closed` is the server's word that the cached session ended (another till closed it), so `recordLiveSession(…, null)`; no row, or any other status, leaves the cache alone (the registers list and `closeSession` also clear it; the seed's `'closed'` rule is the last guard).
 
 - [ ] **Step 1: Failing test in `use-register-session.test.tsx`:**
 
@@ -265,9 +256,14 @@ it("a refresh during this device's count keeps the counting mark", async () => {
 	await runRegisterSessionCycle({ …online: true… });
 	expect(readLiveSession('site', 'A')).toMatchObject({ status: 'counting', counting_here: true });
 });
+it('a refresh that brings the cached session back closed clears the cache', async () => {
+	// cache: s9 open; server list returns s9 as closed (another till closed it)
+	await runRegisterSessionCycle({ …online: true… });
+	expect(readLiveSession('site', 'A')).toBeNull();
+});
 ```
 
-- [ ] **Step 3: Run both files, see the three fail.**
+- [ ] **Step 3: Run both files, see the four fail.**
 
 - [ ] **Step 4: Implement** the four action writes and the cycle's post-refresh write.
 
@@ -333,7 +329,7 @@ it('says the figures are still to come on a seeded session and will not close th
 ## Self-review
 
 - **Spec coverage (§ 5.1):** the repro (Task 6), per-store pointer (Task 1), the cached session id, opener and opened-at (Task 2), the counting mark (Tasks 2 and 4), the Open register card not offering to open a register the cache says is open (Task 3 makes the row exist, so the card's own condition `!session` handles it: no card change), figures unknown until the refresh and never written into a closure (Task 5). Covered.
-- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4).
+- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4). Second round (two threads): the cache clears when the refresh brings the cached session back closed (Task 4); the store-local business day travels in the cache and the seed (Tasks 2–4).
 - **Types:** `LiveSession` is defined once (Task 2) and consumed in Tasks 3 and 4 by that name; `seedSessionFromCache` returns the three literals Tasks 3 asserts.
 - **Review focus:** 1 and 2 in Task 3's tests, 3 in Task 2's binding test, 4 in Task 4's hook test, 5 in Task 5.
 - **Proportion:** the plan's code is tests and signatures; the function bodies are left to the implementer.
