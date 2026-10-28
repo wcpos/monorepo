@@ -1,22 +1,13 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import {
-	Dialog,
-	DialogBody,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from '@wcpos/components/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
-import { Text } from '@wcpos/components/text';
-import { Tree } from '@wcpos/components/tree';
+import { Dialog } from '@wcpos/components/dialog';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditCouponForm } from './form';
 import { useT } from '../../../../contexts/translations';
+import { RecordDialog } from '../../components/record-dialog';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'coupons'> | null>;
@@ -25,53 +16,18 @@ interface Props {
 export function EditCoupon({ resource }: Props) {
 	const coupon = useObservableSuspense(resource);
 	const t = useT();
-	const [value, setValue] = React.useState('form');
 	const code = useRecordField(coupon, (record) => record.payload.code);
 	const payload = useRecordField(coupon, (record) => record.payload);
 
-	if (!coupon) {
-		return (
-			<Dialog route>
-				<DialogContent side="right" size="lg">
-					<DialogHeader>
-						<DialogTitle>
-							<Text>{t('coupons.no_coupon_found')}</Text>
-						</DialogTitle>
-					</DialogHeader>
-				</DialogContent>
-			</Dialog>
-		);
-	}
-
 	return (
 		<Dialog route>
-			<DialogContent side="right" size="lg">
-				<DialogHeader>
-					<DialogTitle>
-						<Text>{t('common.edit_2', { name: code })}</Text>
-					</DialogTitle>
-				</DialogHeader>
-				<View className="min-h-0 flex-1">
-					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
-						<TabsList className="mx-4 flex-row">
-							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('common.form')}</Text>
-							</TabsTrigger>
-							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('common.json')}</Text>
-							</TabsTrigger>
-						</TabsList>
-						<TabsContent value="form" className="min-h-0 flex-1">
-							<EditCouponForm coupon={coupon} />
-						</TabsContent>
-						<TabsContent value="json" className="min-h-0 flex-1">
-							<DialogBody>
-								<Tree value={payload} />
-							</DialogBody>
-						</TabsContent>
-					</Tabs>
-				</View>
-			</DialogContent>
+			<RecordDialog
+				title={coupon ? t('common.edit_2', { name: code }) : t('common.coupon')}
+				record={coupon}
+				notFound={t('coupons.no_coupon_found')}
+				form={(record) => <EditCouponForm coupon={record} />}
+				payload={payload}
+			/>
 		</Dialog>
 	);
 }
