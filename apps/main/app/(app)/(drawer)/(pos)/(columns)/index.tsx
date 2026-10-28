@@ -43,7 +43,7 @@ export default function ResizablePOSColumns() {
 	// On small screens, render a tab-like UI with Products and Cart tabs
 	// This handles the case when user resizes from large to small screen
 	// Every surface that touches a screen edge pads its own inset inside its own background
-	// (EdgeColumn, pos/columns/LEDGER.md line 6): here both tabs sit on `bg-background` at the
+	// (`EdgeSurface`, pos/columns/LEDGER.md line 6): here both tabs sit on `bg-background` at the
 	// top, so the container pads the status bar in that colour, and the tab bar pads the home
 	// indicator in its card colour.
 	if (phone) {
