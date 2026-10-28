@@ -77,7 +77,7 @@ jest.mock('@wcpos/components/form', () => ({
 		return { flush: mockFlush };
 	},
 	FormInput: (props: Record<string, unknown>) => mockControl(props),
-	FormRadioGroup: () => null,
+	FormSegmentedControl: () => null,
 	FormSelect: (props: Record<string, unknown>) => mockControl(props),
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
@@ -123,9 +123,6 @@ jest.mock('../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	META_DATA_DEFAULT_ROW: {},
 	metaDataSchema: {},
-}));
-jest.mock('../../../components/product/status-select', () => ({
-	ProductStatusSelect: () => null,
 }));
 jest.mock('../../../components/tax-class-select', () => ({ useTaxClassOptions: () => [] }));
 jest.mock('../../../components/tax-select', () => ({

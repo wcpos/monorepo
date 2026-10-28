@@ -144,7 +144,10 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 		.toBe(true);
 	await fillCurrencyField(page, 'misc-product-price-input', price);
 	if (taxStatus) {
-		const option = page.getByTestId(`tax_status-option-${taxStatus}`);
+		// Tax is ONE select (TaxSelect): Not taxable, then the store's classes.
+		await page.getByTestId('misc-product-tax-select').click();
+		const value = taxStatus === 'none' ? 'status:none' : 'class:standard';
+		const option = page.getByTestId(`misc-product-tax-select-option-${value}`);
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
 	}

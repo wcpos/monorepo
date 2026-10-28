@@ -30,9 +30,7 @@ import {
 } from '@wcpos/printer';
 import { savePrinterProfile } from '@wcpos/query';
 
-import { CodePageSelect } from '../components/code-page-select';
-import { PaperWidthSelect, PRINTER_TEXT_WIDTHS } from '../components/paper-width-select';
-import { VendorSelect } from '../components/vendor-select';
+import { PRINTER_TEXT_WIDTHS, usePrinterOptions } from '../options';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
 import { WebVendorSegmented } from '../dialog/connection/web-vendor-segmented';
@@ -104,6 +102,7 @@ export function PrinterSetupDialog({
 	prefill?: PrinterDialogPrefill;
 }) {
 	const t = useT();
+	const printerOptions = usePrinterOptions();
 	const web = platform === 'web';
 	const native = platform === 'native';
 	const discovery = usePrinterDiscovery();
@@ -500,8 +499,8 @@ export function PrinterSetupDialog({
 					) : (
 						<FormSelect
 							{...field}
-							customComponent={VendorSelect}
 							options={vendors}
+							placeholder={t('settings.select_vendor')}
 							label={t('settings.printer_vendor')}
 						/>
 					)
@@ -515,7 +514,8 @@ export function PrinterSetupDialog({
 						{...field}
 						value={String(field.value)}
 						onChange={(value: string) => field.onChange(Number(value))}
-						customComponent={PaperWidthSelect}
+						options={printerOptions.columns}
+						placeholder={t('settings.select_printer_text_width')}
 						label={t('settings.printer_text_width')}
 					/>
 				)}
@@ -527,7 +527,8 @@ export function PrinterSetupDialog({
 					render={({ field }) => (
 						<FormSelect
 							{...field}
-							customComponent={CodePageSelect}
+							options={printerOptions.codePages}
+							placeholder={t('settings.printer_code_page')}
 							label={t('settings.printer_code_page')}
 						/>
 					)}

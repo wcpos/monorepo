@@ -13,7 +13,6 @@ import {
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
-import { SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
@@ -147,19 +146,12 @@ export function UISettingsForm() {
 								<FormSelect
 									{...field}
 									label={t('pos_cart.sort_items')}
-									value={sortOptions.find(
-										(option) => option.value === (field.value ?? 'newest_top')
-									)}
-								>
-									<SelectTrigger testID="cart-sort-items">
-										<SelectValue placeholder={t('pos_cart.sort_items')} />
-									</SelectTrigger>
-									<SelectContent portalHost="pos">
-										{sortOptions.map((option) => (
-											<SelectItem key={option.value} {...option} />
-										))}
-									</SelectContent>
-								</FormSelect>
+									value={field.value ?? 'newest_top'}
+									options={sortOptions}
+									placeholder={t('pos_cart.sort_items')}
+									triggerTestID="cart-sort-items"
+									portalHost="pos"
+								/>
 								<Text className="text-muted-foreground text-sm">
 									{t('pos_cart.sort_fees_shipping_last')}
 								</Text>

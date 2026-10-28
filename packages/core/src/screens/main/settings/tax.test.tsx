@@ -95,7 +95,7 @@ jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => children,
 	FormField: () => null,
 	FormInput: () => null,
-	FormRadioGroup: () => null,
+	FormSegmentedControl: () => null,
 	FormSelect: () => null,
 	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => children,
@@ -122,12 +122,6 @@ jest.mock('../../../contexts/app-state', () => ({
 jest.mock('../contexts/extra-data', () => ({ useExtraData: () => ({ extraData }) }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../components/tax-based-on-select', () => ({ TaxBasedOnSelect: () => null }));
-jest.mock('../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
-jest.mock('../components/tax-radio-groups', () => ({
-	InclExclRadioGroup: () => null,
-	TaxDisplayRadioGroup: () => null,
-}));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),

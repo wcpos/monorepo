@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { savePrinterProfile } from '@wcpos/query';
 
 import { PrinterSetupDialog } from './printer-setup-dialog';
-import { PRINTER_TEXT_WIDTHS } from '../components/paper-width-select';
+import { PRINTER_TEXT_WIDTHS } from '../options';
 import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
@@ -43,7 +43,6 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleContent: 'Options',
 }));
 jest.mock('../dialog/connection/web-vendor-segmented', () => ({ WebVendorSegmented: () => null }));
-jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
 jest.mock('../dialog/printer-rows', () => ({ PrinterToggleRows: () => null }));
 jest.mock('../dialog/test-print-error', () => ({ TestPrintError: () => null }));
 jest.mock('@wcpos/query', () => ({

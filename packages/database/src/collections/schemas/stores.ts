@@ -282,7 +282,7 @@ export const storesLiteral = {
 			default: 'inherit',
 			// Deliberately unconstrained. This used to enum WooCommerce's four
 			// built-in classes, but tax classes are user-definable: a merchant can
-			// add "luxury" in WooCommerce settings, and TaxClassSelect builds its
+			// add "luxury" in WooCommerce settings, and useTaxClassOptions builds its
 			// options from the server's tax-class list, so that value is selectable
 			// here. The enum rejected it.
 			//

@@ -40,7 +40,7 @@ jest.mock('@wcpos/components/form', () => ({
 	),
 	FormSelect: () => null,
 	FormSwitch: () => null,
-	FormRadioGroup: () => null,
+	FormSegmentedControl: () => null,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: mockWrap,

@@ -103,7 +103,7 @@ jest.mock('@wcpos/components/form', () => {
 			/>
 		),
 		FormSelect: () => null,
-		FormRadioGroup: () => null,
+		FormSegmentedControl: () => null,
 	};
 });
 jest.mock('@wcpos/components/hstack', () => ({
@@ -200,13 +200,11 @@ jest.mock('../../components/amount-field/amount-field', () => ({
 	),
 }));
 jest.mock('../../components/tax-class-select', () => ({
-	TaxClassSelect: () => null,
 	useTaxClassOptions: () => [
 		{ label: 'Standard', value: 'standard' },
 		{ label: 'Reduced rate', value: 'reduced-rate' },
 	],
 }));
-jest.mock('../../components/tax-radio-groups', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),

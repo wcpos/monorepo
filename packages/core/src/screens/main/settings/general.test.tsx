@@ -129,11 +129,9 @@ jest.mock('../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Guest' }),
 }));
 jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../components/currency-position-select', () => ({ CurrencyPositionSelect: () => null }));
 jest.mock('../components/currency-select', () => ({ CurrencySelect: () => null }));
 jest.mock('../components/customer-select', () => ({ CustomerSelect: () => null }));
 jest.mock('../components/language-select', () => ({ LanguageSelect: () => null }));
-jest.mock('../components/thousands-style-select', () => ({ ThousandsStyleSelect: () => null }));
 
 beforeEach(() => {
 	jest.clearAllMocks();

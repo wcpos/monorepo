@@ -68,7 +68,7 @@ jest.mock('@wcpos/components/form', () => {
 			/>
 		),
 		FormSelect: () => null,
-		FormRadioGroup: () => null,
+		FormSegmentedControl: () => null,
 		FormTreeCombobox: () => null,
 	};
 });
@@ -106,9 +106,6 @@ jest.mock('../../../components/tax-select', () => ({ TaxSelect: mockField }));
 jest.mock('../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: mockField }));
 jest.mock('../../../components/shipping-method-select', () => ({
 	ShippingMethodSelect: () => null,
-}));
-jest.mock('../../../components/tax-radio-groups', () => ({
-	TaxStatusRadioGroup: () => null,
 }));
 jest.mock('../../../components/product/category-select', () => ({
 	CategoryTreeLoader: () => null,

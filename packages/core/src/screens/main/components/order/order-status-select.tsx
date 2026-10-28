@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { OptionSelect } from '@wcpos/components/select';
-import type { SelectSingleRootProps } from '@wcpos/components/select';
+import { OptionSelect, type OptionSelectProps } from '@wcpos/components/select';
 
 import { useT } from '../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
@@ -11,11 +10,9 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
  *   forms pass the pushable set plus the order's current status (ADR 0040 D4).
  */
 export function OrderStatusSelect({
-	value,
-	onValueChange,
 	allowed,
 	...props
-}: SelectSingleRootProps & { allowed?: readonly string[] }) {
+}: Omit<OptionSelectProps, 'options' | 'placeholder'> & { allowed?: readonly string[] }) {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 	const options = React.useMemo(
@@ -26,10 +23,7 @@ export function OrderStatusSelect({
 	return (
 		<OptionSelect
 			options={options}
-			value={value?.value}
-			onChange={(_nextValue, option) => onValueChange?.(option)}
 			placeholder={t('common.select_status')}
-			fallbackLabel=""
 			valueClassName="text-foreground text-sm"
 			{...props}
 		/>

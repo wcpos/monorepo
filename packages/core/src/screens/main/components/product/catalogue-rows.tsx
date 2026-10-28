@@ -11,7 +11,7 @@ import {
 } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
-import { ProductStatusSelect } from './status-select';
+import { PRODUCT_STATUSES, useOptionList } from '../option-lists';
 import { useT } from '../../../../contexts/translations';
 import { PARENT_TAX_CLASS } from '../../hooks/tax-class';
 import { FormAmountField } from '../amount-field';
@@ -174,6 +174,7 @@ export function TaxRow({
 
 export function StatusRow() {
 	const t = useT();
+	const statuses = useOptionList(PRODUCT_STATUSES);
 	const { control } = useFormContext();
 	return (
 		<PropertyRow id="status" label={t('common.status')}>
@@ -182,7 +183,8 @@ export function StatusRow() {
 				name="status"
 				render={({ field: { value, onChange, ...rest } }) => (
 					<FormSelect
-						customComponent={ProductStatusSelect}
+						options={statuses}
+						placeholder={t('common.select_status')}
 						value={value as string}
 						onChange={onChange}
 						{...rest}

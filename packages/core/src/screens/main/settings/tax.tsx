@@ -11,7 +11,7 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormRadioGroup,
+	FormSegmentedControl,
 	FormSelect,
 	SavedFieldProvider,
 	savedKeys,
@@ -27,8 +27,8 @@ import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
-import { TaxBasedOnSelect } from '../components/tax-based-on-select';
-import { InclExclRadioGroup, TaxDisplayRadioGroup } from '../components/tax-radio-groups';
+import { TAX_BASED_ON, useOptionList } from '../components/option-lists';
+import { useTaxSegments } from '../components/tax-segments';
 import { useExtraData } from '../contexts/extra-data';
 import { INHERIT_TAX_CLASS, taxClassFromWire } from '../hooks/tax-class';
 
@@ -55,6 +55,8 @@ function TaxSettingsForm() {
 	const markSaved = useMarkSaved();
 	const { store, site } = useStoreSession();
 	const t = useT();
+	const taxBasedOn = useOptionList(TAX_BASED_ON);
+	const tax = useTaxSegments();
 	const router = useRouter();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as {
@@ -141,7 +143,8 @@ function TaxSettingsForm() {
 						render={({ field: { value, onChange, ...rest } }) => (
 							<PropertyRow name="tax_based_on" label={t('common.calculate_tax_based_on')}>
 								<FormSelect
-									customComponent={TaxBasedOnSelect}
+									options={taxBasedOn}
+									placeholder={t('common.select_tax_based_on')}
 									value={value}
 									onChange={onChange}
 									{...rest}
@@ -185,7 +188,7 @@ function TaxSettingsForm() {
 						name="tax_total_display"
 						render={({ field }) => (
 							<PropertyRow name="tax_total_display" label={t('settings.display_tax_totals')}>
-								<FormRadioGroup customComponent={TaxDisplayRadioGroup} {...field} />
+								<FormSegmentedControl {...field} segments={tax.display} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>
@@ -194,7 +197,7 @@ function TaxSettingsForm() {
 						name="tax_display_shop"
 						render={({ field }) => (
 							<PropertyRow name="tax_display_shop" label={t('settings.display_prices_in_the_shop')}>
-								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
+								<FormSegmentedControl {...field} segments={tax.inclExcl} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>
@@ -206,7 +209,7 @@ function TaxSettingsForm() {
 								name="tax_display_cart"
 								label={t('settings.display_prices_during_cart_and_checkout')}
 							>
-								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
+								<FormSegmentedControl {...field} segments={tax.inclExcl} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>

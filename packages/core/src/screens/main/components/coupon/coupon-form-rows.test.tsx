@@ -88,7 +88,6 @@ jest.mock('../../components/amount-field', () => ({
 }));
 jest.mock('./discount-amount-input', () => ({ DiscountAmountInput: () => null }));
 jest.mock('./expiry-preset-chips', () => ({ ExpiryPresetChips: () => null }));
-jest.mock('./status-select', () => ({ StatusSelect: () => null }));
 jest.mock('../form-errors', () => ({ FormErrors: () => null }));
 
 type Values = z.infer<typeof couponFormSchema>;

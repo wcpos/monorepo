@@ -84,7 +84,6 @@ jest.mock('../../../components/amount-field', () => ({
 	},
 }));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../../../components/product/status-select', () => ({ ProductStatusSelect: () => null }));
 jest.mock('../../../components/tax-class-select', () => ({
 	useTaxClassOptions: () => [{ label: 'Standard rate', value: 'standard' }],
 }));
