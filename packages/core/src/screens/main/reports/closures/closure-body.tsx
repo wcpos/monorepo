@@ -75,12 +75,12 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 				</DialogTitle>
 				<DialogDescription>
 					{/* place · register · when · closer; a missing place or register leaves no empty slot. */}
-					{[storeName, String(row.breakdowns.register_name || names[row.register_id] || ''), span]
+					{[storeName, String(row.breakdowns?.register_name || names[row.register_id] || ''), span]
 						.filter(Boolean)
 						.join(' · ')}
 					{' · '}
 					<Text className="text-foreground font-semibold">
-						{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
+						{String(row.breakdowns?.closed_by_name || t('register.unknown_cashier'))}
 					</Text>
 				</DialogDescription>
 			</View>
@@ -112,7 +112,8 @@ export function ClosureBody({
 		expected = settled.expected.cash ?? '0';
 	const variance = countVariance(counted, expected);
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures;
-	const breakdowns = row.breakdowns;
+	// A row read back always carries breakdowns; a bare fixture may not.
+	const breakdowns = row.breakdowns ?? {};
 	const opening = breakdowns.opening_float as
 		{ counted?: string | null; expected?: string } | undefined;
 	const methods = (breakdowns.payment_methods ?? {}) as Record<
@@ -140,9 +141,9 @@ export function ClosureBody({
 	const cashiers = (breakdowns.cashiers ?? []) as (string | { name: string })[];
 	const recounts = corrections.filter((c) => c.type === 'recount').length;
 	const settledArgs = {
-		recorded: context.formatMoney(recorded.counted.cash ?? '0'),
+		recorded: context.formatMoney(recorded.counted?.cash ?? '0'),
 		result: varianceText(
-			countVariance(recorded.counted.cash ?? '0', recorded.expected.cash ?? '0'),
+			countVariance(recorded.counted?.cash ?? '0', recorded.expected?.cash ?? '0'),
 			format,
 			t
 		),
@@ -311,9 +312,12 @@ export function ClosureBody({
 					trailing={
 						<>
 							<Text variant="key" className="px-2.5 py-1">
-								{row.print_count
-									? t('reports.printed_times', { count: row.print_count })
-									: t('reports.not_printed')}
+								{/* Not a plural pair: the catalogue rule wants {count} in both forms, and "once" has none. */}
+								{row.print_count === 1
+									? t('reports.printed_once')
+									: row.print_count
+										? t('reports.printed_times', { count: row.print_count })
+										: t('reports.not_printed')}
 							</Text>
 							<Icon name={preview ? 'chevronDown' : 'chevronRight'} size="sm" className={MUTED} />
 						</>
