@@ -10,4 +10,4 @@ Created 2026-10-27 for the heading ladder ruled 2026-10-25 (`~/Projects/wcpos-ha
 
 ## Lines
 
-1. The title is a level-2 heading (`role="heading"`, `aria-level={2}`) in `text-base font-semibold text-foreground`; the description under it is `text-xs text-muted-foreground`, `gap-0.5` between — evidence: the ladder board, "section heading"; test "renders a level-2 heading with the title and the description".
+1. The title is a level-2 heading (`role="heading"`, `aria-level={2}`) in `Text variant="section"` (14 semibold foreground); the description under it is `variant="help"` (12 muted), `gap-0.5` between. The classes are the ladder's (`text/ladder.ts`), not restated here — evidence: the ladder board, "section heading"; card 6 (2026-10-28); test "renders a level-2 heading with the title and the description".

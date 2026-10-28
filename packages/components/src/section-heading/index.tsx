@@ -5,7 +5,7 @@ import { Text } from '../text';
 
 /**
  * The one heading for a section in a Settings page, a dialog body or a card body (the heading
- * ladder, ruled 2026-10-25): 16 semibold foreground, its optional description `text-xs` muted.
+ * ladder, ruled 2026-10-25): the `section` rank, its optional description the `help` rank.
  */
 export function SectionHeading({
 	title,
@@ -18,10 +18,10 @@ export function SectionHeading({
 }) {
 	return (
 		<View testID={testID} className="gap-0.5">
-			<Text role="heading" aria-level={2} className="text-foreground text-base font-semibold">
+			<Text role="heading" aria-level={2} variant="section">
 				{title}
 			</Text>
-			{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
+			{!!description && <Text variant="help">{description}</Text>}
 		</View>
 	);
 }
