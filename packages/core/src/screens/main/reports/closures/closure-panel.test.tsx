@@ -464,8 +464,9 @@ it.each([2, null])(
 			expect(screen.getByTestId('closure-settled').textContent).toContain(
 				'Recorded ¥99 · −¥1 short. Settled at ¥101 after 1 recount.'
 			);
+			// The document's own formatter: the store's zone, 24-hour, as the Z-report prints it.
 			expect(screen.getByTestId('closure-correction-1').textContent).toContain(
-				'Sep 12, 2026, 3:00 AM'
+				'Sep 12, 2026, 03:00'
 			);
 		} finally {
 			mockSession.store = previous;

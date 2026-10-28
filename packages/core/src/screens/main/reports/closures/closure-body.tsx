@@ -55,7 +55,8 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 	const t = useT();
 	const store = useViewedStore(row.store_id ?? 0);
 	const storeName = useDocField(store, (value) => value.name);
-	const names = useRegisterNames();
+	// The viewed store's registers, never the bound store's: a remote closure names its own till.
+	const names = useRegisterNames(row.store_id ?? undefined);
 	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const opened = formatClosureDate(row.opened_at, context);
 	const closed = formatClosureDate(row.closed_at, context);
@@ -138,6 +139,8 @@ export function ClosureBody({
 		({ name }) => name !== 'cash' && Number(settled.expected[name] ?? 0) !== 0
 	);
 	const cashiers = (breakdowns.cashiers ?? []) as (string | { name: string })[];
+	const recounts = corrections.filter((c) => c.type === 'recount').length;
+	const documentError = doc.documentError && !doc.isOffline;
 	const term = (label: string, suffix?: React.ReactNode, quiet?: boolean, strong?: boolean) => (
 		<Text
 			numberOfLines={1}
@@ -185,16 +188,20 @@ export function ClosureBody({
 				<Notice
 					testID="closure-settled"
 					tone="warning"
-					title={t('reports.recorded_settled_line', {
-						recorded: context.formatMoney(recorded.counted.cash ?? '0'),
-						result: varianceText(
-							countVariance(recorded.counted.cash ?? '0', recorded.expected.cash ?? '0'),
-							format,
-							t
-						),
-						settled: context.formatMoney(counted),
-						count: corrections.filter((c) => c.type === 'recount').length,
-					})}
+					// A late sale or movement settles figures without a recount: say so, never "0 recounts".
+					title={t(
+						recounts > 0 ? 'reports.recorded_settled_line' : 'reports.recorded_settled_late',
+						{
+							recorded: context.formatMoney(recorded.counted.cash ?? '0'),
+							result: varianceText(
+								countVariance(recorded.counted.cash ?? '0', recorded.expected.cash ?? '0'),
+								format,
+								t
+							),
+							settled: context.formatMoney(counted),
+							count: recounts,
+						}
+					)}
 				/>
 			)}
 			<View>
@@ -303,35 +310,36 @@ export function ClosureBody({
 						</>
 					}
 				/>
-				{preview &&
-					(doc.documentError && !doc.isOffline ? (
-						<View className="gap-3">
-							<Text testID="closure-document-error">{t('reports.load_failed')}</Text>
-							<Button testID="closure-document-retry" variant="outline" onPress={doc.refetch}>
-								{t('common.retry')}
-							</Button>
+				{/* The load error stays visible with the fold closed: it is why Recount is disabled. */}
+				{documentError && (
+					<View className="gap-3 py-2">
+						<Text testID="closure-document-error">{t('reports.load_failed')}</Text>
+						<Button testID="closure-document-retry" variant="outline" onPress={doc.refetch}>
+							{t('common.retry')}
+						</Button>
+					</View>
+				)}
+				{preview && !documentError && (
+					<View className="gap-2 py-2">
+						<View className="min-w-0 gap-2">
+							<TemplateSwitcher
+								templates={doc.templates}
+								selectedId={doc.selectedTemplateId}
+								onSelect={doc.setSelectedTemplateId}
+								isOffline={doc.isOffline}
+								alwaysVisible
+							/>
+							<PrinterSwitcher
+								printers={doc.allPrinters}
+								printerSelection={doc.printerSelection}
+								resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+								onSelect={doc.setPrinterSelection}
+							/>
 						</View>
-					) : (
-						<View className="gap-2 py-2">
-							<View className="min-w-0 gap-2">
-								<TemplateSwitcher
-									templates={doc.templates}
-									selectedId={doc.selectedTemplateId}
-									onSelect={doc.setSelectedTemplateId}
-									isOffline={doc.isOffline}
-									alwaysVisible
-								/>
-								<PrinterSwitcher
-									printers={doc.allPrinters}
-									printerSelection={doc.printerSelection}
-									resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
-									onSelect={doc.setPrinterSelection}
-								/>
-							</View>
-							{/* The flow preview sets its own height; the panel's body scrolls it (Codex, #3036). */}
-							<ReceiptBody doc={doc} hideSelects fullWidth />
-						</View>
-					))}
+						{/* The flow preview sets its own height; the panel's body scrolls it (Codex, #3036). */}
+						<ReceiptBody doc={doc} hideSelects fullWidth />
+					</View>
+				)}
 				{corrections.length > 0 && band(t('reports.corrections'))}
 				{corrections.map((c) => (
 					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">
@@ -341,16 +349,9 @@ export function ClosureBody({
 							{c.approver ? ` · ${t('reports.approver', { name: c.approver.name })}` : ''}
 						</Text>
 						<Text>{c.reason}</Text>
+						{/* The document's own date formatter: it already reads a Z or an explicit offset. */}
 						<Text className="text-muted-foreground">
-							{new Intl.DateTimeFormat(context.locale, {
-								dateStyle: 'medium',
-								timeStyle: 'short',
-								...(context.timezone === 'device' ? {} : { timeZone: context.timezone }),
-							}).format(
-								new Date(
-									c.created_at.endsWith('Z') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`
-								)
-							)}
+							{formatClosureDate(c.created_at, context).datetime}
 						</Text>
 					</View>
 				))}
