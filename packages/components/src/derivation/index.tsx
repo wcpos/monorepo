@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
 import { Icon } from '../icon';
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { TABLE_HEAD_TEXT } from '../table';
 import { Text } from '../text';
@@ -35,7 +36,7 @@ function Derivation({ children, className, ...props }: ViewProps) {
 const BEAD = {
 	fact: 'bg-muted-foreground',
 	result: 'bg-foreground',
-	failed: 'bg-destructive items-center justify-center',
+	failed: `${TONE.bad.solid} items-center justify-center`,
 	quiet: 'border-border border-2',
 } as const;
 
@@ -78,9 +79,7 @@ function DerivationStep({
 				)}
 			</View>
 			<View className={cn('min-w-0 flex-1', !last && 'pb-4')}>
-				<Text className={cn(TABLE_HEAD_TEXT, state === 'failed' && 'text-destructive')}>
-					{label}
-				</Text>
+				<Text className={cn(TABLE_HEAD_TEXT, state === 'failed' && TONE.bad.text)}>{label}</Text>
 				{title != null || trailing != null ? (
 					<View className="mt-1 flex-row items-baseline gap-3">
 						<View className="min-w-0 flex-1">

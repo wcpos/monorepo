@@ -71,7 +71,7 @@ function FormLabel({
 		<Label
 			// The label is a press target for the control beside it (focus, toggle): it keeps
 			// a little vertical padding for the finger; the horizontal inset is gone.
-			className={cn('py-1', error && 'text-destructive', className)}
+			className={cn('py-1', error && 'text-bad', className)}
 			nativeID={formItemNativeID}
 			onPress={onPress ?? pressLabel}
 			{...props}
@@ -108,7 +108,7 @@ function FormMessage({
 			entering={FadeInDown}
 			exiting={FadeOut.duration(CROSSFADE)}
 			nativeID={formMessageNativeID}
-			className={cn('text-destructive text-sm font-medium', className)}
+			className={cn('text-bad text-sm font-medium', className)}
 			{...props}
 		>
 			{body}
