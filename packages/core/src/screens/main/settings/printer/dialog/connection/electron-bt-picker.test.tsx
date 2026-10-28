@@ -12,6 +12,8 @@ jest.mock('@wcpos/components/form', () => ({ SavedMark: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('react-native', () => ({
+	// The shared rows' press haptic reads it (native only).
+	Platform: { OS: 'web' },
 	Pressable: ({
 		children,
 		onPress,

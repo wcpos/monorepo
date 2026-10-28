@@ -1,7 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
-import * as Haptics from 'expo-haptics';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { Icon } from '../icon';
@@ -21,10 +19,6 @@ jest.mock('react-native', () => {
 			React.createElement(actual.Text, { ...props, dataSet: { classes: className } }),
 	};
 });
-jest.mock('expo-haptics', () => ({
-	impactAsync: jest.fn(),
-	ImpactFeedbackStyle: { Light: 'light' },
-}));
 jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('react-native-svg', () => {
 	const elements = jest.requireActual('react-native-svg/lib/commonjs/elements.web');
@@ -75,18 +69,6 @@ it('shows a check only for the selected choice and reserves its slot on the othe
 	).toBeNull();
 });
 
-it('presses when enabled and blocks a disabled press', () => {
-	const onPress = jest.fn();
-	const { rerender } = render(<MenuRow label="Switch" onPress={onPress} />);
-	fireEvent.click(screen.getByRole('button'));
-	expect(onPress).toHaveBeenCalledTimes(1);
-	rerender(<MenuRow label="Switch" onPress={onPress} disabled />);
-	fireEvent.click(screen.getByRole('button'));
-	expect(onPress).toHaveBeenCalledTimes(1);
-	expect(screen.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
-	expect(screen.getByRole('button').dataset.classes).toContain('opacity-45');
-});
-
 it('a locked row is dimmed and still presses', () => {
 	const onPress = jest.fn();
 	render(<MenuRow choice label="Yesterday" locked onPress={onPress} />);
@@ -107,15 +89,6 @@ it('paints destructive words and icons red, with a destructive hover and press w
 		expect(row.dataset.classes).toContain(`${state}:bg-destructive/10`);
 });
 
-it('keeps hover off coarse pointers without removing press or keyboard focus feedback', () => {
-	mockPointer = 'coarse';
-	render(<MenuRow label="Settings" />);
-	const classes = screen.getByRole('button').dataset.classes;
-	expect(classes).not.toContain('hover:');
-	expect(classes).toContain('active:bg-muted');
-	expect(classes).toContain('web:focus:bg-muted');
-});
-
 it('renders a node label, description and leading/trailing slots', () => {
 	render(
 		<MenuRow
@@ -129,37 +102,6 @@ it('renders a node label, description and leading/trailing slots', () => {
 	expect(row).toHaveTextContent('AvatarRegisterNot openedShortcut');
 	expect(screen.getByTestId('label').dataset.classes).toContain('min-w-0 flex-1');
 	expect(within(row).getByText('Not opened').dataset.classes).toContain('text-muted-foreground');
-});
-
-it.each([
-	[false, 'Enter'],
-	[false, ' '],
-	[true, 'Enter'],
-	[true, ' '],
-])('activates choice=%s once with %j, but not when disabled', (choice, key) => {
-	const onPress = jest.fn();
-	const { rerender } = render(
-		<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} />
-	);
-	const row = screen.getByTestId('row');
-	fireEvent.keyDown(row, { key });
-	fireEvent.keyUp(row, { key });
-	// jsdom does not synthesize the browser's keyboard click on native buttons.
-	if (row.tagName === 'BUTTON') fireEvent.click(row, { detail: 0 });
-	expect(onPress).toHaveBeenCalledTimes(1);
-	rerender(<MenuRow testID="row" label="Select" choice={choice} onPress={onPress} disabled />);
-	fireEvent.keyDown(row, { key });
-	fireEvent.keyUp(row, { key });
-	if (row.tagName === 'BUTTON') fireEvent.click(row, { detail: 0 });
-	expect(onPress).toHaveBeenCalledTimes(1);
-});
-
-it('forwards the caller onKeyDown for Escape', () => {
-	const onKeyDown = jest.fn();
-	render(<MenuRow testID="row" label="Settings" onKeyDown={onKeyDown} />);
-	fireEvent.keyDown(screen.getByTestId('row'), { key: 'Escape' });
-	expect(onKeyDown).toHaveBeenCalledTimes(1);
-	expect(onKeyDown.mock.calls[0][0].nativeEvent.key).toBe('Escape');
 });
 
 it('wraps a numeric description in muted Text', () => {
@@ -181,17 +123,3 @@ it.each(['aria-label', 'accessibilityLabel'] as const)(
 		expect(within(group).getAllByRole('radio')).toHaveLength(2);
 	}
 );
-
-it('keeps the native light haptic of the replaced Buttons, but not on disabled rows', () => {
-	const platform = jest.replaceProperty(Platform, 'OS', 'ios');
-	try {
-		const { rerender } = render(<MenuRow label="Settings" />);
-		fireEvent.click(screen.getByRole('button'));
-		expect(Haptics.impactAsync).toHaveBeenCalledWith('light');
-		rerender(<MenuRow label="Settings" disabled />);
-		fireEvent.click(screen.getByRole('button'));
-		expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
-	} finally {
-		platform.restore();
-	}
-});

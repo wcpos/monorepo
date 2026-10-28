@@ -41,6 +41,8 @@ module.exports = {
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.ts'],
 	moduleNameMapper: {
 		'^react-native$': 'react-native-web',
+		// ESM only; see the mock. Every pressable surface imports it through `lib/haptics`.
+		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',
 		// react-native-svg's web elements import `@react-native/assets-registry/registry`, a package
 		// React Native 0.88 no longer depends on and whose 0.88 build is ESM, which this CommonJS
 		// runner cannot load. These suites already run react-native as react-native-web, so use its

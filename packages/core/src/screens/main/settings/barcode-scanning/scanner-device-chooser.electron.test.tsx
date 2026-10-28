@@ -26,6 +26,8 @@ const mockOn = jest.fn((channel: string, cb: (devices: unknown) => void) => {
 jest.mock('react-native', () => {
 	const R = require('react');
 	return {
+		// The shared rows' press haptic reads it (native only).
+		Platform: { OS: 'web' },
 		Pressable: ({ children, onPress, testID }: Record<string, unknown>) =>
 			R.createElement('button', { 'data-testid': testID, onClick: onPress }, children as never),
 		View: ({ children, testID }: Record<string, unknown>) =>

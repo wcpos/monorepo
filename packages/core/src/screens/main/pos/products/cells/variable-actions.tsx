@@ -48,7 +48,6 @@ export function VariableActions({
 					testID="variable-product-popover-button"
 					name="chevronRight"
 					variant="success"
-					size="4xl"
 					accessibilityLabel={t('common.variations')}
 				/>
 			</PopoverTrigger>

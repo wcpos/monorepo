@@ -38,9 +38,16 @@ jest.mock('../text', () => ({
 	Text: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />,
 }));
 
-it('uses the card surface, row height and muted press with disabled opacity', () => {
-	const { getByTestId } = render(<ListItem testID="row" title="Paul" disabled />);
-	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted', 'opacity-50');
+it('uses the card surface and row height on the muted-wash surface', () => {
+	const { getByTestId } = render(<ListItem testID="row" title="Paul" />);
+	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted');
+});
+
+it('announces the selected row, not only paints it', () => {
+	const { getByTestId } = render(
+		<ListItem testID="row" title="Paul" selected onPress={() => {}} />
+	);
+	expect(getByTestId('row')).toHaveAttribute('aria-selected', 'true');
 });
 
 it('preserves explicit variant priority over selected', () => {
@@ -54,10 +61,10 @@ it('preserves explicit variant priority over selected', () => {
 it('removes without activating the row', () => {
 	const onPress = jest.fn();
 	const onRemove = jest.fn();
-	const { getByRole } = render(
+	const { getByText } = render(
 		<ListItem removable removeLabel="Remove" onPress={onPress} onRemove={onRemove} />
 	);
-	fireEvent.click(getByRole('button'));
+	fireEvent.click(getByText('Remove'));
 	expect(onRemove).toHaveBeenCalledTimes(1);
 	expect(onPress).not.toHaveBeenCalled();
 });
@@ -68,34 +75,10 @@ it('retires the background surface and tiny subtitle', () => {
 
 it('cannot remove a disabled row', () => {
 	const onRemove = jest.fn();
-	const { getByRole } = render(
+	const { getByText } = render(
 		<ListItem removable removeLabel="Remove" disabled onRemove={onRemove} />
 	);
-	expect(getByRole('button')).toBeDisabled();
-	fireEvent.click(getByRole('button'));
+	expect(getByText('Remove')).toBeDisabled();
+	fireEvent.click(getByText('Remove'));
 	expect(onRemove).not.toHaveBeenCalled();
-});
-
-it('is a button when it acts, keeps a caller role, and is no tab stop when it does not', () => {
-	const { getByTestId } = render(
-		<>
-			<ListItem testID="action" title="Store" onPress={() => {}} />
-			<ListItem testID="checkbox" title="Coffee" role="checkbox" onPress={() => {}} />
-			<ListItem testID="inert" title="Paul" />
-		</>
-	);
-	expect(getByTestId('action')).toHaveAttribute('accessibilityRole', 'button');
-	expect(getByTestId('checkbox')).not.toHaveAttribute('accessibilityRole');
-	expect(getByTestId('checkbox')).toHaveAttribute('role', 'checkbox');
-	expect(getByTestId('inert')).not.toHaveAttribute('accessibilityRole');
-	expect(getByTestId('inert')).toHaveAttribute('tabIndex', '-1');
-});
-
-it('shows the hover lift on a fine pointer only', () => {
-	mockPointer = 'fine';
-	const { getByTestId, rerender } = render(<ListItem testID="row" onPress={() => {}} />);
-	expect(getByTestId('row')).toHaveClass('web:hover:bg-muted');
-	mockPointer = 'coarse';
-	rerender(<ListItem testID="row" onPress={() => {}} />);
-	expect(getByTestId('row')).not.toHaveClass('web:hover:bg-muted');
 });

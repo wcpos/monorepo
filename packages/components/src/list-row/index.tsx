@@ -1,14 +1,13 @@
 import * as React from 'react';
-import { Pressable, type PressableProps, View } from 'react-native';
+import { View } from 'react-native';
 
 import { currentRowMark } from '../lib/current-row';
-import { usePointer } from '../lib/device';
 import { cn } from '../lib/utils';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 
 export type ListRowSize = 'default' | 'sm';
 
-export type ListRowProps = Omit<PressableProps, 'children'> & {
-	ref?: React.Ref<React.ComponentRef<typeof Pressable>>;
+export type ListRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed'> & {
 	/**
 	 * Set on a list whose rows can be the current one (open orders, a short choice). `true`
 	 * paints the row `bg-muted` with the primary bar on its left edge; `false` keeps the bar's
@@ -35,8 +34,8 @@ const sizes: Record<ListRowSize, string> = {
 
 /**
  * One row of a list: the management lists' phone rows, closures, browse terms, open orders,
- * the cart note. A hairline under each row, a press (and a fine-pointer hover) shows `bg-muted`,
- * and the body takes the room between `leading` and `trailing` so its text truncates, never
+ * the cart note. A hairline under each row on the pressable surface (its press and hover wash
+ * are `bg-muted`), and the body takes the room between `leading` and `trailing` so its text truncates, never
  * the amounts.
  */
 export function ListRow({
@@ -47,37 +46,17 @@ export function ListRow({
 	className,
 	bodyClassName,
 	children,
-	disabled,
-	onPress,
-	role,
-	accessibilityRole,
 	...props
 }: ListRowProps) {
-	const pointer = usePointer();
-	const selectable = selected !== undefined;
-	const radio = (role ?? accessibilityRole) === 'radio';
 	return (
-		<Pressable
-			role={role}
-			// A row that does something is a button unless the caller names it otherwise (a radio).
-			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
-			// A row without an action is no tab stop either (react-native-web's Pressable sets its
-			// own tabIndex and ignores `focusable`).
-			tabIndex={onPress ? undefined : -1}
-			// Native announces it as the selected one (RN maps it onto the selected state); a radio
-			// carries `aria-checked` instead.
-			aria-selected={selectable && !radio ? selected : undefined}
-			disabled={disabled}
-			onPress={onPress}
+		<PressableSurface
+			selected={selected}
 			className={cn(
 				'border-border flex-row items-center gap-3 border-b px-3 py-2',
 				sizes[size],
-				'active:bg-muted',
-				pointer === 'fine' && 'web:hover:bg-muted',
 				currentRowMark(selected),
 				// The bar's 2 comes out of the row's 12, so the content stays on the same line.
-				selectable && 'pl-2.5',
-				disabled && 'opacity-50',
+				selected !== undefined && 'pl-2.5',
 				className
 			)}
 			{...props}
@@ -85,6 +64,6 @@ export function ListRow({
 			{leading}
 			<View className={cn('min-w-0 flex-1', bodyClassName)}>{children}</View>
 			{trailing}
-		</Pressable>
+		</PressableSurface>
 	);
 }

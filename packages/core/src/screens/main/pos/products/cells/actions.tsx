@@ -22,7 +22,6 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> 
 			testID="add-to-cart-button"
 			name="plus"
 			variant="success"
-			size="4xl"
 			accessibilityLabel={t('common.add_to_cart')}
 			onPress={() => addProduct(row.original.record)}
 		/>

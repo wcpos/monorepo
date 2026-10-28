@@ -38,7 +38,6 @@ jest.mock('../lib/native-popover-sizing', () => ({}));
 jest.mock('../lib/overlay', () => ({}));
 jest.mock('../icon', () => ({ Icon: () => null }));
 jest.mock('../input', () => ({ Input: () => null }));
-jest.mock('../lib/min-target', () => ({ useMinTargetSlop: () => ({}) }));
 
 function SelectState() {
 	const { open } = Select.useRootContext();

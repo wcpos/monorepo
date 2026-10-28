@@ -1,15 +1,14 @@
 import * as React from 'react';
-import { Pressable, type PressableProps, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
-import { usePointer } from '../lib/device';
 import { cn } from '../lib/utils';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text } from '../text';
 
 export type NavItemSize = 'row' | 'drawer';
 
-export type NavItemProps = Omit<PressableProps, 'children'> & {
-	selected?: boolean;
+export type NavItemProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'role'> & {
 	/** A name is painted by the item's state; an element (a drawer icon) paints itself. */
 	icon?: IconName | React.ReactElement;
 	/** A string is painted by state; an element (a route's rendered `drawerLabel`) paints itself. */
@@ -30,8 +29,8 @@ const sizes: Record<NavItemSize, string> = {
 
 /**
  * One navigation row: the area list's rows, the drawer's items and its bell. The selected row
- * lifts onto `bg-card` (the surface the content sits on), and a press or a fine-pointer hover
- * shows the same lift.
+ * lifts onto `bg-card` (the surface the content sits on), and the surface's press and hover wash
+ * is the same lift.
  */
 export function NavItem({
 	selected = false,
@@ -42,10 +41,8 @@ export function NavItem({
 	size = 'row',
 	className,
 	testID,
-	accessibilityState,
 	...props
 }: NavItemProps) {
-	const pointer = usePointer();
 	const drawer = size === 'drawer';
 	const tint = selected
 		? drawer
@@ -55,16 +52,14 @@ export function NavItem({
 			? 'text-sidebar-foreground'
 			: 'text-muted-foreground';
 	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ ...accessibilityState, selected }}
-			aria-selected={selected}
+		<PressableSurface
+			role="button"
+			selected={selected}
+			wash="card"
 			className={cn(
 				'flex-row items-center gap-3 px-3',
 				sizes[size],
 				!label && 'justify-center',
-				'active:bg-card',
-				pointer === 'fine' && 'web:hover:bg-card',
 				selected && 'bg-card',
 				className
 			)}
@@ -89,6 +84,6 @@ export function NavItem({
 			) : null}
 			{badge ? <View className="relative h-5 w-5">{badge}</View> : null}
 			{chevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
-		</Pressable>
+		</PressableSurface>
 	);
 }

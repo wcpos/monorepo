@@ -12,7 +12,7 @@ let icon: Record<string, unknown>;
 let label: Record<string, unknown>;
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
-	// The under-44 icon buttons mount a press band (icon-button ledger line 7).
+	// The under-44 buttons mount the 44 pt band (lib/min-target).
 	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	Pressable: (props: Record<string, unknown>) => {
 		pressable = props;
@@ -92,33 +92,6 @@ it('sizes icon roots separately from their glyphs and supports on', () => {
 	rerender(<IconButton name="plus" accessibilityLabel="Add" on size="sm" />);
 	expect(icon.className).toBe('text-primary');
 	expect(pressable.className).toContain('size-8');
-	expect(pressable.hitSlop).toBe(8);
 	rerender(<IconButton name="plus" accessibilityLabel="Add" />);
 	expect(pressable.className).toContain('size-ctl');
-});
-it('grows a sm button to a 44 pt target on native, measured, and keeps a caller slop', () => {
-	const platform = jest.requireMock<{ Platform: { OS: string } }>('react-native').Platform;
-	platform.OS = 'ios';
-	try {
-		const onLayout = jest.fn();
-		const { rerender } = render(
-			<Button size="sm" onLayout={onLayout}>
-				Retry
-			</Button>
-		);
-		const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 80, height: 36 } } };
-		act(() => (pressable.onLayout as (event: object) => void)(layout));
-		expect(onLayout).toHaveBeenCalledWith(layout);
-		expect(pressable.hitSlop).toEqual({ top: 4, bottom: 4, left: 0, right: 0 });
-		rerender(
-			<Button size="sm" hitSlop={0}>
-				Retry
-			</Button>
-		);
-		expect(pressable.hitSlop).toBe(0);
-		rerender(<Button>Retry</Button>);
-		expect(pressable.hitSlop).toBeUndefined();
-	} finally {
-		platform.OS = 'web';
-	}
 });

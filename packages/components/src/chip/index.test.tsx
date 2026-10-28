@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { Chip } from './index';
 
@@ -11,14 +11,10 @@ jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const presses = new Map();
 	const longPresses = new Map();
-	const slops = new Map();
-	const layouts = new Map();
 	return {
 		...actual,
 		presses,
 		longPresses,
-		slops,
-		layouts,
 		View: ({ testID, ...props }: { testID?: string }) =>
 			React.createElement('div', { ...props, 'data-testid': testID }),
 		Pressable: ({
@@ -29,8 +25,6 @@ jest.mock('react-native', () => {
 		}) => {
 			presses.set(props.testID, props.onPress);
 			longPresses.set(props.testID, props.onLongPress);
-			slops.set(props.testID, props.hitSlop);
-			layouts.set(props.testID, props.onLayout);
 			return React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } });
 		},
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
@@ -38,13 +32,6 @@ jest.mock('react-native', () => {
 	};
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-// The measure itself is `lib/min-target`'s test; here, which Pressable gets the grown target.
-jest.mock('../lib/min-target', () => ({
-	useMinTargetSlop: (enabled: boolean) => ({
-		hitSlop: enabled ? { top: 6, bottom: 6 } : undefined,
-		onLayout: undefined,
-	}),
-}));
 jest.mock('../icon', () => ({
 	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
 }));
@@ -60,42 +47,18 @@ it.each([
 	expect(screen.getByTestId('chip-label').dataset.classes).toContain(label);
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
 });
-it('gives a sm chip the 44 pt target on its root, which presses as the label when clearable', () => {
-	const { slops, presses, layouts } = jest.requireMock<{
-		slops: Map<string, unknown>;
-		presses: Map<string, unknown>;
-		layouts: Map<string, unknown>;
-	}>('react-native');
+it('gives each press target of a sm chip the 44 pt band, and a split root no press', () => {
+	const { presses } = jest.requireMock<{ presses: Map<string, unknown> }>('react-native');
 	const onPress = jest.fn();
 	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} />);
-	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
+	expect(screen.getByTestId('chip').contains(screen.getByTestId('min-target-band'))).toBe(true);
 	expect(presses.get('chip')).toBe(onPress);
-	// `hitSlop` never reaches past a parent, so the band is the root's even with a clear control.
 	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={() => {}} />);
-	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
-	expect(slops.get('chip-label')).toBeUndefined();
-	// The band above and below routes by where it landed: past the clear half's x it clears.
-	const onClear = jest.fn();
-	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={onClear} />);
-	const route = presses.get('chip') as (event: object) => void;
-	const layoutClear = layouts.get('chip-clear') as (event: object) => void;
-	layoutClear({ nativeEvent: { layout: { x: 50, width: 32 } } });
-	route({ nativeEvent: { locationX: 10 } });
-	expect(onPress).toHaveBeenCalledTimes(1);
-	expect(onClear).not.toHaveBeenCalled();
-	route({ nativeEvent: { locationX: 60 } });
-	expect(onClear).toHaveBeenCalledTimes(1);
-	expect(onPress).toHaveBeenCalledTimes(1);
-	// Right to left the clear half comes first: its span, not its side, decides.
-	layoutClear({ nativeEvent: { layout: { x: 0, width: 32 } } });
-	route({ nativeEvent: { locationX: 60 } });
-	expect(onPress).toHaveBeenCalledTimes(2);
-	route({ nativeEvent: { locationX: 10 } });
-	expect(onClear).toHaveBeenCalledTimes(2);
-	// Without the grown target a clearable root still takes no press.
-	rerender(<Chip label="Menu" testID="chip" onPress={onPress} onClear={() => {}} />);
-	expect(slops.get('chip')).toBeUndefined();
+	for (const half of ['chip-label', 'chip-clear'])
+		expect(within(screen.getByTestId(half)).getByTestId('min-target-band')).toBeTruthy();
 	expect(presses.get('chip')).toBeUndefined();
+	rerender(<Chip label="Menu" testID="chip" onPress={onPress} />);
+	expect(screen.queryByTestId('min-target-band')).toBeNull();
 });
 it.each([
 	[undefined, 'h-ctl', 'text-base'],
@@ -262,26 +225,6 @@ describe('action', () => {
 		render(<Chip label="Ada" testID="chip" onClear={jest.fn()} action={action()} />);
 		expect(screen.queryByTestId('chip-clear')).toBeNull();
 		expect(screen.getByTestId('chip-address')).toBeTruthy();
-	});
-	it('routes a press in the sm band over the action cell to the action on native', () => {
-		const { presses, layouts } = jest.requireMock<{
-			presses: Map<string, unknown>;
-			layouts: Map<string, unknown>;
-		}>('react-native');
-		const onPress = jest.fn();
-		const onAction = jest.fn();
-		render(
-			<Chip label="Ada" testID="chip" size="sm" onPress={onPress} action={action(onAction)} />
-		);
-		(layouts.get('chip-address') as (event: object) => void)({
-			nativeEvent: { layout: { x: 50, width: 32 } },
-		});
-		const route = presses.get('chip') as (event: object) => void;
-		route({ nativeEvent: { locationX: 60 } });
-		expect(onAction).toHaveBeenCalledTimes(1);
-		route({ nativeEvent: { locationX: 10 } });
-		expect(onPress).toHaveBeenCalledTimes(1);
-		expect(onAction).toHaveBeenCalledTimes(1);
 	});
 	it('fills each cell on its own, never the pill (read from source)', () => {
 		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');

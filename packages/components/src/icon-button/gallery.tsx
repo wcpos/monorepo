@@ -15,9 +15,7 @@ const VARIANTS = [
 	'secondary',
 	'success',
 ] as const satisfies readonly NonNullable<Props['variant']>[];
-const SIZES = ['xs', 'sm', 'lg', 'xl', '2xl', '3xl', '4xl'] as const satisfies readonly NonNullable<
-	Props['size']
->[];
+const SIZES = ['xs', 'sm'] as const satisfies readonly NonNullable<Props['size']>[];
 
 const ADD = 'Add product';
 

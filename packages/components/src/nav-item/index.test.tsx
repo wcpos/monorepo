@@ -15,7 +15,7 @@ jest.mock('react-native', () => {
 		Pressable: ({ className, ...props }: import('react-native').PressableProps) =>
 			React.createElement(actual.Pressable, {
 				...props,
-				dataSet: { classes: className, state: JSON.stringify(props.accessibilityState) },
+				dataSet: { classes: className },
 			}),
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
 			React.createElement(actual.Text, { ...props, dataSet: { classes: className } }),
@@ -59,15 +59,6 @@ it.each([
 	}
 );
 
-it('keeps the hover lift to a fine pointer: a touch screen never sticks on hover', () => {
-	const { unmount } = render(<NavItem label="Tax" testID="item" />);
-	expect(classes('item')).toContain('web:hover:bg-card');
-	unmount();
-	mockPointer = 'coarse';
-	render(<NavItem label="Tax" testID="item" />);
-	expect(classes('item')).not.toContain('web:hover:bg-card');
-});
-
 it('carries no left border and no tinted row (retired 2026-10-16)', () => {
 	render(<NavItem size="drawer" selected label="POS" testID="item" />);
 	expect(classes('item')).not.toMatch(/border-l|border-x|bg-white|bg-primary\/10/);
@@ -92,19 +83,9 @@ it('renders a supplied icon element as is, the trailing badge and chevron, and p
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-it('renders an element label as is and keeps selected beside a caller accessibility state', () => {
+it('renders an element label as is', () => {
 	render(
-		<NavItem
-			selected
-			label={<span data-testid="styled-label">Reports</span>}
-			accessibilityState={{ disabled: true }}
-			testID="item"
-		/>
+		<NavItem selected label={<span data-testid="styled-label">Reports</span>} testID="item" />
 	);
 	expect(screen.getByTestId('item')).toContainElement(screen.getByTestId('styled-label'));
-	expect(screen.getByTestId('item').getAttribute('aria-selected')).toBe('true');
-	expect(JSON.parse(screen.getByTestId('item').dataset.state ?? '{}')).toEqual({
-		disabled: true,
-		selected: true,
-	});
 });

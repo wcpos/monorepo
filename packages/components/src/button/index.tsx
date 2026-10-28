@@ -1,15 +1,12 @@
 import React from 'react';
-import { Platform, Pressable } from 'react-native';
-import type { PressableStateCallbackType } from 'react-native';
+import type { Pressable, PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';
-import * as Haptics from 'expo-haptics';
 
 import { HStack } from '../hstack';
 import { Icon, type IconName, type IconProps } from '../icon';
-import { cn } from '../lib/utils';
 import { Loader } from '../loader';
-import { useMinTargetSlop } from '../lib/min-target';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text, TextClassContext } from '../text';
 
 import type { VariantProps } from 'class-variance-authority';
@@ -136,12 +133,11 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
  */
 type ButtonRef = React.ComponentRef<typeof Pressable>;
 
-type ButtonProps = React.ComponentProps<typeof Pressable> &
+type ButtonProps = Omit<PressableSurfaceProps, 'wash' | 'minTarget' | 'selected' | 'dimmed'> &
 	VariantProps<typeof buttonVariants> & {
 		leftIcon?: IconName | React.ReactNode;
 		rightIcon?: IconName | React.ReactNode;
 		loading?: boolean;
-		disableHaptics?: boolean;
 	};
 
 function Button({
@@ -152,8 +148,6 @@ function Button({
 	rightIcon,
 	loading,
 	children,
-	disableHaptics = false,
-	onPress,
 	...props
 }: ButtonProps) {
 	// Always a real boolean, never undefined: on Android, RN only calls
@@ -166,8 +160,6 @@ function Button({
 	// pass (monorepo#1614, defect 1).
 	const [hovered, setHovered] = React.useState(false);
 	const disabled = !!(props.disabled || loading);
-	// `sm` is drawn under 44 to sit in a row; the finger still gets 44 (§ Design 2).
-	const target = useMinTargetSlop(size === 'sm', props.onLayout);
 
 	/**
 	 * Render icon component based on type
@@ -197,27 +189,15 @@ function Button({
 		return children;
 	};
 
-	// Create a wrapped onPress handler that includes haptics
-	const handlePress = React.useCallback(
-		(e: any) => {
-			if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
-				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			}
-			onPress?.(e);
-		},
-		[disabled, disableHaptics, onPress]
-	);
-
 	return (
-		<Pressable
-			className={cn(
-				buttonVariants({ variant, size, className }),
-				disabled && 'web:pointer-events-none web:cursor-not-allowed opacity-45'
-			)}
+		<PressableSurface
+			className={buttonVariants({ variant, size, className })}
 			role="button"
-			hitSlop={target.hitSlop}
+			// Each variant carries its own wash and lifts its label colour below.
+			wash="none"
+			// `sm` is drawn under 44 to sit in a row; the finger still gets 44 (§ Design 2).
+			minTarget={size === 'sm'}
 			{...props}
-			onLayout={target.onLayout}
 			onHoverIn={(event) => {
 				setHovered(true);
 				props.onHoverIn?.(event);
@@ -226,7 +206,6 @@ function Button({
 				setHovered(false);
 				props.onHoverOut?.(event);
 			}}
-			onPress={handlePress}
 			aria-disabled={disabled}
 			disabled={disabled}
 		>
@@ -258,7 +237,7 @@ function Button({
 					)}
 				</TextClassContext.Provider>
 			)}
-		</Pressable>
+		</PressableSurface>
 	);
 }
 

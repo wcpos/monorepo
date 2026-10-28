@@ -48,6 +48,8 @@ jest.mock('react-hook-form', () => ({
 	useWatch: () => '',
 }));
 jest.mock('react-native', () => ({
+	// The shared rows' press haptic reads it (native only).
+	Platform: { OS: 'web' },
 	Pressable: ({
 		children,
 		onPress,
