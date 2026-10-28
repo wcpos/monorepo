@@ -218,7 +218,7 @@ keys `sites[siteUuid].registers[storeId]`), so switching store never drops Front
 and returning needs no second choice. Y's register in the confirm is Y's bound register, else Y's
 only register, else unknown ("you'll choose one there"; no carry).
 
-**Take the drawer with you** is one server act: `POST /sessions/{id}/carry { to_register_id }` on
+**Take the drawer with you** (disabled with *Send n sales first* while `unsyncedCount > 0`, § 4.9) is one server act: `POST /sessions/{id}/carry { to_register_id }` on
 the plugin closes the session at the server's expected cash (so a blind cashier carries the right
 figure and other tills' sales are included), writes the closure with `reason: 'store_switch'` (today's
 closures become `end_of_day` explicitly) and opens the target register's session with
@@ -242,6 +242,24 @@ Under 640 every panel is a page and every push is a page push with the back arro
 in the bar on both POS tabs and opens one sheet (#3018). Denomination tiles wrap to two rows. With
 products on the right every register-family panel comes from the right beside the bell; one is open
 at a time. The desktop title-bar strip hosts the avatar; no web links on desktop.
+
+### 4.9 Two invariants every slice keeps
+
+Written once here after the spec PR's review (fifteen threads, the round cap); every plan step that
+touches drawer money cites them instead of restating them.
+
+1. **A seeded session's figures are unknown until the server's baseline arrives.** `useRegisterSession`
+   exposes `figuresPending` (slice 1b: the session was seeded into this store database and has no
+   `server_expected_at`). Every surface that shows or acts on drawer money reads it: the register
+   panel's figure tiles and rail, the cashier sheet's drawer tile and the hand-over confirm's drawer
+   tile render `—` with *Figures arrive with the next sync*; Close register, `startCounting`, the
+   carry and the count pane are disabled by it. No closure, count or carry is ever written from a
+   pending session.
+2. **Cash leaves a session only after this device's accounting for it is delivered.** A close waits on
+   its accounting as the queue already does; the carry (§ 4.6) is disabled with *Send n sales first*
+   while `useRegisterSession().unsyncedCount > 0`, and the confirm's description names the count.
+   Slice 6 tests a reconnect with pending cash sales and movements: the carry stays disabled until the
+   queue drains, then enables.
 
 ## 5. Slices, in order
 
