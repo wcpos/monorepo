@@ -103,7 +103,7 @@ export function ClosurePanel({
 		setError('');
 		try {
 			if (!(await doc.print())) setError(t('reports.reprint_failed'));
-			else setPrintedTo((row.print_count ?? 0) + 1);
+			else setPrintedTo((reached) => Math.max(row.print_count ?? 0, reached) + 1);
 		} catch (error) {
 			setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
 		}
