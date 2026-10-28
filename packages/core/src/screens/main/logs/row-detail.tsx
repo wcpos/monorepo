@@ -7,6 +7,7 @@ import { decode } from 'html-entities';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -219,6 +220,7 @@ function RowActions({
  */
 export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; title?: string }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { formatDate } = useLocalDate();
 	const entry = catalogueFor(row.code);
 	const detail = rowDetailData(row);
@@ -371,7 +373,10 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const hasFacts = Boolean(eventType || entries.length > 0);
 
 	return (
-		<VStack testID={`logs-detail-${row.logId}`} className="relative py-2 pl-4 md:ml-42 md:pl-0">
+		<VStack
+			testID={`logs-detail-${row.logId}`}
+			className={cn('relative py-2', phone ? 'pl-4' : 'ml-42')}
+		>
 			{/* The row's occurrence count on its own: the logger folds repeats within a window
 			    into one row, so an exactly-once assertion must read this, not the row count. */}
 			<Text testID={`logs-attempts-${row.logId}`} className="hidden">
@@ -380,7 +385,8 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			{isProblem ? (
 				<View
 					className={cn(
-						'absolute top-2 bottom-2 left-0 w-[3px] rounded-full md:-left-4',
+						'absolute top-2 bottom-2 w-[3px] rounded-full',
+						phone ? 'left-0' : '-left-4',
 						kind === 'error' ? 'bg-destructive' : 'bg-warning'
 					)}
 				/>

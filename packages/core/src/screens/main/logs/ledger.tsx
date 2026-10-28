@@ -8,6 +8,7 @@ import { Badge } from '@wcpos/components/badge';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
 import { Suspense } from '@wcpos/components/suspense';
@@ -224,6 +225,7 @@ function LedgerRow({
 	// subline would read the record twice.
 	const record = recordRefOf(row);
 	const recordText = useRecordLabel(record?.collectionName, record?.recordId)?.text ?? null;
+	const phone = useIsPhone();
 
 	return (
 		<View
@@ -232,11 +234,11 @@ function LedgerRow({
 				chained ? 'border-l-info/30' : 'border-l-transparent'
 			)}
 		>
-			{/* md+ — table row. The whole row is the press target: a full-bleed
+			{/* Off a phone — table row. The whole row is the press target: a full-bleed
 			    pressable overlay sits ABOVE the static cells, and the interactive
 			    children (level pill, code chip) float above the overlay — nested
 			    <button> is invalid DOM on web, so siblings-by-z-order it is. */}
-			<View className="web:hover:bg-muted/20 relative hidden md:flex">
+			<View className={cn('web:hover:bg-muted/20 relative', phone && 'hidden')}>
 				<HStack className="items-baseline gap-3 py-2">
 					<Text className="text-muted-foreground w-20 font-mono text-xs tabular-nums">
 						{timeText}
@@ -276,9 +278,9 @@ function LedgerRow({
 				/>
 			</View>
 
-			{/* below md — two-line pressable row; the status badge overlays the first
+			{/* On a phone — two-line pressable row; the status badge overlays the first
 			    line as a sibling, and the duration stays in the subline (B2 mobile). */}
-			<View className="relative md:hidden">
+			<View className={cn('relative', !phone && 'hidden')}>
 				<Pressable
 					testID={`logs-row-sm-${row.logId}`}
 					accessibilityRole="button"
@@ -334,6 +336,7 @@ export function Ledger({
 	scrollEventThrottle?: ScrollViewProps['scrollEventThrottle'];
 }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { formatDate } = useLocalDate();
 	// Drawn, not live: a changed filter's new handle answers while the previous rows stay.
 	const drawn = useDrawnHandle(handle);
@@ -371,7 +374,7 @@ export function Ledger({
 		<VStack testID="logs-ledger" className="min-h-0 flex-1 gap-0">
 			{/* The shared table head, flush (`px-0`) over the rows' own `gap-3` gutter; the
 			    transparent left edge is the rows' chain mark, so the heads sit over their cells. */}
-			<TableHeader className="hidden md:flex">
+			<TableHeader className={cn(phone && 'hidden')}>
 				<TableRow className="items-center gap-3 border-l-2 border-l-transparent pl-2">
 					<TableHead testID="logs-heading-time" className="w-20 flex-none px-0">
 						<Text>{t('health.logs.col_time')}</Text>

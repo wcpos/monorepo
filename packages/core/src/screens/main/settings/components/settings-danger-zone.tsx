@@ -2,6 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 
 interface SettingsDangerZoneProps {
@@ -23,9 +25,17 @@ export function SettingsDangerZone({
 	loading,
 	testID,
 }: SettingsDangerZoneProps) {
+	const phone = useIsPhone();
 	return (
-		<View className="border-border border-t-hairline mt-2 gap-3 pt-4 md:flex-row md:items-center md:justify-between">
-			<Text className="text-muted-foreground text-xs md:max-w-96 md:flex-1">{description}</Text>
+		<View
+			className={cn(
+				'border-border border-t-hairline mt-2 gap-3 pt-4',
+				!phone && 'flex-row items-center justify-between'
+			)}
+		>
+			<Text className={cn('text-muted-foreground text-xs', !phone && 'max-w-96 flex-1')}>
+				{description}
+			</Text>
 			<Button variant="outline-destructive" onPress={onPress} loading={loading} testID={testID}>
 				<Text>{buttonLabel}</Text>
 			</Button>

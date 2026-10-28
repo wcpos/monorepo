@@ -17,7 +17,7 @@ export const WIDE_MIN_WIDTH = 768;
  */
 export const WIDE_MIN_HEIGHT = 480;
 
-export function isPhoneWindow({ width, height }: { width: number; height: number }): boolean {
+function isPhoneWindow({ width, height }: { width: number; height: number }): boolean {
 	return width < WIDE_MIN_WIDTH || height < WIDE_MIN_HEIGHT;
 }
 
@@ -30,6 +30,12 @@ export function DeviceScope({ phone, pointer, children }: React.PropsWithChildre
 	return React.createElement(DeviceContext.Provider, { value }, children);
 }
 
+/**
+ * The one layout boundary: hooks and class names both read it (`cn(phone && 'hidden')`). There
+ * is no `md:`/`phone:` class variant for it: Uniwind's native media queries read only min/max
+ * width and orientation (no height, no "or"; `uniwind/src/bundler/css-processor/mq.ts`), so a
+ * phone on its side (844 × 390) would read as wide, and no media query sees a `DeviceScope`.
+ */
 export function useIsPhone(): boolean {
 	const override = React.useContext(DeviceContext);
 	const window = useWindowDimensions();

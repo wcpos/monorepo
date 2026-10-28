@@ -30,6 +30,7 @@ const recordRow = {
 	context: { collection: 'orders', recordId: 'ae263330-fbff-4834-8798-3f52ff650c79' },
 };
 
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,

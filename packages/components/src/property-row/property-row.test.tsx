@@ -6,6 +6,7 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { useFormControlAria } from '../form/aria';
 import { FormItemContext } from '../form/context';
 import { SavedFieldProvider, useMarkSaved } from '../form/saved-mark';
+import { DeviceScope, useIsPhone } from '../lib/device';
 import {
 	PROPERTY_PLACEHOLDER_CLASS,
 	PropertyAdd,
@@ -18,10 +19,12 @@ import {
 } from './index';
 
 // Keep RNW rendering; Jest does not compile Uniwind classes, so expose them on the DOM.
+const mockWindow = { width: 1024, height: 768, scale: 1, fontScale: 1 };
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	return {
 		...actual,
+		useWindowDimensions: () => mockWindow,
 		Pressable: ({ className, ...props }: import('react-native').PressableProps) =>
 			React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } }),
 		View: ({ className, ...props }: import('react-native').ViewProps) =>
@@ -72,7 +75,7 @@ it('renders the key, the value and the trailing slot, with no divider', () => {
 	);
 	const row = screen.getByTestId('row');
 	expect(row.textContent).toBe('EmailAdd emailRemove');
-	for (const token of ['min-h-ctl', 'md:flex-row', 'md:items-center', 'md:gap-3']) {
+	for (const token of ['min-h-ctl', 'flex-row', 'items-center', 'gap-3']) {
 		expect(classes(row)).toContain(token);
 	}
 	expect(classes(screen.getByTestId('x-form'))).toContain('gap-0');
@@ -81,7 +84,7 @@ it('renders the key, the value and the trailing slot, with no divider', () => {
 	}
 	const key = screen.getByText('Email');
 	expect(classes(key)).toEqual(expect.arrayContaining(['text-muted-foreground', 'text-sm']));
-	expect(classes(key.parentElement as HTMLElement)).toContain('md:w-32');
+	expect(classes(key.parentElement as HTMLElement)).toContain('w-32');
 	expect(classes(screen.getByText('Add email'))).toEqual(
 		expect.arrayContaining(PROPERTY_PLACEHOLDER_CLASS.split(' '))
 	);
@@ -184,15 +187,17 @@ it.each([
 	['a Switch', { control: <Probe testID="switch" /> }, 'switch', true],
 	['a Saved mark', { name: 'tax', verb: <PropertyVerb>Edit</PropertyVerb> }, 'saved-tax', true],
 ])(
-	'below md, words wrap in flow under the value; a mark or a switch keeps the key line: %s',
+	'on a phone, words wrap in flow under the value; a mark or a switch keeps the key line: %s',
 	(_case, props, find, absolute) => {
 		render(
-			<SavedFieldProvider>
-				<Save name="tax" />
-				<PropertyRow label="Prices entered with tax" {...props}>
-					{true}
-				</PropertyRow>
-			</SavedFieldProvider>
+			<DeviceScope phone>
+				<SavedFieldProvider>
+					<Save name="tax" />
+					<PropertyRow label="Prices entered with tax" {...props}>
+						{true}
+					</PropertyRow>
+				</SavedFieldProvider>
+			</DeviceScope>
 		);
 		if (find === 'saved-tax') fireEvent.click(screen.getByText('save tax'));
 		const node = screen.queryByTestId(find) ?? screen.getByText(find);
@@ -267,8 +272,8 @@ it('pressing the key acts on the control it names (focus, toggle)', () => {
 });
 
 it.each([
-	['a dialog', false, false, ['md:w-32', 'md:shrink-0'], 'md:flex-row'],
-	['a settings page', true, false, ['md:w-64', 'lg:w-72'], 'md:flex-row'],
+	['a dialog', false, false, ['w-32', 'shrink-0'], 'flex-row'],
+	['a settings page', true, false, ['w-64', 'lg:w-72'], 'flex-row'],
 	['stacked', false, true, [], undefined],
 ])('the key column in %s', (_case, wide, stacked, keyClasses, rowClass) => {
 	render(
@@ -280,9 +285,37 @@ it.each([
 	);
 	const key = screen.getByText('Theme').parentElement as HTMLElement;
 	expect(classes(key)).toEqual(expect.arrayContaining(keyClasses));
-	if (!keyClasses.length) expect(classes(key).some((c) => c.startsWith('md:w-'))).toBe(false);
-	expect(classes(screen.getByTestId('row')).includes('md:flex-row')).toBe(!!rowClass);
+	if (!keyClasses.length) expect(classes(key).some((c) => /^(lg:)?w-/.test(c))).toBe(false);
+	expect(classes(screen.getByTestId('row')).includes('flex-row')).toBe(!!rowClass);
 	expect(classes(screen.getByText('Pre-selected on every sale.'))).toContain('text-xs');
+});
+
+// The one layout boundary (768 × 480, lib/device) decides the hook and the row's classes alike:
+// a phone on its side is a phone, and a DeviceScope (a gallery cell) overrides the window.
+it.each([
+	['a tablet', { width: 1024, height: 768 }, undefined, false],
+	['a phone on its side', { width: 844, height: 390 }, undefined, true],
+	['a gallery cell forced to a phone', { width: 1024, height: 768 }, true, true],
+	['a gallery cell forced off a phone', { width: 375, height: 667 }, false, false],
+])('%s: the hook and the row agree', (_case, window, phone, expected) => {
+	Object.assign(mockWindow, window);
+	function Phone() {
+		return <span data-testid="phone">{String(useIsPhone())}</span>;
+	}
+	render(
+		<DeviceScope phone={phone}>
+			<Phone />
+			<PropertyRow testID="row" label="Theme">
+				Light
+			</PropertyRow>
+		</DeviceScope>
+	);
+	Object.assign(mockWindow, { width: 1024, height: 768 });
+	expect(screen.getByTestId('phone').textContent).toBe(String(expected));
+	expect(classes(screen.getByTestId('row')).includes('flex-row')).toBe(!expected);
+	expect(classes(screen.getByText('Theme').parentElement as HTMLElement).includes('w-32')).toBe(
+		!expected
+	);
 });
 
 it('a derived value reads in muted ink', () => {
@@ -301,7 +334,7 @@ it('pads the key of a part of an open compound, and tops a multi-line value', ()
 		</PropertyRow>
 	);
 	expect(classes(screen.getByText('City').parentElement as HTMLElement)).toContain('pl-4');
-	expect(classes(screen.getByTestId('row'))).toContain('md:items-start');
+	expect(classes(screen.getByTestId('row'))).toContain('items-start');
 	// A bare string under a View throws on native, so a plain value renders as a Text.
 	expect(classes(screen.getByText('Leeds'))).toEqual(
 		expect.arrayContaining(['text-foreground', 'text-base'])

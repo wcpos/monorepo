@@ -213,9 +213,14 @@ function DialogPanel(allProps: DialogContentProps) {
 	);
 }
 export function DialogHeader({ className, ...props }: ViewProps): React.JSX.Element {
+	const phone = useIsPhone();
 	return (
 		<View
-			className={cn('pr-ctl flex flex-col gap-1.5 pl-4 text-center sm:text-left', className)}
+			className={cn(
+				'pr-ctl flex flex-col gap-1.5 pl-4',
+				phone ? 'text-center' : 'text-left',
+				className
+			)}
 			{...props}
 		/>
 	);
