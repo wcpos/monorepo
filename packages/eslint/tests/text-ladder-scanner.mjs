@@ -11,7 +11,8 @@ import { ROOT } from './uniwind-scanner.mjs';
 const LADDER_LITERALS = [
 	['text-muted-foreground', 'text-xs'], // variant="help"
 	['text-muted-foreground', 'text-sm'], // variant="key"
-	['text-sm', 'font-medium'], // variant="subheading"
+	['text-sm', 'font-medium'], // variant="subheading": the legacy 13 that migrates to it
+	['text-base', 'font-medium'], // variant="subheading": the rank itself restated
 	['text-xs', 'uppercase'], // variant="caption"
 ];
 const TREES = [

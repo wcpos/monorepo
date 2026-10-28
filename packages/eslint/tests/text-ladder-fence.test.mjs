@@ -36,6 +36,7 @@ test('each ladder combo on a Text is one site; a variant is none', () => {
 		'text-muted-foreground text-xs',
 		'text-sm text-muted-foreground',
 		'flex-1 text-sm font-medium',
+		'text-base font-medium',
 		'text-xs font-semibold tracking-wide uppercase',
 	])
 		assert.deepEqual(scanSource(`<Text className="${classes}" />`, path), [
