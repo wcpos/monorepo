@@ -11,8 +11,10 @@ import { Text, TextClassContext } from '../text';
 // status reads at arm's length in every theme and never by colour alone
 // (design rule 5). The tinted filled pill this replaced is removal R3
 // (wcpos/roadmap#351): there is no shape prop and no pill variant.
-const statusDotVariants = cva('size-2 shrink-0 rounded-full', {
+const statusDotVariants = cva('shrink-0 rounded-full', {
 	variants: {
+		// `caption` is a row's state line and a log level: the help rank's muted words.
+		size: { default: 'size-2', caption: 'size-1.5' },
 		variant: {
 			default: 'bg-primary',
 			ok: TONE.ok.dot,
@@ -24,6 +26,7 @@ const statusDotVariants = cva('size-2 shrink-0 rounded-full', {
 	},
 	defaultVariants: {
 		variant: 'default',
+		size: 'default',
 	},
 });
 
@@ -43,13 +46,16 @@ export interface StatusBadgeProps extends ViewProps, VariantProps<typeof statusD
  * <StatusBadge label="Sign in again" variant="warning" />
  * <StatusBadge label="Out of stock" variant="bad" />
  */
-export function StatusBadge({ label, variant, className, ...props }: StatusBadgeProps) {
+export function StatusBadge({ label, variant, size, className, ...props }: StatusBadgeProps) {
+	const caption = size === 'caption';
 	return (
 		<View className={cn('flex-row items-center gap-1.5', className)} {...props}>
-			<View aria-hidden className={statusDotVariants({ variant })} />
+			<View aria-hidden className={statusDotVariants({ variant, size })} />
 			{/* Same colour-contract reset as `Badge` — see the note there (#1369). */}
 			<TextClassContext.Provider value={undefined}>
-				<Text className="text-foreground text-sm">{label}</Text>
+				<Text variant={caption ? 'help' : undefined} className={caption ? undefined : 'text-sm'}>
+					{label}
+				</Text>
 			</TextClassContext.Provider>
 		</View>
 	);

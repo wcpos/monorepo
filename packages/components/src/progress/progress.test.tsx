@@ -75,6 +75,8 @@ jest.mock('react-native-reanimated', () => ({
 }));
 
 // eslint-disable-next-line import/first
+import { TONE } from '../lib/tone';
+// eslint-disable-next-line import/first
 import { Progress } from './index';
 
 beforeEach(() => {
@@ -93,6 +95,12 @@ it('renders the determinate muted track and indicator at the value', () => {
 	expect(getByTestId('indicator').parentElement).toHaveStyle({ transform: 'translateX(-40%)' });
 	expect(getByTestId('indicator')).toHaveClass('bg-success');
 	expect(getByTestId('indicator').parentElement).not.toHaveClass('bg-success');
+});
+
+it.each(['ok', 'muted'] as const)('fills with a fixed tone from the tone map (%s)', (tone) => {
+	const { getByTestId } = render(<Progress value={100} tone={tone} />);
+	expect(getByTestId('indicator')).toHaveClass(TONE[tone].dot);
+	expect(getByTestId('indicator')).not.toHaveClass('bg-primary');
 });
 
 it('renders the web indeterminate sweep instead of the indicator', () => {

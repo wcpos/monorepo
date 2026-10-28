@@ -4,8 +4,21 @@ import { View, ViewProps } from 'react-native';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-function Card({ className, ...props }: ViewProps) {
-	return <View className={cn('border-border bg-card rounded-lg border', className)} {...props} />;
+// The inset is the card's job, not each caller's: `row` for a device or list row card (12),
+// `body` for a card's body (16, the gutter table's "inside a surface").
+const paddings = { none: '', row: 'p-3', body: 'p-4' } as const;
+
+function Card({
+	padding = 'none',
+	className,
+	...props
+}: ViewProps & { padding?: keyof typeof paddings }) {
+	return (
+		<View
+			className={cn('border-border bg-card rounded-lg border', paddings[padding], className)}
+			{...props}
+		/>
+	);
 }
 
 function CardContent({ className, ...props }: ViewProps) {
