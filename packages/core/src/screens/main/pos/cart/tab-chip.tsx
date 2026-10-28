@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import {
@@ -16,16 +18,13 @@ import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
 import { useAwaitsStore } from '../checkout/use-awaiting-store';
 import { useOrderSaveState } from '../checkout/use-order-save-state';
 
-/**
- * The chip tells the cashier about an order they are NOT looking at. On the active tab the
- * same state is already on screen (ledger, tender pane or receipt stage), and a tinted badge
- * on the filled tab reads blue-on-blue, so the active tab carries no chip.
- */
+/** Inactive tabs show a dot and word; the open tab keeps only the muted word. */
 export function TabChip({
 	order,
 	active = false,
 	compact = false,
 	fallbackLabel,
+	fallback,
 	fallbackIsStatus = false,
 	testIDs = true,
 }: {
@@ -33,7 +32,8 @@ export function TabChip({
 	active?: boolean;
 	compact?: boolean;
 	fallbackLabel?: string;
-	/** The fallback is a real order status (the open-orders list), not the strip's "Cart" word. */
+	fallback?: React.ReactNode;
+	/** The fallback is a real order status (the open-orders list), not a generic label. */
 	fallbackIsStatus?: boolean;
 	/** Off: a copy rendered for measurement only, so a testID still points at one element. */
 	testIDs?: boolean;
@@ -85,16 +85,24 @@ export function TabChip({
 													: 'pos_checkout.chip_in_checkout'
 										)
 									: (fallbackLabel ?? null);
-	if (!label) return null;
-	const tone = awaits ? 'warning' : stage === 'receipt' ? 'success' : 'info';
-	// Plain muted text, no dot: the active tab carries no chip (ledger line 6) but keeps its
-	// status word so every tab reads "amount over status"; and the fallback ("Cart") is not a
-	// status at all, so it never gets a dot on any tab.
+	const tone =
+		saveState?.kind === 'rejected'
+			? 'error'
+			: awaits
+				? 'warning'
+				: stage === 'receipt'
+					? 'success'
+					: waiting
+						? 'warning'
+						: 'info';
+	if (!label) return fallback ?? null;
+	// A real status keeps its word on the active tab, but never repeats its coloured dot.
 	if (active || (label === fallbackLabel && !fallbackIsStatus)) {
 		return compact ? null : (
 			<Text
 				testID={testIDs ? `open-order-status-${order.uuid}` : undefined}
-				className="text-muted-foreground text-sm"
+				variant="key"
+				className="text-muted-foreground"
 			>
 				{label}
 			</Text>
@@ -105,7 +113,7 @@ export function TabChip({
 			testID={testIDs ? `open-order-chip-${order.uuid}` : undefined}
 			label={compact ? '' : label}
 			accessibilityLabel={label}
-			variant={saveState?.kind === 'rejected' ? 'error' : tone}
+			variant={tone}
 		/>
 	);
 }

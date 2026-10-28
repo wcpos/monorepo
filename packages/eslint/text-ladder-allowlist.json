@@ -69,7 +69,6 @@
 	"packages/core/src/screens/main/pos/cart/open-orders-list.tsx": 2,
 	"packages/core/src/screens/main/pos/cart/register-panel.tsx": 5,
 	"packages/core/src/screens/main/pos/cart/register-picker.tsx": 1,
-	"packages/core/src/screens/main/pos/cart/tab-chip.tsx": 1,
 	"packages/core/src/screens/main/pos/cart/totals-changed-banner.tsx": 7,
 	"packages/core/src/screens/main/pos/cart/ui-settings-form.tsx": 1,
 	"packages/core/src/screens/main/pos/cart/user-sheet.tsx": 1,
