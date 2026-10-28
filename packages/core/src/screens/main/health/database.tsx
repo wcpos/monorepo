@@ -33,12 +33,13 @@ import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { cn } from '@wcpos/components/lib/utils';
-import { COLLECTION_VOCABULARY, resetCollectionsAndRefill, useQueryRuntime } from '@wcpos/query';
+import { resetCollectionsAndRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 import { Stat, StatHeader } from '@wcpos/components/stat';
 
+import { collectionLabel } from './collection-label';
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
 import { useCollectionCheck, useManualSync } from './use-manual-sync';
@@ -94,10 +95,6 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'coupons',
 	'taxRates',
 ]);
-
-const ROW_LABEL_KEYS = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.labelKey])
-) as Record<CollectionKey, string>;
 
 type RowPhase = 'idle' | 'clearing';
 
@@ -696,12 +693,15 @@ export function DatabaseScreen() {
 					<Notice
 						tone="warning"
 						testID="db-clock-skew"
-						title={`${t(
+						title={`${
 							stats.clockSkew.skewSeconds > 0
-								? 'health.database.clock_skew_ahead'
-								: 'health.database.clock_skew_behind',
-							{ amount: formatSkewMagnitude(stats.clockSkew.skewSeconds) }
-						)} ${t('health.database.clock_skew_hint')}`}
+								? t('health.database.clock_skew_ahead', {
+										amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+									})
+								: t('health.database.clock_skew_behind', {
+										amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+									})
+						} ${t('health.database.clock_skew_hint')}`}
 					/>
 				) : null}
 
@@ -743,7 +743,7 @@ export function DatabaseScreen() {
 							row={row}
 							sizeBytes={sizes[row.key]}
 							stuckCount={stuckByRow[row.key] ?? 0}
-							label={t(ROW_LABEL_KEYS[row.key])}
+							label={collectionLabel(row.key, t)}
 							wide={tableLayout.wide}
 							backingOff={backingOff}
 						/>

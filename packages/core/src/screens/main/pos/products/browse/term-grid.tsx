@@ -28,7 +28,7 @@ import { VariableProductTile } from '../tiles/variable-product-tile';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseBy, type BrowseTerm, termKey, TERMS_KEY } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey, termsTally } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -165,7 +165,7 @@ export function TermLevelGrid({
 	const ground = useGround();
 	const prefix =
 		children.length > 0 && source !== 'shortcuts'
-			? t(TERMS_KEY[source], { count: children.length })
+			? termsTally(source, children.length, t)
 			: undefined;
 	// A level can be thousands of products: rows virtualise, and a `DealCell` in a row that has
 	// scrolled out is unmounted (its deal timing is by index, nothing is lost).

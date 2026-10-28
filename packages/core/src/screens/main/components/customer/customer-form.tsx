@@ -191,7 +191,7 @@ export function CustomerForm(props: CustomerFormProps) {
 								<PropertyAdd
 									key={name}
 									testID={`customer-add-${name === 'tax_ids' ? 'tax_id' : name}`}
-									label={t(label)}
+									label={label === 'tax_id.tax_id' ? t('tax_id.tax_id') : t('common.custom_field')}
 									onPress={() => append(name, row)}
 								/>
 							))}

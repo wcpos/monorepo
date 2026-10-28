@@ -31,12 +31,6 @@ import type { ReaderActions } from './use-reader-actions';
 import type { RememberedReader } from '../../pos/checkout/tender/remembered-readers';
 
 // Literal keys so the translation extractor sees them.
-const ERROR_KEYS = {
-	connect: 'settings.card_readers.could_not_connect',
-	disconnect: 'settings.card_readers.could_not_disconnect',
-	forget: 'settings.card_readers.could_not_forget',
-	open: 'settings.card_readers.could_not_open',
-} as const;
 
 export { readerName };
 
@@ -99,7 +93,13 @@ export function ReaderRow({
 	let lineTone: DeviceState['tone'] = 'muted';
 	let below: React.ReactNode = null;
 	if (error) {
-		line = t(ERROR_KEYS[error.kind], { message: error.message });
+		const failed = { message: error.message };
+		line = {
+			connect: t('settings.card_readers.could_not_connect', failed),
+			disconnect: t('settings.card_readers.could_not_disconnect', failed),
+			forget: t('settings.card_readers.could_not_forget', failed),
+			open: t('settings.card_readers.could_not_open', failed),
+		}[error.kind];
 		lineTone = 'bad';
 	} else if (scan && found === null) line = t('settings.card_readers.looking');
 	else if (found)

@@ -21,6 +21,7 @@ import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrder } from '../contexts/current-order';
+import { refusalText } from '../../../../extensions/actions/present';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -128,9 +129,7 @@ export const useAddCoupon = () => {
 				if (isActionRefusal(outcome)) {
 					return {
 						success: false,
-						error: outcome.deny.presented
-							? undefined
-							: ctx.t(outcome.deny.reasonKey, outcome.deny.params),
+						error: outcome.deny.presented ? undefined : refusalText(outcome.deny, ctx.t),
 					};
 				}
 				if (!outcome) {

@@ -35,7 +35,6 @@ export type EngineCollectionName = SyncCollectionName;
 type CollectionVocabularyEntry = {
 	legacyName: LegacyCollectionName;
 	telemetryName: string;
-	labelKey: string;
 	censusRoute: string | null;
 	writeable: boolean;
 };
@@ -84,28 +83,24 @@ export const COLLECTION_VOCABULARY = {
 	refunds: {
 		legacyName: 'refunds',
 		telemetryName: 'refunds',
-		labelKey: 'common.refunds',
 		censusRoute: 'wcpos/v2/refunds',
 		writeable: false,
 	},
 	orders: {
 		legacyName: 'orders',
 		telemetryName: 'orders',
-		labelKey: 'common.orders',
 		censusRoute: 'wcpos/v2/orders',
 		writeable: true,
 	},
 	products: {
 		legacyName: 'products',
 		telemetryName: 'products',
-		labelKey: 'common.products',
 		censusRoute: 'wcpos/v2/products',
 		writeable: true,
 	},
 	variations: {
 		legacyName: 'variations',
 		telemetryName: 'variations',
-		labelKey: 'common.variations',
 		// Woo core exposes variations only beneath a specific product, but the
 		// WCPOS plugin's cross-parent route (the 1.9 barcode-search route) is a
 		// plain post_type=product_variation query that emits X-WP-Total, and it
@@ -116,14 +111,12 @@ export const COLLECTION_VOCABULARY = {
 	customers: {
 		legacyName: 'customers',
 		telemetryName: 'customers',
-		labelKey: 'common.customers',
 		censusRoute: 'wcpos/v2/customers',
 		writeable: true,
 	},
 	taxRates: {
 		legacyName: 'taxes',
 		telemetryName: 'tax_rates',
-		labelKey: 'common.tax_rates',
 		// The first route moved off wc/v3 (raw wc/v3/taxes requires
 		// `manage_woocommerce`, which cashier-tier POS users don't have, so every
 		// probe 403'd) — now the rule for the whole table, see above.
@@ -133,28 +126,24 @@ export const COLLECTION_VOCABULARY = {
 	categories: {
 		legacyName: 'products/categories',
 		telemetryName: 'categories',
-		labelKey: 'common.categories',
 		censusRoute: 'wcpos/v2/products/categories',
 		writeable: false,
 	},
 	brands: {
 		legacyName: 'products/brands',
 		telemetryName: 'brands',
-		labelKey: 'common.brands',
 		censusRoute: 'wcpos/v2/products/brands',
 		writeable: false,
 	},
 	tags: {
 		legacyName: 'products/tags',
 		telemetryName: 'tags',
-		labelKey: 'common.tags',
 		censusRoute: 'wcpos/v2/products/tags',
 		writeable: false,
 	},
 	coupons: {
 		legacyName: 'coupons',
 		telemetryName: 'coupons',
-		labelKey: 'common.coupons',
 		censusRoute: 'wcpos/v2/coupons',
 		writeable: true,
 	},

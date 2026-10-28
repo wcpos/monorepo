@@ -80,7 +80,11 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 							key={source}
 							testID={`open-register-chip-${source}`}
 							on={amount === value}
-							label={t(`register.float_${source}_chip`, { amount: format(Number(value)) })}
+							label={
+								source === 'default'
+									? t('register.float_default_chip', { amount: format(Number(value)) })
+									: t('register.float_last_chip', { amount: format(Number(value)) })
+							}
 							onPress={() => setAmount(value)}
 						/>
 					)
