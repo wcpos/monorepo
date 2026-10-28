@@ -121,7 +121,7 @@ const dialogContent = jest.fn();
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useDialog: () => ({ open: true, close: () => {} }),
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>

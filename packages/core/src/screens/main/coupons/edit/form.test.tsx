@@ -78,6 +78,7 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	useOverlay: () => ({ presentation: 'right' }),
+	useOverlayPresentation: () => 'right',
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));

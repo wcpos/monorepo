@@ -14,6 +14,7 @@ import { usePrinterFooter } from './use-printer-footer';
 let mockPresentation = 'right';
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	useOverlay: () => ({ presentation: mockPresentation }),
+	useOverlayPresentation: () => mockPresentation,
 }));
 beforeEach(() => {
 	mockPresentation = 'right';

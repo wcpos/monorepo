@@ -1,8 +1,15 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -118,8 +125,10 @@ export function RecountSheet({
 				closeLabel={t('common.close')}
 				closeButtonProps={{ testID: 'recount-close' }}
 			>
-				<DialogTitle>{t('reports.recount')}</DialogTitle>
-				<ScrollView contentContainerClassName="gap-3">
+				<DialogHeader>
+					<DialogTitle>{t('reports.recount')}</DialogTitle>
+				</DialogHeader>
+				<DialogBody contentContainerClassName="gap-3">
 					{!online && <Text testID="recount-offline">{t('reports.recount_offline')}</Text>}
 					{Object.entries(amounts).map(([method, value]) => (
 						<View key={method} testID={`recount-tender-${method}`} className="gap-2">
@@ -181,15 +190,21 @@ export function RecountSheet({
 						</>
 					)}
 					{!!error && <Text testID="recount-error">{error}</Text>}
-				</ScrollView>
+				</DialogBody>
 				{reasonTooLong && (
 					<Text testID="recount-reason-error" className="text-destructive">
 						{t('reports.recount_reason_too_long', { limit: RECOUNT_REASON_LIMIT })}
 					</Text>
 				)}
-				<Button testID="recount-save" loading={busy} disabled={invalid} onPress={save}>
-					{t('reports.recount_save')}
-				</Button>
+				<DialogFooter
+					intent={{
+						label: t('reports.recount_save'),
+						testID: 'recount-save',
+						loading: busy,
+						disabled: invalid,
+						onPress: () => void save(),
+					}}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

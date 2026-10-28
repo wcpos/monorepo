@@ -1,15 +1,13 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
-import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -45,6 +43,7 @@ import {
 import { brands, cogsEnabled, lineCost } from '../margin';
 import { useLocalCategories } from '../cards/use-local-categories';
 import { periodLabel } from '../date-button';
+import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
@@ -55,9 +54,6 @@ import { useClosureDocumentContext } from '../../../../services/register-session
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
 
-const PANEL_WIDTH = 480;
-// A report with the margin columns has six; at 480 they wrap their heads and their amounts.
-const WIDE_PANEL_WIDTH = 640;
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
 		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
@@ -70,7 +66,6 @@ export function DetailPanel() {
 	const { dateRange, storeId, timezone } = useReportsPeriod(),
 		formats = useReportFormats(storeId);
 	const { screenSize } = useTheme(),
-		{ bottom } = useSafeAreaInsets(),
 		t = useT();
 	const phone = screenSize === 'sm',
 		close = () => setDetail(null);
@@ -164,7 +159,6 @@ export function DetailPanel() {
 			(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
 		),
 	});
-	const panelWidth = spec.head.length > 4 ? WIDE_PANEL_WIDTH : PANEL_WIDTH;
 	const title = t(`reports.panel_${detail}`);
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
@@ -231,25 +225,30 @@ export function DetailPanel() {
 		printer: 'reports.print_printer_mismatch',
 	} as const;
 	if (!detail) return null;
-	const content = (
-		<View
-			testID="detail-panel"
-			// No z-index of its own: the dialog's close button is a later sibling and must paint above.
-			className="bg-card relative min-h-0 min-w-0 flex-1 overflow-hidden"
-			style={
-				!phone && Platform.OS === 'web'
-					? {
-							position: 'absolute',
-							right: 0,
-							top: 0,
-							bottom: 0,
-							width: panelWidth,
-							maxWidth: '100%',
-						}
-					: undefined
-			}
-		>
-			<View className={`gap-1 border-b p-4 ${phone ? '' : 'pr-14'}`}>
+	const exportCsv = async () => {
+		if (busy) return;
+		setBusy(true);
+		setError('');
+		try {
+			await saveOrShareCsv(panelCsv(spec), `sales-${detail}-${scope.from}-${scope.to}.csv`);
+		} catch {
+			setError(t('reports.export_failed'));
+		} finally {
+			setBusy(false);
+		}
+	};
+	const print = async () => {
+		setPrintError('');
+		try {
+			const ok = await doc.print();
+			if (ok === false) setPrintError(t('reports.print_failed'));
+		} catch {
+			setPrintError(t('reports.print_failed'));
+		}
+	};
+	return (
+		<ReportPanel testID="detail-panel" wide={spec.head.length > 4} onClose={close}>
+			<DialogHeader>
 				{phone ? (
 					<Breadcrumb
 						testID="detail-panel-crumb"
@@ -258,7 +257,7 @@ export function DetailPanel() {
 						autoFocus
 					/>
 				) : (
-					<DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+					<DialogTitle>{title}</DialogTitle>
 				)}
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
@@ -272,8 +271,8 @@ export function DetailPanel() {
 						alwaysVisible
 					/>
 				</View>
-			</View>
-			<View testID="detail-panel-body" className="min-h-0 flex-1 p-4">
+			</DialogHeader>
+			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
 					detail === 'orders' ? (
 						<OrdersPanel spec={spec} quantity={formats.quantity} />
@@ -284,16 +283,25 @@ export function DetailPanel() {
 					<Text>{t('common.loading')}</Text>
 				)}
 			</View>
-			<View
+			{waiting && (
+				<Text testID="detail-panel-print-waiting" variant="key" className="px-4">
+					{t(waitingLabels[waiting])}
+				</Text>
+			)}
+			{!!(printError || doc.documentError) && (
+				<Text testID="detail-panel-print-error" className="text-destructive px-4">
+					{printError || doc.documentError?.message}
+				</Text>
+			)}
+			{!!error && (
+				<Text testID="detail-panel-export-error" className="text-destructive px-4">
+					{error}
+				</Text>
+			)}
+			<DialogFooter
 				testID="detail-panel-footer"
-				className="gap-2 border-t p-4"
-				style={phone ? { paddingBottom: bottom + 16 } : undefined}
-			>
-				<View className="flex-row items-center justify-between gap-3">
-					<Text
-						testID={spec.missing ? 'detail-panel-cost-missing' : undefined}
-						className="min-w-0 flex-1 tabular-nums"
-					>
+				aside={
+					<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
 						{detail === 'orders'
 							? t(leftOut ? 'reports.orders_counted_left_out' : 'reports.orders_counted', {
 									n: formats.quantity(selectedOrders.length),
@@ -306,91 +314,23 @@ export function DetailPanel() {
 									total: formats.money(totals.total),
 								})}
 					</Text>
-				</View>
-				<View className="flex-row items-center justify-end gap-3">
-					{ready && (
-						<Button
-							testID="detail-panel-export"
-							variant="outline"
-							loading={busy}
-							onPress={async () => {
-								if (busy) return;
-								setBusy(true);
-								setError('');
-								try {
-									await saveOrShareCsv(
-										panelCsv(spec),
-										`sales-${detail}-${scope.from}-${scope.to}.csv`
-									);
-								} catch {
-									setError(t('reports.export_failed'));
-								} finally {
-									setBusy(false);
-								}
-							}}
-						>
-							{t('reports.export_csv')}
-						</Button>
-					)}
-					{waiting && (
-						<Text
-							testID="detail-panel-print-waiting"
-							className="text-muted-foreground min-w-0 flex-1 text-sm"
-						>
-							{t(waitingLabels[waiting])}
-						</Text>
-					)}
-					<Button
-						testID="detail-panel-print"
-						disabled={!!waiting}
-						loading={doc.isPrinting}
-						onPress={async () => {
-							setPrintError('');
-							try {
-								const ok = await doc.print();
-								if (ok === false) setPrintError(t('reports.print_failed'));
-							} catch {
-								setPrintError(t('reports.print_failed'));
-							}
-						}}
-					>
-						{t('reports.print')}
-					</Button>
-				</View>
-				{!!(printError || doc.documentError) && (
-					<Text testID="detail-panel-print-error" className="text-destructive">
-						{printError || doc.documentError?.message}
-					</Text>
-				)}
-				{!!error && (
-					<Text testID="detail-panel-export-error" className="text-destructive">
-						{error}
-					</Text>
-				)}
-			</View>
-		</View>
-	);
-	return phone ? (
-		content
-	) : (
-		<Dialog open onOpenChange={(open) => !open && close()}>
-			<DialogContent
-				side="right"
-				portalHost="reports"
-				className="bg-card z-50 flex-col gap-0 overflow-hidden p-0"
-				style={
-					Platform.OS === 'web'
-						? { display: 'contents' }
-						: { width: panelWidth, maxWidth: '100%', height: '100%' }
 				}
-				closeLabel={t('common.close')}
-				closeButtonProps={{
-					testID: 'detail-panel-close',
-					className: 'h-12 w-12 items-center justify-center',
-				}}
-			>
-				{content}
-			</DialogContent>
-		</Dialog>
+				secondary={[
+					!!ready && {
+						label: t('reports.export_csv'),
+						testID: 'detail-panel-export',
+						loading: busy,
+						onPress: () => void exportCsv(),
+					},
+					{
+						label: t('reports.print'),
+						testID: 'detail-panel-print',
+						disabled: !!waiting,
+						loading: doc.isPrinting,
+						onPress: () => void print(),
+					},
+				]}
+			/>
+		</ReportPanel>
 	);
 }
