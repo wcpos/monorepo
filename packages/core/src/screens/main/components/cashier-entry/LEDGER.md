@@ -1,0 +1,12 @@
+# Behaviour ledger: `components/cashier-entry`
+
+**Job:** The way into the one cashier surface: the avatar button, the `UserSheet` it opens, and the redirect-return claim.
+
+**Composes:** `@wcpos/components/{lib/utils,pressable-surface}`, `components/user-avatar`, `pos/cart/user-sheet`.
+
+## Lines
+
+1. One entry per screen tree: `BarControls` mounts it in the bar below `lg` (`ManagementBar`, `RegisterBar`), `DrawerContent` on the rail on `lg`. Before card 13 of the 2026-10-28 component-library review the sheet had four hosts (the page bar, the register bar, the rail, and `RedirectReturnCashierSheet` in the area layout, which existed only because the bar is absent there on `lg`) and the claim was written three times — evidence: `index.tsx`, `bar-controls/index.tsx`, `drawer-content/index.tsx` — platform: all.
+2. The redirect-return claim: the sheet opens on mount when `peekRedirectLoginUrl()` is this site's `wcpos_login_url`, so after a popup-blocked OAuth return its Add user consumer mounts to claim the one-shot result (`hooks/use-wcpos-auth/redirect-result.ts`); any other return, or none, leaves it closed. The predicate is the copies' byte for byte — evidence: test "claims a redirect return for …" in `index.test.tsx` — platform: web (native has no redirect return).
+3. The avatar and the sheet are one cell (a `View`): a closed sheet still mounts an empty root, which in a bar's gap row was a cell of its own pushing the controls out of line (Paul, 2026-10-09) — evidence: the register bar's comment of that date — platform: all.
+4. `placement`: `bar` is a control-height square with the muted wash (as `IconButton`), `rail` the rail's 48 square with the card lift (as `NavItem`). `portalHost` is the POS host inside the till and the root elsewhere; `onSwitchRegister` is absent where the picker is not that surface's (the phone Products tab) — evidence: `index.tsx`; test "opens the one cashier surface …" — platform: all.
