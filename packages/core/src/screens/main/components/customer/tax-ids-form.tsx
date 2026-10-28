@@ -25,10 +25,10 @@ import { useT } from '../../../../contexts/translations';
 import {
 	isValidTaxIdFormat,
 	TAX_ID_DEFAULT_COUNTRIES,
-	TAX_ID_LABEL_KEYS,
 	TAX_ID_PLACEHOLDERS,
 	TAX_ID_TYPES,
 	type TaxIdType,
+	useTaxIdLabels,
 } from '../../../../lib/tax-id';
 
 interface TaxIdsFormProps {
@@ -54,9 +54,10 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
 	const { fields, remove } = useFieldArray({ control, name });
+	const labels = useTaxIdLabels();
 	const typeOptions = React.useMemo(
-		() => TAX_ID_TYPES.map((type) => ({ value: type, label: t(TAX_ID_LABEL_KEYS[type]) })),
-		[t]
+		() => TAX_ID_TYPES.map((type) => ({ value: type, label: labels[type] })),
+		[labels]
 	);
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;

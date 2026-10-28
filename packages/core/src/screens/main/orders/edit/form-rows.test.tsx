@@ -74,7 +74,7 @@ jest.mock('@wcpos/query/record-readers', () => ({
 jest.mock('../../../../lib/tax-id', () => ({
 	isValidTaxIdFormat: () => true,
 	TAX_ID_DEFAULT_COUNTRIES: {},
-	TAX_ID_LABEL_KEYS: {},
+	useTaxIdLabels: () => ({}),
 	TAX_ID_PLACEHOLDERS: {},
 	TAX_ID_TYPES: ['eu_vat'],
 }));
