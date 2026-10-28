@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Lane `next`; this slice is one PR, ≤ 200 added production lines (tests, strings, docs excluded).
+- Lane `next`. **Split on 2026-10-28 at the budget gate** (Codex stopped at 170 added lines before formatting, about 255 after, against 200): **slice 1a** = Tasks 1–3 on `codex/register-device-state` (the pointer, the cache, the seed), **slice 1b** = Tasks 4–5 on `codex/register-figures-guard` (the hook's and the cycle's writes, the figures guard), each ≤ 200 added production lines (tests, strings, docs excluded). 1b branches from 1a's merge.
 - Jest runs with `--maxWorkers=2`; `packages/core` and `packages/query` suites need `NODE_OPTIONS=--max-old-space-size=4096`. Run one suite at a time. `pnpm install` has run in this worktree.
 - No new env vars. Constants in code with a comment saying why.
 - Every user-facing string goes through `t()` with a key in `packages/core/src/contexts/translations/locales/en/core.json`.

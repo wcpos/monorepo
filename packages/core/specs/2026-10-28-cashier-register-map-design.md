@@ -247,7 +247,7 @@ at a time. The desktop title-bar strip hosts the avatar; no web links on desktop
 
 Budgets are added production lines (tests, snapshots, strings, docs, migrations excluded).
 
-1. **Device-side register state (prerequisite, ≤ 200).** Reproduce on dev-next with the network
+1. **Device-side register state (prerequisite; split into 1a and 1b at the budget gate on 2026-10-28, ≤ 200 each).** Reproduce on dev-next with the network
    off: hand over to a saved cashier, observe the Open register card on a register the server holds
    open. Then, in `packages/query/src/register-session/register-document.ts`: the pointer becomes
    per (site, store); beside it the device keeps the bound register's open-session id, opener and
