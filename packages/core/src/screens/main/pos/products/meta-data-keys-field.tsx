@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import {
 	Combobox,
@@ -14,7 +14,7 @@ import {
 	useComboboxRootContext,
 } from '@wcpos/components/combobox';
 import type { Option } from '@wcpos/components/combobox';
-import { HStack } from '@wcpos/components/hstack';
+import { Chip } from '@wcpos/components/chip';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
@@ -113,20 +113,14 @@ export function MetaDataKeysField({ value, onChange }: MetaDataKeysFieldProps) {
 			{selected.length > 0 && (
 				<View className="flex-row flex-wrap gap-1">
 					{selected.map((opt) => (
-						<HStack
+						<Chip
 							key={opt.value}
-							className="border-border bg-muted items-center gap-1 rounded-full border px-2 py-0.5"
-						>
-							<Text className="text-sm">{opt.value}</Text>
-							<Pressable
-								onPress={() => removeKey(opt.value)}
-								testID={`meta-key-remove-${opt.value}`}
-								accessibilityRole="button"
-								accessibilityLabel={t('common.remove_2', { name: opt.value })}
-							>
-								<Text className="text-muted-foreground text-sm">✕</Text>
-							</Pressable>
-						</HStack>
+							size="sm"
+							label={opt.value}
+							onClear={() => removeKey(opt.value)}
+							clearTestID={`meta-key-remove-${opt.value}`}
+							clearLabel={t('common.remove_2', { name: opt.value })}
+						/>
 					))}
 				</View>
 			)}

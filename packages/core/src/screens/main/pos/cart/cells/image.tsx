@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Image } from '@wcpos/components/image';
+import { PosterThumb } from '@wcpos/components/poster-tile';
 import type { CellContext } from '@wcpos/core/table-types';
 
 type LineItem = import('@wcpos/query').OrderLineItem;
@@ -19,10 +19,9 @@ export function LineItemImage({ row }: CellContext<Props, 'image'>) {
 	}
 
 	return (
-		<Image
-			source={{ uri: imageUrl }}
-			recyclingKey={row.original.uuid}
-			className="h-10 w-10 rounded"
+		<PosterThumb
+			picture={{ kind: 'image', source: { uri: imageUrl }, recyclingKey: row.original.uuid }}
+			size="sm"
 		/>
 	);
 }

@@ -13,7 +13,6 @@ import { resolveNativePrinterColumns, usePrinterDiscovery } from '@wcpos/printer
 import { useT } from '../../../../../../contexts/translations';
 import { isBluetoothPickerPrinter } from './discovered-printer-filters';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../../schema';
-import { RadioDot } from '../../components/radio-dot';
 
 export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
@@ -62,7 +61,8 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 							}
 						}}
 						selected={selected}
-						leading={<RadioDot selected={selected} />}
+						role="radio"
+						aria-checked={selected}
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>

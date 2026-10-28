@@ -88,7 +88,10 @@ jest.mock('../report/template', () => ({ ZReport: () => null }));
 jest.mock('../report/use-report-print', () => ({
 	useReportPrint: () => ({ print: mockPrint, isPrinting: false, contentRef: { current: null } }),
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+jest.mock('@wcpos/components/text', () => ({
+	Text: jest.requireActual('react-native').Text,
+	TextClassContext: jest.requireActual('react').createContext(''),
+}));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));

@@ -57,6 +57,9 @@ function TestButton({ children, disabled, loading, onPress, testID }: TestButton
 
 // The receipt document hook toasts when a cloud profile falls back to the system dialog for a report.
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ title }: { title: string }) => <span>{title}</span>,
+}));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	Dialog: ({ children, open = true }: React.PropsWithChildren<{ open?: boolean }>) =>

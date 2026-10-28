@@ -6,12 +6,12 @@ import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
-import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
@@ -79,23 +79,19 @@ function MenuChip({
 			</PopoverTrigger>
 			<PopoverContent testID={`hero-${name}-menu`}>
 				<ScrollView className={scroll ? 'max-h-96' : undefined} scrollEnabled={scroll}>
-					{choices.map((row) => (
-						<Button
-							key={row.value}
-							testID={`hero-${name}-${row.value}`}
-							variant="ghost"
-							className="flex-row justify-start gap-2 px-3"
-							onPress={() => choose(row.value)}
-						>
-							<View className="w-5 items-center">
-								{row.value === value && <Icon name="check" size="sm" />}
-							</View>
-							<View className="min-w-0 flex-1">
-								<ButtonText>{row.label}</ButtonText>
-								{row.hint && <Text className="text-muted-foreground text-sm">{row.hint}</Text>}
-							</View>
-						</Button>
-					))}
+					<MenuRowGroup>
+						{choices.map((row) => (
+							<MenuRow
+								key={row.value}
+								testID={`hero-${name}-${row.value}`}
+								choice
+								selected={row.value === value}
+								label={row.label}
+								description={row.hint}
+								onPress={() => choose(row.value)}
+							/>
+						))}
+					</MenuRowGroup>
 				</ScrollView>
 				{hint && <Text className="text-muted-foreground p-3 text-sm">{hint}</Text>}
 			</PopoverContent>
@@ -114,8 +110,7 @@ function CashierChip() {
 	const cashiers = useObservableState(source);
 	const value = useQueryState<'orders'>().filters.cashier;
 	const actions = useQueryStateActions<'orders'>();
-	if (!cashiers)
-		return <View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />;
+	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
 		<MenuChip
 			name="cashier"

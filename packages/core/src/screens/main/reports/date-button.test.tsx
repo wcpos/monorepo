@@ -71,7 +71,7 @@ jest.mock('@wcpos/components/button', () => ({
 		);
 	},
 }));
-// The tablet period rows are MenuRows; the stand-in keeps the role, the testID and the
+// The period rows are MenuRows; the stand-in keeps the role, the testID and the
 // locked dimming on ONE element, as the real row does (opacity-45, LEDGER line 9), which is
 // what the live spec reads. The group stays real.
 jest.mock('@wcpos/components/menu-row', () => ({
@@ -411,7 +411,7 @@ it.each([
 	['reports-period-lastWeek', 'Earlier closures', 'sm'],
 	['reports-period-thisMonth', 'Earlier closures', 'sm'],
 	['reports-period-lastMonth', 'Earlier closures', 'sm'],
-	// Tablet rows are locked MenuRows: the dimming must sit on the element that carries the
+	// Every row is a locked MenuRow: the dimming must sit on the element that carries the
 	// testID and the radio role, not on a wrapper (reports-closures.spec.ts:650 reads it there).
 	['reports-period-yesterday', 'Earlier closures', 'md'],
 	['reports-period-lastMonth', 'Earlier closures', 'md'],
@@ -419,14 +419,11 @@ it.each([
 	mockScreenSize = size;
 	draw();
 	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
-	// Phone rows are Buttons dimmed with opacity-50; tablet rows are locked MenuRows (opacity-45).
-	const dim = size === 'sm' ? 'opacity-50' : 'opacity-45';
-	expect(screen.getByTestId(id).className).toContain(dim);
-	expect(screen.getByTestId('reports-period-today').className).not.toContain(dim);
-	if (size !== 'sm') {
-		expect(screen.getByTestId(id).getAttribute('data-locked')).toBe('true');
-		expect(screen.getByTestId('reports-period-today').getAttribute('data-locked')).toBeNull();
-	}
+	// Phone and tablet rows are the same locked MenuRows (opacity-45).
+	expect(screen.getByTestId(id).className).toContain('opacity-45');
+	expect(screen.getByTestId('reports-period-today').className).not.toContain('opacity-45');
+	expect(screen.getByTestId(id).getAttribute('data-locked')).toBe('true');
+	expect(screen.getByTestId('reports-period-today').getAttribute('data-locked')).toBeNull();
 	fireEvent.click(screen.getByTestId(id));
 	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
 	expect(screen.getByTestId(id).textContent).not.toContain('Locked');

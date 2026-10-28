@@ -45,7 +45,7 @@ export function AddCouponScreen() {
 
 	return (
 		<Dialog route>
-			<DialogContent side="right" size="lg">
+			<DialogContent side="right" size="xl">
 				<DialogHeader>
 					<DialogTitle>
 						<Text>{t('coupons.add_coupon')}</Text>

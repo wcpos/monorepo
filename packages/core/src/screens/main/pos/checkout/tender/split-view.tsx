@@ -6,7 +6,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
+import { Checkbox } from '@wcpos/components/checkbox';
 import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
@@ -158,14 +158,15 @@ export function SplitView({
 										selected={pickedLineIds.includes(line.id)}
 										onPress={() => flow.dispatch({ type: 'toggle-split-line', lineId: line.id })}
 										className="min-h-14"
+										// The row is the checkbox; the mark only draws its state.
 										leading={
-											<View
-												className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-border'}`}
-											>
-												{checked ? (
-													<Icon name="check" size="xs" className="text-success-foreground" />
-												) : null}
-											</View>
+											<Checkbox
+												checked={checked}
+												onCheckedChange={() =>
+													flow.dispatch({ type: 'toggle-split-line', lineId: line.id })
+												}
+												className="pointer-events-none"
+											/>
 										}
 										trailing={
 											<Text className="text-foreground font-semibold tabular-nums">
