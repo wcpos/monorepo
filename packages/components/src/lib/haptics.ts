@@ -10,3 +10,9 @@ export function hapticTick(): void {
 	if (Platform.OS === 'web') return;
 	void Haptics.selectionAsync().catch(() => {});
 }
+
+/** The light press every pressable gives on native (Button, Tile, a row, a tab). */
+export function hapticPress(): void {
+	if (Platform.OS === 'web') return;
+	void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+}

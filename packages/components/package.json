@@ -63,7 +63,6 @@
     "./popover": "./src/popover/index.tsx",
     "./portal": "./src/portal/index.ts",
     "./poster-tile": "./src/poster-tile/index.tsx",
-    "./pressable": "./src/pressable/index.tsx",
     "./print": "./src/print/index.ts",
     "./log-view": "./src/log-view/index.tsx",
     "./price-keypad": "./src/price-keypad/index.tsx",

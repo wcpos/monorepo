@@ -1,20 +1,12 @@
 import * as React from 'react';
-import {
-	type GestureResponderEvent,
-	Platform,
-	Pressable,
-	type PressableProps,
-	View,
-} from 'react-native';
-
-import * as Haptics from 'expo-haptics';
+import { View } from 'react-native';
 
 import { Icon } from '../icon';
-import { usePointer } from '../lib/device';
 import { cn } from '../lib/utils';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text, TextClassContext, type TextProps } from '../text';
 
-export type MenuRowProps = Omit<PressableProps, 'children'> & {
+export type MenuRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed' | 'role'> & {
 	/** Set on every row of a choice list to reserve the leading check slot. */
 	choice?: boolean;
 	selected?: boolean;
@@ -47,58 +39,22 @@ export function MenuRow({
 	variant = 'default',
 	locked = false,
 	className,
-	disabled,
-	onPress,
-	accessibilityState,
 	...props
 }: MenuRowProps) {
-	const pointer = usePointer();
 	const destructive = variant === 'destructive';
-	const press = (event: GestureResponderEvent) => {
-		if (Platform.OS !== 'web' && !disabled) {
-			void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		}
-		onPress?.(event);
-	};
 	return (
 		<TextClassContext.Provider
 			value={cn('text-base select-none', destructive ? 'text-destructive' : 'text-foreground')}
 		>
-			<Pressable
+			<PressableSurface
 				{...props}
-				onPress={press}
-				// react-native-web activates on Space only for the button role; a radio
-				// row gets it here, after the caller's handler and only if that did not
-				// claim the key.
-				onKeyDown={
-					choice
-						? (event) => {
-								props.onKeyDown?.(event);
-								if (event.nativeEvent.key === ' ' && !event.defaultPrevented && !disabled) {
-									event.preventDefault();
-									press(event as unknown as GestureResponderEvent);
-								}
-							}
-						: props.onKeyDown
-				}
-				accessibilityRole={choice ? 'radio' : 'button'}
 				role={choice ? 'radio' : 'button'}
-				accessibilityState={{
-					...accessibilityState,
-					disabled: !!disabled,
-					checked: choice ? selected : undefined,
-				}}
-				aria-checked={choice ? selected : undefined}
-				disabled={disabled}
+				selected={choice ? selected : undefined}
+				dimmed={locked}
+				wash={destructive ? 'destructive' : 'muted'}
 				className={cn(
 					'web:outline-none web:cursor-default min-h-row w-full flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
-					destructive
-						? 'web:focus:bg-destructive/10 active:bg-destructive/10'
-						: 'web:focus:bg-muted active:bg-muted',
-					pointer === 'fine' &&
-						(destructive ? 'web:hover:bg-destructive/10' : 'web:hover:bg-muted'),
-					(disabled || locked) && 'opacity-45',
-					disabled && 'web:pointer-events-none',
+					destructive ? 'web:focus:bg-destructive/10' : 'web:focus:bg-muted',
 					className
 				)}
 			>
@@ -125,7 +81,7 @@ export function MenuRow({
 					)}
 				</View>
 				{trailing}
-			</Pressable>
+			</PressableSurface>
 		</TextClassContext.Provider>
 	);
 }

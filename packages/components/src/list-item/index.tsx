@@ -1,12 +1,12 @@
 import * as React from 'react';
-import { Pressable, type PressableProps, View } from 'react-native';
+import { View } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text } from '../text';
-import { usePointer } from '../lib/device';
 import { TILE_SURFACE } from '../lib/tile-surface';
 
 /**
@@ -52,7 +52,9 @@ const listItemVariants = cva(
 );
 
 interface ListItemBaseProps
-	extends Omit<PressableProps, 'children'>, VariantProps<typeof listItemVariants> {
+	extends
+		Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed'>,
+		VariantProps<typeof listItemVariants> {
 	/** Content rendered on the left (avatar, icon, etc.) */
 	leading?: React.ReactNode;
 	/** Primary text label */
@@ -61,8 +63,6 @@ interface ListItemBaseProps
 	subtitle?: string;
 	/** Content rendered on the right before the remove button (badge, etc.) */
 	trailing?: React.ReactNode;
-	/** Whether this item is in a selected state */
-	selected?: boolean;
 	/** Called when the remove button is pressed */
 	onRemove?: () => void;
 	/** Custom children — if provided, replaces title/subtitle */
@@ -99,22 +99,11 @@ export function ListItem({
 	// Explicit non-default variant (e.g. "warning") wins over selected.
 	const resolvedVariant =
 		variant && variant !== 'default' ? variant : selected ? 'selected' : 'default';
-	const pointer = usePointer();
-	const { onPress, role, accessibilityRole } = pressableProps;
 
 	return (
-		<Pressable
-			// An actionable row is a button unless the caller names it otherwise (a checkbox, a
-			// radio); react-native-web also needs the role for Space to press it. A row without an
-			// action is no tab stop.
-			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
-			tabIndex={onPress ? undefined : -1}
-			className={cn(
-				listItemVariants({ variant: resolvedVariant }),
-				pointer === 'fine' && 'web:hover:bg-muted',
-				pressableProps.disabled && TILE_SURFACE.disabled,
-				className
-			)}
+		<PressableSurface
+			selected={selected}
+			className={cn(listItemVariants({ variant: resolvedVariant }), className)}
 			{...pressableProps}
 		>
 			{leading}
@@ -146,6 +135,6 @@ export function ListItem({
 					}}
 				/>
 			)}
-		</Pressable>
+		</PressableSurface>
 	);
 }

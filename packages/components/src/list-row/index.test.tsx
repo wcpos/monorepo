@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { ListRow } from './index';
 
@@ -24,20 +24,12 @@ beforeEach(() => {
 	mockPointer = 'fine';
 });
 
-it('is a hairline-ruled row with the press and fine-pointer hover on bg-muted', () => {
+it('is a hairline-ruled row on the muted-wash surface', () => {
 	render(<ListRow testID="row" onPress={() => {}} />);
 	expect(classes('row')).toContain('border-b');
 	expect(classes('row')).toContain('min-h-14');
 	expect(classes('row')).toContain('active:bg-muted');
-	expect(classes('row')).toContain('web:hover:bg-muted');
 	expect(classes('row')).not.toContain('rounded');
-	expect(screen.getByTestId('row')).toHaveAttribute('role', 'button');
-});
-
-it('keeps hover off a coarse pointer, where it would stick after a tap', () => {
-	mockPointer = 'coarse';
-	render(<ListRow testID="row" onPress={() => {}} />);
-	expect(classes('row')).not.toContain('hover:');
 });
 
 it('has 44 for a one-line row', () => {
@@ -64,20 +56,6 @@ it('paints the selected row with the primary bar, and keeps the bar room on the 
 	expect(screen.getByTestId('plain')).not.toHaveAttribute('aria-selected');
 });
 
-it('leaves a radio its checked state rather than a selected one, by either role prop', () => {
-	render(
-		<>
-			<ListRow testID="radio" role="radio" aria-checked selected onPress={() => {}} />
-			<ListRow testID="legacy" accessibilityRole="radio" selected onPress={() => {}} />
-		</>
-	);
-	const row = screen.getByTestId('radio');
-	expect(row).toHaveAttribute('role', 'radio');
-	expect(row).toHaveAttribute('aria-checked', 'true');
-	expect(row).not.toHaveAttribute('aria-selected');
-	expect(screen.getByTestId('legacy')).not.toHaveAttribute('aria-selected');
-});
-
 it('puts leading, body and trailing in order, the body taking the room', () => {
 	render(
 		<ListRow
@@ -98,27 +76,4 @@ it('puts leading, body and trailing in order, the body taking the room', () => {
 	expect(body.dataset.classes).toContain('flex-1');
 	expect(body.dataset.classes).toContain('min-w-0');
 	expect(body.dataset.classes).toContain('gap-1');
-});
-
-it('presses, and a disabled row neither presses nor hides that it is unavailable', () => {
-	const onPress = jest.fn();
-	const { rerender } = render(<ListRow testID="row" onPress={onPress} />);
-	fireEvent.click(screen.getByTestId('row'));
-	expect(onPress).toHaveBeenCalledTimes(1);
-	rerender(<ListRow testID="row" onPress={onPress} disabled />);
-	fireEvent.click(screen.getByTestId('row'));
-	expect(onPress).toHaveBeenCalledTimes(1);
-	expect(classes('row')).toContain('opacity-50');
-});
-
-it('is no button and no tab stop without an action', () => {
-	render(
-		<>
-			<ListRow testID="row" />
-			<ListRow testID="action" onPress={() => {}} />
-		</>
-	);
-	expect(screen.getByTestId('row')).not.toHaveAttribute('role');
-	expect(screen.getByTestId('row')).not.toHaveAttribute('tabindex', '0');
-	expect(screen.getByTestId('action')).toHaveAttribute('tabindex', '0');
 });
