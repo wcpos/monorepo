@@ -93,6 +93,8 @@ type BodyProps = Pick<HeadingProps, 'row' | 'settled' | 'blind' | 'testID'> & {
 	touched: ReadonlySet<string>;
 	corrections: readonly Correction[];
 	context: ClosureContext;
+	/** The prints so far; the host counts a reprint it just dispatched (Codex, #3036). */
+	printCount?: number;
 };
 
 export function ClosureBody({
@@ -104,6 +106,7 @@ export function ClosureBody({
 	blind,
 	context,
 	testID,
+	printCount = row.print_count,
 }: BodyProps) {
 	const t = useT();
 	const [preview, setPreview] = React.useState(false);
@@ -260,6 +263,24 @@ export function ClosureBody({
 							</Text>
 						</View>
 					)}
+					{/* A late sale or movement moves Expected after the close: one signed term keeps the
+					    ladder adding up, since the rows above are the recorded figures (Codex, #3036). */}
+					{touched.has('expected.cash') && (
+						<View testID="closure-late-corrections" className={STATIC_ROW}>
+							{term(
+								t('reports.late_corrections'),
+								corrections.filter((c) => c.type !== 'recount').length
+							)}
+							{amount(
+								(() => {
+									const delta = toMinor(expected, 4) - toMinor(recorded.expected?.cash ?? '0', 4);
+									return delta < 0
+										? minus(fromMinor(delta, 4))
+										: context.formatMoney(fromMinor(delta, 4));
+								})()
+							)}
+						</View>
+					)}
 					<View className={STATIC_ROW}>
 						{term(t('register.expected_in_drawer'), undefined, false, true)}
 						{amount(context.formatMoney(expected), false, true)}
@@ -313,10 +334,10 @@ export function ClosureBody({
 						<>
 							<Text variant="key" className="px-2.5 py-1">
 								{/* Not a plural pair: the catalogue rule wants {count} in both forms, and "once" has none. */}
-								{row.print_count === 1
+								{printCount === 1
 									? t('reports.printed_once')
-									: row.print_count
-										? t('reports.printed_times', { count: row.print_count })
+									: printCount
+										? t('reports.printed_times', { count: printCount })
 										: t('reports.not_printed')}
 							</Text>
 							<Icon name={preview ? 'chevronDown' : 'chevronRight'} size="sm" className={MUTED} />

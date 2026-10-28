@@ -96,10 +96,13 @@ export function ClosurePanel({
 	const corrections = recorded.corrections ?? [];
 	const { settled, touched } = deriveSettled(recorded, corrections);
 	const synced = ['synced', 'superseded'].includes(row.sync_status);
+	// Prints dispatched from this pane: the row's count lags until the local row is read again.
+	const [extraPrints, setExtraPrints] = React.useState(0);
 	const reprint = async () => {
 		setError('');
 		try {
 			if (!(await doc.print())) setError(t('reports.reprint_failed'));
+			else setExtraPrints((n) => n + 1);
 		} catch (error) {
 			setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
 		}
@@ -137,6 +140,7 @@ export function ClosurePanel({
 					corrections={corrections}
 					blind={false}
 					context={context}
+					printCount={(row.print_count ?? 0) + extraPrints}
 				/>
 			</ScrollView>
 			{(doc.isOffline || !synced) && (
