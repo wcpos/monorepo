@@ -8,7 +8,6 @@ import * as z from 'zod';
 
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
-import { DocsLink } from '@wcpos/components/docs-link';
 import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
 import {
@@ -24,6 +23,7 @@ import {
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
+import { PropertyRow } from '@wcpos/components/property-row';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 import {
@@ -33,11 +33,9 @@ import {
 } from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 
-import { LockedRow } from './components/locked-row';
 import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { ClearLocalData } from '../pos/cart/clear-local-data';
-import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -139,6 +137,9 @@ function GeneralSettingsForm({
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const http = useRestHttpClient();
+	// Set in WooCommerce (property rows rule 6): the base address's rows link to its settings.
+	const wooUrl = site.url && `${site.url.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings`;
+	const woo = { where: t('settings.set_in_woocommerce'), href: wooUrl || undefined };
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -225,45 +226,45 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="name"
 						render={({ field }) => (
-							<SettingsRow name="name" label={t('settings.store_name')}>
+							<PropertyRow name="name" label={t('settings.store_name')}>
 								<FormInput testID="settings-general-name" {...field} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
-					<LockedRow
+					<PropertyRow
 						label={t('settings.store_base_country')}
-						value={decode(
-							countries.find(({ code }) => code === formData.store_country)?.name ?? ''
-						)}
+						locked={woo}
 						testID="settings-general-locked-country"
-					/>
-					<LockedRow
+					>
+						{decode(countries.find(({ code }) => code === formData.store_country)?.name ?? '')}
+					</PropertyRow>
+					<PropertyRow
 						label={t('settings.store_base_state')}
-						value={decode(
+						locked={woo}
+						testID="settings-general-locked-state"
+					>
+						{decode(
 							countries
 								.find(({ code }) => code === formData.store_country)
 								?.states?.find(({ code }) => code === formData.store_state)?.name ??
 								formData.store_state ??
 								''
 						)}
-						testID="settings-general-locked-state"
-					/>
-					<LockedRow
+					</PropertyRow>
+					<PropertyRow
 						label={t('settings.store_base_city')}
-						value={formData.store_city}
+						locked={woo}
 						testID="settings-general-locked-city"
-					/>
-					<LockedRow
+					>
+						{formData.store_city}
+					</PropertyRow>
+					<PropertyRow
 						label={t('settings.store_base_postcode')}
-						value={formData.store_postcode}
+						locked={woo}
 						testID="settings-general-locked-postcode"
-					/>
-					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
-					{site.url ? (
-						<DocsLink href={`${site.url.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings`}>
-							{t('settings.store_locked_link')}
-						</DocsLink>
-					) : null}
+					>
+						{formData.store_postcode}
+					</PropertyRow>
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.localization')}>
@@ -271,24 +272,24 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="locale"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow name="locale" label={t('settings.language')}>
+							<PropertyRow name="locale" label={t('settings.language')}>
 								<FormSelect
 									customComponent={LanguageSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="default_customer"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow
+							<PropertyRow
 								name="default_customer"
 								label={t('settings.default_customer')}
-								description={t('settings.default_customer_description')}
+								help={t('settings.default_customer_description')}
 							>
 								<FormCombobox
 									customComponent={CustomerSelect}
@@ -300,20 +301,18 @@ function GeneralSettingsForm({
 									value={{ value: String(value), label: format(defaultCustomerData) }}
 									disabled={toggleCustomerSelect}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="default_customer_is_cashier"
 						render={({ field }) => (
-							<SettingsRow
+							<PropertyRow
 								name="default_customer_is_cashier"
-								inline
 								label={t('settings.default_customer_is_cashier')}
-							>
-								<FormSwitch {...field} />
-							</SettingsRow>
+								control={<FormSwitch {...field} />}
+							/>
 						)}
 					/>
 				</SettingsSection>
@@ -323,69 +322,69 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="currency"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow name="currency" label={t('common.currency')}>
+							<PropertyRow name="currency" label={t('common.currency')}>
 								<FormCombobox
 									customComponent={CurrencySelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="currency_pos"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow name="currency_pos" label={t('settings.currency_position')}>
+							<PropertyRow name="currency_pos" label={t('settings.currency_position')}>
 								<FormSelect
 									customComponent={CurrencyPositionSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<SettingsRow name="price_decimal_sep" label={t('settings.decimal_separator')}>
+							<PropertyRow name="price_decimal_sep" label={t('settings.decimal_separator')}>
 								<FormInput {...field} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
 						render={({ field: { value, ...rest } }) => (
-							<SettingsRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
+							<PropertyRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
 								<FormInput type="numeric" value={value ?? undefined} {...rest} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<SettingsRow name="price_thousand_sep" label={t('settings.thousand_separator')}>
+							<PropertyRow name="price_thousand_sep" label={t('settings.thousand_separator')}>
 								<FormInput {...field} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="thousands_group_style"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow name="thousands_group_style" label={t('settings.thousands_group_style')}>
+							<PropertyRow name="thousands_group_style" label={t('settings.thousands_group_style')}>
 								<FormSelect
 									customComponent={ThousandsStyleSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 				</SettingsSection>

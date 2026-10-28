@@ -4,7 +4,7 @@ Seeded 2026-09-18 from the screen inventory `docs/prototypes/2026-09-12-language
 
 **Job:** Configure scanner input sources and feedback, and diagnose captured scan attempts.
 
-**Composes:** `InputSources`, `ScannerDeviceChooser`, `BarcodeSettings`, `TestPanel`, `SettingsSection`, `SettingsRow`, form controls and collapsible disclosures.
+**Composes:** `InputSources`, `ScannerDeviceChooser`, `BarcodeSettings`, `TestPanel`, `SettingsSection`, `PropertyRow`, form controls and collapsible disclosures.
 
 ## Lines
 

@@ -6,6 +6,9 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { GeneralSettings } from './general';
 
 // The reset's confirm is its own suite; here the danger zone only needs its trigger.
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../jest/property-row.test-utils')
+);
 jest.mock('../pos/cart/clear-local-data', () => ({
 	ClearLocalData: ({ trigger }: { trigger: (onPress: () => void) => React.ReactNode }) =>
 		trigger(jest.fn()),
@@ -131,11 +134,6 @@ jest.mock('../components/currency-select', () => ({ CurrencySelect: () => null }
 jest.mock('../components/customer-select', () => ({ CustomerSelect: () => null }));
 jest.mock('../components/language-select', () => ({ LanguageSelect: () => null }));
 jest.mock('../components/thousands-style-select', () => ({ ThousandsStyleSelect: () => null }));
-jest.mock('./components/settings-row', () => ({
-	SettingsRow: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
-}));
 
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -143,21 +141,24 @@ beforeEach(() => {
 });
 it('renders the country display name and the raw address values, with an em dash for empty', () => {
 	const { getByTestId } = render(<GeneralSettings />);
-	expect(getByTestId('settings-general-locked-country').textContent).toBe('United States (US)');
-	expect(getByTestId('settings-general-locked-state').textContent).toBe('New York');
-	expect(getByTestId('settings-general-locked-city').textContent).toBe('London');
-	expect(getByTestId('settings-general-locked-postcode').textContent).toBe('—');
+	// Each locked row reads key · value · where it is set · Open (rule 6).
+	const row = (value: string) => `settings.store_base_${value}settings.set_in_woocommerceOpen`;
+	expect(getByTestId('settings-general-locked-country').textContent).toBe(
+		row('countryUnited States (US)')
+	);
+	expect(getByTestId('settings-general-locked-state').textContent).toBe(row('stateNew York'));
+	expect(getByTestId('settings-general-locked-city').textContent).toBe(row('cityLondon'));
+	expect(getByTestId('settings-general-locked-postcode').textContent).toBe(row('postcode—'));
 });
 it.each(['https://example.test', undefined, ''])(
 	'links to WooCommerce only with a site URL (%s)',
 	(url) => {
 		site.url = url;
-		const { queryByRole } = render(<GeneralSettings />);
-		if (url)
-			expect(queryByRole('link')?.getAttribute('href')).toBe(
-				'https://example.test/wp-admin/admin.php?page=wc-settings'
-			);
-		else expect(queryByRole('link')).toBeNull();
+		const { queryAllByRole } = render(<GeneralSettings />);
+		const hrefs = queryAllByRole('link').map((link) => link.getAttribute('href'));
+		expect(hrefs).toEqual(
+			url ? Array(4).fill('https://example.test/wp-admin/admin.php?page=wc-settings') : []
+		);
 	}
 );
 it('strips all four server-owned address keys while retaining editable changes', async () => {

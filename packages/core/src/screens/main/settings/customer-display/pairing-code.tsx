@@ -5,13 +5,13 @@ import { formatDistance } from 'date-fns/formatDistance';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
-import { SettingsRow } from '../components/settings-row';
 import { SettingsSection } from '../components/settings-section';
 import { useT } from '../../../../contexts/translations';
 import { useLocalDate } from '../../../../hooks/use-local-date';
@@ -90,7 +90,7 @@ export function PairingCode({
 					{t('settings.customer_display.service_unavailable')}
 				</Text>
 			) : null}
-			<SettingsRow label={t('settings.customer_display.display_url')}>
+			<PropertyRow label={t('settings.customer_display.display_url')}>
 				<VStack className="items-end gap-2">
 					<Text selectable testID="customer-display-host-url" className="font-mono text-xs">
 						{url}
@@ -106,7 +106,7 @@ export function PairingCode({
 						</HStack>
 					) : null}
 				</VStack>
-			</SettingsRow>
+			</PropertyRow>
 		</SettingsSection>
 	);
 }

@@ -20,10 +20,10 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { SettingsRow } from '../components/settings-row';
 import { SettingsSection } from '../components/settings-section';
 import { useT } from '../../../../contexts/translations';
 import { useLocalDate } from '../../../../hooks/use-local-date';
@@ -50,9 +50,9 @@ function DisplayRow({
 				});
 
 	return (
-		<SettingsRow
+		<PropertyRow
 			label={display.name}
-			description={t('settings.customer_display.last_seen', {
+			help={t('settings.customer_display.last_seen', {
 				time: lastSeen,
 			})}
 		>
@@ -89,7 +89,7 @@ function DisplayRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</HStack>
-		</SettingsRow>
+		</PropertyRow>
 	);
 }
 

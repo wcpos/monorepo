@@ -6,6 +6,9 @@ import { Uniwind } from 'uniwind';
 
 import { ThemeSettings } from './theme';
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../jest/property-row.test-utils')
+);
 jest.mock('expo-haptics', () => ({}));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
@@ -20,8 +23,6 @@ jest.mock('@wcpos/components/label', () => ({
 }));
 jest.mock('@wcpos/components/form', () => ({
 	...jest.requireActual('@wcpos/components/form/saved-mark'),
-	FormItem: () => null,
-	FormLabel: () => null,
 }));
 jest.mock('@wcpos/components/radio-group', () => {
 	const ReactMock = jest.requireActual('react') as typeof React;

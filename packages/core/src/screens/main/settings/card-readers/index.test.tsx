@@ -30,6 +30,9 @@ let mockMethods: PaymentMethodDescriptor[] = [];
 let mockCaps = { canAcceptReaderTerms: true };
 const mockPlatform = jest.requireMock('react-native').Platform;
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));

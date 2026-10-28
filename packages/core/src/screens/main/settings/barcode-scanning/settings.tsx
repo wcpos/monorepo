@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
@@ -13,11 +12,11 @@ import {
 	FormSwitch,
 	SavedFieldProvider,
 	savedKeys,
-	SavedMark,
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import { PropertyRow } from '@wcpos/components/property-row';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
@@ -37,7 +36,6 @@ import {
 	SCAN_SOUND_THEMES,
 	type ScanSoundTheme,
 } from '../../pos/products/scan-sound-themes';
-import { SettingsRow } from '../components/settings-row';
 import { SettingsSection } from '../components/settings-section';
 
 const formSchema = z.object({
@@ -168,7 +166,7 @@ function BarcodeSettingsForm() {
 					control={form.control}
 					name="barcode_scanning_avg_time_input_threshold"
 					render={({ field: { value, ...rest } }) => (
-						<SettingsRow
+						<PropertyRow
 							name="barcode_scanning_avg_time_input_threshold"
 							label={t('settings.barcode_average_time_input_threshold_ms')}
 						>
@@ -177,14 +175,14 @@ function BarcodeSettingsForm() {
 								value={value != null ? String(value) : undefined}
 								{...rest}
 							/>
-						</SettingsRow>
+						</PropertyRow>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_min_chars"
 					render={({ field: { value, ...rest } }) => (
-						<SettingsRow
+						<PropertyRow
 							name="barcode_scanning_min_chars"
 							label={t('settings.barcode_minimum_length')}
 						>
@@ -193,31 +191,31 @@ function BarcodeSettingsForm() {
 								value={value != null ? String(value) : undefined}
 								{...rest}
 							/>
-						</SettingsRow>
+						</PropertyRow>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_prefix"
 					render={({ field }) => (
-						<SettingsRow
+						<PropertyRow
 							name="barcode_scanning_prefix"
 							label={t('settings.barcode_scanner_prefix')}
 						>
 							<FormInput {...field} />
-						</SettingsRow>
+						</PropertyRow>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_suffix"
 					render={({ field }) => (
-						<SettingsRow
+						<PropertyRow
 							name="barcode_scanning_suffix"
 							label={t('settings.barcode_scanner_suffix')}
 						>
 							<FormInput {...field} />
-						</SettingsRow>
+						</PropertyRow>
 					)}
 				/>
 			</SettingsSection>
@@ -226,30 +224,26 @@ function BarcodeSettingsForm() {
 					control={form.control}
 					name="barcode_scanning_sound_enabled"
 					render={({ field }) => (
-						<SettingsRow
+						<PropertyRow
 							name="barcode_scanning_sound_enabled"
-							inline
 							label={t('settings.barcode_scan_sound')}
-						>
-							<FormSwitch {...field} />
-						</SettingsRow>
+							control={<FormSwitch {...field} />}
+						/>
 					)}
 				/>
 
 				{soundEnabled ? (
-					<VStack className="gap-3 pl-4" testID="scan-sound-options">
+					<VStack testID="scan-sound-options">
 						<FormField
 							control={form.control}
 							name="barcode_scanning_sound_theme"
 							render={({ field }) => (
-								<VStack space="xs">
-									<View className="relative self-start">
-										<Text className="text-sm font-medium">{t('settings.barcode_sound_theme')}</Text>
-										{/* Out of flow: the mark never takes width from the controls beside it. */}
-										<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-											<SavedMark name="barcode_scanning_sound_theme" label={t('settings.saved')} />
-										</View>
-									</View>
+								<PropertyRow
+									stacked
+									indent
+									name="barcode_scanning_sound_theme"
+									label={t('settings.barcode_sound_theme')}
+								>
 									<RadioGroup value={field.value} onValueChange={field.onChange}>
 										{SCAN_SOUND_THEMES.map((theme) => (
 											// A row of 44 (`min-h-row`): the sm preview buttons' grown target needs a
@@ -280,24 +274,30 @@ function BarcodeSettingsForm() {
 											</HStack>
 										))}
 									</RadioGroup>
-								</VStack>
+								</PropertyRow>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="barcode_scanning_sound_volume"
 							render={({ field }) => (
-								<HStack space="sm" className="items-center">
-									<View className="relative">
-										<Text className="text-sm font-medium">
-											{t('settings.barcode_sound_volume')}
-										</Text>
-										{/* Out of flow, under the label: the slider's track never changes width mid-drag. */}
-										<View className="pointer-events-none absolute top-full left-0 mt-0.5">
-											<SavedMark name="barcode_scanning_sound_volume" label={t('settings.saved')} />
-										</View>
-									</View>
-									<VStack className="flex-1 px-2">
+								<PropertyRow
+									indent
+									name="barcode_scanning_sound_volume"
+									label={t('settings.barcode_sound_volume')}
+									control={
+										<Button
+											variant="outline"
+											size="sm"
+											onPress={() => previewSuccess(form.getValues('barcode_scanning_sound_theme'))}
+											testID="sound-preview-volume"
+											aria-label={t('settings.barcode_sound_preview_success')}
+										>
+											<ButtonText>▶</ButtonText>
+										</Button>
+									}
+								>
+									<VStack className="px-2">
 										<Slider
 											value={field.value}
 											onValueChange={field.onChange}
@@ -306,42 +306,31 @@ function BarcodeSettingsForm() {
 											step={0.05}
 										/>
 									</VStack>
-									<Button
-										variant="outline"
-										size="sm"
-										onPress={() => previewSuccess(form.getValues('barcode_scanning_sound_theme'))}
-										testID="sound-preview-volume"
-										aria-label={t('settings.barcode_sound_preview_success')}
-									>
-										<ButtonText>▶</ButtonText>
-									</Button>
-								</HStack>
+								</PropertyRow>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="barcode_scanning_sound_success_enabled"
 							render={({ field }) => (
-								<SettingsRow
+								<PropertyRow
+									indent
 									name="barcode_scanning_sound_success_enabled"
-									inline
 									label={t('settings.barcode_sound_success')}
-								>
-									<FormSwitch {...field} />
-								</SettingsRow>
+									control={<FormSwitch {...field} />}
+								/>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="barcode_scanning_sound_failure_enabled"
 							render={({ field }) => (
-								<SettingsRow
+								<PropertyRow
+									indent
 									name="barcode_scanning_sound_failure_enabled"
-									inline
 									label={t('settings.barcode_sound_failure')}
-								>
-									<FormSwitch {...field} />
-								</SettingsRow>
+									control={<FormSwitch {...field} />}
+								/>
 							)}
 						/>
 						{Platform.OS !== 'web' ? (
@@ -349,13 +338,12 @@ function BarcodeSettingsForm() {
 								control={form.control}
 								name="barcode_scanning_sound_haptic_enabled"
 								render={({ field }) => (
-									<SettingsRow
+									<PropertyRow
+										indent
 										name="barcode_scanning_sound_haptic_enabled"
-										inline
 										label={t('settings.barcode_sound_haptic')}
-									>
-										<FormSwitch {...field} />
-									</SettingsRow>
+										control={<FormSwitch {...field} />}
+									/>
 								)}
 							/>
 						) : null}

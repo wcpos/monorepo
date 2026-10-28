@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { cn } from '@wcpos/components/lib/utils';
+import { PropertyList } from '@wcpos/components/property-row';
 import { SectionHeading } from '@wcpos/components/section-heading';
 
 interface SettingsSectionProps {
@@ -32,7 +33,7 @@ export function SettingsSection({
 			className={cn('gap-1', !first && 'border-border border-t-hairline -mt-1 pt-4')}
 		>
 			{!!title && <SectionHeading title={title} description={description} />}
-			<View className="gap-1 pt-1">{children}</View>
+			<PropertyList wide>{children}</PropertyList>
 		</View>
 	);
 }

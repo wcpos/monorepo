@@ -7,6 +7,9 @@ import { BarcodeSettings } from './settings';
 
 const store = { id: 1, barcode_scanning_sound_enabled: false };
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('react-native', () => ({ View: ({ children }: React.PropsWithChildren) => children }));
 jest.mock('react-hook-form', () => ({
 	useForm: () => ({ control: {}, getValues: jest.fn() }),

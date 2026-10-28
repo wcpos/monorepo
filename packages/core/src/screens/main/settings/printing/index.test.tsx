@@ -7,6 +7,9 @@ import { PrintingSettings } from './index';
 const mockDeletePrinterProfile = jest.fn().mockResolvedValue(true);
 const profile = { id: 'counter', name: 'Counter', isBuiltIn: false, connectionType: 'network' };
 const storeDB = {};
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/query', () => ({
 	deletePrinterProfile: (...args: unknown[]) => mockDeletePrinterProfile(...args),
 	observeTemplatePrinterOverrides: () => ({ pipe: () => new Map() }),
