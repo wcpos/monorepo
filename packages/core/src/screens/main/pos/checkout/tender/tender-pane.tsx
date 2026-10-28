@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useCSSVariable } from 'uniwind';
 
 import { Chip } from '@wcpos/components/chip';
-import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
+import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -173,19 +173,12 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	);
 }
 
-const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDescriptor[])[] => [
-	...['123', '456', '789'].map((row) =>
-		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
-	),
+const keypadRows = (backspace: string): KeypadKey[][] => [
+	...DIGIT_ROWS,
 	[
-		{ value: 'clear', label: 'C', testID: 'checkout-key-clear' },
-		{ value: '0', label: '0', testID: 'checkout-key-0' },
-		{
-			value: 'backspace',
-			icon: 'backspace',
-			accessibilityLabel,
-			testID: 'checkout-key-backspace',
-		},
+		{ name: 'clear', label: 'C' },
+		{ name: '0', label: '0' },
+		{ name: 'backspace', label: backspace, icon: 'backspace' },
 	],
 ];
 
@@ -606,7 +599,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				rows={KEYPAD_ROWS.map((row) =>
 					row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
 				)}
-				onPress={(value) => flow.dispatch({ type: 'key', key: value as TenderKey })}
+				onPress={(name) => flow.dispatch({ type: 'key', key: name as TenderKey })}
 				fit={shrink ? 'shrink' : 'tile'}
 				testID="checkout-keypad"
 				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}

@@ -980,9 +980,9 @@ it('preserves every keypad selector and dispatches the original key action', () 
 	const flow = { ...makeFlow(), saveState: null };
 	render(<TenderPane flow={flow} format={String} />);
 	for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'backspace']) {
-		expect(screen.getByTestId(`checkout-key-${key}`)).toBeTruthy();
+		expect(screen.getByTestId(`checkout-keypad-key-${key}`)).toBeTruthy();
 	}
-	fireEvent.click(screen.getByTestId('checkout-key-5'));
+	fireEvent.click(screen.getByTestId('checkout-keypad-key-5'));
 	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '5' });
 });
 
@@ -1168,7 +1168,7 @@ describe('declared UI (contract 1.2)', () => {
 		expect(screen.queryByText('future')).toBeNull();
 		expect(screen.getByTestId('checkout-commit').textContent).toBe('Send invoice · 9295');
 		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
-		expect(screen.getByTestId('checkout-key-5').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('checkout-keypad-key-5').hasAttribute('disabled')).toBe(true);
 		expect(screen.queryByTestId('checkout-quick-balance')).toBeNull();
 		fireEvent.change(screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address'), {
 			target: { value: 'x@y.z' },

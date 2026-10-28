@@ -1,5 +1,7 @@
 import round from 'lodash/round';
 
+import { typeDecimal } from '../lib/decimal-entry';
+
 /**
  * The price keypad's entry, pure. `buffer` is what has been typed, always with a `.` for the
  * decimal point (the store's separator is the caller's display); `discount` is the quick key
@@ -8,9 +10,8 @@ import round from 'lodash/round';
 export type PriceEntry = { buffer: string; discount?: number };
 
 export type PriceEntryAction =
-	| { type: 'digit'; digit: string; places: number }
-	| { type: 'decimal' }
-	| { type: 'backspace' }
+	/** A digit, `decimal` or `backspace`, typed by `typeDecimal` at the currency's places. */
+	| { type: 'key'; key: string; places: number }
 	| { type: 'discount'; percent: number }
 	| { type: 'reset' };
 
@@ -27,19 +28,11 @@ export function priceEntryReducer(entry: PriceEntry, action: PriceEntryAction): 
 	// Typing after a quick key starts over: the discount is gone, the buffer empty.
 	const buffer = entry.discount === undefined ? entry.buffer : '';
 	switch (action.type) {
-		case 'digit': {
-			const point = buffer.indexOf('.');
-			if (point >= 0 && buffer.length - point > action.places) return { buffer };
-			// A lone 0 only ever starts a fraction: the next digit takes its place.
-			const next = buffer === '0' ? action.digit : buffer + action.digit;
-			return {
-				buffer: point < 0 && next.length > integerDigits(action.places) ? buffer : next,
-			};
+		case 'key': {
+			const typed = typeDecimal(buffer, action.key, action.places, integerDigits(action.places));
+			// A separator the currency has no places for leaves a lit discount lit.
+			return typed === buffer && action.key === 'decimal' ? entry : { buffer: typed };
 		}
-		case 'decimal':
-			return { buffer: buffer.includes('.') ? buffer : `${buffer || '0'}.` };
-		case 'backspace':
-			return { buffer: buffer.slice(0, -1) };
 		// The lit key again puts the stored price back.
 		case 'discount':
 			return entry.discount === action.percent

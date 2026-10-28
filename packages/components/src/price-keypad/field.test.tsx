@@ -52,8 +52,8 @@ jest.mock('../text', () => ({
 }));
 jest.mock('../lib/overlay', () => ({ useOverlayPresentation: () => 'anchored' }));
 // The display row drawn open beside its trigger.
+jest.mock('../keypad', () => ({ DIGIT_ROWS: [] }));
 jest.mock('../grow-keypad', () => ({
-	DIGIT_ROWS: [],
 	closingRows: () => [],
 	GrowKeypad: ({
 		rows,

@@ -1,55 +1,119 @@
-import { Pressable, View, type ViewProps } from 'react-native';
+import type * as React from 'react';
+import { View, type ViewProps } from 'react-native';
+
+import { cva } from 'class-variance-authority';
 
 import { HStack } from '../hstack';
 import { Icon, type IconName } from '../icon';
 import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
 
-export type KeypadKeyDescriptor = {
-	value: string;
-	testID?: string;
-	// An icon-only key carries no name of its own and the string is the caller's to
-	// translate; the machine value is not a name (the page-bar review's lesson, #2188).
-	span?: 2;
+export type KeypadKey = {
+	/** What a press reports: a digit, `decimal`, `backspace`, or the caller's own key. */
+	name: string;
+	/** The accessible name: the digit, or the caller's translated name (an icon's too). */
+	label: string;
+	/** The key's text when it is not its name (`−10%`, named "Discount (10%)"). */
+	text?: string;
+	icon?: IconName;
+	variant?: 'bad' | 'primary';
+	/** Cells wide, fractions allowed so fewer keys fill a row; 1 when unset. */
+	span?: number;
+	/** A quick key: lit (`true`) while its value is the draft. */
+	on?: boolean;
 	disabled?: boolean;
-} & (
-	| { label: string; icon?: never; accessibilityLabel?: string }
-	| { icon: IconName; label?: never; accessibilityLabel: string }
+	testID?: string;
+};
+
+/** Every keypad's digits, 1 2 3 · 4 5 6 · 7 8 9. */
+export const DIGIT_ROWS: KeypadKey[][] = ['123', '456', '789'].map((row) =>
+	[...row].map((digit) => ({ name: digit, label: digit }))
 );
+
+/** The store's separator, 0, ⌫; with no separator (a currency without places) 0 spans its cell. */
+export function decimalRow(separator: string | undefined, backspace: string): KeypadKey[] {
+	return [
+		...(separator ? [{ name: 'decimal', label: separator }] : []),
+		{ name: '0', label: '0', span: separator ? 1 : 2 },
+		{ name: 'backspace', label: backspace, icon: 'backspace' },
+	];
+}
+
+/**
+ * THE key face (card 17, 2026-10-28): the price keypad's phone key (Paul 2026-10-24), flat
+ * `bg-muted` at the control floor, on every keypad that reaches a phone. `cell` is a key under
+ * one panel's border (the anchored grow keypads). A quick key is outlined, filled while lit.
+ */
+const keyFace = cva('items-center justify-center', {
+	variants: {
+		face: {
+			key: 'bg-muted min-h-ctl rounded-lg active:opacity-70',
+			cell: 'web:hover:bg-muted active:bg-muted',
+		},
+		quick: { none: '', off: '', lit: 'bg-primary' },
+	},
+	compoundVariants: [{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' }],
+});
+const keyText = cva('font-semibold', {
+	variants: {
+		face: { key: 'text-xl', cell: 'text-lg' },
+		quick: { none: '', off: 'text-primary text-sm', lit: 'text-primary-foreground text-sm' },
+	},
+});
+
+type KeyProps = KeypadKey & {
+	face?: 'key' | 'cell';
+	onPress: () => void;
+	style?: ViewProps['style'];
+	className?: string;
+};
+
+/** One key: role, name, `keypad-key-<name>` unless the caller names it, the face. */
+export function Key({ face = 'key', name, label, text, icon, variant, on, ...props }: KeyProps) {
+	const quick = on === undefined ? 'none' : on ? 'lit' : 'off';
+	return (
+		<PressableSurface
+			{...props}
+			wash="none"
+			role="button"
+			disabled={!!props.disabled}
+			testID={props.testID ?? `keypad-key-${name}`}
+			accessibilityLabel={label}
+			aria-pressed={on}
+			className={cn(keyFace({ face, quick }), props.className)}
+		>
+			{icon ? (
+				<Icon name={icon} variant={variant} />
+			) : (
+				<Text className={cn(keyText({ face, quick }))}>{text ?? label}</Text>
+			)}
+		</PressableSurface>
+	);
+}
+
 type KeypadProps = ViewProps & {
-	rows: readonly (readonly KeypadKeyDescriptor[])[];
-	onPress: (value: string) => void;
+	rows: readonly (readonly KeypadKey[])[];
+	onPress: (name: string) => void;
 	fit?: 'tile' | 'shrink';
 };
 
+/** Rows of keys with no display or value; a key is `<testID>-key-<name>`. */
 export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...props }: KeypadProps) {
 	const shrink = fit === 'shrink';
-	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	return (
 		<View {...props} testID={testID} className={cn('gap-2', shrink && 'min-h-0 flex-1', className)}>
 			{rows.map((row, index) => (
 				<HStack key={index} className={cn('items-stretch gap-2', shrink && 'min-h-ctl flex-1')}>
 					{row.map((key) => (
-						<Pressable
-							key={key.value}
-							role="button"
-							disabled={!!key.disabled}
-							testID={key.testID ?? id(`key-${key.value}`) ?? `keypad-key-${key.value}`}
-							accessibilityLabel={key.accessibilityLabel ?? key.label}
-							onPress={() => onPress(key.value)}
-							className={cn(
-								'border-border bg-card active:bg-muted web:hover:bg-muted flex-1 items-center justify-center rounded-lg border',
-								shrink ? 'min-h-ctl' : 'h-tile',
-								key.span === 2 && 'flex-[2]',
-								key.disabled && 'opacity-45'
-							)}
-						>
-							{key.icon ? (
-								<Icon name={key.icon} size="xl" className="text-foreground" />
-							) : (
-								<Text className="text-2xl font-medium">{key.label}</Text>
-							)}
-						</Pressable>
+						<Key
+							key={key.name}
+							{...key}
+							testID={key.testID ?? (testID ? `${testID}-key-${key.name}` : undefined)}
+							style={{ flex: key.span ?? 1 }}
+							className={shrink ? undefined : 'h-tile'}
+							onPress={() => onPress(key.name)}
+						/>
 					))}
 				</HStack>
 			))}

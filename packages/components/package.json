@@ -38,6 +38,7 @@
     "./keyboard-controller": "./src/keyboard-controller/index.tsx",
     "./keypad": "./src/keypad/index.tsx",
     "./label": "./src/label/index.tsx",
+    "./lib/decimal-entry": "./src/lib/decimal-entry.ts",
     "./lib/device": "./src/lib/device.ts",
     "./lib/haptics": "./src/lib/haptics.ts",
     "./lib/motion": "./src/lib/motion.ts",

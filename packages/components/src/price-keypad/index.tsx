@@ -3,13 +3,8 @@ import { View } from 'react-native';
 
 import { Button, ButtonText } from '../button';
 import { fieldBox } from '../field-box';
-import {
-	closingRows,
-	DIGIT_ROWS,
-	type GrowCell,
-	GrowKeypad,
-	type GrowKeypadHandle,
-} from '../grow-keypad';
+import { closingRows, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
+import { DIGIT_ROWS } from '../keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
@@ -124,10 +119,7 @@ export function PriceKeypad({
 	const press = (name: string) => {
 		const percent = name.startsWith('discount-') ? Number(name.slice(9)) : undefined;
 		if (percent !== undefined) dispatch({ type: 'discount', percent });
-		else if (name === 'backspace') dispatch({ type: 'backspace' });
-		else if (name !== 'decimal') dispatch({ type: 'digit', digit: name, places: decimals });
-		// A currency without places has no fraction to type.
-		else if (decimals > 0) dispatch({ type: 'decimal' });
+		else dispatch({ type: 'key', key: name, places: decimals });
 	};
 
 	const percents = discounts.slice(0, QUICK_KEYS);

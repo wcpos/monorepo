@@ -406,9 +406,9 @@ for (const [device, viewport] of Object.entries({
 							if (!cash) throw new Error('Store has no enabled manual cash tender');
 							const balance = await readAmountMinor(page, 'checkout-balance');
 							await page.getByTestId(`checkout-method-${cash.id}`).click();
-							await page.getByTestId('checkout-key-clear').click();
+							await page.getByTestId('checkout-keypad-key-clear').click();
 							for (const digit of String(balance))
-								await page.getByTestId(`checkout-key-${digit}`).click();
+								await page.getByTestId(`checkout-keypad-key-${digit}`).click();
 							await page.getByTestId('checkout-commit').click();
 							await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({
 								timeout: 60_000,

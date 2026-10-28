@@ -1,13 +1,8 @@
 import * as React from 'react';
 
 import { fieldBox } from '../field-box';
-import {
-	closingRows,
-	DIGIT_ROWS,
-	type GrowCell,
-	GrowKeypad,
-	type GrowKeypadHandle,
-} from '../grow-keypad';
+import { closingRows, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
+import { DIGIT_ROWS } from '../keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
@@ -15,6 +10,7 @@ import { Text } from '../text';
 import {
 	COUNT_DIGITS,
 	EMPTY_ENTRY,
+	LINE_DIGITS,
 	QUANTITY_PLACES,
 	quantityEntryReducer,
 	typedQuantity,
@@ -151,18 +147,15 @@ export function QuantityKeypad({
 		}
 		// A count stops at 0; a negative stock (oversold) still steps up from where it is.
 		if (name === 'decrease' && count && base <= 0) return;
-		if (name === 'backspace') dispatch({ type: 'backspace' });
-		else if (name === 'increase') step(onGrid(base + 1));
+		if (name === 'increase') step(onGrid(base + 1));
 		else if (name === 'decrease') step(onGrid(base - 1));
-		else if (name !== 'decimal')
+		else
 			dispatch({
-				type: 'digit',
-				digit: name,
+				type: 'key',
+				key: name,
 				places: decimals,
-				whole: count ? COUNT_DIGITS : undefined,
+				whole: count ? COUNT_DIGITS : LINE_DIGITS,
 			});
-		// A whole-number quantity has no fraction to type.
-		else if (decimals > 0) dispatch({ type: 'decimal' });
 	};
 
 	const display = entry.buffer

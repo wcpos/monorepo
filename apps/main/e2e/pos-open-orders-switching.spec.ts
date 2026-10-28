@@ -86,8 +86,8 @@ test.describe('POS open-orders tab switching', () => {
 		await cartRows(page).first().click();
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
-		await page.getByTestId('numpad-key-1').click();
-		await page.getByTestId('numpad-key-2').click();
+		await page.getByTestId('keypad-key-1').click();
+		await page.getByTestId('keypad-key-2').click();
 		await page.getByTestId('numpad-done-button').click();
 		await expect.poll(() => firstRowQuantityDigits(page), { timeout: 15_000 }).toMatch(/^12$/);
 

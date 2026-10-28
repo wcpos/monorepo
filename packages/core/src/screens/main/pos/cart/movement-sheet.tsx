@@ -11,12 +11,15 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
-import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
+import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
+import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
 import { cn } from '@wcpos/components/lib/utils';
 import { amountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { fromMinor, toMinor } from '@wcpos/order-math';
+import { useDocField } from '@wcpos/query';
 
+import { useAppState } from '../../../../contexts/app-state';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -115,8 +118,6 @@ const REASONS: Record<MovementType, string[]> = {
 };
 /** Where the "after" figure sits in the one translated consequence line, so it can be bold. */
 const AFTER_MARK = '\u0001';
-const digitKeys = (row: string): KeypadKeyDescriptor[] =>
-	[...row].map((value) => ({ value, label: value, testID: `movement-key-${value}` }));
 
 export function MovementSheet({
 	type,
@@ -153,31 +154,17 @@ export function MovementSheet({
 		drawer: holds,
 		after: AFTER_MARK,
 	}).split(AFTER_MARK);
-	const separator = /1(\D)5/.exec(format(1.5))?.[1] ?? '.';
-	const keypadRows: KeypadKeyDescriptor[][] = [
-		digitKeys('123'),
-		digitKeys('456'),
-		digitKeys('789'),
-		[
-			{ value: 'decimal', label: separator, testID: 'movement-key-decimal' },
-			...digitKeys('0'),
-			{
-				value: 'backspace',
-				icon: 'backspace',
-				accessibilityLabel: t('common.backspace'),
-				testID: 'movement-key-backspace',
-			},
-		],
+	// The store's separator and places, as every keypad: the key shows the separator and the state
+	// keeps a point (`normalizeAmount` reads a comma before three digits as a thousands separator).
+	const { store } = useAppState();
+	const separator = (useDocField(store, (value) => value.price_decimal_sep) as string) || '.';
+	const places = Number(useDocField(store, (value) => value.price_num_decimals) ?? 2);
+	const keypadRows = [
+		...DIGIT_ROWS,
+		decimalRow(places > 0 ? separator : undefined, t('common.backspace')),
 	];
 	// The keypad and the hardware keyboard edit the same string.
-	const press = (key: string) =>
-		setAmount((prev) => {
-			if (key === 'backspace') return prev.slice(0, -1);
-			if (key !== 'decimal') return prev + key;
-			// The state is canonical (a point): a keypad decimal is never a thousands separator,
-			// and `normalizeAmount` reads a comma before three digits as one. The key shows the locale's.
-			return prev.includes('.') ? prev : `${prev || '0'}.`;
-		});
+	const press = (key: string) => setAmount((prev) => typeDecimal(prev, key, places));
 	let verb = t('register.open_the_drawer');
 	if (type === 'paid_in') {
 		verb = hasAmount ? t('register.put_in', { amount: figure }) : t('register.put_cash_in');
@@ -264,7 +251,9 @@ export function MovementSheet({
 						</Text>
 					)}
 					{!!error && <Text className="text-destructive text-sm">{error}</Text>}
-					{type !== 'no_sale' && <Keypad rows={keypadRows} onPress={press} fit="tile" />}
+					{type !== 'no_sale' && (
+						<Keypad rows={keypadRows} onPress={press} fit="tile" testID="movement" />
+					)}
 				</DialogBody>
 				<DialogFooter
 					size="lg"

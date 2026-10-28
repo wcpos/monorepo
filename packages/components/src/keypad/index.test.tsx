@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { Keypad, type KeypadKeyDescriptor } from './index';
+import { decimalRow, DIGIT_ROWS, Key, Keypad, type KeypadKey } from './index';
 
 // Keep RNW press/focus behavior; expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
@@ -31,18 +31,16 @@ jest.mock('../icon', () => ({
 	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
 }));
 
-const rows: readonly (readonly KeypadKeyDescriptor[])[] = [
+const rows: readonly (readonly KeypadKey[])[] = [
+	DIGIT_ROWS[0],
 	[
-		{ value: '1', label: '1' },
-		{ value: '2', label: '2' },
-		{ value: '3', label: '3' },
-	],
-	[
-		{ value: '0', label: '0', span: 2 },
-		{ value: 'backspace', icon: 'backspace', accessibilityLabel: 'Borrar dígito' },
+		{ name: '0', label: '0', span: 2 },
+		{ name: 'backspace', icon: 'backspace', label: 'Borrar dígito' },
 	],
 ];
-it('renders in reading order and every key emits only its descriptor value', () => {
+const classes = (testID: string) => screen.getByTestId(testID).dataset.classes;
+
+it('renders in reading order and every key emits only its name', () => {
 	const onPress = jest.fn();
 	render(<Keypad rows={rows} onPress={onPress} testID="pad" />);
 	expect(screen.getAllByRole('button').map((key) => key.dataset.testid)).toEqual([
@@ -57,58 +55,55 @@ it('renders in reading order and every key emits only its descriptor value', () 
 		fireEvent.click(key);
 	});
 	expect(onPress.mock.calls).toEqual([['1'], ['2'], ['3'], ['0'], ['backspace']]);
-	expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-});
-it('gives an icon-only key a stable ID without a root ID and honors explicit IDs', () => {
-	render(
-		<Keypad
-			rows={[
-				[
-					{ value: 'clear', icon: 'close', accessibilityLabel: 'Borrar' },
-					{
-						value: 'back',
-						icon: 'backspace',
-						accessibilityLabel: 'Borrar dígito',
-						testID: 'custom-back',
-					},
-				],
-			]}
-			onPress={jest.fn()}
-		/>
-	);
-	expect(screen.getByTestId('keypad-key-clear')).toBeInTheDocument();
-	expect(screen.getByTestId('custom-back')).toBeInTheDocument();
-});
-it('uses a double flex basis for a span of two', () => {
-	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
-	expect(screen.getByTestId('pad-key-0').dataset.classes).toContain('flex-[2]');
-});
-it('fit defaults to tile and shrink uses flexible rows and control-height floors', () => {
-	const { rerender } = render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
-	expect(screen.getByTestId('pad-key-1').dataset.classes).toContain('h-tile');
-	expect(screen.getByTestId('pad-key-1').parentElement).not.toHaveClass('flex-1');
-	rerender(<Keypad rows={rows} onPress={jest.fn()} testID="pad" fit="shrink" />);
-	expect(screen.getByTestId('pad-key-1').dataset.classes).not.toMatch(/(?:^| )h-tile(?: |$)/);
-	expect(screen.getByTestId('pad-key-1').dataset.classes).toContain('min-h-ctl');
-	expect(screen.getByTestId('pad-key-1').parentElement).toHaveClass('flex-1');
-});
-it('disabled keys do not emit', () => {
-	const onPress = jest.fn();
-	render(
-		<Keypad rows={[[{ value: '1', label: '1', disabled: true }]]} onPress={onPress} testID="pad" />
-	);
-	fireEvent.click(screen.getByTestId('pad-key-1'));
-	expect(onPress).not.toHaveBeenCalled();
-});
-it('lets the digit carry the key', () => {
-	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
-	expect(screen.getByText('1').dataset.classes).toContain('text-2xl');
+	expect(screen.getByRole('button', { name: 'Borrar dígito' })).toBeInTheDocument();
 });
 
-it('uses the provided accessible name for icon-only keys', () => {
-	// @ts-expect-error Icon-only keys must supply a translated accessible name.
-	const unnamed: KeypadKeyDescriptor = { value: 'backspace', icon: 'backspace' };
-	void unnamed;
-	render(<Keypad rows={rows} onPress={jest.fn()} />);
-	expect(screen.getByRole('button', { name: 'Borrar dígito' })).toBeInTheDocument();
+it('one testID scheme: keypad-key-<name>, the keypad testID as its prefix, an explicit ID wins', () => {
+	render(<Keypad rows={[[{ name: 'clear', label: 'C' }]]} onPress={jest.fn()} />);
+	render(<Key name="decimal" label="," onPress={jest.fn()} />);
+	render(<Key name="back" label="⌫" testID="custom-back" onPress={jest.fn()} />);
+	expect(screen.getByTestId('keypad-key-clear')).toBeInTheDocument();
+	expect(screen.getByTestId('keypad-key-decimal')).toBeInTheDocument();
+	expect(screen.getByTestId('custom-back')).toBeInTheDocument();
+});
+
+it('is the one face: flat muted at the control floor, the digit in text-xl semibold', () => {
+	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
+	expect(classes('pad-key-1')).toMatch(/bg-muted.*min-h-ctl.*rounded-lg/);
+	expect(classes('pad-key-1')).not.toContain('border');
+	expect(screen.getByText('1').dataset.classes).toContain('font-semibold text-xl');
+	render(<Key name="q" label="Discount" text="−10%" on={false} onPress={jest.fn()} />);
+	render(<Key name="l" label="Discount" text="−5%" on onPress={jest.fn()} />);
+	expect(classes('keypad-key-q')).toContain('border-border border bg-transparent');
+	expect(classes('keypad-key-l')).toContain('bg-primary');
+	expect(screen.getByTestId('keypad-key-l')).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('a span is its flex; fit tile is h-tile, shrink lets rows give way to the control floor', () => {
+	const { rerender } = render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
+	expect(screen.getByTestId('pad-key-0')).toHaveStyle({ flexGrow: 2 });
+	expect(classes('pad-key-1')).toContain('h-tile');
+	expect(screen.getByTestId('pad-key-1').parentElement).not.toHaveClass('flex-1');
+	rerender(<Keypad rows={rows} onPress={jest.fn()} testID="pad" fit="shrink" />);
+	expect(classes('pad-key-1')).not.toMatch(/(?:^| )h-tile(?: |$)/);
+	expect(screen.getByTestId('pad-key-1').parentElement).toHaveClass('flex-1');
+});
+
+it('disabled keys do not emit', () => {
+	const onPress = jest.fn();
+	render(<Keypad rows={[[{ name: '1', label: '1', disabled: true }]]} onPress={onPress} />);
+	fireEvent.click(screen.getByTestId('keypad-key-1'));
+	expect(onPress).not.toHaveBeenCalled();
+});
+
+it('without a separator there is no decimal key and 0 spans its cell', () => {
+	expect(decimalRow(',', '⌫').map((key) => [key.name, key.span])).toEqual([
+		['decimal', undefined],
+		['0', 1],
+		['backspace', undefined],
+	]);
+	expect(decimalRow(undefined, '⌫').map((key) => [key.name, key.span])).toEqual([
+		['0', 2],
+		['backspace', undefined],
+	]);
 });

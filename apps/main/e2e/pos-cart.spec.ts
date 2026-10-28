@@ -133,7 +133,7 @@ test.describe('POS Cart', () => {
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		// The keypad's first digit replaces the quantity and later digits append (decision 36).
-		for (const digit of '123') await page.getByTestId(`numpad-key-${digit}`).click();
+		for (const digit of '123') await page.getByTestId(`keypad-key-${digit}`).click();
 		await expect(page.getByTestId('quantity-keypad-value')).toHaveText('123');
 
 		await page.getByTestId('numpad-done-button').click();

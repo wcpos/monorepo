@@ -2,45 +2,41 @@ import { View } from 'react-native';
 
 import { useT } from '@wcpos/core/contexts/translations';
 
-import { Keypad, type KeypadKeyDescriptor } from './index';
+import { decimalRow, DIGIT_ROWS, Keypad, type KeypadKey } from './index';
 
-const digits = [
-	['1', '2', '3'],
-	['4', '5', '6'],
-	['7', '8', '9'],
-].map((row) => row.map((value) => ({ value, label: value })));
-const zero: KeypadKeyDescriptor = { value: '0', label: '0', span: 2 };
-const numeric = [...digits, [zero, { value: '.', label: '.' }]];
-const icons = (t: (key: string) => string) => [
-	...digits,
+const numeric = (t: (key: string) => string) => [
+	...DIGIT_ROWS,
+	decimalRow('.', t('common.backspace')),
+];
+const icons = (t: (key: string) => string): KeypadKey[][] => [
+	...DIGIT_ROWS,
 	[
-		{ value: 'clear', icon: 'close' as const, accessibilityLabel: t('common.clear') },
-		{ value: '0', label: '0' },
-		{ value: 'backspace', icon: 'backspace' as const, accessibilityLabel: t('common.backspace') },
+		{ name: 'clear', icon: 'close', label: t('common.clear') },
+		{ name: '0', label: '0' },
+		{ name: 'backspace', icon: 'backspace', label: t('common.backspace') },
 	],
 ];
+const wide = (t: (key: string) => string) => [decimalRow(undefined, t('common.backspace'))];
+
 function TranslatedKeypad({
 	rows,
 	...props
-}: Omit<React.ComponentProps<typeof Keypad>, 'rows'> & { rows: typeof numeric | typeof icons }) {
+}: Omit<React.ComponentProps<typeof Keypad>, 'rows'> & { rows: typeof icons }) {
 	const t = useT();
-	return <Keypad {...props} rows={typeof rows === 'function' ? rows(t) : rows} />;
+	return <Keypad {...props} rows={rows(t)} />;
 }
-export const stories = Object.entries({
-	numeric,
-	icons,
-	shrink: numeric,
-	wide: [[zero, { value: '.', label: '.' }]],
-}).map(([id, rows]) => ({
-	id,
-	render: () => (
-		<View className={id === 'shrink' ? 'h-56 w-64' : 'w-64'}>
-			<TranslatedKeypad
-				rows={rows}
-				fit={id === 'shrink' ? 'shrink' : 'tile'}
-				onPress={() => {}}
-				testID={`gallery-keypad-${id}`}
-			/>
-		</View>
-	),
-}));
+export const stories = Object.entries({ numeric, icons, shrink: numeric, wide }).map(
+	([id, rows]) => ({
+		id,
+		render: () => (
+			<View className={id === 'shrink' ? 'h-56 w-64' : 'w-64'}>
+				<TranslatedKeypad
+					rows={rows}
+					fit={id === 'shrink' ? 'shrink' : 'tile'}
+					onPress={() => {}}
+					testID={`gallery-keypad-${id}`}
+				/>
+			</View>
+		),
+	})
+);
