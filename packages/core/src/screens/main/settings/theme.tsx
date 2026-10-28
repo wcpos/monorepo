@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
@@ -18,9 +17,9 @@ import { type Segment, SegmentedControl } from '@wcpos/components/segmented-cont
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import { patchStoreSettings } from '@wcpos/query/user-db';
-import { SavedFieldProvider, SavedMark, useMarkSaved } from '@wcpos/components/form';
+import { SavedFieldProvider, useMarkSaved } from '@wcpos/components/form';
+import { PropertyRow } from '@wcpos/components/property-row';
 
-import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { resolveIconSet } from '../../../contexts/icon-set';
@@ -100,8 +99,17 @@ function ThemeGrid({
 		themeOptions.find((option) => option.name === activeTheme)?.labelKey ?? activeTheme
 	);
 
+	// The status line keys the grid, and the grid's Saved mark sits on that line.
 	return (
-		<>
+		<PropertyRow
+			stacked
+			name="theme"
+			label={
+				hasAdaptiveThemes
+					? t('settings.following_system_theme')
+					: t('settings.current_theme', { theme: activeThemeLabel })
+			}
+		>
 			<VStack className="gap-3 pt-2">
 				{/* First row: System, Light, Dark. items-stretch so every card in a
 				    row takes the tallest card's height (HStack defaults to
@@ -130,20 +138,7 @@ function ThemeGrid({
 					))}
 				</HStack>
 			</VStack>
-
-			{/* Current theme status */}
-			<View className="relative self-start">
-				<Text className="text-muted-foreground text-xs">
-					{hasAdaptiveThemes
-						? t('settings.following_system_theme')
-						: t('settings.current_theme', { theme: activeThemeLabel })}
-				</Text>
-				{/* Out of flow beside the status line: the Scale row below never moves. */}
-				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-					<SavedMark name="theme" label={t('settings.saved')} />
-				</View>
-			</View>
-		</>
+		</PropertyRow>
 	);
 }
 
@@ -173,11 +168,7 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsRow
-			label={t('settings.scale')}
-			description={t('settings.scale.description')}
-			name="scale"
-		>
+		<PropertyRow label={t('settings.scale')} help={t('settings.scale.description')} name="scale">
 			<SegmentedControl
 				segments={
 					SCALE_OPTIONS.map((option) => ({
@@ -191,7 +182,7 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 					void handleScaleChange(value);
 				}}
 			/>
-		</SettingsRow>
+		</PropertyRow>
 	);
 }
 
@@ -228,13 +219,8 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 
 	return (
 		<SettingsSection title={t('settings.icons')}>
-			<View className="relative self-start">
-				<Text className="text-muted-foreground text-xs">{t('settings.icons.description')}</Text>
-				{/* Out of flow beside the description, like the theme's: the rows never move. */}
-				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
-					<SavedMark name="icons" label={t('settings.saved')} />
-				</View>
-			</View>
+			{/* The description keys the list, and the list's Saved mark sits on that line. */}
+			<PropertyRow stacked name="icons" label={t('settings.icons.description')} />
 			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
 			    and Space selects; the radio dot is the selected state. */}
 			<RadioGroup

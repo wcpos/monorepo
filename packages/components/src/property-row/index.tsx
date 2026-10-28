@@ -91,6 +91,8 @@ export function PropertyRow(props: {
 	const item = prefix && id ? `${prefix}-${id}` : minted;
 	const savedName = useSavedName();
 	const marked = !!savedName && [props.name ?? id ?? []].flat().includes(savedName);
+	// A trailing slot that carries words (locked's provenance, a verb) wraps below md.
+	const words = !marked && (!!locked || !!props.verb);
 	const end = marked ? (
 		<SavedMark name={savedName} label={labels.saved} />
 	) : locked ? (
@@ -151,8 +153,11 @@ export function PropertyRow(props: {
 			{end || props.control ? (
 				<View
 					className={cn(
-						'absolute top-1 right-0 shrink-0 flex-row items-center gap-2',
-						!props.stacked && 'md:relative md:top-0'
+						'shrink-0 flex-row items-center gap-2',
+						// A mark or a switch is narrow and sits on the key's line; words would lie over a
+						// long key on a phone, so under md they wrap in flow under the value.
+						words ? 'flex-wrap' : 'absolute top-1 right-0',
+						!words && !props.stacked && 'md:relative md:top-0'
 					)}
 				>
 					{end}

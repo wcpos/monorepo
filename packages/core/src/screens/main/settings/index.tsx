@@ -6,5 +6,4 @@ export { PrintingSettings } from './printing';
 export { TaxSettings } from './tax';
 export { ThemeSettings } from './theme';
 export { SettingsSection } from './components/settings-section';
-export { SettingsRow } from './components/settings-row';
 export { SettingsDangerZone } from './components/settings-danger-zone';

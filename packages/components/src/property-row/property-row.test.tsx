@@ -169,6 +169,39 @@ describe('the row owns the trailing slot', () => {
 	});
 });
 
+function Probe({ testID }: { testID: string }) {
+	return <span data-testid={testID} />;
+}
+
+it.each([
+	['a locked row', { locked: { where: 'Set in WooCommerce' } }, 'Set in WooCommerce', false],
+	[
+		'a verb',
+		{ verb: <PropertyVerb>Use a different address</PropertyVerb> },
+		'Use a different address',
+		false,
+	],
+	['a Switch', { control: <Probe testID="switch" /> }, 'switch', true],
+	['a Saved mark', { name: 'tax', verb: <PropertyVerb>Edit</PropertyVerb> }, 'saved-tax', true],
+])(
+	'below md, words wrap in flow under the value; a mark or a switch keeps the key line: %s',
+	(_case, props, find, absolute) => {
+		render(
+			<SavedFieldProvider>
+				<Save name="tax" />
+				<PropertyRow label="Prices entered with tax" {...props}>
+					{true}
+				</PropertyRow>
+			</SavedFieldProvider>
+		);
+		if (find === 'saved-tax') fireEvent.click(screen.getByText('save tax'));
+		const node = screen.queryByTestId(find) ?? screen.getByText(find);
+		const trailing = node.closest('[data-classes*="gap-2"]') as HTMLElement;
+		expect(classes(trailing).includes('absolute')).toBe(absolute);
+		expect(classes(trailing).includes('flex-wrap')).toBe(!absolute);
+	}
+);
+
 it('the row is the form item: its key names every label-less control in it', () => {
 	render(
 		<PropertyRow prefix="coupon" id="amount" label="Amount">

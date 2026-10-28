@@ -30,6 +30,9 @@ const store = {
 	tax_total_display: 'itemized',
 };
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../jest/property-row.test-utils')
+);
 jest.mock('react-native', () => ({ View: ({ children }: React.PropsWithChildren) => children }));
 jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
@@ -133,11 +136,6 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ get: jest.fn() }),
 }));
 jest.mock('./components/settings-danger-zone', () => ({ SettingsDangerZone: jest.fn(() => null) }));
-jest.mock('./components/settings-row', () => ({
-	SettingsRow: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
-}));
 jest.mock('./components/settings-section', () => ({
 	SettingsSection: ({ children }: React.PropsWithChildren) => children,
 }));
@@ -151,7 +149,9 @@ describe('TaxSettings tax class persistence', () => {
 	it('shows the standard class label without persisting its UI value', async () => {
 		const { getByTestId } = render(<TaxSettings />);
 
-		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe('Standard rate');
+		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toContain(
+			'Standard rate'
+		);
 
 		const onChange = mockUseFormChangeHandler.mock.calls[0][0].onChange;
 		await act(() => onChange({ shipping_tax_class: 'standard' }));
@@ -217,10 +217,9 @@ describe('TaxSettings tax class persistence', () => {
 			true,
 			true,
 		]);
-		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe('Standard rate');
-		expect(
-			(getByTestId('settings-tax-locked-shipping_tax_class-select') as HTMLButtonElement).disabled
-		).toBe(true);
+		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toContain(
+			'Standard rate'
+		);
 	});
 
 	it.each([
@@ -231,15 +230,21 @@ describe('TaxSettings tax class persistence', () => {
 		const { getByTestId, rerender } = render(<TaxSettings />);
 		store.shipping_tax_class = value;
 		rerender(<TaxSettings />);
-		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe(label);
+		expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toContain(label);
 	});
 
-	it('links to the site WooCommerce tax settings', () => {
-		const { getByRole } = render(<TaxSettings />);
-		expect(getByRole('link').getAttribute('href')).toBe(
-			'https://example.test/wp-admin/admin.php?page=wc-settings&tab=tax'
+	it('every locked row says it is set in WooCommerce and opens its tax settings (rule 6)', () => {
+		const { getAllByRole, getByTestId } = render(<TaxSettings />);
+		const links = getAllByRole('link');
+		expect(links).toHaveLength(4);
+		for (const link of links) {
+			expect(link.getAttribute('href')).toBe(
+				'https://example.test/wp-admin/admin.php?page=wc-settings&tab=tax'
+			);
+		}
+		expect(getByTestId('settings-tax-locked-calc_taxes').textContent).toContain(
+			'settings.set_in_woocommerce'
 		);
-		expect(getByRole('link').textContent).toBe('settings.tax_locked_link');
 	});
 
 	it('does not render Restore server settings', () => {
@@ -267,7 +272,7 @@ describe('TaxSettings tax class persistence', () => {
 		store.shipping_tax_class = 'reduced-rate';
 		try {
 			const { getByTestId } = render(<TaxSettings />);
-			expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe(
+			expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toContain(
 				'reduced-rate'
 			);
 		} finally {

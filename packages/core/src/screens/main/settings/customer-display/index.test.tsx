@@ -55,6 +55,9 @@ const site: { url: string; use_rest_route_param: boolean; wcpos_pro_version?: st
 };
 
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
@@ -168,19 +171,6 @@ jest.mock('../../../../services/customer-display', () => ({
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ dateFnsLocale: undefined }),
-}));
-jest.mock('../components/settings-row', () => ({
-	SettingsRow: ({
-		children,
-		label,
-		description,
-	}: React.PropsWithChildren<{ label: string; description?: string }>) => (
-		<div>
-			<span>{label}</span>
-			<span>{description}</span>
-			{children}
-		</div>
-	),
 }));
 jest.mock('../components/settings-section', () => ({
 	SettingsSection: ({

@@ -22,6 +22,9 @@ let store: { display?: { contract: number; signaling: string } } = {};
 const site = { url: 'https://example.com/shop', use_rest_route_param: true };
 
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
@@ -109,14 +112,6 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ dateFnsLocale: undefined }),
-}));
-jest.mock('../components/settings-row', () => ({
-	SettingsRow: ({ children, label }: React.PropsWithChildren<{ label: string }>) => (
-		<div>
-			<span>{label}</span>
-			{children}
-		</div>
-	),
 }));
 jest.mock('../components/settings-section', () => ({
 	SettingsSection: ({ children }: React.PropsWithChildren) => <section>{children}</section>,
