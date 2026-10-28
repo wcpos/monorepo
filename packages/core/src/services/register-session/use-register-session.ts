@@ -126,7 +126,7 @@ export function useRegisterSession() {
 	const runtime = useQueryRuntime();
 	const binding = useRegisterBinding();
 	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
-	useObservableState(register$, null);
+	const registerDoc = useObservableState(register$, null);
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
 	const closeTime = useDocField(store, (value) => value.expected_close_time);
@@ -279,10 +279,12 @@ export function useRegisterSession() {
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	// The same anchor as `expected`, so the strip's terms add up to its total.
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
+	// The emitted document: a render from an emission can precede the writer's cache assignment.
+	const live = registerDoc
+		? registerDoc.sites[site.uuid!]?.registers?.[binding.registerId!]?.live
+		: readLiveSession(site.uuid!, binding.registerId!);
 	const figuresPending =
-		!!session &&
-		session.server_expected_at == null &&
-		(readLiveSession(site.uuid!, binding.registerId!)?.seeded_in ?? []).includes(storeDB.name);
+		!!session && session.server_expected_at == null && !!live?.seeded_in.includes(storeDB.name);
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -417,8 +419,7 @@ export function useRegisterSession() {
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
 				if (!session) throw new RegisterSessionRequiredError();
-				// A seeded `counting` row reaches the count pane without `startCounting`; the
-				// close is the second door, so the same figures invariant guards it (§ 4.9).
+				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register.figures_after_sync');
 				const closed =
 					session!.status === 'closed'

@@ -21,6 +21,8 @@ export async function seedSessionFromCache(
 			},
 		})
 		.exec();
+	// A cache older than a synced active row is the stale one: never end that row before it opened.
+	if (previous.some((row) => row.opened_at_gmt > live.opened_at_gmt)) return 'present';
 	for (const row of previous) {
 		await row.incrementalPatch({
 			status: 'closed',

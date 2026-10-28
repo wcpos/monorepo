@@ -229,7 +229,11 @@ export function RegisterPanel({
 					<View className="min-w-0 flex-1 gap-1.5">
 						<DialogTitle asChild>
 							<AmountFigure testID="register-panel-amount">
-								{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+								{blind
+									? binding.registerName
+									: figuresPending
+										? '—'
+										: format(Number(expected.cash ?? 0))}
 							</AmountFigure>
 						</DialogTitle>
 						{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
@@ -362,7 +366,7 @@ export function RegisterPanel({
 							{!blind && (
 								<View testID="register-panel-expected" className={STATIC_ROW}>
 									{term(t('register.expected_in_drawer'), undefined, false, true)}
-									{amount(format(Number(terms.expected)), false, true)}
+									{amount(figuresPending ? '—' : format(Number(terms.expected)), false, true)}
 								</View>
 							)}
 							{others.length > 0 && (

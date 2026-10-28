@@ -169,6 +169,21 @@ it('a return hand-over into a database still holding the previous session closes
 	expect(pending.getLatest().toJSON()).toEqual(pendingBefore);
 	expect(other.getLatest().toJSON()).toEqual(otherBefore);
 });
+it('a cached session older than a synced active row neither seeds nor closes anything', async () => {
+	const { register_sessions: sessions } = registerCollections(storeDB);
+	const newer = await sessions.insert({
+		...existing,
+		id: 'N',
+		opened_at_gmt: '2026-10-28T14:00:00Z',
+		server_status: 'open',
+	});
+	const before = newer.toJSON();
+	await recordLiveSession(userDB, 'site', 'A', { ...live, session_id: 'OLD' });
+	await cycle();
+	expect(newer.getLatest().toJSON()).toEqual(before);
+	expect(await sessions.findOne('OLD').exec()).toBeNull();
+	expect(readLiveSession('site', 'A')?.seeded_in).toEqual([]);
+});
 it('records on the device which store database the session was seeded into', async () => {
 	await recordLiveSession(userDB, 'site', 'A', live);
 	await cycle();

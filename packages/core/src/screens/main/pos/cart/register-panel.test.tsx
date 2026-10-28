@@ -580,6 +580,9 @@ it('says the figures are still to come on a seeded session and will not close th
 	const floatRow = screen.getByText('register.float').parentElement;
 	expect(floatRow?.textContent).toContain('—');
 	expect(floatRow?.textContent).not.toContain('£0.00');
+	expect(screen.getByTestId('register-panel-amount').textContent).toBe('—');
+	expect(screen.getByTestId('register-panel-expected').textContent).toContain('—');
+	expect(screen.getByTestId('register-panel-expected').textContent).not.toContain('£');
 	const close = screen.getByTestId('register-panel-close-register');
 	expect(close.hasAttribute('disabled')).toBe(true);
 	fireEvent.click(close);
