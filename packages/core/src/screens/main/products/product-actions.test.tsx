@@ -136,10 +136,9 @@ jest.mock('../components/product/catalogue-rows', () => {
 		useOfferedRows: () => ({ row: () => null, adds: null }),
 	};
 });
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyAddRow: () => null,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
 
 // Render the migrated forms with their real action hooks and confirmation dialogs.

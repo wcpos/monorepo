@@ -65,7 +65,7 @@ import {
 	metaDataSchema,
 } from '../../components/meta-data-form';
 import { useRecordAutosave } from '../../components/use-record-autosave';
-import { OrderRow, useCurrencyRow } from '../../components/order/order-rows';
+import { useCurrencyRow } from '../../components/order/order-rows';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { useFieldPresence } from '../../components/use-field-presence';
 import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
@@ -388,8 +388,8 @@ function EditOrderFormFields({ order }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="order-form">
-					<OrderRow prefix="order" id="customer" label={t('common.customer')} mark="customer_id">
+				<PropertyList prefix="order">
+					<PropertyRow id="customer" label={t('common.customer')} name="customer_id">
 						<FormField
 							control={form.control}
 							name="customer_id"
@@ -408,10 +408,9 @@ function EditOrderFormFields({ order }: Props) {
 								/>
 							)}
 						/>
-					</OrderRow>
+					</PropertyRow>
 					<Form {...statusForm}>
-						<OrderRow
-							prefix="order"
+						<PropertyRow
 							id="status"
 							label={t('common.status')}
 							verb={
@@ -439,15 +438,9 @@ function EditOrderFormFields({ order }: Props) {
 									</View>
 								)}
 							/>
-						</OrderRow>
+						</PropertyRow>
 					</Form>
-					<OrderRow
-						prefix="order"
-						id="customer_note"
-						label={t('common.customer_note')}
-						mark="customer_note"
-						align="top"
-					>
+					<PropertyRow id="customer_note" label={t('common.customer_note')} align="top">
 						<FormField
 							control={form.control}
 							name="customer_note"
@@ -458,14 +451,12 @@ function EditOrderFormFields({ order }: Props) {
 								/>
 							)}
 						/>
-					</OrderRow>
+					</PropertyRow>
 					{rows}
 					<PropertyRow
 						testID="order-row-payment"
 						label={t('common.payment')}
-						trailing={
-							<Text className="text-muted-foreground text-sm">{t('orders.set_at_checkout')}</Text>
-						}
+						locked={{ where: t('orders.set_at_checkout') }}
 					>
 						{paymentMethod ? (
 							<Text>
@@ -478,7 +469,7 @@ function EditOrderFormFields({ order }: Props) {
 					</PropertyRow>
 					<TaxIdsForm testID="order" />
 					{currencyRow.shown && (
-						<OrderRow prefix="order" id="currency" label={t('common.currency')} mark="currency">
+						<PropertyRow id="currency" label={t('common.currency')}>
 							<FormField
 								control={form.control}
 								name="currency"
@@ -486,7 +477,7 @@ function EditOrderFormFields({ order }: Props) {
 									<FormSelect customComponent={CurrencySelect} value={value} {...fieldRest} />
 								)}
 							/>
-						</OrderRow>
+						</PropertyRow>
 					)}
 					<MetaDataForm testID="order" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 					<PropertyAddRow>

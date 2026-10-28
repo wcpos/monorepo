@@ -21,7 +21,12 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
-import { PropertyAdd, PropertyList, PropertyVerb } from '@wcpos/components/property-row';
+import {
+	PropertyAdd,
+	PropertyList,
+	PropertyRow,
+	PropertyVerb,
+} from '@wcpos/components/property-row';
 import { isMiscProductLine } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -35,7 +40,7 @@ import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { parsePosData } from '../../../hooks/utils';
-import { CartLineRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
+import { CustomFieldRows, TaxRow } from '../cart-line-rows';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -184,20 +189,15 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="line-item-form">
-					<CartLineRow prefix="line-item" id="name" label={t('common.name')} mark="name">
+				<PropertyList prefix="line-item">
+					<PropertyRow id="name" label={t('common.name')}>
 						<FormField
 							control={form.control}
 							name="name"
 							render={({ field }) => <FormInput testID="edit-line-item-name-input" {...field} />}
 						/>
-					</CartLineRow>
-					<CartLineRow
-						prefix="line-item"
-						id="quantity"
-						label={t('pos_cart.quantity')}
-						mark="quantity"
-					>
+					</PropertyRow>
+					<PropertyRow id="quantity" label={t('pos_cart.quantity')}>
 						<FormField
 							control={form.control}
 							name="quantity"
@@ -209,12 +209,11 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 								/>
 							)}
 						/>
-					</CartLineRow>
-					<CartLineRow
-						prefix="line-item"
+					</PropertyRow>
+					<PropertyRow
 						id="price"
 						label={t('common.price')}
-						mark={['price', 'regular_price']}
+						name={['price', 'regular_price']}
 						verb={onSale ? removeVerb('regular_price') : undefined}
 					>
 						<HStack className="items-center gap-2">
@@ -255,19 +254,17 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 								</FormItem>
 							)}
 						</HStack>
-					</CartLineRow>
+					</PropertyRow>
 					<TaxRow prefix="line-item" />
 					{presence.present
 						.filter((name) => name !== 'regular_price')
 						.map((name) => (
-							<CartLineRow
+							<PropertyRow
 								key={name}
-								prefix="line-item"
 								id={name}
 								label={labels[name]}
-								mark={name}
 								verb={removeVerb(name)}
-								toggle={name === 'virtual' || name === 'downloadable' ? toggle(name) : undefined}
+								control={name === 'virtual' || name === 'downloadable' ? toggle(name) : undefined}
 							>
 								{name === 'sku' ? (
 									<FormField
@@ -295,7 +292,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 										)}
 									/>
 								) : null}
-							</CartLineRow>
+							</PropertyRow>
 						))}
 					<CustomFieldRows prefix="line-item" meta={item.meta_data}>
 						{presence.offered.map((name) => (

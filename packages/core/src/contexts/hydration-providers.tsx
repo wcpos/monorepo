@@ -4,6 +4,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Suspense } from '@wcpos/components/suspense';
 import { DialogLabelsProvider } from '@wcpos/components/dialog';
+import { PropertyRowLabelsProvider } from '@wcpos/components/property-row';
 
 import { Splash, SplashProgressProvider } from '../screens/splash';
 import { AppStateProvider } from './app-state';
@@ -22,7 +23,15 @@ function TranslatedDialogLabels({ children }: HydrationProvidersProps) {
 		() => ({ close: t('common.close'), cancel: t('common.cancel') }),
 		[t]
 	);
-	return <DialogLabelsProvider labels={labels}>{children}</DialogLabelsProvider>;
+	const rowLabels = React.useMemo(
+		() => ({ saved: t('settings.saved'), open: t('common.open') }),
+		[t]
+	);
+	return (
+		<DialogLabelsProvider labels={labels}>
+			<PropertyRowLabelsProvider labels={rowLabels}>{children}</PropertyRowLabelsProvider>
+		</DialogLabelsProvider>
+	);
 }
 
 /**

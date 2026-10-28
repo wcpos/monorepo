@@ -15,7 +15,7 @@ import {
 	useFormChangeHandler,
 	useMarkSaved,
 } from '@wcpos/components/form';
-import { PropertyList } from '@wcpos/components/property-row';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
 import { FormAmountField } from '../../../../components/amount-field';
@@ -25,7 +25,7 @@ import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
-import { AmountRow, CartLineRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
+import { AmountRow, CustomFieldRows, TaxRow } from '../cart-line-rows';
 
 /**
  *
@@ -120,8 +120,8 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="fee-line-form">
-					<CartLineRow prefix="fee-line" id="name" label={t('pos_cart.fee_name')} mark="name">
+				<PropertyList prefix="fee-line">
+					<PropertyRow id="name" label={t('pos_cart.fee_name')}>
 						<FormField
 							control={form.control}
 							name="name"
@@ -133,7 +133,7 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 								/>
 							)}
 						/>
-					</CartLineRow>
+					</PropertyRow>
 					<AmountRow
 						prefix="fee-line"
 						percent={togglePercentage}
@@ -152,12 +152,11 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 							)}
 						/>
 					</AmountRow>
-					<CartLineRow
-						prefix="fee-line"
+					<PropertyRow
 						id="includes-tax"
 						label={t('pos_cart.amount_includes_tax')}
-						mark="prices_include_tax"
-						toggle={
+						name="prices_include_tax"
+						control={
 							<FormField
 								control={form.control}
 								name="prices_include_tax"

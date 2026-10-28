@@ -112,7 +112,7 @@ function EditVariationFormFields({ variation, parentClass }: Props) {
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<CatalogueKind.Provider value="variation">
-					<PropertyList testID="variation-form">
+					<PropertyList prefix="variation">
 						<PriceRow name="regular_price" label={t('common.regular_price')} />
 						{offered.row('sale_price')}
 						{offered.row('sku')}

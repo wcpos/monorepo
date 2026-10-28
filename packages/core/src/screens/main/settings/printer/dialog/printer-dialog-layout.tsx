@@ -11,9 +11,9 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
-import { PropertyList } from '@wcpos/components/property-row';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
-import { PrinterRow, PrinterSettingsRows } from './printer-rows';
+import { PrinterSettingsRows } from './printer-rows';
 import { FormErrors } from '../../../components/form-errors';
 import { useT } from '../../../../../contexts/translations';
 
@@ -58,10 +58,10 @@ export function PrinterDialogLayout({
 				</DialogHeader>
 				<DialogBody>
 					<Form {...form}>
-						<PropertyList testID="printer-form">
+						<PropertyList prefix="printer">
 							<FormErrors />
 							{banner}
-							<PrinterRow id="name" label={t('settings.printer_name')} mark="name">
+							<PropertyRow prefix="printer" id="name" label={t('settings.printer_name')}>
 								<FormField
 									control={form.control}
 									name="name"
@@ -73,7 +73,7 @@ export function PrinterDialogLayout({
 										/>
 									)}
 								/>
-							</PrinterRow>
+							</PropertyRow>
 							{connectionRow}
 							{/* The lane depends on the Connection above it: nested one gutter (rule 8). */}
 							<View className="gap-3 py-2 pl-4">{connectionLane}</View>

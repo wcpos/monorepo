@@ -114,25 +114,9 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: mockWrap,
-	PropertyRow: ({
-		label,
-		children,
-		trailing,
-		testID,
-	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode; testID?: string }>) => (
-		<div data-testid={testID}>
-			<span>{label}</span>
-			{children}
-			{trailing}
-		</div>
-	),
-	PropertyVerb: mockButton,
-	PropertyAddRow: mockWrap,
-	PropertyAdd: ({ label, ...props }: { label: string; testID?: string; onPress?: () => void }) =>
-		mockButton({ ...props, children: label }),
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: mockWrap,
 	TooltipContent: mockWrap,

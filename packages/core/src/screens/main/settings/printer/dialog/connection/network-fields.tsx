@@ -9,11 +9,11 @@ import { Icon } from '@wcpos/components/icon';
 import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { PropertyRow } from '@wcpos/components/property-row';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
 import { DEFAULT_FORM_VALUES } from '../../schema';
-import { PrinterRow } from '../printer-rows';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -75,10 +75,11 @@ export function NetworkFields({
 
 	return (
 		<VStack className="gap-1">
-			<PrinterRow
+			<PropertyRow
+				prefix="printer"
 				id="address"
 				label={t('settings.printer_address')}
-				mark={['address', 'port']}
+				name={['address', 'port']}
 				verb={
 					onScan && (
 						<Button
@@ -129,7 +130,7 @@ export function NetworkFields({
 						</HStack>
 					</FormItem>
 				</HStack>
-			</PrinterRow>
+			</PropertyRow>
 			{probing && (
 				<Text className="text-muted-foreground text-xs">{t('settings.detecting_printer')}</Text>
 			)}

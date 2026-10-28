@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { FormProvider, useForm } from 'react-hook-form';
 
+import { useFormControlAria } from '../form/aria';
+import { FormItemContext } from '../form/context';
+import { SavedFieldProvider, useMarkSaved } from '../form/saved-mark';
 import {
 	PROPERTY_PLACEHOLDER_CLASS,
 	PropertyAdd,
@@ -9,6 +13,7 @@ import {
 	PropertyList,
 	PropertyPlaceholder,
 	PropertyRow,
+	PropertyRowLabelsProvider,
 	PropertyVerb,
 } from './index';
 
@@ -36,16 +41,30 @@ jest.mock('../icon', () => ({
 	},
 }));
 jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual<typeof import('react-native')>('react-native').View },
+	FadeOut: { duration: () => undefined },
+	ZoomIn: { duration: () => ({ easing: () => undefined }) },
+	useReducedMotion: () => true,
+	Easing: { bezier: () => undefined },
+}));
+jest.mock('../switch', () => ({
+	Switch: ({ checked, disabled }: { checked: boolean; disabled?: boolean }) => (
+		<input type="checkbox" checked={checked} disabled={disabled} readOnly />
+	),
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 const classes = (element: HTMLElement) => element.dataset.classes?.split(' ') ?? [];
 
 it('renders the key, the value and the trailing slot, with no divider', () => {
 	render(
-		<PropertyList testID="list">
+		<PropertyList prefix="x">
 			<PropertyRow
 				testID="row"
 				label="Email"
-				trailing={<PropertyVerb onPress={() => {}}>Remove</PropertyVerb>}
+				verb={<PropertyVerb onPress={() => {}}>Remove</PropertyVerb>}
 			>
 				<PropertyPlaceholder>Add email</PropertyPlaceholder>
 			</PropertyRow>
@@ -56,8 +75,8 @@ it('renders the key, the value and the trailing slot, with no divider', () => {
 	for (const token of ['min-h-ctl', 'md:flex-row', 'md:items-center', 'md:gap-3']) {
 		expect(classes(row)).toContain(token);
 	}
-	expect(classes(screen.getByTestId('list'))).toContain('gap-0');
-	for (const element of screen.getByTestId('list').querySelectorAll('[data-classes]')) {
+	expect(classes(screen.getByTestId('x-form'))).toContain('gap-0');
+	for (const element of screen.getByTestId('x-form').querySelectorAll('[data-classes]')) {
 		expect(classes(element as HTMLElement)).not.toContain('border-b');
 	}
 	const key = screen.getByText('Email');
@@ -66,6 +85,180 @@ it('renders the key, the value and the trailing slot, with no divider', () => {
 	expect(classes(screen.getByText('Add email'))).toEqual(
 		expect.arrayContaining(PROPERTY_PLACEHOLDER_CLASS.split(' '))
 	);
+});
+
+/** Presses mark a field saved, as the form's autosave does after a write lands. */
+function Save({ name }: { name: string }) {
+	const markSaved = useMarkSaved();
+	return <button onClick={() => markSaved([name])}>{`save ${name}`}</button>;
+}
+
+/** Reads the form item a label-less control in the row would adopt. */
+function Adopted() {
+	return <span data-testid="adopted">{React.useContext(FormItemContext).nativeID}</span>;
+}
+
+describe('the row owns the trailing slot', () => {
+	const verb = <PropertyVerb testID="verb">Edit</PropertyVerb>;
+	const control = <span data-testid="control" />;
+	it.each([
+		['no field saved: the verb, then the control', 'other', 'Edit', true],
+		["one of the row's fields saved: the mark replaces the verb", 'tax_class', 'Saved', true],
+		['a field of another row saved: the verb stays', 'name', 'Edit', true],
+	])('%s', (_case, saved, expected, hasControl) => {
+		render(
+			<PropertyRowLabelsProvider labels={{ saved: 'Saved', open: 'Open' }}>
+				<SavedFieldProvider>
+					<Save name={saved} />
+					<PropertyRow
+						prefix="line"
+						id="tax"
+						name={['tax_status', 'tax_class']}
+						label="Tax"
+						verb={verb}
+						control={control}
+					>
+						Standard
+					</PropertyRow>
+				</SavedFieldProvider>
+			</PropertyRowLabelsProvider>
+		);
+		fireEvent.click(screen.getByText(`save ${saved}`));
+		const row = screen.getByTestId('line-row-tax');
+		expect(row.textContent).toBe(`TaxStandard${expected}`);
+		expect(!!screen.queryByTestId('control')).toBe(hasControl);
+		// The control is last, so a mark arriving never moves it.
+		const trailing = screen.getByTestId('control').parentElement as HTMLElement;
+		expect(trailing.lastElementChild).toBe(screen.getByTestId('control'));
+	});
+
+	it('names the field by the id when no name is given', () => {
+		render(
+			<SavedFieldProvider>
+				<Save name="code" />
+				<PropertyRow prefix="coupon" id="code" label="Code" verb={verb} />
+			</SavedFieldProvider>
+		);
+		fireEvent.click(screen.getByText('save code'));
+		expect(screen.getByTestId('saved-code')).toBeTruthy();
+		expect(screen.queryByTestId('verb')).toBeNull();
+	});
+
+	it('locked (rule 6): the value, where it is set and Open; a boolean is a disabled switch', () => {
+		render(
+			<>
+				<PropertyRow
+					testID="country"
+					label="Base country"
+					locked={{ where: 'Set in WooCommerce', href: 'https://shop/wp-admin' }}
+				>
+					United Kingdom
+				</PropertyRow>
+				<PropertyRow testID="taxes" label="Enable taxes" locked={{ where: 'Set in WooCommerce' }}>
+					{true}
+				</PropertyRow>
+				<PropertyRow testID="city" label="City" locked={{ where: 'Set in WooCommerce' }} />
+			</>
+		);
+		expect(screen.getByTestId('country').textContent).toBe(
+			'Base countryUnited KingdomSet in WooCommerceOpen'
+		);
+		expect(screen.getByTestId('icon-openExternal')).toBeTruthy();
+		expect(screen.getByTestId('taxes').querySelector('input:checked:disabled')).toBeTruthy();
+		expect(screen.getByTestId('city').textContent).toBe('City—Set in WooCommerce');
+	});
+});
+
+it('the row is the form item: its key names every label-less control in it', () => {
+	render(
+		<PropertyRow prefix="coupon" id="amount" label="Amount">
+			<Adopted />
+		</PropertyRow>
+	);
+	expect(screen.getByTestId('adopted').textContent).toBe('coupon-amount');
+	expect(screen.getByText('Amount').id || screen.getByText('Amount').getAttribute('id')).toBe(
+		'coupon-amount-form-item'
+	);
+});
+
+/** A label-less input as the form wrappers build it: named and messaged by `useFormControlAria`. */
+function Field({ placeholder }: { placeholder: string }) {
+	const { itemNativeID, ariaProps } = useFormControlAria({});
+	return (
+		<input
+			placeholder={placeholder}
+			aria-labelledby={ariaProps['aria-labelledby']}
+			data-message={`${itemNativeID}-form-item-message`}
+		/>
+	);
+}
+
+function InForm({ children }: React.PropsWithChildren) {
+	return <FormProvider {...useForm()}>{children}</FormProvider>;
+}
+
+it.each([
+	['one control is named by the key', false, ['Key'], ['meta-key-form-item']],
+	[
+		'a compound row keeps each control its own name and message',
+		true,
+		['Key', 'Value'],
+		[null, null],
+	],
+])('%s', (_case, compound, placeholders, labelledBy) => {
+	render(
+		<InForm>
+			<PropertyRow prefix="meta" id="key" label="Custom field" compound={compound}>
+				{placeholders.map((placeholder) => (
+					<Field key={placeholder} placeholder={placeholder} />
+				))}
+			</PropertyRow>
+		</InForm>
+	);
+	const inputs = placeholders.map((placeholder) => screen.getByPlaceholderText(placeholder));
+	expect(inputs.map((input) => input.getAttribute('aria-labelledby'))).toEqual(labelledBy);
+	const messages = new Set(inputs.map((input) => input.dataset.message));
+	expect(messages.size).toBe(inputs.length);
+});
+
+it('pressing the key acts on the control it names (focus, toggle)', () => {
+	const press = jest.fn();
+	function Control() {
+		const { setLabelPress } = React.useContext(FormItemContext);
+		React.useEffect(() => setLabelPress?.(press), [setLabelPress]);
+		return null;
+	}
+	render(<PropertyRow label="Scan sound" control={<Control />} />);
+	fireEvent.click(screen.getByText('Scan sound'));
+	expect(press).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+	['a dialog', false, false, ['md:w-32', 'md:shrink-0'], 'md:flex-row'],
+	['a settings page', true, false, ['md:w-64', 'lg:w-72'], 'md:flex-row'],
+	['stacked', false, true, [], undefined],
+])('the key column in %s', (_case, wide, stacked, keyClasses, rowClass) => {
+	render(
+		<PropertyList wide={wide}>
+			<PropertyRow testID="row" label="Theme" stacked={stacked} help="Pre-selected on every sale.">
+				<Adopted />
+			</PropertyRow>
+		</PropertyList>
+	);
+	const key = screen.getByText('Theme').parentElement as HTMLElement;
+	expect(classes(key)).toEqual(expect.arrayContaining(keyClasses));
+	if (!keyClasses.length) expect(classes(key).some((c) => c.startsWith('md:w-'))).toBe(false);
+	expect(classes(screen.getByTestId('row')).includes('md:flex-row')).toBe(!!rowClass);
+	expect(classes(screen.getByText('Pre-selected on every sale.'))).toContain('text-xs');
+});
+
+it('a derived value reads in muted ink', () => {
+	render(
+		<PropertyRow label="Shipping" derived>
+			Same as billing
+		</PropertyRow>
+	);
+	expect(classes(screen.getByText('Same as billing'))).toContain('text-muted-foreground');
 });
 
 it('pads the key of a part of an open compound, and tops a multi-line value', () => {

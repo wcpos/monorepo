@@ -107,20 +107,9 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTextarea: () => null,
 }));
 
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({
-		children,
-		trailing,
-	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
-		<>
-			{children}
-			{trailing}
-		</>
-	),
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyAdd: () => null,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 function mockAction({
 	children,
 	onPress,

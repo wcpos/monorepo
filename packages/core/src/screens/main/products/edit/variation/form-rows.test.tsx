@@ -9,7 +9,6 @@ import { EditVariationForm } from './form';
 
 import type { UseFormReturn } from 'react-hook-form';
 
-type Pressable = React.PropsWithChildren<{ onPress?: () => void; testID?: string }>;
 type Field = {
 	name?: string;
 	value?: unknown;
@@ -49,33 +48,9 @@ jest.mock('@wcpos/components/form', () => {
 		useSavedName: () => '',
 	};
 });
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({
-		label,
-		children,
-		trailing,
-		testID,
-	}: React.PropsWithChildren<{ label: string; trailing?: React.ReactNode; testID?: string }>) => (
-		<div data-testid={testID}>
-			<span>{label}</span>
-			{children}
-			{trailing}
-		</div>
-	),
-	PropertyVerb: ({ children, onPress, testID }: Pressable) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	PropertyAdd: ({ label, onPress, testID }: Pressable & { label: string }) => (
-		<button data-testid={testID} onClick={onPress}>
-			{label}
-		</button>
-	),
-	PropertyPlaceholder: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/collapsible', () => ({}));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,

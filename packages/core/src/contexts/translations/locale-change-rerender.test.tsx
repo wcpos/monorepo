@@ -24,6 +24,9 @@ import { HydrationProviders } from '../hydration-providers';
 
 import type { i18n } from 'i18next';
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../jest/property-row.test-utils')
+);
 jest.mock('expo-localization', () => ({
 	getLocales: () => [{ languageTag: 'en-US', languageCode: 'en' }],
 }));

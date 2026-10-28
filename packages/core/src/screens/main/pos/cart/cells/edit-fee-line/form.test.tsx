@@ -62,20 +62,9 @@ jest.mock('../../../../components/amount-field', () => ({
 }));
 jest.mock('../../../../components/tax-select', () => ({ TaxSelect: () => null }));
 jest.mock('../../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: mockWrap,
-	PropertyRow: ({
-		children,
-		trailing,
-	}: React.PropsWithChildren<{ trailing?: React.ReactNode }>) => (
-		<>
-			{children}
-			{trailing}
-		</>
-	),
-	PropertyAddRow: mockWrap,
-	PropertyAdd: () => null,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
 jest.mock('../../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),

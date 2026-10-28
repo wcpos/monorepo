@@ -12,8 +12,6 @@ import {
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
-	SavedMark,
-	useSavedName,
 } from '@wcpos/components/form';
 import {
 	PropertyAdd,
@@ -173,8 +171,8 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="coupon-form">
-					<CouponRow
+				<PropertyList prefix="coupon">
+					<PropertyRow
 						id="code"
 						label={t('coupons.code')}
 						verb={
@@ -191,8 +189,8 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 							name="code"
 							render={({ field }) => <FormInput testID="coupon-code" {...field} />}
 						/>
-					</CouponRow>
-					<CouponRow id="discount" mark="discount_type" label={t('coupons.discount')} align="top">
+					</PropertyRow>
+					<PropertyRow id="discount" name="discount_type" label={t('coupons.discount')} align="top">
 						<VStack className="gap-2">
 							<FormField
 								control={form.control}
@@ -228,8 +226,8 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 								)}
 							/>
 						</VStack>
-					</CouponRow>
-					<CouponRow id="expires" mark="date_expires_gmt" label={t('coupons.expires')}>
+					</PropertyRow>
+					<PropertyRow id="expires" name="date_expires_gmt" label={t('coupons.expires')}>
 						<FormField
 							control={form.control}
 							name="date_expires_gmt"
@@ -240,10 +238,10 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 								</>
 							)}
 						/>
-					</CouponRow>
-					<CouponRow
+					</PropertyRow>
+					<PropertyRow
 						id="one_time_use"
-						mark="usage_limit"
+						name="usage_limit"
 						label={t('coupons.one_time_use')}
 						control={
 							<FormField
@@ -264,8 +262,8 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 						}
 					>
 						<Help>{t('coupons.one_time_use_help')}</Help>
-					</CouponRow>
-					<CouponRow id="status" label={t('coupons.status')}>
+					</PropertyRow>
+					<PropertyRow id="status" label={t('coupons.status')}>
 						<FormField
 							control={form.control}
 							name="status"
@@ -278,9 +276,9 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 								/>
 							)}
 						/>
-					</CouponRow>
+					</PropertyRow>
 					{presence.present.map((name) => (
-						<CouponRow
+						<PropertyRow
 							key={name}
 							id={name}
 							label={labels[name]}
@@ -289,7 +287,7 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 							verb={removeVerb(name)}
 						>
 							{offeredValue[name]}
-						</CouponRow>
+						</PropertyRow>
 					))}
 					<MetaDataForm testID="coupon" />
 					<PropertyAddRow>
@@ -318,46 +316,4 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 
 function Help({ children }: { children: string }) {
 	return <Text className="text-muted-foreground text-sm">{children}</Text>;
-}
-
-/**
- * One coupon fact: its control in the value slot, named by the row's key. A switch sits in the
- * trailing slot; the row's verb hides while its Saved mark shows.
- */
-function CouponRow({
-	id,
-	mark = id,
-	label,
-	align,
-	control,
-	verb,
-	children,
-}: {
-	id: string;
-	mark?: string;
-	label: string;
-	align?: 'top';
-	control?: React.ReactNode;
-	verb?: React.ReactNode;
-	children: React.ReactNode;
-}) {
-	const t = useT();
-	const marked = useSavedName() === mark;
-	return (
-		<PropertyRow
-			testID={`coupon-row-${id}`}
-			label={label}
-			align={align}
-			nativeID={`coupon-${id}-form-item`}
-			trailing={
-				<>
-					{control && <FormItem nativeID={`coupon-${id}`}>{control}</FormItem>}
-					{marked ? <SavedMark name={mark} label={t('settings.saved')} /> : verb}
-				</>
-			}
-		>
-			{/* With a trailing control the value is prose (a help line): the id names the control. */}
-			<FormItem nativeID={control ? undefined : `coupon-${id}`}>{children}</FormItem>
-		</PropertyRow>
-	);
 }

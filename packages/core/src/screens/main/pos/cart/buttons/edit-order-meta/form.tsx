@@ -45,7 +45,7 @@ import { useStoreSession } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
 import { CashierSelect } from '../../../../components/cashier-select';
-import { OrderRow, useCurrencyRow } from '../../../../components/order/order-rows';
+import { useCurrencyRow } from '../../../../components/order/order-rows';
 import { OrderStatusSelect } from '../../../../components/order/order-status-select';
 import { pushFailureCode } from '../../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../../contexts/use-push-document';
@@ -307,14 +307,8 @@ export function EditOrderMetaForm({
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="order-meta-form">
-					<OrderRow
-						prefix="order-meta"
-						id="customer_note"
-						label={t('common.customer_note')}
-						mark="customer_note"
-						align="top"
-					>
+				<PropertyList prefix="order-meta">
+					<PropertyRow id="customer_note" label={t('common.customer_note')} align="top">
 						<FormField
 							control={form.control}
 							name="customer_note"
@@ -327,9 +321,9 @@ export function EditOrderMetaForm({
 								/>
 							)}
 						/>
-					</OrderRow>
+					</PropertyRow>
 					<Form {...handOverForm}>
-						<OrderRow prefix="order-meta" id="status" label={t('common.status')}>
+						<PropertyRow id="status" label={t('common.status')}>
 							<FormField
 								control={handOverForm.control}
 								name="status"
@@ -344,8 +338,8 @@ export function EditOrderMetaForm({
 									</View>
 								)}
 							/>
-						</OrderRow>
-						<OrderRow prefix="order-meta" id="cashier" label={t('common.cashier')}>
+						</PropertyRow>
+						<PropertyRow id="cashier" label={t('common.cashier')}>
 							<FormField
 								control={handOverForm.control}
 								name="cashier_id"
@@ -364,12 +358,12 @@ export function EditOrderMetaForm({
 									</View>
 								)}
 							/>
-						</OrderRow>
+						</PropertyRow>
 						{/* An intent keeps its verb button (property rows rule 12). */}
 						<PropertyRow
 							testID="order-meta-row-hand_over"
 							label={t('pos_cart.hand_over')}
-							trailing={
+							verb={
 								<Button
 									variant="outline"
 									testID="order-meta-send"
@@ -386,12 +380,7 @@ export function EditOrderMetaForm({
 						</PropertyRow>
 					</Form>
 					{currencyRow.shown && (
-						<OrderRow
-							prefix="order-meta"
-							id="currency"
-							label={t('common.currency')}
-							mark="currency"
-						>
+						<PropertyRow id="currency" label={t('common.currency')}>
 							<FormField
 								control={form.control}
 								name="currency"
@@ -403,7 +392,7 @@ export function EditOrderMetaForm({
 									/>
 								)}
 							/>
-						</OrderRow>
+						</PropertyRow>
 					)}
 					<MetaDataForm testID="order-meta" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 					<PropertyAddRow>

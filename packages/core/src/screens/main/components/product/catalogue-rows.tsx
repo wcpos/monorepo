@@ -2,15 +2,7 @@ import * as React from 'react';
 
 import { useFormContext, useWatch } from 'react-hook-form';
 
-import {
-	FormField,
-	FormInput,
-	FormItem,
-	FormSelect,
-	FormSwitch,
-	SavedMark,
-	useSavedName,
-} from '@wcpos/components/form';
+import { FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/components/form';
 import {
 	PropertyAdd,
 	PropertyPlaceholder,
@@ -36,50 +28,15 @@ import type { FieldValues, UseFormReturn } from 'react-hook-form';
  */
 export const CatalogueKind = React.createContext<'product' | 'variation'>('product');
 
-/**
- * One catalogue fact: its control in the value slot, named by the row's key; a switch sits in
- * the trailing slot. The row's verb (or Remove) hides while one of its fields' Saved marks shows.
- */
-export function CatalogueRow(props: {
-	id: string;
-	label: string;
-	marks?: string[];
-	align?: 'top';
-	control?: React.ReactNode;
-	verb?: React.ReactNode;
-	onRemove?: () => void;
-	children?: React.ReactNode;
-}) {
-	const { id, marks = [id], control, onRemove } = props;
+/** An offered fact's Remove returns it to the add row. */
+function Remove({ id, onPress }: { id: string; onPress?: () => void }) {
 	const t = useT();
 	const kind = React.useContext(CatalogueKind);
-	const marked = marks.includes(useSavedName());
-	const verb = onRemove ? (
-		<PropertyVerb testID={`${kind}-remove-${id}`} onPress={onRemove}>
+	return onPress ? (
+		<PropertyVerb testID={`${kind}-remove-${id}`} onPress={onPress}>
 			{t('common.remove')}
 		</PropertyVerb>
-	) : (
-		props.verb
-	);
-	return (
-		<PropertyRow
-			testID={`${kind}-row-${id}`}
-			label={props.label}
-			align={props.align}
-			nativeID={`${kind}-${id}-form-item`}
-			trailing={
-				<>
-					{control && <FormItem nativeID={`${kind}-${id}`}>{control}</FormItem>}
-					{!marked && verb}
-					{marks.map((name) => (
-						<SavedMark key={name} name={name} label={t('settings.saved')} />
-					))}
-				</>
-			}
-		>
-			<FormItem nativeID={control ? undefined : `${kind}-${id}`}>{props.children}</FormItem>
-		</PropertyRow>
-	);
+	) : null;
 }
 
 type InputRowProps = {
@@ -93,7 +50,11 @@ type InputRowProps = {
 export function TextRow({ money, ...props }: InputRowProps & { money?: boolean }) {
 	const { control } = useFormContext();
 	return (
-		<CatalogueRow id={props.name} label={props.label} onRemove={props.onRemove}>
+		<PropertyRow
+			id={props.name}
+			label={props.label}
+			verb={<Remove id={props.name} onPress={props.onRemove} />}
+		>
 			<FormField
 				control={control}
 				name={props.name}
@@ -105,7 +66,7 @@ export function TextRow({ money, ...props }: InputRowProps & { money?: boolean }
 					)
 				}
 			/>
-		</CatalogueRow>
+		</PropertyRow>
 	);
 }
 
@@ -128,9 +89,9 @@ export function StockRow() {
 		setValue('manage_stock', on, { shouldDirty: true });
 	};
 	return (
-		<CatalogueRow
+		<PropertyRow
 			id="stock"
-			marks={['manage_stock', 'stock_quantity']}
+			name={['manage_stock', 'stock_quantity']}
 			label={t('common.stock')}
 			verb={
 				<PropertyVerb testID={`${kind}-stock-tracking`} onPress={() => track(!managed)}>
@@ -147,7 +108,7 @@ export function StockRow() {
 			) : (
 				<PropertyPlaceholder>{t('products.not_tracked')}</PropertyPlaceholder>
 			)}
-		</CatalogueRow>
+		</PropertyRow>
 	);
 }
 
@@ -173,9 +134,9 @@ export function TaxRow({
 	const follows = includeParent && status !== 'none' && taxClass === PARENT_TAX_CLASS;
 	const parentLabel = classes.find((option) => option.value === parentClass)?.label ?? parentClass;
 	return (
-		<CatalogueRow
+		<PropertyRow
 			id="tax"
-			marks={['tax_class', 'tax_status']}
+			name={['tax_class', 'tax_status']}
 			label={t('common.tax')}
 			verb={
 				follows &&
@@ -207,7 +168,7 @@ export function TaxRow({
 					aria-labelledby={`${kind}-tax-form-item`}
 				/>
 			)}
-		</CatalogueRow>
+		</PropertyRow>
 	);
 }
 
@@ -215,7 +176,7 @@ export function StatusRow() {
 	const t = useT();
 	const { control } = useFormContext();
 	return (
-		<CatalogueRow id="status" label={t('common.status')}>
+		<PropertyRow id="status" label={t('common.status')}>
 			<FormField
 				control={control}
 				name="status"
@@ -228,7 +189,7 @@ export function StatusRow() {
 					/>
 				)}
 			/>
-		</CatalogueRow>
+		</PropertyRow>
 	);
 }
 
@@ -241,10 +202,10 @@ export function OfferedSwitchRow(props: {
 	const kind = React.useContext(CatalogueKind);
 	const { control } = useFormContext();
 	return (
-		<CatalogueRow
+		<PropertyRow
 			id={props.name}
 			label={props.label}
-			onRemove={props.onRemove}
+			verb={<Remove id={props.name} onPress={props.onRemove} />}
 			control={
 				<FormField
 					control={control}

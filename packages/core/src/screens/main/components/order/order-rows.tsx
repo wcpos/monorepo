@@ -1,41 +1,8 @@
 import * as React from 'react';
 
-import { FormItem, SavedMark, useSavedName } from '@wcpos/components/form';
-import { PropertyRow } from '@wcpos/components/property-row';
 import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
-import { useT } from '../../../../contexts/translations';
-
-/**
- * One order fact (the Edit tab, the cart's Order details): its control in the value slot, named
- * by the row's key. The row's verb hides while its Saved mark shows.
- */
-export function OrderRow(props: {
-	prefix: 'order' | 'order-meta';
-	id: string;
-	label: string;
-	mark?: string;
-	align?: 'top';
-	verb?: React.ReactNode;
-	children: React.ReactNode;
-}) {
-	const { prefix, id, mark } = props;
-	const t = useT();
-	const saved = useSavedName();
-	const marked = !!mark && saved === mark;
-	return (
-		<PropertyRow
-			testID={`${prefix}-row-${id}`}
-			label={props.label}
-			align={props.align}
-			nativeID={`${prefix}-${id}-form-item`}
-			trailing={marked ? <SavedMark name={mark} label={t('settings.saved')} /> : props.verb}
-		>
-			<FormItem nativeID={`${prefix}-${id}`}>{props.children}</FormItem>
-		</PropertyRow>
-	);
-}
 
 /**
  * An order's currency is never empty, so it is no presence fact: it is a row while it differs

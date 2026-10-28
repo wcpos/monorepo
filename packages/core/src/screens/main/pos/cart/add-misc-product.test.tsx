@@ -69,42 +69,9 @@ jest.mock('@wcpos/components/form', () => {
 		FormTreeCombobox: () => null,
 	};
 });
-jest.mock('@wcpos/components/property-row', () => ({
-	PropertyList: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyRow: ({
-		children,
-		trailing,
-		testID,
-	}: React.PropsWithChildren<{ trailing?: React.ReactNode; testID?: string }>) => (
-		<div data-testid={testID}>
-			{children}
-			{trailing}
-		</div>
-	),
-	PropertyVerb: ({
-		children,
-		onPress,
-		testID,
-	}: React.PropsWithChildren<{ onPress: () => void; testID?: string }>) => (
-		<button data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	PropertyAddRow: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	PropertyAdd: ({
-		label,
-		onPress,
-		testID,
-	}: {
-		label: string;
-		onPress: () => void;
-		testID?: string;
-	}) => (
-		<button data-testid={testID} onClick={onPress}>
-			{label}
-		</button>
-	),
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
 jest.mock('../../components/amount-field', () => ({
 	FormAmountField: ({ value, testID }: { value: string; testID?: string }) => (

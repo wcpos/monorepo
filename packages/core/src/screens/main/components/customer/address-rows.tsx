@@ -1,9 +1,10 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { decode } from 'html-entities';
 import { useFormContext, type UseFormReturn, useWatch } from 'react-hook-form';
 
-import { FormField, FormInput, FormItem, SavedMark, useSavedName } from '@wcpos/components/form';
+import { FormField, FormInput, FormItem } from '@wcpos/components/form';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
@@ -190,16 +191,14 @@ export function TextPart(props: {
 	secureTextEntry?: boolean;
 }) {
 	const { control } = useFormContext();
+	const Item = props.label ? FormItem : View;
 	return (
 		<FormField
 			control={control}
 			name={props.name}
 			render={({ field }) => (
-				// The row's key is `<id>-form-item`: the input adopts it as its label.
-				<FormItem
-					className="min-w-0 flex-1 gap-0"
-					nativeID={props.label ? undefined : props.name.replace('.', '-')}
-				>
+				// Unlabelled, the input adopts its row's form item, so the row's key names it.
+				<Item className="min-w-0 flex-1 gap-0">
 					<FormInput
 						{...field}
 						value={field.value ?? ''}
@@ -211,7 +210,7 @@ export function TextPart(props: {
 						autoComplete={props.secureTextEntry ? 'new-password' : undefined}
 						testID={props.testID}
 					/>
-				</FormItem>
+				</Item>
 			)}
 		/>
 	);
@@ -236,7 +235,6 @@ function AddressRows(props: {
 	const { testID, prefix, labels } = props;
 	const t = useT();
 	const countries = useCountries();
-	const marked = useSavedName() === prefix && props.mark;
 	const address = useWatch({ name: prefix }) as Address;
 	const line = LINE_PARTS.map((part) =>
 		part === 'country' && address?.country
@@ -248,34 +246,21 @@ function AddressRows(props: {
 	return (
 		<>
 			<PropertyRow
-				testID={`${testID}-row-${prefix}`}
+				prefix={testID}
+				id={prefix}
+				name={props.mark ? prefix : []}
 				label={labels[prefix]}
-				trailing={
-					marked ? (
-						<SavedMark name={prefix} label={t('settings.saved')} />
-					) : (
-						props.verbs.map((item) => verb(testID, item))
-					)
-				}
+				verb={props.verbs.map((item) => verb(testID, item))}
+				derived={!!props.derived}
 			>
-				{props.open ? null : props.derived ? (
-					<Text className="text-muted-foreground">{props.derived}</Text>
-				) : (
-					<Text onPress={props.onOpen}>{line}</Text>
-				)}
+				{props.open ? null : (props.derived ?? <Text onPress={props.onOpen}>{line}</Text>)}
 			</PropertyRow>
 			{props.open &&
 				(props.parts ?? (prefix === 'billing' ? ADDRESS_PARTS : SHIPPING_PARTS)).map((part) => (
-					<PropertyRow
-						key={part}
-						indent
-						label={labels[part]}
-						nativeID={`${prefix}-${part}-form-item`}
-					>
+					// A part never acknowledges: a root field of the same name (first_name) is not it.
+					<PropertyRow key={part} indent label={labels[part]} prefix={prefix} id={part} name={[]}>
 						{part === 'country' || part === 'state' ? (
-							<FormItem nativeID={`${prefix}-${part}`}>
-								{React.createElement(PART_FIELDS[part], { prefix })}
-							</FormItem>
+							React.createElement(PART_FIELDS[part], { prefix })
 						) : (
 							<TextPart
 								name={`${prefix}.${part}`}

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
+import { PropertyRow } from '@wcpos/components/property-row';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
-import { PrinterRow } from '../printer-rows';
 
 import type { PrinterFormValues } from '../../schema';
 
@@ -26,7 +26,7 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 	const t = useT();
 
 	return (
-		<PrinterRow id="vendor" label={t('settings.printer_vendor')} mark="vendor">
+		<PropertyRow prefix="printer" id="vendor" label={t('settings.printer_vendor')}>
 			{/* A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10). */}
 			<SegmentedControl
 				testID="add-printer-vendor-segmented"
@@ -42,6 +42,6 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 					}
 				}}
 			/>
-		</PrinterRow>
+		</PropertyRow>
 	);
 }

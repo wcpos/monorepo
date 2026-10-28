@@ -4,7 +4,7 @@ Seeded 2026-09-18 from the screen inventory `docs/prototypes/2026-09-12-language
 
 **Job:** Configure, test and persist printer profiles across platform-specific connection lanes.
 
-**Composes:** `PrinterDialogLayout`, connection pickers, `PrinterRow` and `PrinterSettingsRows` (`dialog/printer-rows.tsx`), `PrinterDialogFooter`, `TestPrintError` and `PrinterSetupDialog`.
+**Composes:** `PrinterDialogLayout`, connection pickers, `PropertyRow` rows and `PrinterSettingsRows` (`dialog/printer-rows.tsx`), `PrinterDialogFooter`, `TestPrintError` and `PrinterSetupDialog`.
 
 ## Lines
 

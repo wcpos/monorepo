@@ -22,12 +22,12 @@ import { FormItemContext, useFormField } from './context';
  * to its `FormItem`. Reading the context here gave every control `undefined-form-item`
  * while its label carried the item's real id, so no control was named by its label.
  *
- * The context it can read is an ENCLOSING item's: a `SettingsRow` is a `FormItem` whose
- * `FormLabel` names the control placed in it with no `label` of its own. Such a wrapper
- * adopts that item's id, so `aria-labelledby` resolves to the row's label, and hands
- * `onLabelPress` to it, so pressing the row's label focuses or toggles the control. The
+ * The context it can read is an ENCLOSING item's: a `PropertyRow` is a `FormItem` whose
+ * key names the control placed in it with no `label` of its own. Such a wrapper
+ * adopts that item's id, so `aria-labelledby` resolves to the row's key, and hands
+ * `onLabelPress` to it, so pressing the row's key focuses or toggles the control. The
  * wrapper's own `FormDescription` / `FormMessage` then carry the row's id prefix: the row
- * must not render those itself (`SettingsRow` renders its hint as a plain `Text`). The
+ * must not render those itself (`PropertyRow` renders its help as a plain `Text`). The
  * nested `FormItem` only provides context, so the shared id is never a duplicate DOM id.
  */
 export function useFormControlAria({

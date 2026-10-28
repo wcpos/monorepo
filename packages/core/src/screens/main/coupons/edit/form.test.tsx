@@ -30,6 +30,9 @@ const form = {
 	reset: jest.fn(),
 };
 const mockUseForm = jest.fn(() => form);
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm(), useWatch: () => formValues }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('@wcpos/components/form', () => ({

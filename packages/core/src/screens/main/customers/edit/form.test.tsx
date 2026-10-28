@@ -32,6 +32,9 @@ const form = {
 	watch: jest.fn(() => ({ unsubscribe: jest.fn() })),
 };
 const mockUseForm = jest.fn(() => form);
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('react-hook-form', () => ({
 	useForm: () => mockUseForm(),
 	// The shared form's rows read the draft (its address facts watch the whole form).

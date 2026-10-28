@@ -7,7 +7,7 @@ import * as z from 'zod';
 
 import { Form, FormField, FormTreeCombobox, SavedFieldProvider } from '@wcpos/components/form';
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
-import { PropertyAddRow, PropertyList } from '@wcpos/components/property-row';
+import { PropertyAddRow, PropertyList, PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, ProductPayload } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
@@ -17,7 +17,6 @@ import { useAppInfo } from '../../../../../hooks/use-app-info';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
 import {
-	CatalogueRow,
 	CustomFieldAdd,
 	PriceRow,
 	StatusRow,
@@ -135,7 +134,7 @@ function EditProductFormFields({ product }: Props) {
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<PropertyList testID="product-form">
+				<PropertyList prefix="product">
 					<TextRow name="name" label={t('common.name')} testID="product-edit-name-input" />
 					<PriceRow name="regular_price" label={t('common.regular_price')} />
 					{offered.row('sale_price')}
@@ -143,7 +142,7 @@ function EditProductFormFields({ product }: Props) {
 					{offered.row('barcode')}
 					<StockRow />
 					<TaxRow />
-					<CatalogueRow id="categories" label={t('common.categories')} align="top">
+					<PropertyRow id="categories" label={t('common.categories')} align="top">
 						<FormField
 							control={form.control}
 							name="categories"
@@ -160,23 +159,19 @@ function EditProductFormFields({ product }: Props) {
 								</FormTreeCombobox>
 							)}
 						/>
-					</CatalogueRow>
+					</PropertyRow>
 					<StatusRow />
 					{product.payload.type === 'variable' && (
 						// Set elsewhere is locked (rule 6): the variations are edited under the product's row.
-						<CatalogueRow
+						<PropertyRow
 							id="variations"
 							label={t('common.variations')}
-							verb={
-								<Text className="text-muted-foreground text-sm">
-									{t('products.managed_in_the_list')}
-								</Text>
-							}
+							locked={{ where: t('products.managed_in_the_list') }}
 						>
 							<Text>
 								{t('products.n_variations', { count: product.payload.variations?.length ?? 0 })}
 							</Text>
-						</CatalogueRow>
+						</PropertyRow>
 					)}
 					{offered.row('featured')}
 					{offered.row('virtual')}

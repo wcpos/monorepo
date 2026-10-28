@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import * as z from 'zod';
 
-import { Form, SavedMark, useSavedName } from '@wcpos/components/form';
+import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { DialogBody, DialogFooter, type DialogFooterProps } from '@wcpos/components/dialog';
 import {
@@ -12,7 +12,6 @@ import {
 	PropertyRow,
 	PropertyVerb,
 } from '@wcpos/components/property-row';
-import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import {
@@ -84,7 +83,7 @@ const LISTS = [
 	['tax_ids', 'tax_id.tax_id', TAX_ID_DEFAULT_ROW],
 	['meta_data', 'common.custom_field', META_DATA_DEFAULT_ROW],
 ] as const;
-type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode };
+type RowOptions = { marks?: string[]; verb?: React.ReactNode; locked?: { where: string } };
 
 /**
  * A customer as property rows, typed into on creation and edit alike (ledger line 10); an edit
@@ -93,7 +92,6 @@ type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode };
 export function CustomerForm(props: CustomerFormProps) {
 	const { form, footer, renderLayout, onShippingLink } = props;
 	const t = useT();
-	const saved = useSavedName();
 	const editing = !!(form.getValues() as Record<string, unknown>).id;
 	const { focus, ...address } = useAddressFacts(form, 'customer');
 	// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- The writer's ref, not parent state.
@@ -116,20 +114,12 @@ export function CustomerForm(props: CustomerFormProps) {
 			{t('common.remove')}
 		</PropertyVerb>
 	);
-	/** One fact; its verb hides while one of its Saved marks shows, `field` names its control. */
-	const row = (id: string, label: string, value: React.ReactNode, o: RowOptions = {}) => {
-		const mark = (o.marks ?? [id]).find((name) => name === saved);
-		return (
-			<PropertyRow
-				testID={`customer-row-${id}`}
-				label={label}
-				nativeID={o.field && `${o.field.replace('.', '-')}-form-item`}
-				trailing={mark ? <SavedMark name={mark} label={t('settings.saved')} /> : o.verb}
-			>
-				{value}
-			</PropertyRow>
-		);
-	};
+	/** One fact; its verb hides while one of its Saved marks shows. */
+	const row = (id: string, label: string, value: React.ReactNode, o: RowOptions = {}) => (
+		<PropertyRow id={id} label={label} name={o.marks} verb={o.verb} locked={o.locked}>
+			{value}
+		</PropertyRow>
+	);
 	/** A text part; its id (`customer-first-name-input`) is the field's, billing's prefix dropped. */
 	const part = (field: string, placeholder: string, label?: string) => {
 		const id = field.replace('billing.', '');
@@ -147,20 +137,18 @@ export function CustomerForm(props: CustomerFormProps) {
 	};
 	const textRow = (field: string, label: string, o: RowOptions = {}) => {
 		const value = part(field, t('common.add_value', { label }));
-		return row(field.replace('billing.', ''), label, value, { field, ...o });
+		return row(field.replace('billing.', ''), label, value, o);
 	};
 	// Set elsewhere is locked: the value and where it is set (property rows rule 6).
 	const locked = (id: 'username' | 'role', label: string, where: string) =>
-		row(id, label, String(form.getValues(id) ?? ''), {
-			verb: <Text className="text-muted-foreground text-sm">{where}</Text>,
-		});
+		row(id, label, String(form.getValues(id) ?? ''), { locked: { where } });
 
 	const body = (
 		<Form {...form}>
 			<CountriesProvider>
 				<VStack className="gap-4">
 					<FormErrors />
-					<PropertyList testID="customer-form">
+					<PropertyList prefix="customer">
 						{row(
 							'name',
 							t('common.name'),
@@ -168,7 +156,7 @@ export function CustomerForm(props: CustomerFormProps) {
 								{part('first_name', labels.first_name)}
 								{part('last_name', labels.last_name, labels.last_name)}
 							</HStack>,
-							{ field: 'first_name', marks: ['first_name', 'last_name'] }
+							{ marks: ['first_name', 'last_name'] }
 						)}
 						{textRow('email', labels.email)}
 						{/* Billing's Saved mark sits on its address row, or here while that is not a row. */}

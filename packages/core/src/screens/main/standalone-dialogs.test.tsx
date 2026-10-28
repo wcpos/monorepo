@@ -25,6 +25,9 @@ function mockView({ children, className, testID }: ViewProps) {
 		</div>
 	);
 }
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../jest/property-row.test-utils')
+);
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
 	View: mockView,

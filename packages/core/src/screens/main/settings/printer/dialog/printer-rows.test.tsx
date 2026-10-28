@@ -10,6 +10,9 @@ import { DEFAULT_FORM_VALUES, type PrinterFormValues, type VendorOption } from '
 
 type Field = { value?: unknown; onChange: (value: unknown) => void; testID?: string };
 
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../jest/property-row.test-utils')
+);
 jest.mock('react-native', () => ({
 	View: ({
 		children,
@@ -149,7 +152,10 @@ describe('Edit Printer rows', () => {
 		const ids = rowIDs();
 		expect(ids[ids.indexOf('autoOpenDrawer') + 1]).toBe('drawerConnector');
 		expect(screen.getByTestId('add-printer-drawer-connector-field')).toBeInTheDocument();
-		expect(screen.getByText('Cash drawer connector').parentElement).toHaveClass('pl-4');
+		expect(screen.getByText('Cash drawer connector').parentElement).toHaveAttribute(
+			'data-indent',
+			'true'
+		);
 		unmount();
 
 		render(<Layout values={{ autoOpenDrawer: false }} />);
