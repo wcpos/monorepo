@@ -8,7 +8,6 @@ import { useRouter } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 
 import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
-import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
 import { PaneStack } from '@wcpos/components/pane-stack';
 import { Text } from '@wcpos/components/text';
@@ -58,18 +57,13 @@ import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import { useCatalogueRecord } from './commands/use-catalogue-record';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
-import {
-	useDrawnHandle,
-	useProductsQueryHandle,
-	useQuerySnapshot,
-	useQueryState,
-	useQueryStateActions,
-} from '../../../query';
+import { useProductsQueryHandle, useQueryState, useQueryStateActions } from '../../../query';
 
 import type { ExpandedState } from '@tanstack/react-table';
-import type { QueryStateActions, SnapshotFields, VariationMatch } from '../../../query';
+import type { VariationMatch } from '../../../query';
 import type { DataTableFeatures, DataTableFooterProps } from '../components/data-table';
 import type { Row, Table } from '../../../table-types';
+import type { ListTable } from '../components/list-frame';
 
 type ProductRow = {
 	record: EngineRecord<'products'>;
@@ -156,21 +150,29 @@ function variationRenderCell({ column }: { column: { id: string } }) {
 	return get(variationCells, column.id);
 }
 
-/**
- *
- */
-function renderFineItem(
-	{
-		item,
-		index,
-		table,
-	}: {
-		item: Row<ProductRow, DataTableFeatures>;
-		index: number;
-		table: Table<ProductRow, DataTableFeatures>;
-	},
-	openProduct?: (uuid: string) => void
-) {
+type ItemProps = {
+	item: Row<ProductRow, DataTableFeatures>;
+	index: number;
+	table: Table<ProductRow, DataTableFeatures>;
+};
+
+/** The touch row, a variable product's with its variations button. */
+function renderCoarseItem(props: ItemProps) {
+	const { record } = props.item.original;
+	return (
+		<VirtualizedList.Item>
+			<View testID={`data-table-row-${record.payload.slug ?? record.uuid}`}>
+				{record.payload.type === 'variable' ? (
+					<VariableRow {...props} />
+				) : (
+					<TouchRow record={record} />
+				)}
+			</View>
+		</VirtualizedList.Item>
+	);
+}
+
+function renderFineItem({ item, index, table }: ItemProps, openProduct?: (uuid: string) => void) {
 	// The caret opens the product, a variable one's too (its variations open from the button under
 	// its name); the row only while the Actions column is hidden. Inert when the cashier may not edit.
 	const row = (
@@ -274,47 +276,25 @@ function TableFooter(props: DataTableFooterProps) {
 	);
 }
 
-// The list re-renders for the answer only; the table and the footer read their own fields.
-const ANSWER_ONLY: SnapshotFields = [];
-
 /**
  * Tables are expensive to render, so memoize all props.
  */
 function ProductsList({
 	handle,
+	table,
 }: {
 	/** The relational products handle (roadmap#423): the list and its table read its snapshot. */
 	handle: QueryHandle;
+	table: ListTable<ItemProps>;
 }) {
 	const state = useQueryState<'products'>();
-	const actions = useQueryStateActions<'products'>();
-
-	const tableActions = React.useMemo<
-		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
-	>(
-		() => ({
-			setSort: actions.setSort,
-			extendLimit: actions.extendLimit,
-			setFilter: actions.setFilter,
-		}),
-		[actions]
-	);
 	const { calcTaxes } = useTaxSettings();
 	const { saveCatalogueChange } = useCatalogueRecord();
 
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
-	const t = useT();
 	const router = useRouter();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const openProduct =
-		!readOnly && caps.canEditProducts
-			? (uuid: string) =>
-					router.push({
-						pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-						params: { productId: uuid },
-					})
-			: undefined;
 	const canOpenVariation = !readOnly && caps.canEditVariations;
 	const openVariation = React.useMemo(
 		() =>
@@ -355,25 +335,6 @@ function ProductsList({
 		setDrill(null);
 		return true;
 	});
-
-	/**
-	 * Barcode
-	 */
-	const pointer = usePointer();
-	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
-	const { result } = useQuerySnapshot(useDrawnHandle(handle), ANSWER_ONLY);
-	const deferredResult = React.useDeferredValue(result);
-	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
-	const emptyStore =
-		!state.search &&
-		Object.entries(state.filters).every(([key, value]) =>
-			key === 'status'
-				? value === 'publish'
-				: Array.isArray(value)
-					? value.length === 0
-					: value === undefined || value === ''
-		);
 
 	/**
 	 * Table config
@@ -454,81 +415,37 @@ function ProductsList({
 	/* eslint-enable react-compiler/react-compiler */
 
 	return (
-		<>
-			{pending && <View testID="products-searching-line" className="bg-primary h-0.5" />}
-			<PaneStack
-				detail={drilled}
-				renderDetail={(target) => (
-					<DrillIn
-						parent={target.row.original.record}
-						back={() => setDrill(null)}
-						renderPane={() => (
-							<DrillPane
-								target={target}
-								stockStatus={state.filters.stock_status}
-								openVariation={openVariation}
-							/>
-						)}
-					/>
-				)}
-				paneClassName="bg-background"
-				testID="products-pane-stack"
-			>
-				<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
-					<DataTable<ProductRow>
-						id="products"
-						collectionName="products"
-						handle={handle}
-						sort={state.sort}
-						actions={tableActions}
-						renderItem={(props) =>
-							pointer === 'fine' ? (
-								renderFineItem(props, openProduct)
-							) : (
-								<VirtualizedList.Item>
-									<View
-										testID={`data-table-row-${props.item.original.record.payload.slug ?? props.item.original.record.uuid}`}
-									>
-										{props.item.original.record.payload.type === 'variable' ? (
-											<VariableRow {...props} />
-										) : (
-											<TouchRow record={props.item.original.record} />
-										)}
-									</View>
-								</VirtualizedList.Item>
-							)
-						}
-						cellsForRow={cellsForRow}
-						noDataMessage={
-							<EmptyState
-								testID="no-data-message"
-								size="surface"
-								kind={emptyStore ? 'empty' : 'no-results'}
-								title={t(
-									emptyStore ? 'products.no_products_yet' : 'pos_products.nothing_matches_filters'
-								)}
-								description={emptyStore ? t('products.no_products_yet_description') : undefined}
-								action={
-									emptyStore
-										? undefined
-										: {
-												label: t('pos_products.clear_filters'),
-												onPress: () => {
-													actions.resetFilters();
-													actions.clearSearch();
-												},
-											}
-								}
-							/>
-						}
-						estimatedItemSize={56}
-						TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-						getItemType={(row) => row.original.record.payload.type}
-						tableConfig={tableConfig}
-					/>
-				</View>
-			</PaneStack>
-		</>
+		<PaneStack
+			detail={drilled}
+			renderDetail={(target) => (
+				<DrillIn
+					parent={target.row.original.record}
+					back={() => setDrill(null)}
+					renderPane={() => (
+						<DrillPane
+							target={target}
+							stockStatus={state.filters.stock_status}
+							openVariation={openVariation}
+						/>
+					)}
+				/>
+			)}
+			paneClassName="bg-background"
+			testID="products-pane-stack"
+		>
+			<DataTable<ProductRow>
+				id="products"
+				collectionName="products"
+				handle={handle}
+				sort={state.sort}
+				cellsForRow={cellsForRow}
+				estimatedItemSize={56}
+				TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
+				getItemType={(row) => row.original.record.payload.type}
+				tableConfig={tableConfig}
+				{...table}
+			/>
+		</PaneStack>
 	);
 }
 
@@ -536,14 +453,50 @@ function ProductsList({
 function ProductsColumn() {
 	const state = useQueryState<'products'>();
 	const handle = useProductsQueryHandle(state);
+	const t = useT();
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const openProduct =
+		!readOnly && caps.canEditProducts
+			? (uuid: string) =>
+					router.push({
+						pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+						params: { productId: uuid },
+					})
+			: undefined;
+	// The published products are the store's own list: any other status, search or pill narrows it.
+	const narrowed =
+		!!state.search ||
+		!Object.entries(state.filters).every(([key, value]) =>
+			key === 'status'
+				? value === 'publish'
+				: Array.isArray(value)
+					? value.length === 0
+					: value === undefined || value === ''
+		);
 	return (
 		<ListColumn
 			testID="products-body"
+			id="products"
 			chips={<FilterBar />}
 			handle={handle}
 			skeleton={<DataTableSkeleton id="products" />}
+			renderRow={{
+				coarse: renderCoarseItem,
+				fine: (props) => renderFineItem(props, openProduct),
+			}}
+			narrowed={narrowed}
+			empty={{
+				title: t('products.no_products_yet'),
+				description: t('products.no_products_yet_description'),
+			}}
+			noResults={{
+				title: t('pos_products.nothing_matches_filters'),
+				clear: t('pos_products.clear_filters'),
+			}}
 		>
-			<ProductsList handle={handle} />
+			{(table) => <ProductsList handle={handle} table={table} />}
 		</ListColumn>
 	);
 }

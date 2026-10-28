@@ -3,13 +3,11 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-import { EmptyState } from '@wcpos/components/empty-state';
-import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import type { EngineRecord } from '@wcpos/query';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Actions } from './cells/actions';
@@ -38,16 +36,11 @@ import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
 import { useCouponRecord } from './commands/use-coupon-record';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
-import {
-	QueryStateProvider,
-	useCollectionQueryHandle,
-	useDrawnHandle,
-	useQuerySnapshot,
-	useQueryState,
-	useQueryStateActions,
-} from '../../../query';
+import { QueryStateProvider, useCollectionQueryHandle, useQueryState } from '../../../query';
 
-import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
+import type { QueryStateOf } from '../../../query';
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
 
 type CouponRow = { record: EngineRecord<'coupons'> };
 
@@ -94,25 +87,10 @@ function getInitialCouponSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-// The list re-renders for the answer only; the table and the footer read their own fields.
-const ANSWER_ONLY: SnapshotFields = [];
-
-function CouponsList({
-	handle,
-}: {
-	/** The coupons query handle (roadmap#423): the list and its table read its snapshot. */
-	handle: QueryHandle;
-}) {
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CouponsColumn() {
 	const state = useQueryState<'coupons'>();
-	const actions = useQueryStateActions<'coupons'>();
-	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
-	const shown = useDrawnHandle(handle);
-	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
-	const deferredResult = React.useDeferredValue(result);
-	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
-	const emptyStore = !state.search && Object.keys(state.filters).length === 0;
-	const pointer = usePointer();
+	const handle = useCollectionQueryHandle('coupons', state);
 	const t = useT();
 	const router = useRouter();
 	const { readOnly } = useProAccess();
@@ -121,16 +99,6 @@ function CouponsList({
 	const editable = !readOnly && caps.canEditCoupons;
 	const open = (uuid: string) =>
 		router.push({ pathname: '/coupons/edit/[couponId]', params: { couponId: uuid } });
-	const tableActions = React.useMemo<
-		Pick<QueryStateActions<'coupons'>, 'setSort' | 'extendLimit' | 'setFilter'>
-	>(
-		() => ({
-			setSort: actions.setSort,
-			extendLimit: actions.extendLimit,
-			setFilter: actions.setFilter,
-		}),
-		[actions]
-	);
 	const { saveCouponChange } = useCouponRecord();
 
 	const tableConfig = React.useMemo(
@@ -151,73 +119,48 @@ function CouponsList({
 	);
 
 	return (
-		<>
-			{pending && <View testID="coupons-searching-line" className="bg-primary h-0.5" />}
-			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
+		<ListColumn
+			testID="coupons-body"
+			id="coupons"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="coupons" />}
+			renderRow={{
+				coarse: ({ item }: { item: Row<CouponRow, DataTableFeatures> }) => (
+					<VirtualizedList.Item>
+						<View testID={`data-table-row-${item.original.record.uuid}`}>
+							<CoarseRow record={item.original.record} />
+						</View>
+					</VirtualizedList.Item>
+				),
+				fine: ({ item }) => (
+					<VirtualizedList.Item>
+						<DataTableRow
+							item={item}
+							pressWhenActionsHidden={editable ? () => open(item.original.record.uuid) : undefined}
+						/>
+					</VirtualizedList.Item>
+				),
+			}}
+			narrowed={!!state.search || Object.keys(state.filters).length > 0}
+			empty={{
+				title: t('coupons.no_coupons_yet'),
+				description: t('coupons.no_coupons_yet_description'),
+			}}
+			noResults={{ title: t('coupons.nothing_matches_filters'), clear: t('coupons.clear_filters') }}
+		>
+			{(table) => (
 				<DataTable<CouponRow>
 					id="coupons"
 					collectionName="coupons"
 					handle={handle}
 					sort={state.sort}
-					actions={tableActions}
 					cells={cells}
 					estimatedItemSize={56}
 					tableConfig={tableConfig}
-					renderItem={({ item }) => (
-						<VirtualizedList.Item>
-							{pointer === 'coarse' ? (
-								<View testID={`data-table-row-${item.original.record.uuid}`}>
-									<CoarseRow record={item.original.record} />
-								</View>
-							) : (
-								<DataTableRow
-									item={item}
-									pressWhenActionsHidden={
-										editable ? () => open(item.original.record.uuid) : undefined
-									}
-								/>
-							)}
-						</VirtualizedList.Item>
-					)}
-					noDataMessage={
-						<EmptyState
-							testID="no-data-message"
-							size="surface"
-							kind={emptyStore ? 'empty' : 'no-results'}
-							title={t(emptyStore ? 'coupons.no_coupons_yet' : 'coupons.nothing_matches_filters')}
-							description={emptyStore ? t('coupons.no_coupons_yet_description') : undefined}
-							action={
-								emptyStore
-									? undefined
-									: {
-											label: t('coupons.clear_filters'),
-											onPress: () => {
-												actions.resetFilters();
-												actions.clearSearch();
-											},
-										}
-							}
-						/>
-					}
+					{...table}
 				/>
-			</View>
-		</>
-	);
-}
-
-/** The list: the part of the page the Free preview overlay covers. */
-/** The list's column: the part of the page the Free preview overlay covers. */
-function CouponsColumn() {
-	const state = useQueryState<'coupons'>();
-	const handle = useCollectionQueryHandle('coupons', state);
-	return (
-		<ListColumn
-			testID="coupons-body"
-			chips={<FilterBar />}
-			handle={handle}
-			skeleton={<DataTableSkeleton id="coupons" />}
-		>
-			<CouponsList handle={handle} />
+			)}
 		</ListColumn>
 	);
 }
