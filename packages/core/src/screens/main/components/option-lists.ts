@@ -2,8 +2,6 @@ import * as React from 'react';
 
 import { useT } from '../../../contexts/translations';
 
-type Pairs = readonly (readonly [string, string])[];
-
 export const CURRENCY_POSITIONS = [
 	['left', 'common.left'],
 	['right', 'common.right'],
@@ -28,7 +26,7 @@ export const PRODUCT_STATUSES = [
 ] as const;
 
 /** `[value, key]` pairs as `FormSelect` options: the value is the slug written, never translated. */
-export function useOptionList(pairs: Pairs) {
+export function useOptionList(pairs: readonly (readonly [string, string])[]) {
 	const t = useT();
 	return React.useMemo(() => pairs.map(([value, key]) => ({ value, label: t(key) })), [pairs, t]);
 }

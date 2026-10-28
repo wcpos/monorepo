@@ -25,8 +25,12 @@ import {
 
 import type { SearchSelect } from '../../../../query';
 
-/** The product taxonomies searched by name; categories are a tree (`CategoryTreeLoader`). */
-type Collection = 'tag' | 'brand';
+/** Taxonomies searched by name (categories are a tree); literal `t('…')` keys for the extractor. */
+const WORDS: Record<'tag' | 'brand', (t: ReturnType<typeof useT>) => string[]> = {
+	tag: (t) => [t('common.search_tags'), t('common.no_tag_found'), t('common.select_tag')],
+	brand: (t) => [t('common.search_brands'), t('common.no_brand_found'), t('common.select_brand')],
+};
+type Collection = keyof typeof WORDS;
 
 function CollectionList({ select, empty }: { select: SearchSelect; empty: string }) {
 	// Drawn, not live: a typed search's new handle answers while the previous options stay.
@@ -68,18 +72,14 @@ function CollectionList({ select, empty }: { select: SearchSelect; empty: string
 
 /** A combobox's search box and the collection's matches, bound to the local search. */
 export function CollectionSearch({ collection }: { collection: Collection }) {
-	const t = useT();
+	const [search, empty] = WORDS[collection](useT());
 	const select = useSearchSelect(collection);
 
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t(`common.search_${collection}s`)}
-				value={select.search}
-				onChangeText={select.setSearch}
-			/>
+			<ComboboxInput placeholder={search} value={select.search} onChangeText={select.setSearch} />
 			<Suspense>
-				<CollectionList select={select} empty={t(`common.no_${collection}_found`)} />
+				<CollectionList select={select} empty={empty} />
 			</Suspense>
 		</>
 	);
@@ -93,11 +93,11 @@ export function CollectionSelect({
 	collection: Collection;
 	onValueChange?: (option: Option | undefined) => void;
 }) {
-	const t = useT();
+	const pick = WORDS[collection](useT())[2];
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t(`common.select_${collection}`)} />
+				<ComboboxValue placeholder={pick} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
 				<CollectionSearch collection={collection} />
