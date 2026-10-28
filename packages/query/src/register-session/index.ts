@@ -1,23 +1,19 @@
 export {
 	adoptCounters,
 	bindRegister,
-	getBoundRegister,
 	boundRegisterIdOf,
-	getBoundRegisterId,
+	getBoundRegister,
 	getCurrentBoundRegisterId,
-	getRegisterSnapshot,
 	mintUuid,
-	markSeededIn,
-	readLiveSession,
-	recordLiveSession,
 	nextSaleCounter,
 	observeRegister$,
 	readBoundRegister,
 	readCounters,
 	readRegister,
+	recordLiveSession,
 	unbindRegister,
 } from './register-document';
-export type { LiveSession, RegisterCounters, RegisterDocument } from './register-document';
+export type { RegisterCounters, RegisterDocument } from './register-document';
 export type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
 
 export { recordRegisterFact, type RegisterFact } from './audit';
@@ -57,4 +53,3 @@ export {
 	observeSessionAccounting,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
-export { seedSessionFromCache } from './seed';

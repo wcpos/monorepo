@@ -54,6 +54,13 @@ type Directory = {
 	refresh?: Promise<void>;
 	loaded: boolean;
 	listeners: Set<() => void>;
+	/**
+	 * Where a fresh list writes each register's live session. Set by the session hook (the store
+	 * session is one database per cashier); a reader that loads before it writes nothing, and
+	 * the readers' effect never depends on the database handle, which a session re-render may
+	 * hand over as a new object.
+	 */
+	cache?: { userDB: Parameters<typeof recordLiveSession>[0]; siteUuid: string };
 };
 const directories = new Map<string, Directory>();
 
@@ -88,9 +95,7 @@ function publish(entry: Directory, changes: Partial<Binding>) {
 function loadDirectory(
 	entry: Directory,
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
-	storeId: number | undefined,
-	userDB: Parameters<typeof recordLiveSession>[0],
-	siteUuid: string
+	storeId: number | undefined
 ): Promise<void> {
 	if (entry.request) return entry.request;
 	// A new attempt clears the last failure: readers wait for names again while it runs.
@@ -111,11 +116,13 @@ function loadDirectory(
 				// filter here read every store as having no register.
 				registers: (response.data as Register[]).filter((row) => storeId !== 0 || !row.store_id),
 			});
+			const cache = entry.cache;
+			if (!cache) return;
 			for (const row of response.data as Register[]) {
 				if (entry.request !== request) return;
 				await recordLiveSession(
-					userDB,
-					siteUuid,
+					cache.userDB,
+					cache.siteUuid,
 					row.id,
 					row.session
 						? {
@@ -191,6 +198,9 @@ async function syncBinding(
 	online: boolean
 ): Promise<void> {
 	const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, siteUuid, id);
+	// Before the first await: a reader's effect may have started the list request already, and
+	// its answer reads this at arrival time.
+	entry.cache = { userDB, siteUuid };
 	const bound = await readBoundRegister(userDB, siteUuid, storeId);
 	publish(entry, {
 		status: bound ? 'bound' : 'unknown',
@@ -198,7 +208,7 @@ async function syncBinding(
 		registerName: bound?.name ?? null,
 	});
 	if (!online) return;
-	await loadDirectory(entry, http, storeId, userDB, siteUuid);
+	await loadDirectory(entry, http, storeId);
 	if (!entry.loaded) return;
 	const registers = entry.value.registers;
 	if (bound && registers.some(({ id }) => id === bound.id)) {
@@ -246,14 +256,14 @@ export function useRegisterBindingSession(): void {
 
 /** Read another store's directory without changing the physical till binding. */
 export function useRegisterDirectory(storeId: number | undefined) {
-	const { userDB, site } = useStoreSession();
+	const { site } = useStoreSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const entry = directory(site.uuid!, storeId);
 	// A reader mounted before (or without) the session hook still gets the directory.
 	React.useEffect(() => {
-		if (online && !entry.loaded) void loadDirectory(entry, http, storeId, userDB, site.uuid!);
-	}, [entry, http, online, site.uuid, storeId, userDB]);
+		if (online && !entry.loaded) void loadDirectory(entry, http, storeId);
+	}, [entry, http, online, storeId]);
 	const subscribe = React.useCallback(
 		(notify: () => void) => {
 			entry.listeners.add(notify);
@@ -319,10 +329,10 @@ export function useRegisterBinding() {
 		if (current.refresh) return current.refresh;
 		current.request = undefined;
 		current.loaded = false;
-		current.refresh = loadDirectory(current, http, store.id, userDB, site.uuid!).finally(() => {
+		current.refresh = loadDirectory(current, http, store.id).finally(() => {
 			current.refresh = undefined;
 		});
 		return current.refresh;
-	}, [http, site.uuid, store.id, userDB]);
+	}, [http, site.uuid, store.id]);
 	return { ...value, bind, retry, refresh };
 }

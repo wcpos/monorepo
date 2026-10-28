@@ -9,7 +9,6 @@ import type { UserDatabase } from '@wcpos/database';
 import {
 	bindRegister,
 	readBoundRegister,
-	readLiveSession,
 	readRegister,
 	recordLiveSession,
 } from '@wcpos/query/register-session';
@@ -20,7 +19,10 @@ import {
 	useRegisterDirectory,
 } from './use-register-binding';
 import { useRegisterNames } from './use-register-names';
-import { remintRegister } from '../../../../query/src/register-session/register-document';
+import {
+	readLiveSession,
+	remintRegister,
+} from '../../../../query/src/register-session/register-document';
 
 let mockStatus = 'online-website-available';
 let mockDB: UserDatabase;
