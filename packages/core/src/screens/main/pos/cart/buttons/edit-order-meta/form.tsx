@@ -15,15 +15,7 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
 import { DialogBody, useDialog } from '@wcpos/components/dialog';
-import {
-	Form,
-	FormCombobox,
-	FormField,
-	FormSelect,
-	FormTextarea,
-	useFormChangeHandler,
-	useMarkSaved,
-} from '@wcpos/components/form';
+import { Form, FormCombobox, FormField, FormSelect, FormTextarea } from '@wcpos/components/form';
 import {
 	PropertyAdd,
 	PropertyAddRow,
@@ -58,6 +50,7 @@ import {
 	MetaDataForm,
 	metaDataSchema,
 } from '../../../../components/meta-data-form';
+import { useRecordAutosave } from '../../../../components/use-record-autosave';
 import { useOrderFieldsWrite } from '../../../commands/use-order-fields-write';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
@@ -75,40 +68,6 @@ const formSchema = z.object({
 
 const handOverSchema = z.object({ status: z.string(), cashier_id: z.string() });
 
-type MetaRow = { id?: number; key?: string; value?: unknown };
-
-/**
- * The draft's rows reconciled with the order's: a draft row with no id takes the id the order
- * already holds for the same key (the store numbered it during a sync while the sheet stayed
- * open), and a numbered row the draft no longer has goes out as a tombstone, or the store would
- * keep it — but only a row the draft OPENED with (deleted after that sync, so the form saw no id
- * and removed it instead of tombstoning it). A row that arrived from the store while the sheet
- * was open was never the cashier's to delete; the draft simply does not know it.
- */
-function reconcileMetaWithOrder<Row extends MetaRow>(
-	rows: Row[],
-	stored: readonly MetaRow[],
-	openedWith: ReadonlySet<string>
-): (Row | MetaRow)[] {
-	const claimed = new Set<number>();
-	for (const row of rows) if (row.id != null) claimed.add(row.id);
-	const reconciled: (Row | MetaRow)[] = rows.map((row) => {
-		if (row.id != null) return row;
-		const id = stored.find(
-			(entry) => entry.id != null && entry.key === row.key && !claimed.has(entry.id)
-		)?.id;
-		if (id == null) return row;
-		claimed.add(id);
-		return { ...row, id };
-	});
-	for (const entry of stored) {
-		if (entry.id == null || claimed.has(entry.id)) continue;
-		if (!openedWith.has(String(entry.key ?? ''))) continue;
-		if (PROTECTED_ORDER_META_KEYS.includes(String(entry.key ?? ''))) continue;
-		reconciled.push({ id: entry.id, key: entry.key, value: null });
-	}
-	return reconciled;
-}
 type HandOverValues = z.infer<typeof handOverSchema>;
 
 type FormValues = z.infer<typeof formSchema>;
@@ -142,11 +101,6 @@ export function EditOrderMetaForm({
 		null
 	);
 	const [loading, setLoading] = React.useState(false);
-	const markSaved = useMarkSaved();
-	// The meta keys the draft opened with: only one of these, gone from the draft, is a deletion.
-	const openedWithMetaKeys = React.useRef(
-		new Set((formData.meta_data ?? []).map((row) => String(row?.key ?? '')))
-	);
 
 	/**
 	 * `defaultValues`, not reactive `values`: this form IS the writer of what it shows. Every
@@ -165,37 +119,15 @@ export function EditOrderMetaForm({
 		resolver: zodResolver(handOverSchema),
 		values: handOverData,
 	});
-	const { flush } = useFormChangeHandler({
+	// Resolves whether the record holds the edit: flush() hands that to Sync order and Send.
+	const { flush } = useRecordAutosave({
 		form,
-		// A nested path (meta_data.0.value) writes its whole root field; the mark lands on the root.
-		onChange: (changes) => {
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const value = form.getValues(root);
-			// Autosave never writes the identity rows (the hand-over does, on Send; the local patch
-			// keeps the stored ones), and a row the cashier has only just added (no key yet) is not
-			// an edit: it would be pushed as blank meta. The draft is the form's own, so a row the
-			// store has numbered since (a sync while the sheet stayed open) takes its id back from
-			// the order by key, or the store would append a copy instead of updating the row.
-			const patch = {
-				[root]:
-					root === 'meta_data' && Array.isArray(value)
-						? reconcileMetaWithOrder(
-								value.filter(
-									(row) =>
-										!PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? '')) &&
-										(row?.id != null || String(row?.key ?? '') !== '')
-								),
-								order.getLatest().payload.meta_data ?? [],
-								openedWithMetaKeys.current
-							)
-						: value,
-			};
-			// Resolves whether the record holds the edit: flush() hands that to Sync order and Send.
-			return writeOrderFields(order, () => patch).then((written) => {
-				if (written) markSaved([root]);
-				return written;
-			});
-		},
+		stored: () => order.getLatest().payload,
+		persist: (data) => writeOrderFields(order, () => data),
+		// Autosave never writes the identity rows: the hand-over does, on Send, and the local
+		// patch keeps the stored ones.
+		metaDraft: (rows) =>
+			rows.filter((row) => !PROTECTED_ORDER_META_KEYS.includes(String(row?.key ?? ''))),
 	});
 	React.useEffect(() => {
 		if (!flushRef) return;
