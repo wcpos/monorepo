@@ -73,7 +73,7 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 			break;
 	}
 
-	const action = translateErrorAction((key) => t(key), entry.code);
+	const action = translateErrorAction(t, entry.code);
 
 	const guidance = [risk, action].filter(Boolean).join(' ');
 	return guidance.length > 0 ? guidance : null;
@@ -262,7 +262,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const eventType = eventTypeOf(row);
 	const description =
 		!showsGuidance && eventType !== undefined && isSyncEventType(eventType)
-			? translateEventDescription((key) => t(key), eventType)
+			? translateEventDescription(t, eventType)
 			: undefined;
 
 	const entries: KVEntry[] = [];
@@ -334,7 +334,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		? serverSaid !== null
 			? t('health.logs.server_said', { reason: serverSaid })
 			: entry
-				? translateErrorSummary((key) => t(key), entry.code)
+				? translateErrorSummary(t, entry.code)
 				: reason
 		: null;
 	// A code-carrying row with no registered event type is now TITLED from that
