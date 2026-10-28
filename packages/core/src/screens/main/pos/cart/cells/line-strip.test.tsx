@@ -31,9 +31,9 @@ jest.mock('../../hooks/use-remove-line-item', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('./edit-cart-item-button', () => ({ EditCartItemButton: () => null }));
-jest.mock('./edit-line-item', () => ({ EditLineItem: () => null }));
-jest.mock('./edit-fee-line', () => ({ EditFeeLine: () => null }));
-jest.mock('./edit-shipping-line', () => ({ EditShippingLine: () => null }));
+jest.mock('./edit-line-item/form', () => ({ EditLineItemForm: () => null }));
+jest.mock('./edit-fee-line/form', () => ({ EditFeeLineForm: () => null }));
+jest.mock('./edit-shipping-line/form', () => ({ EditShippingLineForm: () => null }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

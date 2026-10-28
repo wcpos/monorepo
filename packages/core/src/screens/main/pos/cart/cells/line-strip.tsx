@@ -24,9 +24,9 @@ import { editOffset, releaseOutcome, removeOffset, removePoint } from './line-st
 import { useT } from '../../../../../contexts/translations';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 import { EditCartItemButton } from './edit-cart-item-button';
-import { EditLineItem } from './edit-line-item';
-import { EditFeeLine } from './edit-fee-line';
-import { EditShippingLine } from './edit-shipping-line';
+import { EditFeeLineForm } from './edit-fee-line/form';
+import { EditLineItemForm } from './edit-line-item/form';
+import { EditShippingLineForm } from './edit-shipping-line/form';
 
 import type { CartLine } from '../../hooks/utils';
 
@@ -403,24 +403,29 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					    rounded to whole pixels, so the open row can stop a fraction past Edit's edge and
 					    would show a hairline of the strip's red there. */}
 					<View className="bg-muted absolute inset-y-0 right-full w-1" />
-					<EditCartItemButton title={title} trigger="label">
-						{type === 'line_items' ? (
-							<EditLineItem
-								uuid={uuid}
-								item={item as React.ComponentProps<typeof EditLineItem>['item']}
-							/>
-						) : type === 'fee_lines' ? (
-							<EditFeeLine
-								uuid={uuid}
-								item={item as React.ComponentProps<typeof EditFeeLine>['item']}
-							/>
-						) : (
-							<EditShippingLine
-								uuid={uuid}
-								item={item as React.ComponentProps<typeof EditShippingLine>['item']}
-							/>
-						)}
-					</EditCartItemButton>
+					<EditCartItemButton
+						title={title}
+						trigger="label"
+						item={item}
+						form={
+							type === 'line_items' ? (
+								<EditLineItemForm
+									uuid={uuid}
+									item={item as React.ComponentProps<typeof EditLineItemForm>['item']}
+								/>
+							) : type === 'fee_lines' ? (
+								<EditFeeLineForm
+									uuid={uuid}
+									item={item as React.ComponentProps<typeof EditFeeLineForm>['item']}
+								/>
+							) : (
+								<EditShippingLineForm
+									uuid={uuid}
+									item={item as React.ComponentProps<typeof EditShippingLineForm>['item']}
+								/>
+							)
+						}
+					/>
 				</Animated.View>
 				<Animated.View
 					testID="cart-line-remove-slot"

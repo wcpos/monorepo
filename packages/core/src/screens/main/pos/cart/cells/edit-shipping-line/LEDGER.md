@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Edit shipping method, amount, tax status and metadata without inventing line-level tax configuration.
 
-**Composes:** `@wcpos/components/{dialog,form,hstack,tabs,text,tree}`.
+**Composes:** `@wcpos/components/{dialog,form,hstack,text}`. The panel, its title and the Form | JSON tabs are `screens/main/components/record-dialog` (card 8, 2026-10-28); this folder is the Form tab only.
 
 ## Lines
 

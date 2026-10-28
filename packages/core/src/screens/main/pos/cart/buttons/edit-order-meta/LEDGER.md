@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Edit order metadata locally and explicitly confirm status/cashier hand-offs.
 
-**Composes:** `@wcpos/components/{alert-dialog,button,combobox,dialog,form,hstack,suspense,tabs,text,tree}`.
+**Composes:** `@wcpos/components/{alert-dialog,button,combobox,dialog,form,hstack,suspense,text}`. The panel, its title and the Form | JSON tabs are `screens/main/components/record-dialog` (card 8, 2026-10-28); this folder is the Form tab only.
 
 ## Lines
 
