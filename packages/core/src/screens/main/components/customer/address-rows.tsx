@@ -18,7 +18,6 @@ import { useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import { AddressCountryField, AddressStateField } from '../billing-address-form';
-import { EditableField } from '../editable-field';
 import { shippingAddressSchema } from '../shipping-address-form';
 
 /** An address's parts in row order; the closed line reads them in postal order. */
@@ -130,7 +129,7 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 	/** The address rows and the offered facts left for the add row, from the record's presence. */
 	const layout = <N extends string>(
 		presence: { present: readonly N[]; offered: readonly N[]; withdraw: (name: N) => void },
-		options: { input?: boolean; billingMark?: boolean; billingParts?: readonly string[] } = {}
+		options: { billingMark?: boolean; billingParts?: readonly string[] } = {}
 	) => {
 		const has = (name: string) => presence.present.includes(name as N);
 		// Shipping is a row whenever billing is: it derives from billing until a verb breaks the link.
@@ -145,7 +144,7 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 			: open.shipping
 				? [sameAsBilling]
 				: [['edit-shipping', t('common.edit'), openPart('shipping')], sameAsBilling];
-		const common = { testID, labels, input: options.input };
+		const common = { testID, labels };
 		return {
 			offered: presence.offered.filter((name) => name !== 'shipping' || !shippingRow),
 			rows: (
@@ -185,15 +184,14 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 }
 
 /**
- * One text fact. `input`: a field that is typed into (a creation form), named by its row's key;
- * otherwise the value at rest and a field while editing, committing on blur or Enter.
+ * One text fact: a field that is typed into, named by its row's key. Creation and edit draw the
+ * same control (Paul, 2026-10-28: "it should look consistent"); an edit form autosaves it.
  */
 export function TextPart(props: {
 	name: string;
 	placeholder: string;
 	testID: string;
 	autoFocus?: boolean;
-	input?: boolean;
 	secureTextEntry?: boolean;
 }) {
 	const { control } = useFormContext();
@@ -202,36 +200,18 @@ export function TextPart(props: {
 			control={control}
 			name={props.name}
 			render={({ field }) => (
-				<FormItem
-					className="min-w-0 flex-1 gap-0"
-					// The row's key is `<id>-form-item`: an input adopts it as its label.
-					nativeID={props.input ? props.name.replace('.', '-') : undefined}
-				>
-					{props.input ? (
-						<FormInput
-							{...field}
-							value={field.value ?? ''}
-							placeholder={props.placeholder}
-							autoFocus={props.autoFocus}
-							secureTextEntry={props.secureTextEntry}
-							// A customer's new password, never the cashier's saved login.
-							autoComplete={props.secureTextEntry ? 'new-password' : undefined}
-							testID={props.testID}
-						/>
-					) : (
-						<EditableField
-							variant="ghost"
-							bold={false}
-							value={field.value ?? ''}
-							onChangeText={field.onChange}
-							// The draft reaches the form as it is typed: a footer action or a dismissal
-							// on native does not blur the editor, and must not read the previous value.
-							onChangeDraft={field.onChange}
-							placeholder={props.placeholder}
-							startEditing={props.autoFocus}
-							testID={props.testID}
-						/>
-					)}
+				// The row's key is `<id>-form-item`: the input adopts it as its label.
+				<FormItem className="min-w-0 flex-1 gap-0" nativeID={props.name.replace('.', '-')}>
+					<FormInput
+						{...field}
+						value={field.value ?? ''}
+						placeholder={props.placeholder}
+						autoFocus={props.autoFocus}
+						secureTextEntry={props.secureTextEntry}
+						// A customer's new password, never the cashier's saved login.
+						autoComplete={props.secureTextEntry ? 'new-password' : undefined}
+						testID={props.testID}
+					/>
 					<FormMessage />
 				</FormItem>
 			)}
@@ -252,7 +232,6 @@ function AddressRows(props: {
 	autoFocus?: boolean;
 	derived?: string;
 	verbs: Verb[];
-	input?: boolean;
 	mark?: boolean;
 	parts?: readonly string[];
 }) {
@@ -304,7 +283,6 @@ function AddressRows(props: {
 								name={`${prefix}.${part}`}
 								placeholder={t('common.add_value', { label: labels[part] })}
 								autoFocus={props.autoFocus && part === 'address_1'}
-								input={props.input}
 								testID={`${testID}-field-${prefix}-${part}`}
 							/>
 						)}

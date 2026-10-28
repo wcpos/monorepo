@@ -92,11 +92,6 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-base-tax-location', () => ({
 	useBaseTaxLocation: () => ({ country: 'CA' }),
 }));
-jest.mock('../editable-field', () => ({
-	EditableField: ({ value, testID }: { value: string; testID?: string }) => (
-		<span data-testid={testID}>{value}</span>
-	),
-}));
 function mockAddressSchema(root: 'billing' | 'shipping') {
 	const z = jest.requireActual('zod') as typeof import('zod');
 	const keys = ['first_name', 'last_name', 'company', 'phone', 'address_1', 'address_2', 'city'];

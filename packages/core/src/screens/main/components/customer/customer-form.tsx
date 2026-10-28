@@ -85,11 +85,11 @@ const LISTS = [
 	['tax_ids', 'tax_id.tax_id', TAX_ID_DEFAULT_ROW],
 	['meta_data', 'common.custom_field', META_DATA_DEFAULT_ROW],
 ] as const;
-type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode; input?: boolean };
+type RowOptions = { field?: string; marks?: string[]; verb?: React.ReactNode };
 
 /**
- * A customer as property rows. A creation form is typed into; an edit (the record has an id,
- * ledger line 2) shows values at rest that the modal autosaves, with Username and Role locked.
+ * A customer as property rows, typed into on creation and edit alike (ledger line 10); an edit
+ * (the record has an id, ledger line 2) is autosaved by its modal, with Username and Role locked.
  */
 export function CustomerForm(props: CustomerFormProps) {
 	const { form, footer, renderLayout, onShippingLink } = props;
@@ -107,7 +107,6 @@ export function CustomerForm(props: CustomerFormProps) {
 	const has = (name: string) => presence.present.includes(name as never);
 	const labels: Record<string, string> = { ...address.labels, password: t('common.password') };
 	const { offered, rows } = address.layout(presence, {
-		input: !editing,
 		billingMark: true,
 		billingParts: BILLING_PARTS,
 	});
@@ -133,14 +132,13 @@ export function CustomerForm(props: CustomerFormProps) {
 		);
 	};
 	/** A text part; its id (`customer-first-name-input`) is the field's, billing's prefix dropped. */
-	const part = (field: string, placeholder: string, input = !editing) => {
+	const part = (field: string, placeholder: string) => {
 		const id = field.replace('billing.', '');
 		return (
 			<TextPart
 				key={id}
 				name={field}
 				placeholder={placeholder}
-				input={input}
 				autoFocus={focus === id}
 				secureTextEntry={id === 'password'}
 				testID={`customer-${id.replace('_', '-')}-input`}
@@ -148,7 +146,7 @@ export function CustomerForm(props: CustomerFormProps) {
 		);
 	};
 	const textRow = (field: string, label: string, o: RowOptions = {}) => {
-		const value = part(field, t('common.add_value', { label }), o.input);
+		const value = part(field, t('common.add_value', { label }));
 		return row(field.replace('billing.', ''), label, value, { field, ...o });
 	};
 	// Set elsewhere is locked: the value and where it is set (property rows rule 6).
@@ -183,7 +181,7 @@ export function CustomerForm(props: CustomerFormProps) {
 							textRow('billing.company', labels.company, { verb: removeVerb('company') })}
 						{rows}
 						{has('password') &&
-							textRow('password', labels.password, { input: true, verb: removeVerb('password') })}
+							textRow('password', labels.password, { verb: removeVerb('password') })}
 						<TaxIdsForm testID="customer" />
 						<MetaDataForm testID="customer" />
 						<PropertyAddRow>

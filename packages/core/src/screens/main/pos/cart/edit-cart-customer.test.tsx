@@ -94,7 +94,28 @@ jest.mock('@wcpos/components/form', () => ({
 	FormField: jest.requireActual('react-hook-form').Controller,
 	// The real item: its context is what the country and state controls adopt their name from.
 	FormItem: jest.requireActual('@wcpos/components/form/common').FormItem,
-	FormInput: () => null,
+	// Like the real input: the field hears every change, so a draft reaches the form as it is typed.
+	FormInput: ({
+		value,
+		onChange,
+		placeholder,
+		autoFocus,
+		testID,
+	}: {
+		value: string;
+		onChange: (value: string) => void;
+		placeholder: string;
+		autoFocus?: boolean;
+		testID?: string;
+	}) => (
+		<input
+			data-testid={testID}
+			aria-label={placeholder}
+			value={value}
+			autoFocus={autoFocus}
+			onChange={(event) => onChange(event.target.value)}
+		/>
+	),
 	FormMessage: () => null,
 	FormSelect: () => null,
 	useFormChangeHandler: jest.requireActual('@wcpos/components/form/use-form-change-handler')
@@ -166,33 +187,6 @@ jest.mock('../../../../lib/tax-id', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, options?: { label?: string }) =>
 		options?.label ? `${key}:${options.label}` : key,
-}));
-jest.mock('../../components/editable-field', () => ({
-	// Like the real field: the draft on every change, the commit on blur.
-	EditableField: ({
-		value,
-		onChangeText,
-		onChangeDraft,
-		placeholder,
-		startEditing,
-		testID,
-	}: {
-		value: string;
-		onChangeText: (value: string) => void;
-		onChangeDraft?: (value: string) => void;
-		placeholder: string;
-		startEditing?: boolean;
-		testID?: string;
-	}) => (
-		<input
-			data-testid={testID}
-			aria-label={placeholder}
-			value={value}
-			autoFocus={startEditing}
-			onChange={(event) => onChangeDraft!(event.target.value)}
-			onBlur={(event) => onChangeText(event.target.value)}
-		/>
-	),
 }));
 // Factories run before this file's constants exist, so each builds its own schema.
 function mockAddressSchema(root: 'billing' | 'shipping') {
