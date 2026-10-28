@@ -39,7 +39,6 @@ import type { useReceiptDocument } from '../../receipt/use-receipt-document';
 const STATIC_ROW =
 	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 const ACTION_ROW = 'border-border rounded-none border-b';
-const NOTE = 'text-muted-foreground px-2.5 py-1 text-sm';
 const MUTED = 'text-muted-foreground';
 
 type HeadingProps = {
@@ -140,6 +139,22 @@ export function ClosureBody({
 	);
 	const cashiers = (breakdowns.cashiers ?? []) as (string | { name: string })[];
 	const recounts = corrections.filter((c) => c.type === 'recount').length;
+	const settledArgs = {
+		recorded: context.formatMoney(recorded.counted.cash ?? '0'),
+		result: varianceText(
+			countVariance(recorded.counted.cash ?? '0', recorded.expected.cash ?? '0'),
+			format,
+			t
+		),
+		settled: context.formatMoney(counted),
+		count: recounts,
+	};
+	// Literal keys: the i18n ratchet refuses a computed one, and the catalogue needs each string.
+	const correctionLabel: Record<Correction['type'], string> = {
+		recount: t('reports.correction_recount'),
+		late_sale: t('reports.late_sale'),
+		late_movement: t('reports.late_movement'),
+	};
 	const documentError = doc.documentError && !doc.isOffline;
 	const term = (label: string, suffix?: React.ReactNode, quiet?: boolean, strong?: boolean) => (
 		<Text
@@ -147,7 +162,7 @@ export function ClosureBody({
 			className={cn('min-w-0 flex-1', quiet && MUTED, strong && 'font-semibold')}
 		>
 			{label}
-			{suffix != null && suffix !== '' && <Text className={`${MUTED} text-sm`}> {suffix}</Text>}
+			{suffix != null && suffix !== '' && <Text variant="key"> {suffix}</Text>}
 		</Text>
 	);
 	const amount = (value: string, quiet?: boolean, strong?: boolean) =>
@@ -158,9 +173,7 @@ export function ClosureBody({
 		Number(value) ? `−${format(Math.abs(Number(value)))}` : format(0);
 	const band = (label: string) => (
 		<View className="h-band border-border justify-center border-b px-2.5">
-			<Text className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-				{label}
-			</Text>
+			<Text variant="caption">{label}</Text>
 		</View>
 	);
 	const figures = [
@@ -173,7 +186,7 @@ export function ClosureBody({
 			<View className="flex-row gap-2">
 				{figures.map(([key, label, value]) => (
 					<View key={key} className="border-border flex-1 rounded-lg border px-3 py-2.5">
-						<Text className="text-muted-foreground text-sm">{label}</Text>
+						<Text variant="key">{label}</Text>
 						<AmountFigure
 							testID={`closure-figure-${key}`}
 							size="tile"
@@ -189,19 +202,11 @@ export function ClosureBody({
 					testID="closure-settled"
 					tone="warning"
 					// A late sale or movement settles figures without a recount: say so, never "0 recounts".
-					title={t(
-						recounts > 0 ? 'reports.recorded_settled_line' : 'reports.recorded_settled_late',
-						{
-							recorded: context.formatMoney(recorded.counted.cash ?? '0'),
-							result: varianceText(
-								countVariance(recorded.counted.cash ?? '0', recorded.expected.cash ?? '0'),
-								format,
-								t
-							),
-							settled: context.formatMoney(counted),
-							count: recounts,
-						}
-					)}
+					title={
+						recounts > 0
+							? t('reports.recorded_settled_line', settledArgs)
+							: t('reports.recorded_settled_late', settledArgs)
+					}
 				/>
 			)}
 			<View>
@@ -234,7 +239,11 @@ export function ClosureBody({
 								: entries.length || undefined;
 						return (
 							<View key={type} className={STATIC_ROW}>
-								{term(t(`register.${type}`), note, !Number(total))}
+								{term(
+									type === 'paid_in' ? t('register.paid_in') : t('register.paid_out'),
+									note,
+									!Number(total)
+								)}
 								{amount(
 									type === 'paid_out' ? minus(total) : context.formatMoney(total),
 									!Number(total)
@@ -301,7 +310,7 @@ export function ClosureBody({
 					label={t('register.z_report')}
 					trailing={
 						<>
-							<Text className={NOTE}>
+							<Text variant="key" className="px-2.5 py-1">
 								{row.print_count
 									? t('reports.printed_times', { count: row.print_count })
 									: t('reports.not_printed')}
@@ -343,7 +352,7 @@ export function ClosureBody({
 				{corrections.length > 0 && band(t('reports.corrections'))}
 				{corrections.map((c) => (
 					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">
-						<Text className="font-semibold">{t(`reports.${c.type}`)}</Text>
+						<Text className="font-semibold">{correctionLabel[c.type]}</Text>
 						<Text>
 							{c.actor.name}
 							{c.approver ? ` · ${t('reports.approver', { name: c.approver.name })}` : ''}

@@ -151,6 +151,7 @@
 	"reports.recorded_settled_line_one": "Recorded {recorded} · {result}. Settled at {settled} after {count} recount.",
 	"reports.recorded_settled_line_other": "Recorded {recorded} · {result}. Settled at {settled} after {count} recounts.",
 	"reports.recorded_settled_late": "Recorded {recorded} · {result}. Settled at {settled} after a late sale or movement.",
+	"reports.correction_recount": "Recount",
 	"reports.printed_times_one": "printed once",
 	"reports.printed_times_other": "printed {count} times",
 	"reports.not_printed": "not printed yet",
