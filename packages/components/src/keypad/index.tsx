@@ -38,27 +38,25 @@ export function decimalRow(separator: string | undefined, backspace: string): Ke
 	];
 }
 
-/** Faces: `boxed` the grid's (ledger line 6), `key` the price keypad's phone key, `cell` a panel's. */
+/** THE key face (ledger line 7): the price keypad's phone key; `cell` sits under one panel's border. */
 const keyFace = cva('items-center justify-center', {
 	variants: {
 		face: {
 			key: 'bg-muted min-h-ctl rounded-lg active:opacity-70',
 			cell: 'web:hover:bg-muted active:bg-muted',
-			boxed: 'border-border bg-card active:bg-muted web:hover:bg-muted min-h-ctl rounded-lg border',
 		},
 		quick: { none: '', off: '', lit: 'bg-primary' },
 	},
 	compoundVariants: [{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' }],
 });
-// `boxed` takes its weight from the `subheading` rank (the ladder fence refuses the literal).
-const keyText = cva('', {
+const keyText = cva('font-semibold', {
 	variants: {
-		face: { key: 'text-xl font-semibold', cell: 'text-lg font-semibold', boxed: 'text-2xl' },
+		face: { key: 'text-xl', cell: 'text-lg' },
 		quick: { none: '', off: 'text-primary text-sm', lit: 'text-primary-foreground text-sm' },
 	},
 });
 
-type KeyProps = KeypadKey & { face?: 'key' | 'cell' | 'boxed'; onPress: () => void } & ViewProps;
+type KeyProps = KeypadKey & { face?: 'key' | 'cell'; onPress: () => void } & ViewProps;
 
 /** One key: role, name, `keypad-key-<name>` unless the caller names it, the face. */
 export function Key({ face = 'key', name, label, text, icon, variant, on, ...props }: KeyProps) {
@@ -75,14 +73,9 @@ export function Key({ face = 'key', name, label, text, icon, variant, on, ...pro
 			className={cn(keyFace({ face, quick }), props.className)}
 		>
 			{icon ? (
-				<Icon name={icon} variant={variant} size={face === 'boxed' ? 'xl' : undefined} />
+				<Icon name={icon} variant={variant} />
 			) : (
-				<Text
-					variant={face === 'boxed' ? 'subheading' : 'body'}
-					className={cn(keyText({ face, quick }))}
-				>
-					{text ?? label}
-				</Text>
+				<Text className={cn(keyText({ face, quick }))}>{text ?? label}</Text>
 			)}
 		</PressableSurface>
 	);
@@ -105,7 +98,6 @@ export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...prop
 						<Key
 							key={key.name}
 							{...key}
-							face="boxed"
 							testID={key.testID ?? (testID ? `${testID}-key-${key.name}` : undefined)}
 							style={{ flex: key.span ?? 1 }}
 							className={shrink ? undefined : 'h-tile'}
