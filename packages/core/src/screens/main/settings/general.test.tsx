@@ -110,7 +110,7 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-// LockedRow imports the Switch for its boolean rows (uniwind is ESM under jest); General's rows are text.
+// A locked row imports the Switch for its boolean values (uniwind is ESM under jest); General's are text.
 jest.mock('@wcpos/components/switch', () => ({ Switch: () => null }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(document: T, select: (value: T) => unknown) => select(document),
