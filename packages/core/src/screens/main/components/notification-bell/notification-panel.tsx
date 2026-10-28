@@ -19,7 +19,7 @@ import { useT } from '../../../../contexts/translations';
 import { storeDayBounds, useStoreDay } from '../../../../hooks/use-store-day';
 import { useDateFormat } from '../../hooks/use-date-format';
 import { groupByRecency, type NotificationListItem } from './notification-groups';
-import { actionUrl, kindOf } from './notification-kind';
+import { actionUrl, kindOf, type NotificationLabelKey } from './notification-kind';
 
 const TONES = {
 	info: { tile: 'bg-info/10', icon: 'text-info' },
@@ -27,6 +27,22 @@ const TONES = {
 	bad: { tile: 'bg-bad-bg', icon: 'text-bad' },
 	neutral: { tile: 'bg-muted', icon: 'text-foreground' },
 };
+
+/** A switch of literal calls, never `t(key)`: the string extractor reads only literals (LEDGER line 46). */
+function kindLabel(t: ReturnType<typeof useT>, key: NotificationLabelKey | undefined): string {
+	switch (key) {
+		case 'notifications.kind_welcome':
+			return t('notifications.kind_welcome');
+		case 'notifications.kind_plugin_update':
+			return t('notifications.kind_plugin_update');
+		case 'notifications.kind_license':
+			return t('notifications.kind_license');
+		case 'notifications.kind_announcement':
+			return t('notifications.kind_announcement');
+		default:
+			return '';
+	}
+}
 
 function NotificationItem({
 	notification,
@@ -42,7 +58,7 @@ function NotificationItem({
 	const timeAgo = useDateFormat(notification.createdAt);
 	const kind = kindOf(notification.workflowId);
 	const tone = TONES[kind.tone];
-	const kindLabel = kind.labelKey ? t(kind.labelKey) : '';
+	const label = kindLabel(t, kind.labelKey);
 	const handlePress = () => {
 		if (unread) onMarkAsRead(notification.id);
 	};
@@ -63,7 +79,7 @@ function NotificationItem({
 		>
 			<Text className={cn(unread && 'font-semibold')}>{notification.title}</Text>
 			{!!notification.body && <Text variant="key">{notification.body}</Text>}
-			<Text variant="help">{[kindLabel, timeAgo].filter(Boolean).join(' · ')}</Text>
+			<Text variant="help">{[label, timeAgo].filter(Boolean).join(' · ')}</Text>
 			{kind.action && (
 				<Button
 					variant="outline"

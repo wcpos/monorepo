@@ -4,10 +4,16 @@ import { WORKFLOW_IDS } from '../../../../services/novu/notification-behaviors';
 
 export type NotificationTone = 'info' | 'warn' | 'bad' | 'neutral';
 export type NotificationAction = 'update-plugin' | 'renew';
+/** The kind's label is translated by a literal `t()` call per key (the i18n fence); the key names which. */
+export type NotificationLabelKey =
+	| 'notifications.kind_welcome'
+	| 'notifications.kind_plugin_update'
+	| 'notifications.kind_license'
+	| 'notifications.kind_announcement';
 export type NotificationKind = {
 	icon: IconName;
 	tone: NotificationTone;
-	labelKey?: string;
+	labelKey?: NotificationLabelKey;
 	action?: NotificationAction;
 };
 
