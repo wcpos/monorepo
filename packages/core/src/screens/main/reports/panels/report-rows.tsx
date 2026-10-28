@@ -10,10 +10,10 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
 import type { PanelSpec } from './specs';
@@ -30,10 +30,10 @@ const PHONE_ROW_SIZE = 120;
  * every one of them when the panel opens. The head and the total stay outside the list.
  */
 export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }) {
-	const { screenSize } = useTheme(),
+	const phone = useIsPhone(),
 		t = useT();
 	if (!spec.rows.length) return <Text>{t('reports.no_rows_in_period')}</Text>;
-	if (screenSize === 'sm')
+	if (phone)
 		return (
 			<View testID={testID} className="min-h-0 flex-1">
 				<VirtualizedList.Root className="min-h-0 flex-1">

@@ -432,7 +432,6 @@ jest.mock('../components/management-bar', () => ({
 	),
 }));
 jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));

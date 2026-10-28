@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import { CROSSFADE } from '@wcpos/components/lib/motion';
 import { getLogger } from '@wcpos/utils/logger';
@@ -10,7 +11,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
 
-import { useTheme } from '../../../../../contexts/theme';
 import { useRegisterSurface } from '../../../../../extensions/commands/use-register-surface';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import {
@@ -45,7 +45,7 @@ export function PayButton() {
 	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const router = useRouter();
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
@@ -114,7 +114,7 @@ export function PayButton() {
 			// The earlier press is still waiting on the store. Show that wait again
 			// rather than enqueue a second write; the pane flips on the same events.
 			if (tenderFlow) enterCheckout(uuid);
-			if (tenderFlow && screenSize === 'sm') router.push(sheetRoute);
+			if (tenderFlow && phone) router.push(sheetRoute);
 			return;
 		}
 		markOrderSaving(uuid, { retry });
@@ -122,14 +122,14 @@ export function PayButton() {
 		// sale stays the current order while its sheet is up (the provider holds members only).
 		if (tenderFlow) {
 			enterCheckout(uuid);
-			if (screenSize === 'sm') router.push(sheetRoute);
+			if (phone) router.push(sheetRoute);
 		} else {
 			setLoading(true);
 		}
 		// A save that fails or is blocked puts the cashier back at the cart to retry.
 		const abandon = () => {
 			leaveCheckout(uuid);
-			if (tenderFlow && screenSize === 'sm') returnToTill(router, true, 'cart');
+			if (tenderFlow && phone) returnToTill(router, true, 'cart');
 		};
 
 		try {
@@ -197,7 +197,7 @@ export function PayButton() {
 		currentOrderRecord,
 		lineItems,
 		router,
-		screenSize,
+		phone,
 		loaded,
 		unsupportedSchema,
 		t,

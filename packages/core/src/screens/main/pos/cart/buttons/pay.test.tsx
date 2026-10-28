@@ -41,7 +41,10 @@ jest.mock('@wcpos/utils/logger', () => {
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, replace: mockReplace, dismissTo: mockDismissTo }),
 }));
-jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockSize === 'sm',
+}));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
 }));

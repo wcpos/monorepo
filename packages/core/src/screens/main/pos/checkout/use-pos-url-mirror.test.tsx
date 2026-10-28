@@ -18,7 +18,10 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: true } }));
 let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart', '[...orderId]'];
 jest.mock('expo-router', () => ({ useRouter: () => ({}), useSegments: () => mockSegments }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockSize === 'sm',
+}));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockRecord }),
 }));

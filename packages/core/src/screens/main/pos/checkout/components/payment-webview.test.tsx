@@ -1043,7 +1043,10 @@ jest.mock('../hooks/use-sale-context', () => ({
 	}),
 }));
 
-jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
 
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({

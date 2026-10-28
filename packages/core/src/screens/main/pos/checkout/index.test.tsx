@@ -26,7 +26,10 @@ jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => null })
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockSize === 'sm',
+}));
 jest.mock('@wcpos/query', () => ({ useRecordField: jest.fn() }));
 beforeEach(() => {
 	resetCheckoutMode();

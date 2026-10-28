@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
+
 import { finishReceipt } from '../checkout-mode';
 import { returnToTill, type TillTab } from '../till-route';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-import { useTheme } from '../../../../../contexts/theme';
 
 /** Where a checkout is shown: the routed checkout modal, or embedded in the columns cart. */
 export type CheckoutHost = 'modal' | 'columns';
@@ -17,7 +18,7 @@ export type CheckoutHost = 'modal' | 'columns';
  */
 export function useLeaveCheckoutHost(host: CheckoutHost) {
 	const router = useRouter();
-	const compact = useTheme().screenSize === 'sm';
+	const compact = useIsPhone();
 	return React.useCallback(
 		(tab: TillTab = 'products') => {
 			if (host === 'modal') returnToTill(router, compact, tab);

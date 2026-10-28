@@ -138,7 +138,6 @@ jest.mock('./settings/printer/dialog/printer-rows', () => ({
 jest.mock('./components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 jest.mock('@wcpos/core/hooks/use-app-info', () => ({
 	useAppInfo: () => ({ appVersion: 'test-build', platformVersion: 'test-build', platform: 'web' }),
 }));
@@ -265,7 +264,8 @@ it.each([false, true])('About opens centred and small, then closes (phone=%s)', 
 	mockPhone = phone;
 	render(<Version />);
 	expect(screen.queryByRole('dialog')).toBeNull();
-	fireEvent.click(screen.getByText('v test-build'));
+	// The rail shows the short version; the phone drawer spells it out.
+	fireEvent.click(screen.getByText(phone ? 'Version test-build' : 'v test-build'));
 	expect(screen.getByRole('dialog')).toHaveClass('w-80', 'rounded-lg');
 	expect(screen.getByText('common.about_wcpos')).toBeInTheDocument();
 	fireEvent.click(screen.getByTestId('dialog-close'));

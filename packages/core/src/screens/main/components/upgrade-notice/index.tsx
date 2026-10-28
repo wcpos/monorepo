@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
@@ -9,7 +10,6 @@ import { Text } from '@wcpos/components/text';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useGround } from '../ground';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
 export function UpgradeNotice({
@@ -26,8 +26,7 @@ export function UpgradeNotice({
 }) {
 	const t = useT();
 
-	const { screenSize } = useTheme();
-	const isPhone = screenSize === 'sm';
+	const isPhone = useIsPhone();
 	const ground = useGround();
 	const openPro = () => openExternalURL('https://wcpos.com/pro');
 

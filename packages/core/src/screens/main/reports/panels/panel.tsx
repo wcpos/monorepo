@@ -7,11 +7,11 @@ import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 
 import { useStoreSession } from '../../../../contexts/app-state';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -65,9 +65,8 @@ export function DetailPanel() {
 	const leftOut = includedOrders.filter((order) => unselectedRowIds[order.uuid]).length;
 	const { dateRange, storeId, timezone } = useReportsPeriod(),
 		formats = useReportFormats(storeId);
-	const { screenSize } = useTheme(),
-		t = useT();
-	const phone = screenSize === 'sm',
+	const t = useT();
+	const phone = useIsPhone(),
 		close = () => setDetail(null);
 	const { presets } = useStoreDay(storeId),
 		{ formatDate } = useLocalDate();

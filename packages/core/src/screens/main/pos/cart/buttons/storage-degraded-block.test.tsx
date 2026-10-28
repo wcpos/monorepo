@@ -406,7 +406,10 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	});
 });
 
-jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => true,
+}));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
 }));

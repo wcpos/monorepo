@@ -86,12 +86,13 @@ jest.mock('../context', () => ({
 		live: true,
 	}),
 }));
+// 'md' stands for a tablet standing up: the wide layout, without the room.
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockState.screenSize === 'sm',
+}));
 jest.mock('../../../../contexts/theme', () => ({
-	// 'md' stands for a tablet standing up: the wide layout, without the room.
-	useTheme: () => ({
-		screenSize: mockState.screenSize === 'md' ? 'lg' : mockState.screenSize,
-		roomy: mockState.screenSize === 'lg',
-	}),
+	useTheme: () => ({ roomy: mockState.screenSize === 'lg' }),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: mockSite, store: mockState.store }),

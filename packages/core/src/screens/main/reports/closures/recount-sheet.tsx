@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
@@ -19,7 +20,6 @@ import { type ClosureRow, mintUuid } from '@wcpos/query/register-session';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { useExclusive } from '../../hooks/use-exclusive';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -63,7 +63,7 @@ export function RecountSheet({
 	};
 	const manager = capabilities?.includes('manage_woocommerce_pos_closures');
 	const online = useOnlineStatus().status === 'online-website-available';
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const [counted, setCounted] = React.useState<Record<string, string>>(() => {
 		const { settled } = deriveSettled(row, corrections);
 		return Object.fromEntries(
@@ -120,7 +120,7 @@ export function RecountSheet({
 			}}
 		>
 			<DialogContent
-				side={screenSize === 'sm' ? 'bottom' : 'right'}
+				side={phone ? 'bottom' : 'right'}
 				testID="recount-sheet"
 				closeLabel={t('common.close')}
 				closeButtonProps={{ testID: 'recount-close' }}

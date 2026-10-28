@@ -29,10 +29,6 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Cashier', stores: [] },
 	}),
 }));
-let mockScreenSize: 'sm' | 'lg' = 'sm';
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
-}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 let mockBinding: Record<string, unknown> = {
 	status: 'bound',
@@ -125,10 +121,9 @@ it('shows the drawer only with a session and opens its panel', () => {
 });
 
 it('has no avatar on wide, where the rail carries it', () => {
-	mockScreenSize = 'lg';
+	mockIsPhone = false;
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
-	mockScreenSize = 'sm';
 });
 it('has an avatar on the phone', () => {
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);

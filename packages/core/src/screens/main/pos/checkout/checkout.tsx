@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
@@ -28,7 +29,6 @@ import { PayFrameNotice } from './pay-page/pay-frame-notice';
 import { usePayFrameGate } from './pay-page/use-pay-frame-gate';
 import { TenderCheckout } from './tender/tender-checkout';
 import { returnToTill } from './till-route';
-import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -93,7 +93,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const orderNumber = orderData.number;
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const router = useRouter();
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const t = useT();
 	// The legacy frame's footer gate (#1024): see usePayFrameGate.
 	const frameGate = usePayFrameGate();
@@ -251,7 +251,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 							? {
 									label: t('pos_checkout.return_to_cart'),
 									testID: 'return-to-cart-button',
-									onPress: () => returnToTill(router, screenSize === 'sm', 'cart'),
+									onPress: () => returnToTill(router, phone, 'cart'),
 								}
 							: {
 									label: t('pos_checkout.process_payment'),

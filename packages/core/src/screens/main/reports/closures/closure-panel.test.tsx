@@ -41,8 +41,9 @@ const template = {
 	engine: 'logicless',
 	content: '<b>{{closure.number}}</b>',
 };
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockPhone ? 'sm' : 'lg' }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),

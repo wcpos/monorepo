@@ -8,6 +8,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -31,7 +32,8 @@ type Term = [id: string, sign: string, label: string, amount: string];
 
 export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 	const t = useT();
-	const { screenSize, roomy } = useTheme();
+	const { roomy } = useTheme();
+	const phone = useIsPhone();
 	const { session, binding, terms, expected, blind, lastClosure, sessionsOn } =
 		useRegisterSession();
 	const { store, site } = useStoreSession();
@@ -209,7 +211,6 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					.filter(Boolean)
 					.join(' · ')
 			: '';
-	const phone = screenSize === 'sm';
 	const stacked = (!phone && !roomy) || rows.length > 4;
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');

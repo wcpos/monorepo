@@ -6,6 +6,7 @@ import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
 import { subDays } from 'date-fns/subDays';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
@@ -14,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popov
 import { Text } from '@wcpos/components/text';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
-import { useTheme } from '../../../contexts/theme';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocalDate } from '../../../hooks/use-local-date';
@@ -110,8 +110,7 @@ export function DateButton({
 	const { formatDate } = useLocalDate();
 	const { width, height } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
-	const { screenSize } = useTheme();
-	const phone = screenSize === 'sm';
+	const phone = useIsPhone();
 	const { license } = useAppInfo();
 	const { presets, timezone } = useStoreDay(storeId);
 	const [locked, setLocked] = React.useState(initialLockedPeriod ? lockedScopeName : '');

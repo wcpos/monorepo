@@ -1784,7 +1784,10 @@ let mockSize = 'sm';
 function hostAtWidth() {
 	return mockSize === 'sm' ? 'modal' : 'columns';
 }
-jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockSize === 'sm',
+}));
 
 it('leaves wide checkout mode without navigating after cancellation', async () => {
 	jest.clearAllMocks();

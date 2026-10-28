@@ -6,10 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { useGround } from '../components/ground';
-import { useTheme } from '../../../contexts/theme';
 import { useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
 import { Hero } from './hero';
@@ -27,8 +27,8 @@ export function Reports({
 	const { bottom } = useSafeAreaInsets();
 	const ground = useGround();
 	const { detail } = useReportsScope(),
-		{ screenSize } = useTheme();
-	const phonePanel = !!detail && screenSize === 'sm';
+		phone = useIsPhone();
+	const phonePanel = !!detail && phone;
 	const registerContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer(
 			'reports',

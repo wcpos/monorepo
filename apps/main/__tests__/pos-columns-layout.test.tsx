@@ -64,8 +64,9 @@ jest.mock('expo-observe', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
 }));
-jest.mock('@wcpos/core/contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
 }));
 jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => {

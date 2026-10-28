@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import {
@@ -27,7 +28,6 @@ import { LedgerPane } from './ledger-pane';
 import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
-import { useTheme } from '../../../../../contexts/theme';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { StorageOutageBanner } from '../../components/storage-outage-banner';
@@ -48,14 +48,13 @@ export function TenderCheckout({ order }: Props) {
 	// The routed modal's confirmations paint at the root host, above it (as the refund form's).
 	const flow = useTenderFlow(order, 'modal');
 	const payload = useRecordField(order, (record) => record.payload);
-	const { screenSize } = useTheme();
 	const { format: formatCurrency } = useCurrencyFormat({
 		currencySymbol: payload.currency_symbol,
 	});
 	const router = useRouter();
 	const t = useT();
 
-	const compact = screenSize === 'sm';
+	const compact = useIsPhone();
 	const stage = useOrderCheckoutStage(order);
 	const { uiSettings } = useUISettings('pos-cart');
 	const finishSale = useFinishSale(order.uuid, 'modal');

@@ -3,9 +3,8 @@ import { View } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Dialog, DialogContent } from '@wcpos/components/dialog';
-
-import { useTheme } from '../../../contexts/theme';
 
 /** A Reports panel: a side panel hosted in Reports, on a phone a page in its place (closures ledger 30). */
 export function ReportPanel({
@@ -14,9 +13,9 @@ export function ReportPanel({
 	onClose,
 	children,
 }: React.PropsWithChildren<{ testID: string; wide?: boolean; onClose: () => void }>) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const { bottom } = useSafeAreaInsets();
-	if (screenSize === 'sm')
+	if (phone)
 		return (
 			<View testID={testID} className="bg-card min-h-0 flex-1" style={{ paddingBottom: bottom }}>
 				<View className="min-h-0 flex-1 gap-4 py-4">{children}</View>
