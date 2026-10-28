@@ -23,10 +23,9 @@ export type TileProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimme
 };
 
 /**
- * A pressable tile, 64 pt or taller: keys and choices the cashier hits by position
- * (denominations, payment methods, split options, register movements, themes). Equal width
- * comes from the grid it sits in (`TileGrid`, CODING_STANDARDS § Design 4), never its label;
- * it grows to fill its cell.
+ * A pressable tile: keys and choices the cashier hits by position (denominations, payment
+ * methods, split options, register movements, themes). Equal width comes from the grid it
+ * sits in (CODING_STANDARDS § Design 4), never from its label.
  */
 export function Tile({
 	selected,

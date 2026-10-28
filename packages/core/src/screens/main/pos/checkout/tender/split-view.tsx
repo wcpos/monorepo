@@ -226,7 +226,6 @@ export function SplitView({
 						) : null}
 					</>
 				) : (
-					// Even shares across one row on a wide pane; two columns otherwise.
 					<TileGrid columns={tab === 'even' && !compact ? options.length : 2}>
 						{options.map((value) => {
 							const minor =
