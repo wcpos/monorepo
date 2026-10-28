@@ -1,4 +1,4 @@
-// Offline defaults use the shipped server closure template's label keys, as literal calls.
+// Offline defaults use the same label keys as the shipped server closure template.
 export const documentLabels = (t: (key: string) => string): Record<string, string> => ({
 	x_report: t('register.x_report'),
 	closure: t('reports.document.closure'),
