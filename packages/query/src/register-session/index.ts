@@ -2,6 +2,7 @@ export {
 	adoptCounters,
 	bindRegister,
 	getBoundRegister,
+	boundRegisterIdOf,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,

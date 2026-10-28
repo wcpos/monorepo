@@ -5,6 +5,7 @@ import useDeepCompareEffect from 'use-deep-compare-effect';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useDocField } from '@wcpos/query';
+import { boundRegisterIdOf } from '@wcpos/query/register-session';
 import { newOrder$, patchTemporaryOrderPayload } from '@wcpos/query/temporary-order';
 
 import { useRegister } from '../../../../../services/register/use-register';
@@ -69,7 +70,7 @@ export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) =>
 		data.meta_data = ensurePosOrderIdentityMeta(undefined, {
 			userId: wpCredentials.id!,
 			tillId: register?.id,
-			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
+			registerId: boundRegisterIdOf(register, site.uuid!, store.id) ?? undefined,
 			storeId: store.id!,
 			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
 		});

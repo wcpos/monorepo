@@ -246,8 +246,13 @@ export function observeRegister$(userDB: UserDatabase) {
 		.pipe(map((doc) => doc?.toJSON(true).data ?? null));
 }
 
-export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
-	const site = currentRegister?.sites?.[siteUuid];
+/** The register bound for a store of a site: its own binding, else the legacy pointer when that is this store's. */
+export function boundRegisterIdOf(
+	register: RegisterDocument | null | undefined,
+	siteUuid: string,
+	storeId?: number
+): string | null {
+	const site = register?.sites?.[siteUuid];
 	const binding = site?.bindings?.[String(storeId ?? 0)];
 	if (binding) return binding.register_id;
 	// Legacy pointers have no store; the next bind writes it.
@@ -258,6 +263,10 @@ export function getBoundRegisterId(siteUuid: string, storeId?: number): string |
 	)
 		return null;
 	return site?.register_id ?? null;
+}
+
+export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
+	return boundRegisterIdOf(currentRegister, siteUuid, storeId);
 }
 
 let currentSiteUuid: string | null = null;
