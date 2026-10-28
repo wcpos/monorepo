@@ -100,9 +100,14 @@ jest.mock('../../../../../contexts/translations', () => ({
 jest.mock('../../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
-jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
-jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
-jest.mock('../../../components/count-input', () => ({ CountInput: () => null }));
+// A form's amount stands in as the form's own input mock: the rows are under test, not the field.
+jest.mock('../../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: (props: object) => {
+		const { FormInput } = jest.requireMock('@wcpos/components/form');
+		return <FormInput {...props} />;
+	},
+}));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../components/product/status-select', () => ({ ProductStatusSelect: () => null }));
 jest.mock('../../../components/product/category-select', () => ({

@@ -26,8 +26,7 @@ import { isMiscProductLine } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CategoryTreeLoader } from '../../../../components/product/category-select';
-import { CurrencyInput } from '../../../../components/currency-input';
-import { QuantityInput } from '../../../../components/quantity-input';
+import { FormAmountField } from '../../../../components/amount-field';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
 import { useFieldPresence } from '../../../../components/use-field-presence';
@@ -203,10 +202,9 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 							control={form.control}
 							name="quantity"
 							render={({ field }) => (
-								<FormInput
-									customComponent={QuantityInput}
+								<FormAmountField
+									kind="quantity"
 									testID="edit-line-item-quantity-input"
-									type="numeric"
 									{...field}
 								/>
 							)}
@@ -225,12 +223,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 									control={form.control}
 									name="price"
 									render={({ field }) => (
-										<FormInput
-											customComponent={CurrencyInput}
-											testID="edit-line-item-price-input"
-											type="numeric"
-											{...field}
-										/>
+										<FormAmountField kind="money" testID="edit-line-item-price-input" {...field} />
 									)}
 								/>
 							</View>
@@ -250,10 +243,9 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 												control={form.control}
 												name="regular_price"
 												render={({ field }) => (
-													<FormInput
-														customComponent={CurrencyInput}
+													<FormAmountField
+														kind="money"
 														testID="edit-line-item-regular_price-input"
-														type="numeric"
 														{...field}
 													/>
 												)}

@@ -106,8 +106,8 @@ jest.mock('@wcpos/components/property-row', () => ({
 	),
 }));
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
-jest.mock('../../components/currency-input', () => ({
-	CurrencyInput: ({ value, testID }: { value: string; testID?: string }) => (
+jest.mock('../../components/amount-field', () => ({
+	FormAmountField: ({ value, testID }: { value: string; testID?: string }) => (
 		<input data-testid={testID} value={value} readOnly />
 	),
 }));

@@ -194,35 +194,23 @@ jest.mock('../../components/form-errors', () => ({
 		);
 	},
 }));
-jest.mock('../../components/number-input', () => ({
-	NumberInput: ({
+// The field's own adapter: its form adapter (the text-or-number hand-over) stays real.
+jest.mock('../../components/amount-field/amount-field', () => ({
+	AmountField: ({
 		value,
-		onChangeText,
+		onCommit,
 		testID,
 	}: {
 		value: string;
-		onChangeText: (v: number) => void;
+		onCommit: (v: number) => void;
 		testID?: string;
 	}) => (
 		<input
 			data-testid={testID ?? 'price'}
-			value={value}
-			onChange={(e) => onChangeText(Number(e.target.value))}
+			value={value ?? ''}
+			onChange={(e) => onCommit(Number(e.target.value))}
 		/>
 	),
-}));
-jest.mock('../../components/currency-input', () => ({
-	CurrencyInput: (props: object) => {
-		const { NumberInput } = jest.requireMock('../../components/number-input');
-		return <NumberInput {...props} />;
-	},
-}));
-// The cart cell's in-place editor, open: the field and the cell's own commit.
-jest.mock('../../components/editable-number', () => ({
-	EditableNumber: (props: object) => {
-		const { NumberInput } = jest.requireMock('../../components/number-input');
-		return <NumberInput {...props} />;
-	},
 }));
 jest.mock('../../components/tax-class-select', () => ({
 	TaxClassSelect: () => null,

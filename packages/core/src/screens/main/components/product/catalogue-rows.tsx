@@ -22,9 +22,8 @@ import { Text } from '@wcpos/components/text';
 import { ProductStatusSelect } from './status-select';
 import { useT } from '../../../../contexts/translations';
 import { PARENT_TAX_CLASS } from '../../hooks/tax-class';
-import { CurrencyInput } from '../currency-input';
+import { FormAmountField } from '../amount-field';
 import { META_DATA_DEFAULT_ROW } from '../meta-data-form';
-import { CountInput } from '../count-input';
 import { useTaxClassOptions } from '../tax-class-select';
 import { TaxSelect } from '../tax-select';
 import { useFieldPresence } from '../use-field-presence';
@@ -98,13 +97,13 @@ export function TextRow({ money, ...props }: InputRowProps & { money?: boolean }
 			<FormField
 				control={control}
 				name={props.name}
-				render={({ field }) => (
-					<FormInput
-						customComponent={money ? CurrencyInput : undefined}
-						testID={props.testID}
-						{...field}
-					/>
-				)}
+				render={({ field }) =>
+					money ? (
+						<FormAmountField kind="money" testID={props.testID} {...field} />
+					) : (
+						<FormInput testID={props.testID} {...field} />
+					)
+				}
 			/>
 		</CatalogueRow>
 	);
@@ -143,15 +142,7 @@ export function StockRow() {
 				<FormField
 					control={control}
 					name="stock_quantity"
-					render={({ field: { value, ...rest } }) => (
-						<FormInput
-							customComponent={CountInput}
-							type="numeric"
-							autoFocus={focus}
-							value={value != null ? String(value) : undefined}
-							{...rest}
-						/>
-					)}
+					render={({ field }) => <FormAmountField kind="count" autoFocus={focus} {...field} />}
 				/>
 			) : (
 				<PropertyPlaceholder>{t('products.not_tracked')}</PropertyPlaceholder>

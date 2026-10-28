@@ -12,9 +12,8 @@ import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
 import { AmountUnitToggle } from '../../components/amount-unit-toggle';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
-import { PercentInput } from '../../components/percent-input';
 import { TaxSelect } from '../../components/tax-select';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddFee } from '../hooks/use-add-fee';
@@ -113,8 +112,9 @@ export function AddFee() {
 								name="amount"
 								render={({ field }) => (
 									<FormItem nativeID="fee-amount" className="flex-1">
-										<FormInput
-											customComponent={percent ? PercentInput : CurrencyInput}
+										<FormAmountField
+											kind={percent ? 'percent' : 'money'}
+											live
 											testID="fee-amount-input"
 											{...field}
 										/>

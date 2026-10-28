@@ -28,8 +28,8 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('../../components/capability-tooltip', () => ({
 	CapabilityTooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock('../../components/quantity-input', () => ({
-	QuantityInput: (props: Record<string, unknown>) => {
+jest.mock('../../components/amount-field', () => ({
+	AmountField: (props: Record<string, unknown>) => {
 		mockQuantity(props);
 		return null;
 	},
@@ -79,11 +79,11 @@ it('the stock is a whole count on the keypad: no trash, its testID kept, a typed
 	expect(props).toMatchObject({
 		testID: 'stock-quantity-input',
 		value: -2,
-		decimals: 0,
+		kind: 'count',
 		disabled: false,
 	});
 	expect(props.onRemove).toBeUndefined();
-	props.onChangeText(0);
+	props.onCommit(0);
 	expect(onChange).toHaveBeenCalledWith(
 		expect.objectContaining({ changes: { stock_quantity: 0 } })
 	);
@@ -99,5 +99,5 @@ it('returns whether the stock was saved, so the keypad takes a refused step back
 	mockProAccess.readOnly = false;
 	const onChange = jest.fn().mockResolvedValue(false);
 	renderCell({ type: 'simple', stock_quantity: 4, manage_stock: true }, onChange);
-	await expect(mockQuantity.mock.calls[0]?.[0].onChangeText(5)).resolves.toBe(false);
+	await expect(mockQuantity.mock.calls[0]?.[0].onCommit(5)).resolves.toBe(false);
 });

@@ -150,21 +150,21 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('../../../components/currency-input', () => ({
-	CurrencyInput: ({
+jest.mock('../../../components/amount-field', () => ({
+	AmountField: ({
 		value,
-		onChangeText,
+		onCommit,
 		testID,
 	}: {
 		value?: number;
-		onChangeText: (value: number) => void;
+		onCommit: (value: number) => void;
 		testID: string;
 	}) => (
 		<input
 			type="number"
 			data-testid={testID}
 			value={value ?? ''}
-			onChange={(event) => onChangeText(Number(event.target.value))}
+			onChange={(event) => onCommit(Number(event.target.value))}
 		/>
 	),
 }));

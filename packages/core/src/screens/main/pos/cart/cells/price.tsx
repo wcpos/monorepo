@@ -5,7 +5,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { MoneyInput } from '../../../components/money-input';
+import { AmountField } from '../../../components/amount-field';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
@@ -65,13 +65,13 @@ function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
 					{format(regular_price || 0)}
 				</Text>
 			)}
-			<MoneyInput
+			<AmountField
+				kind="money"
+				look="quiet"
 				testID="cart-price"
 				value={price}
-				format={format}
-				formatOptions={{ fixedDecimalScale: true }}
 				textClassName="text-muted-foreground text-right"
-				onChangeText={(price) => updateCartLine('line_items', uuid, { price })}
+				onCommit={(price) => updateCartLine('line_items', uuid, { price })}
 				discounts={ensureNumberArray(quickDiscounts)}
 			/>
 		</VStack>

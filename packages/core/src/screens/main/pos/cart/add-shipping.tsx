@@ -18,7 +18,7 @@ import {
 import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxStatusRadioGroup } from '../../components/tax-radio-groups';
@@ -129,11 +129,7 @@ export function AddShipping() {
 							name="amount"
 							render={({ field }) => (
 								<FormItem nativeID="shipping-amount">
-									<FormInput
-										customComponent={CurrencyInput}
-										testID="shipping-amount-input"
-										{...field}
-									/>
+									<FormAmountField kind="money" live testID="shipping-amount-input" {...field} />
 								</FormItem>
 							)}
 						/>

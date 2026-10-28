@@ -127,15 +127,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: jest.fn() }),
 }));
 
-jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
+// A form's amount stands in as the form's own input mock: the rows are under test, not the field.
+jest.mock('../../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: (props: object) => {
+		const { FormInput } = jest.requireMock('@wcpos/components/form');
+		return <FormInput {...props} />;
+	},
+}));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	META_DATA_DEFAULT_ROW: {},
 	metaDataSchema: {},
 }));
-jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
-jest.mock('../../../components/count-input', () => ({ CountInput: () => null }));
 jest.mock('../../../components/product/status-select', () => ({
 	ProductStatusSelect: () => null,
 }));
@@ -309,7 +314,7 @@ describe('catalogue form autosave', () => {
 
 			formValues.manage_stock = true;
 			renderForm();
-			expect(mockControlProps.stock_quantity.type).toBe('numeric');
+			expect(mockControlProps.stock_quantity.kind).toBe('count');
 		});
 
 		it("offers Woo's 'parent' tax class on a variation only", () => {

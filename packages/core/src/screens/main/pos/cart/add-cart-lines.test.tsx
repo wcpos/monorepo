@@ -82,9 +82,11 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../../components/number-input', () => ({ NumberInput: () => null }));
 jest.mock('../../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
 jest.mock('../../components/shipping-method-select', () => ({ ShippingMethodSelect: () => null }));
 jest.mock('../../components/tax-select', () => ({ TaxSelect: () => null }));

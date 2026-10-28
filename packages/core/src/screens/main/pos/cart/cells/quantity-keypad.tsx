@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../contexts/translations';
-import { QuantityInput } from '../../../components/quantity-input';
+import { AmountField } from '../../../components/amount-field';
 import { QUANTITY_FORMAT, useNumberFormat } from '../../../hooks/use-number-format';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
@@ -53,33 +52,24 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 	);
 	return (
 		<VStack className="min-h-row items-center justify-center gap-1">
-			<QuantityInput
+			<AmountField
+				kind="quantity"
 				testID="cart-quantity-input"
 				ref={focusRef}
 				// The column is 56 wide and the input box 41; the shared input's 12-point
 				// horizontal padding left ~17 points for the digits, so "19" fit and "20"
-				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
-				// web QuantityInput renders a button and ignores this.
-				inputClassName="border-0 px-1 text-center tabular-nums"
-				// `web:px-2` only: the native Input already pads its field (px-1 above). The box's
-				// height is the field box's own, a control tall, as every other field.
-				className={cn(
-					'web:px-2 min-w-9 items-center justify-center tabular-nums',
-					overStock && 'border-attention bg-attention/15'
-				)}
-				textClassName="font-semibold"
-				// A tap on the field lands the caret wherever the finger was, often before
-				// the digits, so typing appends instead of replacing ("1" → "31"). A
-				// cashier tapping the quantity means to replace it, as the web keypad
-				// does; selecting on focus makes the next keystroke do exactly that.
-				selectTextOnFocus
+				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09): the number pads 4
+				// itself, and on web the box pads 4 more around it.
+				className="web:px-1 min-w-9 items-center justify-center"
+				textClassName="px-1 text-center font-semibold"
+				tone={overStock ? 'attention' : undefined}
 				value={item.quantity}
 				// Web: whether the store took it (a refusal, the stock guard's, is presented by
 				// the queue and resolves `false`), so the keypad's − and + can take it back.
-				onChangeText={(quantity) =>
+				onCommit={(quantity) =>
 					updateCartLine('line_items', uuid, { quantity }).then((result) => result !== false)
 				}
-				// Web: − at 1 is the trash, the cart's own remove (and its Undo toast), as the
+				// − at 1 (web) or a typed 0 is the cart's own remove (and its Undo toast), as the
 				// conditions notice calls it.
 				onRemove={() => void removeLineItem(uuid, 'line_items')}
 			/>

@@ -68,8 +68,10 @@ jest.mock('@wcpos/components/form', () => ({
 }));
 
 // FormInput is mocked; its keypad fields never render.
-jest.mock('../../components/count-input', () => ({ CountInput: () => null }));
-jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));

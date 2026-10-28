@@ -38,7 +38,7 @@ const schema = z.object({
 	categories: z.array(categoryOptionSchema).default([]),
 	regular_price: z.string(),
 	sale_price: z.string(),
-	stock_quantity: z.number().optional().nullable(),
+	stock_quantity: z.number().int().optional().nullable(),
 	manage_stock: z.boolean().optional(),
 	status: z.string(),
 	featured: z.boolean(),

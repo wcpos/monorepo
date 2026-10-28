@@ -110,8 +110,14 @@ jest.mock('../../../components/tax-radio-groups', () => ({
 jest.mock('../../../components/product/category-select', () => ({
 	CategoryTreeLoader: () => null,
 }));
-jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
-jest.mock('../../../components/number-input', () => ({ NumberInput: () => null }));
+// A form's amount stands in as the form's own input mock: the rows are under test, not the field.
+jest.mock('../../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: (props: object) => {
+		const { FormInput } = jest.requireMock('@wcpos/components/form');
+		return <FormInput {...props} />;
+	},
+}));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../hooks/use-number-format', () => ({ QUANTITY_FORMAT: {} }));
 jest.mock('../../contexts/current-order', () => ({
