@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { TONE, type Tone } from './tone';
@@ -57,6 +57,36 @@ const MAP: Record<Tone, Record<keyof (typeof TONE)[Tone], string>> = {
 	},
 };
 
+// `destructive` is an ACTION's red: a Button/IconButton/MenuRow variant and the wash it presses with, a
+// delete glyph inside a destructive menu item, the cart line's swipe-to-remove strip, a remove row.
+// A STATE (an error line, a refused amount, a failed step, a short count) reads the tone map's `bad`.
+const ACTION_FILES = [
+	'components/src/button/index.tsx',
+	'components/src/icon-button/index.tsx',
+	'components/src/menu-row/index.tsx',
+	'components/src/pressable-surface/index.tsx',
+	'core/src/screens/auth/components/site.tsx',
+	'core/src/screens/auth/components/sites.tsx',
+	'core/src/screens/main/health/conflicted-mutations.tsx',
+	'core/src/screens/main/health/database.tsx',
+	'core/src/screens/main/health/rejected-mutations.tsx',
+	'core/src/screens/main/pos/cart/cells/line-strip.tsx',
+	'core/src/screens/main/pos/products/filter-bar/quick-filter-editor.tsx',
+	'core/src/screens/main/settings/barcode-scanning/input-sources.tsx',
+	'core/src/screens/main/settings/card-readers/reader-row.tsx',
+	'core/src/screens/main/settings/customer-display/paired-displays.tsx',
+	'core/src/screens/main/settings/printing/printer-row.tsx',
+];
+const ACTION_RED = /\b(?:text|bg|border|fill|ring)-destructive(?!-foreground)/;
+const packages = join(__dirname, '../../..');
+
+function filesUsingActionRed(root: string): string[] {
+	return (readdirSync(join(packages, root), { recursive: true }) as string[])
+		.filter((file) => /\.tsx?$/.test(file) && !/\.test\.|__tests__/.test(file))
+		.map((file) => `${root}/${file}`)
+		.filter((file) => ACTION_RED.test(readFileSync(join(packages, file), 'utf8')));
+}
+
 const css = readFileSync(join(__dirname, '../../../../apps/main/global.css'), 'utf8').replace(
 	/\/\*[\s\S]*?\*\//g,
 	''
@@ -87,6 +117,11 @@ describe('the tone map', () => {
 			expect(resolve(body, '--bad')).toMatch(/^oklch\(/);
 		}
 	);
+
+	it('paints no state in the action red: destructive classes stay in action files', () => {
+		const files = ['components/src', 'core/src'].flatMap(filesUsingActionRed);
+		expect(files.filter((file) => !ACTION_FILES.includes(file))).toEqual([]);
+	});
 
 	it('reads five themes and no retired warn token in any of them', () => {
 		expect(themes.map((theme) => theme.name)).toEqual([
