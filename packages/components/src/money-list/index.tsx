@@ -3,6 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 
 /**
  * Money read as a running account (the cart's totals, the tender ledger, an order's totals): a
@@ -45,9 +46,9 @@ function Line({
 	...props
 }: MoneyRowProps & { total?: boolean }) {
 	const text = cn(
-		indent ? 'text-xs' : 'text-base',
+		indent ? TEXT_LADDER.help : 'text-base',
 		total && 'font-semibold',
-		tone === 'default' && (indent || !total) && 'text-muted-foreground',
+		tone === 'default' && !indent && !total && 'text-muted-foreground',
 		TONE[tone]
 	);
 	return (
