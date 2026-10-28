@@ -341,20 +341,15 @@ describe('CouponsScreen query-state wiring', () => {
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
 
-// The legacy string loses the recovery action.
-it('distinguishes an empty store from search results and clears search', () => {
+// The clear itself is `ListColumn`'s (list-frame/index.test.tsx); a search or a filter narrows here.
+it('distinguishes an empty store from search results', () => {
 	render(<CouponsScreen />);
-	let empty = mockDataTableProps.noDataMessage as React.ReactElement<{
-		kind: string;
-		action?: { onPress: () => void };
-	}>;
+	let empty = mockDataTableProps.noDataMessage as React.ReactElement<{ kind: string }>;
 	expect(empty.props.kind).toBe('empty');
 	fireEvent.change(screen.getByTestId('search-coupons'), { target: { value: 'missing' } });
 	act(() => jest.advanceTimersByTime(250));
 	empty = mockDataTableProps.noDataMessage as typeof empty;
 	expect(empty.props.kind).toBe('no-results');
-	act(() => empty.props.action!.onPress());
-	expect(latestState().search).toBe('');
 });
 
 // The guard and the licence hook pull app-state → expo-crypto (ESM), which CI's Node 22 jest
@@ -521,44 +516,18 @@ it.each([
 	else expect(mockPush).not.toHaveBeenCalled();
 });
 
-it('clears both filters and search from no-results', () => {
+it('reads a filter alone as narrowing the list', () => {
 	render(<CouponsScreen />);
 	const actions = mockDataTableProps.actions as { setFilter: (key: string, value: string) => void };
 	act(() => actions.setFilter('status', 'draft'));
-	fireEvent.change(screen.getByTestId('search-coupons'), { target: { value: 'missing' } });
-	act(() => jest.advanceTimersByTime(250));
-	const empty = mockDataTableProps.noDataMessage as React.ReactElement<{
-		kind: string;
-		action: { onPress: () => void };
-	}>;
+	const empty = mockDataTableProps.noDataMessage as React.ReactElement<{ kind: string }>;
 	expect(empty.props.kind).toBe('no-results');
-	act(() => empty.props.action.onPress());
-	expect(latestState()).toMatchObject({ search: '', filters: {} });
 });
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-
-it('shows retained rows as searching only while results are pending', () => {
-	const original = mockHandle;
-	const source = {
-		hits: [{ id: 'one', record: { uuid: 'one' } }],
-		searchState: 'pending',
-		searchActive: true,
-	};
-	mockHandle = fakeQueryHandle({ result: source, total: 27 });
-	try {
-		const { unmount } = render(<CouponsScreen />);
-		expect(screen.getByTestId('coupons-searching-line')).toBeTruthy();
-		act(() => mockHandle.set({ result: { ...source, searchState: 'answered' } }));
-		expect(screen.queryByTestId('coupons-searching-line')).toBeNull();
-		unmount();
-	} finally {
-		mockHandle = original;
-	}
-});
 
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children }: React.PropsWithChildren) => children,

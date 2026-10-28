@@ -3,13 +3,11 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-import { EmptyState } from '@wcpos/components/empty-state';
-import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import type { QueryHandle, ReadonlyEngineRecord } from '@wcpos/query';
+import type { ReadonlyEngineRecord } from '@wcpos/query';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Actions } from './cells/actions';
@@ -31,16 +29,11 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
-import {
-	QueryStateProvider,
-	useCollectionQueryHandle,
-	useDrawnHandle,
-	useQuerySnapshot,
-	useQueryState,
-	useQueryStateActions,
-} from '../../../query';
+import { QueryStateProvider, useCollectionQueryHandle, useQueryState } from '../../../query';
 
-import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
+import type { QueryStateOf } from '../../../query';
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
 
 type CustomerRow = { record: ReadonlyEngineRecord<'customers'> };
 
@@ -83,25 +76,10 @@ function getInitialCustomerSort(
 	};
 }
 
-// The list re-renders for the answer only; the table and the footer read their own fields.
-const ANSWER_ONLY: SnapshotFields = [];
-
-function CustomersList({
-	handle,
-}: {
-	/** The customers query handle (roadmap#423): the list and its table read its snapshot. */
-	handle: QueryHandle;
-}) {
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CustomersColumn() {
 	const state = useQueryState<'customers'>();
-	const actions = useQueryStateActions<'customers'>();
-	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
-	const shown = useDrawnHandle(handle);
-	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
-	const deferredResult = React.useDeferredValue(result);
-	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
-	const emptyStore = !state.search;
-	const pointer = usePointer();
+	const handle = useCollectionQueryHandle('customers', state);
 	const t = useT();
 	const router = useRouter();
 	const { readOnly } = useProAccess();
@@ -110,84 +88,50 @@ function CustomersList({
 	const editable = !readOnly && caps.canEditCustomers;
 	const open = (uuid: string) =>
 		router.push({ pathname: '/customers/edit/[customerId]', params: { customerId: uuid } });
-	const tableActions = React.useMemo<
-		Pick<QueryStateActions<'customers'>, 'setSort' | 'extendLimit' | 'setFilter'>
-	>(
-		() => ({
-			setSort: actions.setSort,
-			extendLimit: actions.extendLimit,
-			setFilter: actions.setFilter,
-		}),
-		[actions]
-	);
-
 	return (
-		<>
-			{pending && <View testID="customers-searching-line" className="bg-primary h-0.5" />}
-			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
+		<ListColumn
+			testID="customers-body"
+			id="customers"
+			handle={handle}
+			skeleton={<DataTableSkeleton id="customers" />}
+			renderRow={{
+				coarse: ({ item }: { item: Row<CustomerRow, DataTableFeatures> }) => (
+					<VirtualizedList.Item>
+						<View testID={`data-table-row-${item.original.record.uuid}`}>
+							<CoarseRow record={item.original.record} />
+						</View>
+					</VirtualizedList.Item>
+				),
+				fine: ({ item }) => (
+					<VirtualizedList.Item>
+						<DataTableRow
+							item={item}
+							pressWhenActionsHidden={editable ? () => open(item.original.record.uuid) : undefined}
+						/>
+					</VirtualizedList.Item>
+				),
+			}}
+			narrowed={!!state.search}
+			empty={{
+				title: t('customers.no_customers_yet'),
+				description: t('customers.no_customers_yet_description'),
+			}}
+			noResults={{
+				title: t('customers.nothing_matches_search'),
+				clear: t('customers.clear_search'),
+			}}
+		>
+			{(table) => (
 				<DataTable<CustomerRow>
 					id="customers"
 					collectionName="customers"
 					handle={handle}
 					sort={state.sort}
-					actions={tableActions}
 					cells={cells}
 					estimatedItemSize={56}
-					renderItem={({ item }) => (
-						<VirtualizedList.Item>
-							{pointer === 'coarse' ? (
-								<View testID={`data-table-row-${item.original.record.uuid}`}>
-									<CoarseRow record={item.original.record} />
-								</View>
-							) : (
-								<DataTableRow
-									item={item}
-									pressWhenActionsHidden={
-										editable ? () => open(item.original.record.uuid) : undefined
-									}
-								/>
-							)}
-						</VirtualizedList.Item>
-					)}
-					noDataMessage={
-						<EmptyState
-							testID="no-data-message"
-							size="surface"
-							kind={emptyStore ? 'empty' : 'no-results'}
-							title={t(
-								emptyStore ? 'customers.no_customers_yet' : 'customers.nothing_matches_search'
-							)}
-							description={emptyStore ? t('customers.no_customers_yet_description') : undefined}
-							action={
-								emptyStore
-									? undefined
-									: {
-											label: t('customers.clear_search'),
-											onPress: () => {
-												actions.clearSearch();
-											},
-										}
-							}
-						/>
-					}
+					{...table}
 				/>
-			</View>
-		</>
-	);
-}
-
-/** The list's column: the part of the page the Free preview overlay covers. */
-function CustomersColumn() {
-	const state = useQueryState<'customers'>();
-	const handle = useCollectionQueryHandle('customers', state);
-	return (
-		<ListColumn
-			testID="customers-body"
-
-			handle={handle}
-			skeleton={<DataTableSkeleton id="customers" />}
-		>
-			<CustomersList handle={handle} />
+			)}
 		</ListColumn>
 	);
 }

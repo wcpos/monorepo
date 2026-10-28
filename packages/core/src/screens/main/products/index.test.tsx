@@ -361,28 +361,17 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
 }));
-it('shows an empty store and clears both search and filters from no results', () => {
-	jest.useFakeTimers();
+// The clear itself is `ListColumn`'s (list-frame/index.test.tsx); published, unfiltered is the store.
+it('shows an empty store, and no results once a filter narrows it', () => {
 	render(<ProductsScreen />);
 	expect(screen.getByTestId('no-data-message').textContent).toContain('products.no_products_yet');
 	const actions = mockDataTableProps.actions as {
 		setFilter: (key: string, value: unknown) => void;
 	};
 	act(() => actions.setFilter('featured', true));
-	fireEvent.change(screen.getByTestId('search-products'), { target: { value: 'missing' } });
-	act(() => jest.advanceTimersByTime(250));
 	expect(screen.getByTestId('no-data-message').textContent).toContain(
 		'pos_products.nothing_matches_filters'
 	);
-	fireEvent.click(screen.getByText('pos_products.clear_filters'));
-	expect(latestState().search).toBe('');
-	expect(latestState().filters).toEqual({
-		status: 'publish',
-		categories: [],
-		tags: [],
-		brands: [],
-	});
-	jest.useRealTimers();
 });
 it('renders the skeleton inside the guard while the handle is unanswered and the bar remains reachable', () => {
 	const original = mockHandle;
@@ -494,20 +483,6 @@ jest.mock('../components/data-table/rows', () => ({
 }));
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
-
-it('shows the searching line only while a pending search retains rows', () => {
-	const original = mockHandle;
-	const source = { hits: [productHit('one')], searchActive: true, searchState: 'pending' };
-	mockHandle = fakeQueryHandle({ result: source, total: 31 });
-	try {
-		render(<ProductsScreen />);
-		expect(screen.getByTestId('products-searching-line')).toBeTruthy();
-		act(() => mockHandle.set({ result: { ...source, searchState: 'answered' } }));
-		expect(screen.queryByTestId('products-searching-line')).toBeNull();
-	} finally {
-		mockHandle = original;
-	}
-});
 
 // A superseded handle's failure must not reach the boundary over a healthy query: the reader
 // moves on to the live handle (the skeleton while it answers), then draws its rows.

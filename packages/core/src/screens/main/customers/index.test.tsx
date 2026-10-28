@@ -315,20 +315,15 @@ describe('CustomersScreen query-state wiring', () => {
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
 
-// The legacy string loses the recovery action.
-it('distinguishes an empty store from search results and clears search', () => {
+// The clear itself is `ListColumn`'s (list-frame/index.test.tsx); a search is what narrows here.
+it('distinguishes an empty store from search results', () => {
 	render(<CustomersScreen />);
-	let empty = mockDataTableProps.noDataMessage as React.ReactElement<{
-		kind: string;
-		action?: { onPress: () => void };
-	}>;
+	let empty = mockDataTableProps.noDataMessage as React.ReactElement<{ kind: string }>;
 	expect(empty.props.kind).toBe('empty');
 	fireEvent.change(screen.getByTestId('search-customers'), { target: { value: 'missing' } });
 	act(() => jest.advanceTimersByTime(250));
 	empty = mockDataTableProps.noDataMessage as typeof empty;
 	expect(empty.props.kind).toBe('no-results');
-	act(() => empty.props.action!.onPress());
-	expect(latestState().search).toBe('');
 });
 
 // The guard and the licence hook pull app-state → expo-crypto (ESM), which CI's Node 22 jest
@@ -497,25 +492,6 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-
-it('shows retained rows as searching only while results are pending', () => {
-	const original = mockHandle;
-	const source = {
-		hits: [{ id: 'one', record: { uuid: 'one' } }],
-		searchState: 'pending',
-		searchActive: true,
-	};
-	mockHandle = fakeQueryHandle({ result: source, total: 7 });
-	try {
-		const { unmount } = render(<CustomersScreen />);
-		expect(screen.getByTestId('customers-searching-line')).toBeTruthy();
-		act(() => mockHandle.set({ result: { ...source, searchState: 'answered' } }));
-		expect(screen.queryByTestId('customers-searching-line')).toBeNull();
-		unmount();
-	} finally {
-		mockHandle = original;
-	}
-});
 
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children }: React.PropsWithChildren) => children,
