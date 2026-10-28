@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
+import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
@@ -38,7 +38,7 @@ export function ClosureList({
 	const names = useRegisterNames();
 
 	return (
-		<View className="bg-card rounded-lg border">
+		<Card>
 			{!rows.length && (
 				<Text testID="closures-empty" className="p-4">
 					{t('reports.no_closures')}
@@ -115,6 +115,6 @@ export function ClosureList({
 					</React.Fragment>
 				);
 			})}
-		</View>
+		</Card>
 	);
 }

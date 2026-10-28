@@ -133,21 +133,21 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	const t = useT();
 	const router = useRouter();
 	return (
-		<VStack space="sm" className="flex-1" testID="checkout-refused">
-			<Text className="text-bad font-semibold">{t('pos_checkout.order_refused')}</Text>
-			<Text className="text-muted-foreground text-sm">
-				{rejection.message ?? rejection.reason ?? t('pos_checkout.order_refused_no_reason')}
-			</Text>
-			<Button
-				variant="outline"
-				size="sm"
-				className="self-start"
-				testID="checkout-refused-store-health"
-				onPress={() => router.push('/health/database')}
-			>
-				<ButtonText>{t('pos_checkout.open_store_health')}</ButtonText>
-			</Button>
-		</VStack>
+		<Notice
+			testID="checkout-refused"
+			tone="bad"
+			title={t('pos_checkout.order_refused')}
+			description={
+				rejection.message ?? rejection.reason ?? t('pos_checkout.order_refused_no_reason')
+			}
+			actions={[
+				{
+					label: t('pos_checkout.open_store_health'),
+					testID: 'checkout-refused-store-health',
+					onPress: () => router.push('/health/database'),
+				},
+			]}
+		/>
 	);
 }
 
