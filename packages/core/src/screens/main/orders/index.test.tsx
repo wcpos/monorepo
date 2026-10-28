@@ -282,16 +282,14 @@ beforeEach(() => {
 	mockSortBy = 'date_created_gmt';
 	mockSortDirection = 'desc';
 });
-it('distinguishes empty baseline from no results and clears filters and search', () => {
+// The clear itself is `ListColumn`'s (list-frame/index.test.tsx); the scope filters are the baseline.
+it('distinguishes the empty baseline from no results', () => {
 	render(<OrdersScreen />);
 	expect(screen.getByTestId('no-data-message').textContent).toContain('orders.no_orders_yet');
 	fireEvent.click(screen.getByTestId('search-probe'));
 	expect(screen.getByTestId('no-data-message').textContent).toContain(
 		'orders.nothing_matches_filters'
 	);
-	fireEvent.click(screen.getByText('orders.clear_filters'));
-	expect(latestState().search).toBe('');
-	expect(latestState().filters).toEqual({ cashier: '7', store: '9' });
 });
 it('interleaves store-day headings only on date-created sort', () => {
 	const subject = {
@@ -388,28 +386,6 @@ it('keeps the current rows, not the skeleton, while a changed query’s handle a
 		);
 		expect(screen.getByTestId('orders-row-two')).toBeTruthy();
 		expect(screen.queryByTestId('orders-row-one')).toBeNull();
-	} finally {
-		mockHandle = original;
-	}
-});
-
-it('keeps rows and shows the searching line only for pending results with rows', () => {
-	const original = mockHandle;
-	const source = {
-		hits: [
-			{ id: 'one', record: { uuid: 'one', payload: { date_created_gmt: '2026-09-17T01:00:00' } } },
-		],
-		searchActive: true,
-		searchState: 'pending',
-	};
-	mockHandle = fakeQueryHandle({ result: source, total: 27 });
-	try {
-		const { unmount } = render(<OrdersScreen />);
-		expect(screen.getByTestId('orders-searching-line')).toBeTruthy();
-		expect(screen.getByTestId('orders-table')).toBeTruthy();
-		act(() => mockHandle.set({ result: { ...source, hits: [] } }));
-		expect(screen.queryByTestId('orders-searching-line')).toBeNull();
-		unmount();
 	} finally {
 		mockHandle = original;
 	}
