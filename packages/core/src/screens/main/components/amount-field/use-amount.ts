@@ -41,19 +41,19 @@ export function useAmount(props: AmountFieldProps) {
 	const format = kind === 'money' && props.look === 'quiet' ? currency.format : number.format;
 	const blank = value == null || value === '';
 	const stored = blank && kind !== 'quantity' && kind !== 'count' ? undefined : Number(value) || 0;
-	// What this field last sent, pending or not (2 → 3 → 2 before the 3 lands); a new value resets it.
-	const sent = React.useRef<number | undefined>(undefined);
+	// Sent and pending: a commit compares with the last until the store holds it (2 → 3 → 4 → 3).
+	const sent = React.useRef<{ last?: number; all: (number | undefined)[] }>({ all: [] });
 	React.useEffect(() => {
-		sent.current = undefined;
+		const { last, all } = sent.current;
+		if (stored === last || !all.includes(stored)) sent.current = { all: [] };
 	}, [stored]);
 	const commit = (next: number): void | boolean | Promise<void | boolean> => {
 		const rounded = round(next, places);
-		if (rounded === (sent.current ?? stored)) return;
-		sent.current = rounded;
+		if (rounded === (sent.current.last ?? stored)) return;
+		sent.current = { last: rounded, all: [...sent.current.all, rounded] };
 		if (rounded === 0 && onRemove) return onRemove();
 		const written = onCommit(rounded) as void | Promise<void | boolean>;
-		// A refused write leaves the store where it was, so the next commit compares with it.
-		const refused = () => sent.current === rounded && (sent.current = undefined);
+		const refused = () => sent.current.last === rounded && (sent.current = { all: [] });
 		void Promise.resolve(written).then((ok) => ok === false && refused(), refused);
 		return written;
 	};

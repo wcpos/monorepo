@@ -109,6 +109,15 @@ it('+ then − before the first write lands is two commits, and a refused write 
 	act(() => void mockKeypad.onChange(2));
 	expect(onCommit.mock.calls).toEqual([[3], [2]]);
 
+	// Two steps pending, the first lands, then −: the cart must end at 3, not 4 (Codex on #3008).
+	onCommit.mockClear();
+	const { rerender } = renderField({ kind: 'quantity', value: 2 });
+	act(() => void mockKeypad.onChange(3));
+	act(() => void mockKeypad.onChange(4));
+	rerender(<AmountField kind="quantity" value={3} onCommit={onCommit} />);
+	act(() => void mockKeypad.onChange(3));
+	expect(onCommit.mock.calls).toEqual([[3], [4], [3]]);
+
 	onCommit.mockClear().mockResolvedValueOnce(false);
 	renderField({ kind: 'quantity', value: 2 });
 	await act(async () => void (await mockKeypad.onChange(3)));
