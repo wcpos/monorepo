@@ -40,9 +40,9 @@ function NotificationItem({
 	const t = useT();
 	const unread = notification.status === 'unread';
 	const timeAgo = useDateFormat(notification.createdAt);
-	const kind = kindOf(notification.workflowId);
+	const kind = kindOf(notification.workflowId, t);
 	const tone = TONES[kind.tone];
-	const kindLabel = kind.labelKey ? t(kind.labelKey) : '';
+	const kindLabel = kind.label ?? '';
 	const handlePress = () => {
 		if (unread) onMarkAsRead(notification.id);
 	};
