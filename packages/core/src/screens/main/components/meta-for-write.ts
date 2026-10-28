@@ -1,4 +1,10 @@
-type MetaRow = { id?: number; key?: string; value?: unknown };
+type MetaRow = {
+	id?: number;
+	key?: string;
+	value?: unknown;
+	attr_id?: number;
+	display_key?: string;
+};
 
 /**
  * The draft's meta rows as the record should hold them. A just-added blank row (no id, no key) is
@@ -10,18 +16,22 @@ type MetaRow = { id?: number; key?: string; value?: unknown };
  * updates meta by id and never deletes a row that is merely absent. A row that arrived from the
  * store on its own was never this form's to delete, so `written` (the keys this form has sent)
  * bounds the tombstones, and a key the draft still holds is never one: a second row under that
- * key (another device's) is not a removal by this form.
+ * key (another device's) is not a removal by this form. A cart line's variation attribute row
+ * (`attr_id`/`display_key`, no key) is the line's own: never blank, never matched by key, sent as is.
  */
 export function metaForWrite(
 	rows: MetaRow[],
 	stored: readonly MetaRow[],
 	written: Set<string>
 ): MetaRow[] {
-	const draft = rows.filter((row) => row?.id != null || String(row?.key ?? '') !== '');
+	const attribute = (row: MetaRow) => row?.attr_id != null || !!row?.display_key;
+	const draft = rows.filter(
+		(row) => attribute(row) || row?.id != null || String(row?.key ?? '') !== ''
+	);
 	const claimed = new Set<number>();
 	for (const row of draft) if (row.id != null) claimed.add(row.id);
 	const reconciled = draft.map((row) => {
-		if (row.id != null) return row;
+		if (row.id != null || attribute(row)) return row;
 		const id = stored.find(
 			(entry) => entry.id != null && entry.key === row.key && !claimed.has(entry.id)
 		)?.id;
@@ -37,7 +47,7 @@ export function metaForWrite(
 		reconciled.push({ id: entry.id, key: entry.key, value: null });
 	}
 	for (const row of reconciled) {
-		if (row.value !== null) written.add(String(row.key ?? ''));
+		if (row.value !== null && !attribute(row)) written.add(String(row.key ?? ''));
 	}
 	return reconciled;
 }

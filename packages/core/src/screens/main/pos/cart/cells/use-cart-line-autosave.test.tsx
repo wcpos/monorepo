@@ -62,6 +62,21 @@ it.each([
 	expect(mockUpdate).toHaveBeenCalledWith('fee_lines', 'fee-1', patch, { record: mockRecord });
 	expect(mockMarkSaved).toHaveBeenCalledWith([root]);
 });
+it('a custom field edit on a variation line carries its attribute rows as they are', async () => {
+	const attributes = [
+		{ attr_id: 3, display_key: 'Colour', display_value: 'Red' },
+		{ attr_id: 0, display_key: 'Size', display_value: 'Large' },
+	];
+	values.meta_data = [uuidRow('fee-1'), ...attributes, { key: 'note', value: 'new' }];
+	renderHook(() => useCartLineAutosave('fee_lines', 'fee-1', form));
+	await change({ 'meta_data.3.value': 'new' });
+	expect(mockUpdate).toHaveBeenCalledWith(
+		'fee_lines',
+		'fee-1',
+		{ meta_data: [uuidRow('fee-1'), ...attributes, { id: 7, key: 'note', value: 'new' }] },
+		{ record: mockRecord }
+	);
+});
 it('a refused write is not marked saved', async () => {
 	mockUpdate.mockResolvedValue(false);
 	values.name = 'Fee';
