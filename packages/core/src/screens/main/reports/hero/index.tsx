@@ -271,9 +271,9 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 			</View>
-			<View className="bg-muted h-12 w-64 rounded" />
-			<View className="bg-muted h-10 w-48 rounded" />
-			<View className="bg-muted h-56 w-full rounded" />
+			<Skeleton shape="line" className="h-12 w-64" />
+			<Skeleton shape="line" className="h-10 w-48" />
+			<Skeleton shape="line" className="h-56" />
 		</Card>
 	);
 }

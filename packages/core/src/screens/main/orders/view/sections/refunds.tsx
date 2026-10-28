@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import toNumber from 'lodash/toNumber';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Card } from '@wcpos/components/card';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Notice } from '@wcpos/components/notice';
@@ -169,7 +170,7 @@ export function RefundsFallback({
 							{t('orders.local_refund_summary')}
 						</Text>
 						{refunds.map((refund, index) => (
-							<View key={`${refund.id || index}`} className="border-border rounded-md border p-3">
+							<Card key={`${refund.id || index}`} padding="row">
 								<Text className="text-foreground text-xs font-medium">
 									{t('orders.refund')} #{refund.id || '—'}
 								</Text>
@@ -179,13 +180,11 @@ export function RefundsFallback({
 								<Text className="text-bad text-sm font-semibold tabular-nums">
 									{format(-refundValue(refund))}
 								</Text>
-							</View>
+							</Card>
 						))}
 					</View>
 				) : (
-					<Text className="text-muted-foreground text-sm">
-						{t('orders.no_local_refund_summary')}
-					</Text>
+					<EmptyState kind="empty" size="inline" title={t('orders.no_local_refund_summary')} />
 				)}
 			</View>
 		</Section>

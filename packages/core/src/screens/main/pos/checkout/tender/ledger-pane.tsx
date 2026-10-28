@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { MoneyList } from '@wcpos/components/money-list';
@@ -157,7 +158,7 @@ export function LedgerLegs({
 						: t('pos_checkout.invoice_sent_awaiting_customer')}
 				</Text>
 			) : (
-				<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payments_yet')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('pos_checkout.no_payments_yet')} />
 			)
 		) : (
 			<VStack space="xs" testID="checkout-ledger">

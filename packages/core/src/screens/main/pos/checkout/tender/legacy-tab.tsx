@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Notice } from '@wcpos/components/notice';
@@ -59,9 +60,12 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 
 	if (flow.legacyMethods.length === 0) {
 		return (
-			<Text className="text-muted-foreground p-4 text-sm">
-				{t('pos_checkout.no_legacy_methods')}
-			</Text>
+			<EmptyState
+				kind="empty"
+				size="inline"
+				title={t('pos_checkout.no_legacy_methods')}
+				className="p-4"
+			/>
 		);
 	}
 
