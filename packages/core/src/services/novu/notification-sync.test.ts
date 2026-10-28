@@ -65,6 +65,29 @@ describe('new notification behaviour', () => {
 		);
 	});
 
+	it('uses the SDK workflow identifier when notification data is absent', async () => {
+		await syncNotificationToRxDB(
+			database,
+			'subscriber-1',
+			{
+				id: 'n-workflow',
+				subject: 'Plugin update',
+				workflow: { identifier: 'plugin-update', id: 'workflow-1' },
+			} as unknown as NovuNotification,
+			true
+		);
+
+		expect(mockUpsertNotification).toHaveBeenCalledWith(
+			database,
+			expect.objectContaining({ id: 'n-workflow', workflowId: 'plugin-update' }),
+			{ preserveLocalState: false }
+		);
+		expect(logger.info).toHaveBeenCalledWith(
+			'Plugin update',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
 	it('keeps a coded SYNC101 row when the local notification write rejects', async () => {
 		mockUpsertNotification.mockRejectedValueOnce(new Error('storage gone'));
 
