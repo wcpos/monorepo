@@ -502,3 +502,21 @@ function Sheet() {
 		/>
 	);
 }
+
+// The record dialog's shell has its own suite; this one drives the form and the footer it carries.
+jest.mock('../../../components/record-dialog', () => ({
+	RecordDialog: ({
+		record,
+		form,
+		footer,
+	}: {
+		record: unknown;
+		form: (record: unknown) => React.ReactNode;
+		footer?: React.ReactNode;
+	}) => (
+		<>
+			{form(record)}
+			{footer}
+		</>
+	),
+}));

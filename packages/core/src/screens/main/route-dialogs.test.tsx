@@ -183,11 +183,11 @@ function AddCouponRoute(_props: { resource: unknown }) {
 // Removing route would close the primitive instead of navigating back; reverting to Modal
 // loses the phone page. Run both loaded and missing records so the early-return shell counts.
 describe.each([
-	['product', EditProductModal, 'w-lg'],
-	['variation', EditVariationModal, 'w-lg'],
+	['product', EditProductModal, 'w-160'],
+	['variation', EditVariationModal, 'w-160'],
 	['customer', EditCustomer, 'w-160'],
 	['customer add', AddCustomerRoute, 'w-160'],
-	['coupon', EditCoupon, 'w-lg'],
+	['coupon', EditCoupon, 'w-160'],
 	['coupon add', AddCouponRoute, 'w-lg'],
 	['order', OrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
@@ -221,3 +221,6 @@ it.each([false, true])(
 		expect(router.back).toHaveBeenCalledTimes(1);
 	}
 );
+
+// The record dialog's not-found state; the real block loads ESM (uniwind, expo-linking).
+jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: () => null }));

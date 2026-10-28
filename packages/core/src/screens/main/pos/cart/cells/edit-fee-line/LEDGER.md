@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Edit fee intent, taxation and metadata while retaining JSON inspection.
 
-**Composes:** `@wcpos/components/{dialog,form,hstack,tabs,text,tree,vstack}`.
+**Composes:** `@wcpos/components/{dialog,form,hstack,text,vstack}`. The panel, its title and the Form | JSON tabs are `screens/main/components/record-dialog` (card 8, 2026-10-28); this folder is the Form tab only.
 
 ## Lines
 

@@ -2,15 +2,11 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@wcpos/components/dialog';
+import { Dialog, DialogFooter } from '@wcpos/components/dialog';
+import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { RecordDialog } from '../../components/record-dialog';
 import { usePanelSide } from '../contexts/overlay-side';
 import { EditOrderMeta } from './buttons/edit-order-meta';
 import { useSyncOrder } from '../../hooks/use-sync-order';
@@ -33,15 +29,19 @@ export function OrderSheet({
 	// The form's pending autosave, awaited before Sync order pushes (a debounced note write
 	// still in flight would otherwise be pushed as the value before it).
 	const flushRef = React.useRef<(() => Promise<boolean>) | null>(null);
+	const payload = useRecordField(order, (record) => record.payload);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="order-meta-dialog">
-				<DialogHeader>
-					<DialogTitle>{t('pos_cart.order_details')}</DialogTitle>
-				</DialogHeader>
-				<EditOrderMeta order={order} flushRef={flushRef} />
-				<OrderSheetFooter order={order} flushRef={flushRef} onOpenChange={onOpenChange} />
-			</DialogContent>
+			<RecordDialog
+				side={side}
+				portalHost="pos"
+				title={t('pos_cart.order_details')}
+				record={order}
+				form={(record) => <EditOrderMeta order={record} flushRef={flushRef} />}
+				payload={payload}
+				footer={<OrderSheetFooter order={order} flushRef={flushRef} onOpenChange={onOpenChange} />}
+				testID="order-meta-dialog"
+			/>
 		</Dialog>
 	);
 }

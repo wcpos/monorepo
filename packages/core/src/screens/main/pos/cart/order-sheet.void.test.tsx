@@ -105,7 +105,12 @@ jest.mock('@wcpos/components/button', () => ({
 
 jest.mock('@wcpos/query', () => {
 	const { awaitWriteOutcome, WriteOutcomeError } = jest.requireActual('@wcpos/query');
-	return { useQueryRuntime: () => mockManager, awaitWriteOutcome, WriteOutcomeError };
+	return {
+		useQueryRuntime: () => mockManager,
+		useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+		awaitWriteOutcome,
+		WriteOutcomeError,
+	};
 });
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -1010,3 +1015,21 @@ function Sheet({ onBeforeVoid = () => {} }: { onBeforeVoid?: () => void }) {
 		/>
 	);
 }
+
+// The record dialog's shell has its own suite; this one drives the form and the footer it carries.
+jest.mock('../../components/record-dialog', () => ({
+	RecordDialog: ({
+		record,
+		form,
+		footer,
+	}: {
+		record: unknown;
+		form: (record: unknown) => React.ReactNode;
+		footer?: React.ReactNode;
+	}) => (
+		<>
+			{form(record)}
+			{footer}
+		</>
+	),
+}));

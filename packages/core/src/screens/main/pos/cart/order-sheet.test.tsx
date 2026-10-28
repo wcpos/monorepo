@@ -96,6 +96,7 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { write: mockDelete } }),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('@wcpos/query/register-session', () => ({
 	getCurrentBoundRegisterId: () => undefined,
@@ -212,3 +213,21 @@ it('does not run the footer action hooks while the sheet is closed', () => {
 		voidHook.mockRestore();
 	}
 });
+
+// The record dialog's shell has its own suite; this one drives the form and the footer it carries.
+jest.mock('../../components/record-dialog', () => ({
+	RecordDialog: ({
+		record,
+		form,
+		footer,
+	}: {
+		record: unknown;
+		form: (record: unknown) => React.ReactNode;
+		footer?: React.ReactNode;
+	}) => (
+		<>
+			{form(record)}
+			{footer}
+		</>
+	),
+}));

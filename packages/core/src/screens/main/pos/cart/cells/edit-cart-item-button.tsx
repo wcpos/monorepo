@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -8,18 +8,21 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
+import { RecordDialog } from '../../../components/record-dialog';
 import { usePanelSide } from '../../contexts/overlay-side';
 
 interface Props {
 	title: string;
 	trigger?: 'icon' | 'label';
-	children: React.ReactNode;
+	/** The cart line: the record the form edits and what the JSON tab shows. */
+	item: object;
+	form: React.ReactNode;
 }
 
 /**
  *
  */
-function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
+function EditCartItemButton({ title, item, form, trigger = 'icon' }: Props) {
 	const t = useT();
 	const side = usePanelSide('cart');
 	const [openDialog, setOpenDialog] = React.useState(false);
@@ -51,14 +54,14 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 						</TooltipContent>
 					</Tooltip>
 				)}
-				<DialogContent side={side} size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>
-							<Text decodeHtml>{title}</Text>
-						</DialogTitle>
-					</DialogHeader>
-					{children}
-				</DialogContent>
+				<RecordDialog
+					side={side}
+					portalHost="pos"
+					title={title}
+					record={item}
+					form={() => form}
+					payload={item}
+				/>
 			</Dialog>
 		</ErrorBoundary>
 	);

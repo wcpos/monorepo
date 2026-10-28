@@ -220,3 +220,6 @@ it('makes Re-open the only primary and groups Sync with Delete', () => {
 });
 
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+
+// The record dialog's not-found state; the real block loads ESM (uniwind, expo-linking).
+jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: () => null }));
