@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Pressable } from '@wcpos/components/pressable';
+import { Button } from '@wcpos/components/button';
 import { StatusBadge, type StatusBadgeProps } from '@wcpos/components/status-badge';
 
 import type { FilterField, FilterValue } from '../../../table-types';
@@ -21,14 +21,14 @@ export function StatusFilterCell<F extends FilterField>(props: {
 	const { table, field, value, options, tones, testID } = props;
 	const label = options.find((option) => option.value === value)?.label ?? value ?? '';
 	return (
-		<Pressable
+		<Button
+			variant="ghost"
 			testID={testID}
-			accessibilityRole="button"
 			accessibilityLabel={label}
-			className="min-h-ctl active:bg-muted items-center"
+			className="self-start px-0"
 			onPress={() => value && table.options.meta?.actions?.setFilter(field, value)}
 		>
 			<StatusBadge label={label} variant={tones[value ?? ''] ?? 'default'} />
-		</Pressable>
+		</Button>
 	);
 }

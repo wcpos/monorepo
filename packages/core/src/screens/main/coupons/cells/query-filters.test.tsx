@@ -79,3 +79,22 @@ describe('coupon filter cells', () => {
 });
 
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+
+// The library Button pulls in uniwind's ESM; the cell needs only its press and its label.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		accessibilityLabel,
+		onPress,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		accessibilityLabel?: string;
+		onPress?: () => void;
+	}) => (
+		<button data-testid={testID} aria-label={accessibilityLabel} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
