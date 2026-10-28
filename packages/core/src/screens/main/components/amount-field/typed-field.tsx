@@ -115,7 +115,8 @@ export function TypedField({
 		dirty.current = true;
 		setInternalValue(text);
 		const typed = stringToNumber(text);
-		if (onDraftChange && Number.isFinite(typed)) onDraftChange(round(typed, places));
+		const draft = Number.isFinite(typed) ? round(typed, places) : text.trim() ? null : undefined;
+		onDraftChange?.(draft);
 	};
 
 	return (

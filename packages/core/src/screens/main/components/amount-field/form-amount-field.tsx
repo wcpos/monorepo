@@ -7,19 +7,15 @@ import { AmountField } from './amount-field';
 
 import type { AmountFieldHandle, AmountFieldProps } from './types';
 
-/** A react-hook-form field (`{...field}`), plus the field's own props. */
 type Props = Omit<AmountFieldProps, 'onCommit' | 'ref'> & {
-	onChange: (value: number | string) => void;
+	onChange: (value: number | string | null) => void;
 	ref?: React.Ref<unknown>;
 	label?: string;
 	/** Each readable draft as typed, for a form that acts only on its verb (a tap does not blur). */
 	live?: boolean;
 };
 
-/**
- * A form's amount, with its label, aria and message. The form gets the committed number, as
- * text when it holds the amount as text (WooCommerce's strings).
- */
+/** A form's amount with its label, aria and message; a form holding text gets text. */
 export function FormAmountField({ value, onChange, ref, label, live, ...props }: Props) {
 	const field = React.useRef<AmountFieldHandle>(null);
 	const toggle = () => (field.current?.isFocused() ? field.current.blur() : field.current?.focus());
@@ -27,7 +23,12 @@ export function FormAmountField({ value, onChange, ref, label, live, ...props }:
 		label,
 		onLabelPress: toggle,
 	});
-	const toForm = (next: number) => onChange(typeof value === 'string' ? String(next) : next);
+	// At mount: a live draft can leave a null, which says nothing of the form's type.
+	const asText = React.useRef(typeof value === 'string');
+	const toForm = (next: number) => onChange(asText.current ? String(next) : next);
+	// Unreadable is null, which every live form's schema refuses, so its verb cannot act on it.
+	const toDraft = (next: number | null | undefined) =>
+		next == null ? onChange(next === null ? null : '') : toForm(next);
 	React.useImperativeHandle(ref, () => field.current);
 	return (
 		<FormItem nativeID={itemNativeID}>
@@ -42,7 +43,7 @@ export function FormAmountField({ value, onChange, ref, label, live, ...props }:
 				{...props}
 				value={value}
 				onCommit={toForm}
-				onDraftChange={live ? toForm : undefined}
+				onDraftChange={live ? toDraft : undefined}
 			/>
 			<FormMessage />
 		</FormItem>

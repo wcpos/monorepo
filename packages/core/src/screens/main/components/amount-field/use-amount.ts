@@ -14,14 +14,9 @@ import type { AmountFieldProps } from './types';
 
 export type Amount = ReturnType<typeof useAmount>;
 
-/** The places a kind carries; money's are the currency's. */
 const PLACES = { count: 0, quantity: QUANTITY_PLACES, percent: PERCENT_PLACES };
 
-/**
- * What both adapters share: the store's separators and places (read here, once), the rest
- * text, and the one commit rule: at the kind's places, never the stored number again, and a
- * quantity committed as 0 is its line's remove.
- */
+/** Both adapters' separators, places, rest text and the one commit rule (read once, here). */
 export function useAmount(props: AmountFieldProps) {
 	const { kind, value, onCommit, onRemove } = props;
 	const { store } = useAppState();
@@ -32,8 +27,7 @@ export function useAmount(props: AmountFieldProps) {
 	// WooCommerce's default, 2, before the store loads.
 	const priceDecimals = useDocField(store, (state) => state.price_num_decimals);
 	const places = kind === 'money' ? (props.places ?? Number(priceDecimals ?? 2)) : PLACES[kind];
-	// A grid's price reads in the open order's currency on the POS, the store's elsewhere; a
-	// field's number carries no symbol (its unit sits beside it).
+	// A grid's price is in the open order's currency on the POS; a field's number has no symbol.
 	const currencySymbol = useRecordField(
 		useCurrentOrderOptional(),
 		(o) => o.payload.currency_symbol
@@ -47,11 +41,21 @@ export function useAmount(props: AmountFieldProps) {
 	const format = kind === 'money' && props.look === 'quiet' ? currency.format : number.format;
 	const blank = value == null || value === '';
 	const stored = blank && kind !== 'quantity' && kind !== 'count' ? undefined : Number(value) || 0;
+	// What this field last sent, pending or not (2 → 3 → 2 before the 3 lands); a new value resets it.
+	const sent = React.useRef<number | undefined>(undefined);
+	React.useEffect(() => {
+		sent.current = undefined;
+	}, [stored]);
 	const commit = (next: number): void | boolean | Promise<void | boolean> => {
 		const rounded = round(next, places);
-		if (rounded === stored) return;
+		if (rounded === (sent.current ?? stored)) return;
+		sent.current = rounded;
 		if (rounded === 0 && onRemove) return onRemove();
-		return onCommit(rounded) as void | Promise<void | boolean>;
+		const written = onCommit(rounded) as void | Promise<void | boolean>;
+		// A refused write leaves the store where it was, so the next commit compares with it.
+		const refused = () => sent.current === rounded && (sent.current = undefined);
+		void Promise.resolve(written).then((ok) => ok === false && refused(), refused);
+		return written;
 	};
 	return { places, decimalSeparator, thousandSeparator, format, stored, commit };
 }

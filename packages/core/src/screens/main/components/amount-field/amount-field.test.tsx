@@ -157,7 +157,9 @@ describe('commit, cancel, no-op', () => {
 		fireEvent.focus(input());
 		fireEvent.change(input(), { target: { value: '7.125' } });
 		fireEvent.change(input(), { target: { value: '7.1x' } });
-		expect(onDraftChange.mock.calls).toEqual([[7.13]]);
+		fireEvent.change(input(), { target: { value: '' } });
+		// Unreadable is null and blank is undefined, never the last readable draft kept.
+		expect(onDraftChange.mock.calls).toEqual([[7.13], [null], [0]]);
 		expect(onCommit).not.toHaveBeenCalled();
 	});
 });
@@ -200,7 +202,7 @@ describe('quiet: a grid cell edits in place', () => {
 });
 
 describe('FormAmountField hands the form the number in the form’s own type', () => {
-	function Harness({ initial }: { initial: string | number }) {
+	function Harness({ initial, live }: { initial: string | number; live?: boolean }) {
 		const form = useForm({ defaultValues: { amount: initial } });
 		const amount = useWatch({ control: form.control, name: 'amount' });
 		return (
@@ -209,7 +211,9 @@ describe('FormAmountField hands the form the number in the form’s own type', (
 					<Controller
 						control={form.control}
 						name="amount"
-						render={({ field }) => <FormAmountField kind="money" testID="amount" {...field} />}
+						render={({ field }) => (
+							<FormAmountField kind="money" live={live} testID="amount" {...field} />
+						)}
 					/>
 				</FormFieldContext.Provider>
 				<span data-testid="held">{`${typeof amount}:${amount}`}</span>
@@ -224,5 +228,19 @@ describe('FormAmountField hands the form the number in the form’s own type', (
 		render(<Harness initial={initial} />);
 		type(screen.getByTestId('amount') as HTMLInputElement, '12.5');
 		expect(screen.getByTestId('held').textContent).toBe(held);
+	});
+
+	it('live: an unreadable draft leaves the form a null its schema refuses, not the last amount', () => {
+		render(<Harness initial="" live />);
+		const input = screen.getByTestId('amount') as HTMLInputElement;
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: '5' } });
+		expect(screen.getByTestId('held').textContent).toBe('string:5');
+		fireEvent.change(input, { target: { value: '.' } });
+		expect(screen.getByTestId('held').textContent).toBe('object:null');
+		fireEvent.change(input, { target: { value: '' } });
+		expect(screen.getByTestId('held').textContent).toBe('string:');
+		fireEvent.change(input, { target: { value: '6' } });
+		expect(screen.getByTestId('held').textContent).toBe('string:6');
 	});
 });

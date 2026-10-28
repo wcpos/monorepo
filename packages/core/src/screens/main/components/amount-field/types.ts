@@ -11,8 +11,8 @@ export interface AmountFieldProps {
 	value: number | string | null | undefined;
 	/** A changed number at the kind's places; resolving `false` takes a keypad step back. */
 	onCommit: (value: number) => unknown;
-	/** Native: each readable draft as it is typed (a keypad commits as it closes). */
-	onDraftChange?: (value: number) => void;
+	/** Native: each draft as typed, `null` unreadable, `undefined` blank (a keypad commits on close). */
+	onDraftChange?: (value: number | null | undefined) => void;
 	/** A quantity committed as 0, or the keypad's − at 1: the line's own remove. */
 	onRemove?: () => void;
 	/** `quiet`: a grid cell's text, pressed to edit in place. A quantity or count is always the box. */
@@ -26,7 +26,6 @@ export interface AmountFieldProps {
 	placeholder?: string;
 	disabled?: boolean;
 	autoFocus?: boolean;
-	/** The box's layout; the number's text. */
 	className?: string;
 	textClassName?: string;
 	testID?: string;

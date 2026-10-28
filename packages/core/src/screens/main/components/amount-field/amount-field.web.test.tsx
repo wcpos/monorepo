@@ -103,6 +103,19 @@ it("the keypad's write goes through the commit rule: places, no-op, a quantity's
 	expect(onRemove).toHaveBeenCalledTimes(1);
 });
 
+it('+ then − before the first write lands is two commits, and a refused write is not remembered', async () => {
+	renderField({ kind: 'quantity', value: 2 });
+	act(() => void mockKeypad.onChange(3));
+	act(() => void mockKeypad.onChange(2));
+	expect(onCommit.mock.calls).toEqual([[3], [2]]);
+
+	onCommit.mockClear().mockResolvedValueOnce(false);
+	renderField({ kind: 'quantity', value: 2 });
+	await act(async () => void (await mockKeypad.onChange(3)));
+	act(() => void mockKeypad.onChange(3));
+	expect(onCommit.mock.calls).toEqual([[3], [3]]);
+});
+
 it("names the quick keys with the store's separator, and passes the quick discounts and tone", () => {
 	renderField({ look: 'quiet', discounts: [12.5] });
 	expect(mockKeypad.discounts).toEqual([12.5]);
