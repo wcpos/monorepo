@@ -1,16 +1,14 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Tabs } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCSSVariable } from 'uniwind';
 
-import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 
+import { POSNavigatorTabBar } from '../../../../../components/pos-phone-tab-bar';
 import { useNavigationBackground } from '../../../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -19,23 +17,17 @@ export const unstable_settings = {
 };
 
 /**
- * Tabs navigator wrapper subscribing to theme-aware colors via
- * `useNavigationBackground` and `useCSSVariable`. Isolation here keeps the
- * parent `TabsLayout` from subscribing to theme changes, re-rendering the
+ * Tabs navigator wrapper subscribing to the theme-aware background via `useNavigationBackground`.
+ * Isolation here keeps the parent `TabsLayout` from subscribing to theme changes, re-rendering the
  * entire navigator, and canceling Uniwind's theme transition.
  */
-function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+function ThemedTabs() {
 	const t = useT();
 	const screenBackgroundColor = useNavigationBackground();
-	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
-		'--color-card',
-		'--color-primary',
-		'--color-muted-foreground',
-		'--color-border',
-	]) as string[];
-
 	return (
 		<Tabs
+			// The one phone tab bar, which the (columns) fallback draws too.
+			tabBar={(props) => <POSNavigatorTabBar {...props} />}
 			screenOptions={{
 				headerShown: false,
 				// Mount both tabs immediately: POSProducts owns the barcode scan
@@ -43,36 +35,11 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				// products tab would leave a direct /cart entry with no scan handler.
 				lazy: false,
 				sceneStyle: { backgroundColor: screenBackgroundColor },
-				tabBarStyle: {
-					backgroundColor: cardColor,
-					borderTopColor: borderColor,
-				},
-				tabBarActiveTintColor: primaryColor,
-				tabBarInactiveTintColor: mutedForeground,
 			}}
 		>
-			<Tabs.Screen
-				name="index"
-				listeners={tabPressListener}
-				options={{
-					title: t('common.products'),
-					tabBarButtonTestID: 'pos-tab-products',
-					tabBarIcon: ({ focused }) => (
-						<Icon name="gift" className={focused ? 'text-primary' : 'text-muted-foreground'} />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="cart"
-				listeners={tabPressListener}
-				options={{
-					title: t('pos_cart.tab_cart'),
-					tabBarButtonTestID: 'pos-tab-cart',
-					tabBarIcon: ({ focused }) => (
-						<Icon name="cart" className={focused ? 'text-primary' : 'text-muted-foreground'} />
-					),
-				}}
-			/>
+			{/* The titles name the screen (the web document title); the bar draws its own labels. */}
+			<Tabs.Screen name="index" options={{ title: t('common.products') }} />
+			<Tabs.Screen name="cart" options={{ title: t('pos_cart.tab_cart') }} />
 		</Tabs>
 	);
 }
@@ -80,17 +47,6 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 export default function TabsLayout() {
 	const { screenSize } = useTheme();
 	const { top } = useSafeAreaInsets();
-
-	const tabPressListener = React.useMemo(
-		() => ({
-			tabPress: () => {
-				if (Platform.OS !== 'web') {
-					void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				}
-			},
-		}),
-		[]
-	);
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
@@ -105,10 +61,10 @@ export default function TabsLayout() {
 
 	// Both tab screens sit on `bg-background` at the top (the register bar has no fill of its
 	// own), so the container pads the status bar in that same colour: no band. The tab bar pads
-	// the home indicator inside its own card colour (React Navigation reads `insets.bottom`).
+	// the home indicator inside its own card colour.
 	return (
 		<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
-			<ThemedTabs tabPressListener={tabPressListener} />
+			<ThemedTabs />
 		</View>
 	);
 }
