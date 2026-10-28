@@ -1,20 +1,19 @@
 import * as React from 'react';
-import { Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
-import { DropdownMenuItem } from './item';
-import { SHEET_LABEL_TEXT, SHEET_ROW_ROLES, SheetContext, useMenuSheet } from './sheet-context';
-import { useIsPhone } from '../lib/device';
+import { SHEET_LABEL_TEXT, SHEET_ROW_ROLES, useMenuSheet } from './sheet-context';
 import { Icon } from '../icon';
 import {
+	AnchoredOverlay,
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
+	type OverlayAnchor,
 	type OverlayScrimProps,
-	OverlaySheetPanel,
-	OverlayShell,
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { MenuRow, type MenuRowProps } from '../menu-row';
 import { TextClassContext, Text as ThemedText } from '../text';
 
 import type { TextProps } from '../text';
@@ -31,16 +30,14 @@ function DropdownMenuSub(props: DropdownMenuPrimitive.SubProps) {
 	return useMenuSheet() ? <>{props.children}</> : <DropdownMenuPrimitive.Sub {...props} />;
 }
 
-const RadioSheetContext = React.createContext<DropdownMenuPrimitive.RadioGroupProps | null>(null);
+const RadioValueContext = React.createContext<DropdownMenuPrimitive.RadioGroupProps | null>(null);
 function DropdownMenuRadioGroup(props: DropdownMenuPrimitive.RadioGroupProps) {
-	const sheet = useMenuSheet();
-	if (!sheet) return <DropdownMenuPrimitive.RadioGroup {...props} />;
 	// The sheet's rows read the value from context; the container is a plain View.
 	const { value: _value, onValueChange: _onValueChange, ...rest } = props;
 	return (
-		<RadioSheetContext.Provider value={props}>
-			<View {...rest} />
-		</RadioSheetContext.Provider>
+		<RadioValueContext.Provider value={props}>
+			{useMenuSheet() ? <View {...rest} /> : <DropdownMenuPrimitive.RadioGroup {...props} />}
+		</RadioValueContext.Provider>
 	);
 }
 
@@ -62,6 +59,11 @@ function MenuScrim(p: OverlayScrimProps) {
 		/>
 	);
 }
+const MENU: OverlayAnchor = {
+	Portal: DropdownMenuPrimitive.Portal,
+	Scrim: MenuScrim,
+	Content: DropdownMenuPrimitive.Content,
+};
 
 /** Text-only children (a string, a number, an interpolation's array of them) need a Text. */
 function isTextChildren(children: React.ReactNode): boolean {
@@ -72,9 +74,53 @@ function isTextChildren(children: React.ReactNode): boolean {
 	);
 }
 
+/** Every menu row: anchored, the primitive's item presses it (`asChild`); on the sheet it presses itself. */
+function MenuItemRow({
+	Item,
+	item: { className, children, ...item },
+	select,
+	...row
+}: MenuRowProps & {
+	Item: React.ComponentType<any>;
+	item: Omit<DropdownMenuPrimitive.ItemProps, 'role'>;
+	select?: () => void;
+}) {
+	const sheet = useMenuSheet();
+	const text = isTextChildren(children as React.ReactNode);
+	const parts = { ...row, className, [text ? 'label' : 'children']: children };
+	if (!sheet)
+		return (
+			<Item asChild {...item}>
+				<MenuRow {...parts} />
+			</Item>
+		);
+	return (
+		<MenuRow
+			{...parts}
+			disabled={!!item.disabled}
+			testID={item.testID}
+			onPress={(event) => {
+				item.onPress?.(event);
+				select?.();
+				if (item.closeOnPress !== false) sheet.close();
+			}}
+		/>
+	);
+}
+
+/** A menu action; `destructive` is red with the destructive wash, last and after a separator. */
+function DropdownMenuItem(
+	props: DropdownMenuPrimitive.ItemProps & { variant?: 'default' | 'destructive' }
+) {
+	const { variant, ...item } = props;
+	return (
+		<MenuItemRow Item={DropdownMenuPrimitive.Item} item={item} role="menuitem" variant={variant} />
+	);
+}
+
 function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
 	return useMenuSheet() ? (
-		<DropdownMenuLabel inset={props.inset} testID={props.testID} className={props.className}>
+		<DropdownMenuLabel testID={props.testID} className={props.className}>
 			{isTextChildren(props.children) ? (
 				props.children
 			) : (
@@ -87,31 +133,21 @@ function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTr
 }
 function AnchoredSubTrigger({
 	className,
-	inset,
 	children,
 	...props
 }: Omit<DropdownMenuPrimitive.SubTriggerProps, 'children'> & {
-	inset?: boolean;
 	children?: React.ReactNode;
 }) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	return (
-		<TextClassContext.Provider value={cn('text-foreground text-base select-none')}>
-			<DropdownMenuPrimitive.SubTrigger
-				className={cn(
-					'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
-					open && 'bg-muted',
-					inset && 'pl-8',
-					className
-				)}
-				{...props}
-			>
-				<>
-					<View className="flex-row items-center gap-2">{children}</View>
-					<Icon name="chevronRight" />
-				</>
-			</DropdownMenuPrimitive.SubTrigger>
-		</TextClassContext.Provider>
+		<DropdownMenuPrimitive.SubTrigger asChild {...props}>
+			<MenuRow
+				role="menuitem"
+				className={cn(open && 'bg-muted', className)}
+				trailing={<Icon name="chevronRight" />}
+				{...(isTextChildren(children) ? { label: children } : { children })}
+			/>
+		</DropdownMenuPrimitive.SubTrigger>
 	);
 }
 
@@ -140,11 +176,8 @@ function AnchoredSubContent({ className, ...props }: DropdownMenuPrimitive.SubCo
 }
 
 function DropdownMenuContent({
-	className,
 	overlayClassName,
 	overlayStyle,
-	portalHost,
-	inline,
 	...props
 }: DropdownMenuPrimitive.ContentProps & {
 	overlayStyle?: StyleProp<ViewStyle>;
@@ -153,176 +186,59 @@ function DropdownMenuContent({
 	inline?: boolean;
 }) {
 	const { open, onOpenChange } = DropdownMenuPrimitive.useRootContext();
-	const phone = useIsPhone();
 	const overlay = React.useMemo(
 		() => ({ className: overlayClassName, style: overlayStyle }),
 		[overlayClassName, overlayStyle]
 	);
-	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
-	const shell = (
+	return (
 		<OverlayPropsContext.Provider value={overlay}>
-			<OverlayShell
-				presentation={phone ? 'bottom' : 'anchored'}
+			<AnchoredOverlay
+				anchor={MENU}
 				open={open}
-				Scrim={MenuScrim}
-				testID={props.testID}
-				onDismiss={phone ? () => onOpenChange(false) : undefined}
-			>
-				{phone ? (
-					<SheetContext.Provider value={{ close: () => onOpenChange(false) }}>
-						<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
-							{/* A long menu (the user menu's stores) scrolls inside the bounded panel; the rows
-							    sit in a menu container, eight points apart (the design rule's target gap). */}
-							<ScrollView>
-								<View role="menu" className="gap-2">
-									{props.children as React.ReactNode}
-								</View>
-							</ScrollView>
-						</OverlaySheetPanel>
-					</SheetContext.Provider>
-				) : (
-					<DropdownMenuPrimitive.Content
-						className={cn(
-							OVERLAY_PANEL.anchored,
-							'z-50 min-w-50 overflow-hidden p-1.5',
-							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-							className
-						)}
-						{...props}
-					/>
-				)}
-			</OverlayShell>
+				onOpenChange={onOpenChange}
+				size="min-w-50 overflow-hidden p-1.5"
+				// A long menu (the user menu's stores) scrolls inside the bounded sheet.
+				list="menu"
+				content={{ ...props, children: props.children as React.ReactNode }}
+				sheetStyle={props.style}
+			/>
 		</OverlayPropsContext.Provider>
 	);
-	return inline ? (
-		phone && !open ? null : (
-			shell
-		)
-	) : (
-		<DropdownMenuPrimitive.Portal hostName={portalHost}>{shell}</DropdownMenuPrimitive.Portal>
-	);
 }
 
-function DropdownMenuCheckboxItem({
-	className,
-	children,
-	checked,
-	...props
-}: DropdownMenuPrimitive.CheckboxItemProps) {
-	const sheet = useMenuSheet();
-	if (sheet)
-		return (
-			<Pressable
-				role={SHEET_ROW_ROLES.checkbox}
-				aria-checked={checked}
-				disabled={props.disabled}
-				testID={props.testID}
-				className={cn(
-					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
-					props.disabled && 'web:pointer-events-none opacity-45',
-					className
-				)}
-				onPress={(e) => {
-					props.onPress?.(e);
-					props.onCheckedChange?.(!checked);
-					if (props.closeOnPress !== false) sheet.close();
-				}}
-			>
-				{/* The row is the control: a presentational mark in the checkbox's skin, not a
-				    second focusable Checkbox inside a menu item (CodeRabbit, #2215). */}
-				<View
-					aria-hidden
-					className={cn(
-						'border-border bg-card size-5 items-center justify-center rounded-sm border',
-						checked && 'bg-primary border-primary'
-					)}
-				>
-					{checked && <Icon name="check" className="text-primary-foreground size-3" />}
-				</View>
-				<>{children}</>
-			</Pressable>
-		);
+function DropdownMenuCheckboxItem(props: DropdownMenuPrimitive.CheckboxItemProps) {
+	// The row is the control: a presentational box in the checkbox's skin, not a second
+	// focusable Checkbox inside a menu item (CodeRabbit, #2215).
 	return (
-		<DropdownMenuPrimitive.CheckboxItem
-			className={cn(
-				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-45',
-				className
-			)}
-			checked={checked}
-			{...props}
-		>
-			<View className="absolute left-2 flex size-4 items-center justify-center">
-				<DropdownMenuPrimitive.ItemIndicator>
-					<Icon name="check" className="text-primary" />
-				</DropdownMenuPrimitive.ItemIndicator>
-			</View>
-			<>{children}</>
-		</DropdownMenuPrimitive.CheckboxItem>
+		<MenuItemRow
+			Item={DropdownMenuPrimitive.CheckboxItem}
+			item={props}
+			role={SHEET_ROW_ROLES.checkbox}
+			checkbox
+			selected={props.checked}
+			select={() => props.onCheckedChange?.(!props.checked)}
+		/>
 	);
 }
 
-function DropdownMenuRadioItem({
-	className,
-	children,
-	...props
-}: DropdownMenuPrimitive.RadioItemProps) {
-	const sheet = useMenuSheet();
-	const radio = React.useContext(RadioSheetContext);
-	if (sheet)
-		return (
-			<Pressable
-				role={SHEET_ROW_ROLES.radio}
-				aria-checked={radio?.value === props.value}
-				disabled={props.disabled}
-				testID={props.testID}
-				className={cn(
-					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
-					props.disabled && 'web:pointer-events-none opacity-45',
-					className
-				)}
-				onPress={(e) => {
-					props.onPress?.(e);
-					radio?.onValueChange(props.value);
-					if (props.closeOnPress !== false) sheet.close();
-				}}
-			>
-				<View className="size-4 items-center justify-center">
-					{radio?.value === props.value && <View className="bg-primary h-2 w-2 rounded-full" />}
-				</View>
-				<>{children}</>
-			</Pressable>
-		);
+function DropdownMenuRadioItem(props: DropdownMenuPrimitive.RadioItemProps) {
+	const radio = React.useContext(RadioValueContext);
 	return (
-		<DropdownMenuPrimitive.RadioItem
-			className={cn(
-				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-45',
-				className
-			)}
-			{...props}
-		>
-			<View className="absolute left-2 flex size-4 items-center justify-center">
-				<DropdownMenuPrimitive.ItemIndicator>
-					<View className="bg-primary h-2 w-2 rounded-full" />
-				</DropdownMenuPrimitive.ItemIndicator>
-			</View>
-			<>{children}</>
-		</DropdownMenuPrimitive.RadioItem>
+		<MenuItemRow
+			Item={DropdownMenuPrimitive.RadioItem}
+			item={props}
+			role={SHEET_ROW_ROLES.radio}
+			choice
+			selected={radio?.value === props.value}
+			select={() => radio?.onValueChange(props.value)}
+		/>
 	);
 }
 
-function DropdownMenuLabel({
-	className,
-	inset,
-	...props
-}: DropdownMenuPrimitive.LabelProps & { inset?: boolean }) {
+function DropdownMenuLabel({ className, ...props }: DropdownMenuPrimitive.LabelProps) {
 	if (useMenuSheet())
 		return (
-			<View
-				testID={props.testID}
-				className={cn('h-9 justify-center px-2', inset && 'pl-8', className)}
-			>
+			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
 				{/* A composed child (an icon and a Text) reads the label style from context; RN
 				    text styles do not pass through a View (CodeRabbit, #2215). */}
 				<TextClassContext.Provider value={SHEET_LABEL_TEXT}>
@@ -338,7 +254,6 @@ function DropdownMenuLabel({
 		<DropdownMenuPrimitive.Label
 			className={cn(
 				'text-foreground web:cursor-default px-2.5 py-1.5 text-sm font-semibold',
-				inset && 'pl-8',
 				className
 			)}
 			{...props}

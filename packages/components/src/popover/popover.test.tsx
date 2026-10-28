@@ -1,66 +1,15 @@
 import '../popover/overlay.test-utils';
-import { readFileSync } from 'node:fs';
-
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
-import { DeviceScope } from '../lib/device';
 import * as C from './index';
 jest.mock('@rn-primitives/popover', () =>
 	jest.requireActual('../popover/overlay.test-utils').mockPrimitive()
 );
 
-it('renders the anchored panel skin', () => {
+// The phone-or-anchored decision and the sheet's geometry are the shell's (lib/anchored-overlay.test).
+it('renders the anchored panel skin at the popover width', () => {
 	render(<C.PopoverContent inline testID="panel" />);
 	expect(screen.getByTestId('panel')).toHaveClass('bg-card rounded-lg w-80 web:animate-pop-in');
-	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/Platform|bg-popover/);
-});
-it('uses a sheet View, not positioned primitive content, on phones', () => {
-	render(
-		<DeviceScope phone>
-			<C.PopoverContent inline testID="panel" />
-		</DeviceScope>
-	);
-	expect(screen.getByTestId('panel')).toHaveClass('rounded-t-2xl');
-	expect(screen.queryByTestId('primitive-content')).toBeNull();
-	expect(screen.getByTestId('panel-scrim')).toHaveClass('bg-scrim');
-	// The sheet rises like the dialog's, and the web scrim closes it: the primitive's web
-	// Overlay is a bare Pressable and no Radix Content is mounted to own outside-click.
-	expect(screen.getByTestId('panel')).toHaveClass('web:animate-sheet-in');
-	fireEvent.click(screen.getByTestId('panel-scrim'));
-	const { useRootContext } = jest.requireMock('@rn-primitives/popover');
-	expect(useRootContext().onOpenChange).toHaveBeenCalledWith(false);
-});
-
-it('lets the sheet geometry win over an anchored caller width', () => {
-	render(
-		<DeviceScope phone>
-			<C.PopoverContent inline testID="panel" className="w-80" />
-		</DeviceScope>
-	);
-	expect(screen.getByTestId('panel')).toHaveClass('w-full');
-	expect(screen.getByTestId('panel')).not.toHaveClass('w-80');
-});
-
-it('drops an anchored caller’s width cap on the phone sheet', () => {
-	// The variations popover's own classes (tiles/inline-variable-tile.tsx): on a tablet the
-	// anchored panel keeps its cap; on a phone the sheet is the phone's width.
-	render(
-		<DeviceScope phone>
-			<C.PopoverContent inline testID="panel" className="w-auto max-w-80 p-2" />
-		</DeviceScope>
-	);
-	expect(screen.getByTestId('panel')).toHaveClass('w-full max-w-full');
-	expect(screen.getByTestId('panel')).not.toHaveClass('max-w-80');
-	expect(screen.getByTestId('panel')).not.toHaveClass('w-auto');
-});
-it('keeps an anchored caller’s width cap above the phone boundary', () => {
-	render(<C.PopoverContent inline testID="panel" className="w-auto max-w-80 p-2" />);
-	expect(screen.getByTestId('panel')).toHaveClass('max-w-80');
-});
-
-it('unmounts an inline sheet when the popover closes (no portal presence to do it)', () => {
-	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toMatch(/return inline \?[\s(]*open \?[\s(]*shell[\s)]*: null/);
 });

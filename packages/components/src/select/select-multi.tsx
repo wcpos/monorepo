@@ -1,16 +1,15 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import { Slot } from '@rn-primitives/slot';
 
-import { Checkbox } from '../checkbox';
 import { fieldBox } from '../field-box';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
-import { useIsPhone } from '../lib/device';
+import { AnchoredOverlay } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
 import { Text, TextClassContext } from '../text';
 
 import type {
@@ -131,60 +130,28 @@ function SelectMultiValue({
 }
 
 function SelectMultiContent({
-	className,
 	children,
-	align = 'start',
-	sideOffset = 4,
-	portalHost,
-	inline,
 	...props
 }: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useMultiSelectContext();
 	// The popover root owns the open state; the multi context mirrors it. A dismiss must go
 	// through the root, or the trigger's next press closes a popover that is already hidden.
 	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
-	const phone = useIsPhone();
-	const presentation = phone ? 'bottom' : 'anchored';
 	if (!context.open) return null;
-	const content = (
-		<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
-	);
-	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
-	const shell = (
-		<OverlayShell
-			presentation={presentation}
+	return (
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
 			open={open}
-			Scrim={PopoverPrimitive.Overlay}
-			onDismiss={phone ? () => onOpenChange(false) : undefined}
-			testID={props.testID}
-		>
-			<TextClassContext.Provider value="text-foreground">
-				{phone ? (
-					<OverlaySheetPanel testID={props.testID} className={className}>
-						{content}
-					</OverlaySheetPanel>
-				) : (
-					<PopoverPrimitive.Content
-						align={align}
-						sideOffset={sideOffset}
-						className={cn(
-							OVERLAY_PANEL.anchored,
-							'z-50 max-h-96 min-w-32 p-1.5',
-							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-							className
-						)}
-						{...props}
-					>
-						{content}
-					</PopoverPrimitive.Content>
-				)}
-			</TextClassContext.Provider>
-		</OverlayShell>
-	);
-	return inline ? (
-		shell
-	) : (
-		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
+			onOpenChange={onOpenChange}
+			size="max-h-96 min-w-32 p-1.5"
+			content={{
+				align: 'start',
+				...props,
+				children: (
+					<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
+				),
+			}}
+		/>
 	);
 }
 
@@ -194,7 +161,6 @@ function SelectMultiItem({
 	value,
 	label,
 	disabled,
-	...props
 }: {
 	value: string;
 	label: string;
@@ -217,23 +183,14 @@ function SelectMultiItem({
 	}, [onValueChange, value, label, currentValue]);
 
 	return (
-		<Pressable
+		<MenuRow
+			checkbox
+			selected={selected}
 			onPress={handlePress}
-			className={cn(
-				'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-2',
-				itemDisabled && 'web:pointer-events-none opacity-45',
-				className
-			)}
 			disabled={itemDisabled}
-			{...props}
-		>
-			<Checkbox
-				checked={selected}
-				onCheckedChange={() => handlePress()}
-				className="pointer-events-none"
-			/>
-			<Text className="text-foreground text-base">{children ?? label}</Text>
-		</Pressable>
+			className={className}
+			label={children ?? label}
+		/>
 	);
 }
 

@@ -40,7 +40,7 @@ it('emits an option before closing and marks only the selected row', () => {
 	mockRoot.onValueChange.mockClear();
 	expect(document.querySelector('[data-primitive]')).toBeNull();
 	expect(screen.getByTestId('b')).toHaveAttribute('aria-selected', 'true');
-	expect(screen.getByTestId('b').querySelector('[data-icon="check"]')).toHaveClass('ml-auto');
+	expect(screen.getByTestId('b').querySelector('[data-icon="check"]')).not.toBeNull();
 	expect(screen.getByTestId('a')).toHaveAttribute('aria-selected', 'false');
 	expect(screen.getByTestId('a').querySelector('[data-icon="check"]')).toBeNull();
 	expect(screen.getByTestId('disabled')).toHaveClass('opacity-45');
@@ -63,15 +63,21 @@ it('renders no scroll buttons in a sheet', () => {
 	expect(screen.queryByTestId('up')).toBeNull();
 	expect(screen.queryByTestId('down')).toBeNull();
 });
-it('keeps the anchored item data-testid mapping', () => {
+it('hosts the anchored web row in the Radix option, which keeps the data-testid and the press', () => {
 	mockPhone.current = false;
 	render(
 		<C.SelectContent inline>
-			<C.SelectItem testID="anchored" value="a" label="A" />
+			<C.SelectItem testID="anchored" value="b" label="B" />
 		</C.SelectContent>
 	);
 	expect(screen.getByTestId('primitive-content')).toBeInTheDocument();
-	expect(screen.getByTestId('anchored')).toHaveClass('pl-8');
+	const option = screen.getByTestId('anchored');
+	expect(option).toHaveClass('rounded-md web:focus:bg-muted');
+	// The row inside draws (inset, check) but is no second control: its click would be swallowed.
+	const row = option.querySelector('.px-2\\.5');
+	expect(row).not.toBeNull();
+	expect(row).not.toHaveAttribute('role');
+	expect(row?.querySelector('[data-icon="check"]')).not.toBeNull();
 });
 it('the phone sheet sits inside the scrim, not beside it', () => {
 	// The primitive's web Overlay renders its Pressable childless and emits the children as

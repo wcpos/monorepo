@@ -7,7 +7,6 @@ import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-han
 
 import { Platform } from '@wcpos/utils/platform';
 
-import { Checkbox } from '../checkbox';
 import { FieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { Input } from '../input';
@@ -20,10 +19,12 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { useIsPhone } from '../lib/device';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
+import { AnchoredOverlay } from '../lib/overlay';
 import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
+import { Text } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
 import type { FlatTreeItem } from '../lib/use-hierarchy';
@@ -362,37 +363,25 @@ function TreeComboboxContent<T>({
 				<VirtualizedListPrimitive.Item>
 					<View className="flex flex-row items-center">
 						<View style={{ width: flatItem.depth * INDENT_PX }} />
-						<Pressable
+						<MenuRow
 							onPress={handlePress}
 							// Keyed by the option's VALUE, not its label: the labels are server-supplied
 							// and localized, and E2E may not select by text (see the repo's E2E selector
 							// policy). Only one tree popover can be open at a time, so the value alone
 							// addresses the row unambiguously.
 							testID={`tree-combobox-item-${flatItem.value}`}
-							className="web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-1 flex-row items-center gap-2 rounded-md px-2.5 py-1.5"
-						>
-							{ctx.multiple ? (
-								<Checkbox
-									checked={selected}
-									onCheckedChange={() => handlePress()}
-									className="pointer-events-none"
-								/>
-							) : (
-								<View className="h-4 w-4 items-center justify-center">
-									{selected && <Icon name="check" className="text-primary" size="xs" />}
-								</View>
-							)}
-							<View className="flex-1">
-								<Text className="text-foreground text-base" decodeHtml>
-									{flatItem.label}
-								</Text>
-								{ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId && (
-									<Text className="text-muted-foreground text-xs" decodeHtml>
-										{ctx.hierarchy.getBreadcrumb(flatItem.value)}
-									</Text>
-								)}
-							</View>
-						</Pressable>
+							role="option"
+							checkbox={ctx.multiple}
+							choice={!ctx.multiple}
+							selected={selected}
+							className="flex-1"
+							label={<MenuRow.Label decodeHtml>{flatItem.label}</MenuRow.Label>}
+							description={
+								ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId ? (
+									<Text decodeHtml>{ctx.hierarchy.getBreadcrumb(flatItem.value)}</Text>
+								) : undefined
+							}
+						/>
 						{flatItem.hasChildren ? (
 							<Pressable
 								onPress={handleToggle}
@@ -470,49 +459,16 @@ function TreeComboboxContent<T>({
 			)}
 		</>
 	);
-	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
-	const shell = (
-		<OverlayShell
-			presentation={phone ? 'bottom' : 'anchored'}
+	return (
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
 			open={open}
-			Scrim={PopoverPrimitive.Overlay}
-			onDismiss={phone ? () => onOpenChange(false) : undefined}
-		>
-			<TextClassContext.Provider value="text-foreground">
-				{phone ? (
-					<OverlaySheetPanel
-						className={className}
-						// The shell pads the safe area; the panel adds only its own inset.
-						style={{ maxHeight: sheet.maxHeight }}
-					>
-						{content}
-					</OverlaySheetPanel>
-				) : (
-					<PopoverPrimitive.Content
-						align="center"
-						sideOffset={4}
-						style={contentStyle}
-						className={cn(
-							OVERLAY_PANEL.anchored,
-							'web:cursor-auto web:outline-none z-50 max-h-75 w-80',
-							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-							className
-						)}
-					>
-						{content}
-					</PopoverPrimitive.Content>
-				)}
-			</TextClassContext.Provider>
-		</OverlayShell>
-	);
-	// Inline (the gallery) has no portal, so nothing unmounts a closed sheet; the portal's
-	// presence does that for every real caller.
-	return inline ? (
-		open ? (
-			shell
-		) : null
-	) : (
-		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
+			onOpenChange={onOpenChange}
+			size="web:cursor-auto web:outline-none max-h-75 w-80"
+			content={{ style: contentStyle, className, inline, portalHost, children: content }}
+			// The shell pads the safe area; the sheet adds only its own inset.
+			sheetStyle={{ maxHeight: sheet.maxHeight }}
+		/>
 	);
 }
 

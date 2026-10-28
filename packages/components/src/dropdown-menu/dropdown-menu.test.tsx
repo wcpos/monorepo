@@ -16,9 +16,8 @@ it('renders the anchored panel skin', () => {
 	expect(screen.getByTestId('panel')).toHaveClass(
 		'bg-card rounded-lg min-w-50 p-1.5 web:animate-pop-in'
 	);
-	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/Platform|bg-popover/);
 });
-it('keeps destructive text red on an ordinary muted row', () => {
+it('draws an anchored item as a MenuRow: a destructive one is red with the destructive wash', () => {
 	function Label() {
 		return <span data-testid="label" className={React.useContext(TextClassContext)} />;
 	}
@@ -28,12 +27,12 @@ it('keeps destructive text red on an ordinary muted row', () => {
 			<C.DropdownMenuShortcut testID="shortcut">⌘P</C.DropdownMenuShortcut>
 		</C.DropdownMenuItem>
 	);
-	expect(screen.getByTestId('row')).toHaveClass('min-h-row rounded-md');
-	expect(screen.getByTestId('row').className).not.toContain('bg-destructive');
+	// The primitive's item is the press (asChild); the row inside is the surface.
+	const row = screen.getByRole('menuitem');
+	expect(row).toHaveClass('min-h-row rounded-md px-2.5 active:bg-destructive/10');
+	expect(row.className).not.toMatch(/(^| )bg-destructive/);
 	expect(screen.getByTestId('label')).toHaveClass('text-destructive');
 	expect(screen.getByTestId('shortcut')).toHaveClass('text-muted-foreground text-sm');
-	for (const file of ['index.tsx', 'item.tsx'])
-		expect(readFileSync(`${__dirname}/${file}`, 'utf8')).not.toMatch(/group|Platform|accent/);
 });
 
 it('keeps one scrim component identity across renders', () => {
@@ -41,7 +40,7 @@ it('keeps one scrim component identity across renders', () => {
 	// menu on web whenever an inline overlayStyle changed identity (CodeRabbit on #2212).
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	expect(source).toMatch(/^function MenuScrim\(/m);
-	expect(source).toMatch(/Scrim=\{MenuScrim\}/);
+	expect(source).toMatch(/Scrim: MenuScrim,/);
 	expect(source).not.toMatch(/useMemo\(\(\) => \{\s*function/);
 });
 
@@ -74,7 +73,8 @@ describe('phone sheet', () => {
 		expect(document.querySelector('[data-primitive]')).toBeNull();
 		expect(screen.getByTestId('action')).toHaveAttribute('role', 'menuitem');
 		expect(screen.getByTestId('action')).toHaveClass('min-h-row');
-		expect(screen.getByTestId('action').className).not.toMatch(/web:hover:|web:focus:/);
+		// A coarse pointer keeps a hover after the tap, so the sheet row has none.
+		expect(screen.getByTestId('action').className).not.toMatch(/web:hover:/);
 		fireEvent.click(screen.getByTestId('action'));
 		expect(action).toHaveBeenCalledTimes(1);
 		expect(mockRoot.onOpenChange).toHaveBeenCalledWith(false);
@@ -90,7 +90,7 @@ describe('phone sheet', () => {
 		fireEvent.click(screen.getByTestId('panel-scrim'));
 		expect(mockRoot.onOpenChange).toHaveBeenCalledWith(false);
 	});
-	it('toggles checkbox and renders the selected radio dot', () => {
+	it('toggles checkbox and checks the selected radio', () => {
 		const checked = jest.fn(),
 			selected = jest.fn(),
 			pressed = jest.fn();
@@ -121,8 +121,8 @@ describe('phone sheet', () => {
 		expect(screen.getByTestId('checkbox').querySelector('[role]')).toBeNull();
 		expect(screen.getByTestId('checkbox').querySelector('[data-icon="check"]')).toBeNull();
 		expect(screen.getByTestId('a')).toHaveAttribute('role', 'menuitemradio');
-		expect(screen.getByTestId('a').querySelector('.bg-primary')).toBeNull();
-		expect(screen.getByTestId('b').querySelector('.bg-primary')).not.toBeNull();
+		expect(screen.getByTestId('a').querySelector('[data-icon="check"]')).toBeNull();
+		expect(screen.getByTestId('b').querySelector('[data-icon="check"]')).not.toBeNull();
 		expect(screen.getByTestId('b')).toHaveAttribute('aria-checked', 'true');
 		fireEvent.click(screen.getByTestId('checkbox'));
 		expect(checked).toHaveBeenCalledWith(true);

@@ -1,10 +1,10 @@
 import * as React from 'react';
 import type { ViewProps } from 'react-native';
 
-const mockView = ({ children, className, testID, ...rest }: ViewProps) =>
+const mockView = ({ children, className, testID, role, ...rest }: ViewProps) =>
 	React.createElement(
 		'div',
-		{ className, 'data-testid': testID, onClick: (rest as { onPress?: () => void }).onPress },
+		{ className, role, 'data-testid': testID, onClick: (rest as { onPress?: () => void }).onPress },
 		children
 	);
 export const mockOnOpenChange = jest.fn();

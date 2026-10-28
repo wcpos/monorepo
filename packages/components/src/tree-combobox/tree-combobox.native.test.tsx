@@ -112,8 +112,10 @@ jest.mock('../virtualized-list', () => ({
 	Item: ({ children }: any) => <>{children}</>,
 }));
 
-jest.mock('../checkbox', () => ({
-	Checkbox: () => <span data-testid="checkbox" />,
+// The rows are MenuRows; jsdom has no matchMedia for the hover gate.
+jest.mock('../lib/device', () => ({
+	...jest.requireActual('../lib/device'),
+	usePointer: () => 'coarse',
 }));
 
 jest.mock('../icon', () => ({
