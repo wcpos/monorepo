@@ -67,6 +67,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@wcpos/core/contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
+jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => {
 	const react = jest.requireActual('react');
 	return {
@@ -414,6 +415,18 @@ describe('phone columns tab across a drawer round trip (#2363)', () => {
 		mockSegments = cartSegments;
 		act(() => view!.update(<ResizablePOSColumns />));
 		expect(paneDisplays()).toEqual(['none', 'flex']);
+	});
+
+	it('labels the phone tabs through translation keys, not English literals', () => {
+		mockScreenSize = 'sm';
+		renderColumns('left');
+		const tabText = (testID: string) =>
+			view!.root
+				.findByProps({ testID })
+				.findAll((node) => typeof node.props.children === 'string')
+				.map((node) => node.props.children);
+		expect(tabText('pos-tab-products')).toContain('common.products');
+		expect(tabText('pos-tab-cart')).toContain('pos_cart.tab_cart');
 	});
 });
 

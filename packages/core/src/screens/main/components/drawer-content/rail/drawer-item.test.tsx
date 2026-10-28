@@ -11,17 +11,20 @@ jest.mock('react-native', () => ({
 		children,
 		testID,
 		accessibilityLabel,
+		accessibilityState,
 		onPress,
 		className,
 	}: React.PropsWithChildren<{
 		testID?: string;
 		accessibilityLabel?: string;
+		accessibilityState?: { selected?: boolean };
 		onPress?: () => void;
 		className?: string;
 	}>) => (
 		<button
 			data-testid={testID}
 			aria-label={accessibilityLabel}
+			aria-selected={accessibilityState?.selected}
 			onClick={onPress}
 			className={className}
 		>
@@ -49,10 +52,12 @@ it.each(['web', 'ios'])('renders an icon-only active tile with web-only tooltip 
 	const { rerender } = render(<DrawerItem {...props} focused />);
 	expect(screen.getByTestId('route').className).toContain('bg-card');
 	expect(screen.getByTestId('route').getAttribute('aria-label')).toBe('Products');
+	expect(screen.getByTestId('route').getAttribute('aria-selected')).toBe('true');
 	expect(screen.queryByText('Products')).toBeNull();
 	expect(!!screen.queryByTestId('tooltip')).toBe(os === 'web');
 	fireEvent.click(screen.getByTestId('route'));
 	expect(onPress).toHaveBeenCalledTimes(1);
 	rerender(<DrawerItem {...props} focused={false} />);
 	expect(screen.getByTestId('route').className.split(' ')).not.toContain('bg-card');
+	expect(screen.getByTestId('route').getAttribute('aria-selected')).toBe('false');
 });

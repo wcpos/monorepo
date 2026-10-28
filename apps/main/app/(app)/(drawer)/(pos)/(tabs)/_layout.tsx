@@ -8,6 +8,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
+import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 
 import { useNavigationBackground } from '../../../../../components/use-navigation-background';
@@ -24,6 +25,7 @@ export const unstable_settings = {
  * entire navigator, and canceling Uniwind's theme transition.
  */
 function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+	const t = useT();
 	const screenBackgroundColor = useNavigationBackground();
 	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
 		'--color-card',
@@ -53,7 +55,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				name="index"
 				listeners={tabPressListener}
 				options={{
-					title: 'Products',
+					title: t('common.products'),
 					tabBarButtonTestID: 'pos-tab-products',
 					tabBarIcon: ({ focused }) => (
 						<Icon name="gift" className={focused ? 'text-primary' : 'text-muted-foreground'} />
@@ -64,7 +66,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				name="cart"
 				listeners={tabPressListener}
 				options={{
-					title: 'Cart',
+					title: t('pos_cart.tab_cart'),
 					tabBarButtonTestID: 'pos-tab-cart',
 					tabBarIcon: ({ focused }) => (
 						<Icon name="cart" className={focused ? 'text-primary' : 'text-muted-foreground'} />
