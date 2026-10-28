@@ -17,6 +17,8 @@ export function refusalText(deny: ActionRefusal['deny'], t: ActionContext['t']):
 	if (deny.reasonKey === 'actions.hook_disabled') return t('actions.hook_disabled', deny.params);
 	if (deny.reasonKey === 'actions.hook_timeout') return t('actions.hook_timeout', deny.params);
 	if (deny.reasonKey === 'actions.hook_failed') return t('actions.hook_failed', deny.params);
+	if (deny.reasonKey === 'pos_cart.void_payments_first')
+		return t('pos_cart.void_payments_first', deny.params);
 	return registrantText(t, deny.reasonKey, deny.params);
 }
 

@@ -28,7 +28,6 @@ import { TaxesCard } from './taxes';
 import { RefundsCard } from './refunds';
 
 type T = (t: (key: string) => string) => string;
-// Each name is a literal translation call: the string extractor reads no computed key.
 const cards: { id: string; name: T; Component: React.ComponentType }[] = [
 	{ id: 'card-orders', name: (t) => t('reports.card_orders'), Component: OrdersCard },
 	{ id: 'card-payments', name: (t) => t('reports.card_payments'), Component: PaymentsCard },
