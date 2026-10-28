@@ -71,7 +71,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormField: () => null,
 	FormInput: () => null,
 	FormItem: () => null,
-	FormRadioGroup: () => null,
+	FormSegmentedControl: () => null,
 	FormSelect: () => null,
 	FormSwitch: () => null,
 }));

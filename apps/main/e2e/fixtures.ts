@@ -1120,11 +1120,11 @@ export async function navigateToPage(
 export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
 	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
-	await page.getByTestId('language-select-trigger').click();
-	const combobox = page.getByTestId('language-combobox-content');
+	await page.getByTestId('language-select').click();
+	const combobox = page.getByTestId('language-select-content');
 	await expect(combobox).toBeVisible({ timeout: 10_000 });
-	await page.getByTestId('language-search-input').fill('en_US');
-	const option = combobox.getByTestId('language-option-en_US');
+	await page.getByTestId('combobox-search').fill('en_US');
+	const option = combobox.getByTestId('language-select-option-en_US');
 	await expect(option).toBeVisible({ timeout: 10_000 });
 	await option.click();
 	await expect(combobox).toBeHidden({ timeout: 10_000 });

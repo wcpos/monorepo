@@ -8,12 +8,8 @@ import { PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
 import { DrawerEmulationWarning } from './drawer-emulation-warning';
-import { CodePageSelect } from '../components/code-page-select';
-import { DrawerConnectorSelect } from '../components/drawer-connector-select';
-import { LanguageSelect } from '../components/language-select';
-import { PaperWidthSelect } from '../components/paper-width-select';
-import { VendorSelect } from '../components/vendor-select';
 import { useT } from '../../../../../contexts/translations';
+import { usePrinterOptions } from '../options';
 
 import type { PrinterFormValues, VendorOption } from '../schema';
 
@@ -45,10 +41,8 @@ function SwitchRow(props: {
 function SelectRow(props: {
 	name: 'vendor' | 'language' | 'columns' | 'codePage' | 'drawerConnector';
 	label: string;
-	/** The select, as `FormSelect`'s own `customComponent` is typed; it types the rest of the props. */
-	select: React.ComponentProps<typeof FormSelect>['customComponent'];
-	/** The vendor list; `FormSelect` hands extra props to its custom component, as the wizard does. */
-	options?: VendorOption[];
+	options: { value: string; label: string }[];
+	placeholder: string;
 	indent?: boolean;
 	/** Columns is a number in the form and a string in the select. */
 	numeric?: boolean;
@@ -63,10 +57,8 @@ function SelectRow(props: {
 				name={name}
 				render={({ field: { value, onChange, ...rest } }) => (
 					<FormSelect
-						customComponent={props.select}
-						// Only the vendor row supplies a list: an `options: undefined` would overwrite the
-						// built-in list the other selects spread after their own (Codex, #2978).
-						{...(props.options ? { options: props.options } : {})}
+						options={props.options}
+						placeholder={props.placeholder}
 						value={value != null ? String(value) : undefined}
 						onChange={(next: string) => {
 							props.onManualChange?.();
@@ -86,6 +78,7 @@ function SelectRow(props: {
  */
 export function PrinterToggleRows({ connector }: { connector?: boolean }) {
 	const t = useT();
+	const { drawerConnectors } = usePrinterOptions();
 	const autoOpenDrawer = useWatch<PrinterFormValues, 'autoOpenDrawer'>({ name: 'autoOpenDrawer' });
 	return (
 		<>
@@ -104,7 +97,8 @@ export function PrinterToggleRows({ connector }: { connector?: boolean }) {
 					<SelectRow
 						name="drawerConnector"
 						label={t('settings.drawer_connector')}
-						select={DrawerConnectorSelect}
+						options={drawerConnectors}
+						placeholder={t('settings.select_drawer_connector')}
 						indent
 					/>
 				</View>
@@ -128,6 +122,7 @@ export function PrinterSettingsRows(props: {
 }) {
 	const { vendorOptions } = props;
 	const t = useT();
+	const options = usePrinterOptions();
 	const [vendor, language] = useWatch<PrinterFormValues, ['vendor', 'language']>({
 		name: ['vendor', 'language'],
 	});
@@ -137,23 +132,30 @@ export function PrinterSettingsRows(props: {
 				<SelectRow
 					name="vendor"
 					label={t('settings.printer_vendor')}
-					select={VendorSelect}
 					options={vendorOptions}
+					placeholder={t('settings.select_vendor')}
 					onManualChange={props.onVendorManualChange}
 				/>
 			) : null}
-			<SelectRow name="language" label={t('settings.printer_language')} select={LanguageSelect} />
+			<SelectRow
+				name="language"
+				label={t('settings.printer_language')}
+				options={options.languages}
+				placeholder={t('settings.select_language')}
+			/>
 			<SelectRow
 				name="columns"
 				label={t('settings.setup_paper_label')}
-				select={PaperWidthSelect}
+				options={options.columns}
+				placeholder={t('settings.select_printer_text_width')}
 				numeric
 			/>
 			{language === 'esc-pos' ? (
 				<SelectRow
 					name="codePage"
 					label={t('settings.printer_code_page')}
-					select={CodePageSelect}
+					options={options.codePages}
+					placeholder={t('settings.printer_code_page')}
 				/>
 			) : null}
 			<DrawerEmulationWarning vendor={vendor} language={language} />

@@ -377,6 +377,7 @@ type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange
 	triggerTestID?: string;
 	/** The root takes no aria props, so a field's label reference goes to the trigger. */
 	'aria-labelledby'?: string;
+	portalHost?: string;
 };
 
 function OptionSelect({
@@ -390,6 +391,7 @@ function OptionSelect({
 	valueClassName,
 	triggerTestID,
 	'aria-labelledby': labelledBy,
+	portalHost,
 	...props
 }: OptionSelectProps) {
 	const selected = options.find((option) => option.value === value);
@@ -414,7 +416,7 @@ function OptionSelect({
 			>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
-			<SelectContent matchWidth={matchWidth}>
+			<SelectContent matchWidth={matchWidth} portalHost={portalHost}>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem

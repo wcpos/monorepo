@@ -28,7 +28,6 @@ import { couponFormSchema } from './coupon-schema';
 import { DiscountAmountInput } from './discount-amount-input';
 import { ExpiryPresetChips } from './expiry-preset-chips';
 import { generateCouponCode } from './generate-code';
-import { StatusSelect } from './status-select';
 import {
 	fromUsageLimit,
 	isOneTimeUse,
@@ -40,6 +39,7 @@ import { useT } from '../../../../contexts/translations';
 import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../form-errors';
 import { META_DATA_DEFAULT_ROW, MetaDataForm } from '../meta-data-form';
+import { useOptionLists } from '../option-lists';
 import { useFieldPresence } from '../use-field-presence';
 
 export { couponFormSchema } from './coupon-schema';
@@ -72,6 +72,7 @@ const SWITCHES: readonly Offered[] = ['individual_use', 'free_shipping'];
 
 export function CouponForm({ form, footer }: CouponFormProps) {
 	const t = useT();
+	const statuses = useOptionLists().couponStatuses;
 	const values = useWatch({ control: form.control });
 	const discountType = values.discount_type ?? 'percent';
 	const showMaxItems = discountType === 'percent' || discountType === 'fixed_product';
@@ -269,7 +270,8 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 							name="status"
 							render={({ field: { value, onChange, ...rest } }) => (
 								<FormSelect
-									customComponent={StatusSelect}
+									options={statuses}
+									placeholder={t('coupons.select_status')}
 									value={value as string}
 									onChange={onChange}
 									{...rest}

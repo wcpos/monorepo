@@ -7,7 +7,6 @@ import { FormCombobox } from './combobox';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { FormFieldContext, useFormField } from './context';
 import { FormInput } from './input';
-import { FormRadioGroup } from './radio-group';
 import { FormSelect } from './select';
 import { FormSegmentedControl } from './segmented-control';
 import { FormSwitch } from './switch';
@@ -41,7 +40,6 @@ export {
 	FormItem,
 	FormLabel,
 	FormMessage,
-	FormRadioGroup,
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,

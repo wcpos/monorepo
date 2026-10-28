@@ -115,27 +115,20 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: any) => <label>{children}</label>,
 }));
-jest.mock('@wcpos/components/radio-group', () => ({
-	RadioGroup: ({ children, value }: any) => (
+jest.mock('@wcpos/components/segmented-control', () => ({
+	SegmentedControl: ({ segments, value }: any) => (
 		<div role="radiogroup" data-value={value}>
-			{children}
+			{segments.map((segment: any) => (
+				<input
+					key={segment.value}
+					type="radio"
+					aria-label={segment.label}
+					value={segment.value}
+					disabled={segment.disabled}
+					data-testid={segment.testID}
+				/>
+			))}
 		</div>
-	),
-	RadioGroupItem: ({ value, disabled, testID }: any) => (
-		<input type="radio" value={value} disabled={disabled} data-testid={testID} />
-	),
-	RadioGroupOption: ({ value, disabled, testID, label, description }: any) => (
-		<label>
-			{label}
-			<input
-				type="radio"
-				aria-label={label}
-				value={value}
-				disabled={disabled}
-				data-testid={testID}
-			/>
-			{description ? <span>{description}</span> : null}
-		</label>
 	),
 }));
 

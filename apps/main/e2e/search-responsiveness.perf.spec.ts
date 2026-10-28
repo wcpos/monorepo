@@ -40,8 +40,8 @@ const dropdowns = [
 	['pos', 'add-coupon-combobox', 'coupon-picker', 'add-coupon-search-input'],
 	['orders', 'order-filter-cashier', 'cashiers', 'combobox-search'],
 	['orders', 'order-filter-customer', 'order-customers', 'combobox-search'],
-	['settings', 'language-select-trigger', 'languages', 'language-search-input'],
-	['settings', 'currency-select-trigger', 'currencies', 'combobox-search'],
+	['settings', 'language-select', 'languages', 'combobox-search'],
+	['settings', 'currency-select', 'currencies', 'combobox-search'],
 	['settings', 'customer-select-trigger', 'customer-picker', 'combobox-search'],
 ] as const;
 
@@ -70,10 +70,10 @@ test('address dropdown searches preserve typing and report frame smoothness', as
 	);
 	await add.click();
 	await page.getByTestId('customer-billing-address-toggle').click();
-	await dropdown(page, testInfo, 'country-select-trigger', 'countries');
-	await page.getByTestId('country-select-trigger').filter({ visible: true }).click();
-	await page.getByTestId('country-option-US').click();
-	await dropdown(page, testInfo, 'state-select-trigger', 'states');
+	await dropdown(page, testInfo, 'country-select', 'countries');
+	await page.getByTestId('country-select').filter({ visible: true }).click();
+	await page.getByTestId('country-select-option-US').click();
+	await dropdown(page, testInfo, 'state-select', 'states');
 	// No record is saved: the country change belongs only to this discarded draft.
 	await page.getByTestId('customer-form-close').click();
 });

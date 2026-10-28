@@ -39,12 +39,11 @@ import { ClearLocalData } from '../pos/cart/clear-local-data';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
-import { ThousandsStyleSelect } from '../components/thousands-style-select';
+import { useOptionLists } from '../components/option-lists';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -106,6 +105,15 @@ function GeneralSettingsForm({
 	defaultCustomerResource: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'];
 }) {
 	const { store, site } = useStoreSession();
+	const sep = useDocField(store, (value) => value.price_thousand_sep);
+	const thousandsStyles = React.useMemo(
+		() => [
+			{ value: 'thousand', label: ['123', '456', '789'].join(sep) },
+			{ value: 'lakh', label: ['12', '34', '56', '789'].join(sep) },
+			{ value: 'wan', label: ['1', '2345', '6789'].join(sep) },
+		],
+		[sep]
+	);
 	const countries = useCountries();
 	const markSaved = useMarkSaved();
 	const [restoreOpen, setRestoreOpen] = React.useState(false);
@@ -134,6 +142,7 @@ function GeneralSettingsForm({
 	const defaultCustomerData =
 		'getLatest' in defaultCustomer ? defaultCustomer.getLatest().payload : defaultCustomer;
 	const t = useT();
+	const { currencyPositions } = useOptionLists();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const http = useRestHttpClient();
@@ -323,7 +332,7 @@ function GeneralSettingsForm({
 						name="currency"
 						render={({ field: { value, onChange, ...rest } }) => (
 							<PropertyRow name="currency" label={t('common.currency')}>
-								<FormCombobox
+								<FormSelect
 									customComponent={CurrencySelect}
 									value={value}
 									onChange={onChange}
@@ -338,7 +347,8 @@ function GeneralSettingsForm({
 						render={({ field: { value, onChange, ...rest } }) => (
 							<PropertyRow name="currency_pos" label={t('settings.currency_position')}>
 								<FormSelect
-									customComponent={CurrencyPositionSelect}
+									options={currencyPositions}
+									placeholder={t('common.select_a_currency_position')}
 									value={value}
 									onChange={onChange}
 									{...rest}
@@ -379,7 +389,8 @@ function GeneralSettingsForm({
 						render={({ field: { value, onChange, ...rest } }) => (
 							<PropertyRow name="thousands_group_style" label={t('settings.thousands_group_style')}>
 								<FormSelect
-									customComponent={ThousandsStyleSelect}
+									options={thousandsStyles}
+									placeholder={t('common.select_thousands_style')}
 									value={value}
 									onChange={onChange}
 									{...rest}

@@ -10,7 +10,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../../query';
-import { TagSearch } from '../tag-select';
+import { CollectionSearch } from '../collection-search';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'tags'> | null>;
@@ -56,7 +56,7 @@ export function TagPill({ resource, selectedID }: Props) {
 				/>
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<TagSearch />
+				<CollectionSearch collection="tag" />
 			</ComboboxContent>
 		</Combobox>
 	);

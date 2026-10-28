@@ -35,11 +35,11 @@ jest.mock('@wcpos/components/form', () => {
 			<input type="checkbox" data-testid={testID} checked={!!value} readOnly />
 		),
 		// The selects are stubs: these tests pin which rows exist and where, not the pickers.
-		// Each stub records whether an `options` key reached it (even as undefined).
-		FormSelect: (props: Record<string, unknown>) => (
+		// Each stub records the values of the list it was handed.
+		FormSelect: (props: { options?: { value: string }[] }) => (
 			<span
 				data-testid="select"
-				data-has-options={String(Object.prototype.hasOwnProperty.call(props, 'options'))}
+				data-values={(props.options ?? []).map((option) => option.value).join(',')}
 			/>
 		),
 		SavedMark: () => null,
@@ -66,11 +66,6 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: jest.requireActual('react').createContext(''),
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
-jest.mock('../components/code-page-select', () => ({ CodePageSelect: () => null }));
-jest.mock('../components/drawer-connector-select', () => ({ DrawerConnectorSelect: () => null }));
-jest.mock('../components/language-select', () => ({ LanguageSelect: () => null }));
-jest.mock('../components/paper-width-select', () => ({ PaperWidthSelect: () => null }));
-jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
@@ -128,15 +123,16 @@ describe('Edit Printer rows', () => {
 		}
 	);
 
-	it('hands an options list only to the vendor select, never an undefined one (Codex, #2978)', () => {
-		// LanguageSelect, PaperWidthSelect, CodePageSelect and DrawerConnectorSelect spread the
-		// forwarded props after their own `options`; an `options: undefined` would erase their lists.
+	it('hands every select row its own list', () => {
 		render(<Layout vendors values={{ language: 'esc-pos', autoOpenDrawer: true }} />);
-		const selects = screen
-			.getAllByTestId('select')
-			.map((el) => el.getAttribute('data-has-options'));
-		expect(selects.filter((v) => v === 'true')).toHaveLength(1);
-		expect(selects.length).toBeGreaterThanOrEqual(5);
+		const lists = screen.getAllByTestId('select').map((el) => el.getAttribute('data-values'));
+		expect(lists).toEqual([
+			'epson',
+			'esc-pos,star-prnt,star-line',
+			'32,42,48,64',
+			expect.stringMatching(/^auto,cp437,/),
+			'pin2,pin5',
+		]);
 	});
 
 	it('adds the Receipt language row while the language is ESC/POS', () => {

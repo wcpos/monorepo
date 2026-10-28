@@ -1,52 +1,36 @@
 import * as React from 'react';
 
-import type { Option } from '@wcpos/components/combobox';
+import { OptionsCombobox } from '@wcpos/components/combobox';
 import { Input } from '@wcpos/components/input';
 
-import { StateCombobox } from './state-combobox';
-import { StateSelect } from './state-select';
 import { StatesProvider, useStates } from '../../../../contexts/countries';
+import { useT } from '../../../../contexts/translations';
 
 /**
- * Here we follow the API for FormInput, but we switch between Input, Combobox and a Select
+ * Here we follow the API for FormInput: the states as a list (searchable past ten), or an Input
  */
-function StateFormInputBase({
-	value,
-	onChangeText,
-	countryCode,
-	...props
-}: React.ComponentProps<typeof Input> & { countryCode?: string }) {
+function StateFormInputBase({ value, onChangeText, ...props }: React.ComponentProps<typeof Input>) {
+	const t = useT();
 	const states = useStates();
-	const hasStates = states && states.length > 0;
-	const hasManyStates = states && states.length > 10;
-
-	/**
-	 * Handle select
-	 */
-	const handleSelect = React.useCallback(
-		(option: Option<any> | undefined) => {
-			onChangeText?.(String(option?.value ?? ''));
-		},
-		[onChangeText]
+	const options = React.useMemo(
+		() =>
+			(states || []).map((state: { name: string; code: string }) => ({
+				label: state.name,
+				value: state.code,
+			})),
+		[states]
 	);
 
-	if (hasStates) {
-		if (hasManyStates) {
-			return (
-				// @ts-expect-error: StateCombobox provides its own children but ComponentProps<typeof Combobox> requires them
-				<StateCombobox
-					value={{ value: value ?? '', label: '' }}
-					onValueChange={handleSelect}
-					countryCode={countryCode}
-					aria-labelledby={props['aria-labelledby']}
-				/>
-			);
-		}
+	if (options.length > 0) {
 		return (
-			<StateSelect
-				value={{ value: value ?? '', label: '' }}
-				onValueChange={handleSelect}
-				countryCode={countryCode ?? ''}
+			<OptionsCombobox
+				options={options}
+				value={value ?? ''}
+				onChange={(next) => onChangeText?.(next ?? '')}
+				placeholder={t('common.select_state')}
+				searchPlaceholder={t('common.search_states')}
+				emptyLabel={t('common.no_state_found')}
+				triggerTestID="state-select"
 				aria-labelledby={props['aria-labelledby']}
 			/>
 		);
@@ -70,7 +54,7 @@ export function StateFormInput({
 
 	return (
 		<StatesProvider countryCode={countryCode}>
-			<StateFormInputBase {...props} countryCode={countryCode} />
+			<StateFormInputBase {...props} />
 		</StatesProvider>
 	);
 }

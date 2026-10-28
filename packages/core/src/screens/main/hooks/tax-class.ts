@@ -31,6 +31,6 @@ export const INHERIT_TAX_CLASS = 'inherit';
 /**
  * A variation's tax class carries its own sentinel: `'parent'` — "same as parent", the
  * class Woo gives a new variation. Like `'inherit'` it is not a slug and passes the codec
- * untouched; the variation form's `TaxClassSelect` offers it via `includeParent`.
+ * untouched; the variation form's `TaxSelect` offers it via `includeParent`.
  */
 export const PARENT_TAX_CLASS = 'parent';

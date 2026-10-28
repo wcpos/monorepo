@@ -10,6 +10,7 @@ import {
 	ComboboxList,
 	ComboboxTrigger,
 	ComboboxValue,
+	type Option,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
@@ -24,16 +25,20 @@ import {
 
 import type { SearchSelect } from '../../../../query';
 
-/**
- *
- */
-function TagList({ select }: { select: SearchSelect }) {
+/** Taxonomies searched by name (categories are a tree); literal `t('…')` keys for the extractor. */
+const WORDS: Record<'tag' | 'brand', (t: ReturnType<typeof useT>) => string[]> = {
+	tag: (t) => [t('common.search_tags'), t('common.no_tag_found'), t('common.select_tag')],
+	brand: (t) => [t('common.search_brands'), t('common.no_brand_found'), t('common.select_brand')],
+};
+type Collection = keyof typeof WORDS;
+
+function CollectionList({ select, empty }: { select: SearchSelect; empty: string }) {
 	// Drawn, not live: a typed search's new handle answers while the previous options stay.
 	const shown = useDrawnHandle(select.handle);
 	const settling = shown !== select.handle;
 	const snapshot = useQuerySnapshot(shown, ['pending', 'exhausted']);
 	const result = snapshot as unknown as {
-		hits: { id: string; record: EngineRecord<'tags'> }[];
+		hits: { id: string; record: EngineRecord<'tags'> | EngineRecord<'brands'> }[];
 	};
 	const handleEndReached = useGuardedExtension(
 		select.extendLimit,
@@ -43,7 +48,6 @@ function TagList({ select }: { select: SearchSelect }) {
 		// search before its first page answers, so settling counts as pending.
 		{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }
 	);
-	const t = useT();
 
 	const data = result.hits.map(({ record }) => ({
 		value: String(record.payload.id),
@@ -61,55 +65,42 @@ function TagList({ select }: { select: SearchSelect }) {
 			estimatedItemSize={44}
 			onEndReached={handleEndReached}
 			onEndReachedThreshold={0.1}
-			ListEmptyComponent={<ComboboxEmpty>{t('common.no_tag_found')}</ComboboxEmpty>}
+			ListEmptyComponent={<ComboboxEmpty>{empty}</ComboboxEmpty>}
 		/>
 	);
 }
 
-/**
- *
- */
-export function TagSearch() {
-	const t = useT();
-	const select = useSearchSelect('tag');
+/** A combobox's search box and the collection's matches, bound to the local search. */
+export function CollectionSearch({ collection }: { collection: Collection }) {
+	const [search, empty] = WORDS[collection](useT());
+	const select = useSearchSelect(collection);
 
-	/**
-	 *
-	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('common.search_tags')}
-				value={select.search}
-				onChangeText={select.setSearch}
-			/>
+			<ComboboxInput placeholder={search} value={select.search} onChangeText={select.setSearch} />
 			<Suspense>
-				<TagList select={select} />
+				<CollectionList select={select} empty={empty} />
 			</Suspense>
 		</>
 	);
 }
 
-/**
- *
- */
-export function TagSelect({
+/** Pick one term of the collection; the quick-filter editor adds it to its list. */
+export function CollectionSelect({
+	collection,
 	onValueChange,
 }: {
-	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
+	collection: Collection;
+	onValueChange?: (option: Option | undefined) => void;
 }) {
-	const t = useT();
-
-	/**
-	 *
-	 */
+	const pick = WORDS[collection](useT())[2];
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('common.select_tag')} />
+				<ComboboxValue placeholder={pick} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
-				<TagSearch />
+				<CollectionSearch collection={collection} />
 			</ComboboxContent>
 		</Combobox>
 	);

@@ -6,7 +6,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Browse and filter orders, reopen/edit/delete them, inspect sale details, and calculate and submit refunds.
 
-**Composes:** `@wcpos/components/{alert-dialog,avatar,button,card,dropdown-menu,error-boundary,form,format,hstack,icon,icon-button,image,modal,radio-group,suspense,table,tabs,text,tooltip,tree,vstack}`.
+**Composes:** `@wcpos/components/{alert-dialog,avatar,button,card,dropdown-menu,error-boundary,form,format,hstack,icon,icon-button,image,modal,segmented-control,suspense,table,tabs,text,tooltip,tree,vstack}`.
 
 ## Lines
 

@@ -239,7 +239,6 @@ jest.mock('../../components/coupon/discount-amount-input', () => ({
 	DiscountAmountInput: () => null,
 }));
 jest.mock('../../components/coupon/expiry-preset-chips', () => ({ ExpiryPresetChips: () => null }));
-jest.mock('../../components/coupon/status-select', () => ({ StatusSelect: () => null }));
 // Each mark sits in its row's trailing slot (the custom field rows' mark is MetaDataForm's own).
 it('renders the newly covered Saved roots after their matching writes', async () => {
 	const { CouponForm } = jest.requireActual('../../components/coupon/coupon-form');

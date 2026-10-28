@@ -24,6 +24,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -37,7 +38,6 @@ import {
 	formatLineItemRefundWithTax,
 	formatRefundUnitPrice,
 } from './calculate-refund';
-import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
@@ -543,31 +543,32 @@ export function RefundOrderForm({ order }: Props) {
 				{!isPosCash ? (
 					<VStack space="sm">
 						<Text>{t('orders.refund_destination')}</Text>
-						<RefundDestinationRadioGroup
+						<SegmentedControl
 							value={refundDestination}
 							onValueChange={(next) =>
-								form.setValue('refund_destination', next, { shouldDirty: true })
+								form.setValue('refund_destination', next as RefundDestination, {
+									shouldDirty: true,
+								})
 							}
-							options={[
+							segments={[
 								{
 									value: 'original_method',
 									label: t('orders.refund_to_original_method', {
 										gateway: orderData.payment_method_title || orderData.payment_method || '',
 									}),
-									description: refundOptions[0].enabled
-										? undefined
-										: t('orders.original_method_refund_unavailable'),
-									enabled: refundOptions[0].enabled,
+									disabled: !refundOptions[0].enabled,
 									testID: 'refund-destination-original_method',
 								},
 								{
-									value: 'cash' as const,
+									value: 'cash',
 									label: t('orders.refund_to_cash'),
-									enabled: true,
 									testID: 'refund-destination-cash',
 								},
 							]}
 						/>
+						{refundOptions[0].enabled ? null : (
+							<Text variant="help">{t('orders.original_method_refund_unavailable')}</Text>
+						)}
 					</VStack>
 				) : null}
 

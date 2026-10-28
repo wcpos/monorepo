@@ -19,8 +19,6 @@ import * as z from 'zod';
 import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
-import { OptionSelect } from '@wcpos/components/select';
-import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
@@ -52,37 +50,14 @@ export const TAX_ID_DEFAULT_ROW = {
 	verified: null as null,
 };
 
-/**
- * Inner Select bound to the FormSelect's `customComponent` slot. Renders the
- * TAX_ID_TYPES catalogue with translated labels.
- */
-function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
-	const t = useT();
-	const options = React.useMemo(
-		() =>
-			TAX_ID_TYPES.map((type) => ({
-				value: type,
-				label: t(TAX_ID_LABEL_KEYS[type]),
-			})),
-		[t]
-	);
-	return (
-		<OptionSelect
-			options={options}
-			value={value?.value}
-			onChange={(_nextValue, option) => onValueChange?.(option)}
-			placeholder={t('tax_id.type_label')}
-			fallbackLabel={value?.label ?? value?.value ?? ''}
-			matchWidth
-			{...props}
-		/>
-	);
-}
-
 export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
 	const { fields, remove } = useFieldArray({ control, name });
+	const typeOptions = React.useMemo(
+		() => TAX_ID_TYPES.map((type) => ({ value: type, label: t(TAX_ID_LABEL_KEYS[type]) })),
+		[t]
+	);
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;
 		value?: string;
@@ -112,7 +87,8 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 								name={`${name}.${index}.type`}
 								render={({ field: { value: rhfValue, onChange: _ignored, ...rest } }) => (
 									<FormSelect
-										customComponent={TaxIdTypeSelect}
+										options={typeOptions}
+										placeholder={t('tax_id.type_label')}
 										label={t('tax_id.type_label')}
 										value={rhfValue as string}
 										onChange={(next) => handleTypeChange(index, next as TaxIdType)}

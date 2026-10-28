@@ -385,7 +385,7 @@ export function EditOrderMetaForm({
 								control={form.control}
 								name="currency"
 								render={({ field }) => (
-									<FormCombobox
+									<FormSelect
 										customComponent={CurrencySelect}
 										{...field}
 										value={field.value ?? ''}

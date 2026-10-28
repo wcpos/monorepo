@@ -40,8 +40,7 @@ import { QuickFilterBarPreview } from './quick-filter-bar-preview';
 import { QuickFilterPreview } from './quick-filter-preview';
 import { AmountField } from '../../../components/amount-field';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { BrandSelect } from '../../../components/product/brand-select';
-import { TagSelect } from '../../../components/product/tag-select';
+import { CollectionSelect } from '../../../components/product/collection-search';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { useT } from '../../../../../contexts/translations';
 
@@ -211,11 +210,10 @@ function TermValueEditor<C extends 'tags' | 'brands'>({
 					onRemove={(id) => onChange(ids.filter((value) => value !== id))}
 				/>
 			</Suspense>
-			{taxonomy === 'tags' ? (
-				<TagSelect onValueChange={handlePick} />
-			) : (
-				<BrandSelect onValueChange={handlePick} />
-			)}
+			<CollectionSelect
+				collection={taxonomy === 'tags' ? 'tag' : 'brand'}
+				onValueChange={handlePick}
+			/>
 		</VStack>
 	);
 }
