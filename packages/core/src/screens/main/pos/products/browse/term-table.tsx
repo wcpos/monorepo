@@ -14,7 +14,7 @@ import { useGround } from '../../../components/ground';
 import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';
 import { GridLoadingRow } from '../tiles/grid-footer';
-import { OwnFooter, OwnFooterContext } from '../own-footer';
+import { OwnFooterContext, ProductsFooter } from '../footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
@@ -244,7 +244,7 @@ export function TermLevelTable({
 				? shown.total
 				: Math.max(placeSize ?? 0, shown.total);
 	// The table's footer counts the pane's own rows, never the live handle's window — through
-	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
+	// OwnFooterContext, so the footer component DataTable mounts is one identity (footer.tsx).
 	const footer = React.useMemo(
 		() => ({ total, drawnCount: loaded, prefix }),
 		[total, loaded, prefix]
@@ -347,7 +347,7 @@ export function TermLevelTable({
 								}}
 								estimatedItemSize={100}
 								ListFooterComponent={short && rows.length > 0 ? GridLoadingRow : NoListFooter}
-								TableFooterComponent={OwnFooter}
+								TableFooterComponent={ProductsFooter}
 								getItemType={itemType}
 							/>
 						</Suspense>

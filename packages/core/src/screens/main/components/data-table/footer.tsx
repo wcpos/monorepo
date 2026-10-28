@@ -24,6 +24,9 @@ export type DataTableFooterProps = {
 	/** The drawn rows' denominator, or null when nothing vouches for one ("Showing N"). */
 	total: number | null;
 	sync: () => Promise<void>;
+	/** Replaces the count sentence (the POS products' own); the raw count markers stay. */
+	label?: string;
+	/** The caption at the row's start, e.g. the tax notice. */
 	children?: React.ReactNode;
 };
 
@@ -34,6 +37,7 @@ export function DataTableFooter({
 	total,
 	sync,
 	drawnCount,
+	label,
 	children,
 }: DataTableFooterProps) {
 	const { clearAndSync } = useCollectionReset(collectionName);
@@ -50,12 +54,13 @@ export function DataTableFooter({
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
-					{total === null
-						? t('common.showing_n', { shown: drawnCount.toLocaleString() })
-						: t('common.showing_of', {
-								shown: drawnCount.toLocaleString(),
-								total: total.toLocaleString(),
-							})}
+					{label ??
+						(total === null
+							? t('common.showing_n', { shown: drawnCount.toLocaleString() })
+							: t('common.showing_of', {
+									shown: drawnCount.toLocaleString(),
+									total: total.toLocaleString(),
+								}))}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{drawnCount}

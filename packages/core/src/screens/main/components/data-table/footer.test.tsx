@@ -25,7 +25,9 @@ jest.mock('../../hooks/use-collection-reset', () => ({
 	useCollectionReset: (collectionName: string) => mockUseCollectionReset(collectionName),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -125,6 +127,33 @@ describe('DataTableFooter', () => {
 			'common.showing_n:10/undefined'
 		);
 		expect(screen.getByTestId('data-table-total-count').textContent).toBe('');
+	});
+
+	it('takes a label for the sentence and a caption child, in the one caption row', () => {
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				<DataTableFooter
+					collectionName="products"
+					drawnCount={16}
+					total={16}
+					label="16 products"
+					active={false}
+					sync={mockSync}
+				>
+					<span data-testid="caption">Tax based on store</span>
+				</DataTableFooter>
+			</QueryStateProvider>
+		);
+		const row = screen.getByTestId('data-table-caption-row');
+		expect(row.contains(screen.getByTestId('caption'))).toBe(true);
+		expect(screen.getByTestId('data-table-count').textContent).toBe('16 products');
+		// The raw markers stay the numbers, whatever the sentence says.
+		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('16');
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe('16');
 	});
 
 	it('retains sync/reset actions', () => {

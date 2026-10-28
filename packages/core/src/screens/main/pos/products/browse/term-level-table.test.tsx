@@ -172,28 +172,28 @@ jest.mock('../rows/variable-product-row', () => ({
 		/>
 	),
 }));
-// The footer (OwnFooter over ProductsFooter) takes the pane's own numbers from its context as
-// values, never a stream. Every render's pair is logged, so a test can see what each commit
-// would have painted, not only where the DOM settled.
+// The footer (ProductsFooter) takes the pane's own numbers from OwnFooterContext as values, never
+// a stream: the mock reads them as the real one does. Every render's pair is logged, so a test can
+// see what each commit would have painted, not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
-jest.mock('../footer', () => ({
-	ProductsFooter: ({
-		drawnCount: count,
-		total,
-		prefix,
-	}: {
-		drawnCount: number;
-		total: number | null;
-		prefix?: string;
-	}) => {
-		mockFooterRenders.push({ count, total });
-		return (
-			<footer data-testid="products-footer" data-count={count} data-total={String(total)}>
-				{prefix && `${prefix} · `}Showing {count} of {total}
-			</footer>
-		);
-	},
-}));
+jest.mock('../footer', () => {
+	const React = jest.requireActual('react');
+	const OwnFooterContext = React.createContext(null);
+	type Numbers = { drawnCount: number; total: number | null; prefix?: string };
+	return {
+		OwnFooterContext,
+		ProductsFooter: (props: Numbers) => {
+			const own: Partial<Numbers> | null = React.useContext(OwnFooterContext);
+			const { drawnCount: count, total, prefix } = { ...props, ...own };
+			mockFooterRenders.push({ count, total });
+			return (
+				<footer data-testid="products-footer" data-count={count} data-total={String(total)}>
+					{prefix && `${prefix} · `}Showing {count} of {total}
+				</footer>
+			);
+		},
+	};
+});
 // The handle as a reader sees it (one snapshot, driven with `set`): the level reads the paging
 // opinion from it; the footer reads the spinner; the answer comes down from the stage as state.
 type FakeHandle = import('@wcpos/query').QueryHandle & {

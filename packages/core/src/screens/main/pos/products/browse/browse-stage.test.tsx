@@ -268,8 +268,11 @@ jest.mock('../tiles/variable-product-tile', () => ({
 		onDrill: (record: unknown) => void;
 	}) => <button data-testid="variable-product-drill" onClick={() => onDrill(record)} />,
 }));
-// The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
-jest.mock('../footer', () => ({ ProductsFooter: () => null }));
+// The pane footer (ProductsFooter) pulls in native-only modules; not under test here.
+jest.mock('../footer', () => ({
+	OwnFooterContext: jest.requireActual('react').createContext(null),
+	ProductsFooter: () => null,
+}));
 jest.mock('../handle-footer', () => ({
 	HandleProductsFooter: ({ total }: { total: number | null }) => (
 		<output data-testid="products-footer">{String(total)}</output>

@@ -152,22 +152,17 @@ jest.mock('../../hooks/use-collection-reset', () => ({
 }));
 jest.mock('../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
 jest.mock('../../components/sync-button', () => ({ SyncButton: () => null }));
-jest.mock('./footer', () => ({
-	ProductsFooter: (props: React.ComponentProps<typeof import('./footer').ProductsFooter>) => {
-		const { ProductsFooter } = jest.requireActual('./footer');
-		return (
-			<footer
-				data-testid="footer"
-				data-active={String(props.active)}
-				data-collection={props.collectionName}
-			>
-				<ProductsFooter {...props} />
-				<output>
-					{props.drawnCount} of {String(props.total)}
-				</output>
-			</footer>
-		);
-	},
+// The real products footer over the table footer, as values: the pane's own numbers arrive
+// through `OwnFooterContext`, so what the table footer is handed is what the cashier reads.
+jest.mock('../../components/data-table/footer', () => ({
+	DataTableFooter: (props: { drawnCount: number; total: number | null; label?: string }) => (
+		<footer data-testid="footer">
+			<output>
+				{props.drawnCount} of {String(props.total)}
+			</output>
+			{props.label}
+		</footer>
+	),
 }));
 jest.mock('./cells/price', () => ({ Price: () => null }));
 jest.mock('./cells/variation-image', () => ({ PosVariationImage: () => null }));
