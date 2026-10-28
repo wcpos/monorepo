@@ -6,8 +6,10 @@ import ts from 'typescript';
 import { ROOT } from './uniwind-scanner.mjs';
 
 // The type ladder is `Text`'s `variant` axis (`packages/components/src/text/ladder.ts`). A `Text`
-// whose classes restate one of these ranks is a site: one site per `className`, local class
-// constants followed, every class string anywhere in the attribute (a `cn()` branch included).
+// whose classes restate one of these ranks is a site: one site per `className`. A combination
+// counts only when all its classes sit in ONE string literal or ONE local constant (followed):
+// a control's own label size with a conditional weight in another `cn()` branch (a chip's `sm`,
+// a segment's selected weight) is the control's design, not the ladder.
 const LADDER_LITERALS = [
 	['text-muted-foreground', 'text-xs'], // variant="help"
 	['text-muted-foreground', 'text-sm'], // variant="key"
@@ -31,7 +33,8 @@ export function scanSource(text, path) {
 	host.getSourceFile = (filename) => (filename === path ? source : undefined);
 	const checker = ts.createProgram([path], { noLib: true, noResolve: true }, host).getTypeChecker();
 	const sites = [];
-	function classTokens(node, tokens, seen) {
+	// Every class in a constant's initializer, its nested constants included: one unit.
+	function constantTokens(node, tokens, seen) {
 		if (ts.isIdentifier(node)) {
 			const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration;
 			if (
@@ -40,13 +43,25 @@ export function scanSource(text, path) {
 				declaration.initializer &&
 				!seen.has(declaration)
 			)
-				classTokens(declaration.initializer, tokens, seen.add(declaration));
+				constantTokens(declaration.initializer, tokens, seen.add(declaration));
 		}
 		if (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node))
 			for (const token of node.text.split(/\s+/)) tokens.add(token);
 		// A truthy callback result stops `forEachChild`, so the walk returns nothing.
-		ts.forEachChild(node, (child) => void classTokens(child, tokens, seen));
+		ts.forEachChild(node, (child) => void constantTokens(child, tokens, seen));
 		return tokens;
+	}
+	// The attribute's units: each string literal on its own, each followed constant as a whole.
+	function classUnits(node, units) {
+		if (ts.isIdentifier(node)) {
+			const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration;
+			if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer)
+				units.push(constantTokens(declaration.initializer, new Set(), new Set([declaration])));
+		}
+		if (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node))
+			units.push(new Set(node.text.split(/\s+/)));
+		ts.forEachChild(node, (child) => void classUnits(child, units));
+		return units;
 	}
 	function visit(node) {
 		if (
@@ -55,8 +70,10 @@ export function scanSource(text, path) {
 			node.initializer &&
 			node.parent.parent.tagName.getText(source) === 'Text'
 		) {
-			const tokens = classTokens(node.initializer, new Set(), new Set());
-			if (LADDER_LITERALS.some((combo) => combo.every((name) => tokens.has(name)))) {
+			const units = classUnits(node.initializer, []);
+			const restates = (tokens) =>
+				LADDER_LITERALS.some((combo) => combo.every((name) => tokens.has(name)));
+			if (units.some(restates)) {
 				const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
 				sites.push(`${path}:${line + 1}:1:${CONSTRUCT}`);
 			}
