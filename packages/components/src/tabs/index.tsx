@@ -7,13 +7,13 @@ import {
 	View,
 } from 'react-native';
 
-import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
 import { withUniwind } from 'uniwind';
 
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
+import { hapticPress } from '../lib/haptics';
 import { cn } from '../lib/utils';
 import { OptionSelect } from '../select';
 import { TextClassContext } from '../text';
@@ -322,9 +322,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 
 	const handlePress = React.useCallback(
 		(e: any) => {
-			if (Platform.OS !== 'web' && !props.disabled) {
-				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			}
+			if (!props.disabled) hapticPress();
 			onPress?.(e);
 		},
 		[props.disabled, onPress]

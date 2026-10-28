@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import * as CheckboxPrimitive from '@rn-primitives/checkbox';
 
 import { Icon } from '../icon';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 
 type CheckboxProps = React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & {
@@ -18,7 +19,6 @@ function Checkbox({ className, indeterminate, ...props }: CheckboxProps) {
 				(props.checked || indeterminate) && 'bg-primary border-primary',
 				className
 			)}
-			hitSlop={12}
 			{...props}
 		>
 			{indeterminate ? (
@@ -30,6 +30,7 @@ function Checkbox({ className, indeterminate, ...props }: CheckboxProps) {
 					<Icon name="check" className="text-primary-foreground size-3" />
 				</CheckboxPrimitive.Indicator>
 			)}
+			<MinTargetBand square />
 		</CheckboxPrimitive.Root>
 	);
 }

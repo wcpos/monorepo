@@ -20,6 +20,7 @@ import {
 } from '../lib/native-popover-sizing';
 import { useIsPhone } from '../lib/device';
 import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
@@ -407,13 +408,13 @@ function TreeComboboxContent<T>({
 								onPress={handleToggle}
 								testID={`tree-combobox-toggle-${flatItem.value}`}
 								className="h-6 w-6 items-center justify-center"
-								hitSlop={4}
 							>
 								<Icon
 									name={flatItem.isExpanded ? 'chevronDown' : 'chevronRight'}
 									size="xs"
 									className="text-muted-foreground"
 								/>
+								<MinTargetBand />
 							</Pressable>
 						) : (
 							<View className="w-6" />

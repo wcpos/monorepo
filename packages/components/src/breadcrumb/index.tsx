@@ -51,7 +51,7 @@ export function Breadcrumb({
 					<React.Fragment key={index}>
 						{!phone && index > 0 && separator}
 						{/* The Pressable is the target: the row's height (`min-h-ctl`), because React Native
-						    Web ignores `hitSlop` (lib/min-target.ts). The hover surface is the inner view,
+						    Web ignores `hitSlop` (lib/min-target). The hover surface is the inner view,
 						    drawn to the word (ledger line 8). */}
 						<Pressable
 							role="button"

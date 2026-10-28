@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
-import { useMinTargetSlop } from '../lib/min-target';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
@@ -88,28 +88,11 @@ export function Chip({
 			: {};
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const sm = size === 'sm';
-	// `sm` is drawn under 44 for a dense cell; the press target still gets 44 (§ Design 2). The
-	// slop sits on the root, because `hitSlop` never reaches past a parent's bounds.
-	const target = useMinTargetSlop(sm, props.onLayout);
 	const onClear = action ? undefined : clearProp;
 	// The trailing cell's press: the action's, or the clear control's. Either makes the chip split.
 	const trail = action?.onPress ?? onClear;
-	// A split chip's root takes no press (the label half does), except on native when it
-	// carries the grown target: the band above and below is the root's, so the root routes a
-	// press there by where it landed, inside the trailing cell's measured span pressing it and the
-	// rest pressing as the label (span, not side: a right-to-left layout puts it first). Native gives a touch to the deepest responder, so inside the chip the label
-	// and the trailing cell still win and nothing fires twice; the web never measures.
-	const trailSpan = React.useRef({ start: 0, end: 0 });
-	const rootPress: PressableProps['onPress'] =
-		!trail || !target.hitSlop
-			? trail
-				? undefined
-				: onPress
-			: (event) => {
-					const x = event.nativeEvent.locationX;
-					if (x >= trailSpan.current.start && x < trailSpan.current.end) trail();
-					else onPress?.(event);
-				};
+	// `sm` is drawn under 44 for a dense cell; each press target still gets 44 (§ Design 2).
+	const band = sm && <MinTargetBand />;
 	const content = (
 		<>
 			{leading ?? (icon && <Icon name={icon} className="text-foreground" />)}
@@ -138,14 +121,12 @@ export function Chip({
 	);
 	return (
 		<Pressable
-			hitSlop={target.hitSlop}
 			{...props}
-			onLayout={target.onLayout}
 			testID={testID}
 			disabled={inactive}
 			// With a trailing cell the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
-			onPress={rootPress}
+			onPress={trail ? undefined : onPress}
 			onLongPress={onLongPress}
 			{...contextMenu}
 			role={trail ? undefined : 'button'}
@@ -191,17 +172,13 @@ export function Chip({
 						}}
 					>
 						{content}
+						{band}
 					</Pressable>
 					<Pressable
 						role="button"
 						disabled={inactive}
 						testID={action ? (action.testID ?? id('action')) : (clearTestID ?? id('clear'))}
 						accessibilityLabel={action ? action.accessibilityLabel : (clearLabel ?? 'Remove')}
-						hitSlop={action ? undefined : 8}
-						onLayout={(event) => {
-							const { x, width } = event.nativeEvent.layout;
-							trailSpan.current = { start: x, end: x + width };
-						}}
 						className={cn(
 							'items-center justify-center self-stretch',
 							// The trailing cell spans the chip's height and as much width, so it is never
@@ -231,10 +208,14 @@ export function Chip({
 						) : (
 							<Icon name="close" size="sm" className="text-foreground" />
 						)}
+						{band}
 					</Pressable>
 				</>
 			) : (
-				content
+				<>
+					{content}
+					{band}
+				</>
 			)}
 		</Pressable>
 	);

@@ -5,6 +5,7 @@ import * as RadioGroupPrimitive from '@rn-primitives/radio-group';
 
 import { HStack } from '../hstack';
 import { Label } from '../label';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { VStack } from '../vstack';
@@ -53,7 +54,6 @@ function RadioGroupItem({
 	const { value: selectedValue, disabled } = useRadioGroupContext();
 	return (
 		<RadioGroupPrimitive.Item
-			hitSlop={12}
 			className={cn(
 				'border-border bg-card size-5 items-center justify-center rounded-full border',
 				props.value === selectedValue && 'border-primary',
@@ -65,6 +65,7 @@ function RadioGroupItem({
 			<RadioGroupPrimitive.Indicator className="flex items-center justify-center">
 				<View className="bg-primary size-2.5 rounded-full" />
 			</RadioGroupPrimitive.Indicator>
+			<MinTargetBand square />
 		</RadioGroupPrimitive.Item>
 	);
 }
