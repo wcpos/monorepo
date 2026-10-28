@@ -3,9 +3,13 @@ import { Platform, Pressable, ScrollView, type ScrollViewInstance, View } from '
 
 import { useObservableSuspense } from 'observable-hooks';
 import Animated, {
-	LinearTransition,
+	FadeIn,
+	FadeOut,
 	ReduceMotion,
+	useAnimatedStyle,
 	useReducedMotion,
+	useSharedValue,
+	withTiming,
 } from 'react-native-reanimated';
 
 import { Badge } from '@wcpos/components/badge';
@@ -35,6 +39,7 @@ import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
 import { cartRestartsOnAdd } from '../hooks/cart-restart';
 import { AGE_TICK_MS, OpenOrdersList, STALE_AFTER_MS } from './open-orders-list';
 import { TabChip } from './tab-chip';
+import { useOrderAmount } from './tab-title';
 import { trayExceptions } from './tray-exceptions';
 import { useAwaitingStore } from '../checkout/use-awaiting-store';
 import {
@@ -54,8 +59,6 @@ import { tabWho } from './tab-who';
 const CELL = 'web:hover:bg-muted active:bg-muted h-full items-center justify-center';
 // A tab is as wide as its text (Paul, 2026-10-09), clipped at the scroll edges.
 const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
-// The + cell keeps its fold/unfold layout transition (Paul, 2026-10-12).
-const SHIFT = LinearTransition.duration(CROSSFADE).easing(EASE).reduceMotion(ReduceMotion.System);
 // The DOM id the tablist owns the + cell by (web).
 const NEW_TAB_ID = 'new-order-tab';
 // RN-web emits its final scroll tick after 100 ms; let that tick land before releasing ours.
@@ -117,6 +120,17 @@ export function OpenOrderTabs({
 	// The blank cart is not an order until its first line, so it has no cart tab: the + cell
 	// is its tab and unfolds into "+ New" while the cashier is on it (Paul, 2026-10-12).
 	const fresh = activeValue === 'new';
+	const plusWidth = useSharedValue(fresh ? NEW_TAB_WIDTH : PLUS_WIDTH);
+	// Selection can come from outside the strip. Animate actual width so the adjacent
+	// viewport reflows each frame rather than clamping its scroll offset in one jump.
+	React.useEffect(() => {
+		plusWidth.value = withTiming(fresh ? NEW_TAB_WIDTH : PLUS_WIDTH, {
+			duration: CROSSFADE,
+			easing: EASE,
+			reduceMotion: ReduceMotion.System,
+		});
+	}, [fresh, plusWidth]);
+	const plusStyle = useAnimatedStyle(() => ({ width: plusWidth.value }));
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
 			// Every tab outside the open hits is a receipt (a paid checkout member renders only at
@@ -214,7 +228,6 @@ export function OpenOrderTabs({
 	React.useEffect(() => endProgrammatic, [endProgrammatic]);
 	const overflow = rowOverflows({
 		stripWidth: strip.width,
-		plusWidth: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH,
 		contentWidth,
 	});
 	const activePosition = positions.get(activeValue);
@@ -396,16 +409,15 @@ export function OpenOrderTabs({
 				>
 					{mounted.map(renderTab)}
 				</ScrollView>
-				{/* The + cell is the blank cart's tab: folded it is the 48 pt + at the end of the
-				    row; while the cashier is on the blank cart it unfolds into the selected "+ New" tab, and folds back when they leave. Nothing
-				    is added to or removed from the row. */}
-				<Animated.View layout={SHIFT} className="h-full">
+				{/* The blank cart's + cell animates its width from 48 to 112 pt. The viewport
+				    beside it grows/shrinks each frame, composing with the centring scroll;
+				    the New label fades inside the clipped cell. */}
+				<Animated.View style={plusStyle} className="h-full overflow-hidden">
 					<Pressable
 						role="tab"
 						nativeID={NEW_TAB_ID}
 						aria-selected={fresh}
-						style={{ width: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH }}
-						className={`${CELL} ${fresh ? `flex-row gap-1.5 border-b-2 ${solo ? 'border-transparent' : 'border-primary'}` : ''}`}
+						className={`${CELL} w-full flex-row gap-1.5 ${fresh ? `border-b-2 ${solo ? 'border-transparent' : 'border-primary'}` : ''}`}
 						testID="new-order-tab"
 						accessibilityLabel={t('pos_cart.new_order')}
 						ref={(node) => {
@@ -430,9 +442,15 @@ export function OpenOrderTabs({
 					>
 						<Icon name="plus" className={fresh ? 'text-primary' : undefined} />
 						{fresh && (
-							<Text testID="new-order-tab-label" className="font-semibold">
-								{t('pos_cart.new_cart_tab')}
-							</Text>
+							<Animated.View
+								entering={FadeIn.duration(CROSSFADE).reduceMotion(ReduceMotion.System)}
+								exiting={FadeOut.duration(CROSSFADE).reduceMotion(ReduceMotion.System)}
+								style={{ flexShrink: 0 }}
+							>
+								<Text testID="new-order-tab-label" className="font-semibold">
+									{t('pos_cart.new_cart_tab')}
+								</Text>
+							</Animated.View>
 						)}
 					</Pressable>
 				</Animated.View>
@@ -475,20 +493,34 @@ function TabContent({
 	const t = useT();
 	const payload = useRecordField(order, (record) => record.payload);
 	const relative = useRelativeTime();
+	const amount = useOrderAmount(order);
 	const openedMs = payload.date_created_gmt
 		? convertUTCStringToLocalDate(payload.date_created_gmt).getTime()
 		: undefined;
 	const stale = openedMs !== undefined && nowMs - openedMs >= STALE_AFTER_MS;
-	const age =
-		openedMs !== undefined && !cartRestartsOnAdd(payload) ? (
-			<Text
-				variant="key"
-				testID={`open-order-tab-${order.uuid}-age`}
-				className={stale ? 'text-warning-text font-semibold' : 'text-muted-foreground'}
-			>
-				{relative(openedMs, nowMs)}
-			</Text>
-		) : null;
+	const fallback = (
+		<Text
+			variant="key"
+			numberOfLines={1}
+			testID={`open-order-tab-${order.uuid}-amount`}
+			className="text-muted-foreground tabular-nums"
+		>
+			{amount}
+			{/* Only the age carries the warning tone; the separator stays muted. */}
+			{stale && !cartRestartsOnAdd(payload) && (
+				<>
+					{' · '}
+					<Text
+						variant="key"
+						testID={`open-order-tab-${order.uuid}-age`}
+						className="text-warning-text font-semibold"
+					>
+						{relative(openedMs, nowMs)}
+					</Text>
+				</>
+			)}
+		</Text>
+	);
 	return (
 		// tabular-nums on the wrapper: on web it reaches the status label's amounts (waiting for
 		// terminal, partly paid) so a tab does not change width as its numbers change.
@@ -502,7 +534,7 @@ function TabContent({
 			>
 				{tabWho(payload, t)}
 			</Text>
-			<TabChip order={order} active={active} compact={phone} fallback={age} />
+			<TabChip order={order} active={active} compact={phone} fallback={fallback} />
 		</View>
 	);
 }

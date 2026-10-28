@@ -164,7 +164,7 @@ function OrderRow({
 			trailing={
 				<View className="items-end gap-0.5">
 					<View className="tabular-nums">
-						<CartTabTitle order={order} amountOnly active />
+						<CartTabTitle order={order} active />
 					</View>
 					<HStack space="sm">
 						{/* A cart that will restart with its next line has no age to show (#2183). */}
