@@ -7,6 +7,7 @@ import { useCSSVariable } from 'uniwind';
 import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Loader, Spin } from '../loader';
 import { TextClassContext } from '../text';
@@ -21,23 +22,6 @@ export { ICON_SET_IDS, DEFAULT_ICON_SET } from './sets';
 export { IconSetProvider, useIconSet } from './set-context';
 
 /**
- * Map variant to CSS variable name for SVG fill colors
- */
-const variantToCSSVariable: Record<string, string> = {
-	default: '--color-foreground',
-	primary: '--color-primary',
-	destructive: '--color-destructive',
-	secondary: '--color-secondary',
-	muted: '--color-muted-foreground',
-	success: '--color-success',
-	error: '--color-destructive',
-	warning: '--color-warning',
-	info: '--color-info',
-	accent: '--color-accent-foreground',
-	attention: '--color-attention',
-};
-
-/**
  * We need to make the icons bigger for native apps
  */
 const iconVariants = cva('inset-0 content-center items-center', {
@@ -45,12 +29,11 @@ const iconVariants = cva('inset-0 content-center items-center', {
 		variant: {
 			default: '',
 			primary: 'text-primary',
-			destructive: 'text-destructive',
 			secondary: 'text-secondary',
 			muted: 'text-muted-foreground',
-			success: 'text-success',
-			error: 'text-destructive',
-			warning: 'text-warning',
+			ok: TONE.ok.text,
+			bad: TONE.bad.text,
+			warning: TONE.warning.text,
 			info: 'text-info',
 			accent: 'text-accent-foreground',
 			attention: 'text-attention',
@@ -109,11 +92,7 @@ export function Icon({
 	// Order matters: textClass (from context like Button) → iconVariants → className (explicit override)
 	const combinedClassName = cn(textClass, iconVariants({ variant, size }), className);
 
-	// Extract CSS variable from className, falling back to variant's default
-	const cssVariable =
-		getColorVariableFromClassName(combinedClassName) ||
-		variantToCSSVariable[variant ?? 'default'] ||
-		'--color-foreground';
+	const cssVariable = getColorVariableFromClassName(combinedClassName) || '--color-foreground';
 
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
 	const resolvedColor = useCSSVariable(cssVariable);

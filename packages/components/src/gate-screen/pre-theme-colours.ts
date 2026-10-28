@@ -15,10 +15,9 @@ export const PRE_THEME_COLOURS = {
 	primaryForeground: '#f6fdff', // --primary-foreground
 	muted: '#edf0f4', // --muted
 	mutedForeground: '#5b646f', // --muted-foreground
-	warnBg: '#fff4d7', // --warn-bg
-	warnText: '#915200', // --warn-text
+	warningBg: '#fff4d7', // --warning-bg
+	warningText: '#915200', // --warning-text
 	badBg: '#fff0ee', // --bad-bg
-	bad: '#d73337', // --bad
 	// The fill and ink of a destructive confirm, the same pair as the Button's `destructive` variant.
 	destructive: '#cd001d', // --destructive
 	destructiveForeground: '#fff9f8', // --destructive-foreground

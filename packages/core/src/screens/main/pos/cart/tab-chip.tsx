@@ -87,11 +87,11 @@ export function TabChip({
 									: (fallbackLabel ?? null);
 	const tone =
 		saveState?.kind === 'rejected'
-			? 'error'
+			? 'bad'
 			: awaits
 				? 'warning'
 				: stage === 'receipt'
-					? 'success'
+					? 'ok'
 					: waiting
 						? 'warning'
 						: 'info';

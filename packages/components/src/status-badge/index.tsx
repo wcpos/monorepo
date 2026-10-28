@@ -3,6 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -14,9 +15,9 @@ const statusDotVariants = cva('size-2 shrink-0 rounded-full', {
 	variants: {
 		variant: {
 			default: 'bg-primary',
-			success: 'bg-success',
+			ok: TONE.ok.dot,
 			warning: 'bg-warning',
-			error: 'bg-destructive',
+			bad: TONE.bad.dot,
 			info: 'bg-info',
 			muted: 'bg-muted-foreground',
 		},
@@ -38,9 +39,9 @@ export interface StatusBadgeProps extends ViewProps, VariantProps<typeof statusD
  * semantic colour on the dot; the word keeps the foreground colour.
  *
  * @example
- * <StatusBadge label="Signed in" variant="success" />
+ * <StatusBadge label="Signed in" variant="ok" />
  * <StatusBadge label="Sign in again" variant="warning" />
- * <StatusBadge label="Out of stock" variant="error" />
+ * <StatusBadge label="Out of stock" variant="bad" />
  */
 export function StatusBadge({ label, variant, className, ...props }: StatusBadgeProps) {
 	return (

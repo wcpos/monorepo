@@ -181,7 +181,7 @@ export function PerformanceScreen() {
 			<VStack className="gap-6">
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
-					<Text className={healthy ? 'text-success font-semibold' : 'text-warn-text font-semibold'}>
+					<Text className={cn('font-semibold', healthy ? 'text-ok' : 'text-warning-text')}>
 						{healthy
 							? t('health.performance.status_normal')
 							: t('health.performance.status_attention')}
@@ -353,9 +353,10 @@ export function PerformanceScreen() {
 						    advisory line claims nothing about measured speed: at x1 the engine
 						    may still be inside its ten-sample slow window. */}
 						<Text
-							className={
-								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warn-text text-sm'
-							}
+							className={cn(
+								'text-sm',
+								pace.kind === 'normal' ? 'text-muted-foreground' : 'text-warning-text'
+							)}
 							testID="server-pace"
 						>
 							{pace.kind === 'paused'

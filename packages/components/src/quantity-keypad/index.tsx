@@ -170,7 +170,7 @@ export function QuantityKeypad({
 		: format(entry.stepped ?? value);
 	const stepper: GrowCell[] = [
 		trash
-			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'destructive' }
+			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'bad' }
 			: { name: 'decrease', label: labels.decrease, icon: 'minus' },
 		{ display: <Value display={display} fit={count} textClassName={textClassName} /> },
 		{ name: 'increase', label: labels.increase, icon: 'plus' },

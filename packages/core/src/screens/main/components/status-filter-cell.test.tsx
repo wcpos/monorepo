@@ -17,7 +17,7 @@ const options = [
 	{ value: 'publish', label: 'Published' },
 	{ value: 'draft', label: 'Draft' },
 ];
-const tones = { publish: 'success', draft: 'muted' } as const;
+const tones = { publish: 'ok', draft: 'muted' } as const;
 
 function renderCell(value: string | undefined, setFilter = jest.fn()) {
 	render(
@@ -34,7 +34,7 @@ function renderCell(value: string | undefined, setFilter = jest.fn()) {
 }
 
 it.each([
-	['publish', 'Published', 'success'],
+	['publish', 'Published', 'ok'],
 	['draft', 'Draft', 'muted'],
 	// A value the list has no word for (a custom status) shows itself, in the default tone.
 	['wc-custom', 'wc-custom', 'default'],

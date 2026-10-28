@@ -102,7 +102,9 @@ function AwaitingStore() {
 		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b px-2.5 py-3">
 			<View className="flex-row items-center justify-between gap-2">
 				<Text>{t('register.awaiting_store_label')}</Text>
-				<Text className="text-warn-text tabular-nums">{t('register.sales_count', { count })}</Text>
+				<Text className="text-warning-text tabular-nums">
+					{t('register.sales_count', { count })}
+				</Text>
 			</View>
 			<Text className="text-muted-foreground text-sm">
 				{t('register.awaiting_store_sent_when_signed_in')}

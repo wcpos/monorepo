@@ -150,7 +150,7 @@ export function TotalsChangedBanner({
 
 	return (
 		<Notice
-			tone="warn"
+			tone="warning"
 			className="m-2"
 			testID={testID}
 			title={divergence ? t('pos_cart.totals_changed_title') : t('pos_cart.engine_warnings_title')}
@@ -224,7 +224,7 @@ function DivergenceNotice({
 			) : null}
 
 			{storeLevel ? (
-				<VStack testID={`${testID}-store-level`} className="border-warn/30 gap-1 border-t pt-1">
+				<VStack testID={`${testID}-store-level`} className="border-warning/30 gap-1 border-t pt-1">
 					<Text className="text-sm font-medium">
 						{t('pos_cart.totals_disagree_store_level_title', { count: divergedOrderCount })}
 					</Text>

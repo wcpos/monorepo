@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
+import { TONE } from '../lib/tone';
 import { StatusBadge } from './index';
 
 jest.mock('react-native', () => ({
@@ -32,22 +33,17 @@ describe('status-badge dot + word', () => {
 		return screen.getByTestId(testID).querySelector('span');
 	}
 
-	it.each([
-		['success', 'bg-success'],
-		['warning', 'bg-warning'],
-		['error', 'bg-destructive'],
-		['info', 'bg-info'],
-		['muted', 'bg-muted-foreground'],
-	] as const)('paints the %s variant on the dot, not the word', (variant, dotClass) => {
-		render(<StatusBadge testID="badge" label="Signed in" variant={variant} />);
+	it.each(Object.keys(TONE) as (keyof typeof TONE)[])(
+		"paints the tone map's %s dot, not the word",
+		(tone) => {
+			render(<StatusBadge testID="badge" label="Signed in" variant={tone} />);
 
-		expect(dotOf('badge')).toHaveClass('size-2', 'rounded-full', dotClass);
-		expect(wordOf('badge')).toHaveTextContent('Signed in');
-		expect(wordOf('badge')).toHaveClass('text-foreground', 'text-sm');
-		expect(wordOf('badge')?.getAttribute('class')).not.toMatch(
-			/text-(success|warning|destructive|info|muted-foreground)/
-		);
-	});
+			expect(dotOf('badge')).toHaveClass('size-2', 'rounded-full', TONE[tone].dot);
+			expect(wordOf('badge')).toHaveTextContent('Signed in');
+			expect(wordOf('badge')).toHaveClass('text-foreground', 'text-sm');
+			expect(wordOf('badge')?.getAttribute('class')).not.toContain(TONE[tone].dot);
+		}
+	);
 
 	it('defaults to the primary dot', () => {
 		render(<StatusBadge testID="badge" label="Default" />);
@@ -55,14 +51,12 @@ describe('status-badge dot + word', () => {
 	});
 
 	it('hides the dot from assistive tech: the word is the status', () => {
-		render(<StatusBadge testID="badge" label="Signed in" variant="success" />);
+		render(<StatusBadge testID="badge" label="Signed in" variant="ok" />);
 		expect(dotOf('badge')).toHaveAttribute('aria-hidden');
 	});
 
 	it('merges a caller className onto the row', () => {
-		render(
-			<StatusBadge testID="badge" label="In stock" variant="success" className="self-start" />
-		);
+		render(<StatusBadge testID="badge" label="In stock" variant="ok" className="self-start" />);
 		expect(screen.getByTestId('badge')).toHaveClass('flex-row', 'items-center', 'self-start');
 	});
 

@@ -17,10 +17,9 @@ const TOKEN: Record<keyof typeof PRE_THEME_COLOURS, string> = {
 	primaryForeground: '--primary-foreground',
 	muted: '--muted',
 	mutedForeground: '--muted-foreground',
-	warnBg: '--warn-bg',
-	warnText: '--warn-text',
+	warningBg: '--warning-bg',
+	warningText: '--warning-text',
 	badBg: '--bad-bg',
-	bad: '--bad',
 	destructive: '--destructive',
 	destructiveForeground: '--destructive-foreground',
 };

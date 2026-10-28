@@ -198,7 +198,7 @@ export function ConflictedMutationsPanel() {
 									{/* A held DELETE must never look like a held edit: resending it
 									    destroys the record on the server (#1093 audit, Q2). */}
 									{row.operation === 'delete' ? (
-										<Badge variant="destructive" testID={`db-conflicted-delete-${row.mutationId}`}>
+										<Badge variant="bad" testID={`db-conflicted-delete-${row.mutationId}`}>
 											{t('health.database.conflicted.delete_pill')}
 										</Badge>
 									) : null}

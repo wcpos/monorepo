@@ -18,10 +18,10 @@ import { TILE_SURFACE } from '../lib/tile-surface';
  * @example
  * // Basic usage with convenience props
  * <ListItem
- *   leading={<Avatar fallback="PK" variant="success" size="md" />}
+ *   leading={<Avatar fallback="PK" size="md" />}
  *   title="Paul Kilmurray"
  *   subtitle="Administrator"
- *   trailing={<StatusBadge label="Valid" variant="success" />}
+ *   trailing={<StatusBadge label="Valid" variant="ok" />}
  *   selected
  *   removable
  *   removeLabel="Remove Paul Kilmurray"

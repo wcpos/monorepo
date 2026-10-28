@@ -226,7 +226,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 						<StatusBadge
 							className="self-start"
 							label={isValid ? t('auth.signed_in') : t('auth.sign_in_again')}
-							variant={isValid ? 'success' : 'warning'}
+							variant={isValid ? 'ok' : 'warning'}
 						/>
 					)}
 				</ListItem>

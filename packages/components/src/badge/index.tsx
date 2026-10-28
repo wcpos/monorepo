@@ -4,6 +4,7 @@ import { View, ViewProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { BeatingCount, type CountMotion, useCountBeat } from './count-beat';
+import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -11,76 +12,34 @@ export { BeatingCount, COUNT_MOTION, type CountMotion, useCountBeat } from './co
 
 const badgeVariants = cva('items-center justify-center rounded-full', {
 	variants: {
-		variant: {
-			default: 'bg-primary',
-			destructive: 'bg-destructive',
-			secondary: 'bg-secondary',
-			success: 'bg-success',
-			warning: 'bg-warning',
-			muted: 'bg-muted',
-		},
 		size: {
 			default: 'h-5 min-w-5 px-1.5',
 			sm: 'h-4 min-w-4 px-1',
 			lg: 'h-6 min-w-6 px-2',
 		},
-		/**
-		 * The quiet form of a state label (a printer scan's "Ready", a scan test's "Typing"): a wash
-		 * of the tone behind words in the foreground, at the solid badge's height. The words are not
-		 * in the tone: amber and green text on their own wash read 2.7:1 and 3.9:1 in the light
-		 * theme, under the 4.5:1 text floor (§ Design 7), and one colour rule for every tone beats
-		 * a per-tone exception. The solid badge is for counts and states that must be seen at a
-		 * glance; the tinted one sits in a row beside the row's own text. Muted has no wash to
-		 * lighten, so it stays as the solid muted.
-		 */
-		tinted: { true: '', false: '' },
 	},
-	compoundVariants: [
-		{ tinted: true, variant: 'default', class: 'bg-primary/15' },
-		{ tinted: true, variant: 'destructive', class: 'bg-destructive/15' },
-		{ tinted: true, variant: 'secondary', class: 'bg-secondary/15' },
-		{ tinted: true, variant: 'success', class: 'bg-success/15' },
-		{ tinted: true, variant: 'warning', class: 'bg-warning/15' },
-	],
 	defaultVariants: {
-		variant: 'default',
 		size: 'default',
-		tinted: false,
 	},
 });
 
 const badgeTextVariants = cva('font-bold tabular-nums', {
 	variants: {
-		variant: {
-			default: 'text-primary-foreground',
-			destructive: 'text-destructive-foreground',
-			secondary: 'text-secondary-foreground',
-			success: 'text-success-foreground',
-			warning: 'text-warning-foreground',
-			muted: 'text-muted-foreground',
-		},
 		size: {
 			default: 'text-xs',
 			sm: 'text-2xs',
 			lg: 'text-sm',
 		},
-		tinted: { true: '', false: '' },
 	},
-	compoundVariants: [
-		{ tinted: true, variant: 'default', class: 'text-foreground' },
-		{ tinted: true, variant: 'destructive', class: 'text-foreground' },
-		{ tinted: true, variant: 'secondary', class: 'text-foreground' },
-		{ tinted: true, variant: 'success', class: 'text-foreground' },
-		{ tinted: true, variant: 'warning', class: 'text-foreground' },
-	],
 	defaultVariants: {
-		variant: 'default',
 		size: 'default',
-		tinted: false,
 	},
 });
 
 export interface BadgeProps extends ViewProps, VariantProps<typeof badgeVariants> {
+	/** The state from the tone map; a count with none is `bad`, the notification red. */
+	variant?: Tone;
+	tinted?: boolean;
 	/** The count to display. If 0 or undefined, badge is hidden. */
 	count?: number;
 	/** Maximum count to display. Shows "99+" if exceeded. Default: 99 */
@@ -128,10 +87,14 @@ export function Badge({
 	const counted = typeof count === 'number' && (count > 0 || showZero);
 	const text = !counted ? null : count > max ? `${max}+` : String(count);
 	const beat = useCountBeat({ value: count ?? 0, text, identity, motion });
+	const face = TONE[variant ?? 'bad'];
+	// A wash keeps its words in the foreground; muted has no wash and stays the solid muted.
+	const [ground, ink] =
+		tinted && variant !== 'muted' ? [face.tinted, 'text-foreground'] : [face.solid, face.onSolid];
 
 	// Dot mode - just show a small indicator
 	if (dot) {
-		return <View className={cn('bg-destructive size-2.5 rounded-full', className)} {...props} />;
+		return <View className={cn(TONE.bad.solid, 'size-2.5 rounded-full', className)} {...props} />;
 	}
 
 	// A badge carries its own colour contract, so it resets whatever text classes it is
@@ -141,11 +104,11 @@ export function Badge({
 	// unprefixed colour and wins on hover instead — a red badge with dark blue digits (#1369).
 	if (children) {
 		return (
-			<View className={cn(badgeVariants({ variant, size, tinted }), className)} {...props}>
+			<View className={cn(badgeVariants({ size }), ground, className)} {...props}>
 				<TextClassContext.Provider value={undefined}>
 					{/* One line: a long label (a customer's name in the stilled cart head) truncates
 					    inside the badge instead of wrapping out of its fixed height. */}
-					<Text className={badgeTextVariants({ variant, size, tinted })} numberOfLines={1}>
+					<Text className={cn(badgeTextVariants({ size }), ink)} numberOfLines={1}>
 						{children}
 					</Text>
 				</TextClassContext.Provider>
@@ -161,8 +124,8 @@ export function Badge({
 			<BeatingCount
 				beat={beat}
 				text={text}
-				className={cn(badgeVariants({ variant, size, tinted }), className)}
-				textClassName={badgeTextVariants({ variant, size, tinted })}
+				className={cn(badgeVariants({ size }), ground, className)}
+				textClassName={cn(badgeTextVariants({ size }), ink)}
 				{...props}
 			/>
 		</TextClassContext.Provider>

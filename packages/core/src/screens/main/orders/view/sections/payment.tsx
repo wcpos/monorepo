@@ -63,9 +63,7 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 							{method ?? ''}
 						</Text>
 						<Text className="text-sm tabular-nums">{format(Number(payload.total || 0))}</Text>
-						{paidAt ? (
-							<StatusBadge label={t('pos_checkout.status_captured')} variant="success" />
-						) : null}
+						{paidAt ? <StatusBadge label={t('pos_checkout.status_captured')} variant="ok" /> : null}
 					</View>
 					{paidAt ? (
 						<Text className="text-muted-foreground text-xs tabular-nums">
@@ -91,7 +89,7 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 			{refunded > 0 ? (
 				<MoneyList.Row
 					className="mt-2"
-					tone="destructive"
+					tone="bad"
 					label={t('orders.refund')}
 					amount={format(-refunded)}
 				/>

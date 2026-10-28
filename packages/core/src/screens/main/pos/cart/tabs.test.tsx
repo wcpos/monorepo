@@ -713,7 +713,7 @@ it('shows billing names and guest entry counts, stale ages, and no age on restar
 		};
 		rerender(<OpenOrderTabs />);
 		expect(screen.getByTestId('open-order-tab-open-who').textContent).toBe('Ada Lovelace');
-		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('text-warn-text');
+		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('text-warning-text');
 		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('font-semibold');
 		mockOpen[0].record = {
 			...original,

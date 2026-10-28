@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
+import { TONE } from '../lib/tone';
 import { ToneDisc } from './index';
 
 // Uniwind is not compiled in Jest; expose the View's classes.
@@ -19,16 +20,11 @@ jest.mock('../icon', () => ({
 
 const glyph = (container: HTMLElement) => container.querySelector('[data-icon]')!;
 
-it.each([
-	['ok', 'bg-ok-bg', 'text-ok', 'check'],
-	['warn', 'bg-warn-bg', 'text-warn-text', 'warning'],
-	['bad', 'bg-bad-bg', 'text-bad', 'alert'],
-	['muted', 'bg-muted', 'text-muted-foreground', 'info'],
-] as const)('paints the %s tone as a wash and its own glyph', (tone, wash, ink, icon) => {
-	const { container } = render(<ToneDisc tone={tone} testID="disc" />);
-	expect(glyph(container).parentElement).toHaveClass('rounded-full', wash);
-	expect(glyph(container)).toHaveAttribute('data-icon', icon);
-	expect(glyph(container)).toHaveClass(ink);
+it('paints its tone from the tone map: the disc wash, the ink and the glyph', () => {
+	const { container } = render(<ToneDisc tone="warning" testID="disc" />);
+	expect(glyph(container).parentElement).toHaveClass('rounded-full', TONE.warning.disc);
+	expect(glyph(container)).toHaveAttribute('data-icon', TONE.warning.glyph);
+	expect(glyph(container)).toHaveClass(TONE.warning.text);
 });
 
 it.each([
@@ -42,6 +38,6 @@ it.each([
 });
 
 it('lets a named glyph win over the tone glyph', () => {
-	const { container } = render(<ToneDisc tone="warn" icon="pending" />);
+	const { container } = render(<ToneDisc tone="warning" icon="pending" />);
 	expect(glyph(container)).toHaveAttribute('data-icon', 'pending');
 });

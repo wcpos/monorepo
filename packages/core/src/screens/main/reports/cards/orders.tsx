@@ -99,7 +99,7 @@ export function OrdersCard() {
 					/>
 					<StatusBadge
 						testID="card-orders-needs"
-						variant={attention ? 'warning' : 'success'}
+						variant={attention ? 'warning' : 'ok'}
 						label={attention || t('reports.nothing_needs_you')}
 					/>
 				</>

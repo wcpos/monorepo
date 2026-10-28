@@ -39,7 +39,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 		return (
 			<VStack space="sm" className="p-4">
 				<Notice
-					tone="warn"
+					tone="warning"
 					title={t('pos_checkout.legacy_not_with_split_title')}
 					description={t('pos_checkout.legacy_not_with_split_description')}
 				/>

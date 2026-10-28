@@ -77,7 +77,7 @@ export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 	const t = useT();
 	return (
 		<Notice
-			tone="warn"
+			tone="warning"
 			title={t('pos_checkout.payment_unanswered')}
 			testID="checkout-unanswered"
 			actions={[
@@ -358,7 +358,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					/>
 				) : null}
 				{!flow.online ? (
-					<Text testID="checkout-offline" className="text-warn-text text-xs">
+					<Text testID="checkout-offline" className="text-warning-text text-xs">
 						{t('pos_checkout.offline')}
 					</Text>
 				) : null}
@@ -368,7 +368,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</AmountFigure>
 			<Text
 				testID="checkout-entry-hint"
-				className={`min-h-6 text-sm ${noChange ? 'text-warn-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
+				className={`min-h-6 text-sm ${noChange ? 'text-warning-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
 				decodeHtml
 			>
 				{hint}
@@ -442,7 +442,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						))}
 			</MethodRows>
 			{slow ? (
-				<Text testID="checkout-save-slow" className="text-warn-text text-sm">
+				<Text testID="checkout-save-slow" className="text-warning-text text-sm">
 					{t('pos_checkout.store_not_answering')}
 				</Text>
 			) : null}
@@ -729,10 +729,10 @@ function MethodStatus({ tile, selected }: { tile: TenderTile; selected: boolean 
 	if (tile.settlesLater)
 		return (
 			<View testID={`checkout-method-sent-later-${method.id}`}>
-				<Text className="text-warn-text text-center text-xs">
+				<Text className="text-warning-text text-center text-xs">
 					{t('pos_checkout.tile_sent_later')}
 				</Text>
-				<Text className="text-warn-text text-center text-xs">
+				<Text className="text-warning-text text-center text-xs">
 					{t('pos_checkout.tile_store_may_refuse')}
 				</Text>
 			</View>

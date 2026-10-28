@@ -28,8 +28,8 @@ const scale: [string, string, string[]][] = [
 	['hero', 'default', ['text-amt', 'text-foreground']],
 	['headline', 'default', ['text-2xl', 'text-foreground']],
 	['tile', 'default', ['text-xl', 'text-foreground']],
-	['tile', 'destructive', ['text-xl', 'text-destructive']],
-	['hero', 'success', ['text-amt', 'text-success']],
+	['tile', 'bad', ['text-xl', 'text-bad']],
+	['hero', 'ok', ['text-amt', 'text-ok']],
 ];
 
 describe('AmountFigure', () => {

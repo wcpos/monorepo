@@ -114,7 +114,7 @@ export function ReaderRow({
 					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
-		lineClass = 'text-warn-text text-sm';
+		lineClass = 'text-warning-text text-sm';
 	} else if (updating) {
 		line = t('settings.card_readers.installing');
 		below = (
@@ -208,7 +208,7 @@ export function ReaderRow({
 				>
 					<Icon
 						name="card"
-						variant={error ? 'destructive' : connected ? 'success' : 'muted'}
+						variant={error ? 'bad' : connected ? 'ok' : 'muted'}
 						size="lg"
 						loading={scan !== null && found === null}
 					/>

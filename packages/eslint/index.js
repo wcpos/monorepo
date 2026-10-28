@@ -388,8 +388,8 @@ export const tintedAlertSelector = {
 		'JSXAttribute[name.name="className"]' +
 		':not(:has(Literal[value=/^size-10 items-center justify-center rounded-lg$/]):has(Literal[value=/^bg-(destructive|success)\\u002F10$/]))' +
 		':not(:has(TemplateElement[value.raw=/^border-border rounded-none border-b $/]):has(Literal[value="bg-success/10"])):has(:matches(' +
-		'Literal[value=/(^|\\s)bg-(destructive|warning|attention|info|success)\\u002F10(\\s|$)/], ' +
-		'TemplateElement[value.raw=/(^|\\s)bg-(destructive|warning|attention|info|success)\\u002F10(\\s|$)/]))',
+		'Literal[value=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/], ' +
+		'TemplateElement[value.raw=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/]))',
 	message:
 		'A tinted alert box is the Notice component (@wcpos/components/notice); success is a line with a check, never a green band (CODING_STANDARDS § Design, wcpos/roadmap#465).',
 };

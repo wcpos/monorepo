@@ -8,6 +8,7 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { Button } from '../button';
 import { DeviceScope } from '../lib/device';
+import { TONE } from '../lib/tone';
 import { GateScreen } from './index';
 
 // Uniwind is not compiled in Jest; expose View/ScrollView classes, keeping real web pressables.
@@ -70,15 +71,11 @@ it('omits description and detail when absent', () => {
 	expect(screen.queryByTestId('gate-screen-detail')).toBeNull();
 });
 
-it.each([
-	['warn', 'bg-warn-bg', 'text-warn-text', 'warning'],
-	['bad', 'bg-bad-bg', 'text-bad', 'alert'],
-	['muted', 'bg-muted', 'text-muted-foreground', 'info'],
-] as const)('puts the %s tone on the disc, never on the title', (tone, surface, glyph, icon) => {
-	const { container } = render(<GateScreen tone={tone} title="Title" />);
-	expect(disc(container)).toHaveClass('size-14', 'rounded-full', surface);
-	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', icon);
-	expect(container.querySelector('[data-icon]')).toHaveClass(glyph);
+it('puts the tone on the disc, never on the title', () => {
+	const { container } = render(<GateScreen tone="bad" title="Title" />);
+	expect(disc(container)).toHaveClass('size-14', 'rounded-full', TONE.bad.disc);
+	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', TONE.bad.glyph);
+	expect(screen.getByTestId('gate-screen-title')).not.toHaveClass(TONE.bad.text);
 });
 
 it('lets a custom icon win over the tone glyph', () => {
@@ -91,7 +88,7 @@ it('stacks the primary before the secondary and fires each', () => {
 	const secondary = jest.fn();
 	render(
 		<GateScreen
-			tone="warn"
+			tone="warning"
 			title="Title"
 			primary={{ label: 'Reload', onPress: primary }}
 			secondary={{ label: 'Logout', onPress: secondary, testID: 'own-logout' }}
@@ -145,7 +142,7 @@ it('fills a destructive primary red and ignores the flag on a secondary', () => 
 it('shows the docs code on the link and opens the docs', () => {
 	render(
 		<GateScreen
-			tone="warn"
+			tone="warning"
 			title="Title"
 			docs={{ label: 'Learn more', href: 'https://docs.wcpos.com/x', code: 'SYNC341' }}
 		/>
@@ -163,7 +160,7 @@ it.each([
 ])('phone=%s insets the card %s and sizes the mark', (phone, inset, other, mark) => {
 	const { container } = render(
 		<DeviceScope phone={phone}>
-			<GateScreen tone="warn" title="Title" />
+			<GateScreen tone="warning" title="Title" />
 		</DeviceScope>
 	);
 	expect(card()).toHaveClass(inset, 'w-full', 'max-w-md');

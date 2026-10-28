@@ -484,7 +484,7 @@ function TabContent({
 			<Text
 				variant="key"
 				testID={`open-order-tab-${order.uuid}-age`}
-				className={stale ? 'text-warn-text font-semibold' : 'text-muted-foreground'}
+				className={stale ? 'text-warning-text font-semibold' : 'text-muted-foreground'}
 			>
 				{relative(openedMs, nowMs)}
 			</Text>

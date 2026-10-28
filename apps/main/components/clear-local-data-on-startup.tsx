@@ -112,7 +112,7 @@ export function ClearLocalDataBlockedScreen() {
 	return (
 		<PreThemeGate
 			testID="clear-local-data-blocked"
-			tone="warn"
+			tone="warning"
 			title="Reset didn’t finish"
 			description={
 				web

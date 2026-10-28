@@ -525,7 +525,7 @@ it('a stamp beside settled money is stale: the paid moment wins', () => {
 // ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet. The moment
 // waits, unseen, for the journal's first answer: one pop in the right tone, never green then amber.
 it.each([
-	[true, 'bg-warn-bg'],
+	[true, 'bg-warning-bg'],
 	[false, 'bg-ok-bg'],
 ])('a sale read as awaiting=%s pops once, in its tone, with one haptic', async (awaiting, tone) => {
 	Platform.isNative = true;

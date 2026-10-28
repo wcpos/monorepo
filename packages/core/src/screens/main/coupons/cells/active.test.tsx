@@ -12,7 +12,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (s: string) => new Date(`${s}Z`),
 }));
 it.each([
-	['publish', null, 'coupons.active', 'success'],
+	['publish', null, 'coupons.active', 'ok'],
 	['publish', '2000-01-01T00:00:00', 'coupons.inactive', 'muted'],
 	['draft', null, 'coupons.inactive', 'muted'],
 ])(

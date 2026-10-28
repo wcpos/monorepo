@@ -173,11 +173,11 @@ function OrderRow({
 								<Icon
 									name="pending"
 									size="xs"
-									className={stale ? 'text-warn-text' : 'text-muted-foreground'}
+									className={stale ? 'text-warning-text' : 'text-muted-foreground'}
 								/>
 								<Text
 									testID={`open-orders-row-${order.uuid}-age`}
-									className={`text-xs ${stale ? 'text-warn-text font-semibold' : 'text-muted-foreground'}`}
+									className={`text-xs ${stale ? 'text-warning-text font-semibold' : 'text-muted-foreground'}`}
 								>
 									{relative(openedMs, nowMs)}
 								</Text>

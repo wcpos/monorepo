@@ -24,13 +24,13 @@ import { Text } from '../text';
  *
  * @example
  * // User avatar with initials fallback when avatar URL fails
- * <Avatar source={{ uri: avatarUrl }} fallback="PK" size="md" variant="success" />
+ * <Avatar source={{ uri: avatarUrl }} fallback="PK" size="md" />
  *
  * // Site icon (rounded square) with site-name initials fallback
  * <Avatar source={faviconUrl} fallback={getInitials(site.name)} size="lg" shape="rounded" />
  *
  * // Initials-only (no image attempted)
- * <Avatar fallback="JD" variant="warning" />
+ * <Avatar fallback="JD" />
  *
  * // The Guest customer: a generic person glyph, neutral
  * <Avatar icon="customer" variant="muted" />
@@ -51,9 +51,6 @@ const avatarVariants = cva('items-center justify-center overflow-hidden', {
 		variant: {
 			// A person's initials sit on the theme's accent (owner rule, 2026-10-18).
 			default: 'bg-primary',
-			success: 'bg-success/15',
-			warning: 'bg-warning/15',
-			error: 'bg-destructive/15',
 			muted: 'bg-muted',
 		},
 	},
@@ -68,13 +65,7 @@ const fallbackTextVariants: Record<
 	NonNullable<VariantProps<typeof avatarVariants>['variant']>,
 	string
 > = {
-	// A tone is the wash behind the initials; the initials stay in the foreground, as a tinted
-	// Badge's words do: a tone's own colour on its 15% wash reads under the 4.5:1 text floor
-	// (light theme: success 4.0:1, error 4.2:1, warning 2.6:1).
 	default: 'text-primary-foreground',
-	success: 'text-foreground',
-	warning: 'text-foreground',
-	error: 'text-foreground',
 	muted: 'text-muted-foreground',
 };
 

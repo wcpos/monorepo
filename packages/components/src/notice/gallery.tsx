@@ -13,12 +13,14 @@ const outage: React.ComponentProps<typeof Notice> = {
 	],
 };
 const examples = {
-	warn: <Notice tone="warn" title="Offline, still selling" description="3 sales waiting to sync" />,
+	warn: (
+		<Notice tone="warning" title="Offline, still selling" description="3 sales waiting to sync" />
+	),
 	info: <Notice tone="info" title="Syncing with server…" />,
 	bad: <Notice {...outage} testID="gallery-notice-bad" />,
 	docs: (
 		<Notice
-			tone="warn"
+			tone="warning"
 			title="Your store changed this order's totals"
 			docs={{ label: 'Learn more', href: 'https://docs.wcpos.com' }}
 			testID="gallery-notice-docs"

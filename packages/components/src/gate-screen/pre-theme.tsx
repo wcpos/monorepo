@@ -21,8 +21,8 @@ type PreThemeGateProps = Omit<GateScreenProps, 'icon' | 'docs'> & {
  * with a `color` prop: `Icon` resolves its colour from a className, which does not resolve here.
  */
 const tones = {
-	warn: { disc: C.warnBg, glyph: C.warnText, Glyph: SvgWarning },
-	bad: { disc: C.badBg, glyph: C.bad, Glyph: SvgAlert },
+	warning: { disc: C.warningBg, glyph: C.warningText, Glyph: SvgWarning },
+	bad: { disc: C.badBg, glyph: C.destructive, Glyph: SvgAlert },
 	muted: { disc: C.muted, glyph: C.mutedForeground, Glyph: SvgInfo },
 } as const;
 

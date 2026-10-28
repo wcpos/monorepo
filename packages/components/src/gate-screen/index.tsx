@@ -26,8 +26,8 @@ type GateAction = {
 	destructive?: boolean;
 };
 export type GateScreenProps = {
-	tone: 'warn' | 'bad' | 'muted';
-	/** Overrides the tone's default glyph: warn → warning, bad → alert, muted → info. */
+	tone: 'warning' | 'bad' | 'muted';
+	/** Overrides the tone's default glyph: warning → warning, bad → alert, muted → info. */
 	icon?: IconName;
 	title: string;
 	description?: string;

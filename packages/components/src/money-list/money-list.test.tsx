@@ -34,14 +34,8 @@ const matrix: [string, object, string[], string[], string[]][] = [
 		['text-base', 'text-foreground'],
 		['font-semibold', 'border-t'],
 	],
-	[
-		'row',
-		{ tone: 'destructive' },
-		['text-destructive'],
-		['text-destructive'],
-		['text-muted-foreground'],
-	],
-	['row', { tone: 'success' }, ['text-success'], ['text-success'], ['text-muted-foreground']],
+	['row', { tone: 'bad' }, ['text-bad'], ['text-bad'], ['text-muted-foreground']],
+	['row', { tone: 'ok' }, ['text-ok'], ['text-ok'], ['text-muted-foreground']],
 	[
 		'row',
 		{ indent: true },
@@ -58,9 +52,9 @@ const matrix: [string, object, string[], string[], string[]][] = [
 	],
 	[
 		'total',
-		{ tone: 'success' },
-		['font-semibold', 'text-success'],
-		['font-semibold', 'text-success'],
+		{ tone: 'ok' },
+		['font-semibold', 'text-ok'],
+		['font-semibold', 'text-ok'],
 		['text-muted-foreground'],
 	],
 ];
@@ -106,7 +100,7 @@ describe('MoneyList', () => {
 	});
 
 	it('draws a row with no amount as its label alone', () => {
-		render(<MoneyList.Total testID="paid" label="Paid in full" tone="success" />);
+		render(<MoneyList.Total testID="paid" label="Paid in full" tone="ok" />);
 		expect(screen.getByTestId('paid').textContent).toBe('Paid in full');
 	});
 });

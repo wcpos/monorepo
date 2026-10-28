@@ -9,8 +9,8 @@ import { StatusFilterCell } from '../../components/status-filter-cell';
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
 const stockTones: Record<string, StatusBadgeProps['variant']> = {
-	instock: 'success',
-	outofstock: 'error',
+	instock: 'ok',
+	outofstock: 'bad',
 	lowstock: 'warning',
 	onbackorder: 'warning',
 };

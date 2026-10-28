@@ -20,7 +20,7 @@ export const stories = [
 		id: 'variants',
 		render: () => (
 			<HStack>
-				{(['default', 'success', 'warning', 'error', 'muted'] as const).map((variant) => (
+				{(['default', 'muted'] as const).map((variant) => (
 					<Avatar key={variant} variant={variant} fallback="PK" />
 				))}
 			</HStack>

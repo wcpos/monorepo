@@ -173,7 +173,7 @@ export function RejectedMutationsPanel() {
 								{/* A rejected DELETE must never look like a rejected edit: requeuing
 								    it destroys the record on the server (#1093 audit, Q2). */}
 								{row.operation === 'delete' ? (
-									<Badge variant="destructive" testID={`db-rejected-delete-${row.mutationId}`}>
+									<Badge variant="bad" testID={`db-rejected-delete-${row.mutationId}`}>
 										{t('health.database.rejected.delete_pill')}
 									</Badge>
 								) : null}

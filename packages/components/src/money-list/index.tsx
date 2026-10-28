@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
+import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { TEXT_LADDER } from '../text/ladder';
@@ -12,13 +13,7 @@ import { TEXT_LADDER } from '../text/ladder';
  * currency format made. The total closes the list at body size, semibold, so the screen's one
  * figure (`AmountFigure`) still leads (CODING_STANDARDS § Design 1 and 7).
  */
-type MoneyTone = 'default' | 'destructive' | 'success';
-
-const TONE: Record<MoneyTone, string> = {
-	default: '',
-	destructive: 'text-destructive',
-	success: 'text-success',
-};
+type MoneyTone = 'default' | Extract<Tone, 'bad' | 'ok'>;
 
 interface MoneyRowProps extends Omit<ViewProps, 'children'> {
 	/** In the row's tone, HTML entities decoded (a product's name); an element is drawn as given. */
@@ -28,7 +23,7 @@ interface MoneyRowProps extends Omit<ViewProps, 'children'> {
 	/** Formatted by the caller. A row with nothing to add up has none. */
 	amount?: string;
 	amountTestID?: string;
-	/** Meaning, never decoration: a refund row is destructive, label and amount alike. */
+	/** Meaning, never decoration: a refund row is `bad`, label and amount alike. */
 	tone?: MoneyTone;
 	/** A breakdown of the row above it: inset, at the help rank. */
 	indent?: boolean;
@@ -49,7 +44,7 @@ function Line({
 		indent ? TEXT_LADDER.help : 'text-base',
 		total && 'font-semibold',
 		tone === 'default' && !indent && !total && 'text-muted-foreground',
-		TONE[tone]
+		tone !== 'default' && TONE[tone].text
 	);
 	return (
 		<View

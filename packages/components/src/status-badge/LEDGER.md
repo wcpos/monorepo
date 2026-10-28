@@ -9,3 +9,4 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 ## Lines
 
 1. Resets inherited text classes so enclosing buttons cannot override the badge’s semantic colours on hover — evidence: `b324f90140 2026-08-19 fix(components): a badge keeps its own colours wherever it is nested (#1369)`, PR/issue #1369, code: "`<TextClassContext.Provider value={undefined}>`" in `packages/components/src/status-badge/index.tsx:61`.
+2. The dot reads the tone map's `dot` face: `ok`, `warning`, `bad`, `info`, `muted` (`error` became `bad`, `success` became `ok`; card 16, 2026-10-28); `default` is the theme's accent — evidence: card 16 of the 2026-10-28 component-library review (`lib/tone.ts`), test `lib/tone.test.ts`.

@@ -68,7 +68,7 @@ const cases = [
 		{ kind: 'taking-over', deferral: 'no-answer' },
 		"The other tab isn't answering",
 		'Close it, or reload it, to continue here.',
-		'warn',
+		'warning',
 	],
 	[
 		{ kind: 'parked', reason: 'worker-lost' },

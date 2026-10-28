@@ -20,7 +20,7 @@ function RegisterStatus({
 	const date = useDateFormat(last_closure?.closed_at_gmt, 'MMM d, p', false);
 	const name = session?.opened_by.name || t('register.unknown_cashier');
 	if (session?.status === 'open')
-		return <StatusBadge variant="success" label={t('register.open_since_by', { time, name })} />;
+		return <StatusBadge variant="ok" label={t('register.open_since_by', { time, name })} />;
 	if (session?.status === 'counting')
 		return <StatusBadge variant="warning" label={t('register.counting_by', { name })} />;
 	return (

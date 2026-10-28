@@ -21,7 +21,7 @@ type GrowKey = {
 	/** The key's text when it is not its name (`−10%`, named "Discount (10%)"). */
 	text?: string;
 	icon?: IconName;
-	variant?: 'destructive' | 'primary';
+	variant?: 'bad' | 'primary';
 	/** Cells wide (anchored), fractions allowed so fewer keys fill a row; 1 when unset. */
 	span?: number;
 	/** A quick key: primary text, lit (`true`) while its value is the draft. */

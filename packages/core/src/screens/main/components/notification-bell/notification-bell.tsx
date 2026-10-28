@@ -51,7 +51,7 @@ export function NotificationBell({
 								<Icon name="notifications" size="xl" className="text-sidebar-foreground" />
 								{/* Always mounted: the badge has to be there to show the first one arrive. */}
 								<View className="absolute -top-1 -right-0.5">
-									<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+									<Badge count={unreadCount} max={99} variant="bad" size="sm" />
 								</View>
 							</View>
 						}
@@ -67,7 +67,7 @@ export function NotificationBell({
 						/>
 					</PopoverTrigger>
 					<View pointerEvents="none" className="absolute -top-1 -right-0.5">
-						<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+						<Badge count={unreadCount} max={99} variant="bad" size="sm" />
 					</View>
 				</View>
 			)}

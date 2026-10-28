@@ -208,7 +208,7 @@ export function TerminalLegView({
 			<StatusBadge
 				testID="checkout-terminal-status"
 				label={status}
-				variant={failed || leg.captureFailed ? 'error' : 'muted'}
+				variant={failed || leg.captureFailed ? 'bad' : 'muted'}
 			/>
 			{/* Flat on the pane: no card around the reader, no box around the log (owner, 2026-10-06). */}
 			<VStack className="w-full max-w-md" space="md">
@@ -218,7 +218,7 @@ export function TerminalLegView({
 					</Text>
 					{connected ? (
 						<StatusBadge
-							variant="success"
+							variant="ok"
 							label={
 								battery != null
 									? t('pos_checkout.reader_connected_battery', { battery })

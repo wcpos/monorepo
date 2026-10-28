@@ -45,7 +45,7 @@ export function UpdateRequiredNotice({ onRetry, align = 'center', testID, childr
 	return (
 		<VStack testID={testID} className={centered ? 'max-w-md items-center' : undefined}>
 			<HStack className="items-center">
-				<Icon name="warning" variant="destructive" />
+				<Icon name="warning" variant="bad" />
 				<Text className="text-destructive">{translateErrorSummary(t, CODE)}</Text>
 			</HStack>
 			<Text className={centered ? 'text-center' : undefined}>{translateErrorAction(t, CODE)}</Text>

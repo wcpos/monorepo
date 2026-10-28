@@ -120,7 +120,7 @@ export function QueuedEmailsPanel() {
 	return (
 		<VStack testID="db-queued-emails" className="gap-2">
 			<Notice
-				tone={failedCount > 0 ? 'bad' : 'warn'}
+				tone={failedCount > 0 ? 'bad' : 'warning'}
 				testID="db-queued-emails-callout"
 				title={t('health.database.emails.title', { count: rows.length })}
 				description={
@@ -141,7 +141,7 @@ export function QueuedEmailsPanel() {
 							<HStack className="items-center gap-2">
 								<Text className="font-medium">{describeRow(row, t)}</Text>
 								{row.status === 'failed' ? (
-									<Badge variant="destructive" testID={`db-queued-email-failed-${row.localID}`}>
+									<Badge variant="bad" testID={`db-queued-email-failed-${row.localID}`}>
 										{t('health.database.emails.failed')}
 									</Badge>
 								) : (

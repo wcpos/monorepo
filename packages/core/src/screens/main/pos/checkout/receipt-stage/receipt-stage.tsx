@@ -71,7 +71,7 @@ function PaidMoment({
 					<ToneDisc
 						testID="receipt-paid-disc"
 						size="lg"
-						tone={sent ? 'muted' : awaiting ? 'warn' : 'ok'}
+						tone={sent ? 'muted' : awaiting ? 'warning' : 'ok'}
 						icon={sent || awaiting ? 'pending' : undefined}
 					/>
 				</Stamp>
@@ -228,7 +228,7 @@ function ReceiptStageDocument({
 				</View>
 				<Text testID="receipt-paid-with" className="text-muted-foreground text-center">
 					{awaiting ? (
-						<Text testID="receipt-awaiting-store" className="text-warn-text">
+						<Text testID="receipt-awaiting-store" className="text-warning-text">
 							{`${t('pos_checkout.awaiting_store')} · `}
 						</Text>
 					) : null}

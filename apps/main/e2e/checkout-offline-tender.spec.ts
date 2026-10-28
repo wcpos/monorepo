@@ -113,7 +113,7 @@ async function takeCashSaleOffline(
 		await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 		await expect(page.getByTestId('receipt-awaiting-store')).toBeVisible({ timeout: 15_000 });
 		// The disc exposes its awaiting/answered state only through its wash class.
-		await expect(page.getByTestId('receipt-paid-disc')).toHaveClass(/\bbg-warn-bg\b/);
+		await expect(page.getByTestId('receipt-paid-disc')).toHaveClass(/\bbg-warning-bg\b/);
 		await expect(page.getByTestId('register-bar-pill').filter({ visible: true })).toBeVisible();
 		expect(sent, 'rule 2: an offline record is journalled, never sent').toEqual([]);
 	} finally {

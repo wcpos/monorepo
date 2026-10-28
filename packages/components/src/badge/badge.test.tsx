@@ -93,7 +93,7 @@ describe('badge colour contract', () => {
 	it('keeps its own colour when nested in a ghost Button', () => {
 		render(
 			<Button variant="ghost" testID="host">
-				<Badge count={1} variant="destructive" size="sm" />
+				<Badge count={1} variant="bad" size="sm" />
 			</Button>
 		);
 
@@ -109,7 +109,7 @@ describe('badge colour contract', () => {
 	] as const)('inherits no stateful text colour from the %s variant', (_label, variant) => {
 		render(
 			<Button variant={variant} testID="host">
-				<Badge count={7} variant="destructive" size="sm" />
+				<Badge count={7} variant="bad" size="sm" />
 			</Button>
 		);
 
@@ -119,7 +119,7 @@ describe('badge colour contract', () => {
 	it('applies the same reset to StatusBadge', () => {
 		render(
 			<Button variant="ghost" testID="host">
-				<StatusBadge label="Valid" variant="success" />
+				<StatusBadge label="Valid" variant="ok" />
 			</Button>
 		);
 
@@ -131,7 +131,7 @@ describe('badge colour contract', () => {
 	it('still renders its own colour outside any Button', () => {
 		render(
 			<div data-testid="host">
-				<Badge count={3} variant="destructive" size="sm" />
+				<Badge count={3} variant="bad" size="sm" />
 			</div>
 		);
 
@@ -153,10 +153,9 @@ describe('badge label', () => {
 
 describe('badge tinted', () => {
 	it.each([
-		['success', 'bg-success/15'],
+		['ok', 'bg-ok/15'],
 		['warning', 'bg-warning/15'],
-		['destructive', 'bg-destructive/15'],
-		['default', 'bg-primary/15'],
+		['bad', 'bg-bad/15'],
 	] as const)(
 		'%s: a wash of the tone, the words in the foreground, the solid height',
 		(tone, bg) => {
@@ -171,13 +170,13 @@ describe('badge tinted', () => {
 			// The words keep the 4.5:1 floor on every wash: amber on amber/15 is 2.7:1 in light.
 			const label = screen.getByText('Ready');
 			expect(label).toHaveClass('text-foreground');
-			expect(label.className).not.toMatch(/text-(success|warning|destructive|primary)\b/);
+			expect(label.className).not.toMatch(/text-(ok|warning|bad)\b/);
 		}
 	);
 
 	it('leaves the solid badge as it was', () => {
-		const { container } = render(<Badge variant="success">Ready</Badge>);
-		expect(container.firstChild).toHaveClass('bg-success');
+		const { container } = render(<Badge variant="ok">Ready</Badge>);
+		expect(container.firstChild).toHaveClass('bg-ok');
 		expect(screen.getByText('Ready')).toHaveClass('text-success-foreground');
 	});
 });

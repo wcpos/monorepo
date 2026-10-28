@@ -140,7 +140,7 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 							{refunds.map((refund) => (
 								<MoneyList.Row
 									key={refund.id}
-									tone="destructive"
+									tone="bad"
 									label={`${t('orders.refund')} #${refund.id}`}
 									amount={format(-refundValue(refund))}
 								/>

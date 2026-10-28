@@ -34,7 +34,7 @@ export function UpdateRequired() {
 
 	return (
 		<GateScreen
-			tone="warn"
+			tone="warning"
 			testID="update-required-screen"
 			title={translateErrorSummary(t, CODE)}
 			description={description}

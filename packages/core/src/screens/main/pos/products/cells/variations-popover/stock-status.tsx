@@ -65,7 +65,7 @@ export function VariationStockBadge({ stock }: { stock: ResolvedStock }) {
 		return (
 			<StatusBadge
 				testID="variation-popover-stock-badge"
-				variant="error"
+				variant="bad"
 				className="self-start"
 				label={t('common.out_of_stock')}
 			/>
@@ -90,7 +90,7 @@ export function VariationStockBadge({ stock }: { stock: ResolvedStock }) {
 	return (
 		<StatusBadge
 			testID="variation-popover-stock-badge"
-			variant="success"
+			variant="ok"
 			className="self-start"
 			label={t('pos_products.in_stock', { quantity: format(stock.quantity) })}
 		/>

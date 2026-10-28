@@ -31,7 +31,7 @@ export function useUnreadErrorCount() {
 export function LogsBadge({ unread }: { unread: number }) {
 	return (
 		<View className="absolute -top-1 -right-0.5">
-			<Badge count={unread} max={99} variant="destructive" size="sm" />
+			<Badge count={unread} max={99} variant="bad" size="sm" />
 		</View>
 	);
 }

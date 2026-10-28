@@ -54,8 +54,8 @@ it('renders title, line, detail and an extra block under derived testIDs', () =>
 });
 
 it.each([
-	['warn', 'warning', PRE_THEME_COLOURS.warnBg, PRE_THEME_COLOURS.warnText],
-	['bad', 'alert', PRE_THEME_COLOURS.badBg, PRE_THEME_COLOURS.bad],
+	['warning', 'warning', PRE_THEME_COLOURS.warningBg, PRE_THEME_COLOURS.warningText],
+	['bad', 'alert', PRE_THEME_COLOURS.badBg, PRE_THEME_COLOURS.destructive],
 	['muted', 'info', PRE_THEME_COLOURS.muted, PRE_THEME_COLOURS.mutedForeground],
 ] as const)('puts the %s tone on the disc, never on the title', (tone, glyph, disc, ink) => {
 	const { container } = render(<PreThemeGate tone={tone} title="T" />);
@@ -71,7 +71,7 @@ it('stacks the primary before the secondary, fires each, and holds a disabled on
 	const secondary = jest.fn();
 	render(
 		<PreThemeGate
-			tone="warn"
+			tone="warning"
 			title="T"
 			primary={{ label: 'Go', onPress: primary, testID: 'own-primary' }}
 			secondary={{ label: 'Back', onPress: secondary, disabled: true }}

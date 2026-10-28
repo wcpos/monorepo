@@ -17,7 +17,7 @@ export function UpgradeRequired() {
 
 	return (
 		<GateScreen
-			tone="warn"
+			tone="warning"
 			testID="upgrade-required-screen"
 			title={t('gate.update_plugin.title')}
 			description={t('gate.update_plugin.description')}

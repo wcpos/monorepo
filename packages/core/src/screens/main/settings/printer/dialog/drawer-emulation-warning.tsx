@@ -22,7 +22,7 @@ export function DrawerEmulationWarning({ vendor, language }: DrawerEmulationWarn
 	}
 
 	return (
-		<Text testID="add-printer-drawer-emulation-warning" className="text-warn-text text-xs">
+		<Text testID="add-printer-drawer-emulation-warning" className="text-warning-text text-xs">
 			{t('settings.cash_drawer_emulation_warning')}
 		</Text>
 	);
