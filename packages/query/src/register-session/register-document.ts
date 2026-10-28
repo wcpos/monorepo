@@ -10,6 +10,19 @@ import type { DeepReadonly } from 'rxdb';
 
 const registerLogger = getLogger(['wcpos', 'app', 'hydration']);
 
+export type LiveSession = {
+	session_id: string;
+	status: 'open' | 'counting';
+	opened_at_gmt: string;
+	opened_by: { id: number; name: string } | null;
+	acknowledged: boolean;
+	expected_float: string | null;
+	counted_float: string | null;
+	business_day: string | null;
+	seeded_in: readonly string[];
+	at: string;
+};
+
 export interface RegisterDocument {
 	id: string;
 	name: string;
@@ -24,9 +37,11 @@ export interface RegisterDocument {
 		string,
 		{
 			sale_counter: number;
+			bindings?: Record<string, { register_id: string; register_name: string | null }>;
 			registers?: Record<
 				string,
 				Partial<RegisterCounters> & {
+					live?: LiveSession;
 					closure_reservation?: { row: DeepReadonly<ClosureRow>; applied: boolean };
 				}
 			>;
@@ -143,9 +158,9 @@ function reminted(data: RegisterDocument, identity: TillIdentity): RegisterDocum
 						? {
 								registers: Object.fromEntries(
 									Object.entries(bucket.registers).map(
-										([register, { closure_reservation: _pending, ...counters }]) => [
+										([register, { closure_reservation: _pending, live, ...counters }]) => [
 											register,
-											counters,
+											{ ...counters, ...(live ? { live: { ...live, seeded_in: [] } } : {}) },
 										]
 									)
 								),
@@ -231,8 +246,15 @@ export function observeRegister$(userDB: UserDatabase) {
 		.pipe(map((doc) => doc?.toJSON(true).data ?? null));
 }
 
-export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
-	const site = currentRegister?.sites?.[siteUuid];
+/** The register bound for a store of a site: its own binding, else the legacy pointer when that is this store's. */
+export function boundRegisterIdOf(
+	register: RegisterDocument | null | undefined,
+	siteUuid: string,
+	storeId?: number
+): string | null {
+	const site = register?.sites?.[siteUuid];
+	const binding = site?.bindings?.[String(storeId ?? 0)];
+	if (binding) return binding.register_id;
 	// Legacy pointers have no store; the next bind writes it.
 	if (
 		storeId !== undefined &&
@@ -241,6 +263,10 @@ export function getBoundRegisterId(siteUuid: string, storeId?: number): string |
 	)
 		return null;
 	return site?.register_id ?? null;
+}
+
+export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
+	return boundRegisterIdOf(currentRegister, siteUuid, storeId);
 }
 
 let currentSiteUuid: string | null = null;
@@ -254,9 +280,18 @@ export function getCurrentBoundRegisterId(): string | null {
 export async function readBoundRegister(userDB: UserDatabase, siteUuid: string, storeId?: number) {
 	currentSiteUuid = siteUuid;
 	currentStoreId = storeId;
-	const site = (await readRegister(userDB))?.sites?.[siteUuid];
+	await readRegister(userDB);
+	return getBoundRegister(siteUuid, storeId);
+}
+
+export function getBoundRegister(
+	siteUuid: string,
+	storeId?: number
+): { id: string; name: string } | null {
+	const site = currentRegister?.sites?.[siteUuid];
 	const id = getBoundRegisterId(siteUuid, storeId);
-	return id ? { id, name: site?.register_name ?? '' } : null;
+	const binding = site?.bindings?.[String(storeId ?? 0)];
+	return id ? { id, name: (binding ? binding.register_name : site?.register_name) ?? '' } : null;
 }
 
 export async function bindRegister(
@@ -275,6 +310,12 @@ export async function bindRegister(
 			...data.sites,
 			[siteUuid]: {
 				...(data.sites[siteUuid] ?? { sale_counter: 0 }),
+				bindings: {
+					...data.sites[siteUuid]?.bindings,
+					...(register.id
+						? { [String(storeId ?? 0)]: { register_id: register.id, register_name: register.name } }
+						: {}),
+				},
 				register_id: register.id,
 				register_name: register.name,
 				register_store_id: storeId ?? null,
@@ -298,12 +339,20 @@ export async function unbindRegister(
 			storeId !== undefined &&
 			site?.register_store_id != null &&
 			site.register_store_id !== storeId;
-		if (!site || belongsElsewhere) return data;
+		if (!site) return data;
+		const bindings = { ...site.bindings };
+		delete bindings[String(storeId ?? 0)];
 		return {
 			...data,
 			sites: {
 				...data.sites,
-				[siteUuid]: { ...site, register_id: null, register_name: null, register_store_id: null },
+				[siteUuid]: {
+					...site,
+					bindings,
+					...(!belongsElsewhere
+						? { register_id: null, register_name: null, register_store_id: null }
+						: {}),
+				},
 			},
 		};
 	});
@@ -525,6 +574,53 @@ export async function advancePerpetual(
 				counters_started_at: register.counters_started_at ?? new Date().toISOString(),
 			},
 		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+
+export function readLiveSession(siteUuid: string, registerId: string): LiveSession | null {
+	return currentRegister?.sites[siteUuid]?.registers?.[registerId]?.live ?? null;
+}
+
+export async function recordLiveSession(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	live: Omit<LiveSession, 'seeded_in' | 'at'> | null
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const register = { ...bucket.registers?.[registerId] };
+		if (live)
+			register.live = {
+				...live,
+				seeded_in: live.session_id === register.live?.session_id ? register.live.seeded_in : [],
+				at: new Date().toISOString(),
+			};
+		else delete register.live;
+		const registers = { ...bucket.registers, [registerId]: register };
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+
+export async function markSeededIn(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	storeDbName: string
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid];
+		const register = bucket?.registers?.[registerId];
+		if (!register?.live || register.live.seeded_in.includes(storeDbName)) return data;
+		const live = { ...register.live, seeded_in: [...register.live.seeded_in, storeDbName] };
+		const registers = { ...bucket.registers, [registerId]: { ...register, live } };
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});
 	currentRegister = updated.toJSON(true).data;

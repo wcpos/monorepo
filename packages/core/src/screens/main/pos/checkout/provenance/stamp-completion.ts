@@ -8,7 +8,7 @@ import {
 	withSaleProvenance,
 } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
-import { nextSaleCounter, readRegister } from '@wcpos/query/register-session';
+import { boundRegisterIdOf, nextSaleCounter, readRegister } from '@wcpos/query/register-session';
 
 export async function completionMeta(
 	order: { id?: number | null; uuid?: string; meta_data?: MetaDataEntry[] },
@@ -47,16 +47,11 @@ export async function completionMeta(
 		return stamp(null, null);
 	}
 	const counter = await nextSaleCounter(userDB, siteUuid);
-	const pointer = register.sites[siteUuid];
-	// A register belongs to one store: a pointer bound in another store of the site is not ours.
-	const boundElsewhere =
-		storeId !== undefined &&
-		pointer?.register_store_id != null &&
-		pointer.register_store_id !== storeId;
+	// A register belongs to one store: this store's binding, never another store's of the site.
 	// The store seeds a default register and a till binds to a lone register on its own,
 	// so a sale reaches here unbound only when the store has several registers and none
 	// was chosen (checkout refuses to complete in that state) or an admin removed them
 	// all. The counter is the device's and is stamped regardless; the gap is reported
 	// when the sale actually completes (see provenance-gap.ts), not here.
-	return stamp(boundElsewhere ? null : (pointer?.register_id ?? null), counter);
+	return stamp(boundRegisterIdOf(register, siteUuid, storeId), counter);
 }
