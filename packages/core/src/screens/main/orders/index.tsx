@@ -4,8 +4,6 @@ import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import isEqual from 'lodash/isEqual';
 
-import { EmptyState } from '@wcpos/components/empty-state';
-import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 import { queryHandleAnswers$ } from '@wcpos/query';
@@ -41,8 +39,6 @@ import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-de
 import {
 	QueryStateProvider,
 	useCollectionQueryHandle,
-	useDrawnHandle,
-	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
@@ -53,12 +49,13 @@ import { Status } from './cells/status';
 import { DateCell } from './cells/date';
 import { Total } from './cells/total';
 import { OrderRow } from './row';
-import { DayHeading, groupOrders, isDay, type OrderListItem } from './day-heading';
+import { DayHeading, groupOrders, isDay, type OrderHit, type OrderListItem } from './day-heading';
 import { useRowKeyboard } from './use-row-keyboard';
 
 import type { Row } from '../../../table-types';
 import type { DataTableFeatures } from '../components/data-table';
-import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../query';
+import type { FiltersOf, QueryStateOf } from '../../../query';
+import type { ListTable } from '../components/list-frame';
 const cells = {
 	actions: Actions,
 	billing: Address,
@@ -109,88 +106,94 @@ function getInitialOrderSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-// The list re-renders for the answer only; the table and the footer read their own fields.
-const ANSWER_ONLY: SnapshotFields = [];
+type OrderListRow = Row<OrderListItem, DataTableFeatures>;
 
-function OrdersList({
-	handle,
-	initialFilters,
+/** The row keyboard (web) and the order rows it moves through, for the rows the list draws. */
+const RowKeyboardContext = React.createContext<{
+	keyboard: ReturnType<typeof useRowKeyboard>;
+	ids: string[];
+} | null>(null);
+
+/** An order's row in the keyboard's focus order. */
+function KeyboardRow({
+	uuid,
+	coarse,
+	children,
 }: {
-	/** The orders query handle (roadmap#423): the list and its table read its snapshot. */
+	uuid: string;
+	coarse: boolean;
+	children: React.ReactNode;
+}) {
+	const context = React.useContext(RowKeyboardContext);
+	if (!context) return <>{children}</>;
+	const { keyboard, ids } = context;
+	const focusIndex = ids.indexOf(uuid);
+	const focused = keyboard.focusIndex === focusIndex;
+	return (
+		<View
+			testID={coarse ? `data-table-row-${uuid}` : undefined}
+			tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
+			onFocus={() => keyboard.focusFrom(focusIndex)}
+			ref={(node) => keyboard.focusRow(focusIndex, node)}
+			// The ring marks keyboard focus only (`keyboard.ring`): a click focuses the row too,
+			// and must not draw it. Uniwind has no `focus-visible:`, so the hook decides.
+			className={
+				focused && keyboard.ring
+					? 'web:outline-2 web:outline-primary web:-outline-offset-2'
+					: undefined
+			}
+		>
+			{children}
+		</View>
+	);
+}
+
+/** A day heading, or an order's row in the keyboard's order, drawn by `render`. */
+function orderItem(
+	coarse: boolean,
+	render: (row: OrderListRow, record: OrderHit['record']) => React.ReactNode
+) {
+	return function renderOrderItem({ item }: { item: OrderListRow }) {
+		return (
+			<VirtualizedList.Item>
+				{isDay(item.original) ? (
+					<DayHeading {...item.original} />
+				) : (
+					<KeyboardRow uuid={item.original.record.uuid} coarse={coarse}>
+						{render(item, item.original.record)}
+					</KeyboardRow>
+				)}
+			</VirtualizedList.Item>
+		);
+	};
+}
+
+/** The table over the drawn orders, grouped by store day, with the row keyboard. */
+function OrdersTable({
+	handle,
+	table,
+	hits,
+	open,
+}: {
 	handle: QueryHandle;
-	initialFilters: Partial<FiltersOf<'orders'>>;
+	table: ListTable<{ item: OrderListRow }>;
+	hits: OrderHit[];
+	open: (uuid: string) => void;
 }) {
 	const state = useQueryState<'orders'>();
-	const actions = useQueryStateActions<'orders'>();
-	// Suspended on until the first answer (the screen's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
-	const shown = useDrawnHandle(handle);
-	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
-	const deferredResult = React.useDeferredValue(result);
 	const { timezone } = useStoreDay();
 	const { heading } = useStoreDayLabel();
-	const pointer = usePointer();
-	const router = useRouter();
-	const t = useT();
-	const data = groupOrders(deferredResult.hits, state.sort.field, timezone, heading);
-	const ids = deferredResult.hits.map((hit) => hit.record.uuid);
+	const data = groupOrders(hits, state.sort.field, timezone, heading);
+	const ids = hits.map((hit) => hit.record.uuid);
 	const listRef = React.useRef<VirtualizedListHandle>(null);
-	// A row opens the order modal (the one order surface), on its View tab.
-	const open = (uuid: string) =>
-		router.push({ pathname: '/orders/edit/[orderId]', params: { orderId: uuid } });
 	const keyboard = useRowKeyboard(ids, open, (index) => {
 		const itemIndex = data.findIndex((item) => !isDay(item) && item.record.uuid === ids[index]);
 		listRef.current?.scrollToIndex({ index: itemIndex, align: 'center', animated: false });
 	});
-	const tableActions = React.useMemo(
-		() => ({
-			setSort: actions.setSort,
-			extendLimit: actions.extendLimit,
-			setFilter: actions.setFilter,
-		}),
-		[actions]
-	);
-	const emptyStore = !state.search && isEqual(state.filters, initialFilters);
-	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
-	const renderItem = ({ item }: { item: Row<OrderListItem, DataTableFeatures>; index: number }) => {
-		if (isDay(item.original))
-			return (
-				<VirtualizedList.Item>
-					<DayHeading {...item.original} />
-				</VirtualizedList.Item>
-			);
-		const record = item.original.record;
-		const focusIndex = ids.indexOf(record.uuid);
-		const focused = keyboard.focusIndex === focusIndex;
-		return (
-			<VirtualizedList.Item>
-				<View
-					testID={pointer === 'coarse' ? `data-table-row-${record.uuid}` : undefined}
-					tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
-					onFocus={() => keyboard.focusFrom(focusIndex)}
-					ref={(node) => keyboard.focusRow(focusIndex, node)}
-					// The ring marks keyboard focus only (`keyboard.ring`): a click focuses the row too,
-					// and must not draw it. Uniwind has no `focus-visible:`, so the hook decides.
-					className={
-						focused && keyboard.ring
-							? 'web:outline-2 web:outline-primary web:-outline-offset-2'
-							: undefined
-					}
-				>
-					{pointer === 'coarse' ? (
-						<OrderRow record={record} onSelect={open} />
-					) : (
-						<DataTableRow item={item} pressWhenActionsHidden={() => open(record.uuid)} />
-					)}
-				</View>
-			</VirtualizedList.Item>
-		);
-	};
 	return (
-		<>
-			{pending && <View testID="orders-searching-line" className="bg-primary h-0.5" />}
+		<RowKeyboardContext.Provider value={{ keyboard, ids }}>
 			<View
-				className={`flex-1 ${pending ? 'opacity-60' : ''}`}
+				className="flex-1"
 				tabIndex={Platform.OS === 'web' ? 0 : undefined}
 				onKeyDown={keyboard.onKeyDown}
 			>
@@ -199,42 +202,19 @@ function OrdersList({
 					collectionName="orders"
 					handle={handle}
 					sort={state.sort}
-					actions={tableActions}
 					cells={cells}
 					estimatedItemSize={56}
-					renderItem={renderItem}
 					listRef={listRef}
 					tableConfig={{
 						data,
 						getRowId: (item) => (isDay(item) ? item.id : item.record.uuid),
 						extraData: { focusIndex: keyboard.focusIndex, ring: keyboard.ring },
 					}}
-					getItemType={(item: Row<OrderListItem, DataTableFeatures>) =>
-						isDay(item.original) ? 'day' : 'order'
-					}
-					noDataMessage={
-						<EmptyState
-							testID="no-data-message"
-							size="surface"
-							kind={emptyStore ? 'empty' : 'no-results'}
-							title={t(emptyStore ? 'orders.no_orders_yet' : 'orders.nothing_matches_filters')}
-							description={emptyStore ? t('orders.no_orders_yet_description') : undefined}
-							action={
-								emptyStore
-									? undefined
-									: {
-											label: t('orders.clear_filters'),
-											onPress: () => {
-												actions.resetFilters();
-												actions.clearSearch();
-											},
-										}
-							}
-						/>
-					}
+					getItemType={(item: OrderListRow) => (isDay(item.original) ? 'day' : 'order')}
+					{...table}
 				/>
 			</View>
-		</>
+		</RowKeyboardContext.Provider>
 	);
 }
 
@@ -249,14 +229,34 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	// failed read, so it is still listening after the boundary's retry.
 	const results$ = React.useMemo(() => queryHandleAnswers$(handle), [handle]);
 	useReferencedCustomerDemand(results$);
+	const router = useRouter();
+	const t = useT();
+	// A row opens the order modal (the one order surface), on its View tab.
+	const open = (uuid: string) =>
+		router.push({ pathname: '/orders/edit/[orderId]', params: { orderId: uuid } });
 	return (
 		<View testID="orders-body" className="flex-1">
 			<ListColumn
+				id="orders"
 				chips={<FilterBar initialFilters={initialFilters} />}
 				handle={handle}
 				skeleton={<DataTableSkeleton id="orders" />}
+				renderRow={{
+					coarse: orderItem(true, (_, record) => <OrderRow record={record} onSelect={open} />),
+					fine: orderItem(false, (item, record) => (
+						<DataTableRow item={item} pressWhenActionsHidden={() => open(record.uuid)} />
+					)),
+				}}
+				narrowed={!!state.search || !isEqual(state.filters, initialFilters)}
+				empty={{
+					title: t('orders.no_orders_yet'),
+					description: t('orders.no_orders_yet_description'),
+				}}
+				noResults={{ title: t('orders.nothing_matches_filters'), clear: t('orders.clear_filters') }}
 			>
-				<OrdersList handle={handle} initialFilters={initialFilters} />
+				{(table, result) => (
+					<OrdersTable handle={handle} table={table} hits={result.hits} open={open} />
+				)}
 			</ListColumn>
 		</View>
 	);

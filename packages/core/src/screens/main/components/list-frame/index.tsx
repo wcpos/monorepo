@@ -189,12 +189,7 @@ export function ListColumn<TParams>({
 	 * an empty stack adds nothing.
 	 */
 	rows?: React.ReactNode;
-} & (
-	| ListProps<TParams>
-	// Orders still draws its own body in the boundary (its row keyboard wraps both rows).
-	| { handle: QueryHandle; skeleton: React.ReactNode; renderRow?: never; children: React.ReactNode }
-	| { handle?: never; children: React.ReactNode }
-)) {
+} & (ListProps<TParams> | { handle?: never; children: React.ReactNode })) {
 	const phone = useIsPhone();
 	const ground = useGround();
 	// The row above the card brings the gutter over it; with no such row, the body brings it.
@@ -223,7 +218,7 @@ export function ListColumn<TParams>({
 				{body.handle ? (
 					<ErrorBoundary onReset={() => body.handle.retry()} resetKeys={[body.handle]}>
 						<Suspense fallback={body.skeleton}>
-							{body.renderRow ? <ListBody {...body} /> : body.children}
+							<ListBody {...body} />
 						</Suspense>
 					</ErrorBoundary>
 				) : (
