@@ -132,13 +132,14 @@ export function CustomerForm(props: CustomerFormProps) {
 		);
 	};
 	/** A text part; its id (`customer-first-name-input`) is the field's, billing's prefix dropped. */
-	const part = (field: string, placeholder: string) => {
+	const part = (field: string, placeholder: string, label?: string) => {
 		const id = field.replace('billing.', '');
 		return (
 			<TextPart
 				key={id}
 				name={field}
 				placeholder={placeholder}
+				label={label}
 				autoFocus={focus === id}
 				secureTextEntry={id === 'password'}
 				testID={`customer-${id.replace('_', '-')}-input`}
@@ -166,7 +167,7 @@ export function CustomerForm(props: CustomerFormProps) {
 							t('common.name'),
 							<HStack className="gap-2">
 								{part('first_name', labels.first_name)}
-								{part('last_name', labels.last_name)}
+								{part('last_name', labels.last_name, labels.last_name)}
 							</HStack>,
 							{ field: 'first_name', marks: ['first_name', 'last_name'] }
 						)}

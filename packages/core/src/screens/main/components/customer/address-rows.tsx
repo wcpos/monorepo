@@ -3,14 +3,7 @@ import * as React from 'react';
 import { decode } from 'html-entities';
 import { useFormContext, type UseFormReturn, useWatch } from 'react-hook-form';
 
-import {
-	FormField,
-	FormInput,
-	FormItem,
-	FormMessage,
-	SavedMark,
-	useSavedName,
-} from '@wcpos/components/form';
+import { FormField, FormInput, FormItem, SavedMark, useSavedName } from '@wcpos/components/form';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
@@ -185,12 +178,15 @@ export function useAddressFacts(form: UseFormReturn<any>, testID: string) {
 
 /**
  * One text fact: a field that is typed into, named by its row's key. Creation and edit draw the
- * same control (Paul, 2026-10-28: "it should look consistent"); an edit form autosaves it.
+ * same control (Paul, 2026-10-28: "it should look consistent"); an edit form autosaves it. A part
+ * whose row names another part (a Name row's last name) is named by its own `label` instead.
+ * `FormInput` renders the field's validation message itself.
  */
 export function TextPart(props: {
 	name: string;
 	placeholder: string;
 	testID: string;
+	label?: string;
 	autoFocus?: boolean;
 	secureTextEntry?: boolean;
 }) {
@@ -201,18 +197,21 @@ export function TextPart(props: {
 			name={props.name}
 			render={({ field }) => (
 				// The row's key is `<id>-form-item`: the input adopts it as its label.
-				<FormItem className="min-w-0 flex-1 gap-0" nativeID={props.name.replace('.', '-')}>
+				<FormItem
+					className="min-w-0 flex-1 gap-0"
+					nativeID={props.label ? undefined : props.name.replace('.', '-')}
+				>
 					<FormInput
 						{...field}
 						value={field.value ?? ''}
 						placeholder={props.placeholder}
+						aria-label={props.label}
 						autoFocus={props.autoFocus}
 						secureTextEntry={props.secureTextEntry}
 						// A customer's new password, never the cashier's saved login.
 						autoComplete={props.secureTextEntry ? 'new-password' : undefined}
 						testID={props.testID}
 					/>
-					<FormMessage />
 				</FormItem>
 			)}
 		/>
