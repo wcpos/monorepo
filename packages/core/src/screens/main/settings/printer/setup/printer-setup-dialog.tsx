@@ -182,6 +182,66 @@ export function PrinterSetupDialog({
 		setOptionsOpen(false);
 		void flow.rescan();
 	};
+	// Each key the helpers resolve, as a literal call: the string extractor reads no computed key.
+	const words: Record<string, string> = {
+		save_anyway: t('settings.save_anyway'),
+		setup_add_ble: t('settings.setup_add_ble'),
+		setup_add_usb: t('settings.setup_add_usb'),
+		setup_address_heading: t('settings.setup_address_heading'),
+		setup_address_help: t('settings.setup_address_help'),
+		setup_bt_not_listed: t('settings.setup_bt_not_listed'),
+		setup_check_address: t('settings.setup_check_address'),
+		setup_choose_bluetooth: t('settings.setup_choose_bluetooth'),
+		setup_default: t('settings.setup_default'),
+		setup_done: t('settings.setup_done'),
+		setup_enter_address: t('settings.setup_enter_address'),
+		setup_err_paper: t('settings.setup_err_paper'),
+		setup_found_single: t('settings.setup_found_single'),
+		setup_more_options: t('settings.setup_more_options'),
+		setup_none: t('settings.setup_none'),
+		setup_none_help: t('settings.setup_none_help'),
+		setup_none_help_native: t('settings.setup_none_help_native'),
+		setup_not_this: t('settings.setup_not_this'),
+		setup_nothing: t('settings.setup_nothing'),
+		setup_notprinter: t('settings.setup_notprinter'),
+		setup_office_heading: t('settings.setup_office_heading'),
+		setup_ok: t('settings.setup_ok'),
+		setup_open_bluetooth_settings: t('settings.setup_open_bluetooth_settings'),
+		setup_paper_32: t('settings.setup_paper_32'),
+		setup_paper_48: t('settings.setup_paper_48'),
+		setup_print_test: t('settings.setup_print_test'),
+		setup_question: t('settings.setup_question'),
+		setup_ready: t('settings.setup_ready'),
+		setup_receipts: t('settings.setup_receipts'),
+		setup_retry: t('settings.setup_retry'),
+		setup_saved_help: t('settings.setup_saved_help'),
+		setup_scan_again: t('settings.setup_scan_again'),
+		setup_short: t('settings.setup_short'),
+		setup_source_bluetooth: t('settings.setup_source_bluetooth'),
+		setup_source_network: t('settings.setup_source_network'),
+		setup_source_system: t('settings.setup_source_system'),
+		setup_source_usb: t('settings.setup_source_usb'),
+		setup_start_over: t('settings.setup_start_over'),
+		setup_trouble: t('settings.setup_trouble'),
+		setup_trouble_bluetooth: t('settings.setup_trouble_bluetooth'),
+		setup_trouble_device: t('settings.setup_trouble_device'),
+		setup_trouble_held: t('settings.setup_trouble_held'),
+		setup_trouble_network: t('settings.setup_trouble_network'),
+		setup_trouble_pairing: t('settings.setup_trouble_pairing'),
+		setup_trouble_permission: t('settings.setup_trouble_permission'),
+		setup_trouble_secure: t('settings.setup_trouble_secure'),
+		setup_trouble_unpaired: t('settings.setup_trouble_unpaired'),
+		setup_trouble_unresponsive: t('settings.setup_trouble_unresponsive'),
+		setup_unknown: t('settings.setup_unknown'),
+		setup_unsure: t('settings.setup_unsure'),
+		setup_which_printer: t('settings.setup_which_printer'),
+		setup_width_32: t('settings.setup_width_32'),
+		setup_width_42: t('settings.setup_width_42'),
+		setup_width_48: t('settings.setup_width_48'),
+		setup_width_64: t('settings.setup_width_64'),
+		setup_width_help: t('settings.setup_width_help'),
+		setup_width_question: t('settings.setup_width_question'),
+	};
 	type ActionOpts = {
 		disabled?: boolean;
 		variant?: 'outline' | 'default' | 'ghost' | 'link';
@@ -204,7 +264,7 @@ export function PrinterSetupDialog({
 			disabled={disabled}
 			onPress={onPress}
 		>
-			{label ?? t(`settings.${key}`)}
+			{label ?? words[key]}
 		</Button>
 	);
 	// Secondary actions are compact buttons in a wrapping row (Paul, 2026-09-05: buttons over links).
@@ -215,10 +275,10 @@ export function PrinterSetupDialog({
 	);
 	const line = (key: string, className = 'text-muted-foreground') => (
 		<Text key={key} className={className}>
-			{t(`settings.setup_${key}`)}
+			{words[`setup_${key}`]}
 		</Text>
 	);
-	const heading = (key: string) => <SectionHeading title={t(`settings.setup_${key}`)} />;
+	const heading = (key: string) => <SectionHeading title={words[`setup_${key}`]} />;
 	const status = (text: string, help?: string, stop?: () => void) => (
 		<View className="gap-1">
 			<View className="flex-row items-center gap-3">
@@ -304,14 +364,14 @@ export function PrinterSetupDialog({
 				onPress={() => flow.select(p)}
 				trailing={
 					<Badge variant={tone[status]} tinted>
-						{t(`settings.setup_${status}`)}
+						{words[`setup_${status}`]}
 					</Badge>
 				}
 			>
 				<Text className="text-base font-semibold">{p.name}</Text>
 				<View className="flex-row items-center gap-2">
 					<Text className="text-muted-foreground text-sm">
-						{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
+						{p.source === 'network' ? p.address : words[`setup_source_${p.source}`]}
 						{p.identity?.model
 							? ` · ${p.identity.model}`
 							: p.identity?.vendor
@@ -321,7 +381,7 @@ export function PrinterSetupDialog({
 					<Badge variant="muted">
 						{native && secureTargetFor(p)
 							? t('settings.setup_source_network_secure')
-							: t(`settings.setup_source_${p.source}`)}
+							: words[`setup_source_${p.source}`]}
 					</Badge>
 				</View>
 			</ListItem>
@@ -333,7 +393,7 @@ export function PrinterSetupDialog({
 			<Text className="text-muted-foreground text-sm">
 				{deviceLane
 					? t('settings.setup_details_device', {
-							source: t(`settings.setup_source_${selected?.source ?? 'usb'}`),
+							source: words[`setup_source_${selected?.source ?? 'usb'}`],
 							vendor: vendorLabel(draft.vendor),
 						})
 					: t('settings.setup_details', {
@@ -388,7 +448,9 @@ export function PrinterSetupDialog({
 			]
 				.filter(Boolean)
 				.join(' · ')
-		: t(native ? 'settings.setup_scanning_sources_native' : 'settings.setup_scanning_sources');
+		: native
+			? t('settings.setup_scanning_sources_native')
+			: t('settings.setup_scanning_sources');
 	const addressScreen = (
 		<>
 			{heading('address_heading')}
