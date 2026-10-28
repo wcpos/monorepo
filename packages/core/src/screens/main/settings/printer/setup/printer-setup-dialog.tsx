@@ -219,7 +219,7 @@ export function PrinterSetupDialog({
 		</Text>
 	);
 	const heading = (key: string, values?: Record<string, unknown>) => (
-		<Text key={key} className="text-base font-semibold">
+		<Text key={key} variant="section">
 			{t(`settings.setup_${key}`, values)}
 		</Text>
 	);
