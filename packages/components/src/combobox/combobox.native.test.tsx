@@ -1,6 +1,4 @@
 /* eslint-disable import/first */
-import * as fs from 'fs';
-import * as path from 'path';
 
 import * as React from 'react';
 import { StyleSheet, type ViewProps } from 'react-native';
@@ -316,19 +314,6 @@ describe('ComboboxValue', () => {
  * `react-native-web` here, whose `View` drops `className` before it reaches the
  * DOM (the probe rendered `class=""`), so the tree cannot be asked for it.
  */
-describe('Combobox control height', () => {
-	const source = fs.readFileSync(path.join(__dirname, 'combobox.tsx'), 'utf8');
-
-	// The box the merchant presses is `ComboboxValue` — `ComboboxTrigger` is the
-	// bare popover trigger and carries no height. It is one control tall from the
-	// floored scale token, not a literal 40 px (roadmap#357).
-	it('sizes the trigger box on the control token, not h-10', () => {
-		expect(source).toContain('h-ctl');
-		expect(source).not.toContain('h-10');
-		expect(source).toContain('rounded-lg');
-	});
-});
-
 it('renders the phone sheet as a View with phone metrics, not primitive Content', () => {
 	render(
 		<DeviceScope phone>

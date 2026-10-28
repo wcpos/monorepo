@@ -11,10 +11,12 @@ import { useControllableState } from '@rn-primitives/hooks';
 
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
+import { FieldBox } from '../field-box';
 import { Icon, type IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
+import { TextClassContext } from '../text';
 
 interface InputContextValue {
 	isFocused: boolean;
@@ -42,16 +44,12 @@ function Root({ children, className, disabled = false }: RootProps) {
 
 	return (
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
-			<View
-				className={cn(
-					'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border',
-					isFocused && 'border-ring web:ring-1 web:ring-ring',
-					disabled && 'web:cursor-not-allowed opacity-45',
-					className
-				)}
+			<FieldBox
+				state={disabled ? 'disabled' : isFocused ? 'open' : 'rest'}
+				className={cn('w-full', className)}
 			>
 				{children}
-			</View>
+			</FieldBox>
 		</InputContext.Provider>
 	);
 }
@@ -89,6 +87,8 @@ function InputField({
 	...props
 }: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
+	// The box's text tone: a TextInput's colour does not inherit from the View around it.
+	const fieldText = React.useContext(TextClassContext);
 	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
@@ -162,7 +162,8 @@ function InputField({
 			ref={mergedRef}
 			editable={editable}
 			className={cn(
-				'text-foreground placeholder:text-muted-foreground w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
+				fieldText,
+				'w-full flex-1 bg-transparent px-3 py-2 leading-none outline-none',
 				// The root carries the disabled opacity; a second one here would compound to 20 %.
 				!editable && 'web:cursor-not-allowed',
 				className

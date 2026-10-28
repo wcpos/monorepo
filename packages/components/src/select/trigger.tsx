@@ -1,42 +1,11 @@
 import * as React from 'react';
 
-import { Slot } from '@rn-primitives/slot';
 import * as SelectPrimitive from '@rn-primitives/select';
 
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
-
-import type { SlottableTextProps } from '@rn-primitives/types';
-
-/**
- * Native Value replaces the @rn-primitives/select re-export so SlottableTextProps
- * can render through SelectPrimitive.useRootContext while preserving
- * TextClassContext styling. Keep selected and placeholder behavior in parity
- * with trigger.web.tsx.
- */
-function Value({
-	asChild,
-	placeholder,
-	className,
-	...props
-}: SlottableTextProps & { placeholder: string }) {
-	const { value } = SelectPrimitive.useRootContext();
-	const textClass = React.useContext(TextClassContext);
-	const Component = asChild ? Slot : Text;
-
-	return (
-		<TextClassContext.Provider
-			value={cn(textClass, 'text-base', !value?.value && 'text-muted-foreground', className)}
-		>
-			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
-			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
-		</TextClassContext.Provider>
-	);
-}
 
 function Trigger({ className, ...props }: SelectPrimitive.TriggerProps) {
 	const { open } = SelectPrimitive.useRootContext();
 	return <SelectPrimitive.Trigger {...props} className={cn(className, open && 'border-ring')} />;
 }
 export { Trigger };
-export { Value };

@@ -3,11 +3,11 @@ import { TextInput } from 'react-native';
 
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
+import { fieldBox } from '../field-box';
 import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
 
 interface TextareaProps extends React.ComponentPropsWithoutRef<typeof TextInput> {
-	placeholderClassName?: string;
 	minHeight?: number;
 }
 
@@ -16,7 +16,6 @@ const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 function Textarea({
 	className,
 	multiline = true,
-	placeholderClassName,
 	minHeight = 40,
 	style,
 	onFocus,
@@ -104,12 +103,13 @@ function Textarea({
 	return (
 		<AnimatedTextInput
 			className={cn(
-				'web:flex border-border bg-card text-foreground min-h-ctl w-full rounded-lg border px-3 py-2 text-base leading-none',
-				isFocused && 'border-ring web:ring-1 web:ring-ring',
-				props.editable === false && 'web:cursor-not-allowed opacity-45',
+				fieldBox({
+					state: props.editable === false ? 'disabled' : isFocused ? 'open' : 'rest',
+					multiline: true,
+				}),
+				'web:flex w-full px-3 py-2 leading-none',
 				className
 			)}
-			placeholderTextColor={cn('text-muted-foreground', placeholderClassName)}
 			multiline={multiline}
 			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			textAlignVertical="top"

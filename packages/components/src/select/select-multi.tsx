@@ -6,6 +6,7 @@ import * as PopoverPrimitive from '@rn-primitives/popover';
 import { Slot } from '@rn-primitives/slot';
 
 import { Checkbox } from '../checkbox';
+import { fieldBox } from '../field-box';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
 import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { useIsPhone } from '../lib/device';
@@ -92,11 +93,7 @@ function SelectMultiTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(
-				className,
-				open && 'border-ring',
-				disabled && 'web:cursor-not-allowed opacity-45'
-			)}
+			className={cn(fieldBox({ state: disabled ? 'disabled' : open ? 'open' : 'rest' }), className)}
 			disabled={disabled}
 			{...props}
 		>

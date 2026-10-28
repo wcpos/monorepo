@@ -8,6 +8,7 @@ import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-han
 import { Platform } from '@wcpos/utils/platform';
 
 import { Checkbox } from '../checkbox';
+import { FieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { Input } from '../input';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -227,7 +228,6 @@ function TreeComboboxTrigger({
 	...props
 }: PopoverPrimitive.TriggerProps) {
 	const { setTriggerWidth } = React.useContext(TreeComboboxWidthContext);
-	const { open } = PopoverPrimitive.useRootContext();
 
 	const handleLayout = React.useCallback(
 		(e: import('react-native').LayoutChangeEvent) => {
@@ -239,11 +239,7 @@ function TreeComboboxTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(
-				className,
-				open && 'border-ring',
-				disabled && 'web:cursor-not-allowed opacity-45'
-			)}
+			className={cn(className, disabled && 'web:cursor-not-allowed opacity-45')}
 			disabled={disabled}
 			onLayout={handleLayout}
 			{...props}
@@ -261,31 +257,25 @@ interface TreeComboboxValueProps {
 }
 
 /**
- * The closed face of the control: the same value box `ComboboxValue` draws, so a
+ * The closed face of the control: the field box, as `ComboboxValue` draws it, so a
  * category picker and a customer picker read as one control. Reads the popover's
- * `open` so the visible border lights up while the tree is open.
+ * `open` so the box lights up while the tree is open.
  */
 function TreeComboboxValue({ children, hasValue, className }: TreeComboboxValueProps) {
 	const { open } = PopoverPrimitive.useRootContext();
 	return (
-		<View
-			className={cn(
-				'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border px-3',
-				open && 'border-ring',
-				className
-			)}
+		<FieldBox
+			state={open ? 'open' : 'rest'}
+			empty={!hasValue}
+			className={cn('w-full px-3', className)}
 		>
 			<View className="flex-1">
-				<Text
-					className={cn('text-base', hasValue ? 'text-foreground' : 'text-muted-foreground')}
-					numberOfLines={1}
-					decodeHtml
-				>
+				<Text numberOfLines={1} decodeHtml>
 					{children}
 				</Text>
 			</View>
 			<Icon name="chevronDown" className="text-muted-foreground" />
-		</View>
+		</FieldBox>
 	);
 }
 

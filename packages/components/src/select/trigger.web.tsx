@@ -8,34 +8,6 @@ import { Slot } from '@rn-primitives/slot';
 
 import { shouldToggleFromPress } from './pointer-type';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
-
-import type { SlottableTextProps } from '@rn-primitives/types';
-
-/**
- * I was having problems with the Select.Value component from Radix, so I created this SelectValue component.
- * I think it has something to do with the Presense not working as expected below in SelectContent.
- * Something is not quite right??
- */
-function Value({
-	asChild,
-	placeholder,
-	className,
-	...props
-}: SlottableTextProps & { placeholder: string }) {
-	const { value } = SelectPrimitive.useRootContext();
-	const textClass = React.useContext(TextClassContext);
-	const Component = asChild ? Slot : Text;
-
-	return (
-		<TextClassContext.Provider
-			value={cn(textClass, 'text-base', !value?.value && 'text-muted-foreground', className)}
-		>
-			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
-			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
-		</TextClassContext.Provider>
-	);
-}
 
 /**
  * Custom Select Trigger that passes onPress to the Pressable component.
@@ -141,4 +113,4 @@ function Trigger({
 	);
 }
 
-export { Trigger, Value };
+export { Trigger };
