@@ -169,6 +169,25 @@ describe('the row owns the trailing slot', () => {
 	});
 });
 
+it.each([
+	[
+		'a locked row puts its provenance in flow, under the value below md',
+		{ locked: { where: 'Set in WooCommerce' } },
+		false,
+	],
+	['a verb stays on the key line, out of flow', { verb: <PropertyVerb>Edit</PropertyVerb> }, true],
+])('%s', (_case, props, absolute) => {
+	render(
+		<PropertyRow label="Prices entered with tax" {...props}>
+			{true}
+		</PropertyRow>
+	);
+	const word = screen.getByText('locked' in props ? 'Set in WooCommerce' : 'Edit');
+	const trailing = word.closest('[data-classes*="gap-2"]') as HTMLElement;
+	expect(classes(trailing).includes('absolute')).toBe(absolute);
+	if (!absolute) expect(classes(trailing)).toContain('flex-wrap');
+});
+
 it('the row is the form item: its key names every label-less control in it', () => {
 	render(
 		<PropertyRow prefix="coupon" id="amount" label="Amount">
