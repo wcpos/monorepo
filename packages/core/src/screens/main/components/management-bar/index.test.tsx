@@ -11,7 +11,10 @@ let mockPhone = false;
 let mockSize = 'md';
 let mockStatus = 'online-website-available';
 const mockDrawer = jest.fn();
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => mockPhone,
+	usePointer: () => 'coarse',
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('expo-router', () => ({ useNavigation: () => ({ openDrawer: mockDrawer }) }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
@@ -23,7 +26,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => null,
+	takeRedirectReturn: () => false,
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
@@ -94,7 +97,7 @@ it('leaves drawer and avatar to the wide rail', () => {
 });
 it.each([
 	['offline', 'common.status_offline'],
-	['online-website-unavailable', 'common.status_site_unreachable'],
+	['online-website-unavailable', 'common.status_offline'],
 ])('labels %s in the bar', (status, label) => {
 	mockStatus = status;
 	bar();

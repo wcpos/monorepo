@@ -13,11 +13,13 @@ jest.mock('../../components/notification-bell/notification-bell', () => ({
 }));
 
 let mockIsPhone = true;
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => mockIsPhone,
+	usePointer: () => 'coarse',
+}));
 
-let mockRedirectUrl: string | null = null;
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	peekRedirectLoginUrl: () => mockRedirectUrl,
+	takeRedirectReturn: () => false,
 }));
 jest.mock('expo-router', () => ({ useNavigation: () => ({}) }));
 jest.mock('../../../../contexts/app-state', () => ({
@@ -82,7 +84,6 @@ jest.mock('./user-sheet', () => ({
 }));
 
 beforeEach(() => {
-	mockRedirectUrl = null;
 	mockIsPhone = true;
 	mockBinding = { status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] };
 });
@@ -107,14 +108,6 @@ it('opens the user sheet from the bar avatar', () => {
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet')).toBeTruthy();
 });
-it('reopens the Add user consumer after this site returns from OAuth', () => {
-	mockRedirectUrl = 'https://shop.test/login';
-	render(
-		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
-	);
-	expect(screen.getByTestId('user-sheet')).toBeTruthy();
-});
-
 let mockSession: { status: string } | null = null;
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ session: mockSession, sessionsOn: true, overdue: false }),

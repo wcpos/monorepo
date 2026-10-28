@@ -1,5 +1,4 @@
 {
-	"apps/main/app/(app)/(drawer)/(pos)/(columns)/index.tsx": 2,
 	"apps/main/components/health/performance-screen.tsx": 9,
 	"apps/main/components/health/trend-frame.tsx": 3,
 	"apps/main/components/health/uptime-strip.tsx": 3,

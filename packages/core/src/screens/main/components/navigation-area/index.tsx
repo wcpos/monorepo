@@ -9,11 +9,7 @@ import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { useGround } from '../ground';
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
-import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
-import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
-import { UserSheet } from '../../pos/cart/user-sheet';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 
@@ -51,24 +47,6 @@ function NavigationItems({
 			onPress={() => router.push(item.href)}
 		/>
 	));
-}
-
-/**
- * The cashier sheet the bar hosted on `lg`, where the rail's avatar opens a sheet of its own:
- * this one only reopens after a redirect login, so the Add user consumer is mounted to claim
- * the one-shot result, as the bar's and the register bar's do.
- */
-function RedirectReturnCashierSheet() {
-	const { site } = useStoreSession();
-	const [open, setOpen] = React.useState(() => peekRedirectLoginUrl() === site.wcpos_login_url);
-	return (
-		<UserSheet
-			open={open}
-			onOpenChange={setOpen}
-			portalHost={null}
-			onSwitchRegister={requestRegisterPicker}
-		/>
-	);
 }
 
 export function NavigationAreaLayout({
@@ -132,7 +110,8 @@ export function NavigationAreaLayout({
 	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title, the
 	// rail carries the avatar, and these pages need neither the bell nor the offline badge (his
 	// call: the POS and the list pages keep theirs). What the bar held besides stays: the top
-	// inset, the held-session banner, the upgrade notice and the redirect-login sheet.
+	// inset, the held-session banner and the upgrade notice; the rail's cashier entry claims a
+	// redirect login.
 	return (
 		<View className="bg-background flex-1" style={{ paddingTop: insets.top }}>
 			<SessionHoldBanner />
@@ -152,7 +131,6 @@ export function NavigationAreaLayout({
 					{children}
 				</View>
 			</View>
-			<RedirectReturnCashierSheet />
 		</View>
 	);
 }

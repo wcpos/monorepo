@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
@@ -7,26 +7,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
-import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
-import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 
+import { POSPhoneTabBar } from '../../../../../components/pos-phone-tab-bar';
 import { POSProductsPane } from '../../../../../components/pos-products-pane';
-
-/** The tab bar's own bottom padding (`py-2`), kept above the home indicator. */
-const TAB_BAR_PADDING = 8;
 
 /**
  *
  */
 export default function ResizablePOSColumns() {
 	const { screenSize } = useTheme();
-	const t = useT();
-	const { top, bottom } = useSafeAreaInsets();
+	const { top } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
 
 	// Check if we're at a /cart route (with or without orderId)
@@ -79,41 +73,8 @@ export default function ResizablePOSColumns() {
 						</ErrorBoundary>
 					</Suspense>
 				</View>
-				{/* Tab bar */}
-				<View
-					testID="pos-tab-bar"
-					className="border-border bg-card flex-row justify-around border-t pt-2"
-					style={{ paddingBottom: bottom + TAB_BAR_PADDING }}
-				>
-					<Pressable
-						testID="pos-tab-products"
-						onPress={() => setActiveTab('products')}
-						className="flex-1 items-center gap-1 py-2"
-					>
-						<Icon name="gift" variant={activeTab === 'products' ? 'primary' : 'muted'} />
-						<Text
-							className={
-								activeTab === 'products' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
-							}
-						>
-							{t('common.products')}
-						</Text>
-					</Pressable>
-					<Pressable
-						testID="pos-tab-cart"
-						onPress={() => setActiveTab('cart')}
-						className="flex-1 items-center gap-1 py-2"
-					>
-						<Icon name="cart" variant={activeTab === 'cart' ? 'primary' : 'muted'} />
-						<Text
-							className={
-								activeTab === 'cart' ? 'text-primary text-xs' : 'text-muted-foreground text-xs'
-							}
-						>
-							{t('pos_cart.tab_cart')}
-						</Text>
-					</Pressable>
-				</View>
+				{/* The same tab bar the (tabs) navigator draws. */}
+				<POSPhoneTabBar active={activeTab} onSelect={setActiveTab} />
 			</View>
 		);
 	}
