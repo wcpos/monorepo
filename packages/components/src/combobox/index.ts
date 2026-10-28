@@ -10,6 +10,7 @@ export {
 	ComboboxValue,
 	useComboboxRootContext,
 } from './combobox';
+export { OptionsCombobox, type OptionsComboboxProps } from './options';
 
 export type {
 	Option,

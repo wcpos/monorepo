@@ -55,11 +55,9 @@ type FormOptionControlProps<TControl extends React.ElementType> = FormOptionFiel
 };
 
 /**
- * Shared body behind `FormSelect` and `FormCombobox`. The two differ only in which
- * control they default to — everything else here (the scalar/Option conversion, the
- * open state, the aria wiring, the label/description/message scaffold) was duplicated
- * line for line between them, and the one place they had quietly diverged was the
- * clear path (see `optionToFieldValue`).
+ * `FormCombobox`'s body: a field whose label cannot be derived from its scalar (a customer
+ * id) passes the `{ value, label }` pair straight through; a plain scalar is lifted into one.
+ * `FormSelect` takes the scalar as it is, so it no longer shares this.
  */
 export function FormOptionControl<TControl extends React.ElementType>({
 	label,
