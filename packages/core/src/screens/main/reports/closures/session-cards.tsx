@@ -24,14 +24,17 @@ export function SessionCards({
 	registers,
 	storeId,
 	localRegisterId,
+	onSessions,
 }: {
 	registers: { id: string; name: string }[];
 	storeId?: number;
 	localRegisterId?: string | null;
+	onSessions?: (sessions: SessionSummary[]) => void;
 }) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const [cards, setCards] = React.useState<Record<string, SessionCardData>>({});
+	const [localSessions, setLocalSessions] = React.useState<SessionSummary[]>([]);
 	const [attempt, retry] = React.useReducer((n: number) => n + 1, 0);
 	const registerIds = registers.map((register) => register.id).join(',');
 	// This keyed store view reads external summaries on activation/reconnect, not per card.
@@ -88,11 +91,25 @@ export function SessionCards({
 			});
 		return () => subscription.unsubscribe();
 	}, [http, online, registerIds, storeId, attempt]);
+	// Combine resolved batch data with the bound till's local session (also available offline).
+	React.useEffect(() => {
+		onSessions?.(
+			registerIds.split(',').flatMap((id) => {
+				if (id === localRegisterId) return localSessions;
+				return cards[id]?.session ? [cards[id].session!] : [];
+			})
+		);
+	}, [cards, localSessions, localRegisterId, registerIds, onSessions]);
 	return (
 		<>
 			{registers.map((register) =>
 				register.id === localRegisterId ? (
-					<SessionCard key={register.id} summary={cards[register.id] ?? loading} reload={retry} />
+					<SessionCard
+						key={register.id}
+						summary={cards[register.id] ?? loading}
+						reload={retry}
+						onSessions={setLocalSessions}
+					/>
 				) : (
 					<RemoteSessionCard
 						key={register.id}

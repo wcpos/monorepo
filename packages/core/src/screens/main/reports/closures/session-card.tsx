@@ -6,7 +6,7 @@ import { format as formatDate } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
-import { Card } from '@wcpos/components/card';
+import { ListRow } from '@wcpos/components/list-row';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
@@ -22,12 +22,17 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useLastClosure } from './use-last-closure';
 
-import type { SessionCardData } from './use-last-closure';
+import type { SessionCardData, SessionSummary } from './use-last-closure';
 
 export type { SessionCardData, SessionSummary } from './use-last-closure';
-type BatchProps = { summary?: SessionCardData; reload?: () => void };
+type BatchProps = {
+	summary?: SessionCardData;
+	reload?: () => void;
+	onSessions?: (sessions: SessionSummary[]) => void;
+};
 
 export function SessionCard(batch: BatchProps) {
+	const { onSessions } = batch;
 	const { store } = useStoreSession();
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
@@ -37,6 +42,12 @@ export function SessionCard(batch: BatchProps) {
 		undefined,
 		!batch.summary
 	);
+	// Publish the local session already resolved by the register hook; closed registers use the remote result.
+	React.useEffect(() => {
+		if (active || !data.binding.registerId)
+			// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- The room aggregates existing reads; the slice explicitly preserves their owners.
+			onSessions?.(active && data.session ? [data.session] : []);
+	}, [active, data.session, data.binding.registerId, onSessions]);
 	if (!active && data.binding.registerId) {
 		return (
 			<RemoteSessionCard
@@ -60,7 +71,6 @@ function SessionCardContent({
 	expected,
 	salesCount,
 	blind,
-	lastClosure,
 	print,
 	unavailable = false,
 	unavailableReason,
@@ -71,7 +81,6 @@ function SessionCardContent({
 	expected?: Record<string, string>;
 	salesCount?: number;
 	blind: boolean;
-	lastClosure: unknown;
 	print: () => Promise<unknown>;
 	unavailable?: boolean;
 	unavailableReason?: string;
@@ -112,45 +121,52 @@ function SessionCardContent({
 			setBusy(false);
 		}
 	};
+	if (!active) return null;
 	return (
-		<Card testID="reports-session-card" padding="body" className="gap-3">
-			<Text className="font-semibold">
-				{binding.registerName} · {active ? t('reports.open') : t('reports.register_closed')}
-			</Text>
-			{active && (
-				<>
-					<Text>
-						{t('register.opened_at_by', {
-							time: formatDate(
-								convertUTCStringToLocalDate(session.opened_at_gmt),
-								'HH:mm',
-								zoneOptions(timezone)
-							),
-						})}{' '}
-						{cashiers?.find((row) => row.id === session.opened_by)?.display_name ??
-							t('register.unknown_cashier')}
-					</Text>
-					{salesCount !== undefined && (
-						<Text>{t('register.sales_count', { count: salesCount })}</Text>
-					)}
-					{!blind && expected && (
-						<Text testID="session-expected" className="text-2xl tabular-nums">
-							{t('register.expected', { amount: format(Number(expected.cash ?? 0)) })}
-						</Text>
-					)}
-				</>
-			)}
-			{(active || !!lastClosure) && (
-				<Button
-					testID="reports-session-print"
-					variant="outline"
-					className="self-start"
-					disabled={busy || unavailable || !!unavailableReason}
-					onPress={dispatch}
-				>
-					{active ? t('register.print_x_report') : t('reports.reprint')}
-				</Button>
-			)}
+		<>
+			<ListRow
+				testID="reports-session-card"
+				className="bg-background"
+				trailing={
+					<>
+						{!blind && expected && (
+							<View className="items-end">
+								<Text testID="session-expected" className="tabular-nums">
+									{format(Number(expected.cash ?? 0))}
+								</Text>
+								<Text variant="key">{t('register.expected_label')}</Text>
+							</View>
+						)}
+						<Button
+							testID="reports-session-print"
+							variant="outline"
+							size="sm"
+							leftIcon="print"
+							disabled={busy || unavailable || !!unavailableReason}
+							onPress={dispatch}
+						>
+							{t('register.x_report')}
+						</Button>
+					</>
+				}
+			>
+				<Text>
+					<Text className="text-success">●</Text> {t('reports.open')} · {binding.registerName}
+				</Text>
+				<Text variant="key">
+					{t('reports.since_by', {
+						time: formatDate(
+							convertUTCStringToLocalDate(session.opened_at_gmt),
+							'HH:mm',
+							zoneOptions(timezone)
+						),
+						name:
+							cashiers?.find((row) => row.id === session.opened_by)?.display_name ??
+							t('register.unknown_cashier'),
+					})}
+					{salesCount !== undefined && ` · ${t('register.sales_count', { count: salesCount })}`}
+				</Text>
+			</ListRow>
 			{(unavailable || unavailableReason) && (
 				<Text testID="session-unavailable">
 					{unavailableReason ?? t('reports.unavailable_offline')}
@@ -161,7 +177,7 @@ function SessionCardContent({
 					{error}
 				</Text>
 			)}
-		</Card>
+		</>
 	);
 }
 
@@ -172,12 +188,18 @@ export function RemoteSessionCard({
 	localCard,
 	summary,
 	reload,
+	onSessions,
 }: BatchProps & {
 	register: { id: string; name: string };
 	storeId?: number;
 	localCard?: (unavailableReason?: string) => React.ReactNode;
 }) {
 	const { data, online, load, unavailable } = useLastClosure(register, storeId, summary);
+	// Report the existing lookup result without introducing another session read.
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- Publish the existing lookup without moving or duplicating its reads.
+		onSessions?.(data.session ? [data.session] : []);
+	}, [data.session, onSessions]);
 	const { wpCredentials, storeDB } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (row) => row.capabilities);
 	const t = useT();
@@ -213,24 +235,37 @@ export function RemoteSessionCard({
 					expected={data.session?.expected ?? (summary ? undefined : {})}
 					salesCount={data.session?.sales_count ?? (summary ? undefined : 0)}
 					blind={!capabilities?.includes('view_woocommerce_pos_reports')}
-					lastClosure={data.closure}
 					unavailable={!online}
 					print={async () => {
 						if ((await report.print()) !== true) throw new Error(t('reports.reprint_failed'));
 					}}
 				/>
-			) : (
-				<Text testID={`session-${online ? data.status : 'unavailable'}`}>{unavailable}</Text>
-			)}
-			{online && data.status === 'error' && (
-				<Button
-					testID={`session-retry-${register.id}`}
-					variant="outline"
-					// The press event must not reach `load` as its options.
-					onPress={() => void (reload ?? load)()}
+			) : null}
+			{data.status !== 'ready' && (online || !localCard) && (
+				<ListRow
+					size="sm"
+					trailing={
+						online &&
+						data.status === 'error' && (
+							<Button
+								testID={`session-retry-${register.id}`}
+								variant="outline"
+								size="sm"
+								// The press event must not reach `load` as its options object.
+								onPress={() => (reload ?? load)()}
+							>
+								{t('common.retry')}
+							</Button>
+						)
+					}
 				>
-					{t('common.retry')}
-				</Button>
+					<Text
+						className="text-muted-foreground"
+						testID={`session-${online ? data.status : 'unavailable'}`}
+					>
+						{unavailable}
+					</Text>
+				</ListRow>
 			)}
 		</View>
 	);

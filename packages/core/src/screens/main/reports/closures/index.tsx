@@ -3,13 +3,6 @@ import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
-import { IconButton } from '@wcpos/components/icon-button';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
@@ -22,23 +15,35 @@ import {
 	useRegisterBinding,
 	useRegisterDirectory,
 } from '../../../../services/register/use-register-binding';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { exportCsv } from './export-csv';
 import { saveOrShareCsv } from './save-or-share-csv';
 import { ClosurePanel } from './closure-panel';
 import { ClosureList } from './closure-list';
-import { RemoteSessionCard, SessionCard } from './session-card';
+import { RemoteSessionCard, SessionCard, type SessionSummary } from './session-card';
 import { SessionCards } from './session-cards';
 import { type ClosureScope, useClosureRows } from './use-closure-rows';
+
+export function ClosuresExportButton({ onPress }: { onPress: () => Promise<void> }) {
+	const t = useT();
+	return (
+		<Button testID="closures-export" variant="outline" leftIcon="document" onPress={onPress}>
+			{t('reports.export_csv')}
+		</Button>
+	);
+}
 
 export function Closures({
 	scope: requested,
 	initialClosureId,
 	onClose,
+	renderScopeRow,
 }: {
 	scope: ClosureScope;
 	initialClosureId?: string;
 	onClose?: () => void;
+	renderScopeRow?: (slots: { actions?: React.ReactNode }) => React.ReactNode;
 }) {
 	const { rows, localRows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
 		useClosureRows(requested);
@@ -55,8 +60,20 @@ export function Closures({
 			!unavailableIds.has(row.server_closure_id ?? row.id)
 	);
 	const { store } = useStoreSession();
+	const { blind } = useRegisterSession();
+	const sessionKey = `${scope.storeId}:${scope.registerId}`;
+	const [resolved, setResolved] = React.useState({
+		key: sessionKey,
+		sessions: [] as SessionSummary[],
+	});
+	const sessions = resolved.key === sessionKey ? resolved.sessions : [];
+	const setSessions = React.useCallback(
+		(sessions: SessionSummary[]) => setResolved({ key: sessionKey, sessions }),
+		[sessionKey]
+	);
 	const binding = useRegisterBinding();
 	const directory = useRegisterDirectory(scope.storeId);
+	const register = directory.registers.find((register) => register.id === scope.registerId);
 	const phone = useIsPhone();
 	const ground = useGround();
 	const t = useT();
@@ -68,120 +85,101 @@ export function Closures({
 			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
 		);
 	}, []);
+	const exportRows = async () => {
+		setError('');
+		try {
+			await saveOrShareCsv(
+				exportCsv(rows, t, names, store.name),
+				`closures-${scope.from}-${scope.to}.csv`
+			);
+		} catch {
+			setError(t('reports.export_failed'));
+		}
+	};
+	const header = renderScopeRow?.({ actions: <ClosuresExportButton onPress={exportRows} /> });
 	if (row && phone)
 		return (
-			<ClosurePanel
-				key={row.id}
-				row={row}
-				onRecountSaved={() => void refreshRow(row)}
-				onClose={close}
-			/>
-		);
-	return (
-		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1 flex-row">
-			<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<IconButton
-							name="more"
-							testID="closures-overflow"
-							accessibilityLabel={t('reports.more')}
-							className="self-end"
-						/>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							testID="closures-export"
-							className="min-h-12"
-							onPress={async () => {
-								setError('');
-								try {
-									await saveOrShareCsv(
-										exportCsv(rows, t, names, store.name),
-										`closures-${scope.from}-${scope.to}.csv`
-									);
-								} catch {
-									setError(t('reports.export_failed'));
-								}
-							}}
-						>
-							<Text>{t('reports.export_csv')}</Text>
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-				{!!error && <Text testID="closures-export-error">{error}</Text>}
-				{!scope.registerId ? (
-					<SessionCards
-						key={scope.storeId}
-						registers={directory.registers}
-						storeId={scope.storeId}
-						localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
-					/>
-				) : (
-					<>
-						{scope.storeId === store.id &&
-							(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
-						{directory.registers
-							.filter(
-								(register) =>
-									(!scope.registerId || register.id === scope.registerId) &&
-									!(scope.storeId === store.id && register.id === binding.registerId)
-							)
-							.map((register) => (
-								<RemoteSessionCard
-									key={`${scope.storeId}:${register.id}`}
-									register={register}
-									storeId={scope.storeId}
-								/>
-							))}
-					</>
-				)}
-
-				{status !== 'ready' && (
-					<Text testID={`closures-${status}`}>
-						{status === 'unavailable'
-							? t('reports.unavailable_offline')
-							: status === 'denied'
-								? t('reports.no_access')
-								: status === 'error'
-									? t('reports.load_failed')
-									: t('common.loading')}
-					</Text>
-				)}
-				{(rows.length > 0 || status === 'ready') && (
-					<ClosureList
-						storeId={scope.storeId}
-						rows={rows}
-						unavailableIds={unavailableIds}
-						onSelect={(row) => setSelected(row.id)}
-					/>
-				)}
-				{(status === 'error' || hasMore) && (
-					<Button
-						testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
-						variant="outline"
-						onPress={loadMore}
-					>
-						{status === 'error' ? t('common.retry') : t('reports.load_more')}
-					</Button>
-				)}
-			</ScrollView>
-			{row ? (
+			<>
+				{header}
 				<ClosurePanel
 					key={row.id}
 					row={row}
 					onRecountSaved={() => void refreshRow(row)}
 					onClose={close}
 				/>
-			) : (
-				!phone && (
-					<View
-						testID="closure-panel-placeholder"
-						className="bg-card w-1/3 items-center justify-center border-l p-4"
-					>
-						<Text className="text-muted-foreground">{t('reports.select_closure')}</Text>
-					</View>
-				)
+			</>
+		);
+	return (
+		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1">
+			{header}
+			<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
+				{!!error && <Text testID="closures-export-error">{error}</Text>}
+				<ClosureList
+					rows={rows}
+					storeId={scope.storeId}
+					sessions={sessions}
+					blind={blind}
+					scopeDay={scope.from === scope.to ? scope.from : undefined}
+					showEmpty={status === 'ready'}
+					unavailableIds={unavailableIds}
+					onSelect={(row) => setSelected(row.id)}
+					sessionRows={
+						!scope.registerId ? (
+							<SessionCards
+								key={scope.storeId}
+								registers={directory.registers}
+								storeId={scope.storeId}
+								onSessions={setSessions}
+								localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
+							/>
+						) : scope.storeId === store.id && scope.registerId === binding.registerId ? (
+							<SessionCard onSessions={setSessions} />
+						) : register ? (
+							<RemoteSessionCard
+								key={sessionKey}
+								register={register}
+								storeId={scope.storeId}
+								onSessions={setSessions}
+							/>
+						) : null
+					}
+
+					status={
+						status !== 'ready' && (
+							<Text testID={`closures-${status}`}>
+								{status === 'unavailable'
+									? t('reports.unavailable_offline')
+									: status === 'denied'
+										? t('reports.no_access')
+										: status === 'error'
+											? t('reports.load_failed')
+											: t('common.loading')}
+							</Text>
+						)
+					}
+					footer={
+						(status === 'error' || hasMore) && (
+							<View className="p-4">
+								<Button
+									testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
+									variant="outline"
+									className="w-full"
+									onPress={loadMore}
+								>
+									{status === 'error' ? t('common.retry') : t('reports.load_more')}
+								</Button>
+							</View>
+						)
+					}
+				/>
+			</ScrollView>
+			{row && (
+				<ClosurePanel
+					key={row.id}
+					row={row}
+					onRecountSaved={() => void refreshRow(row)}
+					onClose={close}
+				/>
 			)}
 			<PortalHost name="reports" />
 		</View>

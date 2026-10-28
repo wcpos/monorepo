@@ -38,7 +38,26 @@ jest.mock('./use-closure-rows', () => ({
 		unavailableIds,
 	}),
 }));
-jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./closure-list', () => ({
+	ClosureList: ({
+		sessionRows,
+		status,
+		footer,
+	}: {
+		sessionRows: React.ReactNode;
+		status: React.ReactNode;
+		footer: React.ReactNode;
+	}) => (
+		<>
+			{sessionRows}
+			{status}
+			{footer}
+		</>
+	),
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ blind: false }),
+}));
 jest.mock('./session-cards', () => ({ SessionCards: () => null }));
 const sessionCard = jest.fn();
 jest.mock('./session-card', () => ({
@@ -113,8 +132,13 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 	),
 }));
 // Revert: export an unscoped collection instead of the exact rows shown.
-it('exports only visible rows from the overflow menu', async () => {
-	render(<Closures scope={scope} />);
+it('exports only visible rows from the export button', async () => {
+	render(
+		<Closures
+			scope={scope}
+			renderScopeRow={({ actions }) => <div data-testid="scope-actions">{actions}</div>}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('closures-export'));
 	await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
 	expect(share).toHaveBeenCalledWith(
@@ -185,5 +209,15 @@ it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) 
 // Revert: feed date/cashier-filtered rows to the current register's last-closure action.
 it('does not substitute scoped history for the register last closure', () => {
 	render(<Closures scope={scope} />);
-	expect(sessionCard).toHaveBeenLastCalledWith({});
+	expect(sessionCard).toHaveBeenLastCalledWith({ onSessions: expect.any(Function) });
+});
+
+// Revert: swallow CSV failures or return the old adjacent placeholder.
+it('keeps export failures in the full-width room without a placeholder pane', async () => {
+	share.mockRejectedValueOnce(new Error('share failed'));
+	render(<Closures scope={scope} renderScopeRow={({ actions }) => actions} />);
+	fireEvent.click(screen.getByTestId('closures-export'));
+	await waitFor(() => expect(screen.getByTestId('closures-export-error')).toBeTruthy());
+	expect(screen.queryByTestId('closure-panel-placeholder')).toBeNull();
+	expect(screen.queryByTestId('closures-overflow')).toBeNull();
 });

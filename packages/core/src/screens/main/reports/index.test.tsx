@@ -430,6 +430,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 	expect(mockClosureScope).toHaveBeenLastCalledWith({
 		scope: expect.objectContaining({ registerId: 'other' }),
 		onClose: expect.any(Function),
+		renderScopeRow: expect.any(Function),
 	});
 	mockPro = false;
 	view.rerender(<ReportsScreen />);
@@ -441,6 +442,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 			storeId: 9,
 		}),
 		onClose: expect.any(Function),
+		renderScopeRow: expect.any(Function),
 	});
 	mockPro = true;
 	jest.useRealTimers();
