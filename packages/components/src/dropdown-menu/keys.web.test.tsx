@@ -86,3 +86,21 @@ it.each([' ', 'Enter'])('toggles an anchored checkbox item once on %p', async (k
 	fireEvent.keyUp(document.activeElement ?? item, { key });
 	expect(onCheckedChange).toHaveBeenCalledTimes(1);
 });
+
+it('leaves a disabled anchored checkbox item alone on a click', async () => {
+	const onCheckedChange = jest.fn();
+	render(
+		<C.DropdownMenu>
+			<C.DropdownMenuTrigger testID="trigger" />
+			<Open />
+			<C.DropdownMenuContent>
+				<C.DropdownMenuCheckboxItem checked={false} onCheckedChange={onCheckedChange} disabled>
+					Notes
+				</C.DropdownMenuCheckboxItem>
+			</C.DropdownMenuContent>
+		</C.DropdownMenu>
+	);
+	const item = await screen.findByRole('menuitemcheckbox');
+	fireEvent.click(item);
+	expect(onCheckedChange).not.toHaveBeenCalled();
+});

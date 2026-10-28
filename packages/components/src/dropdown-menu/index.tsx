@@ -86,8 +86,9 @@ function MenuItemRow({
 	select?: () => void;
 }) {
 	const sheet = useMenuSheet();
-	const text = isTextChildren(children as React.ReactNode);
-	const parts = { ...row, className, [text ? 'label' : 'children']: children };
+	const slot = isTextChildren(children as React.ReactNode) ? 'label' : 'children';
+	// The web primitive keeps `disabled` for Radix; the row needs it too, to dim and not press.
+	const parts = { ...row, className, disabled: !!item.disabled, [slot]: children };
 	if (!sheet)
 		return (
 			<Item asChild {...item}>
@@ -97,7 +98,6 @@ function MenuItemRow({
 	return (
 		<MenuRow
 			{...parts}
-			disabled={!!item.disabled}
 			testID={item.testID}
 			onPress={(event) => {
 				item.onPress?.(event);
