@@ -69,6 +69,59 @@ it('shows a check only for the selected choice and reserves its slot on the othe
 	).toBeNull();
 });
 
+// Every primitive's item is this row: the kind draws the slot and the wash, the role a
+// primitive hands it is what it announces, and `selected` is announced the way that role reads it.
+it.each([
+	['action', {}, 'button', null, null],
+	['choice', { choice: true }, 'radio', 'aria-checked', 'w-5'],
+	['checkbox', { checkbox: true }, 'checkbox', 'aria-checked', 'rounded-sm'],
+	['destructive', { variant: 'destructive' }, 'button', null, null],
+	['menu item', { role: 'menuitem' }, 'menuitem', null, null],
+	['menu radio', { role: 'menuitemradio', choice: true }, 'menuitemradio', 'aria-checked', 'w-5'],
+	[
+		'menu checkbox',
+		{ role: 'menuitemcheckbox', checkbox: true },
+		'menuitemcheckbox',
+		'aria-checked',
+		'rounded-sm',
+	],
+	['option', { role: 'option' }, 'option', 'aria-selected', null],
+] as const)('%s', (kind, props, role, state, slot) => {
+	const onPress = jest.fn();
+	render(<MenuRow label="Row" selected onPress={onPress} {...props} />);
+	const row = screen.getByRole(role, { name: 'Row' });
+	if (state) expect(row).toHaveAttribute(state, 'true');
+	else expect(row).not.toHaveAttribute('aria-checked');
+	const mark = slot ? row.querySelector(`[data-classes~="${slot}"]`) : null;
+	if (slot) expect(mark?.querySelector('svg')).not.toBeNull();
+	else expect(row.querySelector('[aria-hidden] svg')).toBeNull();
+	const wash = kind === 'destructive' ? 'active:bg-destructive/10' : 'active:bg-muted';
+	expect(row.dataset.classes?.split(' ')).toContain(wash);
+	fireEvent.click(row);
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('draws without a role or press when a primitive hosts it, dimmed when disabled', () => {
+	render(<MenuRow hosted choice selected disabled label="Small" testID="row" />);
+	expect(screen.queryByRole('radio')).toBeNull();
+	expect(screen.queryByRole('button')).toBeNull();
+	const row = screen.getByText('Small').closest('[data-classes~="px-2.5"]') as HTMLElement;
+	expect(row.dataset.classes).toContain('opacity-45');
+	expect(row.querySelector('[data-classes~="w-5"] svg')).not.toBeNull();
+});
+
+it('lays free children (an icon and a Text) on the row in place of the label', () => {
+	render(
+		<MenuRow onPress={() => {}}>
+			<Icon name="delete" />
+			<span>Remove</span>
+		</MenuRow>
+	);
+	const row = screen.getByRole('button');
+	expect(row).toHaveTextContent('Remove');
+	expect(row.querySelector('[data-classes~="flex-1"]')).toBeNull();
+});
+
 it('a locked row is dimmed and still presses', () => {
 	const onPress = jest.fn();
 	render(<MenuRow choice label="Yesterday" locked onPress={onPress} />);
