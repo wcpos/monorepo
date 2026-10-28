@@ -97,9 +97,8 @@
   --color-rail-border: var(--rail-border);
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
-  --color-warn: var(--warn);
-  --color-warn-text: var(--warn-text);
-  --color-warn-bg: var(--warn-bg);
+  --color-warning-text: var(--warning-text);
+  --color-warning-bg: var(--warning-bg);
   --color-bad: var(--bad);
   --color-bad-bg: var(--bad-bg);
   --color-neutral: var(--neutral);
@@ -350,9 +349,8 @@
       --info-foreground: oklch(0.98 0.01 240);
       --action: oklch(0.55 0.18 295);
       --action-foreground: oklch(0.98 0.01 295);
-      --attention: var(--warn);
+      --attention: var(--warning);
       --attention-foreground: oklch(0.25 0.03 90);
-      --warning: var(--warn);
       /* Dark ink, as attention and the other four themes use: near-white on the light amber
          read 2.8:1, under the 4.5:1 text floor (CODING_STANDARDS § Design 7). */
       --warning-foreground: oklch(0.25 0.03 90);
@@ -391,10 +389,10 @@
       --rail-border: oklch(0.90 0.012 250);
       --ok: oklch(0.52 0.16 155);
       --ok-bg: oklch(0.96 0.03 155);
-      --warn: oklch(0.68 0.16 70);
-      --warn-text: oklch(0.50 0.13 70);
-      --warn-bg: oklch(0.97 0.04 85);
-      --bad: oklch(0.58 0.2 25);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
       --bad-bg: oklch(0.97 0.02 25);
       --neutral: oklch(0.62 0.01 250);
       --scrim: oklch(0.2 0.02 250 / .28);
@@ -461,9 +459,8 @@
       --info-foreground: oklch(0.15 0.02 240);
       --action: oklch(0.68 0.16 295);
       --action-foreground: oklch(0.15 0.02 295);
-      --attention: var(--warn);
+      --attention: var(--warning);
       --attention-foreground: oklch(0.18 0.025 90);
-      --warning: var(--warn);
       --warning-foreground: oklch(0.15 0.02 45);
       
       /* Borders and inputs */
@@ -500,10 +497,10 @@
       --rail-border: oklch(0.25 0.02 250);
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
-      --warn: oklch(0.78 0.15 75);
-      --warn-text: var(--warn);
-      --warn-bg: oklch(0.30 0.05 80);
-      --bad: oklch(0.68 0.18 25);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
       --bad-bg: oklch(0.30 0.05 25);
       --neutral: oklch(0.62 0.01 250);
       --scrim: oklch(0.05 0.02 250 / .5);
@@ -568,9 +565,8 @@
       --info-foreground: oklch(0.15 0.04 210);
       --action: oklch(0.65 0.14 290);
       --action-foreground: oklch(0.15 0.03 290);
-      --attention: var(--warn);
+      --attention: var(--warning);
       --attention-foreground: oklch(0.18 0.05 85);
-      --warning: var(--warn);
       --warning-foreground: oklch(0.15 0.04 55);
       
       /* Borders and inputs */
@@ -607,10 +603,10 @@
       --rail-border: oklch(0.24 0.04 230);
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
-      --warn: oklch(0.78 0.15 75);
-      --warn-text: var(--warn);
-      --warn-bg: oklch(0.30 0.05 80);
-      --bad: oklch(0.68 0.18 25);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
       --bad-bg: oklch(0.30 0.05 25);
       --neutral: oklch(0.62 0.01 250);
       --scrim: oklch(0.05 0.03 230 / .5);
@@ -675,9 +671,8 @@
       --info-foreground: oklch(0.18 0.05 260);
       --action: oklch(0.62 0.13 300);
       --action-foreground: oklch(0.18 0.04 300);
-      --attention: var(--warn);
+      --attention: var(--warning);
       --attention-foreground: oklch(0.20 0.07 70);
-      --warning: var(--warn);
       --warning-foreground: oklch(0.18 0.06 55);
       
       /* Borders and inputs */
@@ -714,10 +709,10 @@
       --rail-border: oklch(0.25 0.05 318);
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
-      --warn: oklch(0.78 0.15 75);
-      --warn-text: var(--warn);
-      --warn-bg: oklch(0.30 0.05 80);
-      --bad: oklch(0.68 0.18 25);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
       --bad-bg: oklch(0.30 0.05 25);
       --neutral: oklch(0.62 0.01 250);
       --scrim: oklch(0.05 0.03 318 / .5);
@@ -780,9 +775,8 @@
       --info-foreground: oklch(0.12 0 0);
       --action: oklch(0.66 0 0);
       --action-foreground: oklch(0.12 0 0);
-      --attention: var(--warn);
+      --attention: var(--warning);
       --attention-foreground: oklch(0.12 0 0);
-      --warning: var(--warn);
       --warning-foreground: oklch(0.12 0 0);
       
       /* Borders and inputs */
@@ -819,10 +813,10 @@
       --rail-border: oklch(0.22 0 0);
       --ok: oklch(0.72 0.15 155);
       --ok-bg: oklch(0.28 0.04 155);
-      --warn: oklch(0.78 0.15 75);
-      --warn-text: var(--warn);
-      --warn-bg: oklch(0.30 0.05 80);
-      --bad: oklch(0.68 0.18 25);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
       --bad-bg: oklch(0.30 0.05 25);
       --neutral: oklch(0.62 0.01 250);
       --scrim: oklch(0 0 0 / .55);

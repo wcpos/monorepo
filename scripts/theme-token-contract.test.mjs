@@ -49,9 +49,9 @@ const newColors = [
 	'rail-border',
 	'ok',
 	'ok-bg',
-	'warn',
-	'warn-text',
-	'warn-bg',
+	'warning',
+	'warning-text',
+	'warning-bg',
 	'bad',
 	'bad-bg',
 	'neutral',
@@ -67,8 +67,9 @@ const aliases = {
 	'sidebar-foreground': 'rail-foreground',
 	'sidebar-border': 'rail-border',
 	success: 'ok',
-	warning: 'warn',
-	attention: 'warn',
+	attention: 'warning',
+	// One red: a state that is bad and an action that destroys are the same colour (card 16).
+	bad: 'destructive',
 	accent: 'muted',
 	'accent-foreground': 'foreground',
 	popover: 'card',
@@ -170,7 +171,9 @@ test('the table-row-alt alias stays mapped and no imperative read names it', () 
 // A class-string grep missed `useCSSVariable('--color-error')` in pulse-row.tsx on the
 // first cut of this PR (caught in review). Imperative reads of a token are consumers
 // too, so the retired names are banned from source, not only from the sheet.
-const RETIRED_IN_SOURCE = /--(?:color-)?(?:tertiary|error)(?:-foreground)?\b|duration-750/;
+// `warn*` folded into the `warning` family (card 16): one name per tone.
+const RETIRED_IN_SOURCE =
+	/--(?:color-)?(?:tertiary|error)(?:-foreground)?\b|--(?:color-)?warn(?:-text|-bg)?\b|\b(?:bg|text|border)-warn(?:-text|-bg)?\b|duration-750/;
 const SOURCE_ROOTS = ['apps/main', 'packages/components/src', 'packages/core/src'];
 const SOURCE_EXT = /\.(?:[cm]?[jt]sx?|css)$/;
 
@@ -307,7 +310,7 @@ function themeToken(body, token) {
 // Pixels measured in Chrome 155 (headless, sRGB canvas, 2026-10-18). The amber words are
 // outside the sRGB gamut; a hard clip paints them lighter than the browser's chroma
 // reduction does, which is why the mapping is here. L 0.55 is what the round-1 gallery
-// baseline shot; L 0.50 is the shipped light --warn-text.
+// baseline shot; L 0.50 is the shipped light --warning-text.
 test("gamut mapping matches Chromium's rendered pixels", () => {
 	const encode = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
 	const warnText55 = oklchLinearRgb('oklch(0.55 0.13 70)').map(encode);
@@ -334,8 +337,8 @@ const TEXT_CONTRAST = 4.5;
 // and log-view; destructive/10 with destructive words appears in legacy-tab and log-view.
 for (const name of themeNames) {
 	for (const [text, tint, alpha] of [
-		['warn-text', 'warn', 0.1],
-		['warn-text', 'warn', 0.15],
+		['warning-text', 'warning', 0.1],
+		['warning-text', 'warning', 0.15],
 		['destructive', 'destructive', 0.1],
 	]) {
 		for (const surface of ['card', 'background']) {
@@ -371,13 +374,13 @@ for (const name of themeNames) {
 
 for (const name of themeNames) {
 	for (const [text, ground] of [
-		['warn-text', 'card'],
-		['warn-text', 'background'],
+		['warning-text', 'card'],
+		['warning-text', 'background'],
 		['destructive', 'card'],
 		['destructive', 'background'],
 		['destructive-foreground', 'destructive'],
 		['action-foreground', 'action'],
-		['warning-foreground', 'warn'],
+		['warning-foreground', 'warning'],
 		['info-foreground', 'info'],
 		['info', 'card'],
 		['info', 'background'],

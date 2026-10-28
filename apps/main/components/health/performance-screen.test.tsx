@@ -228,7 +228,7 @@ describe('PerformanceScreen · server over time', () => {
 			'Easing off — checking 4× less often: your server asked the POS to slow down'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
-			'text-warn-text'
+			'text-warning-text'
 		);
 	});
 

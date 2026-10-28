@@ -23,8 +23,8 @@ function CellView({ cell, tooltip }: { cell: UptimeCell; tooltip: string }) {
 		cell.state === 'running' ? (
 			<View className="bg-ok h-6 rounded opacity-75" />
 		) : cell.state === 'errors' ? (
-			<View className="border-warn h-6 items-center justify-center rounded border">
-				<Text className="text-warn text-xs">⚠</Text>
+			<View className="border-warning h-6 items-center justify-center rounded border">
+				<Text className="text-warning text-xs">⚠</Text>
 			</View>
 		) : (
 			<View className="border-border h-6 rounded border" />
@@ -106,7 +106,7 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 					</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
-					<View className="border-warn h-3 w-3 rounded-sm border" />
+					<View className="border-warning h-3 w-3 rounded-sm border" />
 					<Text className="text-muted-foreground text-xs">
 						{t('health.performance.uptime_errors')}
 					</Text>

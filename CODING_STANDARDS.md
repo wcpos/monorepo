@@ -45,7 +45,7 @@ Prefer semantic classes over hardcoded colors to preserve theme compatibility.
 | `bg-card`         | Card/elevated surfaces                                                                                                                                                                                    |
 | `bg-sidebar`      | Navigation sidebar                                                                                                                                                                                        |
 | `bg-muted`        | Muted elements/buttons                                                                                                                                                                                    |
-| `text-warn-text`  | warning words, and an icon inline with them (register-count lock, open-orders clock, upgrade-notice star); `warn` is the fill and the standalone icon (register-bar, StatusBadge, Icon `warning` variant) |
+| `text-warning-text` | warning words and every warning glyph (register-count lock, open-orders clock, Icon `warning`); `warning` is the fill (register-bar, StatusBadge dot, Badge); state classes come from `lib/tone.ts` |
 | `bg-table-header` | Data table headers                                                                                                                                                                                        |
 
 ### Theme Switching and Native Issues
@@ -230,6 +230,9 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   `bg-primary`, `text-destructive`, `bg-success`, …). Never a hex or an `oklch()` in a component.
 - One accent colour for the primary action per screen. Semantic colours (success, warning,
   destructive, info) only carry meaning, never decoration.
+- A state has one name on every surface: `ok`, `warning`, `bad`, `info` or `muted`, read from the
+  tone map (`packages/components/src/lib/tone.ts`). `destructive` names an ACTION (Button, IconButton,
+  MenuRow), never a state, and is the same red as `bad` (`--bad: var(--destructive)`).
 - **Primary is the theme's accent, never red; brand red is destructive only** (owner ruling,
   2026-09-11). `bg-primary` is blue in the default light and dark themes and varies by theme
   (Ocean teal, Sunset orange, Monochrome grey): use the token and let it vary. The marketing site's

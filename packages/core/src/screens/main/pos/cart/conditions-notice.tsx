@@ -18,7 +18,7 @@ export function CartConditionsNotice() {
 		// Fits up to about three rows (it sits outside the cart's scroll view), then scrolls inside.
 		<View
 			testID="cart-conditions-notice"
-			className="border-warn/45 bg-warn-bg m-2 max-h-36 overflow-hidden rounded-lg border px-2"
+			className="border-warning/45 bg-warning-bg m-2 max-h-36 overflow-hidden rounded-lg border px-2"
 		>
 			<ScrollView>
 				{unmet.map(({ lineUuid, fix, reasonKey, params }, index) => (
@@ -33,8 +33,8 @@ export function CartConditionsNotice() {
 								: void removeLineItem(lineUuid, 'line_items'))
 						}
 						className={cn(
-							'active:bg-warn/20 min-h-11 flex-row items-center gap-2',
-							index > 0 && 'border-warn/30 border-t'
+							'active:bg-warning/20 min-h-11 flex-row items-center gap-2',
+							index > 0 && 'border-warning/30 border-t'
 						)}
 					>
 						<Icon name="product" className="text-foreground" />
