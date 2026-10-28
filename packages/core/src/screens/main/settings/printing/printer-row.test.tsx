@@ -9,6 +9,11 @@ import type { PrinterProfile } from '@wcpos/printer';
 import { PrinterRow } from './printer-row';
 
 // The real row: a saved printer was tested and saved, so it must not carry the wizard entry.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('react-native', () => ({
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>

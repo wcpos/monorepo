@@ -55,6 +55,11 @@ const site: { url: string; use_rest_route_param: boolean; wcpos_pro_version?: st
 };
 
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../../jest/property-row.test-utils')
 );
@@ -123,6 +128,7 @@ jest.mock('@wcpos/utils/open-external-url', () => ({
 	openExternalURL: (url: string) => mockOpenExternalURL(url),
 }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<span data-testid={testID}>{children}</span>
 	),

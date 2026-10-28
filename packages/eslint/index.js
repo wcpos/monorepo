@@ -384,9 +384,8 @@ const appCodeFiles = cwd.endsWith('/packages/core')
 // Shared by the broad ratchet and the ownership blocks that replace its rule.
 export const tintedAlertSelector = {
 	selector:
-		// Status icon tiles (size-10 + red/green tint) and highlighted register rows (border-b + green) are not alerts.
+		// Highlighted register rows (border-b + green) are not alerts.
 		'JSXAttribute[name.name="className"]' +
-		':not(:has(Literal[value=/^size-10 items-center justify-center rounded-lg$/]):has(Literal[value=/^bg-(destructive|success)\\u002F10$/]))' +
 		':not(:has(TemplateElement[value.raw=/^border-border rounded-none border-b $/]):has(Literal[value="bg-success/10"])):has(:matches(' +
 		'Literal[value=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/], ' +
 		'TemplateElement[value.raw=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/]))',

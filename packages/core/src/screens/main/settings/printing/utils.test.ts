@@ -44,7 +44,7 @@ describe('templateTypeLabel', () => {
 
 describe('printing settings copy', () => {
 	it('has bundled source translations for every Printing settings key', () => {
-		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx', 'template-row.tsx'];
+		const files = ['index.tsx', 'printer-row.tsx', 'template-row.tsx'];
 		const sourceCatalog = JSON.parse(
 			readFileSync(
 				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),
@@ -69,7 +69,7 @@ describe('printing settings copy', () => {
 	it('uses Print Dialog consistently for the built-in system printer', () => {
 		// The English lives in the bundled catalog, not in the source, so assert on
 		// the resolved copy for every key these screens use.
-		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx'];
+		const files = ['index.tsx', 'printer-row.tsx'];
 		const sourceCatalog = JSON.parse(
 			readFileSync(
 				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),

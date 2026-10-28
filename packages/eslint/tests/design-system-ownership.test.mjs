@@ -430,10 +430,8 @@ test('does not mistake prose, other opacities or Notice for a tinted alert box',
 	assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
 });
 
-test('allows only the reader icon and highlighted-row class pairs, not generic tint boxes', async () => {
-	const messages =
-		await variantOwnership(`export const Fine = ({ error, connected, highlight }) => <>
-		<View className={cn('size-10 items-center justify-center rounded-lg', error ? 'bg-destructive/10' : connected ? 'bg-success/10' : 'bg-muted')} />
+test('allows only the highlighted-row class pair, not generic tint boxes', async () => {
+	const messages = await variantOwnership(`export const Fine = ({ highlight }) => <>
 		<ListItem className={\`border-border rounded-none border-b \${highlight ? 'bg-success/10' : ''}\`} />
 		<View className="rounded-lg bg-destructive/10" />
 		<View className={\`border-border rounded-none border-b \${highlight ? 'bg-warning/10' : ''}\`} />

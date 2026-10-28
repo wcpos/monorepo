@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { formatDistance } from 'date-fns/formatDistance';
 
@@ -11,16 +10,16 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
-import { HStack } from '@wcpos/components/hstack';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -50,24 +49,19 @@ function DisplayRow({
 				});
 
 	return (
-		<PropertyRow
-			label={display.name}
-			help={t('settings.customer_display.last_seen', {
-				time: lastSeen,
-			})}
+		<DeviceRow
+			icon="desktop"
+			name={display.name}
+			identifiers={[t('settings.customer_display.last_seen', { time: lastSeen })]}
+			state={{
+				tone: display.connected ? 'ok' : 'muted',
+				testID: `customer-display-status-${display.id}`,
+				label: display.connected
+					? t('settings.customer_display.connected')
+					: t('settings.customer_display.disconnected'),
+			}}
 		>
-			<HStack className="items-center justify-end gap-3">
-				<View
-					className={`h-2 w-2 rounded-full ${display.connected ? 'bg-success' : 'bg-muted-foreground/40'}`}
-				/>
-				<Text
-					testID={`customer-display-status-${display.id}`}
-					className={display.connected ? 'text-success text-xs' : 'text-muted-foreground text-xs'}
-				>
-					{display.connected
-						? t('settings.customer_display.connected')
-						: t('settings.customer_display.disconnected')}
-				</Text>
+			<DeviceRowActions>
 				{/* Forgetting unpairs the display: the last, red row of the row's ⋮ menu. */}
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
@@ -88,8 +82,8 @@ function DisplayRow({
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
-			</HStack>
-		</PropertyRow>
+			</DeviceRowActions>
+		</DeviceRow>
 	);
 }
 
@@ -118,11 +112,9 @@ export function PairedDisplays({
 			description={t('settings.customer_display.paired_description')}
 		>
 			{displays.length === 0 ? (
-				<Text className="text-muted-foreground text-sm">
-					{t('settings.customer_display.empty')}
-				</Text>
+				<EmptyState kind="empty" size="inline" title={t('settings.customer_display.empty')} />
 			) : (
-				<VStack>
+				<VStack className="gap-2">
 					{displays.map((display) => (
 						<DisplayRow
 							key={display.id}

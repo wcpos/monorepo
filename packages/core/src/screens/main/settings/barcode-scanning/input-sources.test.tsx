@@ -16,6 +16,11 @@ const mockUpsert = jest.fn();
 const mockOpenExternalURL = jest.fn();
 
 // The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../../jest/property-row.test-utils')
 );

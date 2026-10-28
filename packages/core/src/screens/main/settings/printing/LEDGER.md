@@ -4,7 +4,7 @@ Seeded 2026-09-18 from the screen inventory `docs/prototypes/2026-09-12-language
 
 **Job:** List printers and receipt templates, route templates and report test-print outcomes.
 
-**Composes:** `PrinterRow`, `TemplateRow`, `PrintersEmptyState`, `SettingsSection`, printer dialogs, buttons, menus and toasts.
+**Composes:** `PrinterRow` and `TemplateRow` (both `DeviceRow`s), `EmptyState`, `SettingsSection`, printer dialogs, buttons, menus and toasts.
 
 ## Lines
 
@@ -17,3 +17,4 @@ Seeded 2026-09-18 from the screen inventory `docs/prototypes/2026-09-12-language
 7. Wait for printer loading to finish before showing the list or empty state — an unresolved fetch must not present a false empty page — evidence: test "hides the list until loaded, then shows the empty state" in `packages/core/src/screens/main/settings/printing/index-cloud.test.tsx:340` — platform: all. _(added 2026-09-18 beyond the inventory's §5 by wcpos/roadmap#350: evidenced by a code comment or test on next)_
 8. Show one actionable translated line for a test-print failure instead of the raw transport string — evidence: test "shows one actionable line instead of the raw failure string" in `packages/core/src/screens/main/settings/printing/index-cloud.test.tsx:312` — platform: all. _(added 2026-09-18 beyond the inventory's §5 by wcpos/roadmap#350: evidenced by a code comment or test on next)_
 9. Make a newly inserted built-in Print Dialog the default only when no default printer already exists — initialization must not steal an existing routing choice — evidence: code: `"Only set as default if no other printer is already default"` in `packages/core/src/screens/main/settings/printing/use-ensure-system-printer.ts:24` — platform: all. _(added 2026-09-18 beyond the inventory's §5 by wcpos/roadmap#350: evidenced by a code comment or test on next)_
+10. Add printer is the page's add control, not the empty state's: one Button under the list or the `EmptyState`, primary while no printer exists and outline beside a list; the empty state keeps only its words and the guide link — evidence: card 10 of the 2026-10-28 component-library review (the design call that `EmptyState`'s own action stays a ghost button); test "hides the list until loaded, then shows the empty state" in `index-cloud.test.tsx`.
