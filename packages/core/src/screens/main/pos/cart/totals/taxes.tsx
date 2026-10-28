@@ -25,7 +25,7 @@ export function Taxes({ totalTax, taxLines = [] }: Props) {
 	const t = useT();
 
 	// The rate's own label (Woo's itemized display), its incl/excl beside it at the help size.
-	const beside = <Text className="text-muted-foreground text-xs">{String(inclOrExcl)}</Text>;
+	const beside = <Text variant="help">{String(inclOrExcl)}</Text>;
 	if (taxTotalDisplay === 'itemized') {
 		return taxLines.map((tax, index) => (
 			<MoneyList.Row

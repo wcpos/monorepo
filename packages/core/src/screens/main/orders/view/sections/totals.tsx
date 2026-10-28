@@ -63,11 +63,7 @@ export function TotalsSection({ order }: { order: OrderPayload }) {
 				{shippingLines.length || shipping > 0 ? (
 					<MoneyList.Row
 						label={t('common.shipping')}
-						beside={
-							shippingMethod ? (
-								<Text className="text-muted-foreground text-xs">· {shippingMethod}</Text>
-							) : null
-						}
+						beside={shippingMethod ? <Text variant="help">· {shippingMethod}</Text> : null}
 						amount={format(shipping)}
 					/>
 				) : null}
