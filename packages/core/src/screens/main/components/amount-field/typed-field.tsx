@@ -95,16 +95,27 @@ export function TypedField({
 		}
 	}
 
-	// Emit the number on blur only when something was typed and it changes the record: a focus
+	// Emit the number on leaving only when something was typed and it changes the record: a focus
 	// and leave must not write (a blank regular price would become "0"), a typed 0 over a blank
 	// must. Unparseable text writes nothing and the field shows the stored value again.
-	const handleBlur = React.useCallback(() => {
-		setIsFocused(false);
+	const settle = () => {
 		const typed = stringToNumber(internalValue);
 		if (dirty.current && Number.isFinite(typed)) void commit(typed);
 		dirty.current = false;
+	};
+	const handleBlur = () => {
+		setIsFocused(false);
+		settle();
 		onDone?.();
-	}, [internalValue, commit, onDone, stringToNumber]);
+	};
+	// A field removed while focused never blurs (a phone's settings page on Back), so the draft
+	// lands as a blur would. Layout effects, so this runs before the form's own passive cleanups
+	// unsubscribe its writer; the ref only carries the latest draft to that cleanup.
+	const settleRef = React.useRef(settle);
+	React.useLayoutEffect(() => {
+		settleRef.current = settle;
+	});
+	React.useLayoutEffect(() => () => settleRef.current(), []);
 
 	const handleFocus = React.useCallback(() => {
 		setIsFocused(true);

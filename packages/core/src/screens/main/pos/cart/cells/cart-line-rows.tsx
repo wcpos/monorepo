@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useFormContext, useWatch } from 'react-hook-form';
+import * as z from 'zod';
 
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyAdd, PropertyAddRow, PropertyRow } from '@wcpos/components/property-row';
@@ -12,6 +13,13 @@ import { META_DATA_DEFAULT_ROW, MetaDataForm } from '../../../components/meta-da
 import { TaxSelect } from '../../../components/tax-select';
 
 type Prefix = 'line-item' | 'fee-line' | 'shipping-line';
+
+/** A fee's amount as Add fee and the fee sheet both hold it: Woo's text, never below zero. */
+export const feeAmountSchema = (message: string) =>
+	z
+		.string()
+		.refine((value) => Number(value) >= 0, { message })
+		.optional();
 const TAX_MARK = ['tax_status', 'tax_class'];
 
 /** Tax status and class as one fact (property rows rule 4); each change writes its own root. */

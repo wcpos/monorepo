@@ -16,8 +16,6 @@ import {
 	FormSwitch,
 	FormTreeCombobox,
 	SavedFieldProvider,
-	useFormChangeHandler,
-	useMarkSaved,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
@@ -35,12 +33,11 @@ import { FormAmountField } from '../../../../components/amount-field';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
 import { useFieldPresence } from '../../../../components/use-field-presence';
-import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
+import { taxClassFromWire } from '../../../../hooks/tax-class';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
-import { useCurrentOrder } from '../../../contexts/current-order';
-import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { parsePosData } from '../../../hooks/utils';
 import { CustomFieldRows, TaxRow } from '../cart-line-rows';
+import { useCartLineAutosave } from '../use-cart-line-autosave';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
@@ -84,11 +81,6 @@ export function EditLineItemForm(props: Props) {
 
 function EditLineItemFormFields({ uuid, item }: Props) {
 	const t = useT();
-	const { updateCartLine } = useUpdateCartLine();
-	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
-	// another order was selected still reaches it.
-	const { currentOrderRecord } = useCurrentOrder();
-	const markSaved = useMarkSaved();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
 	const posData = parsePosData(item);
@@ -120,30 +112,14 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 		},
 	});
 
-	useFormChangeHandler({
-		form,
-		onChange: (changes) => {
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const value = form.getValues(root);
-			const wireValue =
-				root === 'tax_class'
-					? taxClassToWire(form.getValues('tax_class'))
-					: root === 'categories'
-						? form
-								.getValues('categories')
-								.map((opt) => ({ id: Number(opt.value), name: opt.label }))
-						: value;
-			return updateCartLine(
-				'line_items',
-				uuid,
-				{ [root]: wireValue },
-				{ record: currentOrderRecord }
-			).then((written) => {
-				if (written) markSaved([root]);
-				return Boolean(written);
-			});
-		},
-	});
+	useCartLineAutosave('line_items', uuid, form, (root, value) =>
+		root === 'categories'
+			? (value as FormValues['categories']).map((opt) => ({
+					id: Number(opt.value),
+					name: opt.label,
+				}))
+			: undefined
+	);
 
 	const values = useWatch({ control: form.control });
 	const write = (name: Offered, value: unknown) =>

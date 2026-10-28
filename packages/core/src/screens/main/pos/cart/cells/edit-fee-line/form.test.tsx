@@ -25,19 +25,11 @@ jest.mock('@wcpos/components/form', () => ({
 		name,
 		value,
 		onChange,
-		type,
 	}: {
 		name: string;
-		value?: string | number;
-		onChange: (value: string | number) => void;
-		type?: string;
-	}) => (
-		<input
-			aria-label={name}
-			value={value ?? ''}
-			onChange={(e) => onChange(type === 'numeric' ? Number(e.target.value) : e.target.value)}
-		/>
-	),
+		value?: string;
+		onChange: (value: string) => void;
+	}) => <input aria-label={name} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />,
 	FormSelect: () => null,
 	FormSwitch: () => null,
 	FormSegmentedControl: () => null,
@@ -54,10 +46,10 @@ jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: 
 // A form's amount stands in as the form's own input mock: the rows are under test, not the field.
 jest.mock('../../../../components/amount-field', () => ({
 	AmountField: () => null,
-	// The line's amount is a number in the form: the field hands it one.
+	// The fee's amount is Woo's text in the form, as in Add fee: the field hands a text form text.
 	FormAmountField: (props: object) => {
 		const { FormInput } = jest.requireMock('@wcpos/components/form');
-		return <FormInput {...props} type="numeric" />;
+		return <FormInput {...props} />;
 	},
 }));
 jest.mock('../../../../components/tax-select', () => ({ TaxSelect: () => null }));

@@ -3,7 +3,6 @@ import * as React from 'react';
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
-import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Toast } from '@wcpos/components/toast';
 import {
@@ -18,6 +17,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 import { savePrinterProfile } from '@wcpos/query';
 
+import { useRecordAutosave } from '../../../components/use-record-autosave';
 import { logTestPrintFailure } from '../../../hooks/use-print/print-failure';
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -99,7 +99,6 @@ export function usePrinterDialogForm({
 	const t = useT();
 	const { storeDB } = useStoreSession();
 	const printerService = React.useMemo(() => new PrinterService(), []);
-	const markSaved = useMarkSaved();
 
 	const [testLoading, setTestLoading] = React.useState(false);
 	const [drawerLoading, setDrawerLoading] = React.useState(false);
@@ -395,19 +394,21 @@ export function usePrinterDialogForm({
 	// so two writes in flight (a picker sets several fields at once) would race on one revision:
 	// each write waits for the one before it.
 	const writeQueue = React.useRef<Promise<unknown>>(Promise.resolve());
-	const { flush } = useFormChangeHandler({
+	const { flush } = useRecordAutosave<PrinterFormValues, PrinterFormValues>({
 		form,
-		onChange: async (changes) => {
-			const root = Object.keys(changes)[0].split('.')[0];
-			const result = schema.safeParse(form.getValues());
-			if (!result.success) {
-				void form.trigger();
-				return false;
-			}
-			const write = writeQueue.current.then(() => persistProfile(result.data));
+		// The profile is written whole, so it goes only while the whole form is valid.
+		before: () => {
+			const valid = schema.safeParse(form.getValues()).success;
+			if (!valid) void form.trigger();
+			return valid;
+		},
+		compose: () => schema.parse(form.getValues()),
+		persist: async (profile, root) => {
+			const write = writeQueue.current.then(() => persistProfile(profile as PrinterFormValues));
 			writeQueue.current = write.catch(() => undefined);
 			try {
 				await write;
+				return true;
 			} catch (error) {
 				printerLogger.error('Failed to save printer profile', {
 					showToast: true,
@@ -416,8 +417,6 @@ export function usePrinterDialogForm({
 				});
 				return false;
 			}
-			markSaved([root]);
-			return true;
 		},
 	});
 

@@ -56,6 +56,7 @@ jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({ s
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
+jest.mock('../../components/amount-field', () => ({ FormAmountField: () => null }));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../pos/products/play-scan-sound', () => ({
 	playScanSuccess: jest.fn(),

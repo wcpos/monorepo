@@ -38,6 +38,7 @@ import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleRows } from '../dialog/printer-rows';
 import { TestPrintError } from '../dialog/test-print-error';
 import { CopySetupReport } from '../copy-setup-report';
+import { FormPortField } from '../port-field';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 import {
 	electronPrinterSchema,
@@ -416,12 +417,11 @@ export function PrinterSetupDialog({
 							control={form.control}
 							name="port"
 							render={({ field }) => (
-								<FormInput
+								<FormPortField
 									{...field}
 									testID="printer-setup-port"
 									editable={!busy}
 									label={t('settings.printer_port')}
-									type="numeric"
 								/>
 							)}
 						/>

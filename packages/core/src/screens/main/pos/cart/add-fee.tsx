@@ -17,6 +17,7 @@ import { FormErrors } from '../../components/form-errors';
 import { TaxSelect } from '../../components/tax-select';
 import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddFee } from '../hooks/use-add-fee';
+import { feeAmountSchema } from './cells/cart-line-rows';
 
 /**
  *
@@ -45,12 +46,7 @@ export function AddFee() {
 	 */
 	const form = useForm<FormValues, unknown, FormValues>({
 		resolver: zodResolver(
-			formSchema.extend({
-				amount: z
-					.string()
-					.refine((value) => Number(value) >= 0, { message: t('pos_cart.fee_amount_negative') })
-					.optional(),
-			}) as never
+			formSchema.extend({ amount: feeAmountSchema(t('pos_cart.fee_amount_negative')) }) as never
 		) as never,
 		defaultValues: {
 			name: '',

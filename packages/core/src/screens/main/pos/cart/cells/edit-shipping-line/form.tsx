@@ -14,8 +14,6 @@ import {
 	FormSelect,
 	FormSwitch,
 	SavedFieldProvider,
-	useFormChangeHandler,
-	useMarkSaved,
 } from '@wcpos/components/form';
 import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
@@ -26,9 +24,8 @@ import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { useOptionLists } from '../../../../components/option-lists';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
-import { useCurrentOrder } from '../../../contexts/current-order';
-import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { AmountRow, CustomFieldRows } from '../cart-line-rows';
+import { useCartLineAutosave } from '../use-cart-line-autosave';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
@@ -65,11 +62,6 @@ export function EditShippingLineForm(props: Props) {
 function EditShippingLineFormFields({ uuid, item }: Props) {
 	const t = useT();
 	const { taxStatus } = useOptionLists();
-	const { updateCartLine } = useUpdateCartLine();
-	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
-	// another order was selected still reaches it.
-	const { currentOrderRecord } = useCurrentOrder();
-	const markSaved = useMarkSaved();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
 
@@ -90,23 +82,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 		},
 	});
 
-	useFormChangeHandler({
-		form,
-		onChange: (changes) => {
-			const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-			const value = form.getValues(root);
-			const wireValue = value;
-			return updateCartLine(
-				'shipping_lines',
-				uuid,
-				{ [root]: wireValue },
-				{ record: currentOrderRecord }
-			).then((written) => {
-				if (written) markSaved([root]);
-				return Boolean(written);
-			});
-		},
-	});
+	useCartLineAutosave('shipping_lines', uuid, form);
 
 	return (
 		<Form {...form}>

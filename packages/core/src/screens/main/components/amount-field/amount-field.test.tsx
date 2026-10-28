@@ -122,6 +122,81 @@ describe('commit, cancel, no-op', () => {
 		expect(onCommit).toHaveBeenCalledWith(3.5);
 	});
 
+	it('a field removed while focused lands its draft once, before the form unsubscribes', () => {
+		const written = jest.fn();
+		function Page() {
+			const form = useForm({ defaultValues: { count: 8 } });
+			// As useFormChangeHandler subscribes: a passive effect in the page that unmounts with it.
+			React.useEffect(() => {
+				const sub = form.watch((values, { name }) => name && written(values.count));
+				return () => sub.unsubscribe();
+			}, [form]);
+			return (
+				<FormProvider {...form}>
+					<FormFieldContext.Provider value={{ name: 'count' }}>
+						<Controller
+							control={form.control}
+							name="count"
+							render={({ field }) => <FormAmountField kind="count" testID="amount" {...field} />}
+						/>
+					</FormFieldContext.Provider>
+				</FormProvider>
+			);
+		}
+		const { unmount } = render(<Page />);
+		const input = screen.getByTestId('amount') as HTMLInputElement;
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: '12' } });
+		unmount();
+		expect(written).toHaveBeenCalledTimes(1);
+		expect(written).toHaveBeenCalledWith(12);
+	});
+
+	it('a field whose row is removed (the form clears it, then it unmounts) drops its draft', () => {
+		const written = jest.fn();
+		function Page() {
+			const form = useForm({ defaultValues: { sale: 5 as number | string } });
+			const [shown, setShown] = React.useState(true);
+			React.useEffect(() => {
+				const sub = form.watch((values, { name }) => name && written(values.sale));
+				return () => sub.unsubscribe();
+			}, [form]);
+			return (
+				<FormProvider {...form}>
+					<FormFieldContext.Provider value={{ name: 'sale' }}>
+						{shown && (
+							<Controller
+								control={form.control}
+								name="sale"
+								render={({ field }) => <FormAmountField kind="money" testID="amount" {...field} />}
+							/>
+						)}
+						<button
+							data-testid="remove"
+							onClick={() => {
+								setShown(false);
+								form.setValue('sale', '', { shouldDirty: true });
+							}}
+						/>
+					</FormFieldContext.Provider>
+				</FormProvider>
+			);
+		}
+		render(<Page />);
+		const input = screen.getByTestId('amount') as HTMLInputElement;
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: '4' } });
+		fireEvent.click(screen.getByTestId('remove'));
+		expect(written.mock.calls).toEqual([['']]);
+	});
+
+	it('a field blurred, then removed, does not land its draft twice', () => {
+		const { onCommit, input, unmount } = field({ value: '3' });
+		type(input(), '4');
+		unmount();
+		expect(onCommit).toHaveBeenCalledTimes(1);
+	});
+
 	it('Escape puts the stored number back and writes nothing', () => {
 		const { onCommit, input } = field();
 		fireEvent.focus(input());

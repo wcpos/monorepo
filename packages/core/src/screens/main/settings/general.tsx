@@ -41,6 +41,7 @@ import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
+import { FormAmountField } from '../components/amount-field';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
 import { useOptionLists } from '../components/option-lists';
@@ -69,7 +70,8 @@ const formSchema = z.object({
 	currency_pos: z.string().default('left'),
 	price_thousand_sep: z.string().default(','),
 	price_decimal_sep: z.string().default('.'),
-	price_num_decimals: z.coerce.number().default(2),
+	// Woo's own field is a number with min 0, step 1 and no max (class-wc-settings-general.php).
+	price_num_decimals: z.coerce.number().int().min(0).default(2),
 	thousands_group_style: z.enum(['thousand', 'lakh', 'wan']).default('thousand'),
 });
 
@@ -368,9 +370,9 @@ function GeneralSettingsForm({
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
-						render={({ field: { value, ...rest } }) => (
+						render={({ field }) => (
 							<PropertyRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
-								<FormInput type="numeric" value={value ?? undefined} {...rest} />
+								<FormAmountField kind="count" testID="settings-general-decimals" {...field} />
 							</PropertyRow>
 						)}
 					/>

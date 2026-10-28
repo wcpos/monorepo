@@ -5,12 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
-import {
-	Form,
-	SavedFieldProvider,
-	useFormChangeHandler,
-	useMarkSaved,
-} from '@wcpos/components/form';
+import { Form, SavedFieldProvider } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
 	PropertyAdd,
@@ -41,6 +36,7 @@ import {
 import { FormErrors } from '../../components/form-errors';
 import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
 import { useFieldPresence } from '../../components/use-field-presence';
+import { useRecordAutosave } from '../../components/use-record-autosave';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -92,7 +88,6 @@ function EditCartCustomerFields() {
 	);
 	const setCartCustomer = useSetCartCustomer();
 	const { saveCustomerAddresses } = useCartCustomerRecord();
-	const markSaved = useMarkSaved();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const { caps } = useUserCapabilities();
@@ -112,24 +107,30 @@ function EditCartCustomerFields() {
 	// While linked, a write carries billing as shipping; a verb's own shipping write lands as set.
 	const shippingOf = (values: FormValues) =>
 		linked ? asShipping(values.billing) : values.shipping;
-	const handleChange = async (changes: Partial<FormValues>) => {
-		const root = Object.keys(changes)[0].split('.')[0] as keyof FormValues;
-		// The writer takes the whole address set, so the whole set is validated before it goes: an
-		// invalid email left in one field must not ride along with an edit to another.
-		if (!(await form.trigger())) return false;
-		// The validated output, as the old Save wrote it (unknown keys stripped), and a tax-id row
-		// the cashier has only just added (no value yet) is not an edit.
-		const values = formSchema.parse(form.getValues());
-		return setCartCustomer(currentOrderRecord, {
-			billing: values.billing,
-			shipping: root === 'shipping' ? values.shipping : shippingOf(values),
-			taxIds: (values.tax_ids ?? []).filter((row) => String(row?.value ?? '') !== ''),
-		}).then((written) => {
-			if (written) markSaved([root]);
-			return Boolean(written);
-		});
+	// The writer takes the whole address set. The changed root has been validated; a sibling rides
+	// as its draft only while that draft is valid (unknown keys stripped), otherwise as the order
+	// holds it, so an invalid field elsewhere neither blocks this edit nor enters with it.
+	const part = <K extends keyof FormValues>(key: K) => {
+		const parsed = formSchema.shape[key].safeParse(form.getValues(key));
+		return (
+			parsed.success ? parsed.data : currentOrderRecord.getLatest().payload[key]
+		) as FormValues[K];
 	};
-	useFormChangeHandler({ form, onChange: handleChange });
+	useRecordAutosave<FormValues, FormValues>({
+		form,
+		compose: (root) => ({
+			billing: part('billing'),
+			shipping: root === 'shipping' || !linked ? part('shipping') : asShipping(part('billing')),
+			tax_ids: part('tax_ids'),
+		}),
+		// A tax-id row the cashier has only just added (no value yet) is not an edit.
+		persist: ({ billing, shipping, tax_ids }) =>
+			setCartCustomer(currentOrderRecord, {
+				billing,
+				shipping,
+				taxIds: (tax_ids ?? []).filter((row) => String(row?.value ?? '') !== ''),
+			}),
+	});
 
 	/**
 	 * We need to get the customer document and patch it with the new address
