@@ -43,14 +43,7 @@ interface VariationHit {
 }
 
 const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeatures>) => {
-	const meta = props.table.options.meta as
-		| {
-				variationRenderCell?: (
-					props: CellContext<TableCellRow, unknown, DataTableFeatures>
-				) => React.ComponentType<CellContext<TableCellRow, unknown, DataTableFeatures>> | null;
-		  }
-		| undefined;
-	const Cell = meta?.variationRenderCell?.(props);
+	const Cell = props.table.options.meta?.variationRenderCell?.(props);
 
 	if (Cell) {
 		return (

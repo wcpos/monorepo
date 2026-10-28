@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
 import Animated, {
 	useAnimatedStyle,
 	useDerivedValue,
@@ -9,7 +8,6 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { map } from 'rxjs/operators';
 import { flexRender } from '@tanstack/react-table';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -20,6 +18,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { getColumnStyle } from '../../data-table/column-style';
 import { VariationRowProvider } from './context';
+import { useRowExpanded } from './use-row-expansion';
 import { Variations } from './variations';
 
 import type { DataTableFeatures } from '../../data-table';
@@ -51,25 +50,8 @@ export function VariableProductRow({
 	 * https://github.com/facebook/react/issues/33057
 	 */
 	'use no memo';
-	const meta = table.options.meta as
-		| {
-				expanded$: import('rxjs').Observable<Record<string, boolean>>;
-				setRowExpanded?: (rowId: string, expanded: boolean) => void;
-				variationStockStatus?: string;
-				openVariation?: (record: EngineRecord<'variations'>) => void;
-		  }
-		| undefined;
-	/**
-	 * Memoised explicitly. This component carries `'use no memo'` above, so nothing else
-	 * would: the inline `.pipe()` built a new observable every render, and
-	 * `useObservableEagerState` keys its subscription on observable identity, so every
-	 * visible variable-product row resubscribed on every render.
-	 */
-	const isExpanded$ = React.useMemo(
-		() => meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id])),
-		[meta, item.id]
-	);
-	const isExpanded = useObservableEagerState(isExpanded$);
+	const meta = table.options.meta;
+	const isExpanded = useRowExpanded(meta, item.id);
 
 	/**
 	 * Animation setup

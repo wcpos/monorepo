@@ -22,7 +22,7 @@ jest.mock('@wcpos/components/status-badge', () => ({
 	},
 }));
 jest.mock('../../hooks/use-stock-status-label', () => ({
-	useStockStatusLabel: () => ({ getLabel: (status: string) => status }),
+	useStockStatusLabel: () => ({ items: [], getLabel: (status: string) => status }),
 }));
 
 function renderCell(product: Record<string, unknown>) {
@@ -87,3 +87,22 @@ it.each([
 	const { props } = renderCell({ manage_stock: false, stock_status });
 	expect(props.variant).toBe(variant);
 });
+
+// The library Button pulls in uniwind's ESM; the cell needs only its press and its label.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		accessibilityLabel,
+		onPress,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		accessibilityLabel?: string;
+		onPress?: () => void;
+	}) => (
+		<button data-testid={testID} aria-label={accessibilityLabel} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));

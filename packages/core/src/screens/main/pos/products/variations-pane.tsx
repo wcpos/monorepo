@@ -18,7 +18,7 @@ import { DataTable } from '../../components/data-table';
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { matchesStockStatusFilter } from '../../components/product/stock-filter';
 import { useVariationsRefresh } from './cells/variations-popover/use-variations-refresh';
-import { OwnFooter, OwnFooterContext, type OwnFooterNumbers } from './own-footer';
+import { OwnFooterContext, type OwnFooterNumbers, ProductsFooter } from './footer';
 import { VariationsGrid } from './variations-grid';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from './cells/price';
@@ -117,7 +117,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 	);
 	const parentCount = useDocField(parent, (value) => value.payload.variations?.length);
 	const t = useT();
-	// The footer's numbers are the pane's own (own-footer.tsx): the shown rows, and the parent as
+	// The footer's numbers are the pane's own (footer.tsx): the shown rows, and the parent as
 	// the denominator, floored at the resident count — as a value, so it lands in the same commit
 	// as the count; an absent list leaves the drawn handle's total to the footer.
 	const footer = React.useMemo<OwnFooterNumbers>(
@@ -160,7 +160,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 					</VirtualizedList.Item>
 				)}
 				ListFooterComponent={NoListFooter}
-				TableFooterComponent={OwnFooter}
+				TableFooterComponent={ProductsFooter}
 			/>
 		</OwnFooterContext.Provider>
 	);

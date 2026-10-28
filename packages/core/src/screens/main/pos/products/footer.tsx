@@ -1,87 +1,59 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
-
 import { useT } from '../../../../contexts/translations';
-import { useQueryStateActions } from '../../../../query';
+import { DataTableFooter } from '../../components/data-table/footer';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
-import { SyncButton } from '../../components/sync-button';
 import { useTaxSettings } from '../../contexts/tax-rates';
-import { useCollectionReset } from '../../hooks/use-collection-reset';
 
 import type { DataTableFooterProps } from '../../components/data-table/footer';
 
 /** The footer contract every table footer takes (`DataTableFooterProps`): values only. */
 export type ProductsFooterProps = Omit<DataTableFooterProps, 'children'> & {
-	label?: string;
 	prefix?: string;
 };
 
 /**
- * The products caption row, values in: the table hands them from its handles, a browse level or
- * the variations grid from its own (`HandleProductsFooter`). The tax notice is the left slot.
+ * A pane's own numbers for its DataTable's footer (a level's or a variations pane's rows; total
+ * undefined: the table's), as a context so the footer is ONE component, never remounted mid-sync.
  */
-export function ProductsFooter({
-	collectionName,
-	active: loading,
-	total,
-	sync,
-	drawnCount,
-	label,
-	prefix,
-}: ProductsFooterProps) {
+export type OwnFooterNumbers = { drawnCount: number; total?: number | null; prefix?: string };
+export const OwnFooterContext = React.createContext<OwnFooterNumbers | null>(null);
+
+/** The products caption row: the table footer with the products' sentence; the tax notice its caption. */
+export function ProductsFooter({ label, prefix: propsPrefix, ...props }: ProductsFooterProps) {
+	const own = React.useContext(OwnFooterContext);
 	const { calcTaxes } = useTaxSettings();
-	const { clearAndSync } = useCollectionReset(collectionName);
-	const actions = useQueryStateActions();
 	const t = useT();
+	const drawnCount = own?.drawnCount ?? props.drawnCount;
+	const total = own?.total === undefined ? props.total : own.total;
+	const prefix = own ? own.prefix : propsPrefix;
 	const withPrefix = (products: string) =>
 		prefix === undefined ? products : t('pos_products.root_tally', { terms: prefix, products });
 	return (
-		// Same caption row as the data-table footer: on the ground, no rule, its content's height (the
-		// `xs` sync button, 6 units); its mount aligns the text with the card's cells (`CaptionRowInset`).
-		<HStack className="items-center">
-			{/* The caption slot fills the row; its child keeps its own width (shrinkable, never grown),
-			    so the tax trigger is pressable on its text and icons alone, not across the footer. */}
-			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">
-				{calcTaxes ? <TaxBasedOn /> : null}
-			</HStack>
-			<HStack className="shrink-0 gap-0">
-				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
-				<Text testID="data-table-count" className="text-muted-foreground text-sm">
-					{label ??
-						withPrefix(
-							total === null
-								? t('common.showing_n', { shown: drawnCount.toLocaleString() })
-								: drawnCount < total
-									? t('common.showing_of', {
-											shown: drawnCount.toLocaleString(),
-											total: total.toLocaleString(),
-										})
-									: t(
-											collectionName === 'variations'
-												? 'pos_products.n_options'
-												: 'pos_products.n_products',
-											{ count: total }
-										)
-						)}
-				</Text>
-				<Text testID="data-table-loaded-count" className="hidden">
-					{drawnCount}
-				</Text>
-				<Text testID="data-table-total-count" className="hidden">
-					{total ?? ''}
-				</Text>
-				<SyncButton
-					sync={sync}
-					active={loading}
-					clearAndSync={() => {
-						actions.clearSearch();
-						actions.resetFilters();
-						return clearAndSync();
-					}}
-				/>
-			</HStack>
-		</HStack>
+		<DataTableFooter
+			{...props}
+			drawnCount={drawnCount}
+			total={total}
+			label={
+				label ??
+				withPrefix(
+					total === null
+						? t('common.showing_n', { shown: drawnCount.toLocaleString() })
+						: drawnCount < total
+							? t('common.showing_of', {
+									shown: drawnCount.toLocaleString(),
+									total: total.toLocaleString(),
+								})
+							: t(
+									props.collectionName === 'variations'
+										? 'pos_products.n_options'
+										: 'pos_products.n_products',
+									{ count: total }
+								)
+				)
+			}
+		>
+			{calcTaxes ? <TaxBasedOn /> : null}
+		</DataTableFooter>
 	);
 }

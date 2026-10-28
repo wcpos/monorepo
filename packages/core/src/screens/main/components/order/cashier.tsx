@@ -7,8 +7,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCashierLabel } from '../../hooks/use-cashier-label';
 
-import type { QueryStateActions } from '../../../../query';
-
 /**
  *
  */
@@ -21,11 +19,7 @@ export function Cashier({
 		({ payload }) => wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? undefined
 	);
 	const cashier = useCashierLabel(cashierID);
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 
 	/**
 	 * It's possible the order doesn't have a cashier, eg: web or admin orders.

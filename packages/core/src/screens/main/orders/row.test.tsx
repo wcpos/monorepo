@@ -9,6 +9,8 @@ import { OrderRow } from './row';
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+// Reached through the status cell's Button (orders/cells/status.tsx); its ESM import is not under test.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));

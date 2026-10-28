@@ -29,12 +29,7 @@ export function EditablePrice({
 		type: payload.type,
 		onSale: payload.on_sale,
 	}));
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'> | EngineRecord<'variations'>;
-			changes: Record<string, unknown>;
-		}) => void | Promise<boolean>;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = fields.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
@@ -52,7 +47,7 @@ export function EditablePrice({
 				format={format}
 				formatOptions={{ fixedDecimalScale: true }}
 				onChangeText={(price) =>
-					meta.onChange({
+					commit?.({
 						document: record,
 						changes: { [column.id]: String(price) },
 					})

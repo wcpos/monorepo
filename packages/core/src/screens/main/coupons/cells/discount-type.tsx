@@ -4,8 +4,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
-import type { QueryStateActions } from '../../../../query';
-
 const labelMap: Record<string, string> = {
 	percent: 'coupons.percent_short',
 	fixed_cart: 'coupons.fixed_cart_short',
@@ -19,11 +17,7 @@ export function DiscountType({
 	const discountType =
 		useRecordField(row.original.record, ({ payload }) => payload.discount_type) ?? 'percent';
 	const t = useT();
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'coupons'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 
 	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 

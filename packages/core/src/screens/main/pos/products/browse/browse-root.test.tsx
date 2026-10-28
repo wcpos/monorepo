@@ -60,7 +60,7 @@ jest.mock('../../../../../query', () => ({
 // pair is logged, so a test can see what each commit would have painted, not only where the DOM
 // settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
-// The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
+// The pane footer (ProductsFooter) pulls in native-only modules; not under test here.
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
 jest.mock('../handle-footer', () => ({
 	HandleProductsFooter: ({

@@ -4,8 +4,6 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import type { QueryStateActions } from '../../../../query';
-
 /**
  *
  */
@@ -16,9 +14,7 @@ export function ProductCategories({
 	const categories =
 		useRecordField(row.original.record, (product) => product.payload.categories) || [];
 
-	const meta = table.options.meta as unknown as {
-		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
-	};
+	const actions = table.options.meta?.actions;
 
 	if (categories.length === 0) {
 		return null;
@@ -37,7 +33,7 @@ export function ProductCategories({
 						accessibilityRole="button"
 						decodeHtml
 						onPress={() =>
-							cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])
+							cat.id === undefined ? undefined : actions?.setFilter('categories', [cat.id])
 						}
 					>
 						{cat.name}

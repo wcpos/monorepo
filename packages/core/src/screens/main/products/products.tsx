@@ -412,10 +412,9 @@ function ProductsList({
 			getRowCanExpand: (row: Row<ProductRow, DataTableFeatures>) =>
 				!drillStyle && row.original.record.payload.type === 'variable',
 			meta: {
-				expandedRef,
 				expanded$,
 				setRowExpanded,
-				onChange: ({
+				commit: ({
 					document,
 					changes,
 				}: {

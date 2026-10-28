@@ -136,7 +136,7 @@ function CouponsList({
 	const tableConfig = React.useMemo(
 		() => ({
 			meta: {
-				onChange: ({
+				commit: ({
 					document,
 					changes,
 				}: {

@@ -50,7 +50,7 @@ function Name({ type }: { type: string }) {
 	const context = {
 		row: { original: { record } },
 		column: { columnDef: { meta: {} } },
-		table: { options: { meta: { onChange } } },
+		table: { options: { meta: { commit: onChange } } },
 	} as unknown as React.ComponentProps<typeof ProductName>;
 	return <ProductName {...context} />;
 }

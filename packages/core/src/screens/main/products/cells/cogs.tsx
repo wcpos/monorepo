@@ -27,12 +27,7 @@ export function COGS({
 	const cogs = useRecordField(row.original.record, (record) => record.payload.cost_of_goods_sold);
 	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const defined_value = get(cogs, ['values', 0, 'defined_value'], 0);
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'> | EngineRecord<'variations'>;
-			changes: Record<string, unknown>;
-		}) => void | Promise<boolean>;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
@@ -60,7 +55,7 @@ export function COGS({
 							},
 						],
 					};
-					void meta.onChange({
+					void commit?.({
 						document: product,
 						changes: { cost_of_goods_sold: updatedCogs },
 					});

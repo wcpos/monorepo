@@ -44,7 +44,7 @@ function renderAmount(discount_type: string, amount: string) {
 	const props = {
 		row: { original: { record } },
 		column: { id: 'amount' },
-		table: { options: { meta: { onChange: jest.fn() } } },
+		table: { options: { meta: { commit: jest.fn() } } },
 	} as unknown as Parameters<typeof EditableAmount>[0];
 	render(<EditableAmount {...props} />);
 	return screen.getByTestId('amount');

@@ -14,7 +14,10 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../hooks/use-order-status-label', () => ({
-	useOrderStatusLabel: () => ({ getLabel: (value: string) => `Server: ${value}` }),
+	useOrderStatusLabel: () => ({
+		items: [{ value: 'completed', label: 'Server: completed' }],
+		getLabel: (value: string) => `Server: ${value}`,
+	}),
 }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label, variant }: { label: string; variant: string }) => (
@@ -50,3 +53,22 @@ it('filters by the status on press', () => {
 	fireEvent.click(screen.getByRole('button'));
 	expect(setFilter).toHaveBeenCalledWith('status', 'completed');
 });
+
+// The library Button pulls in uniwind's ESM; the cell needs only its press and its label.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		accessibilityLabel,
+		onPress,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		accessibilityLabel?: string;
+		onPress?: () => void;
+	}) => (
+		<button data-testid={testID} aria-label={accessibilityLabel} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
