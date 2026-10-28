@@ -24,7 +24,7 @@ import { FormAmountField } from '../../../../components/amount-field';
 import { FormErrors } from '../../../../components/form-errors';
 import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
-import { useTaxSegments } from '../../../../components/tax-segments';
+import { useOptionLists } from '../../../../components/option-lists';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
@@ -64,7 +64,7 @@ export function EditShippingLineForm(props: Props) {
 
 function EditShippingLineFormFields({ uuid, item }: Props) {
 	const t = useT();
-	const tax = useTaxSegments();
+	const { taxStatus } = useOptionLists();
 	const { updateCartLine } = useUpdateCartLine();
 	// The order this sheet belongs to: a debounced write that lands after the sheet closed and
 	// another order was selected still reaches it.
@@ -163,7 +163,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 							control={form.control}
 							name="tax_status"
 							render={({ field }) => (
-								<FormSegmentedControl {...field} segments={tax.status} testID={field.name} />
+								<FormSegmentedControl {...field} segments={taxStatus} testID={field.name} />
 							)}
 						/>
 					</PropertyRow>

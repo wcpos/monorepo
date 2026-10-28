@@ -39,7 +39,7 @@ import { useT } from '../../../../contexts/translations';
 import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../form-errors';
 import { META_DATA_DEFAULT_ROW, MetaDataForm } from '../meta-data-form';
-import { COUPON_STATUSES, useOptionList } from '../option-lists';
+import { useOptionLists } from '../option-lists';
 import { useFieldPresence } from '../use-field-presence';
 
 export { couponFormSchema } from './coupon-schema';
@@ -72,7 +72,7 @@ const SWITCHES: readonly Offered[] = ['individual_use', 'free_shipping'];
 
 export function CouponForm({ form, footer }: CouponFormProps) {
 	const t = useT();
-	const statuses = useOptionList(COUPON_STATUSES);
+	const statuses = useOptionLists().couponStatuses;
 	const values = useWatch({ control: form.control });
 	const discountType = values.discount_type ?? 'percent';
 	const showMaxItems = discountType === 'percent' || discountType === 'fixed_product';

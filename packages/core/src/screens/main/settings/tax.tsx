@@ -27,8 +27,7 @@ import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
-import { TAX_BASED_ON, useOptionList } from '../components/option-lists';
-import { useTaxSegments } from '../components/tax-segments';
+import { useOptionLists } from '../components/option-lists';
 import { useExtraData } from '../contexts/extra-data';
 import { INHERIT_TAX_CLASS, taxClassFromWire } from '../hooks/tax-class';
 
@@ -55,8 +54,7 @@ function TaxSettingsForm() {
 	const markSaved = useMarkSaved();
 	const { store, site } = useStoreSession();
 	const t = useT();
-	const taxBasedOn = useOptionList(TAX_BASED_ON);
-	const tax = useTaxSegments();
+	const lists = useOptionLists();
 	const router = useRouter();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as {
@@ -143,7 +141,7 @@ function TaxSettingsForm() {
 						render={({ field: { value, onChange, ...rest } }) => (
 							<PropertyRow name="tax_based_on" label={t('common.calculate_tax_based_on')}>
 								<FormSelect
-									options={taxBasedOn}
+									options={lists.taxBasedOn}
 									placeholder={t('common.select_tax_based_on')}
 									value={value}
 									onChange={onChange}
@@ -188,7 +186,7 @@ function TaxSettingsForm() {
 						name="tax_total_display"
 						render={({ field }) => (
 							<PropertyRow name="tax_total_display" label={t('settings.display_tax_totals')}>
-								<FormSegmentedControl {...field} segments={tax.display} testID={field.name} />
+								<FormSegmentedControl {...field} segments={lists.taxDisplay} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>
@@ -197,7 +195,7 @@ function TaxSettingsForm() {
 						name="tax_display_shop"
 						render={({ field }) => (
 							<PropertyRow name="tax_display_shop" label={t('settings.display_prices_in_the_shop')}>
-								<FormSegmentedControl {...field} segments={tax.inclExcl} testID={field.name} />
+								<FormSegmentedControl {...field} segments={lists.inclExcl} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>
@@ -209,7 +207,7 @@ function TaxSettingsForm() {
 								name="tax_display_cart"
 								label={t('settings.display_prices_during_cart_and_checkout')}
 							>
-								<FormSegmentedControl {...field} segments={tax.inclExcl} testID={field.name} />
+								<FormSegmentedControl {...field} segments={lists.inclExcl} testID={field.name} />
 							</PropertyRow>
 						)}
 					/>

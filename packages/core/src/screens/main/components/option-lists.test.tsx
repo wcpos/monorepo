@@ -3,13 +3,7 @@
  */
 import { renderHook } from '@testing-library/react';
 
-import {
-	COUPON_STATUSES,
-	CURRENCY_POSITIONS,
-	PRODUCT_STATUSES,
-	TAX_BASED_ON,
-	useOptionList,
-} from './option-lists';
+import { useOptionLists } from './option-lists';
 import { usePrinterOptions } from '../settings/printer/options';
 
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => `t:${key}` }));
@@ -17,18 +11,24 @@ jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) =
 const values = (options: { value: string }[]) => options.map((option) => option.value);
 
 /**
- * The values are what `FormSelect` writes to the record: Woo's own slugs, byte for byte, in
- * the order the select lists them. A label is translated; a value never is.
+ * The values are what the select or segmented control writes to the record: Woo's own slugs,
+ * byte for byte, in the order they are listed. A label is translated; a value never is.
  */
-it.each([
-	['currency position', CURRENCY_POSITIONS, ['left', 'right', 'left_space', 'right_space']],
-	['tax based on', TAX_BASED_ON, ['shipping', 'billing', 'base']],
-	['coupon status', COUPON_STATUSES, ['publish', 'draft', 'pending']],
-	['product status', PRODUCT_STATUSES, ['draft', 'pending', 'private', 'publish']],
-])('the %s list writes Woo slugs and shows translations', (_name, pairs, expected) => {
-	const { result } = renderHook(() => useOptionList(pairs));
-	expect(values(result.current)).toEqual(expected);
-	expect(result.current[0].label).toBe(`t:${pairs[0][1]}`);
+it('writes Woo slugs and shows translations', () => {
+	const { result } = renderHook(() => useOptionLists());
+	const lists = Object.fromEntries(
+		Object.entries(result.current).map(([name, list]) => [name, values([...list])])
+	);
+	expect(lists).toEqual({
+		currencyPositions: ['left', 'right', 'left_space', 'right_space'],
+		taxBasedOn: ['shipping', 'billing', 'base'],
+		couponStatuses: ['publish', 'draft', 'pending'],
+		productStatuses: ['draft', 'pending', 'private', 'publish'],
+		taxStatus: ['taxable', 'none'],
+		taxDisplay: ['single', 'itemized'],
+		inclExcl: ['incl', 'excl'],
+	});
+	expect(result.current.inclExcl[0].label).toBe('t:common.including_tax');
 });
 
 it("offers the printer form's lists, shared by the wizard and Edit Printer", () => {

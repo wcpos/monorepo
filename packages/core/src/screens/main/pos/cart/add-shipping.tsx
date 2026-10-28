@@ -21,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
 import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
-import { useTaxSegments } from '../../components/tax-segments';
+import { useOptionLists } from '../../components/option-lists';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**
@@ -47,7 +47,7 @@ type FormValues = z.infer<typeof formSchema>;
  */
 export function AddShipping() {
 	const t = useT();
-	const tax = useTaxSegments();
+	const { taxStatus } = useOptionLists();
 	const { addShipping } = useAddShipping();
 	const { close: closeDialog } = useDialog();
 
@@ -153,7 +153,7 @@ export function AddShipping() {
 							name="tax_status"
 							render={({ field }) => (
 								<FormItem nativeID="shipping-tax">
-									<FormSegmentedControl {...field} segments={tax.status} testID={field.name} />
+									<FormSegmentedControl {...field} segments={taxStatus} testID={field.name} />
 								</FormItem>
 							)}
 						/>

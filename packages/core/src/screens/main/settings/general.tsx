@@ -43,7 +43,7 @@ import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
-import { CURRENCY_POSITIONS, useOptionList } from '../components/option-lists';
+import { useOptionLists } from '../components/option-lists';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -142,7 +142,7 @@ function GeneralSettingsForm({
 	const defaultCustomerData =
 		'getLatest' in defaultCustomer ? defaultCustomer.getLatest().payload : defaultCustomer;
 	const t = useT();
-	const currencyPositions = useOptionList(CURRENCY_POSITIONS);
+	const { currencyPositions } = useOptionLists();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const http = useRestHttpClient();
