@@ -203,7 +203,7 @@ export function ConflictedMutationsPanel() {
 										</Badge>
 									) : null}
 								</HStack>
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{t(
 										row.status === 'needs-revision'
 											? 'health.database.conflicted.needs_revision_reason'

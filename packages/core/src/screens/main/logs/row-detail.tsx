@@ -117,7 +117,9 @@ function EventCode({ row, eventType, logId }: { row: LogRow; eventType: string; 
 
 	return (
 		<HStack className="items-center gap-3">
-			<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_event_code')}</Text>
+			<Text variant="help" className="w-24">
+				{t('health.logs.kv_event_code')}
+			</Text>
 			<Text selectable className="flex-1 font-mono text-xs">
 				{eventType}
 			</Text>
@@ -404,19 +406,15 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 									{lead}
 								</Text>
 							) : null}
-							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
-							{narration ? (
-								<Text className="text-muted-foreground text-xs">{narration}</Text>
-							) : null}
+							{guidance ? <Text variant="subheading">{guidance}</Text> : null}
+							{narration ? <Text variant="help">{narration}</Text> : null}
 							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>
 					) : (
 						<>
 							{description ? <Text className="text-sm">{description}</Text> : null}
-							{narration ? (
-								<Text className="text-muted-foreground text-xs">{narration}</Text>
-							) : null}
+							{narration ? <Text variant="help">{narration}</Text> : null}
 							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 						</>
 					)}
@@ -430,14 +428,16 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			) : null}
 			{hasContext ? (
 				<HStack className="items-baseline gap-3">
-					<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_details')}</Text>
+					<Text variant="help" className="w-24">
+						{t('health.logs.kv_details')}
+					</Text>
 					<View className="flex-1">
 						<Tree value={context} collapsed />
 					</View>
 				</HStack>
 			) : null}
 			{!hasProse && !hasFacts && !hasContext ? (
-				<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
+				<Text variant="help">{t('health.logs.no_detail')}</Text>
 			) : null}
 		</VStack>
 	);

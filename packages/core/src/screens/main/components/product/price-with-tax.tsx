@@ -87,12 +87,7 @@ export function PriceWithTax({
 				>
 					{format(displayValue)}
 				</Text>
-				<Text
-					className={cn(
-						strikethrough && 'line-through',
-						'text-muted-foreground text-right text-sm'
-					)}
-				>
+				<Text variant="key" className={cn(strikethrough && 'line-through', 'text-right')}>
 					{taxLineText(t, inclOrExcl, format(taxTotal))}
 				</Text>
 			</VStack>

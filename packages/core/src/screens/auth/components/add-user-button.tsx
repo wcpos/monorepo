@@ -119,7 +119,9 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 			onPress={handlePress}
 			leading={<Icon name="plus" size="sm" />}
 		>
-			<Text className="text-muted-foreground text-sm font-medium">{label}</Text>
+			<Text variant="key" className="font-medium">
+				{label}
+			</Text>
 		</ListItem>
 	);
 }

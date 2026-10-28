@@ -150,7 +150,7 @@ export function QueuedEmailsPanel() {
 									</Badge>
 								)}
 							</HStack>
-							<Text className="text-muted-foreground text-xs">
+							<Text variant="help">
 								{t('health.database.emails.when', {
 									ago: relative(Date.parse(row.queuedAt), nowMs),
 								})}
