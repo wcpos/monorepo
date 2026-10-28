@@ -1074,7 +1074,6 @@
 	"pos_cart.add_shipping": "Add Shipping",
 	"pos_cart.amount": "Amount",
 	"pos_cart.amount_includes_tax": "Amount Includes Tax",
-	"pos_cart.cart": "Cart {order_total}",
 	"pos_cart.tab_cart": "Cart",
 	"pos_cart.cart_changed": "Cart changed during coupon application. Please try again.",
 	"pos_cart.cart_settings": "Cart Settings",

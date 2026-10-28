@@ -11,14 +11,14 @@ it('never scrolls fitting content into empty space', () => {
 	expect(centredOffset({ rowWidth: 500, contentWidth: 200, tabX: 100, tabWidth: 100 })).toBe(0);
 });
 it.each([
-	[512, false],
-	[513, true],
+	[448, false],
+	[449, true],
 	[0, false],
-])('tests overflow without reserving a tray (%s)', (contentWidth, expected) => {
-	expect(rowOverflows({ stripWidth: 560, plusWidth: 48, contentWidth })).toBe(expected);
+])('reserves the unfolded cell, but not the tray (%s)', (contentWidth, expected) => {
+	expect(rowOverflows({ stripWidth: 560, contentWidth })).toBe(expected);
 });
 it('waits for a positive strip layout', () => {
-	expect(rowOverflows({ stripWidth: 0, plusWidth: 48, contentWidth: 800 })).toBe(false);
+	expect(rowOverflows({ stripWidth: 0, contentWidth: 800 })).toBe(false);
 });
 it('sorts and deduplicates native snap stops after clamping', () => {
 	expect(

@@ -157,10 +157,9 @@ const layout = (width: number, widths = mockOpen.map(() => 100)) => {
 		x += w;
 	});
 	act(() => mockContentSizes.get('row')?.(x, 52));
-	measure(
-		'scroll-row',
-		width - (mockCurrent.isNew ? 112 : 48) - (screen.queryByTestId('open-orders-count') ? 56 : 0)
-	);
+	// Overflow always reserves the unfolded 112 pt cell; the viewport follows its live width.
+	const overflow = width > 0 && x > width - 112;
+	measure('scroll-row', width - (mockCurrent.isNew ? 112 : 48) - (overflow ? 56 : 0));
 };
 const mockSetOrder = jest.fn();
 const mockRecord = (uuid: string, date: string) => ({
@@ -168,7 +167,8 @@ const mockRecord = (uuid: string, date: string) => ({
 	payload: {
 		date_created_gmt: date,
 		total: '10.00',
-		refunds: [],
+		currency_symbol: '$',
+		refunds: [] as { id: number; total: string }[],
 		meta_data: [] as ReturnType<typeof withLedger>,
 		status: 'pos-open',
 		billing: { first_name: '', last_name: '' },
@@ -183,9 +183,8 @@ const mockTimings: number[] = [];
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
-	LinearTransition: {
-		duration: () => ({ easing: () => ({ reduceMotion: () => 'layout' }) }),
-	},
+	FadeIn: { duration: () => ({ reduceMotion: () => 'fade-in' }) },
+	FadeOut: { duration: () => ({ reduceMotion: () => 'fade-out' }) },
 	ReduceMotion: { System: 'system' },
 	useReducedMotion: () => mockReducedMotion,
 	Easing: { bezier: () => 'ease', linear: 'linear' },
@@ -236,7 +235,9 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+	useCurrencyFormat: ({ currencySymbol = '$' }: { currencySymbol?: string }) => ({
+		format: (value: number) => `${currencySymbol}${value.toFixed(2)}`,
+	}),
 }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
@@ -321,7 +322,7 @@ it("the + cell is the blank cart's tab: it unfolds while the current order is ne
 	expect(screen.queryByTestId('open-order-tab-new')).toBeNull();
 	const plus = screen.getByTestId('new-order-tab');
 	expect(plus.getAttribute('aria-selected')).toBe('false');
-	expect(plus.style.width).toBe('48px');
+	// The reanimated mock omits styles: selection and label expose the folded state.
 	expect(screen.queryByTestId('new-order-tab-label')).toBeNull();
 	fireEvent.click(plus);
 	expect(mockSetOrder).toHaveBeenCalledWith('');
@@ -334,7 +335,6 @@ it("the + cell is the blank cart's tab: it unfolds while the current order is ne
 	const fresh = screen.getByTestId('new-order-tab');
 	const open = screen.getByTestId('open-order-tab-open');
 	expect(fresh.getAttribute('aria-selected')).toBe('true');
-	expect(fresh.style.width).toBe('112px');
 	expect(fresh.className).toContain('border-primary');
 	expect(screen.getByTestId('new-order-tab-label').textContent).toBe('New');
 	// The tablist owns the cell, so the selected New tab is one of its tabs to a reader.
@@ -441,7 +441,7 @@ it('keeps other tabs reachable when a receipt suspends or is missing', () => {
 	expect(screen.getByTestId('new-order-tab')).not.toBeNull();
 });
 
-it('marks selection with an underline and keeps who above age or status', () => {
+it('marks selection with an underline and keeps who above amount or status', () => {
 	enterReceipt('late');
 	render(<OpenOrderTabs />);
 	const active = screen.getByTestId('open-order-tab-late');
@@ -456,8 +456,9 @@ it('marks selection with an underline and keeps who above age or status', () => 
 	expect(content.firstElementChild?.className).toContain('font-medium');
 	// A token width, never an arbitrary px (the uniwind contract ratchet).
 	expect(content.firstElementChild?.className).toContain('max-w-52');
-	// A plain cart has an age instead of a status.
-	expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('5 min');
+	// A fresh plain cart shows its amount, never its age.
+	expect(screen.getByTestId('open-order-tab-open-amount').textContent).toBe('$10.00');
+	expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
 	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
 	expect(active.firstElementChild?.firstElementChild?.className).toContain('font-semibold');
 	expect(active.firstElementChild?.children).toHaveLength(2);
@@ -469,13 +470,13 @@ it('marks selection with an underline and keeps who above age or status', () => 
 	expect(screen.getByTestId('open-orders-count').getAttribute('aria-label')).toBe('1 open');
 });
 
-it('keeps phone tabs to who and age or a dot, with no active chip', () => {
+it('keeps phone tabs to who and amount or a dot, with no active chip', () => {
 	mockPhone = true;
 	enterReceipt('late');
 	render(<OpenOrderTabs />);
 	const content = screen.getByTestId('open-order-tab-open').firstElementChild!;
 	expect(content.className).toContain('flex-row');
-	expect(content.textContent).toBe('Guest · Hat5 min');
+	expect(content.textContent).toBe('Guest · Hat$10.00');
 	// A plain cart has no dot on the phone either; only a real status draws one.
 	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
 	expect(screen.queryByTestId('open-order-chip-late')).toBeNull();
@@ -484,10 +485,10 @@ it('keeps phone tabs to who and age or a dot, with no active chip', () => {
 	expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
 });
 
-it('keeps the shared title wording for callers outside the strip', () => {
+it('keeps the shared amount for callers outside the strip', () => {
 	const order = mockOpen[0].record as unknown as React.ComponentProps<typeof CartTabTitle>['order'];
 	const { container } = render(<CartTabTitle order={order} />);
-	expect(container.textContent).toBe('Cart $10.00');
+	expect(container.textContent).toBe('$10.00');
 });
 
 it('opens the list from the strip, and the count button or a tab closes it again', () => {
@@ -715,6 +716,12 @@ it('shows billing names and guest entry counts, stale ages, and no age on restar
 		expect(screen.getByTestId('open-order-tab-open-who').textContent).toBe('Ada Lovelace');
 		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('text-warning-text');
 		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('font-semibold');
+		const amount = screen.getByTestId('open-order-tab-open-amount');
+		expect(amount.textContent).toBe('$10.00 · 2 h');
+		expect(amount.className).toContain('tabular-nums');
+		expect(amount.className).toContain('text-muted-foreground');
+		expect(amount.className).not.toContain('text-warning-text');
+		expect(screen.getByTestId('open-order-tab-open-age').parentElement).toBe(amount);
 		mockOpen[0].record = {
 			...original,
 			payload: {
@@ -728,7 +735,10 @@ it('shows billing names and guest entry counts, stale ages, and no age on restar
 		expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
 		expect(screen.getByTestId('open-order-status-open').textContent).toBe('In checkout');
 		act(() => resetCheckoutMode());
-		mockOpen[0].record = { ...original, payload: { ...original.payload, line_items: [] } };
+		mockOpen[0].record = {
+			...original,
+			payload: { ...original.payload, line_items: [], date_created_gmt: '2026-09-07T10:00:00' },
+		};
 		rerender(<OpenOrderTabs />);
 		expect(screen.getByTestId('open-order-tab-open-who').textContent).toBe('Guest');
 		expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
@@ -812,16 +822,18 @@ it('uses measured text widths and recentres when the row or active tab changes s
 		mockOpen = open;
 	}
 });
-it('shares one age clock across the strip and updates it while mounted', () => {
-	jest.useFakeTimers({ now: new Date('2026-09-07T12:05:00Z') });
+it('shares one age clock and reveals the age at the stale threshold', () => {
+	jest.useFakeTimers({ now: new Date('2026-09-07T12:59:00Z') });
+	jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-07T12:59:00Z'));
 	const interval = jest.spyOn(global, 'setInterval');
 	try {
 		const { unmount } = render(<OpenOrderTabs />);
 		expect(interval).toHaveBeenCalledTimes(1);
-		expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('5 min');
-		jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-07T12:06:00Z'));
+		expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
+		jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-07T13:00:00Z'));
 		act(() => jest.advanceTimersByTime(60_000));
-		expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('6 min');
+		expect(screen.getByTestId('open-order-tab-open-amount').textContent).toBe('$10.00 · 1 h');
+		expect(screen.getByTestId('open-order-tab-open-age').className).toContain('text-warning-text');
 		unmount();
 	} finally {
 		interval.mockRestore();
@@ -889,11 +901,12 @@ it.each(['drag', 'scroll'])(
 		}
 	}
 );
-it('keeps the active phone age only when there is no chip state', () => {
+it('keeps the active phone amount only when there is no chip state', () => {
 	mockPhone = true;
 	render(<OpenOrderTabs />);
-	expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('5 min');
+	expect(screen.getByTestId('open-order-tab-open-amount').textContent).toBe('$10.00');
 	act(() => enterCheckout('open'));
+	expect(screen.queryByTestId('open-order-tab-open-amount')).toBeNull();
 	expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
 	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
 	expect(screen.queryByTestId('open-order-status-open')).toBeNull();
@@ -942,4 +955,45 @@ it.each(['rejected', 'awaiting', 'terminal'])(
 it('lets tab presses reach the tab while the native search keyboard is open', () => {
 	render(<OpenOrderTabs />);
 	expect(screen.getByTestId('scroll-row').dataset.keyboardTaps).toBe('handled');
+});
+
+it('shares the net refunded amount and currency between the strip and title', () => {
+	const original = mockOpen[0].record;
+	try {
+		mockOpen[0].record = {
+			...original,
+			payload: {
+				...original.payload,
+				total: '15.00',
+				currency_symbol: '€',
+				refunds: [{ id: 1, total: '-3.00' }],
+			},
+		};
+		render(<OpenOrderTabs />);
+		const order = mockOpen[0].record as unknown as React.ComponentProps<
+			typeof CartTabTitle
+		>['order'];
+		const title = render(<CartTabTitle order={order} />);
+		expect(screen.getByTestId('open-order-tab-open-amount').textContent).toBe('€12.00');
+		expect(title.container.textContent).toBe('€12.00');
+	} finally {
+		mockOpen[0].record = original;
+	}
+});
+it('keeps the overflow tray mounted while the blank cart unfolds and folds', () => {
+	const { rerender } = render(<OpenOrderTabs />);
+	// Fits next to 48 pt, but not next to 112 pt: selection must not toggle the tray.
+	layout(200);
+	const tray = screen.getByTestId('open-orders-count');
+	mockCurrent = freshRecord();
+	rerender(<OpenOrderTabs />);
+	layout(200);
+	expect(screen.getByTestId('open-orders-count')).toBe(tray);
+	expect(screen.getByTestId('new-order-tab-label').textContent).toBe('New');
+	mockCurrent = mockOpen[0].record;
+	rerender(<OpenOrderTabs />);
+	layout(200);
+	expect(screen.getByTestId('open-orders-count')).toBe(tray);
+	expect(screen.getByTestId('new-order-tab').getAttribute('aria-selected')).toBe('false');
+	expect(screen.queryByTestId('new-order-tab-label')).toBeNull();
 });
