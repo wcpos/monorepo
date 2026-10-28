@@ -26,7 +26,7 @@ export function presentTenderRefusal(
 	if (presented) return reasonKey;
 	if (reasonKey === SESSION_REQUIRED_REASON) presentSessionRequired(logger, t, context);
 	else if (reasonKey === CHOOSE_REGISTER_REASON)
-		logger.info(t(CHOOSE_REGISTER_REASON), { showToast: true, context });
+		logger.info(t('pos_checkout.choose_register_first'), { showToast: true, context });
 	else presentActionRefusal(actionCtx, refusal, context);
 	return reasonKey;
 }

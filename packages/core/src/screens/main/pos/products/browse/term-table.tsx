@@ -18,7 +18,7 @@ import { OwnFooterContext, ProductsFooter } from '../footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
-import { type BrowseBy, type BrowseTerm, termKey, TERMS_KEY } from './browse-source';
+import { type BrowseBy, type BrowseTerm, termKey, termsTally } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow, useImageColumnShown } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
@@ -222,7 +222,7 @@ export function TermLevelTable({
 	const ground = useGround();
 	const prefix =
 		children.length > 0 && source !== 'shortcuts'
-			? t(TERMS_KEY[source], { count: children.length })
+			? termsTally(source, children.length, t)
 			: undefined;
 	const showImage = useImageColumnShown();
 	// This pane's own answer, held while the shared query is another level's (level-snapshot.ts).

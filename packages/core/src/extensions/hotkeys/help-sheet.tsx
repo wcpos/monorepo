@@ -14,6 +14,7 @@ import {
 import { useT } from '../../contexts/translations';
 import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side';
 import { getCommands, runCommand } from '../commands';
+import { registrantText } from '../actions/present';
 import { chordPlatform, DEFAULT_BINDINGS, describeChord } from './bindings';
 
 import type { CommandContext, CommandId } from '../commands';
@@ -62,7 +63,7 @@ export function HelpSheet({
 										testID={`hotkeys-help-row-${command.id}`}
 										disabled={command.when?.(ctx) === false}
 										onPress={() => run(command.id)}
-										label={t(command.label)}
+										label={registrantText(t, command.label)}
 										trailing={
 											<View className="flex-row gap-1">
 												{keys &&

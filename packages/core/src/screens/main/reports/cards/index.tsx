@@ -27,16 +27,18 @@ import { TopProductsCard } from './top-products';
 import { TaxesCard } from './taxes';
 import { RefundsCard } from './refunds';
 
-const cards = [
-	{ id: 'card-orders', name: 'reports.card_orders', Component: OrdersCard },
-	{ id: 'card-payments', name: 'reports.card_payments', Component: PaymentsCard },
-	{ id: 'card-where-sold', name: 'reports.card_where_sold', Component: WhereSoldCard },
-	{ id: 'card-products', name: 'reports.card_top_products', Component: TopProductsCard },
-	{ id: 'card-categories', name: 'reports.card_categories', Component: CategoriesCard },
-	{ id: 'card-brands', name: 'reports.card_brands', Component: BrandsCard },
-	{ id: 'card-cashiers', name: 'reports.card_cashiers', Component: CashiersCard },
-	{ id: 'card-taxes', name: 'reports.card_taxes', Component: TaxesCard },
-	{ id: 'card-refunds', name: 'reports.card_refunds', Component: RefundsCard },
+type T = (t: (key: string) => string) => string;
+// Each name is a literal translation call: the string extractor reads no computed key.
+const cards: { id: string; name: T; Component: React.ComponentType }[] = [
+	{ id: 'card-orders', name: (t) => t('reports.card_orders'), Component: OrdersCard },
+	{ id: 'card-payments', name: (t) => t('reports.card_payments'), Component: PaymentsCard },
+	{ id: 'card-where-sold', name: (t) => t('reports.card_where_sold'), Component: WhereSoldCard },
+	{ id: 'card-products', name: (t) => t('reports.card_top_products'), Component: TopProductsCard },
+	{ id: 'card-categories', name: (t) => t('reports.card_categories'), Component: CategoriesCard },
+	{ id: 'card-brands', name: (t) => t('reports.card_brands'), Component: BrandsCard },
+	{ id: 'card-cashiers', name: (t) => t('reports.card_cashiers'), Component: CashiersCard },
+	{ id: 'card-taxes', name: (t) => t('reports.card_taxes'), Component: TaxesCard },
+	{ id: 'card-refunds', name: (t) => t('reports.card_refunds'), Component: RefundsCard },
 ];
 // Three cards need about 330 points each for their stat grids plus two gaps; two need 290.
 const THREE_COLUMNS_MIN_WIDTH = 1000;
@@ -94,7 +96,7 @@ export function PeriodSection() {
 								<View key={cell} className="min-w-0 flex-1">
 									{card && (
 										<ErrorBoundary>
-											<Suspense fallback={<CardSkeleton testID={card.id} name={t(card.name)} />}>
+											<Suspense fallback={<CardSkeleton testID={card.id} name={card.name(t)} />}>
 												<card.Component />
 											</Suspense>
 										</ErrorBoundary>
