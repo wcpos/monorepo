@@ -2,11 +2,11 @@
 
 Created 2026-10-25 for the property-rows grammar Paul chose after five boards (`~/Projects/wcpos-handoffs/2026-10-25-property-rows-system.html`, `2026-10-25-property-rows-every-form.html`). Numbers are assigned once and never reused; every line keeps its evidence.
 
-**Job:** Show a record as a list of facts, one row per fact (key · value · verb), with the absent facts offered as add buttons at the bottom.
+**Job:** Show a record or a settings page as a list of facts, one row per fact (key · value · verb), with a record's absent facts offered as add buttons at the bottom.
 
-**Not its job:** deciding which facts are asked for or present (`useFieldPresence` in core and the record's own field list), saving (the form's autosave), or a settings page's rows (`SettingsRow`, which keeps its own ledger until it becomes an alias).
+**Not its job:** deciding which facts are asked for or present (`useFieldPresence` in core and the record's own field list), saving (the form's autosave). `SettingsRow` and `LockedRow` were deleted into this row on 2026-10-28 (card 5); settings LEDGER lines 2 and 4 moved here as lines 9 and 12.
 
-**Base:** React Native `View`, `Text` / `TextClassContext`, `Button`.
+**Base:** React Native `View`, `Text` / `TextClassContext`, `Button`, `DocsLink`, `Switch`, and from `form/`: `FormItem`, `useSavedName`, `SavedMark`.
 
 ## Lines
 
@@ -17,3 +17,10 @@ Created 2026-10-25 for the property-rows grammar Paul chose after five boards (`
 5. Add buttons are `Button variant="outline" size="sm" leftIcon="plus"` (36), wrapping with `gap-2`, never Chips: a Chip is a selectable state and these are actions (CODING_STANDARDS § Chips, badges and switches) — evidence: the system board, "Add row"; test "an add is a 36-tall outline Button…".
 6. Verbs are `Button variant="link" size="sm"` (primary, 13 medium), never a chevron — evidence: the board's verb vocabulary; test "a verb is a small link Button in primary ink".
 7. An empty asked-for value reads as a placeholder in muted ink (`PROPERTY_PLACEHOLDER_CLASS`), shared with `EditableField`'s placeholder so the two never disagree — evidence: the board's "Asked but empty: a placeholder verb, no box".
+8. The row reads the form's Saved name: `name` (the field or fields it holds, `id` by default) decides whether the mark shows, and the mark takes the verb's place, never beside it; a trailing `control` (a Switch) comes after it, so a mark arriving never moves the control. Nine wrappers (PrinterRow, OrderRow, CartLineRow, CouponRow, CatalogueRow, the customer and address rows, tax IDs, custom fields) each re-derived this; a list (tax IDs, custom fields) names its field on its first row only — evidence: card 5 of the 2026-10-28 component-library review; test "the row owns the trailing slot".
+9. The row is the form item: the list's `prefix` (or the row's own) and `id` give the testID `<prefix>-row-<id>` and the item id `<prefix>-<id>` (minted without them), the key is `<item>-form-item`, a label-less control in the row adopts it, and pressing the key presses that control (focus, toggle). It needs no react-hook-form provider, so the customer-display page's rows render as the others (moved from settings LEDGER line 2) — evidence: tests "the row is the form item…", "pressing the key acts on the control it names".
+10. Set elsewhere is locked (rule 6): the value, then where it is set and _Open ↗_ (`DocsLink`) when there is a link; a boolean value is a disabled switch, an empty one a dash. Replaces `LockedRow` and the settings pages' note line; the orchestrator's pick, Paul to confirm — dropping Open is the one `DocsLink` line in the row — evidence: the property-rows system board, "Locked: value plus where it is set · Set in WooCommerce · Open ↗"; test "locked (rule 6)…".
+11. A derived value (rule 5) reads in muted ink; its verb breaks the link — evidence: the board's "Derived: value in muted"; test "a derived value reads in muted ink".
+12. The key column is the list's: 128 (`md:w-32`) in a dialog, `PropertyList wide` (every `SettingsSection`) 256 / 288 (`md:w-64 lg:w-72`) with the value in one 320 column (`md:max-w-80`), so a settings page's marks and switches line up in one trailing column (moved from settings LEDGER line 4, where it was `SettingsRow`'s) — evidence: the board's "the key column is w-32 in a dialog and md:w-64 lg:w-72 on a settings page"; test "the key column in …".
+13. `stacked` puts the key above the value at every width with the trailing slot on the key's line: a value too big for the line (the theme tiles, the icon sets, the scan sounds) keeps its Saved mark in the row instead of an absolutely placed one — evidence: card 5 ("the saved mark is hand-placed at 5 offsets"); test "the key column in stacked".
+14. `help` is one line under the key in the help rank — evidence: CODING_STANDARDS § Design 11 ("the help line says what happens at the till"); test "the key column in …".

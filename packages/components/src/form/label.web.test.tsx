@@ -129,8 +129,8 @@ describe('web form labels', () => {
 	});
 
 	/**
-	 * A `SettingsRow` is a `FormItem` + `FormLabel` with the wrapper beside it and no label
-	 * of its own: the wrapper adopts the row's item, so the row's label names and acts.
+	 * A `PropertyRow` is a `FormItem` whose key names the wrapper beside it, which has no label
+	 * of its own: the wrapper adopts the row's item, so the row's key names and acts.
 	 */
 	describe('inside an enclosing item whose label names the control', () => {
 		it('names the input by the enclosing label, and a click focuses it', () => {
