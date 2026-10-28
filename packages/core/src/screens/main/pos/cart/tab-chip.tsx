@@ -69,7 +69,9 @@ export function TabChip({
 				: awaits
 					? t('pos_checkout.chip_awaiting_store_due', { due: format(Number(balance)) })
 					: stage === 'receipt'
-						? t(sent ? 'pos_checkout.chip_sent_receipt' : 'pos_checkout.chip_paid_receipt')
+						? sent
+							? t('pos_checkout.chip_sent_receipt')
+							: t('pos_checkout.chip_paid_receipt')
 						: waiting
 							? t('pos_checkout.chip_waiting_for_terminal', {
 									amount: format(Number(waiting.amount)),
@@ -77,13 +79,11 @@ export function TabChip({
 							: captured && Number(balance) > 0
 								? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
 								: stage === 'checkout' && !captured
-									? t(
-											saveState?.kind === 'saving'
-												? 'pos_checkout.saving_order'
-												: saveState?.kind === 'queued-offline'
-													? 'pos_checkout.chip_in_checkout_offline'
-													: 'pos_checkout.chip_in_checkout'
-										)
+									? saveState?.kind === 'saving'
+										? t('pos_checkout.saving_order')
+										: saveState?.kind === 'queued-offline'
+											? t('pos_checkout.chip_in_checkout_offline')
+											: t('pos_checkout.chip_in_checkout')
 									: (fallbackLabel ?? null);
 	const tone =
 		saveState?.kind === 'rejected'

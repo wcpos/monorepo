@@ -21,6 +21,10 @@ let mockRetrying: false | 'none' | 'failed' = false;
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
+// The strip's portal comes with the edge surface, which reads the safe-area insets.
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('./register-gate-card', () => ({
 	RegisterGateCard: ({ failed }: { failed: boolean }) => (

@@ -9,7 +9,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
-import { describePrinterError } from '../describe-printer-error';
+import { describePrinterError, printerErrorText } from '../describe-printer-error';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 
 import type { TestPrintFailure } from './use-printer-dialog-form';
@@ -76,7 +76,7 @@ export function TestPrintError({ error, hideGuide = false }: TestPrintErrorProps
 			<Notice
 				tone="bad"
 				testID="add-printer-test-error"
-				title={t(describePrinterError(error.message).key)}
+				title={printerErrorText(describePrinterError(error.message).key, t)}
 				docs={
 					hideGuide
 						? undefined

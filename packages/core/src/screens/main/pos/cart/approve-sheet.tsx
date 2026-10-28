@@ -78,7 +78,7 @@ export function ApproveSheet({
 					sessionId: session.id,
 					registerId: session.register_id,
 				});
-			const message = t(refused ? 'register.cannot_approve' : 'register.approval_failed');
+			const message = refused ? t('register.cannot_approve') : t('register.approval_failed');
 			setError(message);
 			Toast.show({ type: 'error', title: message });
 		} finally {

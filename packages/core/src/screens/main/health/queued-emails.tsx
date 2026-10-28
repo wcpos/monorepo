@@ -96,9 +96,9 @@ export function QueuedEmailsPanel() {
 			const removed = await removeReceiptEmail(storeDB, row.localID, logger);
 			Toast.show({
 				type: removed ? 'success' : 'warning',
-				text1: t(
-					removed ? 'health.database.emails.removed' : 'health.database.emails.remove_in_flight'
-				),
+				text1: removed
+					? t('health.database.emails.removed')
+					: t('health.database.emails.remove_in_flight'),
 			});
 		} catch (error) {
 			const message = getErrorMessage(error);

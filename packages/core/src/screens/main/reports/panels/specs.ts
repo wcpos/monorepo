@@ -70,6 +70,34 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		total = t('common.total');
 	const count = number(orders.length),
 		amount = money(totals.total);
+	// Column heads as literal translation calls: the string extractor reads no computed key.
+	const col = {
+		order: t('common.order'),
+		time: t('common.time'),
+		cashier: t('common.cashier'),
+		paidBy: t('reports.col_paid_by'),
+		counted: t('reports.counted'),
+		method: t('reports.col_method'),
+		orders: t('common.orders'),
+		amount: t('common.amount'),
+		share: t('reports.col_share'),
+		product: t('common.product'),
+		qty: t('reports.col_qty'),
+		brand: t('common.brand'),
+		category: t('common.category'),
+		channel: t('common.channel'),
+		register: t('common.register'),
+		avgOrder: t('reports.col_avg_order'),
+		rate: t('common.rate'),
+		net: t('reports.document.net'),
+		tax: t('common.tax'),
+		gross: t('reports.document.gross'),
+		refundTime: t('reports.col_time'),
+		reason: t('reports.col_reason'),
+		cost: t('reports.col_cost'),
+		profit: t('reports.col_profit'),
+		margin: t('reports.col_margin'),
+	};
 	const keys = {
 		channels: ['channel', 'orders', 'amount', 'share'],
 		registers: ['register', 'orders', 'avg_order', 'amount'],
@@ -96,7 +124,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		totalRaw: (string | number)[]
 	): PanelSpec => {
 		const result: PanelSpec = {
-			head: head.map((key) => t(key)),
+			head,
 			rows,
 			total,
 			totalRaw,
@@ -117,10 +145,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		if (groups && (inputs.cogs ?? cogsEnabled(orders, []))) {
 			const insert = <T>(values: T[], extra: T[]) => values.splice(3, 0, ...extra);
 			insert(result.keys, ['cost', 'profit', 'margin']);
-			insert(
-				result.head,
-				['reports.col_cost', 'reports.col_profit', 'reports.col_margin'].map((key) => t(key))
-			);
+			insert(result.head, [col.cost, col.profit, col.margin]);
 			insert(result.types, ['money', 'money', 'number']);
 			insert(result.align, ['right', 'right', 'right']);
 			const append = (
@@ -163,14 +188,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 	switch (id) {
 		case 'orders':
 			return spec(
-				[
-					'common.order',
-					'common.time',
-					'common.cashier',
-					'reports.col_paid_by',
-					'common.total',
-					'reports.counted',
-				],
+				[col.order, col.time, col.cashier, col.paidBy, total, col.counted],
 				orders.map((order) => {
 					const cashier = wooMetaCarrier.readIdentity(order.meta_data).cashierId ?? '';
 					const method = order.payment_method
@@ -185,7 +203,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 						cashierNames[cashier] || unknown,
 						method,
 						money(Number(order.total || 0)),
-						t(inputs.unselectedRowIds?.[order.uuid] ? 'common.no' : 'common.yes'),
+						inputs.unselectedRowIds?.[order.uuid] ? t('common.no') : t('common.yes'),
 					];
 					return {
 						key: order.uuid,
@@ -211,7 +229,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				unknown,
 			};
 			return spec(
-				['reports.col_method', 'common.orders', 'common.amount', 'reports.col_share'],
+				[col.method, col.orders, col.amount, col.share],
 				payments.map((row) => ({
 					key: row.key,
 					raw: [row.label || labels[row.key] || unknown, row.orders, row.amount, row.share * 100],
@@ -228,7 +246,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		}
 		case 'products':
 			return spec(
-				['common.product', 'reports.col_qty', 'common.amount'],
+				[col.product, col.qty, col.amount],
 				products.map((row) => ({
 					key: row.key,
 					raw: [row.name || unknown, row.quantity, row.amount],
@@ -262,12 +280,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				nobrand: t('reports.no_brand'),
 			};
 			return spec(
-				[
-					id === 'brands' ? 'common.brand' : 'common.category',
-					'reports.col_qty',
-					'common.amount',
-					'reports.col_share',
-				],
+				[id === 'brands' ? col.brand : col.category, col.qty, col.amount, col.share],
 				grouping.map((row) => ({
 					key: row.key,
 					raw: [label(row), row.quantity, row.amount, row.share * 100],
@@ -296,11 +309,13 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 			const totalShare = rows.reduce((sum, row) => sum + row.share, 0);
 			return spec(
 				byChannel
-					? ['common.channel', 'common.orders', 'common.amount', 'reports.col_share']
-					: ['common.register', 'common.orders', 'reports.col_avg_order', 'common.amount'],
+					? [col.channel, col.orders, col.amount, col.share]
+					: [col.register, col.orders, col.avgOrder, col.amount],
 				rows.map((row) => {
 					const name = byChannel
-						? t(row.key === 'store' ? 'reports.in_store' : 'common.online')
+						? row.key === 'store'
+							? t('reports.in_store')
+							: t('common.online')
 						: row.key === 'online'
 							? t('common.online')
 							: row.key === 'unregistered'
@@ -325,7 +340,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		}
 		case 'cashiers':
 			return spec(
-				['common.cashier', 'common.orders', 'reports.col_avg_order', 'common.amount'],
+				[col.cashier, col.orders, col.avgOrder, col.amount],
 				cashiers.map((row) => ({
 					key: row.key,
 					raw: [
@@ -346,7 +361,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 			);
 		case 'taxes':
 			return spec(
-				['common.rate', 'reports.document.net', 'common.tax', 'reports.document.gross'],
+				[col.rate, col.net, col.tax, col.gross],
 				taxes.rows.map((row) => ({
 					key: row.rateId,
 					raw: [
@@ -369,7 +384,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 			const refunds = inputs.periodRefunds ?? [];
 			const refunded = refundsSummary(refunds, totals, inputs.num_decimals).refunded;
 			return spec(
-				['common.order', 'reports.col_time', 'reports.col_reason', 'common.amount'],
+				[col.order, col.refundTime, col.reason, col.amount],
 				refunds.map((refund) => {
 					const amount = Math.abs(Number(refund.amount ?? refund.total ?? 0));
 					const cells = [

@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { HStack } from '../hstack';
+import { Text } from '../text';
+import { VStack } from '../vstack';
 
 export type KVEntry = { label: string; value: string };
 
@@ -15,7 +15,9 @@ export function KVGrid({ entries, testID }: { entries: KVEntry[]; testID?: strin
 		<VStack testID={testID} className="gap-1">
 			{entries.map((entry) => (
 				<HStack key={entry.label} className="items-baseline gap-3">
-					<Text className="text-muted-foreground w-24 text-xs">{entry.label}</Text>
+					<Text variant="help" className="w-24">
+						{entry.label}
+					</Text>
 					<Text selectable className="flex-1 font-mono text-xs">
 						{entry.value}
 					</Text>

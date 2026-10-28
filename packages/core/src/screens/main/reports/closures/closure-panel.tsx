@@ -177,7 +177,13 @@ export function ClosurePanel({
 				)}
 				{(documentError ? [] : corrections).map((c) => (
 					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">
-						<Text className="font-semibold">{t(`reports.${c.type}`)}</Text>
+						<Text className="font-semibold">
+							{c.type === 'recount'
+								? t('reports.recount')
+								: c.type === 'late_sale'
+									? t('reports.late_sale')
+									: t('reports.late_movement')}
+						</Text>
 						<Text>
 							{c.actor.name}
 							{c.approver ? ` · ${t('reports.approver', { name: c.approver.name })}` : ''}
@@ -199,7 +205,7 @@ export function ClosurePanel({
 			</ScrollView>
 			{(doc.isOffline || !synced) && (
 				<Text className="px-4">
-					{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}
+					{doc.isOffline ? t('reports.recount_offline') : t('reports.recount_pending')}
 				</Text>
 			)}
 			{!!error && (

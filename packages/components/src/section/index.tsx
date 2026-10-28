@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
-import { cn } from '@wcpos/components/lib/utils';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { HStack } from '../hstack';
+import { cn } from '../lib/utils';
+import { Text } from '../text';
+import { VStack } from '../vstack';
 
 /**
  * Line-separated Store health section: hairline on top, plain title, muted

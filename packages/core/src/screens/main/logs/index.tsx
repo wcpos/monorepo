@@ -11,6 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import { readRecentErrorLogs } from '@wcpos/query/store-local';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
+import { Stat, StatHeader } from '@wcpos/components/stat';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -25,7 +26,6 @@ import {
 } from '../../../query';
 import { AreaPage } from '../components/navigation-area/area-page';
 import { QuerySearchInput } from '../components/query-search-input';
-import { Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
 import { LedgerFooter, LedgerPane, useLevelLabel } from './ledger';

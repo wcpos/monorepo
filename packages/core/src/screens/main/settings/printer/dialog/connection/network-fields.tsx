@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
@@ -194,9 +195,12 @@ export function NetworkFields({
 				</Text>
 			)}
 			{!scanning && networkPrinters.length === 0 && onScan && (
-				<Text testID="add-printer-network-none-found" className="text-muted-foreground text-xs">
-					{t('settings.no_printers_found')}
-				</Text>
+				<EmptyState
+					testID="add-printer-network-none-found"
+					kind="empty"
+					size="inline"
+					title={t('settings.no_printers_found')}
+				/>
 			)}
 			{networkPrinters.length > 0 && (
 				<VStack testID="add-printer-network-results" className="gap-2 pt-1">

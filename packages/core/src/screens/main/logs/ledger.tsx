@@ -4,6 +4,7 @@ import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns/isToday';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Badge } from '@wcpos/components/badge';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
@@ -17,11 +18,11 @@ import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { QueryHandle } from '@wcpos/query';
+import { CodeChip } from '@wcpos/components/code-chip';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot } from '../../../query';
-import { CodeChip } from '../health/components';
 import { useRecordLabel } from '../health/use-record-label';
 import { useEventTitle } from './event-title';
 import {
@@ -413,9 +414,12 @@ export function Ledger({
 				scrollEventThrottle={scrollEventThrottle}
 			>
 				{rows.length === 0 ? (
-					<Text className="text-muted-foreground py-6 text-center text-sm">
-						{t('logs.no_logs_found')}
-					</Text>
+					<EmptyState
+						kind="empty"
+						size="inline"
+						title={t('logs.no_logs_found')}
+						className="justify-center py-6"
+					/>
 				) : (
 					rows.map((row) => (
 						<LedgerRow

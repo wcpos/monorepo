@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { cn } from '@wcpos/components/lib/utils';
-import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
+import { cn } from '../lib/utils';
+import { HStack } from '../hstack';
+import { Text } from '../text';
 
 export type StatTone = 'default' | 'good' | 'bad';
 
@@ -35,7 +35,7 @@ export function Stat({
 			<Text className={cn('text-lg font-semibold tabular-nums', TONE_CLASS[tone])}>
 				{typeof value === 'number' ? value.toLocaleString() : value}
 			</Text>
-			<Text className="text-muted-foreground text-xs">{label}</Text>
+			<Text variant="help">{label}</Text>
 		</View>
 	);
 

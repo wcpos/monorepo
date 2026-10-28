@@ -352,7 +352,6 @@ function POSProductsContent({
 	const placeTerm = browsePlace?.term;
 	const placeCount = placeTerm?.kind === 'term' ? placeTerm.count : census;
 	const placeName = placeTerm?.kind === 'term' ? placeTerm.name : '';
-	const emptyKey = placeName ? 'pos_products.none_match_in' : 'pos_products.none_match';
 	const conditionsOn = conditionsBeyond(browsePlace, state, initialFilters);
 	// The footer's denominator follows the matches under any narrowing, the setting's included.
 	const narrowed = narrowedBeyondPlace(browsePlace, state);
@@ -366,7 +365,9 @@ function POSProductsContent({
 				emptyStore
 					? t('pos_products.no_products_yet')
 					: conditionsOn && placeCount !== null && conditions
-						? t(emptyKey, { count: placeCount, place: placeName, conditions })
+						? placeName
+							? t('pos_products.none_match_in', { count: placeCount, place: placeName, conditions })
+							: t('pos_products.none_match', { count: placeCount, place: placeName, conditions })
 						: t('pos_products.nothing_matches_filters')
 			}
 			description={emptyStore ? t('pos_products.no_products_yet_description') : undefined}
@@ -534,11 +535,11 @@ function POSProductsContent({
 		<Notice
 			tone="info"
 			icon={session?.status === 'counting' ? 'info' : 'lock'}
-			title={t(
+			title={
 				session?.status === 'counting'
-					? 'pos_products.counting_items_after_count'
-					: 'pos_products.price_check_only_until_open'
-			)}
+					? t('pos_products.counting_items_after_count')
+					: t('pos_products.price_check_only_until_open')
+			}
 			testID="products-locked-notice"
 		/>
 	);

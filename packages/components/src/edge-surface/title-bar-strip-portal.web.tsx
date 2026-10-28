@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { createPortal } from 'react-dom';
 
-import { useTitleBarStrip } from './index';
+import { useTitleBarStrip } from './title-bar-strip';
 
 /** Renders its children into the desktop strip's host node; nothing when there is none. */
 export function TitleBarStripPortal({ children }: React.PropsWithChildren) {

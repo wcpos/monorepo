@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { TitleBarStripProvider } from '@wcpos/core/contexts/title-bar-strip';
+import { TitleBarStripProvider } from '@wcpos/components/edge-surface';
 import type { TypedIpcRenderer, WindowColorScheme } from '@wcpos/printer/ipc-channels';
 
 /**
@@ -12,12 +11,13 @@ import type { TypedIpcRenderer, WindowColorScheme } from '@wcpos/printer/ipc-cha
  * traffic lights at the top-left, Windows/Linux's min/max/close at the top-right.
  * Chromium reports that strip through the Window Controls Overlay API.
  *
- * Every surface that reaches the top of the window — the rail, the register bar,
- * the drawer header, page bars, sheets and dialogs — already pads by
- * `insets.top` for the phone status bar, so the strip is reserved the same way:
- * it is added to the top inset here and nothing screen-level knows about it. The
- * strip itself is the drag region (apps/main/public/index.html). It collapses to 0
- * when the controls are hidden, e.g. macOS full screen.
+ * Every surface that reaches the top of the window — the rail, the drawer, page
+ * bars — is an `EdgeSurface` on the top edge, which pads the strip's height with
+ * the status bar's, once; the POS ground takes the strip alone and its columns
+ * the status bar. So the strip's height is published here and nothing screen-level
+ * adds or subtracts it. The strip itself is the drag region
+ * (apps/main/public/index.html). It collapses to 0 when the controls are hidden,
+ * e.g. macOS full screen.
  */
 interface WindowControlsOverlay extends EventTarget {
 	visible: boolean;
@@ -30,11 +30,6 @@ function getWindowControlsOverlay(): WindowControlsOverlay | undefined {
 		.windowControlsOverlay;
 }
 
-function readTitleBarHeight(): number {
-	const overlay = getWindowControlsOverlay();
-	if (!overlay?.visible) return 0;
-	return Math.round(overlay.getTitlebarAreaRect().height);
-}
 /** The strip's area clear of the OS controls, as `left:width:height` so the store compares by value. */
 function readTitleBarArea(): string {
 	const overlay = getWindowControlsOverlay();
@@ -55,7 +50,7 @@ function useTitleBarArea(): { left: number; width: number; height: number } {
 }
 /**
  * The strip is the till's topmost row on the desktop: the register bar portals into
- * this node (core's `TitleBarStripPortal`). It sits over the drag region, sized to the
+ * this node (`TitleBarStripPortal`, `@wcpos/components/edge-surface`). It sits over the drag region, sized to the
  * title-bar area so it never covers the traffic lights or the Windows controls; its
  * buttons are `no-drag` by the global rule in public/index.html.
  */
@@ -91,20 +86,6 @@ function subscribeToTitleBarGeometry(onChange: () => void): () => void {
 	return () => overlay.removeEventListener('geometrychange', onChange);
 }
 
-export function useTitleBarHeight(): number {
-	return React.useSyncExternalStore(subscribeToTitleBarGeometry, readTitleBarHeight, () => 0);
-}
-
-function TitleBarInsets({ children }: React.PropsWithChildren) {
-	const insets = useSafeAreaInsets();
-	const titleBarHeight = useTitleBarHeight();
-	const value = React.useMemo(
-		() => ({ ...insets, top: insets.top + titleBarHeight }),
-		[insets, titleBarHeight]
-	);
-	return <SafeAreaInsetsContext.Provider value={value}>{children}</SafeAreaInsetsContext.Provider>;
-}
-
 /**
  * Windows/Linux draw the window-control glyphs over the page and default their
  * colour to the OS theme, not ours. Every theme but `light` has a dark rail.
@@ -134,9 +115,9 @@ function WindowColorSchemeSync(): null {
 
 export function DesktopWindowChrome({ children }: React.PropsWithChildren) {
 	return (
-		<TitleBarInsets>
+		<>
 			<WindowColorSchemeSync />
 			<TitleBarStripHost>{children}</TitleBarStripHost>
-		</TitleBarInsets>
+		</>
 	);
 }

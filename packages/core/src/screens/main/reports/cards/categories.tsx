@@ -41,8 +41,9 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 					}),
 		[selectedOrders, products, totals, decimals, group, tree]
 	);
-	if (!store || !products || !tree)
-		return <CardSkeleton testID={`card-${group}`} name={t(`reports.card_${group}`)} />;
+	const name = group === 'brands' ? t('reports.card_brands') : t('reports.card_categories');
+	if (!store || !products || !tree) return <CardSkeleton testID={`card-${group}`} name={name} />;
+	const count = { count: summary.parts.length, n: quantity(summary.parts.length) };
 	const labels: Record<string, string> = {
 		unknown: t('reports.unknown_product'),
 		uncategorised: t('reports.uncategorised'),
@@ -52,7 +53,7 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 		<ReportCard
 			onOpen={() => setDetail(group)}
 			testID={`card-${group}`}
-			name={t(`reports.card_${group}`)}
+			name={name}
 			figure={money(totals.total)}
 		>
 			{summary.parts.length ? (
@@ -60,10 +61,8 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 					testID={`card-${group}-donut`}
 					centre={{
 						figure: moneyWhole(Math.round(totals.total)),
-						label: t(`reports.n_${group}`, {
-							count: summary.parts.length,
-							n: quantity(summary.parts.length),
-						}),
+						label:
+							group === 'brands' ? t('reports.n_brands', count) : t('reports.n_categories', count),
 					}}
 					parts={summary.parts.map((row) => ({
 						key: row.key,

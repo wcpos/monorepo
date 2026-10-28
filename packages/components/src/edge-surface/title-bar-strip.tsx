@@ -6,7 +6,7 @@ import * as React from 'react';
  * topmost row, so the register bar renders INTO it rather than above the cart
  * (roadmap prototype 2026-09-30-phone-md-chrome, desktop option 7). The chrome
  * publishes a host node here; anywhere without one (web, tablet, phone, native) the
- * bar stays where it is.
+ * bar stays where it is. Its height is part of the top edge: `EdgeSurface` pads it once.
  */
 export interface TitleBarStripHost {
 	/** The DOM node inside the strip, sized to the title-bar area (clear of the controls). */

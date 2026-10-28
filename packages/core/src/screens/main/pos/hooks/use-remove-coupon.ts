@@ -71,10 +71,13 @@ export const useRemoveCoupon = () => {
 			}
 			if (!outcome) return;
 
-			orderLogger.info(t(removedIntent ? 'pos_cart.discount_removed' : 'pos_cart.coupon_removed'), {
-				showToast: true,
-				context: { couponCode },
-			});
+			orderLogger.info(
+				removedIntent ? t('pos_cart.discount_removed') : t('pos_cart.coupon_removed'),
+				{
+					showToast: true,
+					context: { couponCode },
+				}
+			);
 		},
 		[currentOrderRecord, localPatch, t, orderLogger, recalculate, ctx, actor]
 	);

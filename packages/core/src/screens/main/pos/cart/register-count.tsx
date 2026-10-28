@@ -298,7 +298,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						});
 				}}
 			>
-				{t(needsManager ? 'register.approve_and_close' : 'register.close_and_print')}
+				{needsManager ? t('register.approve_and_close') : t('register.close_and_print')}
 			</Button>
 		</ScrollView>
 	);

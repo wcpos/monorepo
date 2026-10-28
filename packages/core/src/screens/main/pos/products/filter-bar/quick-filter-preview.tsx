@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -43,9 +44,12 @@ function PreviewResults({ handle }: { handle: QueryHandle }) {
 					: t('pos_products.quick_filter_preview_count', { n: count })}
 			</Text>
 			{count === 0 && (
-				<Text testID="quick-filter-preview-empty" className="text-muted-foreground text-sm">
-					{t('pos_products.quick_filter_preview_empty')}
-				</Text>
+				<EmptyState
+					testID="quick-filter-preview-empty"
+					kind="empty"
+					size="inline"
+					title={t('pos_products.quick_filter_preview_empty')}
+				/>
 			)}
 			{hits.slice(0, 5).map(({ id, record }, index) => (
 				<Text

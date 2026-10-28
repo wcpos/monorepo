@@ -37,6 +37,7 @@ import { COLLECTION_VOCABULARY, resetCollectionsAndRefill, useQueryRuntime } fro
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
+import { Stat, StatHeader } from '@wcpos/components/stat';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -53,7 +54,6 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import { Stat, StatHeader } from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,

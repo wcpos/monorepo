@@ -22,9 +22,15 @@ export function exportCsv(
 		),
 	];
 
-	const header = ['business_day', 'closure', 'register', 'store', 'opened', 'closed', 'closer'].map(
-		(key) => t(`reports.csv_${key}`)
-	);
+	const header = [
+		t('reports.csv_business_day'),
+		t('reports.csv_closure'),
+		t('reports.csv_register'),
+		t('reports.csv_store'),
+		t('reports.csv_opened'),
+		t('reports.csv_closed'),
+		t('reports.csv_closer'),
+	];
 	header.push(
 		...tenders.flatMap((method) => [
 			`${t('reports.document.expected')} (${method})`,
@@ -56,7 +62,7 @@ export function exportCsv(
 					counted,
 					value === undefined
 						? ''
-						: `${value.replace(/^-/, '')} ${t(Number(value) < 0 ? 'register.short' : Number(value) > 0 ? 'register.over' : 'reports.exact')}`,
+						: `${value.replace(/^-/, '')} ${Number(value) < 0 ? t('register.short') : Number(value) > 0 ? t('register.over') : t('reports.exact')}`,
 				];
 			}),
 			!row.synced_rows_at

@@ -121,7 +121,7 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 			<Text>{`${t('reports.report_period_start')}: ${reportPeriod.from}`}</Text>
 			<Text>{`${t('reports.report_period_end')}: ${reportPeriod.to}`}</Text>
 			<Text>{`${t('common.cashier')}: ${cashier.name}${cashier.id === '' ? '' : ` (ID: ${cashier.id})`}`}</Text>
-			<Text testID="report-status-scope">{`${t('common.orders')}: ${t(statusMode === 'all' ? 'reports.every_status' : 'reports.completed_processing')}`}</Text>
+			<Text testID="report-status-scope">{`${t('common.orders')}: ${statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing')}`}</Text>
 			<Br />
 
 			<Line />

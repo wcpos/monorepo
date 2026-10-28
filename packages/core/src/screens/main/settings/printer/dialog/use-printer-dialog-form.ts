@@ -338,10 +338,9 @@ export function usePrinterDialogForm({
 			await printerService.testPrint(profile);
 			// Only an acknowledging lane may claim "printed"; a raw lane only knows it sent.
 			Toast.show({
-				title: t(
-					laneAcknowledgesPrint(profile)
-						? 'settings.test_print_done'
-						: 'settings.test_print_dispatched'
+				title: (laneAcknowledgesPrint(profile)
+					? t('settings.test_print_done')
+					: t('settings.test_print_dispatched')
 				).replace('%s', data.name || 'printer'),
 				type: 'success',
 			});

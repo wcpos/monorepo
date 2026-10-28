@@ -32,7 +32,8 @@ export function WhereSoldCard() {
 		() => (byRegister ? registers(selectedOrders, totals) : channels(selectedOrders, totals)),
 		[byRegister, selectedOrders, totals]
 	);
-	const channelLabel = (key: string) => t(key === 'store' ? 'reports.in_store' : 'common.online');
+	const channelLabel = (key: string) =>
+		key === 'store' ? t('reports.in_store') : t('common.online');
 	// The two rows no register stamped: the site's online orders, and POS orders with no register.
 	const registerLabel = (key: string) =>
 		key === 'online'
@@ -74,10 +75,15 @@ export function WhereSoldCard() {
 					testID="card-where-sold-donut"
 					centre={{
 						figure: moneyWhole(Math.round(totals.total)),
-						label: t(byRegister ? 'reports.n_registers' : 'reports.n_channels', {
-							count: registerCount,
-							n: number(registerCount),
-						}),
+						label: byRegister
+							? t('reports.n_registers', {
+									count: registerCount,
+									n: number(registerCount),
+								})
+							: t('reports.n_channels', {
+									count: registerCount,
+									n: number(registerCount),
+								}),
 					}}
 					parts={rows.map((row) => ({
 						key: row.key,
