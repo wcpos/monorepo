@@ -16,10 +16,10 @@ const statusDotVariants = cva('size-2 shrink-0 rounded-full', {
 		variant: {
 			default: 'bg-primary',
 			ok: TONE.ok.dot,
-			warning: 'bg-warning',
+			warning: TONE.warning.dot,
 			bad: TONE.bad.dot,
-			info: 'bg-info',
-			muted: 'bg-muted-foreground',
+			info: TONE.info.dot,
+			muted: TONE.muted.dot,
 		},
 	},
 	defaultVariants: {
