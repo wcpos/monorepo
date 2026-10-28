@@ -3,27 +3,27 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { Section } from './section';
+import { Section } from './index';
 
 type Props = { children?: React.ReactNode; testID?: string };
-jest.mock('@wcpos/components/hstack', () => ({
+jest.mock('../hstack', () => ({
 	HStack: ({ children, testID }: Props) => (
 		<div data-testid={testID} data-stack="row">
 			{children}
 		</div>
 	),
 }));
-jest.mock('@wcpos/components/vstack', () => ({
+jest.mock('../vstack', () => ({
 	VStack: ({ children, testID }: Props) => (
 		<div data-testid={testID} data-stack="column">
 			{children}
 		</div>
 	),
 }));
-jest.mock('@wcpos/components/text', () => ({
+jest.mock('../text', () => ({
 	Text: ({ children, testID }: Props) => <span data-testid={testID}>{children}</span>,
 }));
-jest.mock('@wcpos/components/lib/utils', () => ({
+jest.mock('../lib/utils', () => ({
 	cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 

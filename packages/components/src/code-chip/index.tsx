@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { cn } from '@wcpos/components/lib/utils';
-import { Text } from '@wcpos/components/text';
+import { cn } from '../lib/utils';
+import { Text } from '../text';
 
 /**
  * Error-code chip (`SYNC132`). Pressable only when the code exists in the

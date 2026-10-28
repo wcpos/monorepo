@@ -91,9 +91,6 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (a: unknown) => mockToast(a) },
 }));
-jest.mock('./components', () => ({
-	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
-}));
 let mockIsPro = true;
 let mockCaps: Record<string, boolean> = {
 	canEditProducts: true,

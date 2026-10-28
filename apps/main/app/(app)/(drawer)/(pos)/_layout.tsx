@@ -1,21 +1,20 @@
 import React from 'react';
-import { Platform, View, type ViewInstance } from 'react-native';
+import { Platform, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useDocField } from '@wcpos/query';
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
-import { useTitleBarStrip } from '@wcpos/core/contexts/title-bar-strip';
 import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { CommandsProvider } from '@wcpos/core/extensions/commands';
 import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
@@ -161,6 +160,10 @@ export default function POSLayout() {
 	);
 }
 
+const STRIP = ['strip'] as const;
+const TOP = ['top'] as const;
+const NONE = [] as const;
+
 /**
  * Deliberately does NOT subscribe to the current order.
  *
@@ -171,24 +174,15 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const insets = useSafeAreaInsets();
 	const { theme } = useUniwind();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	// The root never pads a SYSTEM inset: every surface that touches a screen edge runs its own
 	// background through the inset and pads inside it (`EdgeSurface`: the columns, the phone tab
 	// container; the full-size modal), so the status bar floats over the column it sits on (owner,
 	// iPad, 2026-10-14: a flat grey band under the status bar and the home indicator).
-	// The one exception is the desktop's title-bar strip, which DesktopWindowChrome folds into
-	// `insets.top`: it is not a system bar but the till's topmost row (the register bar portals
-	// into it across the full width), so it stays one ground, here on the root.
-	const { height: stripHeight } = useTitleBarStrip();
-	const edgeTop = Math.max(0, insets.top - stripHeight);
-	// With the upgrade notice showing, the notice owns the top edge (it pads `edgeTop` inside its
-	// own colour), so nothing below it touches the top edge: the stack reads a top inset of 0.
-	const stackInsets = React.useMemo(
-		() => ({ ...insets, top: showUpgrade ? 0 : edgeTop }),
-		[insets, showUpgrade, edgeTop]
-	);
+	// The one exception is the desktop's title-bar strip: it is not a system bar but the till's
+	// topmost row (the register bar portals into it across the full width), so the root takes the
+	// strip alone, as one ground, and the columns below pad only the status bar.
 	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
@@ -199,18 +193,15 @@ function POSStack() {
 			<PosUrlMirror />
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
-				<View
-					ref={registerPOSContainer}
-					className="bg-background flex-1"
-					style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
-				>
+				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
 					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
-					{showUpgrade && (
-						<View className="bg-muted" style={{ paddingTop: edgeTop }}>
-							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
-						</View>
-					)}
-					<SafeAreaInsetsContext.Provider value={stackInsets}>
+					{/* With the upgrade notice showing, the notice owns the top edge: this column pads
+					    the status bar in the notice's colour, and nothing under it touches the top. */}
+					<EdgeSurface
+						edges={showUpgrade ? TOP : NONE}
+						className={showUpgrade ? 'bg-muted flex-1' : 'flex-1'}
+					>
+						{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 						<Stack
 							screenOptions={{
 								animation: 'none',
@@ -236,8 +227,8 @@ function POSStack() {
 								}}
 							/>
 						</Stack>
-					</SafeAreaInsetsContext.Provider>
-				</View>
+					</EdgeSurface>
+				</EdgeSurface>
 				{/**
 				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
 				 * so that dialogs like add/edit product etc can access the context

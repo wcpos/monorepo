@@ -132,7 +132,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
-jest.mock('../health/components', () => ({
+jest.mock('@wcpos/components/code-chip', () => ({
 	CodeChip: ({ code, onPress, testID }: { code: string; onPress: () => void; testID: string }) => (
 		<button data-testid={testID} onClick={onPress}>
 			{code}

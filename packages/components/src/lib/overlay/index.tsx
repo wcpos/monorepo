@@ -25,6 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useEdgeInsets } from '../../edge-surface';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
 import { TextClassContext } from '../../text';
 import { useIsPhone } from '../device';
@@ -282,6 +283,8 @@ export function OverlaySheetPanel({
 		</SheetFocusScope>
 	);
 }
+const TOP = ['top'] as const;
+
 const align: Record<OverlayPresentation, string> = {
 	anchored: '',
 	center: 'items-center justify-center p-2',
@@ -322,6 +325,9 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		children,
 	} = props;
 	const insets = useSafeAreaInsets();
+	// The top through the edge surfaces: a modal that is a screen's root view under the POS
+	// upgrade notice, which pads the status bar itself, pads none again.
+	const { paddingTop = 0 } = useEdgeInsets(TOP);
 	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -518,7 +524,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			style={[
 				StyleSheet.absoluteFill,
 				{
-					paddingTop: insets.top,
+					paddingTop,
 					// A bottom sheet carries its own bottom inset (OverlaySheetPanel).
 					paddingBottom: presentation === 'bottom' ? 0 : insets.bottom,
 					paddingLeft: insets.left,

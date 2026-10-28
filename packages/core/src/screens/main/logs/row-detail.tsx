@@ -20,10 +20,10 @@ import {
 	ERROR_CATALOGUE,
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type KVEntry, KVGrid } from '@wcpos/components/kv-grid';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { type KVEntry, KVGrid } from '../health/components';
 import { useRecordEditRoute } from '../health/record-edit-route';
 import { useRecordLabel } from '../health/use-record-label';
 import { translateErrorAction } from './generated/error-actions.generated';

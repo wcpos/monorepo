@@ -73,7 +73,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
-jest.mock('../health/components', () => ({
+jest.mock('@wcpos/components/kv-grid', () => ({
 	KVGrid: ({ entries }: { entries: { label: string; value: string }[] }) => (
 		<div>
 			{entries.map(({ label, value }) => (

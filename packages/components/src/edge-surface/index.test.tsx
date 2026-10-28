@@ -4,7 +4,7 @@ import type { ViewProps } from 'react-native';
 
 import { render, renderHook, screen } from '@testing-library/react';
 
-import { type Edge, EdgeSurface, useEdgeInsets } from './index';
+import { type Edge, EdgeSurface, TitleBarStripProvider, useEdgeInsets } from './index';
 
 jest.mock('react-native', () => {
 	const native = jest.requireActual<typeof import('react-native')>('react-native');
@@ -74,4 +74,24 @@ it('leaves the edges it does not touch to what is inside it', () => {
 	expect(renderHook(() => useEdgeInsets(['top', 'bottom']), { wrapper }).result.current).toEqual({
 		paddingBottom: 34,
 	});
+});
+
+// The desktop's title-bar strip is part of the top edge, padded once: by the first surface on the
+// top edge (a page bar, the rail), or by a ground that takes the strip alone (the POS root), whose
+// columns then pad only the status bar.
+it('pads the title-bar strip once, with the top edge or on its own', () => {
+	render(
+		<TitleBarStripProvider value={{ node: null, height: 28 }}>
+			<EdgeSurface testID="bar" edges={['top']}>
+				<EdgeSurface testID="inner" edges={['top']} />
+			</EdgeSurface>
+			<EdgeSurface testID="pos" edges={['strip']}>
+				<EdgeSurface testID="column" edges={['top']} />
+			</EdgeSurface>
+		</TitleBarStripProvider>
+	);
+	expect(padding('bar').paddingTop).toBe('75px');
+	expect(padding('inner').paddingTop).toBe('');
+	expect(padding('pos').paddingTop).toBe('28px');
+	expect(padding('column').paddingTop).toBe('47px');
 });
