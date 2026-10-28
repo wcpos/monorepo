@@ -74,7 +74,7 @@ describe('settings and Store health route structure', () => {
 
 	it('gives every drawer route a stable navigation selector', () => {
 		expect(
-			source('../../packages/core/src/screens/main/components/drawer-content/drawer-item-list.tsx')
+			source('../../packages/core/src/screens/main/components/drawer-content/index.tsx')
 		).toContain('testID={`drawer-item-${route.name.replace');
 	});
 });
