@@ -54,7 +54,7 @@ export function Tile({
 					{title}
 				</Text>
 			)}
-			{typeof sub === 'string' ? (
+			{typeof sub === 'string' || typeof sub === 'number' ? (
 				<Text variant="help" numberOfLines={2} className="text-center">
 					{sub}
 				</Text>

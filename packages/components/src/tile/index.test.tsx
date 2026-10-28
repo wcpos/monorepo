@@ -40,6 +40,18 @@ it('draws its title, sub line and count pill in its own slots', () => {
 	expect(screen.getByTestId('den-badge')).toHaveTextContent('0');
 });
 
+it.each([
+	['a string', 'Each £5.00'],
+	['a number', 12],
+])('draws %s sub line as text, never a bare text node under the surface', (_, sub) => {
+	render(<Tile testID="tile" title={3} sub={sub} />);
+	// A bare text node would make the surface itself the element holding the text.
+	for (const text of ['3', String(sub)]) {
+		expect(screen.getByText(text)).not.toBe(screen.getByTestId('tile'));
+		expect(screen.getByText(text).parentElement).toBe(screen.getByTestId('tile'));
+	}
+});
+
 it('marks the picked tile with the primary border on bg-muted', () => {
 	render(<Tile testID="tile" selected onPress={() => {}} />);
 	expect(classes('tile')).toContain('border-primary');
