@@ -299,10 +299,33 @@ export function ClosureBody({
 					<>
 						{band(t('register.other_tenders'))}
 						{others.map(({ name, label }) => (
-							<View key={name} className={STATIC_ROW}>
-								{term(String(label))}
-								{amount(context.formatMoney(settled.expected[name]))}
-							</View>
+							<React.Fragment key={name}>
+								<View className={STATIC_ROW}>
+									{term(String(label))}
+									{amount(context.formatMoney(settled.expected[name]))}
+								</View>
+								{/* A tender that was counted at the close (or recounted since) keeps its
+								    count and result on the record, as the cash does (Codex, #3036). */}
+								{settled.counted?.[name] != null && (
+									<View testID={`closure-tender-counted-${name}`} className={STATIC_ROW}>
+										{term(
+											`${label} · ${t('register.counted')}`,
+											[
+												varianceText(
+													countVariance(settled.counted[name], settled.expected[name] ?? '0'),
+													format,
+													t
+												),
+												touched.has(`counted.${name}`) ? t('reports.settled') : '',
+											]
+												.filter(Boolean)
+												.join(' · '),
+											true
+										)}
+										{amount(context.formatMoney(settled.counted[name]), true)}
+									</View>
+								)}
+							</React.Fragment>
 						))}
 					</>
 				)}
