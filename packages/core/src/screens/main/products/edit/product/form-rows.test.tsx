@@ -9,7 +9,6 @@ import { EditProductForm } from './form';
 
 import type { UseFormReturn } from 'react-hook-form';
 
-type Pressable = React.PropsWithChildren<{ onPress?: () => void; testID?: string }>;
 type Field = {
 	name?: string;
 	value?: unknown;

@@ -257,7 +257,8 @@ function AddressRows(props: {
 			</PropertyRow>
 			{props.open &&
 				(props.parts ?? (prefix === 'billing' ? ADDRESS_PARTS : SHIPPING_PARTS)).map((part) => (
-					<PropertyRow key={part} indent label={labels[part]} prefix={prefix} id={part}>
+					// A part never acknowledges: a root field of the same name (first_name) is not it.
+					<PropertyRow key={part} indent label={labels[part]} prefix={prefix} id={part} name={[]}>
 						{part === 'country' || part === 'state' ? (
 							React.createElement(PART_FIELDS[part], { prefix })
 						) : (

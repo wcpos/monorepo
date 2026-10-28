@@ -8,7 +8,7 @@ import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { CustomerForm, type CustomerFormValues, fillBillingFromIdentity } from './customer-form';
 
-type Pressable = { onPress?: () => void; testID?: string };
+let mockSavedName = '';
 
 jest.mock('@wcpos/components/form', () => ({
 	Form: jest.requireActual('react-hook-form').FormProvider,
@@ -39,8 +39,8 @@ jest.mock('@wcpos/components/form', () => ({
 		/>
 	),
 	FormMessage: () => null,
-	SavedMark: () => null,
-	useSavedName: () => '',
+	SavedMark: ({ name }: { name: string }) => <span data-testid={`saved-${name}`} />,
+	useSavedName: () => mockSavedName,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -197,6 +197,22 @@ describe('CustomerForm', () => {
 		fireEvent.click(screen.getByTestId('customer-edit-billing'));
 		expect(screen.getByTestId('customer-field-billing-first_name')).toBeTruthy();
 		expect(screen.getByTestId('customer-field-billing-email')).toBeTruthy();
+	});
+	it("a root field's save marks its own row, never the address part of the same name", () => {
+		mockSavedName = 'first_name';
+		try {
+			render(<Harness values={{ id: 7, billing: { ...ADDRESS, first_name: 'Bill' } }} />);
+			fireEvent.click(screen.getByTestId('customer-edit-billing'));
+			expect(screen.getAllByTestId('saved-first_name')).toHaveLength(1);
+			expect(
+				screen.getByTestId('customer-row-name').querySelector('[data-testid="saved-first_name"]')
+			).toBeTruthy();
+			expect(
+				screen.getByTestId('billing-row-first_name').querySelector('[data-testid^="saved-"]')
+			).toBeNull();
+		} finally {
+			mockSavedName = '';
+		}
 	});
 	it('a reset with a different shipping address (Sync) breaks the Same as billing link', async () => {
 		render(<Harness values={{ id: 7, billing: ADDRESS, shipping: ADDRESS }} />);

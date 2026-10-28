@@ -57,7 +57,7 @@ export function PropertyList(props: {
  *
  * The row is the form item: `id` and the list's `prefix` give it the testID `<prefix>-row-<id>` and
  * the item id `<prefix>-<id>` (minted without them); its key is `<item>-form-item`, the label every
- * label-less control in the row adopts. `name` is the form field (or fields) the row holds,
+ * label-less control in the row adopts (not in a `compound` row). `name` is the form field (or fields) the row holds,
  * `id` by default: while one's Saved mark shows it takes the verb's place, never beside it.
  * The trailing slot is that mark-or-verb, then `control` (a Switch), which never moves.
  */
@@ -75,6 +75,8 @@ export function PropertyRow(props: {
 	locked?: { where: string; href?: string };
 	/** A copy of another fact (rule 5): the value in muted ink, the verb breaks the link. */
 	derived?: boolean;
+	/** Two or more controls in the value (a custom field's key and value): each keeps its own item. */
+	compound?: boolean;
 	align?: 'center' | 'top';
 	indent?: boolean;
 	stacked?: boolean;
@@ -139,7 +141,11 @@ export function PropertyRow(props: {
 				<TextClassContext.Provider
 					value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
 				>
-					{value}
+					{props.compound ? (
+						<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
+					) : (
+						value
+					)}
 				</TextClassContext.Provider>
 			</View>
 			{end || props.control ? (
@@ -156,6 +162,9 @@ export function PropertyRow(props: {
 		</FormItem>
 	);
 }
+
+/** A compound row's controls adopt no item: each names and messages itself. */
+const NO_ITEM = { nativeID: '' };
 
 /** The key presses the control it names (focus, toggle), as a form label does. */
 function Key(props: { nativeID: string; children: string }) {

@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { FormProvider, useForm } from 'react-hook-form';
 
+import { useFormControlAria } from '../form/aria';
 import { FormItemContext } from '../form/context';
 import { SavedFieldProvider, useMarkSaved } from '../form/saved-mark';
 import {
@@ -177,6 +179,46 @@ it('the row is the form item: its key names every label-less control in it', () 
 	expect(screen.getByText('Amount').id || screen.getByText('Amount').getAttribute('id')).toBe(
 		'coupon-amount-form-item'
 	);
+});
+
+/** A label-less input as the form wrappers build it: named and messaged by `useFormControlAria`. */
+function Field({ placeholder }: { placeholder: string }) {
+	const { itemNativeID, ariaProps } = useFormControlAria({});
+	return (
+		<input
+			placeholder={placeholder}
+			aria-labelledby={ariaProps['aria-labelledby']}
+			data-message={`${itemNativeID}-form-item-message`}
+		/>
+	);
+}
+
+function InForm({ children }: React.PropsWithChildren) {
+	return <FormProvider {...useForm()}>{children}</FormProvider>;
+}
+
+it.each([
+	['one control is named by the key', false, ['Key'], ['meta-key-form-item']],
+	[
+		'a compound row keeps each control its own name and message',
+		true,
+		['Key', 'Value'],
+		[null, null],
+	],
+])('%s', (_case, compound, placeholders, labelledBy) => {
+	render(
+		<InForm>
+			<PropertyRow prefix="meta" id="key" label="Custom field" compound={compound}>
+				{placeholders.map((placeholder) => (
+					<Field key={placeholder} placeholder={placeholder} />
+				))}
+			</PropertyRow>
+		</InForm>
+	);
+	const inputs = placeholders.map((placeholder) => screen.getByPlaceholderText(placeholder));
+	expect(inputs.map((input) => input.getAttribute('aria-labelledby'))).toEqual(labelledBy);
+	const messages = new Set(inputs.map((input) => input.dataset.message));
+	expect(messages.size).toBe(inputs.length);
 });
 
 it('pressing the key acts on the control it names (focus, toggle)', () => {

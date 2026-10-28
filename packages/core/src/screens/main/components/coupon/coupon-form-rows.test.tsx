@@ -8,7 +8,6 @@ import { CouponForm, type couponFormSchema } from './coupon-form';
 
 import type * as z from 'zod';
 
-type Pressable = React.PropsWithChildren<{ onPress?: () => void; testID?: string }>;
 type Field = {
 	value?: unknown;
 	onChange: (value: unknown) => void;

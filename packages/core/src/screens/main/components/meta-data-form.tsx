@@ -77,6 +77,7 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 						key={field.id}
 						testID={`${testID}-row-meta-${index}`}
 						label={t('common.custom_field')}
+						compound
 						name={index === first ? name : []}
 						verb={
 							<PropertyVerb
