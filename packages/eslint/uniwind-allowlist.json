@@ -44,12 +44,6 @@
 	"packages/core/src/screens/main/customers/edit/index.tsx": {
 		"bare-Suspense": 1
 	},
-	"packages/core/src/screens/main/health/components/code-chip.tsx": {
-		"raw-pressable": 1
-	},
-	"packages/core/src/screens/main/health/components/stat.tsx": {
-		"raw-pressable": 1
-	},
 	"packages/core/src/screens/main/health/database.tsx": {
 		"raw-pressable": 1
 	},

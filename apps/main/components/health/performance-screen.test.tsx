@@ -84,7 +84,7 @@ jest.mock('@wcpos/core/screens/main/hooks/use-engine-monitor', () => ({
 jest.mock('@wcpos/core/screens/main/logs/logs-logic', () => ({
 	formatCadence: () => null,
 }));
-jest.mock('@wcpos/core/screens/main/health/components', () => {
+jest.mock('@wcpos/components/section', () => {
 	const { View } = jest.requireActual('react-native');
 	return {
 		Section: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (

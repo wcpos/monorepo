@@ -65,7 +65,7 @@ jest.mock('@wcpos/components/collapsible', () => {
 		},
 	};
 });
-jest.mock('./components/section', () => ({
+jest.mock('@wcpos/components/section', () => ({
 	Section: ({
 		children,
 		testID,

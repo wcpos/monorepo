@@ -306,8 +306,7 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	}),
 	useMutationCounts: () => mockMutationCounts,
 }));
-jest.mock('./components', () => ({
-	Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+jest.mock('@wcpos/components/stat', () => ({
 	Stat: () => null,
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

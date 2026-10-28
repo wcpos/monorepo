@@ -35,8 +35,6 @@
 	"packages/core/src/screens/main/components/product/price-with-tax.tsx": 1,
 	"packages/core/src/screens/main/coupons/row.tsx": 2,
 	"packages/core/src/screens/main/customers/row.tsx": 2,
-	"packages/core/src/screens/main/health/components/kv-grid.tsx": 1,
-	"packages/core/src/screens/main/health/components/stat.tsx": 1,
 	"packages/core/src/screens/main/health/conflicted-mutations.tsx": 1,
 	"packages/core/src/screens/main/health/database.tsx": 11,
 	"packages/core/src/screens/main/health/queued-emails.tsx": 1,

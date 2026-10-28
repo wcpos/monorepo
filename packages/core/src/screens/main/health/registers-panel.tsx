@@ -7,10 +7,10 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { Section } from '@wcpos/components/section';
 
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
-import { Section } from './components/section';
 import {
 	closuresSupported,
 	duplicateSales,

@@ -44,9 +44,6 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('./components', () => ({
-	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
-}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({

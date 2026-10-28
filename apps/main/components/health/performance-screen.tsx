@@ -14,7 +14,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
 import { AreaPage } from '@wcpos/core/screens/main/components/navigation-area/area-page';
-import { Section } from '@wcpos/core/screens/main/health/components';
+import { Section } from '@wcpos/components/section';
 import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
 import { patchStoreSettings } from '@wcpos/query/user-db';
 import { useEngineStatus } from '@wcpos/core/screens/main/hooks/use-engine-monitor';

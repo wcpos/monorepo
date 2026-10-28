@@ -17,11 +17,11 @@ import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { QueryHandle } from '@wcpos/query';
+import { CodeChip } from '@wcpos/components/code-chip';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot } from '../../../query';
-import { CodeChip } from '../health/components';
 import { useRecordLabel } from '../health/use-record-label';
 import { useEventTitle } from './event-title';
 import {

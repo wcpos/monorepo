@@ -89,9 +89,6 @@ jest.mock('@wcpos/components/text', () => {
 	};
 });
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
-jest.mock('./components', () => ({
-	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
-}));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { resolveConflict: mockResolveConflict } }),
