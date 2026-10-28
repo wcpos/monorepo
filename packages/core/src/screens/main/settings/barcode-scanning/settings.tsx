@@ -27,6 +27,7 @@ import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { playScanFailure, playScanSuccess } from '../../pos/products/play-scan-sound';
 import {
@@ -165,32 +166,24 @@ function BarcodeSettingsForm() {
 				<FormField
 					control={form.control}
 					name="barcode_scanning_avg_time_input_threshold"
-					render={({ field: { value, ...rest } }) => (
+					render={({ field }) => (
 						<PropertyRow
 							name="barcode_scanning_avg_time_input_threshold"
 							label={t('settings.barcode_average_time_input_threshold_ms')}
 						>
-							<FormInput
-								type="numeric"
-								value={value != null ? String(value) : undefined}
-								{...rest}
-							/>
+							<FormAmountField kind="count" testID="settings-barcode-threshold" {...field} />
 						</PropertyRow>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_min_chars"
-					render={({ field: { value, ...rest } }) => (
+					render={({ field }) => (
 						<PropertyRow
 							name="barcode_scanning_min_chars"
 							label={t('settings.barcode_minimum_length')}
 						>
-							<FormInput
-								type="numeric"
-								value={value != null ? String(value) : undefined}
-								{...rest}
-							/>
+							<FormAmountField kind="count" testID="settings-barcode-min-chars" {...field} />
 						</PropertyRow>
 					)}
 				/>

@@ -41,6 +41,7 @@ import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
+import { FormAmountField } from '../components/amount-field';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
 import { useOptionLists } from '../components/option-lists';
@@ -368,9 +369,9 @@ function GeneralSettingsForm({
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
-						render={({ field: { value, ...rest } }) => (
+						render={({ field }) => (
 							<PropertyRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
-								<FormInput type="numeric" value={value ?? undefined} {...rest} />
+								<FormAmountField kind="count" testID="settings-general-decimals" {...field} />
 							</PropertyRow>
 						)}
 					/>

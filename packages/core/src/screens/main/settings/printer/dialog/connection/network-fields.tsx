@@ -13,6 +13,7 @@ import { PropertyRow } from '@wcpos/components/property-row';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { FormPortField } from '../../port-field';
 import { DEFAULT_FORM_VALUES } from '../../schema';
 
 import type { UseFormReturn } from 'react-hook-form';
@@ -117,14 +118,8 @@ export function NetworkFields({
 							<FormField
 								control={form.control}
 								name="port"
-								render={({ field: { value, ...rest } }) => (
-									<FormInput
-										testID="add-printer-port-input"
-										type="numeric"
-										className="w-20"
-										value={value != null ? String(value) : undefined}
-										{...rest}
-									/>
+								render={({ field }) => (
+									<FormPortField testID="add-printer-port-input" className="w-20" {...field} />
 								)}
 							/>
 						</HStack>
