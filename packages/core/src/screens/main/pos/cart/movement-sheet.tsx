@@ -13,6 +13,7 @@ import {
 import { Input } from '@wcpos/components/input';
 import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
 import { cn } from '@wcpos/components/lib/utils';
+import { amountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
@@ -29,7 +30,8 @@ import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-c
 import { useExclusive } from '../../hooks/use-exclusive';
 import { usePanelSide } from '../contexts/overlay-side';
 
-const HERO = 'text-amt font-semibold tabular-nums';
+/** The figure typed in place: the amount figure's hero step on the input itself. */
+const HERO = amountFigure({ size: 'hero' });
 
 export function RegisterAmount({
 	currencyOptions,

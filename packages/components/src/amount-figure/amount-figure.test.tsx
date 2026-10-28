@@ -44,13 +44,14 @@ describe('AmountFigure', () => {
 		expect(list.filter((name) => /^text-(xl|2xl|amt|4xl|7xl)$/.test(name))).toHaveLength(1);
 	});
 
-	it('defaults to the hero and lets a caller add layout', () => {
-		render(
-			<AmountFigure testID="figure" className="text-center">
+	it('defaults to the hero and centres it with its eyebrow on a centred stage', () => {
+		const { container } = render(
+			<AmountFigure testID="figure" eyebrow="On the terminal" center>
 				$10.00
 			</AmountFigure>
 		);
 		expect(words('figure')).toEqual(expect.arrayContaining(['text-amt', 'text-center']));
+		expect((container.firstElementChild as HTMLElement).dataset.classes).toContain('items-center');
 	});
 
 	it('sets the eyebrow in the caption rank above the figure', () => {

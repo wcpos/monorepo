@@ -24,13 +24,20 @@ type AmountFigureProps = Omit<TextProps, 'variant' | 'tabular'> &
 	VariantProps<typeof amountFigure> & {
 		/** The caption above the figure: "Remaining", "On the terminal". */
 		eyebrow?: string;
+		/** On a centred stage (the terminal, the paid moment): the figure and its eyebrow alike. */
+		center?: boolean;
 	};
 
-function AmountFigure({ size, tone, eyebrow, className, ...props }: AmountFigureProps) {
-	const figure = <Text className={cn(amountFigure({ size, tone }), className)} {...props} />;
+function AmountFigure({ size, tone, eyebrow, center, className, ...props }: AmountFigureProps) {
+	const figure = (
+		<Text
+			className={cn(amountFigure({ size, tone }), center && 'text-center', className)}
+			{...props}
+		/>
+	);
 	if (eyebrow === undefined) return figure;
 	return (
-		<View className="gap-1">
+		<View className={cn('gap-1', center && 'items-center')}>
 			<Text variant="caption">{eyebrow}</Text>
 			{figure}
 		</View>

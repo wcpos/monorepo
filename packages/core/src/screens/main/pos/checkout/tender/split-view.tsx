@@ -8,6 +8,7 @@ import { type Segment, SegmentedControl } from '@wcpos/components/segmented-cont
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Checkbox } from '@wcpos/components/checkbox';
 import { ListItem } from '@wcpos/components/list-item';
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 
@@ -124,7 +125,7 @@ export function SplitView({
 						</Svg>
 					</View>
 				) : null}
-				<Text className="text-foreground text-amt font-bold tabular-nums">{format(balance)}</Text>
+				<AmountFigure>{format(balance)}</AmountFigure>
 			</View>
 			<View className="w-full max-w-2xl gap-4">
 				<SegmentedControl
