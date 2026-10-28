@@ -5,15 +5,12 @@ import { Drawer } from 'expo-router/drawer';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
-import { Icon } from '@wcpos/components/icon';
+import type { IconName } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import {
-	DrawerContent as DrawerRail,
-	useRailWidth,
-} from '@wcpos/core/screens/main/components/drawer-content/rail';
+import { useRailWidth } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
@@ -25,6 +22,19 @@ import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrad
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
+
+/** Each drawer route's icon; the drawer item paints its tint. */
+const DRAWER_ICONS: Record<string, IconName> = {
+	'(pos)': 'register',
+	products: 'gift',
+	orders: 'receipt',
+	coupons: 'discount',
+	customers: 'customers',
+	reports: 'reports',
+	health: 'health',
+	settings: 'settings',
+	support: 'support',
+};
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -97,144 +107,33 @@ function ThemedDrawer({
 				},
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
-			// Elements, not calls: called as functions the rails' hooks ran in the drawer's own
-			// fiber, so crossing `lg` swapped one hook list for another under the same fiber
-			// (React Compiler: "Expected a constant size argument for each invocation of
-			// useMemoCache … 39 but 22"). As elements the type changes and React remounts.
-			drawerContent={(props) =>
-				screenSize === 'lg' ? <DrawerRail {...props} /> : <DrawerContent {...props} />
-			}
+			// An element, not a call: called as a function its hooks would run in the drawer's own
+			// fiber, and a hook list that changed with the presentation would break React Compiler
+			// ("Expected a constant size argument for each invocation of useMemoCache").
+			drawerContent={(props) => (
+				<DrawerContent
+					{...props}
+					presentation={screenSize === 'lg' ? 'rail' : 'front'}
+					icons={DRAWER_ICONS}
+					badges={{ health: <LogsBadge unread={unreadErrorCount} /> }}
+				/>
+			)}
 		>
-			<Drawer.Screen
-				name="(pos)"
-				options={{
-					title: t('common.pos'),
-					drawerLabel: t('common.pos'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="register"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="products"
-				options={{
-					title: t('common.products'),
-					drawerLabel: t('common.products'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="gift"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="orders"
-				options={{
-					title: t('common.orders'),
-					drawerLabel: t('common.orders'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="receipt"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="coupons"
-				options={{
-					title: t('common.coupons'),
-					drawerLabel: t('common.coupons'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="discount"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="customers"
-				options={{
-					title: t('common.customers'),
-					drawerLabel: t('common.customers'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="customers"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="reports"
-				options={{
-					title: t('common.reports'),
-					drawerLabel: t('common.reports'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="reports"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
+			<Drawer.Screen name="(pos)" options={{ title: t('common.pos') }} />
+			<Drawer.Screen name="products" options={{ title: t('common.products') }} />
+			<Drawer.Screen name="orders" options={{ title: t('common.orders') }} />
+			<Drawer.Screen name="coupons" options={{ title: t('common.coupons') }} />
+			<Drawer.Screen name="customers" options={{ title: t('common.customers') }} />
+			<Drawer.Screen name="reports" options={{ title: t('common.reports') }} />
 			<Drawer.Screen
 				name="health"
 				options={{
 					title: t('common.store_health'),
-					drawerLabel: t('common.store_health'),
-					drawerIcon: ({ focused }) => (
-						<View>
-							<Icon
-								size="xl"
-								name="health"
-								className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-							/>
-							<LogsBadge unread={unreadErrorCount} />
-						</View>
-					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
 			/>
-			<Drawer.Screen
-				name="settings"
-				options={{
-					title: t('common.settings'),
-					drawerLabel: t('common.settings'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="settings"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="support"
-				options={{
-					title: t('common.support'),
-					drawerLabel: t('common.support'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="support"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
+			<Drawer.Screen name="settings" options={{ title: t('common.settings') }} />
+			<Drawer.Screen name="support" options={{ title: t('common.support') }} />
 		</Drawer>
 	);
 }

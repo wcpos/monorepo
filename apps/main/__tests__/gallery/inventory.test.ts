@@ -29,8 +29,8 @@ it('is the keys of the registry entries the registry test reads', () => {
 	});
 	expect(new Set(GALLERY_COMPONENTS)).toEqual(new Set(keys));
 	expect(GALLERY_COMPONENTS).toHaveLength(keys.length);
-	// Both spellings of a key: quoted (`'drawer-item': drawerItem`) and shorthand (`popover`).
-	expect(GALLERY_COMPONENTS).toEqual(expect.arrayContaining(['drawer-item', 'popover', 'switch']));
+	// Both spellings of a key: quoted (`'alert-dialog': alertDialog`) and shorthand (`popover`).
+	expect(GALLERY_COMPONENTS).toEqual(expect.arrayContaining(['alert-dialog', 'popover', 'switch']));
 });
 
 it('reads quoted, bare and renamed keys', () => {

@@ -26,9 +26,6 @@
 	"packages/core/src/screens/main/components/data-table/rows.tsx": {
 		"raw-pressable": 1
 	},
-	"packages/core/src/screens/main/components/drawer-content/rail/drawer-item.tsx": {
-		"raw-pressable": 1
-	},
 	"packages/core/src/screens/main/components/drawer-content/rail/index.tsx": {
 		"raw-pressable": 1
 	},
