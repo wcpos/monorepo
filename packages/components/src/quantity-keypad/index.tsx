@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
 
 import { fieldBox } from '../field-box';
 import {
@@ -11,6 +10,7 @@ import {
 } from '../grow-keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
 import {
 	COUNT_DIGITS,
@@ -192,9 +192,10 @@ export function QuantityKeypad({
 			onClose={onClose}
 			onOpenChange={onOpenChange}
 		>
-			<Pressable
+			<PressableSurface
 				testID={testID}
 				role="button"
+				wash="none"
 				disabled={disabled}
 				nativeID={labelledBy && ownID}
 				aria-labelledby={labelledBy && `${labelledBy} ${ownID}`}
@@ -202,13 +203,13 @@ export function QuantityKeypad({
 				aria-invalid={invalid || undefined}
 				className={cn(
 					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
-					// The outline Button's pressed wash: a press shows within 100 ms (§ Design 2).
+					// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
 					'active:bg-muted max-w-full min-w-10 items-start justify-center px-3',
 					className
 				)}
 			>
 				<Text className={cn('tabular-nums', textClassName)}>{format(value)}</Text>
-			</Pressable>
+			</PressableSurface>
 		</GrowKeypad>
 	);
 }

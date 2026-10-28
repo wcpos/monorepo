@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button, ButtonText } from '../button';
 import { fieldBox } from '../field-box';
@@ -12,6 +12,7 @@ import {
 } from '../grow-keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
 import { draftPrice, EMPTY_PRICE, priceEntryReducer } from './reducer';
 
@@ -179,17 +180,18 @@ export function PriceKeypad({
 		>
 			{field ? (
 				// A form's price rests as the field box, as an Input does.
-				<Pressable
+				<PressableSurface
 					{...trigger}
 					role="button"
+					wash="none"
 					className={cn(
 						fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
-						// The outline Button's pressed wash: a press shows within 100 ms (§ Design 2).
+						// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
 						'active:bg-muted w-full items-end justify-center px-3'
 					)}
 				>
 					<Text className={tone}>{text}</Text>
-				</Pressable>
+				</PressableSurface>
 			) : (
 				<Button
 					variant="ghost"

@@ -16,8 +16,15 @@ jest.mock('react-native', () => {
 			</div>
 		);
 	}
-	return { View: Box, Pressable: Box };
+	return { View: Box };
 });
+jest.mock('../pressable-surface', () => ({
+	PressableSurface: ({ className, testID, children }: Record<string, any>) => (
+		<div className={className} data-testid={testID}>
+			{children}
+		</div>
+	),
+}));
 jest.mock('../button', () => ({
 	Button: ({
 		className,
@@ -86,6 +93,7 @@ it("a field rests as the field box with the Input's padding, its display row ins
 	const trigger = screen.getByTestId('price');
 	expect(trigger.className).toContain(fieldBox({ state: 'rest' }));
 	expect(trigger.className).toContain('px-3');
+	// The outline Button's pressed wash, written as Button writes it.
 	expect(trigger.className).toContain('active:bg-muted');
 	expect(displayRow().className).toContain('px-3');
 });
