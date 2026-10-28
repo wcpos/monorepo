@@ -498,7 +498,7 @@ function TabContent({
 			<Text
 				testID={`open-order-tab-${order.uuid}-who`}
 				numberOfLines={1}
-				className={`max-w-[200px] ${active ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}
+				className={`max-w-52 ${active ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`}
 			>
 				{tabWho(payload, t)}
 			</Text>

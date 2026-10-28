@@ -454,7 +454,8 @@ it('marks selection with an underline and keeps who above age or status', () => 
 	expect(content.className).toContain('items-start');
 	expect(content.firstElementChild?.textContent).toBe('Guest · Hat');
 	expect(content.firstElementChild?.className).toContain('font-medium');
-	expect(content.firstElementChild?.className).toContain('max-w-[200px]');
+	// A token width, never an arbitrary px (the uniwind contract ratchet).
+	expect(content.firstElementChild?.className).toContain('max-w-52');
 	// A plain cart has an age instead of a status.
 	expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('5 min');
 	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
