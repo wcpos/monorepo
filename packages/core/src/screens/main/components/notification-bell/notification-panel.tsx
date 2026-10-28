@@ -62,12 +62,8 @@ function NotificationItem({
 			trailing={<View className={cn('bg-primary h-2 w-2 rounded-full', !unread && 'opacity-0')} />}
 		>
 			<Text className={cn(unread && 'font-semibold')}>{notification.title}</Text>
-			{!!notification.body && (
-				<Text className="text-muted-foreground text-sm">{notification.body}</Text>
-			)}
-			<Text className="text-muted-foreground text-xs">
-				{[kindLabel, timeAgo].filter(Boolean).join(' · ')}
-			</Text>
+			{!!notification.body && <Text variant="key">{notification.body}</Text>}
+			<Text variant="help">{[kindLabel, timeAgo].filter(Boolean).join(' · ')}</Text>
 			{kind.action && (
 				<Button
 					variant="outline"
@@ -112,7 +108,7 @@ export function NotificationPanelContent() {
 				testID={`notifications-band-${item.id}`}
 				className="h-band bg-background border-border justify-center border-b px-3"
 			>
-				<Text className="text-muted-foreground text-xs tracking-wide uppercase">{item.label}</Text>
+				<Text variant="caption">{item.label}</Text>
 			</View>
 		) : (
 			<NotificationItem

@@ -35,7 +35,6 @@
 	"packages/core/src/screens/main/components/data-table/footer.tsx": 1,
 	"packages/core/src/screens/main/components/drawer-content/version.tsx": 3,
 	"packages/core/src/screens/main/components/navigation-area/area-page.tsx": 1,
-	"packages/core/src/screens/main/components/notification-bell/notification-panel.tsx": 1,
 	"packages/core/src/screens/main/components/product/attributes.tsx": 2,
 	"packages/core/src/screens/main/components/product/grouped-names.tsx": 1,
 	"packages/core/src/screens/main/components/product/price-with-tax.tsx": 1,
