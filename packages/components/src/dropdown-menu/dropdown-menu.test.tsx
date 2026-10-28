@@ -32,7 +32,7 @@ it('draws an anchored item as a MenuRow: a destructive one is red with the destr
 	expect(row).toHaveClass('min-h-row rounded-md px-2.5 active:bg-destructive/10');
 	expect(row.className).not.toMatch(/(^| )bg-destructive/);
 	expect(screen.getByTestId('label')).toHaveClass('text-destructive');
-	expect(screen.getByTestId('shortcut')).toHaveClass('text-muted-foreground text-sm');
+	expect(screen.getByTestId('shortcut')).toHaveAttribute('data-variant', 'key');
 });
 
 it('keeps one scrim component identity across renders', () => {
@@ -149,10 +149,8 @@ describe('phone sheet', () => {
 		);
 		expect(document.querySelector('[data-primitive]')).toBeNull();
 		expect(screen.getByTestId('section')).toHaveTextContent('Section');
-		expect(screen.getByTestId('section').querySelector('.uppercase')).not.toBeNull();
-		// The label reads at the floor (text-sm), not below it (the design rule; Codex on #2215).
-		expect(screen.getByTestId('section').querySelector('.text-sm')).not.toBeNull();
-		expect(screen.getByTestId('section').querySelector('.text-xs')).toBeNull();
+		// The label is the ladder's caption rank: 12 uppercase, at the floor (CODING_STANDARDS § Design 3).
+		expect(screen.getByTestId('section').querySelector('[data-variant="caption"]')).not.toBeNull();
 		expect(screen.getByTestId('nested')).toHaveAttribute('role', 'menuitem');
 		expect(screen.getByTestId('hint')).toHaveClass('ml-auto');
 		expect(screen.getByTestId('separator')).toHaveClass('-mx-2');

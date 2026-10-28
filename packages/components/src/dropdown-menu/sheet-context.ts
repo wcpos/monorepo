@@ -22,7 +22,3 @@ export const SHEET_ROW_ROLES: { checkbox: SurfaceRole; radio: SurfaceRole } =
 	Platform.OS === 'web'
 		? { checkbox: 'menuitemcheckbox', radio: 'menuitemradio' }
 		: { checkbox: 'checkbox', radio: 'radio' };
-
-/** The sheet's section label text: the drawn `.opt.h2`, at the floor the design rule sets. */
-export const SHEET_LABEL_TEXT =
-	'text-muted-foreground text-sm font-semibold tracking-wide uppercase';

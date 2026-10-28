@@ -3,7 +3,7 @@ import { StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
-import { SHEET_LABEL_TEXT, SHEET_ROW_ROLES, useMenuSheet } from './sheet-context';
+import { SHEET_ROW_ROLES, useMenuSheet } from './sheet-context';
 import { Icon } from '../icon';
 import {
 	AnchoredOverlay,
@@ -15,6 +15,7 @@ import {
 import { cn } from '../lib/utils';
 import { MenuRow, type MenuRowProps } from '../menu-row';
 import { TextClassContext, Text as ThemedText } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 
 import type { TextProps } from '../text';
 
@@ -240,9 +241,9 @@ function DropdownMenuLabel({ className, ...props }: DropdownMenuPrimitive.LabelP
 			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
 				{/* A composed child (an icon and a Text) reads the label style from context; RN
 				    text styles do not pass through a View (CodeRabbit, #2215). */}
-				<TextClassContext.Provider value={SHEET_LABEL_TEXT}>
+				<TextClassContext.Provider value={TEXT_LADDER.caption}>
 					{isTextChildren(props.children) ? (
-						<ThemedText className={SHEET_LABEL_TEXT}>{props.children}</ThemedText>
+						<ThemedText variant="caption">{props.children}</ThemedText>
 					) : (
 						props.children
 					)}
@@ -272,7 +273,7 @@ function DropdownMenuSeparator({ className, ...props }: DropdownMenuPrimitive.Se
 }
 
 function DropdownMenuShortcut({ className, ...props }: TextProps) {
-	return <Text className={cn('text-muted-foreground ml-auto text-sm', className)} {...props} />;
+	return <Text variant="key" className={cn('ml-auto', className)} {...props} />;
 }
 
 export {

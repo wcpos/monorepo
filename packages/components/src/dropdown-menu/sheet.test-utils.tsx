@@ -10,23 +10,24 @@ export const mockRoot = {
 	value: { value: 'b', label: 'B' },
 	onValueChange: jest.fn(),
 };
-const Part = React.forwardRef<HTMLDivElement, PressableProps & { 'data-testid'?: string }>(
-	({ children, className, testID, onPress, disabled, role, ...props }, ref) => (
-		<div
-			ref={ref}
-			className={className}
-			data-testid={props['data-testid'] ?? testID}
-			role={role}
-			aria-checked={props['aria-checked']}
-			aria-selected={props['aria-selected']}
-			onClick={
-				disabled ? undefined : (onPress as unknown as React.MouseEventHandler<HTMLDivElement>)
-			}
-		>
-			{children as React.ReactNode}
-		</div>
-	)
-);
+const Part = React.forwardRef<
+	HTMLDivElement,
+	PressableProps & { 'data-testid'?: string; variant?: string }
+>(({ children, className, testID, onPress, disabled, role, ...props }, ref) => (
+	<div
+		ref={ref}
+		className={className}
+		// A themed `Text`'s ladder rank (`variant`), which this part stands in for.
+		data-variant={props.variant}
+		data-testid={props['data-testid'] ?? testID}
+		role={role}
+		aria-checked={props['aria-checked']}
+		aria-selected={props['aria-selected']}
+		onClick={disabled ? undefined : (onPress as unknown as React.MouseEventHandler<HTMLDivElement>)}
+	>
+		{children as React.ReactNode}
+	</div>
+));
 Part.displayName = 'SheetTestPart';
 // Retain the overlay harness, adding row semantics and native wrapper passthroughs.
 Object.assign(jest.requireMock('react-native'), {
