@@ -7,7 +7,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
-import { TAX_ID_LABEL_KEYS, type TaxId, type TaxIdType } from '../../../../../lib/tax-id';
+import { type TaxId, type TaxIdType, useTaxIdLabels } from '../../../../../lib/tax-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerAvatar } from '../../../components/user-avatar/customer-avatar';
 
@@ -62,6 +62,7 @@ const LABEL = 'text-muted-foreground mb-1 text-xs tracking-wide uppercase';
  */
 export function CustomerSection({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
+	const taxIdLabels = useTaxIdLabels();
 	const { format: formatCustomerName } = useCustomerNameFormat();
 	const name = formatCustomerName({
 		billing: order.billing,
@@ -119,11 +120,10 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 						<View className="gap-1">
 							<Text className={LABEL}>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
 							{taxIds.map((entry, index) => {
-								const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
 								return (
 									<View key={`${entry.type}-${entry.value}-${index}`} className="flex-row gap-2">
 										<Text className="text-muted-foreground text-xs">
-											{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
+											{taxIdLabels[entry.type as TaxIdType] ?? taxIdLabels.other}
 										</Text>
 										<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
 									</View>
