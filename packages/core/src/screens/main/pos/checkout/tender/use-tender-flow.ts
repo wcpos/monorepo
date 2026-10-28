@@ -111,7 +111,7 @@ import { useRegisterBinding } from '../../../../../services/register/use-registe
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
-import { disabledReasonKey, failureReasonLabel, providerErrorMessage } from './labels';
+import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
 import {
 	activePlan,
 	appliedMinor,
@@ -1088,16 +1088,10 @@ export function useTenderFlow(
 			// dead button, so the cashier gets the same line the tile is showing.
 			const selectedTile = tiles.find(({ method: candidate }) => candidate.id === method.id);
 			if (selectedTile?.disabled && selectedTile.reason) {
-				logger.info(
-					t(disabledReasonKey(selectedTile.reason), {
-						title: method.title,
-						...(typeof selectedTile.reason === 'object' ? selectedTile.reason : {}),
-					}),
-					{
-						showToast: true,
-						context: { ...orderContext, method: method.id },
-					}
-				);
+				logger.info(disabledReasonText(selectedTile.reason, method.title, t), {
+					showToast: true,
+					context: { ...orderContext, method: method.id },
+				});
 				return;
 			}
 			// An order the store has not created has no route to journal a leg against (its own
@@ -1120,11 +1114,9 @@ export function useTenderFlow(
 					status.reader?.transport !== deviceTransport
 				) {
 					logger.info(
-						t(
-							status?.connection === 'connecting'
-								? 'pos_checkout.reader_connecting'
-								: 'pos_checkout.reader_disconnected'
-						),
+						status?.connection === 'connecting'
+							? t('pos_checkout.reader_connecting')
+							: t('pos_checkout.reader_disconnected'),
 						{ showToast: true, context: { ...orderContext, method: method.id } }
 					);
 					return;
@@ -1232,7 +1224,7 @@ export function useTenderFlow(
 						isLivePaymentStatus(status)
 					)
 				) {
-					logger.info(t(disabledReasonKey('not_with_split'), { title: method.title }), {
+					logger.info(disabledReasonText('not_with_split', method.title, t), {
 						showToast: true,
 						context: { ...orderContext, method: method.id },
 					});

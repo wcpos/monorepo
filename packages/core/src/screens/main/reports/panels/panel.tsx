@@ -158,7 +158,19 @@ export function DetailPanel() {
 			(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
 		),
 	});
-	const title = t(`reports.panel_${detail}`);
+	const titles: Record<NonNullable<typeof detail>, string> = {
+		orders: t('reports.panel_orders'),
+		payments: t('reports.panel_payments'),
+		products: t('reports.panel_products'),
+		categories: t('reports.panel_categories'),
+		brands: t('reports.panel_brands'),
+		cashiers: t('reports.panel_cashiers'),
+		taxes: t('reports.panel_taxes'),
+		refunds: t('reports.panel_refunds'),
+		channels: t('reports.panel_channels'),
+		registers: t('reports.panel_registers'),
+	};
+	const title = titles[detail ?? 'orders'];
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
 		spec,
@@ -215,15 +227,25 @@ export function DetailPanel() {
 									? 'printer'
 									: null;
 	const waitingLabels = {
-		store: 'reports.print_waiting_store',
-		data: 'reports.print_waiting_data',
-		orders: 'reports.print_waiting_orders',
-		refunds: 'reports.print_waiting_refunds',
-		templates: 'reports.print_waiting_templates',
-		'no-template': 'reports.print_no_local_template',
-		printer: 'reports.print_printer_mismatch',
-	} as const;
+		store: t('reports.print_waiting_store'),
+		data: t('reports.print_waiting_data'),
+		orders: t('reports.print_waiting_orders'),
+		refunds: t('reports.print_waiting_refunds'),
+		templates: t('reports.print_waiting_templates'),
+		'no-template': t('reports.print_no_local_template'),
+		printer: t('reports.print_printer_mismatch'),
+	};
 	if (!detail) return null;
+	const counted = {
+		n: formats.quantity(selectedOrders.length),
+		m: formats.quantity(includedOrders.length),
+	};
+	const status = {
+		n: formats.quantity(spec.missing?.n),
+		m: formats.quantity(spec.missing?.m),
+		count: formats.quantity(selectedOrders.length),
+		total: formats.money(totals.total),
+	};
 	const exportCsv = async () => {
 		if (busy) return;
 		setBusy(true);
@@ -284,7 +306,7 @@ export function DetailPanel() {
 			</View>
 			{waiting && (
 				<Text testID="detail-panel-print-waiting" variant="key" className="px-4">
-					{t(waitingLabels[waiting])}
+					{waitingLabels[waiting]}
 				</Text>
 			)}
 			{!!(printError || doc.documentError) && (
@@ -302,16 +324,12 @@ export function DetailPanel() {
 				aside={
 					<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
 						{detail === 'orders'
-							? t(leftOut ? 'reports.orders_counted_left_out' : 'reports.orders_counted', {
-									n: formats.quantity(selectedOrders.length),
-									m: formats.quantity(includedOrders.length),
-								})
-							: t(spec.missing ? 'reports.cost_missing_status' : 'reports.panel_status', {
-									n: formats.quantity(spec.missing?.n),
-									m: formats.quantity(spec.missing?.m),
-									count: formats.quantity(selectedOrders.length),
-									total: formats.money(totals.total),
-								})}
+							? leftOut
+								? t('reports.orders_counted_left_out', counted)
+								: t('reports.orders_counted', counted)
+							: spec.missing
+								? t('reports.cost_missing_status', status)
+								: t('reports.panel_status', status)}
 					</Text>
 				}
 				secondary={[
