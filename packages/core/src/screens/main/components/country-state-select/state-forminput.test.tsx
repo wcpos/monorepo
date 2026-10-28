@@ -7,32 +7,20 @@ import { render } from '@testing-library/react';
 
 import { StateFormInput } from './state-forminput';
 
-// The state control is an Input, a Select or a Combobox by the country's state count. Whichever it
-// is, the field's label reference must reach the thing a screen reader focuses: the trigger.
-const mockOptionSelect = jest.fn((_props: Record<string, unknown>) => null);
-const mockComboboxTrigger = jest.fn((_props: Record<string, unknown>) => null);
+// The state control is a list when the country has states (OptionsCombobox decides Select or
+// searchable) and a plain Input when it has none. Either way the field's label reference reaches
+// the control, and the field holds the state's code.
+const mockOptionsCombobox = jest.fn((_props: Record<string, unknown>) => null);
 const states: Record<string, { name: string; code: string }[]> = {
-	// 2 states: a Select. 11 states: a Combobox. None: a plain Input.
 	XS: [
-		{ name: 'A', code: 'A' },
-		{ name: 'B', code: 'B' },
+		{ name: 'Alpha', code: 'A' },
+		{ name: 'Beta', code: 'B' },
 	],
-	XM: Array.from({ length: 11 }, (_, i) => ({ name: `S${i}`, code: `S${i}` })),
 	XN: [],
 };
 
-jest.mock('@wcpos/components/select', () => ({
-	OptionSelect: (props: Record<string, unknown>) => mockOptionSelect(props),
-}));
 jest.mock('@wcpos/components/combobox', () => ({
-	Combobox: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-	ComboboxTrigger: (props: Record<string, unknown>) => mockComboboxTrigger(props),
-	ComboboxValue: () => null,
-	ComboboxContent: () => null,
-	ComboboxInput: () => null,
-	ComboboxList: () => null,
-	ComboboxEmpty: () => null,
-	ComboboxItem: () => null,
+	OptionsCombobox: (props: Record<string, unknown>) => mockOptionsCombobox(props),
 }));
 jest.mock('@wcpos/components/input', () => ({
 	Input: (props: Record<string, unknown>) => (
@@ -48,30 +36,44 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 let currentCountry = 'XS';
 
 describe('StateFormInput', () => {
-	beforeEach(() => {
-		mockOptionSelect.mockClear();
-		mockComboboxTrigger.mockClear();
-	});
+	beforeEach(() => mockOptionsCombobox.mockClear());
 
-	it('names the Select trigger by the field label', () => {
+	it("draws the country's states, named by the field label, and writes the code", () => {
 		currentCountry = 'XS';
-		render(<StateFormInput countryCode="XS" aria-labelledby="state-label" />);
-		expect(mockOptionSelect).toHaveBeenCalledWith(
-			expect.objectContaining({ 'aria-labelledby': 'state-label' })
+		const onChangeText = jest.fn();
+		render(
+			<StateFormInput
+				countryCode="XS"
+				value="B"
+				onChangeText={onChangeText}
+				aria-labelledby="state-label"
+			/>
 		);
-	});
-
-	it('names the Combobox trigger by the field label', () => {
-		currentCountry = 'XM';
-		render(<StateFormInput countryCode="XM" aria-labelledby="state-label" />);
-		expect(mockComboboxTrigger).toHaveBeenCalledWith(
-			expect.objectContaining({ 'aria-labelledby': 'state-label' })
+		const props = mockOptionsCombobox.mock.calls[0][0] as {
+			options: unknown;
+			value: string;
+			onChange: (next: string | undefined) => void;
+		};
+		expect(props).toEqual(
+			expect.objectContaining({
+				'aria-labelledby': 'state-label',
+				triggerTestID: 'state-select',
+				value: 'B',
+				options: [
+					{ label: 'Alpha', value: 'A' },
+					{ label: 'Beta', value: 'B' },
+				],
+			})
 		);
+		props.onChange('A');
+		props.onChange(undefined);
+		expect(onChangeText.mock.calls).toEqual([['A'], ['']]);
 	});
 
 	it('names the plain Input by the field label', () => {
 		currentCountry = 'XN';
 		const { container } = render(<StateFormInput countryCode="XN" aria-labelledby="state-label" />);
 		expect(container.querySelector('input')?.getAttribute('aria-labelledby')).toBe('state-label');
+		expect(mockOptionsCombobox).not.toHaveBeenCalled();
 	});
 });

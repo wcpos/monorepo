@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormCombobox, FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
 
 import { CountryCombobox } from '../country-state-select/country-combobox';
 import { StateFormInput } from '../country-state-select/state-forminput';
@@ -41,7 +41,7 @@ export function AddressCountryField({ prefix }: { prefix: AddressPrefix }) {
 		<FormField
 			control={control}
 			name={`${prefix}.country`}
-			render={({ field }) => <FormCombobox customComponent={CountryCombobox} {...field} />}
+			render={({ field }) => <FormSelect customComponent={CountryCombobox} {...field} />}
 		/>
 	);
 }

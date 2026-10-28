@@ -135,14 +135,14 @@ test.describe('Language Settings', () => {
 	 */
 	const SWITCH_TARGETS = [
 		{
-			optionTestID: 'language-option-de_DE',
+			optionTestID: 'language-select-option-de_DE',
 			cdnCode: '/translations/js/de_DE/',
 			// `settings.store_name` in the published de_DE bundle — the label the
 			// General settings form must re-render into (#40).
 			storeNameLabel: 'Geschäftsname',
 		},
 		{
-			optionTestID: 'language-option-fr_FR',
+			optionTestID: 'language-select-option-fr_FR',
 			cdnCode: '/translations/js/fr_FR/',
 			storeNameLabel: 'Nom du magasin',
 		},
@@ -153,12 +153,12 @@ test.describe('Language Settings', () => {
 	 * Uses testIDs so it works regardless of the current UI language.
 	 */
 	async function selectLanguage(page: import('@playwright/test').Page, optionTestID: string) {
-		await page.getByTestId('language-select-trigger').click();
-		const combobox = page.getByTestId('language-combobox-content');
+		await page.getByTestId('language-select').click();
+		const combobox = page.getByTestId('language-select-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
 		await page
-			.getByTestId('language-search-input')
-			.fill(optionTestID.replace('language-option-', ''));
+			.getByTestId('combobox-search')
+			.fill(optionTestID.replace('language-select-option-', ''));
 		const option = combobox.getByTestId(optionTestID);
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
@@ -202,15 +202,15 @@ test.describe('Language Settings', () => {
 	test('should have a language set in settings', async ({ posPage: page }) => {
 		await openSettings(page);
 
-		const trigger = page.getByTestId('language-select-trigger');
+		const trigger = page.getByTestId('language-select');
 		await expect(trigger).toBeVisible({ timeout: 10_000 });
 		await expect(trigger).toContainText(/\S/);
 		await trigger.click();
-		const combobox = page.getByTestId('language-combobox-content');
+		const combobox = page.getByTestId('language-select-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
 		await page
-			.getByTestId('language-search-input')
-			.fill(SWITCH_TARGETS[0].optionTestID.replace('language-option-', ''));
+			.getByTestId('combobox-search')
+			.fill(SWITCH_TARGETS[0].optionTestID.replace('language-select-option-', ''));
 		await expect(combobox.getByTestId(SWITCH_TARGETS[0].optionTestID)).toBeVisible({
 			timeout: 10_000,
 		});
