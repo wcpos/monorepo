@@ -5,6 +5,7 @@ import {
 	findNodeHandle,
 	type GestureResponderEvent,
 	Platform,
+	ScrollView,
 	type StyleProp,
 	StyleSheet,
 	View,
@@ -25,6 +26,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView, useKeyboardState } from '../keyboard-controller';
+import { TextClassContext } from '../text';
+import { useIsPhone } from './device';
 import {
 	EASE,
 	EASE_EXIT,
@@ -589,4 +592,94 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			)}
 		</OverlayContext.Provider>
 	);
+}
+
+/** The anchored adapter: one primitive family's portal, its scrim and its positioned panel. */
+export type OverlayAnchor = {
+	Portal: React.ComponentType<{ hostName?: string; children: React.ReactNode }>;
+	Scrim: OverlayScrimComponent;
+	Content: React.ComponentType<any>;
+};
+export type AnchoredContent = {
+	className?: string;
+	testID?: string;
+	inline?: boolean;
+	portalHost?: string;
+	children?: React.ReactNode;
+	[prop: string]: unknown;
+};
+export type AnchoredOverlayProps = {
+	anchor: OverlayAnchor;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	/** The anchored panel's size and padding; the skin, the layer and the motion are the shell's. */
+	size: string;
+	/** All of it reaches the anchored panel; the sheet takes its classes, testID and children. */
+	content: AnchoredContent;
+	sheetStyle?: StyleProp<ViewStyle>;
+	/** Rows of a menu or a list: the sheet scrolls them in a container with this role, eight points apart. */
+	list?: 'menu' | 'group';
+	/** Web, anchored: a press outside the panel closes it and reaches nothing underneath (#2313). */
+	outsidePress?: boolean;
+};
+/**
+ * Every menu, select and popover on a trigger: on a phone the bottom sheet, else the primitive's
+ * positioned panel (the standards' rule, decided once), with both panels' skin, motion and dismiss.
+ */
+export function AnchoredOverlay({
+	anchor,
+	open,
+	onOpenChange,
+	size,
+	content,
+	sheetStyle,
+	list,
+	outsidePress,
+}: AnchoredOverlayProps) {
+	const { className, testID, inline, portalHost, children, ...position } = content;
+	const phone = useIsPhone();
+	const close = () => onOpenChange(false);
+	const shell = (
+		<OverlayShell
+			presentation={phone ? 'bottom' : 'anchored'}
+			open={open}
+			Scrim={anchor.Scrim}
+			onDismiss={phone ? close : undefined}
+			onOutsidePress={!phone && outsidePress ? close : undefined}
+			testID={testID}
+		>
+			<TextClassContext.Provider value="text-foreground">
+				{phone ? (
+					<OverlaySheetPanel testID={testID} className={className} style={sheetStyle}>
+						{list ? (
+							<ScrollView>
+								<View role={list} className="gap-2">
+									{children}
+								</View>
+							</ScrollView>
+						) : (
+							children
+						)}
+					</OverlaySheetPanel>
+				) : (
+					<anchor.Content
+						{...position}
+						testID={testID}
+						className={cn(
+							OVERLAY_PANEL.anchored,
+							'z-50',
+							size,
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							className
+						)}
+					>
+						{children}
+					</anchor.Content>
+				)}
+			</TextClassContext.Provider>
+		</OverlayShell>
+	);
+	// Inline has no portal, whose presence would unmount a closed sheet.
+	if (inline) return open ? shell : null;
+	return <anchor.Portal hostName={portalHost}>{shell}</anchor.Portal>;
 }

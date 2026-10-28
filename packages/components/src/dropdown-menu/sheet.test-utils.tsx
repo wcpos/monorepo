@@ -49,7 +49,10 @@ function IconMock({ name, className }: { name: string; className?: string }) {
 }
 IconMock.displayName = 'SheetTestIcon';
 jest.requireMock('../icon').Icon = IconMock;
-jest.mock('../lib/device', () => ({ useIsPhone: () => mockPhone.current }));
+jest.mock('../lib/device', () => ({
+	useIsPhone: () => mockPhone.current,
+	usePointer: () => 'coarse',
+}));
 jest.mock('../checkbox', () => ({ Checkbox: Part }));
 jest.mock('../button', () => ({ Button: Part }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: Part }));

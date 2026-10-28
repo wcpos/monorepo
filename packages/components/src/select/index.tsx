@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
 
@@ -17,13 +17,17 @@ import {
 import { fieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { useLayoutWidth } from '../lib/use-layout-width';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
-import { useIsPhone } from '../lib/device';
+import {
+	AnchoredOverlay,
+	type OverlayAnchor,
+	type OverlayScrimProps,
+	useOverlayPresentation,
+} from '../lib/overlay';
+import { MenuRow } from '../menu-row';
 import { Text } from '../text';
 import { webTestID } from '../lib/test-id';
 import { cn } from '../lib/utils';
 
-import type { OverlayScrimProps } from '../lib/overlay';
 import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';
 
 /**
@@ -57,10 +61,11 @@ function Select({ multiple, ...props }: SelectRootProps) {
 
 const useRootContext = SelectPrimitive.useRootContext;
 
-const SelectSheetContext = React.createContext<{ close: () => void } | null>(null);
+/** On the phone sheet no primitive Content is mounted: the parts draw plain Views. */
+const useSheet = () => useOverlayPresentation() === 'bottom';
 const SHEET_LABEL_TEXT = 'text-muted-foreground text-sm font-semibold tracking-wide uppercase';
 function SelectGroup(props: SelectPrimitive.GroupProps) {
-	if (React.useContext(SelectSheetContext)) return <View {...props} role="group" />;
+	if (useSheet()) return <View {...props} role="group" />;
 	return <SelectPrimitive.Group {...props} />;
 }
 
@@ -137,75 +142,49 @@ function SingleSelectTrigger({ className, ...props }: SelectPrimitive.TriggerPro
  * Internal single-select content component that safely calls useRootContext at top level.
  */
 function SelectSingleContent({
-	className,
-	children,
 	position = 'popper',
-	portalHost,
 	matchWidth,
-	inline,
 	...props
 }: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
-	const phone = useIsPhone();
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (!open) return null;
-
-	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
-	const shell = (
-		<OverlayShell
-			presentation={phone ? 'bottom' : 'anchored'}
-			onDismiss={phone ? () => onOpenChange(false) : undefined}
+	return (
+		<AnchoredOverlay
+			anchor={SELECT}
 			open={open}
-			Scrim={SelectScrim}
-			testID={props.testID}
-		>
-			{phone ? (
-				<SelectSheetContext.Provider value={{ close: () => onOpenChange(false) }}>
-					<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
-						<ScrollView>
-							{/* The rows are options in a group, eight points apart; a listbox would promise
-							    the arrow-key navigation a touch sheet does not give (CodeRabbit, #2215). */}
-							<View role="group" className="gap-2">
-								{children}
-							</View>
-						</ScrollView>
-					</OverlaySheetPanel>
-				</SelectSheetContext.Provider>
-			) : (
-				<SelectPrimitive.Content
-					className={cn(
-						OVERLAY_PANEL.anchored,
-						'relative z-50 max-h-96 min-w-32 p-1.5',
-						// The trigger-width floor sits on the bordered, padded content box (border-box), not
-						// on the viewport: on the viewport it made the rows trigger-width inside a box that
-						// was trigger-width in total, so they overflowed the right padding and border.
-						position === 'popper' && 'min-w-(--radix-select-trigger-width)',
-						position === 'popper' &&
-							'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-						className
-					)}
-					style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
-					position={position}
-					{...props}
-				>
-					<SelectPrimitive.Viewport
-						className={cn(
-							'p-0',
-							position === 'popper' && 'h-(--radix-select-trigger-height) w-full'
-						)}
-					>
-						{children}
-					</SelectPrimitive.Viewport>
-				</SelectPrimitive.Content>
+			onOpenChange={onOpenChange}
+			size={cn(
+				'relative max-h-96 min-w-32 p-1.5',
+				// The trigger-width floor sits on the bordered, padded box, not the viewport: there it
+				// made trigger-width rows inside a trigger-width box, overflowing its padding and border.
+				position === 'popper' && 'min-w-(--radix-select-trigger-width)',
+				position === 'popper' &&
+					'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1'
 			)}
-		</OverlayShell>
+			// Options in a group: a listbox promises arrow keys a touch sheet lacks (CodeRabbit, #2215).
+			list="group"
+			content={{
+				style: matchWidth && triggerWidth ? { width: triggerWidth } : undefined,
+				position,
+				...props,
+			}}
+			sheetStyle={props.style}
+		/>
 	);
-	return inline ? (
-		shell
-	) : (
-		<SelectPrimitive.Portal hostName={portalHost}>{shell}</SelectPrimitive.Portal>
+}
+
+/** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
+function SelectPanel({ position, children, ...props }: SelectPrimitive.ContentProps) {
+	return (
+		<SelectPrimitive.Content position={position} {...props}>
+			<SelectPrimitive.Viewport
+				className={cn('p-0', position === 'popper' && 'h-(--radix-select-trigger-height) w-full')}
+			>
+				{children}
+			</SelectPrimitive.Viewport>
+		</SelectPrimitive.Content>
 	);
 }
 
@@ -220,6 +199,11 @@ function SelectSingleContent({
 function SelectScrim(p: OverlayScrimProps) {
 	return Platform.OS === 'web' ? <Pressable {...p} /> : <SelectPrimitive.Overlay {...p} />;
 }
+const SELECT: OverlayAnchor = {
+	Portal: SelectPrimitive.Portal,
+	Scrim: SelectScrim,
+	Content: SelectPanel,
+};
 
 function SelectContent({
 	matchWidth,
@@ -246,7 +230,7 @@ function SelectContent({
 }
 
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
-	if (React.useContext(SelectSheetContext))
+	if (useSheet())
 		return (
 			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
 				<Text className={SHEET_LABEL_TEXT}>{props.children}</Text>
@@ -261,7 +245,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 }
 
 function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
-	const sheet = React.useContext(SelectSheetContext);
+	const sheet = useSheet();
 	const isMulti = React.useContext(MultiModeContext);
 
 	if (isMulti) {
@@ -283,26 +267,31 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 				{children}
 			</SelectSheetItem>
 		);
+	return <SelectAnchoredItem className={className} {...props} />;
+}
 
+/** Native presses the row through `asChild`; web's Radix option hosts it (a nested pressable swallows its click). */
+function SelectAnchoredItem({ className, ...props }: SelectPrimitive.ItemProps) {
+	const { value } = SelectPrimitive.useRootContext();
 	// On web the Radix item is a DOM node: `testID` must not reach it (React warns on the
 	// unknown attribute), `data-testid` carries the id instead. Native keeps `testID`.
 	const { testID, ...item } = props;
 	return (
 		<SelectPrimitive.Item
-			className={cn(
-				'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center rounded-md py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-45',
-				className
-			)}
+			asChild={Platform.OS !== 'web'}
+			className="web:outline-none web:focus:bg-muted rounded-md"
 			{...item}
 			{...(Platform.OS === 'web' ? webTestID(testID) : { testID })}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-				<SelectPrimitive.ItemIndicator>
-					<Icon name="check" className="text-primary" />
-				</SelectPrimitive.ItemIndicator>
-			</View>
-			<SelectPrimitive.ItemText className="text-foreground text-base" />
+			<MenuRow
+				hosted={Platform.OS === 'web'}
+				role="option"
+				choice
+				selected={value?.value === props.value}
+				disabled={!!props.disabled}
+				className={className}
+				label={<SelectPrimitive.ItemText className="text-foreground text-base" />}
+			/>
 		</SelectPrimitive.Item>
 	);
 }
@@ -310,33 +299,25 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 function SelectSheetItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
 	const { value, onValueChange, onOpenChange } = SelectPrimitive.useRootContext();
 	return (
-		<Pressable
+		<MenuRow
 			role="option"
-			aria-selected={value?.value === props.value}
-			disabled={props.disabled}
+			choice
+			selected={value?.value === props.value}
+			disabled={!!props.disabled}
 			testID={props.testID}
-			className={cn(
-				'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
-				props.disabled && 'web:pointer-events-none opacity-45',
-				className
-			)}
+			className={className}
+			label={(children as React.ReactNode) ?? props.label}
 			onPress={(e) => {
 				props.onPress?.(e);
 				onValueChange({ value: props.value, label: props.label });
 				if (props.closeOnPress !== false) onOpenChange(false);
 			}}
-		>
-			<Text className="text-foreground flex-1 text-base">
-				{(children as React.ReactNode) ?? props.label}
-			</Text>
-			{value?.value === props.value && <Icon name="check" className="text-primary ml-auto" />}
-		</Pressable>
+		/>
 	);
 }
 
 function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
-	if (React.useContext(SelectSheetContext))
-		return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
+	if (useSheet()) return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
 	return (
 		<SelectPrimitive.Separator
 			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
@@ -349,7 +330,7 @@ function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps
  * Platform: WEB ONLY
  */
 function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) {
-	if (React.useContext(SelectSheetContext)) return null;
+	if (useSheet()) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -367,7 +348,7 @@ function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpB
  * Platform: WEB ONLY
  */
 function SelectScrollDownButton({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) {
-	if (React.useContext(SelectSheetContext)) return null;
+	if (useSheet()) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}

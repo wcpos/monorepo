@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
@@ -19,11 +19,13 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
+import { AnchoredOverlay } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
 import { useIsPhone } from '../lib/device';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
 import { Icon } from '../icon';
 
 import type {
@@ -153,19 +155,13 @@ function ComboboxValue({
 }
 
 function ComboboxContent({
-	className,
-	align = 'center',
-	sideOffset = 4,
-	portalHost,
 	children,
 	style,
-	inline,
 	...props
 }: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useComboboxRootContext();
 	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
 	const sheet = usePhoneSheetMetrics();
-	const isPhone = useIsPhone();
 	const isNative = Platform.OS !== 'web';
 	const contentStyle = React.useMemo(() => {
 		if (!isNative) return style;
@@ -178,55 +174,22 @@ function ComboboxContent({
 	// Enable arrow key navigation when combobox is open
 	useArrowKeyNavigation();
 
-	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
-	const content = (
-		<ComboboxRootContext.Provider value={context}>{children}</ComboboxRootContext.Provider>
-	);
-	const shell = (
-		<OverlayShell
-			presentation={isPhone ? 'bottom' : 'anchored'}
+	return (
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
 			open={open}
-			Scrim={PopoverPrimitive.Overlay}
-			onDismiss={isPhone ? () => onOpenChange(false) : undefined}
-			testID={props.testID}
-		>
-			<TextClassContext.Provider value="text-foreground">
-				{isPhone ? (
-					<OverlaySheetPanel
-						testID={props.testID}
-						className={className}
-						// The shell pads the safe area; the panel adds only its own inset.
-						style={[{ maxHeight: sheet.maxHeight }, style]}
-					>
-						{content}
-					</OverlaySheetPanel>
-				) : (
-					<PopoverPrimitive.Content
-						align={align}
-						sideOffset={sideOffset}
-						style={contentStyle}
-						className={cn(
-							OVERLAY_PANEL.anchored,
-							'web:cursor-auto web:outline-none z-50 max-h-75 w-80',
-							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-							className
-						)}
-						{...props}
-					>
-						{content}
-					</PopoverPrimitive.Content>
-				)}
-			</TextClassContext.Provider>
-		</OverlayShell>
-	);
-	// Inline (the gallery) has no portal, so nothing unmounts a closed sheet; the portal's
-	// presence does that for every real caller.
-	return inline ? (
-		open ? (
-			shell
-		) : null
-	) : (
-		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
+			onOpenChange={onOpenChange}
+			size="web:cursor-auto web:outline-none max-h-75 w-80"
+			content={{
+				...props,
+				style: contentStyle,
+				children: (
+					<ComboboxRootContext.Provider value={context}>{children}</ComboboxRootContext.Provider>
+				),
+			}}
+			// The shell pads the safe area; the sheet adds only its own inset.
+			sheetStyle={[{ maxHeight: sheet.maxHeight }, style]}
+		/>
 	);
 }
 
@@ -371,25 +334,16 @@ function ComboboxItem({ value, label, item, className, children, ...props }: Com
 
 	return (
 		<VirtualizedListPrimitive.Item>
-			<Pressable
-				onPress={handlePress}
-				role="option"
-				aria-selected={selected}
-				className={cn(
-					'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
-					multiple && 'pl-8',
-					props.disabled && 'web:pointer-events-none opacity-45',
-					className
-				)}
+			<MenuRow
 				{...props}
+				role="option"
+				choice={multiple}
+				selected={selected}
+				onPress={handlePress}
+				className={className}
 			>
-				{multiple && (
-					<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-						{selected && <Icon name="check" className="text-primary" />}
-					</View>
-				)}
 				{children}
-			</Pressable>
+			</MenuRow>
 		</VirtualizedListPrimitive.Item>
 	);
 }

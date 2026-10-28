@@ -267,11 +267,21 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(''),
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => false,
+	usePointer: () => 'fine',
+}));
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	OVERLAY_PANEL: {},
 	OVERLAY_MOTION: { anchored: {} },
 	OverlayShell: ({ children }: React.PropsWithChildren) => children,
+	// The menu's shell, anchored: the primitive's portal and positioned content.
+	AnchoredOverlay: ({ anchor, content: { inline: _i, portalHost: _p, ...content } }: any) => (
+		<anchor.Portal>
+			<anchor.Content {...content} />
+		</anchor.Portal>
+	),
+	useOverlayPresentation: () => 'anchored',
 }));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>

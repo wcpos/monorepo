@@ -49,6 +49,8 @@ export type PressableSurfaceProps = Omit<PressableProps, 'role'> & {
 	haptic?: boolean;
 	/** Drawn under 44 pt: the finger still gets 44 (`lib/min-target`). */
 	minTarget?: boolean;
+	/** A primitive's item around it presses on keydown: Radix's click and the web keyup press are not a second. */
+	primitiveKeys?: boolean;
 	className?: string;
 };
 
@@ -79,6 +81,7 @@ function Surface({
 	washClassName,
 	haptic = true,
 	minTarget = false,
+	primitiveKeys = false,
 	onPress,
 	onKeyDown,
 	className,
@@ -90,6 +93,7 @@ function Surface({
 	const checked = resolved !== undefined && CHECKED_ROLES.has(resolved);
 	const press = onPress
 		? (event: GestureResponderEvent) => {
+				if (primitiveKeys && event?.type === 'keyup') return;
 				if (haptic && !disabled) hapticPress();
 				onPress(event);
 			}
@@ -109,6 +113,7 @@ function Surface({
 			disabled={!!disabled}
 			onPress={press}
 			onKeyDown={(event) => {
+				if (primitiveKeys && ['Enter', ' '].includes(event.nativeEvent.key)) event.preventDefault();
 				onKeyDown?.(event);
 				if (
 					press &&

@@ -6,14 +6,20 @@ import { cn } from '../lib/utils';
 import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text, TextClassContext, type TextProps } from '../text';
 
-export type MenuRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed' | 'role'> & {
+export type MenuRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed'> & {
 	/** Set on every row of a choice list to reserve the leading check slot. */
 	choice?: boolean;
+	/** A row that toggles: the leading slot is a box, marked when `selected`. */
+	checkbox?: boolean;
 	selected?: boolean;
+	/** A primitive's own element around the row presses it (the web select's option): the row only draws. */
+	hosted?: boolean;
 	leading?: React.ReactNode;
-	label: React.ReactNode;
+	/** One line of text, or a node; a row of free parts (an icon and a Text) is `children` instead. */
+	label?: React.ReactNode;
 	description?: React.ReactNode;
 	trailing?: React.ReactNode;
+	children?: React.ReactNode;
 	variant?: 'default' | 'destructive';
 	/**
 	 * Dimmed like `disabled` but still pressable, for an option the caller gates (a Free
@@ -28,28 +34,33 @@ function MenuRowLabel({ className, ...props }: TextProps) {
 	return <Text {...props} numberOfLines={1} className={cn('min-w-0 flex-1', className)} />;
 }
 
-/** One menu action or choice, with no list divider or button surface. */
+/** The item row of every menu, select and sheet; the primitives supply only press and `role`. */
 export function MenuRow({
 	choice = false,
+	checkbox = false,
 	selected = false,
+	role,
+	hosted = false,
 	leading,
 	label,
 	description,
 	trailing,
+	children,
 	variant = 'default',
 	locked = false,
 	className,
 	...props
 }: MenuRowProps) {
 	const destructive = variant === 'destructive';
+	const Surface = hosted ? HostedRow : PressableSurface;
 	return (
 		<TextClassContext.Provider
 			value={cn('text-base select-none', destructive ? 'text-destructive' : 'text-foreground')}
 		>
-			<PressableSurface
+			<Surface
 				{...props}
-				role={choice ? 'radio' : 'button'}
-				selected={choice ? selected : undefined}
+				role={role ?? (checkbox ? 'checkbox' : choice ? 'radio' : 'button')}
+				selected={choice || checkbox || role === 'option' ? selected : undefined}
 				dimmed={locked}
 				wash={destructive ? 'destructive' : 'muted'}
 				className={cn(
@@ -58,31 +69,50 @@ export function MenuRow({
 					className
 				)}
 			>
-				{choice && (
-					<View aria-hidden className="w-5 items-center">
-						{selected && <Icon name="check" size="sm" />}
+				{(choice || checkbox) && (
+					<View
+						aria-hidden
+						className={cn('w-5 items-center', checkbox && BOX[selected ? 'on' : 'off'])}
+					>
+						{selected && <Icon name="check" size="sm" className={cn(checkbox && BOX_CHECK)} />}
 					</View>
 				)}
 				{leading}
-				<View className="min-w-0 flex-1">
-					{typeof label === 'string' || typeof label === 'number' ? (
-						<MenuRowLabel>{label}</MenuRowLabel>
-					) : (
-						label
-					)}
-					{description != null && (
-						<TextClassContext.Provider value="text-muted-foreground text-sm">
-							{typeof description === 'string' || typeof description === 'number' ? (
-								<Text>{description}</Text>
-							) : (
-								description
-							)}
-						</TextClassContext.Provider>
-					)}
-				</View>
+				{children ?? (
+					<View className="min-w-0 flex-1">
+						{typeof label === 'string' || typeof label === 'number' ? (
+							<MenuRowLabel>{label}</MenuRowLabel>
+						) : (
+							label
+						)}
+						{description != null && (
+							<TextClassContext.Provider value="text-muted-foreground text-sm">
+								{typeof description === 'string' || typeof description === 'number' ? (
+									<Text>{description}</Text>
+								) : (
+									description
+								)}
+							</TextClassContext.Provider>
+						)}
+					</View>
+				)}
 				{trailing}
-			</PressableSurface>
+			</Surface>
 		</TextClassContext.Provider>
+	);
+}
+
+const BOX = {
+	off: 'border-border bg-card size-5 justify-center rounded-sm border',
+	on: 'border-primary bg-primary size-5 justify-center rounded-sm border',
+};
+const BOX_CHECK = 'text-primary-foreground size-3';
+
+function HostedRow({ className, disabled, dimmed, children }: PressableSurfaceProps) {
+	return (
+		<View className={cn(className, (disabled || dimmed) && 'opacity-45')}>
+			{children as React.ReactNode}
+		</View>
 	);
 }
 
