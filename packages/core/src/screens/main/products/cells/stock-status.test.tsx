@@ -22,7 +22,7 @@ jest.mock('@wcpos/components/status-badge', () => ({
 	},
 }));
 jest.mock('../../hooks/use-stock-status-label', () => ({
-	useStockStatusLabel: () => ({ getLabel: (status: string) => status }),
+	useStockStatusLabel: () => ({ items: [], getLabel: (status: string) => status }),
 }));
 
 function renderCell(product: Record<string, unknown>) {

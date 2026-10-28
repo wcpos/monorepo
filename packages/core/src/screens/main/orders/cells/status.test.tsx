@@ -14,7 +14,10 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../hooks/use-order-status-label', () => ({
-	useOrderStatusLabel: () => ({ getLabel: (value: string) => `Server: ${value}` }),
+	useOrderStatusLabel: () => ({
+		items: [{ value: 'completed', label: 'Server: completed' }],
+		getLabel: (value: string) => `Server: ${value}`,
+	}),
 }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label, variant }: { label: string; variant: string }) => (

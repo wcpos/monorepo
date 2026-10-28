@@ -1,18 +1,20 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
 
-import { StatusBadge } from '@wcpos/components/status-badge';
+import { StatusBadge, type StatusBadgeProps } from '@wcpos/components/status-badge';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { displayStockStatus } from '../../components/product/resolve-stock';
+import { StatusFilterCell } from '../../components/status-filter-cell';
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
-import type { QueryStateActions } from '../../../../query';
+const stockTones: Record<string, StatusBadgeProps['variant']> = {
+	instock: 'success',
+	outofstock: 'error',
+	lowstock: 'warning',
+	onbackorder: 'warning',
+};
 
-/**
- *
- */
 export function StockStatus({
 	table,
 	row,
@@ -23,23 +25,16 @@ export function StockStatus({
 	const stockStatus = useRecordField(row.original.record, (product) =>
 		displayStockStatus(product.payload)
 	);
-	const { getLabel } = useStockStatusLabel();
-	const meta = table.options.meta as unknown as {
-		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
-	};
-
+	const { items } = useStockStatusLabel();
 	return (
-		<Pressable
+		<StatusFilterCell
+			table={table}
+			field="stock_status"
+			value={stockStatus}
+			options={items}
+			tones={stockTones}
 			testID="product-stock-status"
-			accessibilityRole="button"
-			accessibilityLabel={getLabel(stockStatus ?? '')}
-			className="min-h-11 justify-center"
-			onPress={() => {
-				if (stockStatus) meta.actions.setFilter('stock_status', stockStatus);
-			}}
-		>
-			<ProductStockBadge status={stockStatus} />
-		</Pressable>
+		/>
 	);
 }
 
@@ -51,17 +46,9 @@ export function ProductStockBadge({
 	quantity?: number | null;
 }) {
 	const { getLabel } = useStockStatusLabel();
-	const variant =
-		status === 'instock'
-			? 'success'
-			: status === 'outofstock'
-				? 'error'
-				: status === 'lowstock' || status === 'onbackorder'
-					? 'warning'
-					: 'default';
 	return (
 		<StatusBadge
-			variant={variant}
+			variant={stockTones[status ?? ''] ?? 'default'}
 			label={`${quantity == null ? '' : `${quantity} · `}${getLabel(status ?? '')}`}
 		/>
 	);

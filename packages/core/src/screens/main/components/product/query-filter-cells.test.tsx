@@ -28,7 +28,7 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('../../hooks/use-stock-status-label', () => ({
-	useStockStatusLabel: () => ({ getLabel: (value: string) => value }),
+	useStockStatusLabel: () => ({ items: [], getLabel: (value: string) => value }),
 }));
 
 type CellName = 'brands' | 'categories' | 'tags' | 'stock_status';

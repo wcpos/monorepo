@@ -47,9 +47,6 @@
 	"packages/core/src/screens/main/components/product/variable-product-row/variations/index.tsx": {
 		"bare-Suspense": 1
 	},
-	"packages/core/src/screens/main/coupons/cells/status.tsx": {
-		"raw-pressable": 1
-	},
 	"packages/core/src/screens/main/coupons/edit/index.tsx": {
 		"bare-Suspense": 1
 	},
@@ -76,9 +73,6 @@
 	},
 	"packages/core/src/screens/main/logs/row-detail.tsx": {
 		"arbitrary-px": 1
-	},
-	"packages/core/src/screens/main/orders/cells/status.tsx": {
-		"raw-pressable": 1
 	},
 	"packages/core/src/screens/main/pos/cart/cells/line-strip.tsx": {
 		"raw-pressable": 1
@@ -114,9 +108,6 @@
 		"duration-literal": 10
 	},
 	"packages/core/src/screens/main/pos/products/tiles/inline-variable-tile.tsx": {
-		"raw-pressable": 1
-	},
-	"packages/core/src/screens/main/products/cells/stock-status.tsx": {
 		"raw-pressable": 1
 	},
 	"packages/core/src/screens/main/products/index.tsx": {
