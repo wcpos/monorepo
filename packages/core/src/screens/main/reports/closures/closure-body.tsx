@@ -277,12 +277,13 @@ export function ClosureBody({
 						</Text>
 					</View>
 				)}
-				{breakdowns.transaction_count != null && row.period_sales_total != null && (
+				{breakdowns.transaction_count != null && settled.period_sales_total != null && (
 					<View className={STATIC_ROW}>
 						{term(t('reports.sales'))}
+						{/* The settled total: a late-sale correction moves it with the expected figures. */}
 						<Text className="tabular-nums">
 							{String(breakdowns.transaction_count)}
-							{!blind && ` · ${context.formatMoney(row.period_sales_total)}`}
+							{!blind && ` · ${context.formatMoney(settled.period_sales_total)}`}
 						</Text>
 					</View>
 				)}
@@ -327,9 +328,8 @@ export function ClosureBody({
 									onSelect={doc.setPrinterSelection}
 								/>
 							</View>
-							<View className="h-80">
-								<ReceiptBody doc={doc} hideSelects fullWidth />
-							</View>
+							{/* The flow preview sets its own height; the panel's body scrolls it (Codex, #3036). */}
+							<ReceiptBody doc={doc} hideSelects fullWidth />
 						</View>
 					))}
 				{corrections.length > 0 && band(t('reports.corrections'))}
