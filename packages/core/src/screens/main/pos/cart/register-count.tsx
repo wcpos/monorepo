@@ -75,8 +75,16 @@ export function DenominationTile({
 }
 
 export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) => void }) {
-	const { session, actions, expected, blind, binding, varianceThreshold, unsyncedCount } =
-		useRegisterSession();
+	const {
+		session,
+		actions,
+		expected,
+		blind,
+		binding,
+		varianceThreshold,
+		unsyncedCount,
+		figuresPending,
+	} = useRegisterSession();
 	const { store } = useStoreSession();
 	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
@@ -175,6 +183,13 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						)}
 					</View>
 				</View>
+			)}
+			{figuresPending && (
+				<Notice
+					tone="info"
+					title={t('register.figures_after_sync')}
+					testID="count-figures-pending"
+				/>
 			)}
 			{needsManager && (
 				<Notice
@@ -279,7 +294,9 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				className="w-full"
 				loading={busy}
 				disabled={
-					!valid || Object.values(others).some((value) => value !== '' && !validAmount(value))
+					!valid ||
+					figuresPending ||
+					Object.values(others).some((value) => value !== '' && !validAmount(value))
 				}
 				onPress={() => {
 					if (!blind && valid && overThreshold(variance, varianceThreshold))

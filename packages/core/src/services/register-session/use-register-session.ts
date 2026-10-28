@@ -417,6 +417,9 @@ export function useRegisterSession() {
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
 				if (!session) throw new RegisterSessionRequiredError();
+				// A seeded `counting` row reaches the count pane without `startCounting`; the
+				// close is the second door, so the same figures invariant guards it (§ 4.9).
+				if (figuresPending) throw new Error('register.figures_after_sync');
 				const closed =
 					session!.status === 'closed'
 						? session!

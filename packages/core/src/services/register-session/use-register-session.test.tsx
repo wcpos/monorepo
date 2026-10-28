@@ -1882,6 +1882,10 @@ it.each(['synced', 'pending'])(
 				'register.figures_after_sync'
 			);
 			expect(actions.startCounting).not.toHaveBeenCalled();
+			await expect(
+				result.current.actions.closeSession({ counted: { cash: '100' } })
+			).rejects.toThrow('register.figures_after_sync');
+			expect(actions.closeSession).not.toHaveBeenCalled();
 			await act(async () => {
 				active = [{ ...active[0], server_expected_at: session.server_expected_at }];
 				mockSessionChanges.next();
