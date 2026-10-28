@@ -350,7 +350,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
-				if (figuresPending) throw new Error('register.figures_after_sync');
+				if (figuresPending) throw new Error('register_figures_pending');
 				if (!session) throw new RegisterSessionRequiredError();
 				const row = await startCounting(storeDB, session.id);
 				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
@@ -420,7 +420,7 @@ export function useRegisterSession() {
 			closeSession: async (input: { counted: Record<string, string> }) => {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
-				if (figuresPending) throw new Error('register.figures_after_sync');
+				if (figuresPending) throw new Error('register_figures_pending');
 				const closed =
 					session!.status === 'closed'
 						? session!

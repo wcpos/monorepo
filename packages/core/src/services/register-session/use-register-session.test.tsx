@@ -1879,12 +1879,12 @@ it.each(['synced', 'pending'])(
 			await act(() => markSeededIn(userDB, 'site', 'register', storeDB.name));
 			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', true));
 			await expect(result.current.actions.startCounting()).rejects.toThrow(
-				'register.figures_after_sync'
+				'register_figures_pending'
 			);
 			expect(actions.startCounting).not.toHaveBeenCalled();
 			await expect(
 				result.current.actions.closeSession({ counted: { cash: '100' } })
-			).rejects.toThrow('register.figures_after_sync');
+			).rejects.toThrow('register_figures_pending');
 			expect(actions.closeSession).not.toHaveBeenCalled();
 			await act(async () => {
 				active = [{ ...active[0], server_expected_at: session.server_expected_at }];
