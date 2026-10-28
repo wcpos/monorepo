@@ -10,6 +10,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -37,9 +38,10 @@ export function Receipt({ resource, document, side = 'right' }: Props) {
 				<DialogContent side={side} size="xl">
 					<DialogHeader>
 						<DialogTitle>
-							<Text>{t('common.no_order_found')}</Text>
+							<Text>{t('common.receipt')}</Text>
 						</DialogTitle>
 					</DialogHeader>
+					<EmptyState kind="empty" title={t('common.no_order_found')} />
 				</DialogContent>
 			</Dialog>
 		);

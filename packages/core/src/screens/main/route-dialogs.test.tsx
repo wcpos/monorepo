@@ -188,7 +188,7 @@ describe.each([
 	['customer', EditCustomer, 'w-160'],
 	['customer add', AddCustomerRoute, 'w-160'],
 	['coupon', EditCoupon, 'w-160'],
-	['coupon add', AddCouponRoute, 'w-lg'],
+	['coupon add', AddCouponRoute, 'w-160'],
 	['order', OrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
 ] as const)('%s route shell', (_name, Screen, width) => {

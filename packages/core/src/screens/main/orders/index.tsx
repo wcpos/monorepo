@@ -18,7 +18,7 @@ import { UpgradeNotice } from '../components/upgrade-notice';
 import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { PaymentAttentionNotice } from './attention-notice';
-import { DisplayOptions } from './display-options';
+import { DisplayOptions } from '../components/display-options';
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Note } from './cells/note';
@@ -283,7 +283,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 							/>
 						}
 					>
-						<DisplayOptions />
+						<DisplayOptions id="orders" />
 					</ManagementBar>
 					<PaymentAttentionNotice />
 					{showUpgrade && !license?.isPro && (

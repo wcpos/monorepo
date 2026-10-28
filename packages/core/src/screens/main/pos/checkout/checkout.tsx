@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -52,9 +53,10 @@ export function Checkout({ resource }: Props) {
 				<DialogContent testID="checkout-dialog" size="lg">
 					<DialogHeader>
 						<DialogTitle>
-							<Text>{t('common.no_order_found')}</Text>
+							<Text>{t('pos_checkout.checkout')}</Text>
 						</DialogTitle>
 					</DialogHeader>
+					<EmptyState kind="empty" title={t('common.no_order_found')} />
 				</DialogContent>
 			</Dialog>
 		);

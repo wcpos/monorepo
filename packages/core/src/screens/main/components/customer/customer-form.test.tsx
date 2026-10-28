@@ -99,14 +99,12 @@ function mockAddressSchema(root: 'billing' | 'shipping') {
 	const address = z.object(Object.fromEntries(keys.map((key) => [key, z.string().optional()])));
 	return z.object({ [root]: address.optional() });
 }
-jest.mock('../billing-address-form', () => ({
+jest.mock('./address', () => ({
 	AddressCountryField: ({ prefix }: { prefix: string }) => (
 		<button data-testid={`${prefix}-country-select`} />
 	),
 	AddressStateField: () => null,
 	billingAddressSchema: mockAddressSchema('billing'),
-}));
-jest.mock('../shipping-address-form', () => ({
 	shippingAddressSchema: mockAddressSchema('shipping'),
 }));
 jest.mock('../form-errors', () => ({ FormErrors: () => null }));

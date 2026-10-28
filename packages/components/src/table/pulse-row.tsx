@@ -15,7 +15,7 @@ import { EASE, EASE_EXIT, PANEL_SLIDE_OUT } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 import type { RowData, TableFeatures } from '@tanstack/react-table';
-import type { Row, Table } from '../data-table/types';
+import type { Row, Table } from './types';
 
 type PulseTableRowProps<
 	TData extends RowData,

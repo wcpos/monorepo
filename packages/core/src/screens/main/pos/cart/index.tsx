@@ -5,6 +5,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { cn } from '@wcpos/components/lib/utils';
@@ -21,7 +22,6 @@ import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';
 import { useVoidOrder } from '../hooks/use-void-order';
 import { CartTable } from './table';
-import { EmptyCart } from './empty-cart';
 import { CartFoot } from './foot';
 import { OrderSheet } from './order-sheet';
 import { Totals } from './totals';
@@ -220,7 +220,12 @@ function CartColumn({
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
-							<EmptyCart />
+							<EmptyState
+								kind="empty"
+								icon="cart"
+								testID="cart-empty"
+								title={t('pos_cart.empty_cart_hint')}
+							/>
 							{overdue && (
 								<Button
 									testID="checkout-close-register"

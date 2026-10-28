@@ -16,7 +16,7 @@ import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Avatar } from './cells/avatar';
 import { CustomerEmail } from './cells/email';
-import { DisplayOptions } from './display-options';
+import { DisplayOptions } from '../components/display-options';
 import { CustomerRow as CoarseRow } from './row';
 import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
@@ -235,7 +235,7 @@ function CustomersScreenContent() {
 							</Text>
 						</TooltipContent>
 					</Tooltip>
-					<DisplayOptions />
+					<DisplayOptions id="customers" />
 				</ManagementBar>
 			}
 		>

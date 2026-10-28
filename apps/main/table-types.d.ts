@@ -3,4 +3,4 @@
  * and @wcpos/core so that ColumnMeta and TableMeta extensions are available.
  */
 /// <reference path="../../packages/core/src/table-types.d.ts" />
-import '@wcpos/components/data-table/types';
+import '@wcpos/components/table/types';

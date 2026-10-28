@@ -5,6 +5,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
 import { HStack } from '@wcpos/components/hstack';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -84,7 +85,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 					]}
 				/>
 				{flow.saveState?.kind === 'saving' && !payload.number ? (
-					<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
+					<Skeleton shape="line" className="w-40" testID="checkout-title-skeleton" />
 				) : null}
 				<View className="flex-1" />
 				{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (

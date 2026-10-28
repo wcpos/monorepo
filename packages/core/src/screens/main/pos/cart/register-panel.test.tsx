@@ -108,6 +108,27 @@ jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (props: unknown) => showToast(props) },
 }));
+// The refused band is a Notice; the stand-in keeps its testID, title and action buttons.
+jest.mock('@wcpos/components/notice', () => ({
+	Notice: ({
+		testID,
+		title,
+		actions,
+	}: {
+		testID?: string;
+		title: string;
+		actions?: { label: string; onPress: () => void; testID?: string }[];
+	}) => (
+		<div data-testid={testID}>
+			{title}
+			{actions?.map((action) => (
+				<button key={action.label} data-testid={action.testID} onClick={action.onPress}>
+					{action.label}
+				</button>
+			))}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

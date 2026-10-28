@@ -124,10 +124,10 @@ jest.mock('./cells/line-strip', () => ({
 jest.mock('./cells/fee-and-shipping-total', () => ({ FeeAndShippingTotal: () => null }));
 let mockIsPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
-jest.mock('./empty-cart', () => ({
-	EmptyCart: () => {
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID }: { testID?: string }) => {
 		const { createElement } = jest.requireActual<typeof import('react')>('react');
-		return createElement('div', { 'data-testid': 'cart-empty' });
+		return createElement('div', { 'data-testid': testID });
 	},
 }));
 jest.mock('./cells/fee-name', () => ({ FeeName: () => null }));

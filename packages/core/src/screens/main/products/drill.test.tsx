@@ -332,7 +332,6 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	CardContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	CardHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/input', () => ({
 	Input: ({

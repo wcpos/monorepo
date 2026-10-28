@@ -14,6 +14,8 @@ const mockLoggerSuccess = jest.fn();
 const mockLoggerError = jest.fn();
 const mockRouterBack = jest.fn();
 
+// The form's error band is a Notice, which loads ESM uniwind and expo-linking.
+jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('@hookform/resolvers/zod', () => ({
 	zodResolver: () => undefined,
 }));

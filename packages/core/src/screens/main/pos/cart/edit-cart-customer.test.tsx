@@ -201,15 +201,13 @@ function MockPartControl() {
 	const { ariaProps } = useFormControlAria({});
 	return <button aria-labelledby={ariaProps['aria-labelledby']} />;
 }
-jest.mock('../../components/billing-address-form', () => ({
+jest.mock('../../components/customer/address', () => ({
 	AddressCountryField: MockPartControl,
 	AddressStateField: MockPartControl,
 	billingAddressSchema: mockAddressSchema('billing'),
-}));
-jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../../components/shipping-address-form', () => ({
 	shippingAddressSchema: mockAddressSchema('shipping'),
 }));
+jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({
 		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),

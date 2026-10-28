@@ -95,9 +95,6 @@
 	"packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
 		"bare-Suspense": 1
 	},
-	"packages/core/src/screens/main/pos/products/meta-data-keys-field.tsx": {
-		"raw-pressable": 1
-	},
 	"packages/core/src/screens/main/pos/products/rows/in-cart-count.tsx": {
 		"raw-pressable": 1
 	},

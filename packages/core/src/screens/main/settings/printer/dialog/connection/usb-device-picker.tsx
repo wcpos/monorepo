@@ -13,7 +13,6 @@ import { resolveNativePrinterColumns, usePrinterDiscovery } from '@wcpos/printer
 import { useT } from '../../../../../../contexts/translations';
 import { isUsbLikeDevice } from './discovered-printer-filters';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../../schema';
-import { RadioDot } from '../../components/radio-dot';
 
 export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
@@ -60,7 +59,8 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 							}
 						}}
 						selected={selected}
-						leading={<RadioDot selected={selected} />}
+						role="radio"
+						aria-checked={selected}
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>

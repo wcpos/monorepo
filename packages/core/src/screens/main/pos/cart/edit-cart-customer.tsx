@@ -28,7 +28,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { billingAddressSchema } from '../../components/billing-address-form';
 import {
 	ADDRESS_FACTS,
 	asShipping,
@@ -41,7 +40,7 @@ import {
 	taxIdsFormSchema,
 } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
-import { shippingAddressSchema } from '../../components/shipping-address-form';
+import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
 import { useFieldPresence } from '../../components/use-field-presence';
 import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useCartCustomerRecord } from '../commands/use-cart-customer-record';

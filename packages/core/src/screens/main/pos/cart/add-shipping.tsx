@@ -21,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
-import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { TaxStatusRadioGroup } from '../../components/tax-radio-groups';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**

@@ -22,7 +22,7 @@ import { EditableDescription } from './cells/editable-description';
 import { Status } from './cells/status';
 import { Usage } from './cells/usage';
 import { FilterBar } from './filter-bar';
-import { DisplayOptions } from './display-options';
+import { DisplayOptions } from '../components/display-options';
 import { CouponRow as CoarseRow } from './row';
 import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
@@ -265,7 +265,7 @@ function CouponsScreenContent() {
 							</Text>
 						</TooltipContent>
 					</Tooltip>
-					<DisplayOptions />
+					<DisplayOptions id="coupons" />
 				</ManagementBar>
 			}
 		>

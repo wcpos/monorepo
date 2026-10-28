@@ -8,7 +8,6 @@ import { Uniwind } from 'uniwind';
 
 import { stories as drawerItem } from '@wcpos/core/screens/main/components/drawer-content/rail/gallery';
 import { stories as popover } from '@wcpos/components/popover/gallery';
-import { stories as hoverCard } from '@wcpos/components/hover-card/gallery';
 import { stories as dropdownMenu } from '@wcpos/components/dropdown-menu/gallery';
 import { stories as alertDialog } from '@wcpos/components/alert-dialog/gallery';
 import { stories as label } from '@wcpos/components/label/gallery';
@@ -71,7 +70,6 @@ const registry: Record<string, Story[]> = {
 	'drawer-item': drawerItem,
 	'alert-dialog': alertDialog,
 	'dropdown-menu': dropdownMenu,
-	'hover-card': hoverCard,
 	popover,
 	tabs,
 	panels,

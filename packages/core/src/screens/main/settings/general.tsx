@@ -84,7 +84,7 @@ const formSchema = z.object({
  *
  * Built in the component that also READS it, the resource would be discarded with the aborted
  * render and rebuilt by every Suspense retry, which never ends (#1707): the customers query's
- * first emission is always async, and `SettingsPage`'s boundary sits ABOVE this component, so
+ * first emission is always async, and `AreaPage`'s boundary sits ABOVE this component, so
  * it cannot help. Above a boundary of its own, this component commits alongside the fallback
  * and the retry reads back the resource the first attempt already subscribed.
  */

@@ -11,7 +11,6 @@ import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { hasTargetKind, type OsPrinterTargetKind } from './discovered-printer-filters';
 import { useT } from '../../../../../../contexts/translations';
-import { RadioDot } from '../../components/radio-dot';
 
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
@@ -89,7 +88,8 @@ export function OsPrintersSection({
 							form.setValue('name', p.name);
 						}}
 						selected={selected}
-						leading={<RadioDot selected={selected} />}
+						role="radio"
+						aria-checked={selected}
 					>
 						<Text className="text-sm">{p.name}</Text>
 					</ListItem>

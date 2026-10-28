@@ -1,17 +1,6 @@
 import type { ViewStyle } from 'react-native';
 
-function getFlexAlign(align: 'left' | 'right' | 'center'): NonNullable<ViewStyle['alignItems']> {
-	switch (align) {
-		case 'left':
-			return 'flex-start';
-		case 'right':
-			return 'flex-end';
-		case 'center':
-			return 'center';
-		default:
-			return 'flex-start';
-	}
-}
+import { getFlexAlign } from '@wcpos/components/lib/utils';
 
 /**
  * A column's cell style from its UI-settings meta: a fixed width holds its basis, anything else

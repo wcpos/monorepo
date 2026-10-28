@@ -3,7 +3,7 @@
  * so that ColumnMeta extensions (width, flex, align, hideLabel, show) are available
  * throughout the core package.
  */
-import '@wcpos/components/data-table/types';
+import '@wcpos/components/table/types';
 
 import type { ElementType } from 'react';
 
@@ -27,7 +27,7 @@ export type {
 	HeaderContext,
 	Row,
 	Table,
-} from '@wcpos/components/data-table/types';
+} from '@wcpos/components/table/types';
 
 /** A filter a list's cell can set: a field of one of the lists, and that field's value. */
 export type FilterField = { [C in CollectionKey]: keyof FiltersOf<C> }[CollectionKey];

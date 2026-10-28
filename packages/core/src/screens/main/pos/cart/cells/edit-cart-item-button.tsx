@@ -3,9 +3,6 @@ import * as React from 'react';
 import { Dialog } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
-import { IconButton } from '@wcpos/components/icon-button';
-import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
 import { RecordDialog } from '../../../components/record-dialog';
@@ -13,16 +10,13 @@ import { usePanelSide } from '../../contexts/overlay-side';
 
 interface Props {
 	title: string;
-	trigger?: 'icon' | 'label';
 	/** The cart line: the record the form edits and what the JSON tab shows. */
 	item: object;
 	form: React.ReactNode;
 }
 
-/**
- *
- */
-function EditCartItemButton({ title, item, form, trigger = 'icon' }: Props) {
+/** The line strip's Edit block and the record dialog it opens on the line. */
+function EditCartItemButton({ title, item, form }: Props) {
 	const t = useT();
 	const side = usePanelSide('cart');
 	const [openDialog, setOpenDialog] = React.useState(false);
@@ -30,30 +24,17 @@ function EditCartItemButton({ title, item, form, trigger = 'icon' }: Props) {
 	return (
 		<ErrorBoundary>
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
-				{trigger === 'label' ? (
-					// A square block the height of the cart row it sits under (the line strip).
-					// The slot under it paints the block's grey (line-strip.tsx).
-					<Button
-						variant="ghost"
-						// eslint-disable-next-line no-restricted-syntax
-						className="min-w-tile h-auto flex-1 rounded-none px-5"
-						testID="cart-line-edit"
-						onPress={() => setOpenDialog(true)}
-					>
-						{t('pos_cart.edit_line')}
-					</Button>
-				) : (
-					<Tooltip>
-						<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-							<IconButton name="more" accessibilityLabel={t('pos_cart.edit_line')} />
-						</TooltipTrigger>
-						{/* Every caller builds this title from a server-supplied name — a product,
-					    a fee, a shipping method — so both places it renders decode. */}
-						<TooltipContent>
-							<Text decodeHtml>{title}</Text>
-						</TooltipContent>
-					</Tooltip>
-				)}
+				{/* A square block the height of the cart row it sits under (the line strip).
+				    The slot under it paints the block's grey (line-strip.tsx). */}
+				<Button
+					variant="ghost"
+					// eslint-disable-next-line no-restricted-syntax
+					className="min-w-tile h-auto flex-1 rounded-none px-5"
+					testID="cart-line-edit"
+					onPress={() => setOpenDialog(true)}
+				>
+					{t('pos_cart.edit_line')}
+				</Button>
 				<RecordDialog
 					side={side}
 					portalHost="pos"

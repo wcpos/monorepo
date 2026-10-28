@@ -416,12 +416,17 @@ jest.mock('../../components/meta-data-form', () => ({
 	},
 	metaDataSchema: {},
 }));
-jest.mock('../../components/billing-address-form', () => ({
-	billingAddressSchema: { shape: {} },
+// The address module's real schemas load its country and state fields; those stay out.
+jest.mock('../../components/country-state-select/country-combobox', () => ({
+	CountryCombobox: () => null,
 }));
-jest.mock('../../components/shipping-address-form', () => ({
+jest.mock('../../components/country-state-select/state-forminput', () => ({
+	StateFormInput: () => null,
+}));
+jest.mock('../../components/customer/address', () => ({
+	billingAddressSchema: { shape: {} },
 	// The real schema: a linked shipping is billing's copy through it (`asShipping`).
-	shippingAddressSchema: jest.requireActual('../../components/shipping-address-form')
+	shippingAddressSchema: jest.requireActual('../../components/customer/address')
 		.shippingAddressSchema,
 }));
 jest.mock('../../components/customer/tax-ids-form', () => ({

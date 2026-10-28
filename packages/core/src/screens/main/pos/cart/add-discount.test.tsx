@@ -231,7 +231,7 @@ jest.mock('../../components/tax-class-select', () => ({
 		{ label: 'Reduced rate', value: 'reduced-rate' },
 	],
 }));
-jest.mock('../../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
+jest.mock('../../components/tax-radio-groups', () => ({ TaxStatusRadioGroup: () => null }));
 jest.mock('../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),

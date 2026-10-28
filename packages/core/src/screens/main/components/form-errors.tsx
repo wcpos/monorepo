@@ -1,8 +1,8 @@
 import React from 'react';
-import { View } from 'react-native';
 
 import { useFormState } from 'react-hook-form';
 
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 
 import { flattenErrors } from './flatten-errors';
@@ -29,13 +29,12 @@ export function FormErrors() {
 	}
 
 	return (
-		<View>
-			<Text className="text-destructive">{t('common.please_fix_the_following_errors')}</Text>
+		<Notice tone="bad" title={t('common.please_fix_the_following_errors')}>
 			{errorMessages.map((error, index) => (
-				<Text className="text-destructive" key={index}>
+				<Text className="text-muted-foreground" key={index}>
 					{'\u2022'} {error.path}: {error.message}
 				</Text>
 			))}
-		</View>
+		</Notice>
 	);
 }

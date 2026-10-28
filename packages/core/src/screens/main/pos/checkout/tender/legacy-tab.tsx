@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Notice } from '@wcpos/components/notice';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -75,7 +75,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	// mounted before the catalog loads journals none, and a sale settled at a stored unpaid
 	// status (BACS at pending) would never replay to completion.
 	if (flow.saveState || !gatewayResolved) {
-		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
+		return <Skeleton className="m-4" testID="checkout-legacy-skeleton" />;
 	}
 	if (gatewayError) {
 		return (

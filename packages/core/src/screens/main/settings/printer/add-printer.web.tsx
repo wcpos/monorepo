@@ -1,13 +1,12 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
 import { SavedFieldProvider } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
+import { Notice } from '@wcpos/components/notice';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
@@ -141,14 +140,7 @@ function EditPrinterDialog({
 		return types;
 	}, []);
 
-	const banner = (
-		<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
-			<Icon name="info" size="sm" className="text-muted-foreground mt-0.5" />
-			<Text className="text-muted-foreground flex-1 text-sm">
-				{t('settings.web_printer_limitation')}
-			</Text>
-		</View>
-	);
+	const banner = <Notice tone="info" title={t('settings.web_printer_limitation')} />;
 
 	const webDeviceSection = connectionType !== 'network' && (
 		<VStack className="gap-2">

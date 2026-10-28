@@ -18,6 +18,7 @@ import {
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { MenuRow } from '@wcpos/components/menu-row';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
@@ -255,19 +256,22 @@ export function RegisterPanel({
 					)}
 				</DialogHeader>
 				{refused.length > 0 && (
-					<View className="border-destructive mx-4 flex-row items-center gap-2 border px-3 py-2">
-						<Text testID="register-panel-refused" className="text-destructive flex-1">
-							{t('register.refused', { count: refused.length })}
-						</Text>
-						<Button
-							testID="register-panel-retry-refused"
-							onPress={() =>
-								attempt(() => Promise.all(refused.map((row) => actions.retryMovement(row.id))))
-							}
-						>
-							{t('register.retry')}
-						</Button>
-					</View>
+					<Notice
+						tone="bad"
+						testID="register-panel-refused"
+						className="mx-4"
+						title={t('register.refused', { count: refused.length })}
+						actions={[
+							{
+								label: t('register.retry'),
+								testID: 'register-panel-retry-refused',
+								onPress: () =>
+									void attempt(() =>
+										Promise.all(refused.map((row) => actions.retryMovement(row.id)))
+									),
+							},
+						]}
+					/>
 				)}
 				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (

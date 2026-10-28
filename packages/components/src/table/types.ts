@@ -53,7 +53,7 @@ export type Table<TData extends RowData, TFeatures extends TableFeatures = {}> =
 
 /**
  * Augment @tanstack/react-table's ColumnMeta interface with
- * the custom properties used in this project's data-table components.
+ * the custom properties used in this project's tables.
  */
 declare module '@tanstack/react-table' {
 	interface ColumnMeta<

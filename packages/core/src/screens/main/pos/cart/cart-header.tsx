@@ -6,6 +6,7 @@ import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/co
 import type { Option } from '@wcpos/components/combobox/types';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { useRecordField } from '@wcpos/query';
 
@@ -50,10 +51,7 @@ function StilledCartHeader() {
 				{/* An order with no number yet (saving, queued offline or refused): a placeholder,
 				    never an empty "#". */}
 				{!number ? (
-					<View
-						className="bg-muted h-4 w-16 rounded-full"
-						testID="checkout-ledger-number-skeleton"
-					/>
+					<Skeleton shape="line" className="w-16" testID="checkout-ledger-number-skeleton" />
 				) : (
 					<Text testID="checkout-ledger-number" className="font-semibold">
 						{`#${number}`}

@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 
 **Job:** Styled table primitives with alternating rows and an imperative add/remove-feedback row.
 
-**Base:** `@rn-primitives/table`, `@rn-primitives/slot`, `react-native`, `react-native-reanimated`, `react-native-worklets`, and `uniwind`; TanStack imports supply types. No split; shared files contain `web:` styling modifiers.
+**Base:** `@rn-primitives/table`, `@rn-primitives/slot`, `react-native`, `react-native-reanimated`, `react-native-worklets`, and `uniwind`; TanStack imports supply types; `types.ts` (`@wcpos/components/table/types`, folded in from the deleted `data-table/` folder 2026-10-28) holds the TanStack aliases and the `ColumnMeta` augmentation. No split; shared files contain `web:` styling modifiers.
 
 ## Lines
 

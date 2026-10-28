@@ -312,9 +312,6 @@ jest.mock('../../../hooks/use-customer-name-format', () => ({
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	CardContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	CardHeader: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
 }));
 it('reads the stilled totals independently, with balance only in the tender header', () => {
 	mockFlow = makeFlow({ paidMinor: 5000, balanceMinor: 4295 });

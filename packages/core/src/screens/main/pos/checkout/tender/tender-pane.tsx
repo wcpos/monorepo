@@ -12,6 +12,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { VStack } from '@wcpos/components/vstack';
@@ -434,10 +435,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				{pills.length > 0 || !saving
 					? pills
 					: Array.from({ length: 4 }, (_, index) => (
-							<View
+							<Skeleton
 								key={index}
+								shape="tile"
 								testID="checkout-tile-skeleton"
-								className="bg-muted h-tile min-w-0 flex-1 rounded-lg"
+								className="min-w-0 flex-1"
 							/>
 						))}
 			</MethodRows>

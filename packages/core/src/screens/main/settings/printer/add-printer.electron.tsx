@@ -34,7 +34,6 @@ import {
 	type VendorOption,
 } from './schema';
 import { useT } from '../../../../contexts/translations';
-import { RadioDot } from './components/radio-dot';
 
 import type { PrinterDialogPrefill } from './profile-config';
 import type { UseFormReturn } from 'react-hook-form';
@@ -79,7 +78,8 @@ function DeviceList({
 							}
 						}}
 						selected={selected}
-						leading={<RadioDot selected={selected} />}
+						role="radio"
+						aria-checked={selected}
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>

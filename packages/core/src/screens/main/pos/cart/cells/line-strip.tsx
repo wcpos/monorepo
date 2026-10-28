@@ -405,7 +405,6 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					<View className="bg-muted absolute inset-y-0 right-full w-1" />
 					<EditCartItemButton
 						title={title}
-						trigger="label"
 						item={item}
 						form={
 							type === 'line_items' ? (

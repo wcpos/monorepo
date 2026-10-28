@@ -11,7 +11,6 @@ jest.resetModules();
 const registered = [
 	"'drawer-item': drawerItem",
 	'popover',
-	"'hover-card': hoverCard",
 	"'dropdown-menu': dropdownMenu",
 	"'alert-dialog': alertDialog",
 	'tabs',
