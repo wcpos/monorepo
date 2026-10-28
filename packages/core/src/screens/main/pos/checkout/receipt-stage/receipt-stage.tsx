@@ -9,11 +9,11 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 
-import { Icon } from '@wcpos/components/icon';
 import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { activeAwaitingCustomer, derive, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
@@ -67,18 +67,12 @@ function PaidMoment({
 				className="items-center gap-3 p-4"
 			>
 				<Stamp key={String(awaiting)} mode={awaiting === firstTone ? 'still' : 'pop'}>
-					<View
+					<ToneDisc
 						testID="receipt-paid-disc"
-						className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : awaiting ? 'bg-warning/15' : 'bg-success/15'}`}
-					>
-						<Icon
-							name={sent || awaiting ? 'pending' : 'check'}
-							size={sent || awaiting ? '4xl' : undefined}
-							className={
-								sent ? 'text-muted-foreground' : awaiting ? 'text-warn-text' : 'text-success'
-							}
-						/>
-					</View>
+						size="lg"
+						tone={sent ? 'muted' : awaiting ? 'warn' : 'ok'}
+						icon={sent || awaiting ? 'pending' : undefined}
+					/>
 				</Stamp>
 				{children}
 			</Stamp>

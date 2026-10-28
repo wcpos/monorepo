@@ -484,7 +484,7 @@ jest.mock('react-native', () => ({
 it('paints the paid surface neutrally and the success disc semantically', () => {
 	render(<ReceiptStage orderUuid="paid" compact />);
 	expect(screen.getByTestId('checkout-paid').className).toContain('bg-card');
-	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-ok-bg');
 });
 it('a sent sale shows the neutral sent moment: where it went, what is due, no tick, no haptic', async () => {
 	Platform.isNative = true;
@@ -504,7 +504,7 @@ it('a sent sale shows the neutral sent moment: where it went, what is due, no ti
 		'to buyer@example.com · $92.95 due'
 	);
 	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-muted');
-	expect(screen.getByTestId('receipt-paid-disc').className).not.toContain('bg-success');
+	expect(screen.getByTestId('receipt-paid-disc').className).not.toContain('bg-ok-bg');
 	expect(Haptics.notificationAsync).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('checkout-sent-new'));
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
@@ -525,8 +525,8 @@ it('a stamp beside settled money is stale: the paid moment wins', () => {
 // ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet. The moment
 // waits, unseen, for the journal's first answer: one pop in the right tone, never green then amber.
 it.each([
-	[true, 'bg-warning/15'],
-	[false, 'bg-success/15'],
+	[true, 'bg-warn-bg'],
+	[false, 'bg-ok-bg'],
 ])('a sale read as awaiting=%s pops once, in its tone, with one haptic', async (awaiting, tone) => {
 	Platform.isNative = true;
 	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
@@ -563,7 +563,7 @@ it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green
 		rerender(<ReceiptStage orderUuid="paid" compact />);
 	});
 	expect(screen.queryByTestId('receipt-awaiting-store')).toBeNull();
-	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-ok-bg');
 	// The disc alone re-pops; the headline never unmounts.
 	expect(withTiming).toHaveBeenCalledTimes(2);
 	expect(screen.getByTestId('checkout-paid-headline')).toBe(headline);
