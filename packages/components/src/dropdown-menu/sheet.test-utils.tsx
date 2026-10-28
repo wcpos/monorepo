@@ -12,14 +12,13 @@ export const mockRoot = {
 };
 const Part = React.forwardRef<
 	HTMLDivElement,
-	PressableProps & { 'data-testid'?: string; variant?: string }
+	PressableProps & { 'data-testid'?: string; 'data-variant'?: string }
 >(({ children, className, testID, onPress, disabled, role, ...props }, ref) => (
 	<div
 		ref={ref}
 		className={className}
-		// A themed `Text`'s ladder rank (`variant`), which this part stands in for.
-		data-variant={props.variant}
 		data-testid={props['data-testid'] ?? testID}
+		data-variant={props['data-variant']}
 		role={role}
 		aria-checked={props['aria-checked']}
 		aria-selected={props['aria-selected']}
@@ -44,7 +43,16 @@ jest.requireMock('react-native-reanimated').default.View = Part;
 jest.requireMock('../keyboard-controller').KeyboardAvoidingView = Part;
 // The native shell reads the keyboard's state for its bottom sheet; these suites keep it hidden.
 jest.requireMock('../keyboard-controller').useKeyboardState = () => false;
-jest.requireMock('../text').Text = Part;
+// The themed Text is its own part: it carries the ladder rank (`variant`), which react-native's
+// Text ignores, so a rank set on the wrong Text shows up as a missing `data-variant`.
+function ThemedTextPart({
+	variant,
+	...props
+}: React.ComponentProps<typeof Part> & { variant?: string | null }) {
+	return <Part {...props} data-variant={variant ?? undefined} />;
+}
+ThemedTextPart.displayName = 'SheetTestThemedText';
+jest.requireMock('../text').Text = ThemedTextPart;
 function IconMock({ name, className }: { name: string; className?: string }) {
 	return <span data-icon={name} className={className} />;
 }

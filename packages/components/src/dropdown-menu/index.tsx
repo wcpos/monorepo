@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { StyleProp, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
@@ -273,7 +273,7 @@ function DropdownMenuSeparator({ className, ...props }: DropdownMenuPrimitive.Se
 }
 
 function DropdownMenuShortcut({ className, ...props }: TextProps) {
-	return <Text variant="key" className={cn('ml-auto', className)} {...props} />;
+	return <ThemedText variant="key" className={cn('ml-auto', className)} {...props} />;
 }
 
 export {
