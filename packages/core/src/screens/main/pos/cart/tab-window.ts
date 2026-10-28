@@ -51,3 +51,17 @@ export function snapOffsets({
 		),
 	].sort((a, b) => a - b);
 }
+
+/** Web reports size changes, not sibling moves: sum widths in mounted order. */
+export function tabOffsets(ids: readonly string[], widths: ReadonlyMap<string, number>) {
+	const offsets = new Map<string, { x: number; width: number }>();
+	let x = 0;
+	for (const id of ids) {
+		const width = widths.get(id);
+		// An unmeasured predecessor makes every subsequent position unknown.
+		if (width === undefined) break;
+		offsets.set(id, { x, width });
+		x += width;
+	}
+	return offsets;
+}

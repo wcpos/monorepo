@@ -22,6 +22,7 @@ type LayoutEvent = {
 	nativeEvent: { layout: { x: number; y: number; width: number; height: number } };
 };
 const mockScrollTo = jest.fn();
+const mockScrollEvents = new Map<string, (() => void) | undefined>();
 const mockContentSizes = new Map<string, (width: number, height: number) => void>();
 let mockReducedMotion = false;
 let mockAwaiting = new Set<string>();
@@ -48,6 +49,7 @@ jest.mock('react-native', () => {
 				'aria-selected'?: boolean;
 				'aria-expanded'?: boolean;
 				'aria-owns'?: string;
+				'aria-hidden'?: boolean;
 				nativeID?: string;
 				style?: React.CSSProperties;
 			}
@@ -64,6 +66,7 @@ jest.mock('react-native', () => {
 				'aria-selected': selected,
 				'aria-expanded': expanded,
 				'aria-owns': owns,
+				'aria-hidden': hidden,
 				nativeID,
 				style,
 			},
@@ -91,6 +94,7 @@ jest.mock('react-native', () => {
 					'aria-selected': selected,
 					'aria-expanded': expanded,
 					'aria-owns': owns,
+					'aria-hidden': hidden,
 					id: nativeID,
 					style,
 				},
@@ -110,6 +114,10 @@ jest.mock('react-native', () => {
 				onLayout: (event: LayoutEvent) => void;
 				scrollEnabled: boolean;
 				snapToOffsets?: number[];
+				onScrollBeginDrag?: () => void;
+				onScroll?: () => void;
+				onMomentumScrollEnd?: () => void;
+				keyboardShouldPersistTaps?: string;
 				role?: string;
 				'aria-owns'?: string;
 			},
@@ -117,6 +125,9 @@ jest.mock('react-native', () => {
 		) {
 			React.useImperativeHandle(ref, () => ({ scrollTo: mockScrollTo }));
 			mockContentSizes.set('row', props.onContentSizeChange);
+			mockScrollEvents.set('drag', props.onScrollBeginDrag);
+			mockScrollEvents.set('scroll', props.onScroll);
+			mockScrollEvents.set('end', props.onMomentumScrollEnd);
 			mockLayouts.set('scroll-row', props.onLayout);
 			return (
 				<div
@@ -124,6 +135,7 @@ jest.mock('react-native', () => {
 					aria-owns={props['aria-owns']}
 					data-testid="scroll-row"
 					data-scroll={String(props.scrollEnabled)}
+					data-keyboard-taps={props.keyboardShouldPersistTaps}
 					data-snaps={JSON.stringify(props.snapToOffsets)}
 				>
 					{props.children}
@@ -270,6 +282,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 }));
 jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitsStore: (uuid: string) => mockAwaiting.has(uuid),
+	useAwaitingStore: () => mockAwaiting,
 }));
 jest.mock('@wcpos/components/slide-over', () => ({
 	SlideOver: ({
@@ -748,10 +761,14 @@ it('summarises clipped carts with one dot per exception tone, excluding the open
 		layout(560);
 		expect(screen.getAllByTestId('open-orders-warning')).toHaveLength(1);
 		expect(screen.getAllByTestId('open-orders-error')).toHaveLength(1);
-		expect(screen.getByTestId('open-orders-warning').getAttribute('aria-label')).toMatch(
-			/Awaiting store|terminal/
+		expect(screen.getByTestId('open-orders-count').getAttribute('aria-label')).toBe(
+			'8 open, Awaiting store, Save refused'
 		);
-		expect(screen.getByTestId('open-orders-error').getAttribute('aria-label')).toBe('Save refused');
+		for (const tone of ['warning', 'error']) {
+			const dot = screen.getByTestId(`open-orders-${tone}`);
+			expect(dot.getAttribute('aria-label')).toBeNull();
+			expect(dot.getAttribute('aria-hidden')).toBe('true');
+		}
 		mockAwaiting.clear();
 		mockOpen[6].record.payload.meta_data = [];
 		mockCurrent = mockOpen[5].record;
@@ -809,4 +826,119 @@ it('shares one age clock across the strip and updates it while mounted', () => {
 		interval.mockRestore();
 		jest.useRealTimers();
 	}
+});
+
+// A width-only web layout must not retain an x from before a sibling left.
+it('recentres the open cart after a cart to its left closes without remeasurement', () => {
+	const open = mockOpen;
+	try {
+		mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => ({
+			id,
+			record: mockRecord(id, '2026-09-07T12:00:00'),
+		}));
+		mockCurrent = mockOpen[4].record;
+		const { rerender } = render(<OpenOrderTabs />);
+		layout(560);
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 222, animated: false });
+		mockOpen = mockOpen.slice(1);
+		rerender(<OpenOrderTabs />);
+		act(() => mockContentSizes.get('row')?.(700, 52));
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 122, animated: true });
+	} finally {
+		mockOpen = open;
+	}
+});
+it.each(['drag', 'scroll'])(
+	'keeps a user %s still across size changes until another tab is selected',
+	(event) => {
+		jest.useFakeTimers();
+		const open = mockOpen;
+		try {
+			mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => ({
+				id,
+				record: mockRecord(id, '2026-09-07T12:00:00'),
+			}));
+			mockCurrent = mockOpen[4].record;
+			const { rerender } = render(<OpenOrderTabs />);
+			layout(560);
+			// A scroll emitted by our own scrollTo must not count as a cashier's swipe.
+			act(() => mockScrollEvents.get('scroll')?.());
+			act(() => jest.advanceTimersByTime(1000));
+			act(() => mockContentSizes.get('row')?.(810, 52));
+			expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 222, animated: true });
+			act(() => jest.advanceTimersByTime(1000));
+			act(() => mockScrollEvents.get(event)?.());
+			mockScrollTo.mockClear();
+			act(() => mockContentSizes.get('row')?.(820, 52));
+			measure('scroll-row', 400);
+			expect(mockScrollTo).not.toHaveBeenCalled();
+			fireEvent.click(screen.getByTestId('open-order-tab-d'));
+			mockCurrent = mockOpen[3].record;
+			rerender(<OpenOrderTabs />);
+			expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 150, animated: true });
+			act(() => mockScrollEvents.get('drag')?.());
+			mockScrollTo.mockClear();
+			fireEvent.keyDown(screen.getByTestId('open-order-tab-d'), { key: 'ArrowRight' });
+			mockCurrent = mockOpen[4].record;
+			rerender(<OpenOrderTabs />);
+			expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 250, animated: true });
+		} finally {
+			mockOpen = open;
+			jest.useRealTimers();
+		}
+	}
+);
+it('keeps the active phone age only when there is no chip state', () => {
+	mockPhone = true;
+	render(<OpenOrderTabs />);
+	expect(screen.getByTestId('open-order-tab-open-age').textContent).toBe('5 min');
+	act(() => enterCheckout('open'));
+	expect(screen.queryByTestId('open-order-tab-open-age')).toBeNull();
+	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
+	expect(screen.queryByTestId('open-order-status-open')).toBeNull();
+});
+it.each(['rejected', 'awaiting', 'terminal'])(
+	'summarises the unmounted 30th cart when %s',
+	(state) => {
+		const open = mockOpen;
+		try {
+			mockOpen = Array.from({ length: 30 }, (_, i) => ({
+				id: `c${i}`,
+				record: mockRecord(`c${i}`, '2026-09-07T12:00:00'),
+			}));
+			mockCurrent = mockOpen[0].record;
+			if (state === 'rejected')
+				markOrderSaveRejected('c29', { status: null, reason: null, message: null });
+			if (state === 'awaiting') mockAwaiting.add('c29');
+			if (state === 'terminal')
+				mockOpen[29].record.payload.meta_data = withLedger(
+					[],
+					[
+						{
+							id: 'terminal',
+							status: 'pending',
+							amount: '10.00',
+							capture_mode: 'server',
+							tendered: null,
+						} as PaymentRow,
+					]
+				);
+			const { rerender } = render(<OpenOrderTabs />);
+			layout(560);
+			expect(screen.queryByTestId('open-order-tab-c29')).toBeNull();
+			expect(
+				screen.getByTestId(`open-orders-${state === 'rejected' ? 'error' : 'warning'}`)
+			).toBeTruthy();
+			mockCurrent = mockOpen[29].record;
+			rerender(<OpenOrderTabs />);
+			expect(screen.queryByTestId('open-orders-error')).toBeNull();
+			expect(screen.queryByTestId('open-orders-warning')).toBeNull();
+		} finally {
+			mockOpen = open;
+		}
+	}
+);
+it('lets tab presses reach the tab while the native search keyboard is open', () => {
+	render(<OpenOrderTabs />);
+	expect(screen.getByTestId('scroll-row').dataset.keyboardTaps).toBe('handled');
 });

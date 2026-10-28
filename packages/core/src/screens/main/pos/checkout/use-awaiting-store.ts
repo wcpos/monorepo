@@ -15,7 +15,7 @@ const NONE: ReadonlySet<string> = new Set();
  * shared stream: warm (the register bar holds it), a reader gets the set on its first render;
  * null only before the stream's first-ever answer, so a mark is never drawn from a guess.
  */
-function useAwaitingStore(): ReadonlySet<string> | null {
+export function useAwaitingStore(): ReadonlySet<string> | null {
 	const { storeDB } = useStoreSession();
 	return useObservableEagerState(
 		React.useMemo(

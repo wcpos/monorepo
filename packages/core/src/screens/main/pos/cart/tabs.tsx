@@ -34,7 +34,9 @@ import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
 import { cartRestartsOnAdd } from '../hooks/cart-restart';
 import { AGE_TICK_MS, OpenOrdersList, STALE_AFTER_MS } from './open-orders-list';
-import { TabChip, type TabTone, TabToneContext } from './tab-chip';
+import { TabChip } from './tab-chip';
+import { trayExceptions } from './tray-exceptions';
+import { useAwaitingStore } from '../checkout/use-awaiting-store';
 import {
 	centredOffset,
 	NEW_TAB_WIDTH,
@@ -43,6 +45,7 @@ import {
 	rowOverflows,
 	snapOffsets,
 	TAB_MIN,
+	tabOffsets,
 } from './tab-window';
 import { tabWho } from './tab-who';
 
@@ -55,6 +58,8 @@ const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
 const SHIFT = LinearTransition.duration(CROSSFADE).easing(EASE).reduceMotion(ReduceMotion.System);
 // The DOM id the tablist owns the + cell by (web).
 const NEW_TAB_ID = 'new-order-tab';
+// RN-web emits its final scroll tick after 100 ms; let that tick land before releasing ours.
+const SCROLL_IDLE_MS = 150;
 
 export function OpenOrderTabs({
 	position = 'bottom',
@@ -71,6 +76,8 @@ export function OpenOrderTabs({
 	const nowMs = useNowMs(AGE_TICK_MS);
 	const reducedMotion = useReducedMotion();
 	const { checkoutOrders, receiptOrders, saveStates, selectedReceiptOrder } = useCheckoutMode();
+	const awaiting = useAwaitingStore();
+	const dragged = React.useRef(false);
 	// Receipts and in-flight checkouts that left the open hits keep a tab. A draft that entered
 	// checkout before its first save landed has no record yet and is no tab.
 	const extraIds = [...new Set([...checkoutOrders, ...receiptOrders])].filter(
@@ -172,6 +179,7 @@ export function OpenOrderTabs({
 	const step = (delta: number) => {
 		const at = activeIndex + delta;
 		if (at < 0 || at > entries.length) return;
+		dragged.current = false;
 		focusPending.current = true;
 		handleTabPress(at === entries.length ? 'new' : entries[at].id);
 	};
@@ -182,25 +190,28 @@ export function OpenOrderTabs({
 			receiptOrders.has(id) ||
 			index >= openOrders.length
 	);
-	const [tones, setTones] = React.useState<ReadonlyMap<string, TabTone>>(() => new Map());
-	const reportTone = React.useCallback((uuid: string, tone: TabTone) => {
-		setTones((was) => {
-			if ((was.get(uuid) ?? null) === tone) return was;
-			const next = new Map(was);
-			if (tone) next.set(uuid, tone);
-			else next.delete(uuid);
-			return next;
-		});
-	}, []);
-	const exceptions = new Set(
-		mounted.filter(({ id }) => id !== activeValue).map(({ id }) => tones.get(id))
-	);
+	const exceptions = trayExceptions({ orders: openOrders, activeValue, saveStates, awaiting });
+	const exceptionTones = (['warning', 'error'] as const).filter((tone) => exceptions.has(tone));
 	const scrollRef = React.useRef<ScrollViewInstance>(null);
 	const [rowWidth, setRowWidth] = React.useState(0);
 	const [contentWidth, setContentWidth] = React.useState(0);
-	const [positions, setPositions] = React.useState<
-		ReadonlyMap<string, { x: number; width: number }>
-	>(() => new Map());
+	const [widths, setWidths] = React.useState<ReadonlyMap<string, number>>(() => new Map());
+	const positions = tabOffsets(
+		mounted.map(({ id }) => id),
+		widths
+	);
+	// RN-web has no drag/end callbacks: distinguish our scroll ticks until scrolling goes quiet.
+	const programmatic = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const endProgrammatic = React.useCallback(() => {
+		clearTimeout(programmatic.current);
+		programmatic.current = undefined;
+	}, []);
+	const trackProgrammatic = React.useCallback(() => {
+		clearTimeout(programmatic.current);
+		programmatic.current = setTimeout(endProgrammatic, SCROLL_IDLE_MS);
+	}, [endProgrammatic]);
+	// Release the outstanding scroll timer when the strip leaves the screen.
+	React.useEffect(() => endProgrammatic, [endProgrammatic]);
 	const overflow = rowOverflows({
 		stripWidth: strip.width,
 		plusWidth: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH,
@@ -210,24 +221,26 @@ export function OpenOrderTabs({
 	// The first centring is the strip finding its place on mount, not a move the cashier made:
 	// it lands without a slide. Every later one slides (motion ruling: buttery, never a jump).
 	const settled = React.useRef(false);
-	// Selection can arrive outside the strip (list, keyboard, current-order store); sync the
-	// imperative scroll position after its measured content and viewport have settled.
+	const previousActive = React.useRef(activeValue);
+	const offset = fresh
+		? Math.max(0, contentWidth - rowWidth)
+		: activePosition &&
+			centredOffset({
+				rowWidth,
+				contentWidth,
+				tabX: activePosition.x,
+				tabWidth: activePosition.width,
+			});
+	// External selection and layout jointly drive the scroll, unless the cashier swiped away.
 	React.useEffect(() => {
+		if (previousActive.current !== activeValue) dragged.current = false;
+		previousActive.current = activeValue;
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- External selection and layout events jointly drive this imperative scroll.
-		if (!overflow || rowWidth <= 0 || (!fresh && !activePosition)) return;
-		scrollRef.current?.scrollTo({
-			x: fresh
-				? Math.max(0, contentWidth - rowWidth)
-				: centredOffset({
-						rowWidth,
-						contentWidth,
-						tabX: activePosition!.x,
-						tabWidth: activePosition!.width,
-					}),
-			animated: settled.current && !reducedMotion,
-		});
+		if (dragged.current || !overflow || rowWidth <= 0 || offset === undefined) return;
+		trackProgrammatic();
+		scrollRef.current?.scrollTo({ x: offset, animated: settled.current && !reducedMotion });
 		settled.current = true;
-	}, [activeValue, activePosition, contentWidth, rowWidth, overflow, fresh, reducedMotion]);
+	}, [activeValue, offset, contentWidth, rowWidth, overflow, reducedMotion, trackProgrammatic]);
 	// A sole tab has nothing to be selected against: no underline (board, "One cart"). The
 	// unfolded New tab counts: with no carts it is the only tab.
 	const solo = entries.length + (fresh ? 1 : 0) === 1;
@@ -256,13 +269,13 @@ export function OpenOrderTabs({
 				}}
 				onLayout={({
 					nativeEvent: {
-						layout: { x, width },
+						layout: { width },
 					},
 				}) => {
-					setPositions((was) => {
-						if (was.get(id)?.x === x && was.get(id)?.width === width) return was;
+					setWidths((was) => {
+						if (was.get(id) === width) return was;
 						const live = new Set(mounted.map((entry) => entry.id));
-						return new Map([...was].filter(([key]) => live.has(key))).set(id, { x, width });
+						return new Map([...was].filter(([key]) => live.has(key))).set(id, width);
 					});
 				}}
 				style={{ minWidth: TAB_MIN, flexShrink: 0 }}
@@ -311,7 +324,14 @@ export function OpenOrderTabs({
 						role="button"
 						className={`${CELL} border-border min-w-14 flex-row gap-1 border-r px-2.5 ${listOpen ? 'bg-muted' : ''}`}
 						testID="open-orders-count"
-						accessibilityLabel={t('pos_cart.open_orders_count', { count: openOrders.length })}
+						accessibilityLabel={[
+							t('pos_cart.open_orders_count', { count: openOrders.length }),
+							...exceptionTones.map((tone) =>
+								tone === 'error'
+									? t('pos_checkout.chip_save_refused')
+									: t('pos_checkout.awaiting_store')
+							),
+						].join(', ')}
 						aria-expanded={listOpen}
 						onPress={() => (listOpen ? closeList() : setListOpen(true))}
 					>
@@ -324,20 +344,14 @@ export function OpenOrderTabs({
 							showZero
 							identity={openOrdersScope}
 						/>
-						{(['warning', 'error'] as const)
-							.filter((tone) => exceptions.has(tone))
-							.map((tone) => (
-								<View
-									key={tone}
-									testID={`open-orders-${tone}`}
-									className={`size-2 rounded-full ${tone === 'warning' ? 'bg-warning' : 'bg-destructive'}`}
-									accessibilityLabel={
-										tone === 'error'
-											? t('pos_checkout.chip_save_refused')
-											: `${t('pos_checkout.awaiting_store')} / ${t('pos_checkout.waiting_for_terminal')}`
-									}
-								/>
-							))}
+						{exceptionTones.map((tone) => (
+							<View
+								key={tone}
+								testID={`open-orders-${tone}`}
+								className={`size-2 rounded-full ${tone === 'warning' ? 'bg-warning' : 'bg-destructive'}`}
+								aria-hidden
+							/>
+						))}
 						{/* The chevron points the way the list will travel. */}
 						<Icon
 							name={listOpen === (position === 'bottom') ? 'chevronDown' : 'chevronUp'}
@@ -350,6 +364,8 @@ export function OpenOrderTabs({
 				<ScrollView
 					ref={scrollRef}
 					horizontal
+					// A tab press must reach its handler while the product-search keyboard is open.
+					keyboardShouldPersistTaps="handled"
 					showsHorizontalScrollIndicator={false}
 					scrollEnabled={overflow}
 					role="tablist"
@@ -357,6 +373,16 @@ export function OpenOrderTabs({
 					className="min-w-0 flex-1"
 					onLayout={({ nativeEvent: { layout } }) => setRowWidth(layout.width)}
 					onContentSizeChange={(width) => setContentWidth(width)}
+					onScrollBeginDrag={() => {
+						dragged.current = true;
+					}}
+					onScroll={() => {
+						if (Platform.OS !== 'web') return;
+						if (programmatic.current !== undefined) trackProgrammatic();
+						else dragged.current = true;
+					}}
+					scrollEventThrottle={16}
+					onMomentumScrollEnd={endProgrammatic}
 					// Native swipes snap to tab centres; RN-web ignores snapping, intentionally.
 					snapToOffsets={snapOffsets({
 						rowWidth,
@@ -368,9 +394,7 @@ export function OpenOrderTabs({
 					})}
 					decelerationRate="fast"
 				>
-					<TabToneContext.Provider value={reportTone}>
-						{mounted.map(renderTab)}
-					</TabToneContext.Provider>
+					{mounted.map(renderTab)}
 				</ScrollView>
 				{/* The + cell is the blank cart's tab: folded it is the 48 pt + at the end of the
 				    row; while the cashier is on the blank cart it unfolds into the selected "+ New" tab, and folds back when they leave. Nothing

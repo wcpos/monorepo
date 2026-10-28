@@ -18,12 +18,6 @@ import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
 import { useAwaitsStore } from '../checkout/use-awaiting-store';
 import { useOrderSaveState } from '../checkout/use-order-save-state';
 
-export type TabTone = 'warning' | 'error' | null;
-// Only the strip provides this registry; list rows do not register duplicate chips.
-export const TabToneContext = React.createContext<((uuid: string, tone: TabTone) => void) | null>(
-	null
-);
-
 /** Inactive tabs show a dot and word; the open tab keeps only the muted word. */
 export function TabChip({
 	order,
@@ -101,13 +95,6 @@ export function TabChip({
 					: waiting
 						? 'warning'
 						: 'info';
-	const reportTone = React.useContext(TabToneContext);
-	const exceptionTone = label && (tone === 'warning' || tone === 'error') ? tone : null;
-	// The tray consumes state derived inside this chip; release it when the tab leaves reach.
-	React.useEffect(() => {
-		reportTone?.(order.uuid, exceptionTone);
-		return () => reportTone?.(order.uuid, null);
-	}, [reportTone, order.uuid, exceptionTone]);
 	if (!label) return fallback ?? null;
 	// A real status keeps its word on the active tab, but never repeats its coloured dot.
 	if (active || (label === fallbackLabel && !fallbackIsStatus)) {
