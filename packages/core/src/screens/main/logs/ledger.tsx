@@ -11,6 +11,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
@@ -20,7 +21,7 @@ import type { QueryHandle } from '@wcpos/query';
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot } from '../../../query';
-import { CodeChip, LevelIndicator, type LevelKind } from '../health/components';
+import { CodeChip } from '../health/components';
 import { useRecordLabel } from '../health/use-record-label';
 import { useEventTitle } from './event-title';
 import {
@@ -28,10 +29,21 @@ import {
 	displayCategory,
 	displayKind,
 	formatDurationMs,
+	type LevelKind,
 	type LogRow,
 	recordRefOf,
 } from './logs-logic';
 import { RowDetail } from './row-detail';
+
+// The level's dot from the tone map; an actor's row takes the accent.
+const LEVEL_TONE = {
+	info: 'muted',
+	warn: 'warning',
+	error: 'bad',
+	action: 'default',
+	sync: 'info',
+	debug: 'muted',
+} as const satisfies Record<LevelKind, string>;
 
 export function useLevelLabel(): (kind: LevelKind) => string {
 	const t = useT();
@@ -194,7 +206,7 @@ function LevelPill({
 				active && 'bg-muted'
 			)}
 		>
-			<LevelIndicator kind={kind} label={label} />
+			<StatusBadge size="caption" variant={LEVEL_TONE[kind]} label={label} />
 		</Pressable>
 	);
 }
@@ -289,8 +301,7 @@ function LedgerRow({
 				>
 					<HStack className="items-center gap-2 pr-32">
 						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
-						{/* Dot-only for space, but the kind still reads to assistive tech. */}
-						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
+						<StatusBadge size="caption" variant={LEVEL_TONE[kind]} label={levelLabel} />
 					</HStack>
 					<Text className="text-sm">{title}</Text>
 					<Subline

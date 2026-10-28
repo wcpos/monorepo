@@ -13,6 +13,8 @@ type Props = {
 	disabled?: boolean;
 	onPress?: () => void;
 };
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID, disabled, onPress }: Props) => (
 		<button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>

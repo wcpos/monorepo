@@ -26,6 +26,8 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
 import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Notice } from '@wcpos/components/notice';
+import { Progress } from '@wcpos/components/progress';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -51,7 +53,7 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import { CoverageBar, Stat, StatHeader } from './components';
+import { Stat, StatHeader } from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,
@@ -108,6 +110,9 @@ type RowCoverage =
 	  };
 
 type RowStory = { serverText: string; coverage: RowCoverage };
+
+/** Coverage is quiet: the accent while partial, green once everything is local. */
+const coverageTone = (percent: number) => (percent >= 100 ? 'ok' : undefined);
 
 /**
  * The "on server" + "coverage" story for one row, shared by the table (md+)
@@ -209,7 +214,11 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 				<Tooltip showOnNative>
 					<TooltipTrigger asChild>
 						<Pressable accessibilityLabel={coverage.tooltip} className="items-end py-1">
-							<CoverageBar percent={coverage.percent} />
+							<Progress
+								value={coverage.percent}
+								tone={coverageTone(coverage.percent)}
+								className="w-16"
+							/>
 						</Pressable>
 					</TooltipTrigger>
 					<TooltipContent>
@@ -462,7 +471,11 @@ function CollectionRowView({
 						{sizeText ? `≈ ${sizeText}` : '—'}
 					</Text>
 					{story.coverage.kind === 'partial' || story.coverage.kind === 'windowed' ? (
-						<CoverageBar percent={story.coverage.percent} className="mt-1 w-11" />
+						<Progress
+							value={story.coverage.percent}
+							tone={coverageTone(story.coverage.percent)}
+							className="mt-1 w-11"
+						/>
 					) : null}
 				</View>
 				{menu}
@@ -554,7 +567,7 @@ function HowSyncingWorksLink() {
 			testID="db-how-syncing-works"
 			href={HOW_SYNCING_WORKS_DOCS_URL}
 			// Indented to sit in the freshness station's text column, under the status lines.
-			className="mt-0.5 ml-3.5"
+			className="mt-0.5 ml-3"
 		>
 			{t('health.database.how_title')}
 		</DocsLink>
@@ -800,25 +813,20 @@ export function DatabaseScreen() {
 				{/* Freshness station */}
 				<HStack className="flex-wrap items-end justify-between gap-3 pt-1">
 					<VStack className="gap-0.5">
-						<HStack className="items-center gap-1.5">
-							<View
-								className={
-									lastCheck?.status === 'error'
-										? 'bg-warning h-2 w-2 rounded-full'
-										: 'bg-success h-2 w-2 rounded-full'
-								}
-							/>
-							<Text className="text-muted-foreground text-xs">
-								{lastCheck === null
+						<StatusBadge
+							size="caption"
+							variant={lastCheck?.status === 'error' ? 'warning' : 'ok'}
+							label={
+								lastCheck === null
 									? t('health.database.first_check_pending')
 									: lastCheck.status === 'error'
 										? t('health.database.last_check_error')
 										: t('health.database.watching', {
 												ago: relative(lastCheck.atMs, nowMs),
-											})}
-							</Text>
-						</HStack>
-						<Text className="text-muted-foreground pl-3.5 text-xs">
+											})
+							}
+						/>
+						<Text variant="help" className="pl-3">
 							{censusWindow.updatedAtMs === null
 								? t('health.database.totals_pending')
 								: backingOff
@@ -835,12 +843,11 @@ export function DatabaseScreen() {
 											})}
 						</Text>
 						{censusProgress !== null && !censusRefreshDue(censusWindow, nowMs) ? (
-							<View className="bg-muted mt-1 ml-3.5 h-0.5 w-40 overflow-hidden rounded-full">
-								<View
-									className="bg-border h-0.5 rounded-full"
-									style={{ width: `${Math.round(censusProgress * 100)}%` }}
-								/>
-							</View>
+							<Progress
+								value={Math.round(censusProgress * 100)}
+								tone="muted"
+								className="mt-1 ml-3 w-40"
+							/>
 						) : null}
 						<HowSyncingWorksLink />
 					</VStack>

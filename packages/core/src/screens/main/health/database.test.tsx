@@ -53,6 +53,8 @@ let mockCensusTotals: Record<
 	{ total: number; updatedAtMs: number; freshUntilMs: number; fresh: boolean }
 > = { ...defaultCensusTotals };
 
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -173,6 +175,7 @@ jest.mock('@wcpos/components/badge', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -304,7 +307,6 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	useMutationCounts: () => mockMutationCounts,
 }));
 jest.mock('./components', () => ({
-	CoverageBar: ({ percent }: { percent: number }) => <div>{percent}</div>,
 	Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 	Stat: () => null,
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
