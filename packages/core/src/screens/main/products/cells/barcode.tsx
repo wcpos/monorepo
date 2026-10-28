@@ -28,12 +28,7 @@ export function Barcode({
 	const { caps } = useUserCapabilities();
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 	const disabled = readOnly || !canEdit;
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'> | EngineRecord<'variations'>;
-			changes: Record<string, unknown>;
-		}) => void | Promise<boolean>;
-	};
+	const commit = table.options.meta?.commit;
 
 	// Update value if the underlying barcode changes. Implemented as the React
 	// "adjust state during render" pattern (tracking the previous barcode) rather
@@ -49,8 +44,8 @@ export function Barcode({
 	 */
 	const handleSubmit = React.useCallback(() => {
 		if (disabled) return;
-		void meta.onChange({ document: product, changes: { barcode: value } });
-	}, [product, meta, value, disabled]);
+		void commit?.({ document: product, changes: { barcode: value } });
+	}, [product, commit, value, disabled]);
 
 	/**
 	 *

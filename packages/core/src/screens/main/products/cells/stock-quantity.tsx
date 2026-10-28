@@ -32,12 +32,7 @@ export function StockQuantity({
 	const manageStock = useRecordField(row.original.record, (record) => record.payload.manage_stock);
 	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const t = useT();
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'> | EngineRecord<'variations'>;
-			changes: Record<string, unknown>;
-		}) => void | Promise<boolean>;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
@@ -57,7 +52,7 @@ export function StockQuantity({
 						className="web:px-3 w-full"
 						// Whether it was saved: the keypad takes a refused − or + back.
 						onChangeText={(stock_quantity) =>
-							meta.onChange({ document: product, changes: { stock_quantity } })
+							commit?.({ document: product, changes: { stock_quantity } })
 						}
 						disabled={disabled || !manageStock}
 					/>
@@ -68,7 +63,7 @@ export function StockQuantity({
 					checked={manageStock ?? false}
 					onCheckedChange={(manage_stock) => {
 						if (!disabled) {
-							void meta.onChange({ document: product, changes: { manage_stock } });
+							void commit?.({ document: product, changes: { manage_stock } });
 						}
 					}}
 					size="sm"

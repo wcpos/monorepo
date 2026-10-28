@@ -8,7 +8,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
-import type { QueryStateActions } from '../../../../query';
 import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
 
 /**
@@ -19,18 +18,14 @@ export function Customer({
 	row,
 	column,
 }: CellContext<{ record: EngineRecord<'orders'> }, 'customer_id'>) {
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 	const { format } = useCustomerNameFormat();
 	const { customerID, billing, shipping } = useRecordField(row.original.record, ({ payload }) => ({
 		customerID: payload.customer_id,
 		billing: payload.billing,
 		shipping: payload.shipping,
 	}));
-	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
+	const show = column.columnDef.meta?.show;
 
 	return (
 		<VStack className="max-w-full">

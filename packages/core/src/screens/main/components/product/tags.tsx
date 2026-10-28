@@ -6,8 +6,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
-import type { QueryStateActions } from '../../../../query';
-
 /**
  *
  */
@@ -18,9 +16,7 @@ export function ProductTags({
 	const tags = useRecordField(row.original.record, (product) => product.payload.tags) || [];
 
 	const t = useT();
-	const meta = table.options.meta as unknown as {
-		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
-	};
+	const actions = table.options.meta?.actions;
 
 	if (tags.length === 0) {
 		return null;
@@ -41,7 +37,7 @@ export function ProductTags({
 						accessibilityRole="button"
 						decodeHtml
 						onPress={() =>
-							tag.id === undefined ? undefined : meta.actions.setFilter('tags', [tag.id])
+							tag.id === undefined ? undefined : actions?.setFilter('tags', [tag.id])
 						}
 					>
 						{tag.name}

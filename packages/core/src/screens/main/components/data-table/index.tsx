@@ -56,11 +56,7 @@ type DataTableFeatures = typeof dataTableFeatures;
 type DataTableRow = QueryResult['hits'][number];
 type CellComponent = React.ElementType;
 type CellMap = Record<string, CellComponent>;
-type DataTableConfig<TData extends RowData> = Omit<
-	Partial<TableOptions<DataTableFeatures, TData>>,
-	'meta'
-> & {
-	meta?: Record<string, unknown>;
+type DataTableConfig<TData extends RowData> = Partial<TableOptions<DataTableFeatures, TData>> & {
 	extraData?: unknown;
 };
 
@@ -294,17 +290,16 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 		paging
 	);
 
+	// The caller's TData names what its cells read off the drawn hits (the table's rows).
+	const config = tableConfig as Partial<TableOptions<DataTableFeatures, DataTableRow>> | undefined;
 	const table = useTable<DataTableFeatures, DataTableRow>({
 		features: dataTableFeatures,
 		columns,
 		data: deferredResult.hits,
 		getRowId: (row) => row.id,
-		...(tableConfig as unknown as Partial<TableOptions<DataTableFeatures, DataTableRow>>),
-		state: { columnVisibility, ...tableConfig?.state },
-		meta: {
-			...tableConfig?.meta,
-			actions: { setFilter: props.actions.setFilter },
-		} as unknown as TableOptions<DataTableFeatures, DataTableRow>['meta'],
+		...config,
+		state: { columnVisibility, ...config?.state },
+		meta: { ...config?.meta, actions: { setFilter: props.actions.setFilter } },
 	});
 
 	/**

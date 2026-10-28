@@ -486,7 +486,6 @@ function POSProductsContent({
 			getRowCanExpand: (row: Row<ProductRow, DataTableFeatures>) =>
 				row.original.record.payload.type === 'variable',
 			meta: {
-				expandedRef,
 				expanded$,
 				setRowExpanded,
 				variationRenderCell: ({ column }: { column: { id: string } }) =>

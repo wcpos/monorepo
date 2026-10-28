@@ -7,8 +7,6 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 
-import type { QueryStateActions } from '../../../../query';
-
 export function Register({
 	table,
 	row,
@@ -18,9 +16,7 @@ export function Register({
 		({ payload }) => wooMetaCarrier.readIdentity(payload.meta_data).registerId
 	);
 	const names = useRegisterNames();
-	const actions = (
-		table.options.meta as { actions?: Pick<QueryStateActions<'orders'>, 'setFilter'> }
-	)?.actions;
+	const actions = table.options.meta?.actions;
 	if (!id) return null;
 	return (
 		<Chip

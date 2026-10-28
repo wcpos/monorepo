@@ -14,12 +14,7 @@ export function EditableDescription({
 }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
 	const item = row.original.record;
 	const description = useRecordField(row.original.record, ({ payload }) => payload.description);
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'coupons'>;
-			changes: Record<string, unknown>;
-		}) => void;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 
@@ -27,7 +22,7 @@ export function EditableDescription({
 		<CapabilityTooltip show={!readOnly && !caps.canEditCoupons} hint="editCoupons">
 			<EditableField
 				value={description}
-				onChangeText={(val) => meta.onChange({ document: item, changes: { description: val } })}
+				onChangeText={(val) => commit?.({ document: item, changes: { description: val } })}
 				editable={!readOnly && caps.canEditCoupons}
 				bold={false}
 			/>

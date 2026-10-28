@@ -47,7 +47,7 @@ const renderCell = (product: Record<string, unknown>, onChange = jest.fn()) =>
 	render(
 		<StockQuantity
 			row={{ original: { document: product, record: { payload: product } } } as never}
-			table={{ options: { meta: { onChange } } } as never}
+			table={{ options: { meta: { commit: onChange } } } as never}
 			column={{} as never}
 			cell={{} as never}
 			getValue={jest.fn()}

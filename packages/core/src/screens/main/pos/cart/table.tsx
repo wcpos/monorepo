@@ -293,11 +293,6 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 		getRowId: (line) => line.uuid || `${line.type}-${line.item.id ?? line.position}`,
 		// debugTable: true,
 		meta: {
-			onChange: (_data: unknown) => {
-				// fallback handler — should be overridden by the parent
-			},
-			rowRefs,
-			rowLayouts,
 			scrollToRow: (uuid: string) => {
 				const layout = rowLayouts.current.get(uuid);
 				const scrollView = scrollViewRef.current;

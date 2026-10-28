@@ -19,12 +19,7 @@ export function EditableAmount({
 	const amount = useRecordField(row.original.record, ({ payload }) => payload.amount);
 	const percent =
 		useRecordField(row.original.record, ({ payload }) => payload.discount_type) === 'percent';
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'coupons'>;
-			changes: Record<string, unknown>;
-		}) => void;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const { format } = useCurrencyFormat();
@@ -42,7 +37,7 @@ export function EditableAmount({
 				formatOptions={percent ? undefined : { fixedDecimalScale: true }}
 				decimals={percent ? PERCENT_PLACES : undefined}
 				onChangeText={(val) =>
-					meta.onChange({
+					commit?.({
 						document: item,
 						changes: { [column.id]: String(val) },
 					})

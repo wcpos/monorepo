@@ -266,10 +266,10 @@ describe('CouponsScreen query-state wiring', () => {
 	it('patches an inline edit through the coupons mutation', () => {
 		render(<CouponsScreen />);
 		const { meta } = mockDataTableProps.tableConfig as {
-			meta: { onChange: (args: { document: unknown; changes: unknown }) => void };
+			meta: { commit: (args: { document: unknown; changes: unknown }) => void };
 		};
 		const document = { uuid: 'one' };
-		meta.onChange({ document, changes: { code: 'SAVE10' } });
+		meta.commit({ document, changes: { code: 'SAVE10' } });
 		expect(mockPatch).toHaveBeenCalledWith({ document, data: { code: 'SAVE10' } });
 	});
 

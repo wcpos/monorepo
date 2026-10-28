@@ -27,12 +27,7 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = caps.canEditProducts;
-	const meta = props.table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'>;
-			changes: Record<string, unknown>;
-		}) => void | Promise<boolean>;
-	};
+	const commit = props.table.options.meta?.commit;
 
 	/**
 	 *
@@ -45,7 +40,7 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 					onChangeText={
 						readOnly || !canEdit
 							? undefined
-							: (name) => meta.onChange({ document: record, changes: { name } })
+							: (name) => commit?.({ document: record, changes: { name } })
 					}
 					editable={!readOnly && canEdit}
 				/>

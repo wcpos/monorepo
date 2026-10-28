@@ -149,20 +149,18 @@ type VariableRowProps = {
 	table: Table<Product, DataTableFeatures>;
 };
 export function VariableRow(props: VariableRowProps) {
-	const meta = props.table.options.meta as unknown as {
-		setRowExpanded: (id: string, expanded: boolean) => void;
-	};
+	const meta = props.table.options.meta;
 	return (
-		<VariationRowProvider row={props.item} setRowExpanded={meta.setRowExpanded}>
+		<VariationRowProvider row={props.item} setRowExpanded={meta?.setRowExpanded}>
 			<VariableRowContent {...props} />
 		</VariationRowProvider>
 	);
 }
 function VariableRowContent({ item, table }: VariableRowProps) {
-	const meta = table.options.meta as unknown as { variationStockStatus?: string; drill?: unknown };
+	const meta = table.options.meta;
 	const { expanded } = useRowExpansion(item, table);
 	// The drill style slides the variations in from the button; nothing renders under the row.
-	const inline = !meta.drill;
+	const inline = !meta?.drill;
 	return (
 		<>
 			<ProductRow
@@ -176,7 +174,7 @@ function VariableRowContent({ item, table }: VariableRowProps) {
 				<VariationsButton row={item} table={table} />
 			</View>
 			{inline && expanded && (
-				<InlineVariations row={item} stockStatus={meta.variationStockStatus} />
+				<InlineVariations row={item} stockStatus={meta?.variationStockStatus} />
 			)}
 		</>
 	);
