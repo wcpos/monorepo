@@ -88,7 +88,7 @@ it('renders open, counting and last-closure labels with their params and tones',
 		within(open)
 			.getByText('register.open_since_by {"time":"10:15","name":"Pat"}')
 			.getAttribute('data-variant')
-	).toBe('success');
+	).toBe('ok');
 	expect(
 		within(screen.getByTestId('register-picker-row-counting'))
 			.getByText('register.counting_by {"name":"Sam"}')

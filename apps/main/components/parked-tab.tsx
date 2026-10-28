@@ -29,7 +29,7 @@ export function ParkedTab({
 	const copy = lost ? 'lost' : waiting ? (state.deferral ?? 'waiting') : 'parked';
 	const [title, description] = PARKED_TAB_COPY[copy];
 	// Waiting is quiet, an unanswered handover is a warning, a lost database is the one red state.
-	const tone = lost ? 'bad' : copy === 'no-answer' ? 'warn' : 'muted';
+	const tone = lost ? 'bad' : copy === 'no-answer' ? 'warning' : 'muted';
 	return (
 		<View
 			testID="parked-tab"

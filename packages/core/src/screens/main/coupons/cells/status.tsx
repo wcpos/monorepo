@@ -11,7 +11,7 @@ const labelMap: Record<string, string> = {
 	draft: 'coupons.draft',
 	pending: 'coupons.pending',
 };
-const tones = { publish: 'success', draft: 'muted', pending: 'warning' } as const;
+const tones = { publish: 'ok', draft: 'muted', pending: 'warning' } as const;
 
 export function Status({ row, table }: CellContext<{ record: EngineRecord<'coupons'> }, 'status'>) {
 	const status = useRecordField(row.original.record, ({ payload }) => payload.status) ?? '';

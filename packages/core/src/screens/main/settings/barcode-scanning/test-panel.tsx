@@ -235,7 +235,7 @@ function Verdict({
 					</Text>
 				</>
 			) : analysis.nearMiss ? (
-				<Notice tone="warn" title={headline} />
+				<Notice tone="warning" title={headline} />
 			) : (
 				<Text className="text-muted-foreground text-sm">{headline}</Text>
 			)}
@@ -253,7 +253,7 @@ function Verdict({
 
 			{analysis.shiftMangled ? (
 				<Notice
-					tone="warn"
+					tone="warning"
 					title={t('settings.barcode_test_shift_mangled_title')}
 					description={t('settings.barcode_test_shift_mangled_description')}
 				/>
@@ -301,7 +301,7 @@ function History({ history }: { history: TraceAnalysis[] }) {
 						? t('settings.barcode_test_result_too_short')
 						: t('settings.barcode_test_result_scan')
 					: t('settings.barcode_test_result_typing');
-				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'success') : 'muted';
+				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'ok') : 'muted';
 				return (
 					<HStack key={index} className="border-border rounded-md border p-2">
 						<Text className="flex-1 font-mono text-sm" numberOfLines={1}>

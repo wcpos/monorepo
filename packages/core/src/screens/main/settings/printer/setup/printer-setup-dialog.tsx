@@ -286,9 +286,9 @@ export function PrinterSetupDialog({
 	const scanScreen = phase === 'scanning' || phase === 'checking' || phase === 'results';
 	const vendorLabel = (vendor?: string) => vendors.find((v) => v.value === vendor)?.label ?? '';
 	const tone: Record<string, BadgeProps['variant']> = {
-		ready: 'success',
+		ready: 'ok',
 		unsure: 'warning',
-		notprinter: 'destructive',
+		notprinter: 'bad',
 		unknown: 'muted',
 	};
 	const cards = found.map((p) => {

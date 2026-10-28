@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text, type TextProps } from '../text';
 
@@ -15,7 +16,7 @@ import { Text, type TextProps } from '../text';
 const amountFigure = cva('font-bold tabular-nums', {
 	variants: {
 		size: { hero: 'text-amt', headline: 'text-2xl', tile: 'text-xl' },
-		tone: { default: 'text-foreground', destructive: 'text-destructive', success: 'text-success' },
+		tone: { default: 'text-foreground', bad: TONE.bad.text, ok: TONE.ok.text },
 	},
 	defaultVariants: { size: 'hero', tone: 'default' },
 });

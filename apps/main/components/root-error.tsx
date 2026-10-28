@@ -120,7 +120,7 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 		return (
 			<PreThemeGate
 				testID="root-error-restart-required"
-				tone="warn"
+				tone="warning"
 				title={COPY.restartTitle}
 				description={COPY.restartLine}
 			/>

@@ -2,13 +2,15 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
+import { TONE } from '../lib/tone';
 import { Icon, type IconName, IconSetProvider } from './index';
 import { ICON_NAMES } from './names';
 import { ICON_SET_IDS, ICON_SETS } from './sets';
 
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false, isElectron: false } }));
 const { Platform: mockPlatform } = jest.requireMock('@wcpos/utils/platform');
-jest.mock('uniwind', () => ({ useCSSVariable: () => '#123456' }));
+const mockUseCSSVariable = jest.fn((_name: string) => '#123456');
+jest.mock('uniwind', () => ({ useCSSVariable: (name: string) => mockUseCSSVariable(name) }));
 jest.mock('../text', () => ({ TextClassContext: React.createContext('') }));
 jest.mock('../loader', () => ({
 	Loader: () => null,
@@ -100,3 +102,13 @@ it('spin keeps the glyph mounted and turning', () => {
 	rerender(<Icon name="refresh" />);
 	expect(queryByTestId('spin')).toBeNull();
 });
+
+it.each(Object.keys(TONE) as (keyof typeof TONE)[])(
+	'paints the %s state in the tone map ink on native',
+	(tone) => {
+		render(<Icon name="check" variant={tone} />);
+		expect(mockUseCSSVariable).toHaveBeenLastCalledWith(
+			TONE[tone].text.replace('text-', '--color-')
+		);
+	}
+);

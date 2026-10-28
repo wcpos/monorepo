@@ -91,7 +91,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			</View>
 			{paidBy ? (
 				<StatusBadge
-					variant="success"
+					variant="ok"
 					label={t('pos_checkout.line_paid_by', { methods: paidBy.join(' + ') })}
 				/>
 			) : null}

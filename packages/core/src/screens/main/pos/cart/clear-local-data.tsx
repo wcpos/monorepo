@@ -144,7 +144,7 @@ export function RestartLockOverlay() {
 			<View testID="clear-local-data-restart-overlay" className="absolute inset-0 z-50">
 				<GateScreen
 					testID="clear-local-data-restart-gate"
-					tone="warn"
+					tone="warning"
 					title={t('common.clear_all_local_data_restart_required')}
 					description={t('common.clear_all_local_data_restart_required_body')}
 				/>

@@ -52,7 +52,7 @@ describe('StockStatus cell', () => {
 			stock_status: 'instock',
 			backorders: 'no',
 		});
-		expect(props.variant).toBe('error');
+		expect(props.variant).toBe('bad');
 		expect(props.label).toBe('outofstock');
 	});
 
@@ -78,10 +78,10 @@ describe('StockStatus cell', () => {
 });
 
 it.each([
-	['instock', 'success'],
+	['instock', 'ok'],
 	['lowstock', 'warning'],
 	['onbackorder', 'warning'],
-	['outofstock', 'error'],
+	['outofstock', 'bad'],
 	['unknown', 'default'],
 ])('maps %s to %s', (stock_status, variant) => {
 	const { props } = renderCell({ manage_stock: false, stock_status });

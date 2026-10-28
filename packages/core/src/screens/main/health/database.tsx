@@ -382,7 +382,7 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Badge variant="destructive" testID={`db-stuck-${row.key}`}>
+							<Badge variant="bad" testID={`db-stuck-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
 							</Badge>
 						) : null}
@@ -431,7 +431,7 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Badge variant="destructive" testID={`db-stuck-sm-${row.key}`}>
+							<Badge variant="bad" testID={`db-stuck-sm-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
 							</Badge>
 						) : null}
@@ -681,7 +681,7 @@ export function DatabaseScreen() {
 
 				{stats.clockSkew ? (
 					<Notice
-						tone="warn"
+						tone="warning"
 						testID="db-clock-skew"
 						title={`${t(
 							stats.clockSkew.skewSeconds > 0
@@ -694,7 +694,7 @@ export function DatabaseScreen() {
 
 				{status.connectivity === 'offline' ? (
 					<Notice
-						tone="warn"
+						tone="warning"
 						title={
 							readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')
 						}

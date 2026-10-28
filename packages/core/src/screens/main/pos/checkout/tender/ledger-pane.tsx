@@ -71,7 +71,7 @@ export function LedgerLines({
 					beside={
 						line.id !== undefined && paidBy?.[line.id] ? (
 							<StatusBadge
-								variant="success"
+								variant="ok"
 								label={t('pos_checkout.line_paid_by', { methods: paidBy[line.id].join(' + ') })}
 							/>
 						) : null
@@ -190,7 +190,7 @@ export function LedgerLegs({
 				<MoneyList.Row label={t('pos_checkout.paid')} amount={format(view.paidMinor)} />
 				<MoneyList.Total
 					label={paidInFull ? paidInFullText : t('pos_checkout.remaining')}
-					tone={paidInFull ? 'success' : 'default'}
+					tone={paidInFull ? 'ok' : 'default'}
 					amount={paidInFull ? undefined : format(view.balanceMinor)}
 					amountTestID="checkout-ledger-remaining"
 				/>

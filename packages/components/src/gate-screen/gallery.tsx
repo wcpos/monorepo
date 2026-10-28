@@ -9,7 +9,7 @@ const noop = () => {};
 const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 	{
 		id: 'update',
-		tone: 'warn',
+		tone: 'warning',
 		title: 'Update the POS app on this device.',
 		description:
 			'The WCPOS plugin on your WordPress site is newer than the app in this tab. Reload the page to load the latest version.',
@@ -19,7 +19,7 @@ const examples: ({ id: string } & React.ComponentProps<typeof GateScreen>)[] = [
 	},
 	{
 		id: 'plugin',
-		tone: 'warn',
+		tone: 'warning',
 		title: 'Update the WCPOS plugin on your WordPress site.',
 		description:
 			'The POS app on this device is newer than the plugin the store is running. In WordPress open Plugins, update WCPOS, then log in again.',
@@ -110,7 +110,7 @@ export const stories = [
 			<View className="h-160 w-full">
 				<PreThemeGate
 					testID="gallery-gate-screen-pre-theme-reset-blocked"
-					tone="warn"
+					tone="warning"
 					title="Reset didn’t finish"
 					description="The local data reset did not complete. Reload the page to retry — nothing new can be saved until it finishes."
 					primary={{ label: 'Reload and retry', onPress: noop }}

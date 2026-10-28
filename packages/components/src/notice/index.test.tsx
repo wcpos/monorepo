@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
+import { TONE } from '../lib/tone';
 import { Notice } from './index';
 
 // Uniwind is not compiled in Jest; expose root classes, retaining real web pressables.
@@ -29,15 +30,15 @@ jest.mock('../loader', () => ({
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it.each([
-	['warn', 'border-warn/45 bg-warn-bg', 'warning', 'status', 'polite'],
-	['info', 'border-border bg-card', 'info', 'status', 'polite'],
-	['bad', 'border-bad/45 bg-bad-bg', 'alert', 'alert', 'assertive'],
-] as const)('renders the %s tone and live region', (tone, classes, icon, role, live) => {
+	['warning', 'status', 'polite'],
+	['info', 'status', 'polite'],
+	['bad', 'alert', 'assertive'],
+] as const)('renders the %s band from the tone map and its live region', (tone, role, live) => {
 	const { container } = render(<Notice tone={tone} title="Title" testID="notice" />);
-	expect(screen.getByTestId('notice')).toHaveClass(...classes.split(' '));
+	expect(screen.getByTestId('notice')).toHaveClass(...TONE[tone].band.split(' '));
 	expect(screen.getByTestId('notice')).toHaveAttribute('role', role);
 	expect(screen.getByTestId('notice')).toHaveAttribute('aria-live', live);
-	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', icon);
+	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', TONE[tone].glyph);
 });
 it('renders two ordered actions and fires their own callbacks', () => {
 	const first = jest.fn();
@@ -71,7 +72,7 @@ it('an action with `loading` shows the Loader and is inert; one without is uncha
 	const idle = jest.fn();
 	render(
 		<Notice
-			tone="warn"
+			tone="warning"
 			title="Title"
 			testID="notice"
 			actions={[
@@ -96,7 +97,7 @@ it('an action with `loading` shows the Loader and is inert; one without is uncha
 it('composes a real DocsLink', () => {
 	render(
 		<Notice
-			tone="warn"
+			tone="warning"
 			title="Title"
 			testID="notice"
 			docs={{ label: 'Learn more', href: 'https://docs.wcpos.com' }}
@@ -107,7 +108,7 @@ it('composes a real DocsLink', () => {
 });
 it('renders children inside the text column under the description', () => {
 	render(
-		<Notice tone="warn" title="Title" description="Description" testID="notice">
+		<Notice tone="warning" title="Title" description="Description" testID="notice">
 			<span data-testid="body">Engine warning</span>
 		</Notice>
 	);
@@ -129,7 +130,7 @@ it('announces a bad notice on iOS, where aria-live has no native live region', (
 	render(<Notice tone="bad" title="Local database unavailable" />);
 	expect(announce).toHaveBeenCalledWith('Local database unavailable');
 	announce.mockClear();
-	render(<Notice tone="warn" title="Offline" />);
+	render(<Notice tone="warning" title="Offline" />);
 	expect(announce).not.toHaveBeenCalled();
 	os.restore();
 	announce.mockRestore();

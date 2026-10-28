@@ -114,9 +114,7 @@ export function ClosureSheet({
 								testID={`closure-${key}`}
 								size="tile"
 								tone={
-									key === 'variance' && countVariance(counted, expected) < 0
-										? 'destructive'
-										: 'default'
+									key === 'variance' && countVariance(counted, expected) < 0 ? 'bad' : 'default'
 								}
 							>
 								{value}

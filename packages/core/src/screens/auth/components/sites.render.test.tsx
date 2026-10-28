@@ -140,7 +140,7 @@ it.each([[a], [a, b]])(
 		expect(
 			screen.getAllByText('Update the WooCommerce POS plugin on this site to continue')
 		).toHaveLength(sites.length);
-		expect(container.querySelector('aside')?.getAttribute('data-tone')).toBe('warn');
+		expect(container.querySelector('aside')?.getAttribute('data-tone')).toBe('warning');
 		expect(screen.getAllByRole('link')[0].getAttribute('href')).toBe(
 			'https://docs.wcpos.com/error-codes/AUTH331'
 		);

@@ -84,7 +84,7 @@ export function TotalsSection({ order }: { order: OrderPayload }) {
 					/>
 				))}
 				{refunded > 0 ? (
-					<MoneyList.Row tone="destructive" label={t('orders.refund')} amount={format(-refunded)} />
+					<MoneyList.Row tone="bad" label={t('orders.refund')} amount={format(-refunded)} />
 				) : null}
 				<MoneyList.Total
 					label={refunded > 0 ? t('orders.net_payment') : t('common.total')}

@@ -8,13 +8,13 @@ import { StatusFilterCell } from '../../components/status-filter-cell';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 const variants: Record<string, StatusBadgeProps['variant']> = {
-	completed: 'success',
+	completed: 'ok',
 	processing: 'info',
 	'pos-open': 'info',
 	'on-hold': 'warning',
 	pending: 'warning',
 	'pos-partial': 'warning',
-	failed: 'error',
+	failed: 'bad',
 	cancelled: 'muted',
 	refunded: 'muted',
 	trash: 'muted',

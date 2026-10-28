@@ -17,11 +17,9 @@ export const stories = [
 		id: 'variants',
 		render: () => (
 			<HStack>
-				{(['default', 'primary', 'destructive', 'muted', 'success', 'warning'] as const).map(
-					(variant) => (
-						<Icon key={variant} name="cart" variant={variant} />
-					)
-				)}
+				{(['default', 'primary', 'bad', 'muted', 'ok', 'warning'] as const).map((variant) => (
+					<Icon key={variant} name="cart" variant={variant} />
+				))}
 			</HStack>
 		),
 	},

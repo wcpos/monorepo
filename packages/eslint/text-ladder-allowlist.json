@@ -3,7 +3,6 @@
 	"apps/main/components/health/trend-frame.tsx": 3,
 	"apps/main/components/health/uptime-strip.tsx": 3,
 	"packages/components/src/avatar/index.tsx": 1,
-	"packages/components/src/badge/index.tsx": 1,
 	"packages/components/src/chip/index.tsx": 1,
 	"packages/components/src/derivation/index.tsx": 1,
 	"packages/components/src/dropdown-menu/index.tsx": 1,

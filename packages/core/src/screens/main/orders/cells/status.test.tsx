@@ -27,13 +27,13 @@ jest.mock('@wcpos/components/status-badge', () => ({
 	),
 }));
 it.each([
-	['completed', 'success'],
+	['completed', 'ok'],
 	['processing', 'info'],
 	['pos-open', 'info'],
 	['on-hold', 'warning'],
 	['pending', 'warning'],
 	['pos-partial', 'warning'],
-	['failed', 'error'],
+	['failed', 'bad'],
 	['cancelled', 'muted'],
 	['refunded', 'muted'],
 	['trash', 'muted'],

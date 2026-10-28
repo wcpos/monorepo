@@ -97,7 +97,7 @@ function CheckRow({
 	) : neutral ? (
 		<Icon name="info" variant="muted" />
 	) : (
-		<Icon name="confirmed" variant="success" />
+		<Icon name="confirmed" variant="ok" />
 	);
 	const lines = (
 		<VStack className="flex-1 gap-0.5">

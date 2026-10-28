@@ -13,7 +13,7 @@ const VARIANTS = [
 	'muted',
 	'destructive',
 	'secondary',
-	'success',
+	'ok',
 ] as const satisfies readonly NonNullable<Props['variant']>[];
 const SIZES = ['xs', 'sm'] as const satisfies readonly NonNullable<Props['size']>[];
 

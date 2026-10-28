@@ -46,7 +46,7 @@ export function ProductVariationActions({
 			name="plus"
 			accessibilityLabel={t('common.add_to_cart')}
 			onPress={() => parent && addVariation(variation, parent, metaData)}
-			variant="success"
+			variant="ok"
 		/>
 	);
 }

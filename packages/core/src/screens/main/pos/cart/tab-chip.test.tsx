@@ -71,7 +71,7 @@ it.each([
 		'receipt',
 		[{ id: 'leg', status: 'captured', amount: '10.00', tendered: null }],
 		'Paid · receipt',
-		'success',
+		'ok',
 	],
 ] as const)('renders %s from the order payload', (stage, rows, label, variant) => {
 	if (stage === 'checkout') enterCheckout('a');
@@ -96,7 +96,7 @@ it.each([
 it.each([
 	['saving', 'Saving order…', 'info'],
 	['queued-offline', 'In checkout · offline', 'info'],
-	['rejected', 'Save refused', 'error'],
+	['rejected', 'Save refused', 'bad'],
 ])('labels a %s order', (kind, label, variant) => {
 	enterCheckout('a');
 	markOrderSaving('a');
@@ -246,7 +246,7 @@ it('a journal not read yet is not awaiting: no tab flashes amber as it mounts', 
 	} as unknown as EngineRecord<'orders'>;
 	render(<TabChip order={order} />);
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
-	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('success');
+	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('ok');
 });
 
 it('an awaiting sale with nothing due reads Paid · awaiting store whatever its stage', () => {

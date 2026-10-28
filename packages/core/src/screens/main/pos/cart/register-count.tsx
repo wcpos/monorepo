@@ -180,7 +180,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			)}
 			{needsManager && (
 				<Notice
-					tone="warn"
+					tone="warning"
 					icon="lock"
 					title={
 						session?.approval_required

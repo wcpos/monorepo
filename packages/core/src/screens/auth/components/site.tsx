@@ -90,7 +90,7 @@ export function SiteContent({ site }: { site: ReadonlySiteRecord }) {
 	if (!wcposVersionPass) {
 		return (
 			<Notice
-				tone="warn"
+				tone="warning"
 				title={t('auth.update_plugin_to_continue')}
 				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
 			/>

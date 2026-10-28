@@ -5,6 +5,7 @@ import { Button, ButtonText } from '../button';
 import { DocsLink } from '../docs-link';
 import { HStack } from '../hstack';
 import { Icon, type IconName } from '../icon';
+import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { VStack } from '../vstack';
@@ -14,7 +15,7 @@ type NoticeActions = readonly [NoticeAction] | readonly [NoticeAction, NoticeAct
 /** One line of a list the band carries (one refused sale, say), with its own actions. */
 type NoticeItem = { id: string; text: string; actions: NoticeActions };
 type NoticeProps = ViewProps & {
-	tone: 'warn' | 'info' | 'bad';
+	tone: Extract<Tone, 'warning' | 'info' | 'bad'>;
 	icon?: IconName;
 	title: string;
 	description?: string;
@@ -24,11 +25,6 @@ type NoticeProps = ViewProps & {
 	items?: readonly NoticeItem[];
 	docs?: { label: string; href: string; testID?: string };
 };
-const tones = {
-	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'warning' },
-	info: { surface: 'border-border bg-card', icon: 'info' },
-	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'alert' },
-} as const;
 
 export function Notice({
 	tone,
@@ -43,7 +39,6 @@ export function Notice({
 	className,
 	...props
 }: NoticeProps) {
-	const style = tones[tone];
 	// iOS has no live region (`aria-live` maps to Android's accessibilityLiveRegion), so a
 	// mounted outage is spoken explicitly there; the live region covers Android and web.
 	const spoken = React.useRef(tone === 'bad' ? title : undefined);
@@ -60,11 +55,11 @@ export function Notice({
 			aria-live={tone === 'bad' ? 'assertive' : 'polite'}
 			className={cn(
 				'flex-row flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5',
-				style.surface,
+				TONE[tone].band,
 				className
 			)}
 		>
-			<Icon name={icon ?? style.icon} className="text-foreground" />
+			<Icon name={icon ?? TONE[tone].glyph} className="text-foreground" />
 			<VStack className="min-w-0 flex-1 basis-48">
 				<Text testID={id('title')} className="text-foreground font-medium">
 					{title}
