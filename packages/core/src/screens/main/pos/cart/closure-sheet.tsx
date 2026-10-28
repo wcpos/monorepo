@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useDocField } from '@wcpos/query';
+import { Card } from '@wcpos/components/card';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
@@ -108,7 +109,7 @@ export function ClosureSheet({
 				{/* Tiles wrap on a narrow page (the phone's full-width sheet, long amounts). */}
 				<View className="flex-row flex-wrap gap-2">
 					{figures.map(([key, label, value]) => (
-						<View key={key} className="border-border min-w-28 flex-1 rounded-lg border px-3 py-2.5">
+						<Card key={key} padding="row" className="min-w-28 flex-1">
 							<Text className="text-muted-foreground text-sm">{label}</Text>
 							<AmountFigure
 								testID={`closure-${key}`}
@@ -119,7 +120,7 @@ export function ClosureSheet({
 							>
 								{value}
 							</AmountFigure>
-						</View>
+						</Card>
 					))}
 				</View>
 				{!blind && closure.unsynced_count > 0 && (

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { ListRow } from '@wcpos/components/list-row';
 import {
@@ -60,9 +61,12 @@ export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 
 	if (rates.length === 0) {
 		return (
-			<View className="items-center p-8">
-				<Text className="text-muted-foreground text-center">{t('tax_rates.none_in_class')}</Text>
-			</View>
+			<EmptyState
+				kind="empty"
+				size="inline"
+				title={t('tax_rates.none_in_class')}
+				className="justify-center p-8"
+			/>
 		);
 	}
 

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Image } from '@wcpos/components/image';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
@@ -187,7 +188,7 @@ export function LineItemsSection({ order }: { order: OrderPayload }) {
 	if (!lineItems.length && !fees.length) {
 		return (
 			<Section title={t('orders.items')}>
-				<Text className="text-muted-foreground">{t('orders.no_line_items')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('orders.no_line_items')} />
 			</Section>
 		);
 	}

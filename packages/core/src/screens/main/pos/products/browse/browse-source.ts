@@ -2,12 +2,16 @@ export const BROWSE_BY = ['all', 'categories', 'tags', 'brands', 'shortcuts'] as
 export type BrowseBy = (typeof BROWSE_BY)[number];
 export type TaxonomySource = 'categories' | 'tags' | 'brands';
 
-// Literal keys: the extractor skips a template key (scripts/extract-js-strings.js).
-export const TERMS_KEY = {
-	categories: 'pos_products.n_categories',
-	tags: 'pos_products.n_tags',
-	brands: 'pos_products.n_brands',
-} as const;
+/** "N categories" for a source's terms, as literal calls: the extractor skips a computed key. */
+export function termsTally(
+	source: TaxonomySource,
+	count: number,
+	t: (key: string, values: { count: number }) => string
+) {
+	if (source === 'tags') return t('pos_products.n_tags', { count });
+	if (source === 'brands') return t('pos_products.n_brands', { count });
+	return t('pos_products.n_categories', { count });
+}
 
 /**
  * What a till browses by until the cashier chooses: categories (owner, 2026-10-07). The seed in

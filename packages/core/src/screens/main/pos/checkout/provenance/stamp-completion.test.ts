@@ -8,6 +8,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
 }));
 jest.mock('@wcpos/query/register-session', () => ({
+	boundRegisterIdOf: jest.requireActual('@wcpos/query/register-session').boundRegisterIdOf,
 	readRegister: jest.fn(async () => ({
 		sites: { site: { register_id: 'register', register_store_id: 1 } },
 	})),
@@ -28,6 +29,23 @@ it('does not stamp a register bound in another store of the site', async () => {
 	const meta = await completionMeta({}, { ...deps, storeId: 2, sessionId: 'session' });
 	expect(meta.some(({ key }) => key === '_wcpos_register')).toBe(false);
 	expect(meta.some(({ key }) => key === '_wcpos_sale_counter')).toBe(true);
+});
+it("stamps the current store's register when another store of the site was bound later", async () => {
+	// Store 1 bound A, then store 2 bound B: the legacy pointer names B, the bindings keep both.
+	jest.mocked(readRegister).mockResolvedValueOnce({
+		sites: {
+			site: {
+				register_id: 'B',
+				register_store_id: 2,
+				bindings: {
+					'1': { register_id: 'A', register_name: 'A' },
+					'2': { register_id: 'B', register_name: 'B' },
+				},
+			},
+		},
+	} as never);
+	const meta = await completionMeta({}, { ...deps, storeId: 1, sessionId: 'session' });
+	expect(meta).toEqual(expect.arrayContaining([{ key: '_wcpos_register', value: 'A' }]));
 });
 it('still counts a sale on a till with no store register bound', async () => {
 	// The device register exists (it always does after hydration); the store side is

@@ -4,10 +4,10 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	adoptCounters,
 	bindRegister,
-	getBoundRegisterId,
-	getRegisterSnapshot,
+	getBoundRegister,
 	readBoundRegister,
 	readCounters,
+	recordLiveSession,
 	type RegisterCounters,
 	unbindRegister,
 } from '@wcpos/query/register-session';
@@ -54,22 +54,27 @@ type Directory = {
 	refresh?: Promise<void>;
 	loaded: boolean;
 	listeners: Set<() => void>;
+	/**
+	 * Where a fresh list writes each register's live session. Set by the session hook (the store
+	 * session is one database per cashier); a reader that loads before it writes nothing, and
+	 * the readers' effect never depends on the database handle, which a session re-render may
+	 * hand over as a new object.
+	 */
+	cache?: { userDB: Parameters<typeof recordLiveSession>[0]; siteUuid: string };
 };
 const directories = new Map<string, Directory>();
 
 function directory(siteUuid: string, storeId: number | undefined): Directory {
 	const key = `${siteUuid}:${storeId}`;
 	if (!directories.has(key)) {
-		const pointer = getBoundRegisterId(siteUuid, storeId)
-			? getRegisterSnapshot()?.sites?.[siteUuid]
-			: null;
+		const pointer = getBoundRegister(siteUuid, storeId);
 		directories.set(key, {
 			loaded: false,
 			listeners: new Set(),
 			value: {
-				status: pointer?.register_id ? 'bound' : 'unknown',
-				registerId: pointer?.register_id ?? null,
-				registerName: pointer?.register_name ?? null,
+				status: pointer?.id ? 'bound' : 'unknown',
+				registerId: pointer?.id ?? null,
+				registerName: pointer?.name ?? null,
 				registers: [],
 				loaded: false,
 				failed: false,
@@ -99,7 +104,7 @@ function loadDirectory(
 	// is ignored, so an older list never replaces the refreshed rows and live state.
 	const request: Promise<void> = http
 		.get('registers', { params: { store_id: storeId || null } })
-		.then((response) => {
+		.then(async (response) => {
 			if (entry.request !== request) return;
 			entry.loaded = true;
 			publish(entry, {
@@ -111,6 +116,28 @@ function loadDirectory(
 				// filter here read every store as having no register.
 				registers: (response.data as Register[]).filter((row) => storeId !== 0 || !row.store_id),
 			});
+			const cache = entry.cache;
+			if (!cache) return;
+			for (const row of response.data as Register[]) {
+				if (entry.request !== request) return;
+				await recordLiveSession(
+					cache.userDB,
+					cache.siteUuid,
+					row.id,
+					row.session
+						? {
+								session_id: row.session.id,
+								status: row.session.status,
+								opened_at_gmt: row.session.opened_at_gmt,
+								opened_by: row.session.opened_by,
+								acknowledged: true,
+								expected_float: null,
+								counted_float: null,
+								business_day: null,
+							}
+						: null
+				);
+			}
 		})
 		.catch(() => {
 			if (entry.request !== request) return;
@@ -171,6 +198,9 @@ async function syncBinding(
 	online: boolean
 ): Promise<void> {
 	const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, siteUuid, id);
+	// Before the first await: a reader's effect may have started the list request already, and
+	// its answer reads this at arrival time.
+	entry.cache = { userDB, siteUuid };
 	const bound = await readBoundRegister(userDB, siteUuid, storeId);
 	publish(entry, {
 		status: bound ? 'bound' : 'unknown',

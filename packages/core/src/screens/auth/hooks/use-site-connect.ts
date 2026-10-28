@@ -243,13 +243,13 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 						// Inline copy is translated; the registry summary stays the
 						// docs/logs voice. Codes without a dedicated key share the
 						// generic host line — the DocsLink names the exact cause.
-						const messageKey =
+						const message =
 							authResult.code === ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST
-								? 'auth.server_blocks_login_token'
+								? t('auth.server_blocks_login_token')
 								: authResult.code === ERROR_CODES.REST_TRANSPORT_BLOCKED
-									? 'auth.store_rest_api_unreachable'
-									: 'auth.host_compatibility_problem';
-						throw Object.assign(new Error(t(messageKey)), {
+									? t('auth.store_rest_api_unreachable')
+									: t('auth.host_compatibility_problem');
+						throw Object.assign(new Error(message), {
 							errorCode: authResult.code,
 						});
 					}

@@ -47,7 +47,12 @@ export function TaxesCard() {
 			)}
 			<StatGrid
 				items={(['net', 'tax', 'gross'] as const).map((key) => ({
-					label: t(key === 'tax' ? 'common.tax' : `reports.document.${key}`),
+					label:
+						key === 'tax'
+							? t('common.tax')
+							: key === 'net'
+								? t('reports.document.net')
+								: t('reports.document.gross'),
 					value: money(summary[key]),
 					testID: `card-taxes-${key}`,
 				}))}

@@ -62,7 +62,14 @@ export async function evaluateCartStock(ctx: ActionContext, args: StockArgs) {
 			{
 				category: STOCK_LOG_CATEGORY,
 				showToast: true,
-				toast: { title: ctx.t(reasonKey, params), type: 'warning' },
+				toast: {
+					title: missing
+						? ctx.t('pos_cart.stock_not_loaded', params)
+						: result.available === null
+							? ctx.t('pos_products.out_of_stock', params)
+							: ctx.t('pos_cart.only_n_available', params),
+					type: 'warning',
+				},
 				context: missing
 					? { productId, variationId, reason: 'missing_stock_record' }
 					: { productId, variationId, available: result.available },

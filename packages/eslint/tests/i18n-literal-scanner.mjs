@@ -13,6 +13,17 @@ const TREES = ['apps/main', 'packages'];
 const SKIP_DIRS =
 	/^(?:node_modules|dist|build|web-build|public|ios|android|__tests__|__mocks__|fixtures|tests?)$/;
 export const CONSTRUCT = 'i18n-computed-key';
+// A catalog key handed to any other function (`translate('common.x')`) is invisible too.
+const CATALOG = new Set(
+	Object.keys(
+		JSON.parse(
+			readFileSync(
+				join(ROOT, 'packages/core/src/contexts/translations/locales/en/core.json'),
+				'utf8'
+			)
+		)
+	).map((key) => key.replace(/_(?:zero|one|two|few|many|other)$/, ''))
+);
 
 export function scanSource(text, path) {
 	// A `.ts` file parses as TS: read as TSX, an angle-bracket cast swallows the code after it.
@@ -24,13 +35,9 @@ export function scanSource(text, path) {
 			const callee = node.expression;
 			const name = ts.isPropertyAccessExpression(callee) ? callee.name : callee;
 			const key = node.arguments[0];
-			if (
-				ts.isIdentifier(name) &&
-				name.text === 't' &&
-				key &&
-				!ts.isStringLiteral(key) &&
-				!ts.isNoSubstitutionTemplateLiteral(key)
-			) {
+			const literal = key && (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key));
+			const isT = ts.isIdentifier(name) && name.text === 't';
+			if (key && (isT ? !literal : literal && CATALOG.has(key.text))) {
 				const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
 				sites.push(`${path}:${line + 1}:1:${CONSTRUCT}`);
 			}

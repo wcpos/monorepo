@@ -1,7 +1,8 @@
 import type { UserDatabase } from '@wcpos/database';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { readRegister } from './register-document';
+import { markSeededIn, readLiveSession, readRegister } from './register-document';
+import { seedSessionFromCache } from './seed';
 import { writeClosure } from './session-store';
 import { drainRegisterSessionQueue, type SessionHttp } from './queue';
 import { refreshSessions } from './refresh';
@@ -68,6 +69,13 @@ export async function runRegisterSessionCycle({
 				})
 			);
 	}
+	const live = registerId ? readLiveSession(siteUuid, registerId) : null;
+	if (
+		live &&
+		(await staged('seed', () => seedSessionFromCache(storeDB, live, registerId!, storeId))) ===
+			'seeded'
+	)
+		await markSeededIn(userDB, siteUuid, registerId!, sessions.database.name);
 	if (!online) return;
 	await staged('drain', () =>
 		drainRegisterSessionQueue({

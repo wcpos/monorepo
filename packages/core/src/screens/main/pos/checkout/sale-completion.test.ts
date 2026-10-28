@@ -56,6 +56,7 @@ jest.mock('@wcpos/query', () => ({
 	answerAdopted: (...args: unknown[]) => mockAnswerAdopted(...args),
 }));
 jest.mock('@wcpos/query/register-session', () => ({
+	boundRegisterIdOf: jest.requireActual('@wcpos/query/register-session').boundRegisterIdOf,
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
 	readRegister: async () => ({ sites: { site: { register_id: 'register-A' } } }),
 	nextSaleCounter: async () => 7,

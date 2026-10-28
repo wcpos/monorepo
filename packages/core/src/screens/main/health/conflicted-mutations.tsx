@@ -26,11 +26,12 @@ import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { collectionLabel } from './collection-label';
 import { useT } from '../../../contexts/translations';
 import { useRecordEditRoute } from './record-edit-route';
 import { classifyResolutionError } from './resolution-error';
@@ -169,12 +170,11 @@ export function ConflictedMutationsPanel() {
 			<Notice
 				tone="bad"
 				testID="db-conflicted-callout"
-				title={t(
+				title={
 					hasUnverifiedRevision
-						? 'health.database.conflicted.needs_revision_title'
-						: 'health.database.conflicted.title',
-					{ count: rows.length }
-				)}
+						? t('health.database.conflicted.needs_revision_title', { count: rows.length })
+						: t('health.database.conflicted.title', { count: rows.length })
+				}
 				description={t('health.database.conflicted.body')}
 			/>
 
@@ -204,11 +204,9 @@ export function ConflictedMutationsPanel() {
 									) : null}
 								</HStack>
 								<Text className="text-muted-foreground text-xs">
-									{t(
-										row.status === 'needs-revision'
-											? 'health.database.conflicted.needs_revision_reason'
-											: 'health.database.conflicted.reason'
-									)}
+									{row.status === 'needs-revision'
+										? t('health.database.conflicted.needs_revision_reason')
+										: t('health.database.conflicted.reason')}
 								</Text>
 								{row.queuedAt ? (
 									<Text className="text-muted-foreground/80 text-xs">
@@ -383,9 +381,6 @@ type Translate = ReturnType<typeof useT>;
 
 /** "Products · Aether Gym Pant" — never a bare uuid when anything better exists. */
 function describeRecord(row: UnresolvedConflict, t: Translate): string {
-	const labelKey = (COLLECTION_VOCABULARY as Record<string, { labelKey?: string } | undefined>)[
-		row.collectionName
-	]?.labelKey;
-	const collection = labelKey ? t(labelKey) : row.collectionName;
+	const collection = collectionLabel(row.collectionName, t);
 	return row.label ? `${collection} · ${row.label}` : `${collection} · ${row.recordId.slice(0, 8)}`;
 }

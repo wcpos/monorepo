@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCSSVariable } from 'uniwind';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Chip } from '@wcpos/components/chip';
 import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -112,9 +113,7 @@ export function TenderPane({ flow, format, compact }: Props) {
 	}
 
 	if (flow.tiles.length === 0) {
-		return (
-			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payment_methods')}</Text>
-		);
+		return <EmptyState kind="empty" size="inline" title={t('pos_checkout.no_payment_methods')} />;
 	}
 
 	return flow.state.splitView ? (

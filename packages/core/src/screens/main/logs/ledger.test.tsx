@@ -30,6 +30,12 @@ const recordRow = {
 	context: { collection: 'orders', recordId: 'ae263330-fbff-4834-8798-3f52ff650c79' },
 };
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('react-native', () => ({
 	Pressable: ({

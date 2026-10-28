@@ -5,7 +5,7 @@ import type { QueryHandle } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryHandleFields } from '../../../../../query';
 import { HandleProductsFooter } from '../handle-footer';
-import { type BrowseBy, TERMS_KEY } from './browse-source';
+import { type BrowseBy, termsTally } from './browse-source';
 
 import type { SnapshotFields } from '../../../../../query';
 
@@ -59,7 +59,7 @@ export function BrowseRootFooter({
 		source === 'shortcuts'
 			? products
 			: t('pos_products.root_tally', {
-					terms: t(TERMS_KEY[source], { count: termCount }),
+					terms: termsTally(source, termCount, t),
 					products,
 				});
 	return (

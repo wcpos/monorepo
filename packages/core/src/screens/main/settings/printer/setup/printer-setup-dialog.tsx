@@ -4,6 +4,7 @@ import { Linking, Platform, View } from 'react-native';
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Card } from '@wcpos/components/card';
 import { Badge, type BadgeProps } from '@wcpos/components/badge';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
@@ -454,10 +455,7 @@ export function PrinterSetupDialog({
 	const addressScreen = (
 		<>
 			{heading('address_heading')}
-			<View
-				testID="printer-setup-address-form"
-				className="border-border gap-3 rounded-lg border p-3"
-			>
+			<Card testID="printer-setup-address-form" padding="row" className="gap-3">
 				<View className="flex-row gap-3">
 					<View className="flex-1">
 						<FormField
@@ -508,7 +506,7 @@ export function PrinterSetupDialog({
 						{t('common.cancel')}
 					</Button>
 				)}
-			</View>
+			</Card>
 			{failure && <TestPrintError error={failure} hideGuide />}
 			{line('address_help', 'text-muted-foreground text-sm')}
 			{links(link('setup_scan_again', startOver), guide)}
@@ -533,7 +531,7 @@ export function PrinterSetupDialog({
 		</>
 	);
 	const moreOptions = optionsOpen && (
-		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-lg border p-3">
+		<Card testID="printer-setup-options" padding="row" className="gap-3">
 			<FormField
 				control={form.control}
 				name="name"
@@ -597,7 +595,7 @@ export function PrinterSetupDialog({
 				/>
 			)}
 			<PrinterToggleRows />
-		</VStack>
+		</Card>
 	);
 	const scanLinks = links(
 		usb,
