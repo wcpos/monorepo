@@ -14,7 +14,7 @@ export type LevelKind = 'info' | 'warn' | 'error' | 'action' | 'sync' | 'debug';
 const DOT_CLASS: Record<LevelKind, string> = {
 	info: 'bg-muted-foreground/40',
 	warn: 'bg-warning',
-	error: 'bg-destructive',
+	error: 'bg-bad',
 	action: 'bg-action',
 	sync: 'bg-info',
 	debug: 'bg-muted-foreground/20',

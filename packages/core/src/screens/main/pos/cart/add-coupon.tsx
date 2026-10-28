@@ -72,7 +72,7 @@ export function AddCoupon() {
 	return (
 		<>
 			<DialogBody contentContainerClassName="gap-4">
-				{error && <Text className="text-destructive">{error}</Text>}
+				{error && <Text className="text-bad">{error}</Text>}
 				<Combobox onValueChange={handleValueChange}>
 					<ComboboxTrigger testID="add-coupon-combobox">
 						<ComboboxValue placeholder={t('pos_cart.select_coupon')} />

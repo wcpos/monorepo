@@ -140,7 +140,7 @@ function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabe
 	const word = levelWord(level, levelLabels);
 	const tint =
 		level === 'error'
-			? 'bg-destructive/10 border-destructive'
+			? 'bg-bad/10 border-bad'
 			: level === 'warn'
 				? 'bg-warning/10 border-warning'
 				: 'border-transparent';
@@ -157,7 +157,7 @@ function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabe
 					selectable
 					className={cn(
 						'shrink font-mono text-xs',
-						level === 'error' ? 'text-destructive' : 'text-foreground'
+						level === 'error' ? 'text-bad' : 'text-foreground'
 					)}
 				>
 					{word ? <Text className={cn('font-mono text-xs font-bold', tone)}>{word} </Text> : null}

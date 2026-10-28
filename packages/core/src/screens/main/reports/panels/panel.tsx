@@ -288,12 +288,12 @@ export function DetailPanel() {
 				</Text>
 			)}
 			{!!(printError || doc.documentError) && (
-				<Text testID="detail-panel-print-error" className="text-destructive px-4">
+				<Text testID="detail-panel-print-error" className="text-bad px-4">
 					{printError || doc.documentError?.message}
 				</Text>
 			)}
 			{!!error && (
-				<Text testID="detail-panel-export-error" className="text-destructive px-4">
+				<Text testID="detail-panel-export-error" className="text-bad px-4">
 					{error}
 				</Text>
 			)}

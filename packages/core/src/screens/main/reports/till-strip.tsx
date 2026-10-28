@@ -125,7 +125,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
 		: t('reports.exact');
 	const resultColor =
-		variance < 0 ? 'text-destructive' : variance > 0 ? 'text-success' : 'text-muted-foreground';
+		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
 	const rows: Term[] = [];
 	const money = (amount: string) => format(Number(amount));
 	if (bound && !blind) {
@@ -382,7 +382,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				</Text>
 			)}
 			{!!error && (
-				<Text testID="till-print-error" className="text-destructive">
+				<Text testID="till-print-error" className="text-bad">
 					{error}
 				</Text>
 			)}

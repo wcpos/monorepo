@@ -108,9 +108,9 @@ const TONES = {
 		border: 'border-muted-foreground/50',
 		mark: 'text-foreground',
 	},
-	destructive: {
-		bg: 'bg-destructive',
-		border: 'border-destructive',
+	bad: {
+		bg: 'bg-bad',
+		border: 'border-bad',
 		mark: 'text-destructive-foreground',
 	},
 	muted: { bg: 'bg-muted-foreground', border: 'border-muted-foreground', mark: 'text-card' },
@@ -326,7 +326,7 @@ function StepNode({
 		mark: markTone,
 	} = TONES[
 		state === 'failed'
-			? 'destructive'
+			? 'bad'
 			: state === 'stopped'
 				? 'muted'
 				: state === 'done'
@@ -335,7 +335,7 @@ function StepNode({
 	];
 	const labelTone =
 		state === 'failed'
-			? 'text-destructive'
+			? 'text-bad'
 			: state === 'current' || state === 'stopped'
 				? 'text-foreground'
 				: 'text-muted-foreground';

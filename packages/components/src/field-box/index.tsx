@@ -20,7 +20,7 @@ const fieldBoxVariants = cva(`border-border bg-card rounded-lg border ${FIELD_TE
 			rest: '',
 			open: 'border-ring web:ring-1 web:ring-ring',
 			disabled: 'web:cursor-not-allowed opacity-45',
-			invalid: 'border-destructive',
+			invalid: 'border-bad',
 			/** Its number needs a look (a cart line over stock). */
 			attention: 'border-attention bg-attention/15',
 		},

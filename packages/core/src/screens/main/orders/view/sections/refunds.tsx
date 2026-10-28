@@ -40,7 +40,7 @@ function RefundCard({
 	return (
 		<View className="border-border bg-card overflow-hidden rounded-md border">
 			{/* Head */}
-			<View className="bg-destructive/5 border-border/60 flex-row items-start justify-between gap-3 border-b px-3 py-2.5">
+			<View className="bg-bad/5 border-border/60 flex-row items-start justify-between gap-3 border-b px-3 py-2.5">
 				<View className="min-w-0 flex-1">
 					<Text className="text-foreground text-xs font-medium tabular-nums">
 						{t('orders.refund')} #{refund.id || '—'}
@@ -48,9 +48,7 @@ function RefundCard({
 					{date ? <Text className="text-muted-foreground text-xs">{date}</Text> : null}
 				</View>
 				<View className="items-end">
-					<Text className="text-destructive text-sm font-semibold tabular-nums">
-						{format(-amount)}
-					</Text>
+					<Text className="text-bad text-sm font-semibold tabular-nums">{format(-amount)}</Text>
 					{refund.refunded_by ? (
 						<Text className="text-muted-foreground text-xs">
 							{t('orders.refunded_by')} {refund.refunded_by}
@@ -158,7 +156,7 @@ export function RefundsFallback({
 	return (
 		<Section title={t('orders.refunds')}>
 			<View className="gap-3">
-				<Text className="text-destructive text-sm">{t('orders.refunds_load_failed')}</Text>
+				<Text className="text-bad text-sm">{t('orders.refunds_load_failed')}</Text>
 				{refunds?.length ? (
 					<View className="gap-2">
 						<Text className="text-muted-foreground text-xs">
@@ -172,7 +170,7 @@ export function RefundsFallback({
 								<Text className="text-muted-foreground text-xs">
 									{refund.reason || t('orders.no_reason_provided')}
 								</Text>
-								<Text className="text-destructive text-sm font-semibold tabular-nums">
+								<Text className="text-bad text-sm font-semibold tabular-nums">
 									{format(-refundValue(refund))}
 								</Text>
 							</View>

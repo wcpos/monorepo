@@ -191,7 +191,7 @@ export function RegisterPanel({
 						<View key={row.id} className={STATIC_ROW}>
 							<Text
 								testID={`movement-row-${row.id}`}
-								className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
+								className={`flex-1 ${row.sync_status === 'failed' ? 'text-bad' : ''}`}
 							>
 								{row.reason}
 								{!blind && type !== 'no_sale'
@@ -410,7 +410,7 @@ export function RegisterPanel({
 								/>
 							) : null}
 							{lastClosure.sync_status === 'failed' && (
-								<Text testID="closure-sync-error" className="text-destructive px-2.5 py-1 text-sm">
+								<Text testID="closure-sync-error" className="text-bad px-2.5 py-1 text-sm">
 									{lastClosure.sync_error}
 								</Text>
 							)}
@@ -420,7 +420,7 @@ export function RegisterPanel({
 								)}
 						</View>
 					)}
-					{!!error && <Text className="text-destructive px-2.5 py-2 text-sm">{error}</Text>}
+					{!!error && <Text className="text-bad px-2.5 py-2 text-sm">{error}</Text>}
 				</DialogBody>
 				<DialogFooter
 					size="lg"

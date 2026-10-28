@@ -480,7 +480,7 @@ export function RegistersPanel() {
 				<Text className="text-muted-foreground text-sm">{t('common.loading')}</Text>
 			) : null}
 			{error !== null ? (
-				<Text testID="health-registers-error" className="text-destructive text-sm">
+				<Text testID="health-registers-error" className="text-bad text-sm">
 					{t('health.registers.error', { error })}
 				</Text>
 			) : null}

@@ -47,9 +47,7 @@ export function OrderTotal({
 		<>
 			<Text className="text-right tabular-nums">{format(parseFloat(total ?? '0'))}</Text>
 			{refundTotal > 0 && (
-				<Text className="text-destructive text-right text-sm tabular-nums">
-					{format(-refundTotal)}
-				</Text>
+				<Text className="text-bad text-right text-sm tabular-nums">{format(-refundTotal)}</Text>
 			)}
 			{paymentMethodTitle && (
 				<Text className="text-muted-foreground text-right text-sm">{paymentMethodTitle}</Text>

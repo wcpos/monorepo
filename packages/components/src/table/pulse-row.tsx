@@ -249,7 +249,7 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 				style={[addedStyle, { pointerEvents: 'none' }]}
 			/>
 			<Animated.View
-				className="bg-destructive absolute inset-0"
+				className="bg-bad absolute inset-0"
 				style={[removedStyle, { pointerEvents: 'none' }]}
 			/>
 		</Animated.View>

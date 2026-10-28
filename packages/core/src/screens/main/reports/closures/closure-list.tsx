@@ -75,7 +75,7 @@ export function ClosureList({
 									</Text>
 									<Text
 										testID={`closure-result-${row.id}`}
-										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-success' : 'text-muted-foreground'}`}
+										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground'}`}
 									>
 										{variance
 											? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`

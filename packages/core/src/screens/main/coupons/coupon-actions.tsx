@@ -123,7 +123,7 @@ export function DeleteCouponDialog({
 					<AlertDialogTitle>{t('coupons.delete', { name: code })}</AlertDialogTitle>
 					<AlertDialogDescription>
 						<VStack>
-							<Text className="text-destructive">{t('coupons.are_you_sure_you_want_to')}</Text>
+							<Text className="text-bad">{t('coupons.are_you_sure_you_want_to')}</Text>
 							<HStack>
 								<Checkbox
 									aria-labelledby="confirm"

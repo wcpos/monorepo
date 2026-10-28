@@ -387,7 +387,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 					className={cn(
 						'absolute top-2 bottom-2 w-[3px] rounded-full',
 						phone ? 'left-0' : '-left-4',
-						kind === 'error' ? 'bg-destructive' : 'bg-warning'
+						kind === 'error' ? 'bg-bad' : 'bg-warning'
 					)}
 				/>
 			) : null}

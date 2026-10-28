@@ -173,7 +173,7 @@ export function ClosureSheet({
 					}
 				/>
 				{!!error && (
-					<Text testID="closure-print-error" className="text-destructive">
+					<Text testID="closure-print-error" className="text-bad">
 						{error}
 					</Text>
 				)}

@@ -156,7 +156,7 @@ function SessionCardContent({
 				</Text>
 			)}
 			{!!error && (
-				<Text testID="session-print-error" className="text-destructive">
+				<Text testID="session-print-error" className="text-bad">
 					{error}
 				</Text>
 			)}

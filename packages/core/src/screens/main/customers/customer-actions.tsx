@@ -129,7 +129,7 @@ export function DeleteCustomerDialog({
 					</AlertDialogTitle>
 					<AlertDialogDescription>
 						<VStack>
-							<Text className="text-destructive">{t('customers.are_you_sure_you_want_to')}</Text>
+							<Text className="text-bad">{t('customers.are_you_sure_you_want_to')}</Text>
 							<HStack>
 								<Checkbox
 									aria-labelledby="confirm"

@@ -36,7 +36,7 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 		return (
 			<HStack
 				testID="error-boundary-fallback"
-				className="bg-destructive items-start justify-between p-2"
+				className="bg-bad items-start justify-between p-2"
 				onLayout={handleLayout}
 			>
 				<Tooltip>
@@ -67,7 +67,7 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	return (
 		<HStack
 			testID="error-boundary-fallback"
-			className="bg-destructive w-full items-start p-2"
+			className="bg-bad w-full items-start p-2"
 			onLayout={handleLayout}
 		>
 			<Icon name="warning" size="4xl" className="text-destructive-foreground" />

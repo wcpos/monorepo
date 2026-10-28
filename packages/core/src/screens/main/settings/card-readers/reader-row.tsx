@@ -103,7 +103,7 @@ export function ReaderRow({
 	let below: React.ReactNode = null;
 	if (error) {
 		line = t(ERROR_KEYS[error.kind], { message: error.message });
-		lineClass = 'text-destructive text-sm';
+		lineClass = 'text-bad text-sm';
 	} else if (scan && found === null) line = t('settings.card_readers.looking');
 	else if (found)
 		line =
@@ -203,7 +203,7 @@ export function ReaderRow({
 				<View
 					className={cn(
 						'size-10 items-center justify-center rounded-lg',
-						error ? 'bg-destructive/10' : connected ? 'bg-success/10' : 'bg-muted'
+						error ? 'bg-bad-bg' : connected ? 'bg-success/10' : 'bg-muted'
 					)}
 				>
 					<Icon

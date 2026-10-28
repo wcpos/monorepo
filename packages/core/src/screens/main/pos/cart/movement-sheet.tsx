@@ -249,7 +249,7 @@ export function MovementSheet({
 							{t(`register.movement_needs_${invalid}`)}
 						</Text>
 					)}
-					{!!error && <Text className="text-destructive text-sm">{error}</Text>}
+					{!!error && <Text className="text-bad text-sm">{error}</Text>}
 					{type !== 'no_sale' && (
 						<Keypad rows={keypadRows} onPress={press} fit="tile" testID="movement" />
 					)}

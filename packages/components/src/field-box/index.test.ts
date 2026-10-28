@@ -8,10 +8,10 @@ const MARK = ['border-attention', 'bg-attention/15'];
 
 /** Every state draws the one box; each adds only its own mark and none of the others'. */
 const MATRIX: [FieldBoxState, { has: string[]; not: string[] }][] = [
-	['rest', { has: ['border-border'], not: [...RING, ...DIM, ...MARK, 'border-destructive'] }],
-	['open', { has: RING, not: ['border-border', ...DIM, ...MARK, 'border-destructive'] }],
-	['disabled', { has: ['border-border', ...DIM], not: [...RING, ...MARK, 'border-destructive'] }],
-	['invalid', { has: ['border-destructive'], not: ['border-border', ...RING, ...DIM, ...MARK] }],
+	['rest', { has: ['border-border'], not: [...RING, ...DIM, ...MARK, 'border-bad'] }],
+	['open', { has: RING, not: ['border-border', ...DIM, ...MARK, 'border-bad'] }],
+	['disabled', { has: ['border-border', ...DIM], not: [...RING, ...MARK, 'border-bad'] }],
+	['invalid', { has: ['border-bad'], not: ['border-border', ...RING, ...DIM, ...MARK] }],
 	['attention', { has: MARK, not: ['border-border', 'bg-card', ...RING, ...DIM] }],
 ];
 

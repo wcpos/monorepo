@@ -127,7 +127,7 @@ function CashierChip() {
 	);
 }
 const tone = (value: number) =>
-	value > 0 ? 'text-success' : value < 0 ? 'text-destructive' : 'text-muted-foreground';
+	value > 0 ? 'text-ok' : value < 0 ? 'text-bad' : 'text-muted-foreground';
 const signed = (value: number, format: (value: number) => string) =>
 	value === 0 ? '±0' : `${value > 0 ? '+' : '−'}${format(Math.abs(value))}`;
 type Field = 'total' | 'orders' | 'averageOrderValue' | 'totalItemsSold';
