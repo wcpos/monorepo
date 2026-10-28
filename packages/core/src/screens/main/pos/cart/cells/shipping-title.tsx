@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
-import { EditableField } from '../../../components/editable-field';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCartTableReadOnly } from './read-only';
 

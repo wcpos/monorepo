@@ -122,7 +122,7 @@ export function Version() {
 				<Pressable>
 					<Text
 						className={cn(
-							'text-sidebar-foreground p-2 px-4 text-xs opacity-50 active:opacity-100',
+							'text-sidebar-foreground p-2 px-3 text-xs opacity-50 active:opacity-100',
 							!phone && 'px-0 text-center'
 						)}
 					>

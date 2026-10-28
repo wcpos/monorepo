@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { Breadcrumb } from '../breadcrumb';
+import { EdgeSurface } from '../edge-surface';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
+import { useGround } from '../lib/ground';
 import { cn } from '../lib/utils';
 import { StatusBadge, type StatusBadgeProps } from '../status-badge';
 import { Text } from '../text';
@@ -30,19 +30,9 @@ export type PageBarProps = ViewProps & {
 	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23).
 	 */
 	search?: React.ReactNode;
-	/**
-	 * Pads the top safe-area inset (default). `false` for a bar inside a column that already
-	 * pads it (the POS products column's `EdgeColumn`).
-	 */
-	insetTop?: boolean;
-	/**
-	 * The side of this bar's pane that faces another pane across a resize handle: that side keeps
-	 * no inset, because the handle is the gutter (one page gutter wide, `panels`), so the two
-	 * panes' surfaces sit one page gutter apart (the POS products column, with the cart beside
-	 * it; owner, 2026-10-23). The rest of the bar's inset is unchanged.
-	 */
-	innerEdge?: 'left' | 'right';
 };
+
+const TOP = ['top'] as const;
 
 export function PageBar({
 	title,
@@ -52,22 +42,23 @@ export function PageBar({
 	onMenu,
 	back,
 	search,
-	insetTop = true,
-	innerEdge,
 	children,
 	testID,
 	className,
 	style,
 	...props
 }: PageBarProps) {
-	const insets = useSafeAreaInsets();
 	const phone = useIsPhone();
+	const ground = useGround();
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	return (
-		<View
+		// The bar touches the top edge; inside a column that pads it already (the POS products
+		// column), there is nothing left to pad.
+		<EdgeSurface
 			testID={testID}
+			edges={TOP}
 			className={cn('bg-background', className)}
-			style={insetTop ? [style, { paddingTop: insets.top }] : style}
+			style={style}
 			{...props}
 		>
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
@@ -80,13 +71,8 @@ export function PageBar({
 			<HStack
 				className={cn(
 					'bg-background items-center',
-					phone
-						? 'h-ctl gap-2 pr-2 pl-4'
-						: innerEdge === 'right'
-							? 'pl-gutter pt-gutter gap-4 pr-0'
-							: innerEdge === 'left'
-								? 'pr-gutter pt-gutter gap-4 pl-0'
-								: 'px-gutter pt-gutter gap-4'
+					// The ground's gutter, so a pane's edge that faces another keeps none (`useGround`).
+					phone ? 'h-ctl gap-2 pr-2 pl-4' : cn(ground.px, ground.pt, 'gap-4')
 				)}
 			>
 				{(phone || onMenu) &&
@@ -150,6 +136,6 @@ export function PageBar({
 					{search}
 				</View>
 			)}
-		</View>
+		</EdgeSurface>
 	);
 }

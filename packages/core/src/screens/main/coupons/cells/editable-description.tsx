@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
-import { EditableField } from '../../components/editable-field';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';

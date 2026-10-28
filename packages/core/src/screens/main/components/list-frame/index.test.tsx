@@ -81,7 +81,7 @@ jest.mock('@wcpos/components/error-boundary', () => {
 		),
 	};
 });
-jest.mock('../chip-row', () => ({
+jest.mock('@wcpos/components/chip-row', () => ({
 	ChipRowSkeleton: () => <div data-testid="chip-row-skeleton" />,
 }));
 jest.mock('../pro-guard', () => ({

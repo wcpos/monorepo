@@ -2,8 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Tabs } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { useT } from '@wcpos/core/contexts/translations';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
@@ -44,14 +44,15 @@ function ThemedTabs() {
 	);
 }
 
+const TOP = ['top'] as const;
+
 export default function TabsLayout() {
 	const phone = useIsPhone();
-	const { top } = useSafeAreaInsets();
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
 	if (!phone) {
-		// The columns run edge to edge; each pads its own insets (EdgeColumn).
+		// The columns run edge to edge; each pads its own insets.
 		return (
 			<View testID="screen-pos" style={{ flex: 1 }}>
 				<POSColumns />
@@ -63,8 +64,8 @@ export default function TabsLayout() {
 	// own), so the container pads the status bar in that same colour: no band. The tab bar pads
 	// the home indicator inside its own card colour.
 	return (
-		<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
+		<EdgeSurface testID="screen-pos" edges={TOP} className="bg-background flex-1">
 			<ThemedTabs />
-		</View>
+		</EdgeSurface>
 	);
 }

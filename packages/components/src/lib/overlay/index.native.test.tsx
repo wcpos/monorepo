@@ -3,7 +3,7 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 
 import { render, screen } from '@testing-library/react';
 
-import { EASE, EASE_EXIT } from './motion';
+import { EASE, EASE_EXIT } from '../motion';
 import {
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
@@ -11,7 +11,7 @@ import {
 	OverlayShell,
 	useOverlay,
 	useSheetInset,
-} from './overlay';
+} from './index';
 
 const mockViews: ViewProps[] = [];
 const mockScrimProps: PressableProps[] = [];
@@ -42,7 +42,7 @@ jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
 let mockKeyboardVisible = false;
-jest.mock('../keyboard-controller', () => ({
+jest.mock('../../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
 	useKeyboardState: <T,>(select: (state: { isVisible: boolean }) => T) =>
 		select({ isVisible: mockKeyboardVisible }),

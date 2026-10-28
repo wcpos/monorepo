@@ -11,7 +11,7 @@ import { FieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { Input } from '../input';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
-import { applyCascadeToggle, useHierarchy } from '../lib/use-hierarchy';
+import { applyCascadeToggle, useHierarchy } from './use-hierarchy';
 import {
 	getNativeListHeight,
 	NATIVE_LIST_MAX_HEIGHT,
@@ -27,7 +27,7 @@ import { POPOVER_ANCHOR } from '../popover/anchor';
 import { Text } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
-import type { FlatTreeItem } from '../lib/use-hierarchy';
+import type { FlatTreeItem } from './use-hierarchy';
 import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
 
 const INDENT_PX = 16;

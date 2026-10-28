@@ -175,9 +175,9 @@ function POSStack() {
 	const { theme } = useUniwind();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	// The root never pads a SYSTEM inset: every surface that touches a screen edge runs its own
-	// background through the inset and pads inside it (EdgeColumn, the phone tab container,
-	// the full-size modal), so the status bar floats over the column it sits on (owner, iPad,
-	// 2026-10-14: a flat grey band under the status bar and the home indicator).
+	// background through the inset and pads inside it (`EdgeSurface`: the columns, the phone tab
+	// container; the full-size modal), so the status bar floats over the column it sits on (owner,
+	// iPad, 2026-10-14: a flat grey band under the status bar and the home indicator).
 	// The one exception is the desktop's title-bar strip, which DesktopWindowChrome folds into
 	// `insets.top`: it is not a system bar but the till's topmost row (the register bar portals
 	// into it across the full width), so it stays one ground, here on the root.

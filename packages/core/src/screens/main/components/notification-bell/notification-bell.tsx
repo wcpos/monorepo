@@ -42,7 +42,6 @@ export function NotificationBell({
 				<PopoverTrigger asChild>
 					<NavItem
 						size="drawer"
-						className="mx-2"
 						testID={testID}
 						accessibilityLabel={t('common.notifications')}
 						label={t('common.notifications')}

@@ -2,14 +2,14 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Redirect, usePathname, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../ground';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 
@@ -49,6 +49,8 @@ function NavigationItems({
 	));
 }
 
+const TOP = ['top'] as const;
+
 export function NavigationAreaLayout({
 	items,
 	indexHref,
@@ -77,7 +79,6 @@ export function NavigationAreaLayout({
 	children: React.ReactNode;
 }) {
 	const phone = useIsPhone();
-	const insets = useSafeAreaInsets();
 	const ground = useGround();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -113,7 +114,7 @@ export function NavigationAreaLayout({
 	// inset, the held-session banner and the upgrade notice; the rail's cashier entry claims a
 	// redirect login.
 	return (
-		<View className="bg-background flex-1" style={{ paddingTop: insets.top }}>
+		<EdgeSurface edges={TOP} className="bg-background flex-1">
 			<SessionHoldBanner />
 			{/* First row of the column: flush with the top it pads; after the hold banner it is the
 			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
@@ -131,7 +132,7 @@ export function NavigationAreaLayout({
 					{children}
 				</View>
 			</View>
-		</View>
+		</EdgeSurface>
 	);
 }
 

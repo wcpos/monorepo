@@ -11,3 +11,4 @@ export type {
 	TreeComboboxMultiProps,
 	TreeComboboxContentProps,
 } from './types';
+export type { HierarchicalOption } from './use-hierarchy';

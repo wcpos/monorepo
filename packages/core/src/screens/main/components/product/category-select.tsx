@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Suspense } from '@wcpos/components/suspense';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useAllCategoriesHandle, useQuerySnapshot } from '../../../../query';

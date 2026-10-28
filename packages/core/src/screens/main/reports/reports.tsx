@@ -1,20 +1,21 @@
 import * as React from 'react';
 import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { useEdgeInsets } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
 import { Hero } from './hero';
 import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
+
+const BOTTOM = ['bottom'] as const;
 
 export function Reports({
 	title,
@@ -24,7 +25,7 @@ export function Reports({
 	/** The till strip: the page's first row, scrolling with it (owner, 2026-10-18). */
 	header?: React.ReactNode;
 }) {
-	const { bottom } = useSafeAreaInsets();
+	const bottomInset = useEdgeInsets(BOTTOM);
 	const ground = useGround();
 	const { detail } = useReportsScope(),
 		phone = useIsPhone();
@@ -40,7 +41,8 @@ export function Reports({
 			ref={registerContainer}
 			testID="screen-reports"
 			className="h-full gap-2"
-			style={{ paddingBottom: !phonePanel && bottom !== 0 ? bottom : undefined }}
+			// A phone panel in the page's place pads the home indicator in its own colour.
+			style={phonePanel ? undefined : bottomInset}
 		>
 			{!phonePanel && (
 				<ErrorBoundary>

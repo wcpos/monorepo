@@ -14,7 +14,7 @@ import {
 	FormSwitch,
 	FormTreeCombobox,
 } from '@wcpos/components/form';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import {
 	PropertyAdd,
 	PropertyAddRow,

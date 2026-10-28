@@ -369,7 +369,7 @@ The ESLint `designSystemOwnershipSelectors` footer selector in `packages/eslint/
 
 #### Situation → overlay
 
-One shell (`lib/overlay.tsx`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
+One shell (`lib/overlay`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
 anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
 becomes a page.
 
@@ -434,7 +434,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
   sides, and the row under it (the chip row, a page body) brings the gutter between them. A bar
   that centres a 44 control in a fixed 64 puts 10 above the search and 26 under it; that is the
   tell (owner, 2026-10-20).
-- Two panes across a resize handle: the handle is the gutter, one page gutter wide with the 4 px grip centred in it (`@wcpos/components/panels`), and the edge of a pane that faces it keeps no inset of its own, so the two panes' surfaces sit one page gutter apart, the gap any two content areas get; an 8 px handle beside a full gutter had put nearly two there. The POS products column names the cart's side through `GroundInnerEdge` (`ground.ts`, which every surface on the ground reads) and `PageBar innerEdge`; the cart is flush with the handle (owner, 2026-10-23).
+- Two panes across a resize handle: the handle is the gutter, one page gutter wide with the 4 px grip centred in it (`@wcpos/components/panels`), and the edge of a pane that faces it keeps no inset of its own, so the two panes' surfaces sit one page gutter apart, the gap any two content areas get; an 8 px handle beside a full gutter had put nearly two there. The POS products column names the cart's side through `GroundInnerEdge` (`@wcpos/components/lib/ground`, the one gutter table, which every surface on the ground reads: `PageBar`, `ChipRow`, `TableSurface`, the tile ground and the caption row); the cart is flush with the handle (owner, 2026-10-23).
 - One page gutter at every width: a page does not double its inset on `md` while its neighbour
   keeps the page gutter (Settings sat at 32 beside Products at 16 until 2026-10-20).
 - A new container takes its gutter from this table. A mockup does not offer padding as an option.
@@ -448,7 +448,7 @@ left at a 4 px inset and the gap was offered as a choice; it is not one).
 - Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
 - The bar has the title left where there is one (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, with no rule under it and no height of its own: its controls sit the page gutter from the top and the sides and the row under it brings the page gutter between them (Gutters, above); on a phone the bar is 44 and search is its own 44 row under it, with no rule under either.
 - The list pages (Products, Orders, Customers, Coupons) carry no title: the search names the page and the rail marks it (owner, 2026-10-18). Support and Reports keep theirs. Settings and Store health show no bar on `lg`: the rail carries the avatar, those pages need neither the bell nor the offline badge (owner's call; the POS and the list pages keep theirs), and the upgrade notice and the held-session banner render above the area rail; below `lg` they keep the bar.
-- The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11. The POS products column's search row is a `PageBar` too: no title, `insetTop={false}` (its `EdgeColumn` pads the inset), the scan, view and settings controls as its actions.
+- The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11. The POS products column's search row is a `PageBar` too: no title (its column, an `EdgeSurface`, pads the top inset, so the bar has none left to pad), the scan, view and settings controls as its actions.
 - The phone search row is `PageBar`'s: on a phone, a bar with a search shows it on its own 44 row under the control row (no rule: the row under it brings its own gutter, owner 2026-10-23), so every bar with a search, the POS's included, has one phone grammar.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 - An area page (Settings, Store health) is one card on the page ground with its heading inside (`text-xl` semibold, an optional muted line, then a hairline rule), at `max-w-4xl` centred, the page gutter around the card at every width: `AreaPage` in `navigation-area/` (owner, 2026-10-18).
@@ -497,7 +497,7 @@ A compound fact (an address) is one line closed and its parts as indented rows o
   edges, top-aligned (`DialogContent` from `dialog` with `size="full"` does this on native).
 - A bottom sheet (a ⋮ menu, a picker, a short choice) sits on the screen edge and paints the
   bottom inset itself in card colour; the shell leaves that strip unpadded. Both live in
-  `lib/overlay.tsx` and `dialog/index.tsx`; a sheet that shows a bar under it is a bug there,
+  `lib/overlay` and `dialog/index.tsx`; a sheet that shows a bar under it is a bug there,
   not a reason for local padding.
 - A sheet's rows are 48 pt, one icon + one verb each; a destructive row is last and red.
 - The sheet header is title + close; a segmented switch (Payments / Legacy) is its own row

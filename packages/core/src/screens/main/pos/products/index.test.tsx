@@ -47,7 +47,7 @@ jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocus
 jest.mock('../../components/pro-guard', () => ({
 	withProAccess: (Component: unknown) => Component,
 }));
-// The column's bar and frame read the insets (the column's EdgeColumn pads them; both opt out).
+// The column's bar and frame read the insets (the register column pads them).
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));

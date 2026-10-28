@@ -14,8 +14,8 @@ import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../../components/ground';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {

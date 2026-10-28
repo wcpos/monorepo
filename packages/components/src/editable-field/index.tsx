@@ -1,11 +1,12 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/components/button';
-import type { InputProps } from '@wcpos/components/input';
-import { cn } from '@wcpos/components/lib/utils';
-import { PROPERTY_PLACEHOLDER_CLASS } from '@wcpos/components/property-row';
-import { Text } from '@wcpos/components/text';
-import { Textarea } from '@wcpos/components/textarea';
+import { Button } from '../button';
+import { cn } from '../lib/utils';
+import { PROPERTY_PLACEHOLDER_CLASS } from '../property-row';
+import { Text } from '../text';
+import { Textarea } from '../textarea';
+
+import type { InputProps } from '../input';
 
 /**
  * An editable name field that displays as a button and switches to a textarea on click.

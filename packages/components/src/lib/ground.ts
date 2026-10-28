@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { useIsPhone } from '@wcpos/components/lib/device';
-import { GUTTER_UNITS } from '@wcpos/components/lib/scale';
+import { useIsPhone } from './device';
+import { GUTTER_UNITS } from './scale';
 
 /**
  * The ground's gutter as class strings, one per side or use, and in spacing units for px sums.
@@ -98,15 +98,11 @@ const InnerEdgeContext = React.createContext<InnerEdge | null>(null);
  */
 export const GroundInnerEdge = InnerEdgeContext.Provider;
 
-/** The pane's inner edge, for a surface that cannot read `useGround()` (the page bar's prop). */
-export function useGroundInnerEdge(): InnerEdge | null {
-	return React.useContext(InnerEdgeContext);
-}
-
 /**
  * The ground's gutter: the page-gutter token inside a window, 16 at the phone's screen edge
  * (owner, 2026-10-22; CODING_STANDARDS § Gutters), none on an edge that faces another pane.
- * The one place those rules are written; a surface reads `useGround().p`, never `phone ? …`.
+ * The one place those rules are written; a surface reads `useGround().p`, never `phone ? …`:
+ * the page bar, the chip row, the table surface, the tile ground and the caption row alike.
  */
 export function useGround(): Ground {
 	const phone = useIsPhone();

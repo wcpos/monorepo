@@ -4,8 +4,8 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
-import { EditableField } from '../../components/editable-field';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
 import { GroupedNames } from '../../components/product/grouped-names';

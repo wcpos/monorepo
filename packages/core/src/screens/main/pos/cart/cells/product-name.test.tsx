@@ -48,7 +48,7 @@ jest.mock('../../conditions/use-cart-conditions', () => ({
 	useCartUnmet: () => mockUnmet,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
-jest.mock('../../../components/editable-field', () => ({
+jest.mock('@wcpos/components/editable-field', () => ({
 	EditableField: () => <span data-testid="editable-name" />,
 }));
 jest.mock('@wcpos/components/status-badge', () => ({

@@ -30,7 +30,7 @@ function PanelResizeHandle({
 	// The handle is the gutter between its two panes: one page gutter wide (3 units, 12 at
 	// Regular) with the 4 px grip centred in it, so a pane flush with the handle on either side
 	// sits one page gutter from its neighbour — the Gutters table's gap between content areas —
-	// and a pane's own inset stops at the handle (`GroundInnerEdge`, core `ground.ts`). It had
+	// and a pane's own inset stops at the handle (`GroundInnerEdge`, `lib/ground`). It had
 	// been a fixed 8 beside each pane's full gutter (owner, 2026-10-23: "make the grip column
 	// match the spacing on the other edges of the products panel; the grip bar centred").
 	const gutter = GUTTER_UNITS * useSpacingUnit();

@@ -10,7 +10,7 @@ import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { PropertyAddRow, PropertyList, PropertyRow } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, ProductPayload } from '@wcpos/query';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 
 import { useT } from '../../../../../contexts/translations';
 import { useAppInfo } from '../../../../../hooks/use-app-info';

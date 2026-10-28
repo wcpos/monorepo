@@ -25,9 +25,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { KeyboardAvoidingView, useKeyboardState } from '../keyboard-controller';
-import { TextClassContext } from '../text';
-import { useIsPhone } from './device';
+import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
+import { TextClassContext } from '../../text';
+import { useIsPhone } from '../device';
 import {
 	EASE,
 	EASE_EXIT,
@@ -36,9 +36,9 @@ import {
 	PANEL_SLIDE_OUT,
 	POPOVER_FADE,
 	SHEET_RISE,
-} from './motion';
+} from '../motion';
 import { SheetFocusScope } from './sheet-focus-scope';
-import { cn } from './utils';
+import { cn } from '../utils';
 /** The shell's platform verdict; consumers branch on this, never on `Platform` themselves. */
 export const isWeb = Platform.OS === 'web';
 /**

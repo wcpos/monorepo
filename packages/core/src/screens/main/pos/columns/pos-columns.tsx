@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { GroundInnerEdge } from '@wcpos/components/lib/ground';
 import { CROSSFADE } from '@wcpos/components/lib/motion';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { type EngineRecord, useDocField } from '@wcpos/query';
@@ -13,12 +15,13 @@ import { useCurrentOrder } from '../contexts/current-order';
 import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
-import { EdgeColumn } from './edge-column';
-import { GroundInnerEdge } from '../../components/ground';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 
 const PRODUCTS_ENTRY_ID = 'products';
+
+/** A register column runs from the top screen edge to the bottom one. */
+const COLUMN = ['top', 'bottom'] as const;
 
 /** This slot grants no host methods: the panels are pure layout. */
 const NO_API: SlotContracts['pos.columns.panel']['api'] = {};
@@ -90,9 +93,9 @@ export function POSColumns() {
 									minSize={25}
 									id={descriptor.id}
 								>
-									{/* Each panel's content is an EdgeColumn in the colour that content paints, so
-									    the column runs through both safe-area insets and the resize handle runs
-									    the full screen height (ledger line 6). */}
+									{/* Each panel's content is a column touching the top and bottom edges in the
+									    colour that content paints, so it runs through both safe-area insets and the
+									    resize handle runs the full screen height (ledger line 6). */}
 									{descriptor.id === PRODUCTS_ENTRY_ID ? (
 										<Animated.View
 											key={
@@ -103,34 +106,50 @@ export function POSColumns() {
 											style={{ flex: 1 }}
 										>
 											{receiptUuid ? (
-												<EdgeColumn testID="pos-receipt-column" className="bg-card">
+												<EdgeSurface
+													testID="pos-receipt-column"
+													edges={COLUMN}
+													className="bg-card flex-1"
+												>
 													<ReceiptStage orderUuid={receiptUuid} compact={false} />
-												</EdgeColumn>
+												</EdgeSurface>
 											) : showTender ? (
-												<EdgeColumn testID="pos-checkout-column" className="bg-card">
+												<EdgeSurface
+													testID="pos-checkout-column"
+													edges={COLUMN}
+													className="bg-card flex-1"
+												>
 													{/* Keyed by order: two orders in checkout must not share one keypad reducer. */}
 													<CheckoutColumn
 														key={currentOrderRecord.uuid}
 														order={currentOrderRecord as EngineRecord<'orders'>}
 													/>
-												</EdgeColumn>
+												</EdgeSurface>
 											) : (
 												// The products column's edge facing the cart keeps no inset: the handle
-												// placed above IS the gutter (ground.ts; ledger line 8). Named here, beside
+												// placed above IS the gutter (lib/ground; ledger line 8). Named here, beside
 												// the handle, so the two halves of that rule live in one file.
 												<GroundInnerEdge value={productsOnRight ? 'left' : 'right'}>
-													<EdgeColumn testID="pos-products-column" className="bg-background">
+													<EdgeSurface
+														testID="pos-products-column"
+														edges={COLUMN}
+														className="bg-background flex-1"
+													>
 														{element}
-													</EdgeColumn>
+													</EdgeSurface>
 												</GroundInnerEdge>
 											)}
 										</Animated.View>
 									) : (
 										// The cart (and any other panel) paints the card colour (`OpenOrders` in
 										// its column is `bg-card`).
-										<EdgeColumn testID={`pos-${descriptor.id}-column`} className="bg-card">
+										<EdgeSurface
+											testID={`pos-${descriptor.id}-column`}
+											edges={COLUMN}
+											className="bg-card flex-1"
+										>
 											{element}
-										</EdgeColumn>
+										</EdgeSurface>
 									)}
 								</Panel>
 							</React.Fragment>

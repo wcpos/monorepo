@@ -17,7 +17,7 @@ jest.mock('../../hooks/use-user-capabilities', () => ({
 jest.mock('../../components/capability-tooltip', () => ({
 	CapabilityTooltip: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('../../components/editable-field', () => ({
+jest.mock('@wcpos/components/editable-field', () => ({
 	EditableField: ({
 		value,
 		editable,

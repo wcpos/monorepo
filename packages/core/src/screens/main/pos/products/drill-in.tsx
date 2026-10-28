@@ -3,10 +3,10 @@ import { View } from 'react-native';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { type EngineRecord, useDocField } from '@wcpos/query';
+import { useGround } from '@wcpos/components/lib/ground';
 
 import { useT } from '../../../../contexts/translations';
 import { QueryStateProvider } from '../../../../query';
-import { useGround } from '../../components/ground';
 import { DealFade } from './deal-stack';
 import { LevelBack } from './level-back';
 import { VariationsPane } from './variations-pane';

@@ -2,12 +2,11 @@ import React from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useGround } from '../components/ground';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { UpgradeNotice } from '../components/upgrade-notice';
@@ -15,6 +14,8 @@ import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { ManagementBar } from '../components/management-bar';
 import { adjustForPadding } from './adjust-for-padding';
 import Discord from './discord';
+
+const BOTTOM = ['bottom'] as const;
 
 export function Support() {
 	const t = useT();
@@ -33,7 +34,6 @@ export function Support() {
 	// padding without necessarily resizing the frame, so no new layout event would follow.
 	const frame = layout ?? window;
 	const dimensions = adjustForPadding(frame.width, frame.height, gutter);
-	const { bottom } = useSafeAreaInsets();
 
 	// Measures the frame under the bar (and the notice), not the whole screen, so the
 	// embed never sizes itself to space the bar already takes.
@@ -43,11 +43,7 @@ export function Support() {
 	};
 
 	return (
-		<View
-			testID="screen-support"
-			className="bg-background flex-1"
-			style={{ paddingBottom: bottom || undefined }}
-		>
+		<EdgeSurface testID="screen-support" edges={BOTTOM} className="bg-background flex-1">
 			<ManagementBar title={t('common.support')} testID="support-bar" />
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 			<View
@@ -68,6 +64,6 @@ export function Support() {
 					height={dimensions.height}
 				/>
 			</View>
-		</View>
+		</EdgeSurface>
 	);
 }
