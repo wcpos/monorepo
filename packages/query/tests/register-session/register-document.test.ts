@@ -13,11 +13,14 @@ import {
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,
 	markAnchored,
+	markSeededIn,
 	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
 	readCounters,
+	readLiveSession,
 	readRegister,
+	recordLiveSession,
 	remintRegister,
 	settleRegister,
 	unbindRegister,
@@ -133,17 +136,19 @@ it.each([null, { id: 'server-register', name: 'Front' }])(
 	}
 );
 
-it('rejects another store pointer after hydration without resetting the site counter', async () => {
+it("keeps each store's pointer after a bind for another store, without resetting the site counter", async () => {
 	await remintRegister(db);
 	await bindRegister(db, 'site', { id: 'a', name: 'A' }, 1);
 	await nextSaleCounter(db, 'site');
 	await bindRegister(db, 'site', { id: 'b', name: 'B' }, 2);
 	expect(getCurrentBoundRegisterId()).toBe('b');
-	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
-	expect(getCurrentBoundRegisterId()).toBeNull();
+	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'a', name: 'A' });
+	expect(getCurrentBoundRegisterId()).toBe('a');
 	expect(await readBoundRegister(db, 'site', 2)).toEqual({ id: 'b', name: 'B' });
 	expect(getCurrentBoundRegisterId()).toBe('b');
 	expect(await nextSaleCounter(db, 'site')).toBe(2);
+	await unbindRegister(db, 'site', 2);
+	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'a', name: 'A' });
 });
 it('does not unbind a pointer another store of the site has written', async () => {
 	await remintRegister(db);
@@ -290,6 +295,18 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 	});
 	for (const counter of [1, 2, 3]) expect(await nextSaleCounter(db, 'site')).toBe(counter);
 	expect(await nextSaleCounter(db, 'other')).toBe(1);
+	const live = {
+		session_id: 's1',
+		status: 'open',
+		opened_at_gmt: '2026-10-28T13:05:00Z',
+		opened_by: { id: 7, name: 'Demo Cashier' },
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+		seeded_in: ['db-a'],
+		at: '2026-10-28T13:05:00Z',
+	};
 	// A closure the source till has in flight is the source's, not the clone's.
 	const doc = await db.getLocal<{ sites: Record<string, { registers?: Record<string, unknown> }> }>(
 		'register'
@@ -303,6 +320,7 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 				registers: {
 					'server-register': {
 						...data.sites.site.registers?.['server-register'],
+						live,
 						closure_reservation: { row: { id: 'closure-1', number: 5 }, applied: false },
 					},
 				},
@@ -325,6 +343,7 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 		register_store_id: 1,
 		registers: { 'server-register': { last_closure_number: 4, perpetual_sales_total: '10.0000' } },
 	});
+	expect(fresh.sites.site.registers?.['server-register']?.live).toEqual({ ...live, seeded_in: [] });
 	expect(fresh.sites.site.registers?.['server-register']).not.toHaveProperty('closure_reservation');
 	expect(fresh.sites.other.sale_counter).toBe(0);
 	// The next sale starts the new till's own run, and the cached identity moved with it.
@@ -507,4 +526,65 @@ describe('settleRegister: the till anchor', () => {
 		expect(fresh.id).toBe('dddddddd-0000-4000-8000-00000000000d');
 		expect(localStorage.getItem(ANCHOR)).toBe(fresh.id);
 	});
+});
+
+it('still reads a legacy single pointer for its store and nothing for another', async () => {
+	await remintRegister(db);
+	const doc = await db.getLocal('register');
+	await doc!.incrementalModify((data) => ({
+		...data,
+		sites: {
+			site: { sale_counter: 0, register_id: 'L', register_name: 'Legacy', register_store_id: 1 },
+		},
+	}));
+	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'L', name: 'Legacy' });
+	expect(await readBoundRegister(db, 'site', 2)).toBeNull();
+});
+
+it("caches a register's live session on the device and clears it", async () => {
+	await remintRegister(db);
+	const base = {
+		opened_at_gmt: '2026-10-28T13:05:00Z',
+		opened_by: { id: 7, name: 'Demo Cashier' },
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+	};
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'open' });
+	expect(readLiveSession('site', 'A')).toMatchObject({
+		session_id: 's1',
+		status: 'open',
+	});
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'counting' });
+	await recordLiveSession(db, 'site', 'A', {
+		...base,
+		session_id: 's2',
+		status: 'open',
+		opened_by: null,
+	});
+	await recordLiveSession(db, 'site', 'A', null);
+	expect(readLiveSession('site', 'A')).toBeNull();
+});
+it('keeps seed destinations once per database for the same session and resets them for a new session', async () => {
+	await remintRegister(db);
+	const live = {
+		session_id: 's1',
+		status: 'open' as const,
+		opened_at_gmt: '2026-10-28T13:05:00Z',
+		opened_by: null,
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+	};
+	await recordLiveSession(db, 'site', 'A', live);
+	expect(readLiveSession('site', 'A')?.seeded_in).toEqual([]);
+	await markSeededIn(db, 'site', 'A', 'db-a');
+	await markSeededIn(db, 'site', 'A', 'db-a');
+	await markSeededIn(db, 'site', 'A', 'db-b');
+	await recordLiveSession(db, 'site', 'A', { ...live, status: 'counting' });
+	expect(readLiveSession('site', 'A')?.seeded_in).toEqual(['db-a', 'db-b']);
+	await recordLiveSession(db, 'site', 'A', { ...live, session_id: 's2' });
+	expect(readLiveSession('site', 'A')?.seeded_in).toEqual([]);
 });

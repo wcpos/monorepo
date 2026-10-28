@@ -4,10 +4,10 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	adoptCounters,
 	bindRegister,
-	getBoundRegisterId,
-	getRegisterSnapshot,
+	getBoundRegister,
 	readBoundRegister,
 	readCounters,
+	recordLiveSession,
 	type RegisterCounters,
 	unbindRegister,
 } from '@wcpos/query/register-session';
@@ -60,16 +60,14 @@ const directories = new Map<string, Directory>();
 function directory(siteUuid: string, storeId: number | undefined): Directory {
 	const key = `${siteUuid}:${storeId}`;
 	if (!directories.has(key)) {
-		const pointer = getBoundRegisterId(siteUuid, storeId)
-			? getRegisterSnapshot()?.sites?.[siteUuid]
-			: null;
+		const pointer = getBoundRegister(siteUuid, storeId);
 		directories.set(key, {
 			loaded: false,
 			listeners: new Set(),
 			value: {
-				status: pointer?.register_id ? 'bound' : 'unknown',
-				registerId: pointer?.register_id ?? null,
-				registerName: pointer?.register_name ?? null,
+				status: pointer?.id ? 'bound' : 'unknown',
+				registerId: pointer?.id ?? null,
+				registerName: pointer?.name ?? null,
 				registers: [],
 				loaded: false,
 				failed: false,
@@ -90,7 +88,9 @@ function publish(entry: Directory, changes: Partial<Binding>) {
 function loadDirectory(
 	entry: Directory,
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
-	storeId: number | undefined
+	storeId: number | undefined,
+	userDB: Parameters<typeof recordLiveSession>[0],
+	siteUuid: string
 ): Promise<void> {
 	if (entry.request) return entry.request;
 	// A new attempt clears the last failure: readers wait for names again while it runs.
@@ -99,7 +99,7 @@ function loadDirectory(
 	// is ignored, so an older list never replaces the refreshed rows and live state.
 	const request: Promise<void> = http
 		.get('registers', { params: { store_id: storeId || null } })
-		.then((response) => {
+		.then(async (response) => {
 			if (entry.request !== request) return;
 			entry.loaded = true;
 			publish(entry, {
@@ -111,6 +111,26 @@ function loadDirectory(
 				// filter here read every store as having no register.
 				registers: (response.data as Register[]).filter((row) => storeId !== 0 || !row.store_id),
 			});
+			for (const row of response.data as Register[]) {
+				if (entry.request !== request) return;
+				await recordLiveSession(
+					userDB,
+					siteUuid,
+					row.id,
+					row.session
+						? {
+								session_id: row.session.id,
+								status: row.session.status,
+								opened_at_gmt: row.session.opened_at_gmt,
+								opened_by: row.session.opened_by,
+								acknowledged: true,
+								expected_float: null,
+								counted_float: null,
+								business_day: null,
+							}
+						: null
+				);
+			}
 		})
 		.catch(() => {
 			if (entry.request !== request) return;
@@ -178,7 +198,7 @@ async function syncBinding(
 		registerName: bound?.name ?? null,
 	});
 	if (!online) return;
-	await loadDirectory(entry, http, storeId);
+	await loadDirectory(entry, http, storeId, userDB, siteUuid);
 	if (!entry.loaded) return;
 	const registers = entry.value.registers;
 	if (bound && registers.some(({ id }) => id === bound.id)) {
@@ -226,14 +246,14 @@ export function useRegisterBindingSession(): void {
 
 /** Read another store's directory without changing the physical till binding. */
 export function useRegisterDirectory(storeId: number | undefined) {
-	const { site } = useStoreSession();
+	const { userDB, site } = useStoreSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const entry = directory(site.uuid!, storeId);
 	// A reader mounted before (or without) the session hook still gets the directory.
 	React.useEffect(() => {
-		if (online && !entry.loaded) void loadDirectory(entry, http, storeId);
-	}, [entry, http, online, storeId]);
+		if (online && !entry.loaded) void loadDirectory(entry, http, storeId, userDB, site.uuid!);
+	}, [entry, http, online, site.uuid, storeId, userDB]);
 	const subscribe = React.useCallback(
 		(notify: () => void) => {
 			entry.listeners.add(notify);
@@ -299,10 +319,10 @@ export function useRegisterBinding() {
 		if (current.refresh) return current.refresh;
 		current.request = undefined;
 		current.loaded = false;
-		current.refresh = loadDirectory(current, http, store.id).finally(() => {
+		current.refresh = loadDirectory(current, http, store.id, userDB, site.uuid!).finally(() => {
 			current.refresh = undefined;
 		});
 		return current.refresh;
-	}, [http, site.uuid, store.id]);
+	}, [http, site.uuid, store.id, userDB]);
 	return { ...value, bind, retry, refresh };
 }

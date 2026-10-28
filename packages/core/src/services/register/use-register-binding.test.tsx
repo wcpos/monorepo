@@ -6,7 +6,13 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { getLogger } from '@wcpos/utils/logger';
 import type { UserDatabase } from '@wcpos/database';
-import { bindRegister, readBoundRegister, readRegister } from '@wcpos/query/register-session';
+import {
+	bindRegister,
+	readBoundRegister,
+	readLiveSession,
+	readRegister,
+	recordLiveSession,
+} from '@wcpos/query/register-session';
 
 import {
 	useRegisterBinding,
@@ -23,9 +29,14 @@ let mockStoreId = 2;
 const logger = jest.mocked(getLogger(['wcpos', 'register']));
 // The real adoption by default; one test makes the local write fail after a good store read.
 const mockAdoptCounters = jest.fn();
+const mockRecordLiveSession = jest.fn();
 jest.mock('@wcpos/query/register-session', () => {
 	const actual = jest.requireActual('@wcpos/query/register-session');
-	return { ...actual, adoptCounters: (...args: unknown[]) => mockAdoptCounters(...args) };
+	return {
+		...actual,
+		adoptCounters: (...args: unknown[]) => mockAdoptCounters(...args),
+		recordLiveSession: (...args: unknown[]) => mockRecordLiveSession(...args),
+	};
 });
 const mockHttp = { get: jest.fn() };
 jest.mock('../../contexts/app-state', () => ({
@@ -56,6 +67,9 @@ beforeEach(async () => {
 	mockStatus = 'online-website-available';
 	mockStoreId = 2;
 	mockHttp.get.mockReset();
+	mockRecordLiveSession.mockImplementation(
+		jest.requireActual('@wcpos/query/register-session').recordLiveSession
+	);
 	mockAdoptCounters.mockImplementation(
 		jest.requireActual('@wcpos/query/register-session').adoptCounters
 	);
@@ -101,6 +115,42 @@ it('silently binds the sole register the store lists and filters by store', asyn
 	expect(names.result.current).toEqual({ a: 'a' });
 	expect(mockHttp.get).toHaveBeenCalledTimes(2);
 });
+it("records each listed register's live session on the device, and clears a closed one", async () => {
+	mockHttp.get.mockResolvedValue({
+		data: [
+			{
+				id: 'a',
+				name: 'a',
+				session: {
+					id: 's1',
+					status: 'open',
+					opened_at_gmt: '2026-10-28T13:05:00Z',
+					opened_by: { id: 7, name: 'Demo Cashier' },
+				},
+			},
+			{ id: 'b', name: 'b', session: null },
+		],
+	});
+	await recordLiveSession(mockDB, mockSite, 'b', {
+		session_id: 'old',
+		status: 'open',
+		opened_at_gmt: '2026-10-27T09:00:00Z',
+		opened_by: null,
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+	});
+	const { result } = mount();
+	await waitFor(() => expect(result.current.status).toBe('choose'));
+	expect(result.current.loaded).toBe(true);
+	expect(readLiveSession(mockSite, 'a')).toMatchObject({
+		session_id: 's1',
+		acknowledged: true,
+		opened_by: { name: 'Demo Cashier' },
+	});
+	expect(readLiveSession(mockSite, 'b')).toBeNull();
+});
 it('requires a choice among three, then binds the tapped id', async () => {
 	mockHttp.get.mockResolvedValue({ data: rows });
 	const view = mount();
@@ -145,6 +195,39 @@ it('uses the pointer offline without fetching', async () => {
 	await waitFor(() => expect(view.result.current.status).toBe('bound'));
 	expect(view.result.current.registerId).toBe('b');
 	expect(mockHttp.get).not.toHaveBeenCalled();
+});
+it('boots a store on its own binding when the last bind was for another store', async () => {
+	await bindRegister(mockDB, mockSite, { id: 'a', name: 'Front' }, 1);
+	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' }, 2);
+	mockStoreId = 1;
+	mockStatus = 'offline';
+	const { result } = mount();
+	expect(result.current.registerId).toBe('a');
+	expect(result.current.registerName).toBe('Front');
+	await act(async () => {});
+});
+it('a reconnect that reuses the cached list does not erase a session recorded since', async () => {
+	mockHttp.get.mockImplementation(async (url) => ({
+		data: url === 'registers' ? [{ id: 'a', name: 'a', session: null }] : rows[0],
+	}));
+	const { result, rerender } = mount();
+	await waitFor(() => expect(result.current.registerId).toBe('a'));
+	await recordLiveSession(mockDB, mockSite, 'a', {
+		session_id: 'local',
+		status: 'open',
+		opened_at_gmt: '2026-10-28T13:05:00Z',
+		opened_by: null,
+		acknowledged: false,
+		expected_float: '100.0000',
+		counted_float: '100.0000',
+		business_day: '2026-10-28',
+	});
+	mockStatus = 'offline';
+	await act(async () => rerender());
+	mockStatus = 'online-website-available';
+	await act(async () => rerender());
+	expect(mockHttp.get.mock.calls.filter(([path]) => path === 'registers')).toHaveLength(1);
+	expect(readLiveSession(mockSite, 'a')?.session_id).toBe('local');
 });
 it('leaves status unchanged on request failure', async () => {
 	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' }, mockStoreId);
@@ -476,4 +559,37 @@ it('ignores a superseded directory answer that lands after a refresh', async () 
 	// The older answer arrived last and changed nothing: the refreshed rows stand.
 	expect(view.result.current.registers.map(({ id }) => id)).toEqual(['b', 'c']);
 	expect(view.result.current.status).toBe('choose');
+});
+
+it('stops caching a superseded directory between register writes', async () => {
+	let release: () => void = () => {};
+	const paused = new Promise<void>((resolve) => (release = resolve));
+	const record = jest.requireActual('@wcpos/query/register-session').recordLiveSession;
+	mockRecordLiveSession.mockImplementationOnce(async (...args: unknown[]) => {
+		await paused;
+		await record(...args);
+	});
+	mockHttp.get.mockResolvedValueOnce({ data: [rows[0], rows[1]] }).mockResolvedValueOnce({
+		data: [
+			{
+				...rows[1],
+				session: {
+					id: 'new',
+					status: 'open',
+					opened_at_gmt: '2026-10-28T13:05:00Z',
+					opened_by: { id: 7, name: 'Pat' },
+				},
+			},
+		],
+	});
+	const { result } = mount();
+	await waitFor(() => expect(mockRecordLiveSession).toHaveBeenCalledTimes(1));
+	await act(async () => {
+		await result.current.refresh();
+	});
+	expect(readLiveSession(mockSite, 'b')?.session_id).toBe('new');
+	await act(async () => {
+		release();
+	});
+	expect(readLiveSession(mockSite, 'b')?.session_id).toBe('new');
 });
