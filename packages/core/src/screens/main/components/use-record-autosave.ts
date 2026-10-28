@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
 
 import { metaForWrite } from './meta-for-write';
+import { taxClassToWire } from '../hooks/tax-class';
 
 import type { FieldPath, FieldValues, UseFormReturn } from 'react-hook-form';
 
@@ -11,6 +12,11 @@ type MetaRows = Parameters<typeof metaForWrite>[0];
 /** A form's own patch, optionally with the step that follows ITS write (writes overlap, so the capture lives in the closure). */
 export type RecordPatch<P> = Partial<P> | { data: Partial<P>; after?: (written: boolean) => void };
 
+/**
+ * The one autosave for an edit form (CODING_STANDARDS §Design, Saving): the changed path's
+ * root, the record's wire spellings (tax IDs, custom fields, the tax class), the caller's write,
+ * the Saved mark. `useFormChangeHandler` under it has already validated the changed path.
+ */
 export function useRecordAutosave<T extends FieldValues, P extends { meta_data?: unknown[] }>({
 	form,
 	readOnly = false,
@@ -23,10 +29,10 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 }: {
 	form: UseFormReturn<T>;
 	readOnly?: boolean;
-	/** Read at write time so reconciliation sees newly numbered stored rows. */
-	stored: () => P;
-	/** The record command, bound by the caller (`saveCustomerFields(customer, data)`); the names `save`/`patch` are the seam ratchet's. */
-	persist: (data: Partial<P>) => Promise<boolean | undefined>;
+	/** The record as it stands, read at write time so custom fields see newly numbered rows; a form with custom fields passes it. */
+	stored?: () => P;
+	/** The record command, bound by the caller; a truthy result is a landed write. The names `save`/`patch` are the seam ratchet's. */
+	persist: (data: Partial<P>) => Promise<unknown>;
 	before?: (root: string) => boolean | Promise<boolean>;
 	wire?: (root: string, value: unknown) => unknown;
 	compose?: (root: string, wireValue: unknown) => RecordPatch<P> | Promise<RecordPatch<P>>;
@@ -34,7 +40,16 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 	metaDraft?: (rows: MetaRows) => MetaRows;
 }): { flush: () => Promise<boolean> } {
 	const markSaved = useMarkSaved();
-	const writtenRef = React.useRef(new Set<string>());
+	const draftMeta = (rows: MetaRows) => metaDraft?.(rows) ?? rows;
+	// A row the form opened with is the cashier's to delete, numbered since or not; so is one it wrote.
+	const [writtenKeys] = React.useState(
+		() =>
+			new Set(
+				draftMeta((form.getValues('meta_data' as FieldPath<T>) as MetaRows | undefined) ?? [])
+					.map((row) => String(row?.key ?? ''))
+					.filter(Boolean)
+			)
+	);
 	return useFormChangeHandler({
 		form,
 		onChange: async (changes) => {
@@ -48,12 +63,10 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 				root === 'tax_ids' && Array.isArray(value)
 					? value.filter((row) => String(row?.value ?? '') !== '')
 					: root === 'meta_data' && Array.isArray(value)
-						? metaForWrite(
-								metaDraft?.(value) ?? value,
-								(stored().meta_data ?? []) as MetaRows,
-								writtenRef.current
-							)
-						: (wire?.(root, value) ?? value);
+						? metaForWrite(draftMeta(value), (stored?.().meta_data ?? []) as MetaRows, writtenKeys)
+						: root === 'tax_class'
+							? taxClassToWire(value as string | null | undefined)
+							: (wire?.(root, value) ?? value);
 			const own = (await compose?.(root, wireValue)) ?? ({ [root]: wireValue } as Partial<P>);
 			const { data, after } =
 				'data' in own && typeof own.after === 'function'

@@ -1,7 +1,6 @@
 import type { ReadonlyEngineRecord } from '@wcpos/query';
 
 import { useRecordAutosave } from '../../components/use-record-autosave';
-import { taxClassToWire } from '../../hooks/tax-class';
 import { useCatalogueRecord } from '../commands/use-catalogue-record';
 
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
@@ -25,9 +24,6 @@ export function useCatalogueAutosave<T extends FieldValues>({
 		readOnly,
 		stored: () => record.getLatest().payload,
 		persist: (data) => saveCatalogueFields(record, data),
-		wire: (root, value) =>
-			root === 'tax_class'
-				? taxClassToWire(value as string | null | undefined)
-				: (wire?.(root, value) ?? value),
+		wire,
 	});
 }
