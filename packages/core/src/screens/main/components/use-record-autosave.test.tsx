@@ -23,7 +23,7 @@ const form = {
 	getValues: jest.fn((root: string) => values[root]),
 	trigger: jest.fn(async () => true),
 } as unknown as UseFormReturn<Values>;
-const persist = jest.fn<Promise<unknown>, [Partial<Payload>]>();
+const persist = jest.fn<Promise<unknown>, [Partial<Payload>, string]>();
 let payload: Payload;
 function mount(options: Partial<Parameters<typeof useRecordAutosave<Values, Payload>>[0]> = {}) {
 	const hook = renderHook(() =>
@@ -72,7 +72,7 @@ it('drops blank tax ID rows before custom wiring', async () => {
 	const wire = jest.fn();
 	mount({ wire });
 	await change({ 'tax_ids.2.value': 'DE123' });
-	expect(persist).toHaveBeenCalledWith({ tax_ids: [{ value: 'DE123' }, { value: 0 }] });
+	expect(persist).toHaveBeenCalledWith({ tax_ids: [{ value: 'DE123' }, { value: 0 }] }, 'tax_ids');
 	expect(wire).not.toHaveBeenCalled();
 });
 it('reconciles current stored meta and tombstones a removed written key', async () => {
@@ -82,11 +82,17 @@ it('reconciles current stored meta and tombstones a removed written key', async 
 	];
 	mount();
 	await change({ 'meta_data.0.value': 'red' });
-	expect(persist).toHaveBeenLastCalledWith({ meta_data: [{ key: 'colour', value: 'red' }] });
+	expect(persist).toHaveBeenLastCalledWith(
+		{ meta_data: [{ key: 'colour', value: 'red' }] },
+		'meta_data'
+	);
 	payload = { meta_data: [{ id: 9, key: 'colour', value: 'red' }] };
 	values.meta_data = [];
 	await change({ meta_data: [] });
-	expect(persist).toHaveBeenLastCalledWith({ meta_data: [{ id: 9, key: 'colour', value: null }] });
+	expect(persist).toHaveBeenLastCalledWith(
+		{ meta_data: [{ id: 9, key: 'colour', value: null }] },
+		'meta_data'
+	);
 });
 it('filters the meta draft before reconciliation rather than through custom wiring', async () => {
 	values.meta_data = [
@@ -97,7 +103,10 @@ it('filters the meta draft before reconciliation rather than through custom wiri
 	const wire = jest.fn();
 	mount({ metaDraft: (rows) => rows.filter((row) => row.key !== 'protected'), wire });
 	await change({ meta_data: values.meta_data });
-	expect(persist).toHaveBeenCalledWith({ meta_data: [{ id: 9, key: 'colour', value: 'red' }] });
+	expect(persist).toHaveBeenCalledWith(
+		{ meta_data: [{ id: 9, key: 'colour', value: 'red' }] },
+		'meta_data'
+	);
 	expect(wire).not.toHaveBeenCalled();
 });
 it.each([
@@ -115,7 +124,7 @@ it.each([
 	values[root] = value;
 	mount();
 	expect(await change({ [path]: value })).toBe(true);
-	expect(persist).toHaveBeenCalledWith({ [root]: wireValue });
+	expect(persist).toHaveBeenCalledWith({ [root]: wireValue }, root);
 	expect(mockMarkSaved).toHaveBeenCalledWith([root]);
 });
 it('a row the form opened with is tombstoned once the store has numbered it', async () => {
@@ -133,7 +142,10 @@ it('a row the form opened with is tombstoned once the store has numbered it', as
 	};
 	values.meta_data = [{ key: 'protected', value: 'x' }];
 	await change({ meta_data: values.meta_data });
-	expect(persist).toHaveBeenCalledWith({ meta_data: [{ id: 9, key: 'colour', value: null }] });
+	expect(persist).toHaveBeenCalledWith(
+		{ meta_data: [{ id: 9, key: 'colour', value: null }] },
+		'meta_data'
+	);
 });
 it('compose replaces the default patch and receives the custom wire value', async () => {
 	values.name = 'Ada';
@@ -142,13 +154,16 @@ it('compose replaces the default patch and receives the custom wire value', asyn
 		compose: (_root, value) => ({ alias: value }),
 	});
 	await change({ name: 'Ada' });
-	expect(persist).toHaveBeenCalledWith({ alias: 'ADA' });
+	expect(persist).toHaveBeenCalledWith({ alias: 'ADA' }, 'name');
 });
 it('awaits an async patch (the customer mirror validates the billing root first)', async () => {
 	values.first_name = 'Ada';
 	mount({ compose: async (root, value) => ({ [root]: value, billing: { first_name: value } }) });
 	await change({ first_name: 'Ada' });
-	expect(persist).toHaveBeenCalledWith({ first_name: 'Ada', billing: { first_name: 'Ada' } });
+	expect(persist).toHaveBeenCalledWith(
+		{ first_name: 'Ada', billing: { first_name: 'Ada' } },
+		'first_name'
+	);
 });
 it.each([true, { document: {} }, false, undefined])(
 	'after sees written=%p; only a truthy persist marks the root',
@@ -159,7 +174,7 @@ it.each([true, { document: {} }, false, undefined])(
 		const { result } = mount({ compose: (root, value) => ({ data: { [root]: value }, after }) });
 		expect(result.current.flush).toBe(mockFlush);
 		expect(await change({ name: 'Ada' })).toBe(Boolean(written));
-		expect(persist).toHaveBeenCalledWith({ name: 'Ada' });
+		expect(persist).toHaveBeenCalledWith({ name: 'Ada' }, 'name');
 		expect(after).toHaveBeenCalledWith(Boolean(written));
 		if (written) expect(mockMarkSaved).toHaveBeenCalledWith(['name']);
 		else expect(mockMarkSaved).not.toHaveBeenCalled();

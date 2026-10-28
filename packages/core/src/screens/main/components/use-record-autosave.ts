@@ -17,7 +17,7 @@ export type RecordPatch<P> = Partial<P> | { data: Partial<P>; after?: (written: 
  * root, the record's wire spellings (tax IDs, custom fields, the tax class), the caller's write,
  * the Saved mark. `useFormChangeHandler` under it has already validated the changed path.
  */
-export function useRecordAutosave<T extends FieldValues, P extends { meta_data?: unknown[] }>({
+export function useRecordAutosave<T extends FieldValues, P extends object>({
 	form,
 	readOnly = false,
 	stored,
@@ -32,7 +32,7 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 	/** The record as it stands, read at write time so custom fields see newly numbered rows; a form with custom fields passes it. */
 	stored?: () => P;
 	/** The record command, bound by the caller; a truthy result is a landed write. The names `save`/`patch` are the seam ratchet's. */
-	persist: (data: Partial<P>) => Promise<unknown>;
+	persist: (data: Partial<P>, root: string) => Promise<unknown>;
 	before?: (root: string) => boolean | Promise<boolean>;
 	wire?: (root: string, value: unknown) => unknown;
 	compose?: (root: string, wireValue: unknown) => RecordPatch<P> | Promise<RecordPatch<P>>;
@@ -63,7 +63,11 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 				root === 'tax_ids' && Array.isArray(value)
 					? value.filter((row) => String(row?.value ?? '') !== '')
 					: root === 'meta_data' && Array.isArray(value)
-						? metaForWrite(draftMeta(value), (stored?.().meta_data ?? []) as MetaRows, writtenKeys)
+						? metaForWrite(
+								draftMeta(value),
+								(stored?.() as { meta_data?: MetaRows } | undefined)?.meta_data ?? [],
+								writtenKeys
+							)
 						: root === 'tax_class'
 							? taxClassToWire(value as string | null | undefined)
 							: (wire?.(root, value) ?? value);
@@ -72,7 +76,7 @@ export function useRecordAutosave<T extends FieldValues, P extends { meta_data?:
 				'data' in own && typeof own.after === 'function'
 					? (own as { data: Partial<P>; after: (written: boolean) => void })
 					: { data: own as Partial<P>, after: undefined };
-			const written = Boolean(await persist(data));
+			const written = Boolean(await persist(data, root));
 			after?.(written);
 			if (written) markSaved([root]);
 			return written;
