@@ -33,6 +33,7 @@ import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
+import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
 import { HeroShell } from './hero';
 import { Reports } from './reports';
@@ -44,7 +45,7 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
-import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
+import { clampClosureScope, type ClosureScope, useLocalClosure } from './closures/use-closure-rows';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
 
@@ -81,7 +82,10 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+type SalesScreenProps = { hasRoom: boolean; onRoomChange: (room: string) => void };
+
+function ReportsScreenContent({ hasRoom, onRoomChange }: SalesScreenProps) {
+	const router = useRouter();
 	const t = useT();
 	const ground = useGround();
 	const state = useQueryState<'orders'>();
@@ -180,7 +184,19 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 			lockedScopeName={t('reports.earlier_days')}
 		/>
 	);
-	const strip = <TillStrip onOpenClosures={() => onRoomChange('closures')} />;
+	const strip = (
+		<TillStrip
+			onOpenClosures={hasRoom ? () => onRoomChange('closures') : undefined}
+			onOpenClosure={(closure) =>
+				router.setParams({
+					closureId: closure.id,
+					businessDay: closure.business_day,
+					openedAt: closure.opened_at,
+					registerId: closure.register_id,
+				})
+			}
+		/>
+	);
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
@@ -228,7 +244,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 /**
  *
  */
-function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+function SalesScreen({ hasRoom, onRoomChange }: SalesScreenProps) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const binding = useRegisterBinding();
@@ -267,7 +283,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 			<ErrorBoundary>
 				<Suspense>
 					<ReportsScopeProvider>
-						<ReportsScreenContent onRoomChange={onRoomChange} />
+						<ReportsScreenContent hasRoom={hasRoom} onRoomChange={onRoomChange} />
 					</ReportsScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
@@ -286,19 +302,31 @@ function ReportsShell() {
 		openedAt?: string;
 		registerId?: string;
 	}>();
-	const [room, setRoom] = React.useState(params.closureId ? 'closures' : 'sales');
+	const { license } = useAppInfo();
+	const hasRoom = !!license?.isPro;
+	const [room, setRoom] = React.useState(hasRoom && params.closureId ? 'closures' : 'sales');
+	if (!hasRoom && room === 'closures') setRoom('sales');
+	const onRoomChange = (next: string) => {
+		if (next !== 'closures' || hasRoom) setRoom(next);
+	};
+	const { row, status } = useLocalClosure(hasRoom ? undefined : params.closureId);
+	const onClose = () => router.setParams({ closureId: undefined });
+	// Consume an unresolved external route so it cannot keep reopening a missing document.
+	React.useEffect(() => {
+		if (!hasRoom && params.closureId && status === 'missing')
+			router.setParams({ closureId: undefined });
+	}, [hasRoom, params.closureId, status, router]);
 	const [selection, setSelection] = React.useState<ClosureScope | null>(null);
 	const { store, wpCredentials } = useAppState();
 	const binding = useRegisterBinding();
 	const { presets, timezone } = useStoreDay();
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
-	const { license } = useAppInfo();
-	const closureDay =
-		params.businessDay ??
-		(params.openedAt
-			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
-			: today);
-	const lockedClosure = !!params.closureId && !license?.isPro && closureDay !== today;
+	const closureDay = !hasRoom
+		? today
+		: (params.businessDay ??
+			(params.openedAt
+				? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
+				: today));
 	const initialScope = clampClosureScope(
 		{
 			from: license?.isPro ? closureDay : today,
@@ -313,14 +341,18 @@ function ReportsShell() {
 	const scope = license?.isPro
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
+	if (phone && row) return <ClosurePanel row={row} onClose={onClose} />;
 	return (
 		// Each room's bar pads the safe-area inset and shows the held-session banner and the Free
 		// strip under it, as every page bar does.
 		<View className="flex-1">
 			<ErrorBoundary>
 				<Suspense>
-					{room === 'sales' ? (
-						<SalesScreen onRoomChange={setRoom} />
+					{!(hasRoom && room === 'closures') ? (
+						<>
+							<SalesScreen hasRoom={hasRoom} onRoomChange={onRoomChange} />
+							{row && <ClosurePanel key={row.id} row={row} onClose={onClose} />}
+						</>
 					) : (
 						<>
 							<Bar
@@ -349,7 +381,6 @@ function ReportsShell() {
 											// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
 											key={license?.isPro ? 'pro' : 'free'}
 											lockedScopeName={t('reports.earlier_closures')}
-											initialLockedPeriod={lockedClosure}
 											initialHistoryLimit={outsideHistory}
 										/>
 										<CashierButton scope={scope} onScopeChange={setSelection} />
@@ -357,7 +388,7 @@ function ReportsShell() {
 									</View>
 								)}
 								scope={scope}
-								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
+								initialClosureId={outsideHistory ? undefined : params.closureId}
 								onClose={() => router.setParams({ closureId: undefined })}
 							/>
 						</>

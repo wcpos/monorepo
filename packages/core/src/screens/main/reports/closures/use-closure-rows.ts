@@ -10,7 +10,12 @@ import get from 'lodash/get';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 import { log } from '@wcpos/utils/logger';
-import { type ClosureRow, observeClosures, refreshClosureRow } from '@wcpos/query/register-session';
+import {
+	type ClosureRow,
+	observeClosures,
+	readClosure,
+	refreshClosureRow,
+} from '@wcpos/query/register-session';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -82,6 +87,35 @@ export function normalizeClosureRow(
 			},
 		},
 	];
+}
+export function useLocalClosure(id?: string): {
+	row: ClosureRow | null;
+	status: 'loading' | 'ready' | 'missing';
+} {
+	const { storeDB } = useStoreSession();
+	const [result, setResult] = React.useState<{ id?: string; row: ClosureRow | null }>({
+		row: null,
+	});
+	// A deep link needs one local read; discard its answer if the link changes or unmounts.
+	React.useEffect(() => {
+		if (!id) return;
+		let cancelled = false;
+		void readClosure(storeDB, { id, serverClosureId: id }).then(
+			(record) => {
+				if (!cancelled) setResult({ id, row: record?.toMutableJSON() ?? null });
+			},
+			(error) => {
+				log.warn('Local closure could not be read', { context: { error: String(error) } });
+				if (!cancelled) setResult({ id, row: null });
+			}
+		);
+		return () => {
+			cancelled = true;
+		};
+	}, [id, storeDB]);
+	if (!id) return { row: null, status: 'missing' };
+	if (result.id !== id) return { row: null, status: 'loading' };
+	return { row: result.row, status: result.row ? 'ready' : 'missing' };
 }
 // Match the REST list default; a full final page costs one extra read, not a totals query.
 const PAGE_SIZE = 50;
