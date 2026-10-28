@@ -1,0 +1,63 @@
+import * as React from 'react';
+
+import { render, screen } from '@testing-library/react';
+
+import { AmountFigure } from './index';
+
+// Expose classes because Jest does not compile Uniwind.
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	const host = (tag: string, props: Record<string, any>) =>
+		React.createElement(
+			tag,
+			{ 'data-testid': props.testID, 'data-classes': props.className },
+			props.children
+		);
+	return {
+		...actual,
+		View: (props: Record<string, any>) => host('div', props),
+		Text: (props: Record<string, any>) => host('span', props),
+	};
+});
+
+const words = (id: string) =>
+	((screen.getByTestId(id) as HTMLElement).dataset.classes ?? '').split(/\s+/);
+
+// size, tone → the classes the figure carries.
+const scale: [string, string, string[]][] = [
+	['hero', 'default', ['text-amt', 'text-foreground']],
+	['headline', 'default', ['text-2xl', 'text-foreground']],
+	['tile', 'default', ['text-xl', 'text-foreground']],
+	['tile', 'destructive', ['text-xl', 'text-destructive']],
+	['hero', 'success', ['text-amt', 'text-success']],
+];
+
+describe('AmountFigure', () => {
+	it.each(scale)('%s %s is bold, tabular and one size step', (size, tone, present) => {
+		render(
+			<AmountFigure testID="figure" size={size as never} tone={tone as never}>
+				$10.00
+			</AmountFigure>
+		);
+		const list = words('figure');
+		expect(list).toEqual(expect.arrayContaining([...present, 'font-bold', 'tabular-nums']));
+		expect(list.filter((name) => /^text-(xl|2xl|amt|4xl|7xl)$/.test(name))).toHaveLength(1);
+	});
+
+	it('defaults to the hero and lets a caller add layout', () => {
+		render(
+			<AmountFigure testID="figure" className="text-center">
+				$10.00
+			</AmountFigure>
+		);
+		expect(words('figure')).toEqual(expect.arrayContaining(['text-amt', 'text-center']));
+	});
+
+	it('sets the eyebrow in the caption rank above the figure', () => {
+		const { container } = render(<AmountFigure eyebrow="Remaining">$4.00</AmountFigure>);
+		const [eyebrow, figure] = Array.from(container.querySelectorAll('span'));
+		expect(eyebrow.textContent).toBe('Remaining');
+		expect(eyebrow.dataset.classes).toContain('uppercase');
+		expect(figure.textContent).toBe('$4.00');
+	});
+});
