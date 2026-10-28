@@ -38,17 +38,25 @@
 - Test: `packages/core/src/screens/main/pos/cart/user-sheet.test.tsx`
 
 **Interfaces:**
-- Produces: `UserSheet` computes `const side = portalHost === 'pos' ? usePanelSide('cart') : 'right'` (both hooks called unconditionally: `const cartSide = usePanelSide('cart')`, then pick). The header description is one string built from parts joined by ` · `: store name, register name (only when the store has more than one register, `binding.registers.length > 1`), `t('register.on_the_till_since', { time })` where `time` is the credential's `last_access` formatted `HH:MM` in the store day's timezone, omitted when `last_access` is empty.
+- Produces: `UserSheet` computes its side from the ROUTE, not the portal host (the rail's entry on the POS passes `portalHost={null}`, `drawer-content/index.tsx:147-151`): `const onPOS = useSegments().includes('(pos)')` (expo-router), `const cartSide = usePanelSide('cart')`, `const side = onPOS ? cartSide : 'right'`. The portal host keeps deciding only where the dialog portals. The header description is one string built from parts joined by ` · `: store name, register name (only when the store has more than one register, `binding.registers.length > 1`), `t('register.on_the_till_since', { time })` where `time` is the credential's `last_access` formatted `HH:MM` in the store day's timezone, omitted when `last_access` is empty.
 - Consumes: `usePanelSide` (`../contexts/overlay-side`), `useRegisterBinding`, `useDocField(wpCredentials, v => v.last_access)`.
 
 - [ ] **Step 1: Failing tests** (the file mocks `../contexts/overlay-side` at line 116 as `() => 'right'`; change that mock to a settable `let mockCartSide = 'left'` returned by `usePanelSide`):
 
 ```ts
-it('comes from the products side on the POS and from the right elsewhere', () => {
-	mockCartSide = 'left';
-	const { unmount } = render(<UserSheet open onOpenChange={() => {}} portalHost="pos" />);
+it('comes from the products side on the POS, whichever host portals it, and from the right elsewhere', () => {
+	mockCartSide = 'left'; mockSegments = ['(app)', '(drawer)', '(pos)'];
+	let r = render(<UserSheet open onOpenChange={() => {}} portalHost="pos" />);
 	expect(screen.getByTestId('user-sheet')).toHaveAttribute('data-side', 'left');
-	unmount();
+	r.unmount();
+	r = render(<UserSheet open onOpenChange={() => {}} portalHost={null} />); // the rail's entry on the POS
+	expect(screen.getByTestId('user-sheet')).toHaveAttribute('data-side', 'left');
+	r.unmount();
+	mockCartSide = 'right';
+	r = render(<UserSheet open onOpenChange={() => {}} portalHost={null} />); // products on the right
+	expect(screen.getByTestId('user-sheet')).toHaveAttribute('data-side', 'right');
+	r.unmount();
+	mockSegments = ['(app)', '(drawer)', 'orders'];
 	render(<UserSheet open onOpenChange={() => {}} portalHost={null} />);
 	expect(screen.getByTestId('user-sheet')).toHaveAttribute('data-side', 'right');
 });
@@ -229,5 +237,5 @@ describe('register band', () => {
 
 - **Spec § 4.3 coverage:** header (T1), figure tiles and the door (T2), Notice and Cashier band (T3), Store band and the deleted sheet and the bar's title (T4), Register band and the picker rule (T5), links at the foot and Sign out unchanged (T6), the side rule (T1), the standards row and ledgers (T6). "Another account…" stays as `AddUserButton` (T3). The confirm is slice 3 and is not here.
 - **Types:** `onOpenRegister?: () => void` is the one new prop, carried `RegisterBar → BarControls → CashierEntry → UserSheet`; `onSwitchRegister` is removed from all four in T5. `requestRegisterPanel` / `consumeRegisterPanelRequest` / `useRegisterPanelRequested` (T2) and `requestCashierSheet` / `consumeCashierSheetRequest` / `useCashierSheetRequested` (T4) mirror `register-picker-request.ts` exactly.
-- **Review focus:** 1 → T2 rail test; 2 → T1 side test with `mockCartSide = 'right'` (add that case); 3 → T4 one-store test, T5 one-register test; 4 → T5 attributed test; 5 → T4 failure test.
+- **Review focus:** 1 → T2 rail test; 2 → T1 side test (the products-right case is in it; the side comes from the route, so the rail's null host on the POS is covered too); 3 → T4 one-store test, T5 one-register test; 4 → T5 attributed test; 5 → T4 failure test.
 - **Proportion:** signatures and tests only; bodies left to the implementer. The `last_access` field exists on the credential schema (`packages/database/src/collections/schemas/wp-credientials.ts:49`); whether login refreshes it is for T1's implementer to check, and if it does not, the header omits the time rather than inventing one.

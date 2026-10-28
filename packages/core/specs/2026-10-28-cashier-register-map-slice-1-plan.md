@@ -41,7 +41,7 @@ Inputs the spec implies but no task's tests would otherwise exercise; each line'
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `RegisterDocument.sites[siteUuid].bindings?: Record<string, { register_id: string; register_name: string | null }>` keyed by `String(storeId ?? 0)`; the four functions keep their signatures. A bind writes `bindings[store]` **and** the legacy trio (`register_id`, `register_name`, `register_store_id`) so older readers still see the last bind; a read prefers `bindings[store]`, then the legacy trio when `register_store_id` matches or is null (today's rule). An unbind removes `bindings[store]` and clears the legacy trio only when they point at that store.
+- Produces: `RegisterDocument.sites[siteUuid].bindings?: Record<string, { register_id: string; register_name: string | null }>` keyed by `String(storeId ?? 0)`; the four functions keep their signatures, plus one sync accessor `export function getBoundRegister(siteUuid: string, storeId?: number): { id: string; name: string } | null` (the same rule as `getBoundRegisterId`, with the name) for callers that hold no database handle. `directory()` in `use-register-binding.ts:63-72` initialises from `getBoundRegister(siteUuid, storeId)` instead of the legacy `register_id` / `register_name` fields, so a store whose binding differs from the last legacy pointer boots bound to its own register. A bind writes `bindings[store]` **and** the legacy trio (`register_id`, `register_name`, `register_store_id`) so older readers still see the last bind; a read prefers `bindings[store]`, then the legacy trio when `register_store_id` matches or is null (today's rule). An unbind removes `bindings[store]` and clears the legacy trio only when they point at that store.
 
 - [ ] **Step 1: Move the existing expectation, then add one test** in `register-document.test.ts`. The existing test `'rejects another store pointer after hydration without resetting the site counter'` (line 136) asserts the old one-pointer-per-site rule (`readBoundRegister(db, 'site', 1)` is null after store 2 binds). That assertion is the behaviour this task changes: rename the test `'keeps each store's pointer after a bind for another store, without resetting the site counter'` and make it expect `{ id: 'a', name: 'A' }` for store 1 after store 2 binds, `getCurrentBoundRegisterId()` following the last read, the counter still at 2, and after `unbindRegister(db, 'site', 2)` store 1 still bound. `'does not unbind a pointer another store of the site has written'` and the legacy-pointer test stay as they are. Then add:
 
@@ -69,6 +69,22 @@ Expected: the moved expectation and the new test FAIL (store 1's pointer is drop
 
 Expected: all PASS, including `'rejects another store pointer after hydration…'`, `'does not unbind a pointer another store of the site has written'` and `'re-mints a cloned till…'` (bindings survive a re-mint like the legacy trio does; add `bindings` to the kept fields in `reminted` if that test fails).
 
+- [ ] **Step 4b: Failing test in `use-register-binding.test.tsx`** (after `'uses the pointer offline without fetching'`):
+
+```ts
+it('boots a store on its own binding when the last bind was for another store', async () => {
+	await bindRegister(mockDB, mockSite, { id: 'a', name: 'Front' }, 1);
+	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' }, 2);
+	mockStoreId = 1;
+	mockStatus = 'offline';
+	const { result } = mount();
+	expect(result.current.registerId).toBe('a'); // synchronously, before any sync
+	expect(result.current.registerName).toBe('Front');
+});
+```
+
+  Then implement `getBoundRegister` and the `directory()` change.
+
 - [ ] **Step 5: Run the binding hook's suite**, which exercises the same functions through the directory:
 
 Run: `NODE_OPTIONS=--max-old-space-size=4096 pnpm -C /Users/kilbot/Projects/monorepo-v2-worktrees/cashier-register-map/packages/core exec jest src/services/register/use-register-binding.test.tsx --maxWorkers=2`
@@ -86,7 +102,7 @@ git -C /Users/kilbot/Projects/monorepo-v2-worktrees/cashier-register-map commit 
 **Files:**
 - Modify: `packages/query/src/register-session/register-document.ts`
 - Modify: `packages/query/src/register-session/index.ts` (export the three new functions and the type)
-- Modify: `packages/core/src/services/register/use-register-binding.ts:181-195` (`syncBinding`, after `loadDirectory`)
+- Modify: `packages/core/src/services/register/use-register-binding.ts:89-128` (`loadDirectory`'s success path: it gains `userDB` and `siteUuid` parameters, and writes the cache there, after `publish`, only for the response that is still `entry.request`; `syncBinding` passes them through). Never from `syncBinding`'s reuse of a cached request: a stale list must not overwrite a session the hook recorded since.
 - Test: `packages/query/tests/register-session/register-document.test.ts`, `packages/core/src/services/register/use-register-binding.test.tsx`
 
 **Interfaces:**
@@ -154,9 +170,23 @@ it("records each listed register's live session on the device, and clears a clos
 });
 ```
 
-- [ ] **Step 3: Run both files, see the two new tests fail** (functions undefined / cache empty).
+- [ ] **Step 2b: Failing test in `use-register-binding.test.tsx`:**
 
-- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `syncBinding` after `if (!entry.loaded) return;` write `recordLiveSession` for every row in `entry.value.registers` (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by, acknowledged: true, expected_float: null, counted_float: null, business_day: null } : null`), awaited in series before the bind logic.
+```ts
+it('a reconnect that reuses the cached list does not erase a session recorded since', async () => {
+	mockHttp.get.mockResolvedValue({ data: [{ id: 'a', name: 'a', session: null }] });
+	const { result, rerender } = mount();
+	await waitFor(() => expect(result.current.loaded).toBe(true));
+	await recordLiveSession(mockDB, mockSite, 'a', { session_id: 'local', status: 'open', opened_at_gmt: '2026-10-28T13:05:00Z', opened_by: null, acknowledged: false, expected_float: '100.0000', counted_float: '100.0000', business_day: '2026-10-28' });
+	mockStatus = 'offline'; rerender(); mockStatus = 'online-website-available'; rerender(); // reconnect: syncBinding runs, loadDirectory returns the cached request
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(1));
+	expect(readLiveSession(mockSite, 'a')?.session_id).toBe('local');
+});
+```
+
+- [ ] **Step 3: Run both files, see the three new tests fail** (functions undefined / cache empty / cache erased).
+
+- [ ] **Step 4: Implement** the three functions in `register-document.ts` (same `incrementalModify` shape as `adoptCounters`; update `currentRegister` after the write), export them from `index.ts`, and in `loadDirectory`'s fresh-response path write `recordLiveSession` for every row in the response (`row.session ? { session_id: row.session.id, status: row.session.status, opened_at_gmt: row.session.opened_at_gmt, opened_by: row.session.opened_by, acknowledged: true, expected_float: null, counted_float: null, business_day: null } : null`), awaited in series before the bind logic.
 
 - [ ] **Step 5: Run both files**: PASS. Run the full `use-register-binding.test.tsx` and `register-document.test.ts`: PASS.
 
@@ -329,7 +359,7 @@ it('says the figures are still to come on a seeded session and will not close th
 ## Self-review
 
 - **Spec coverage (§ 5.1):** the repro (Task 6), per-store pointer (Task 1), the cached session id, opener and opened-at (Task 2), the counting mark (Tasks 2 and 4), the Open register card not offering to open a register the cache says is open (Task 3 makes the row exist, so the card's own condition `!session` handles it: no card change), figures unknown until the refresh and never written into a closure (Task 5). Covered.
-- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4). Second round (two threads): the cache clears when the refresh brings the cached session back closed (Task 4); the store-local business day travels in the cache and the seed (Tasks 2–4).
+- **Review of 2026-10-28 (Codex bot on #3028, three threads) folded in:** the post-refresh cache write looks up open *and* counting rows and never clears (Task 4); unknown figures cannot reach a count or closure (Task 5); an unacknowledged opening is cached with its floats and seeded as a pending create under the same id (Tasks 2–4). Second round (two threads): the cache clears when the refresh brings the cached session back closed (Task 4); the store-local business day travels in the cache and the seed (Tasks 2–4). Third round (two threads): the directory bootstrap reads the per-store binding through `getBoundRegister` (Task 1); the registers-list cache write happens only on a fresh response, never on a reused request (Task 2).
 - **Types:** `LiveSession` is defined once (Task 2) and consumed in Tasks 3 and 4 by that name; `seedSessionFromCache` returns the three literals Tasks 3 asserts.
 - **Review focus:** 1 and 2 in Task 3's tests, 3 in Task 2's binding test, 4 in Task 4's hook test, 5 in Task 5.
 - **Proportion:** the plan's code is tests and signatures; the function bodies are left to the implementer.
