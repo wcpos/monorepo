@@ -23,7 +23,7 @@ const closure = jest.fn();
 jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
-const userDB = {};
+const userDB = { getLocal$: () => of(null) };
 const storeDB = {
 	collections: { register_sessions: sessions, cash_movements: sessions, closures: sessions },
 };

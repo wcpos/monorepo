@@ -11,6 +11,24 @@ export async function seedSessionFromCache(
 	const { register_sessions: sessions } = registerCollections(storeDB);
 	const existing = await sessions.findOne(live.session_id).exec();
 	if (existing) return existing.status === 'closed' ? 'closed' : 'present';
+	const previous = await sessions
+		.find({
+			selector: {
+				register_id: registerId,
+				status: { $in: ['open', 'counting'] },
+				id: { $ne: live.session_id },
+				sync_status: 'synced',
+			},
+		})
+		.exec();
+	for (const row of previous) {
+		await row.incrementalPatch({
+			status: 'closed',
+			server_status: 'closed',
+			pending_status: null,
+			closed_at_gmt: live.opened_at_gmt,
+		});
+	}
 	await sessions.insert({
 		id: live.session_id,
 		register_id: registerId,

@@ -201,6 +201,7 @@
 	"register.overdue": "Overdue",
 	"register.counting": "Counting",
 	"register.unknown_cashier": "Cashier",
+	"register.figures_after_sync": "Figures arrive with the next sync.",
 	"register.float": "Float",
 	"register.cash_sales": "Cash sales",
 	"register.cash_refunds": "Cash refunds",

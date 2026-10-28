@@ -72,6 +72,7 @@ export function RegisterPanel({
 		terms,
 		salesCount,
 		blind,
+		figuresPending,
 		movements,
 		refusedMovements,
 		lastClosure,
@@ -263,6 +264,14 @@ export function RegisterPanel({
 						/>
 					)}
 				</DialogHeader>
+				{figuresPending && (
+					<Notice
+						tone="info"
+						testID="register-panel-figures-pending"
+						className="mx-4"
+						title={t('register.figures_after_sync')}
+					/>
+				)}
 				{refused.length > 0 && (
 					<Notice
 						tone="bad"
@@ -309,7 +318,7 @@ export function RegisterPanel({
 									t('register.float'),
 									openedTime && t('register.opened_suffix', { time: openedTime })
 								)}
-								{amount(format(Number(terms.float)))}
+								{amount(figuresPending ? '—' : format(Number(terms.float)))}
 							</View>
 							<View className={STATIC_ROW}>
 								{term(t('register.cash_sales'), terms.cashSales.count)}
@@ -432,7 +441,7 @@ export function RegisterPanel({
 					intent={{
 						label: t('register.close_register'),
 						testID: 'register-panel-close-register',
-						disabled: !session,
+						disabled: !session || figuresPending,
 						onPress: () =>
 							void attempt(async () => {
 								await actions.startCounting();

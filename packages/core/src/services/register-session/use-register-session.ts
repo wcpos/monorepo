@@ -15,12 +15,16 @@ import {
 	createSessionAccountingState,
 	deriveDrawerTerms,
 	deriveExpected,
+	markCountingHere,
 	observeCashMovements,
+	observeRegister$,
 	observeRegisterClosures,
 	observeRegisterSessions,
 	observeSessionAccounting,
 	openSession,
+	readLiveSession,
 	readMovement,
+	recordLiveSession,
 	recordMovement,
 	RegisterSessionRequiredError,
 	requireOpenSession,
@@ -121,6 +125,8 @@ export function useRegisterSession() {
 	const { today, timezone } = useStoreDay();
 	const runtime = useQueryRuntime();
 	const binding = useRegisterBinding();
+	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
+	useObservableState(register$, null);
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
 	const closeTime = useDocField(store, (value) => value.expected_close_time);
@@ -273,6 +279,10 @@ export function useRegisterSession() {
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	// The same anchor as `expected`, so the strip's terms add up to its total.
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
+	const figuresPending =
+		!!session &&
+		session.server_expected_at == null &&
+		(readLiveSession(site.uuid!, binding.registerId!)?.seeded_in ?? []).includes(storeDB.name);
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -294,6 +304,7 @@ export function useRegisterSession() {
 		overdue,
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
+		figuresPending,
 		salesCount:
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
@@ -316,6 +327,16 @@ export function useRegisterSession() {
 					businessDay: today(),
 					storeId: store.id,
 				});
+				await recordLiveSession(userDB, site.uuid!, row.register_id, {
+					session_id: row.id,
+					status: 'open',
+					opened_at_gmt: row.opened_at_gmt,
+					opened_by: { id: wpCredentials.id ?? 0, name: wpCredentials.display_name ?? '' },
+					acknowledged: false,
+					expected_float: row.expected_float ?? null,
+					counted_float: row.counted_float ?? null,
+					business_day: row.business_day ?? null,
+				});
 				recordRegisterFact({
 					kind: 'session-opened',
 					actor,
@@ -327,8 +348,32 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
+				if (figuresPending) throw new Error('register.figures_after_sync');
 				if (!session) throw new RegisterSessionRequiredError();
 				const row = await startCounting(storeDB, session.id);
+				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
+				await recordLiveSession(userDB, site.uuid!, row.register_id, {
+					session_id: row.id,
+					status: 'counting',
+					opened_at_gmt: row.opened_at_gmt,
+					opened_by:
+						row.opened_by == null
+							? null
+							: {
+									id: row.opened_by,
+									name:
+										opener?.id === row.opened_by
+											? opener.name
+											: row.opened_by === wpCredentials.id
+												? (wpCredentials.display_name ?? '')
+												: '',
+								},
+					acknowledged: session.sync_status === 'synced' || session.server_status != null,
+					expected_float: row.expected_float ?? null,
+					counted_float: row.counted_float ?? null,
+					business_day: row.business_day ?? null,
+				});
+				await markCountingHere(userDB, site.uuid!, row.register_id, true);
 				recordRegisterFact({
 					kind: 'counting-started',
 					actor,
@@ -340,6 +385,28 @@ export function useRegisterSession() {
 			backToSelling: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
 				const row = await backToSelling(storeDB, session.id);
+				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
+				await recordLiveSession(userDB, site.uuid!, row.register_id, {
+					session_id: row.id,
+					status: 'open',
+					opened_at_gmt: row.opened_at_gmt,
+					opened_by:
+						row.opened_by == null
+							? null
+							: {
+									id: row.opened_by,
+									name:
+										opener?.id === row.opened_by
+											? opener.name
+											: row.opened_by === wpCredentials.id
+												? (wpCredentials.display_name ?? '')
+												: '',
+								},
+					acknowledged: session.sync_status === 'synced' || session.server_status != null,
+					expected_float: row.expected_float ?? null,
+					counted_float: row.counted_float ?? null,
+					business_day: row.business_day ?? null,
+				});
 				recordRegisterFact({
 					kind: 'counting-abandoned',
 					actor,
@@ -450,6 +517,7 @@ export function useRegisterSession() {
 					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
 					refundRecords,
 				});
+				await recordLiveSession(userDB, site.uuid!, closed.register_id, null);
 				recordRegisterFact({
 					kind: 'session-closed',
 					actor,
