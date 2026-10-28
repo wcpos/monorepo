@@ -5,6 +5,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
+import { TitleBarStripPortal, useTitleBarStrip } from '@wcpos/components/edge-surface';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Skeleton } from '@wcpos/components/skeleton';
@@ -33,8 +34,6 @@ import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { SessionHoldBanner } from '../../components/session-hold-banner';
-import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
-import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';
 import { RegisterGateCard } from './register-gate-card';
 import {

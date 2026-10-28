@@ -4,6 +4,8 @@ import { Text } from 'react-native';
 import { act, render } from '@testing-library/react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { type Edge, EdgeSurface, useEdgeInsets } from '@wcpos/components/edge-surface';
+
 import { DesktopWindowChrome, windowColorScheme } from './desktop-window-chrome.electron';
 
 const mockTheme = { current: 'dark' };
@@ -41,9 +43,11 @@ afterEach(() => {
 	delete (window as unknown as { ipcRenderer?: unknown }).ipcRenderer;
 });
 
+/** What a surface on the top edge pads, and the bottom inset, which the strip never touches. */
 function TopInset() {
-	const { top, bottom } = useSafeAreaInsets();
-	return <Text testID="insets">{`${top}/${bottom}`}</Text>;
+	const { paddingTop = 0 } = useEdgeInsets(['top']);
+	const { bottom } = useSafeAreaInsets();
+	return <Text testID="insets">{`${paddingTop}/${bottom}`}</Text>;
 }
 
 /** The status-bar insets the provider above would report (phone-shaped on purpose). */
@@ -60,11 +64,31 @@ function renderChrome() {
 }
 
 describe('DesktopWindowChrome (electron)', () => {
-	it('adds the title-bar strip to the top inset and leaves the others alone', async () => {
+	it('pads the title-bar strip with the top inset and leaves the others alone', async () => {
 		overlay.visible = true;
 		overlay.height = 40;
 		const screen = await renderChrome();
 		expect(screen.getByTestId('insets').props.children).toBe('60/34');
+	});
+
+	// The strip is padded once: by the first surface on the top edge, or by a ground that takes
+	// the strip alone (the POS root), whose columns then pad only the status bar.
+	it.each<[readonly Edge[], string]>([
+		[['top'], '0/34'],
+		[['strip'], '20/34'],
+	])('pads the strip once under a surface on %j', async (edges, expected) => {
+		overlay.visible = true;
+		overlay.height = 40;
+		const screen = await render(
+			<SafeAreaInsetsContext.Provider value={deviceInsets}>
+				<DesktopWindowChrome>
+					<EdgeSurface edges={edges}>
+						<TopInset />
+					</EdgeSurface>
+				</DesktopWindowChrome>
+			</SafeAreaInsetsContext.Provider>
+		);
+		expect(screen.getByTestId('insets').props.children).toBe(expected);
 	});
 
 	it('follows the overlay when the controls hide, e.g. macOS full screen', async () => {

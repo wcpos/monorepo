@@ -153,7 +153,7 @@ function MerchantRootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>
-				{/* Desktop only: reserves the frameless window's title-bar strip as top inset. */}
+				{/* Desktop only: publishes the frameless window's title-bar strip, part of the top edge. */}
 				<DesktopWindowChrome>
 					<GestureHandlerRootView style={{ flex: 1 }}>
 						<KeyboardProvider>
