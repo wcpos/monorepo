@@ -600,7 +600,6 @@ export type OverlayAnchor = {
 	Scrim: OverlayScrimComponent;
 	Content: React.ComponentType<any>;
 };
-/** The props the caller's Content was handed, the anchored primitive's own (align, side, handlers) among them. */
 export type AnchoredContent = {
 	className?: string;
 	testID?: string;

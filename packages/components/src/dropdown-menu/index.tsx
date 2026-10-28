@@ -91,7 +91,7 @@ function MenuItemRow({
 	if (!sheet)
 		return (
 			<Item asChild {...item}>
-				<MenuRow {...parts} />
+				<MenuRow {...parts} primitiveKeys />
 			</Item>
 		);
 	return (
@@ -108,7 +108,6 @@ function MenuItemRow({
 	);
 }
 
-/** A menu action; `destructive` is red with the destructive wash, last and after a separator. */
 function DropdownMenuItem(
 	props: DropdownMenuPrimitive.ItemProps & { variant?: 'default' | 'destructive' }
 ) {

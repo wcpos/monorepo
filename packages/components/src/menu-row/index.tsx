@@ -102,14 +102,12 @@ export function MenuRow({
 	);
 }
 
-/** The checkbox's skin, drawn: the row is the control, not a second Checkbox inside it. */
 const BOX = {
 	off: 'border-border bg-card size-5 justify-center rounded-sm border',
 	on: 'border-primary bg-primary size-5 justify-center rounded-sm border',
 };
 const BOX_CHECK = 'text-primary-foreground size-3';
 
-/** The row of a `hosted` primitive: it draws, dims, and takes no role, focus or press. */
 function HostedRow({ className, disabled, dimmed, children }: PressableSurfaceProps) {
 	return (
 		<View className={cn(className, (disabled || dimmed) && 'opacity-45')}>
