@@ -77,9 +77,13 @@ export function ElectronBtPicker({
 					onPress={() => setShowUnnamed((v) => !v)}
 				>
 					<Text>
-						{t(showUnnamed ? 'settings.bt_hide_unnamed' : 'settings.bt_show_unnamed', {
-							n: unnamed.length,
-						})}
+						{showUnnamed
+							? t('settings.bt_hide_unnamed', {
+									n: unnamed.length,
+								})
+							: t('settings.bt_show_unnamed', {
+									n: unnamed.length,
+								})}
 					</Text>
 				</Button>
 			)}

@@ -36,10 +36,12 @@ export function RegisterGateCard({
 			kind="failed"
 			icon="register"
 			testID="register-gate-card"
-			title={t(failed ? 'register.cannot_reach_registers' : 'register.no_register_for_store')}
-			description={t(
-				failed ? 'register.check_connection_then_try_again' : 'register.manager_adds_one_in_stores'
-			)}
+			title={failed ? t('register.cannot_reach_registers') : t('register.no_register_for_store')}
+			description={
+				failed
+					? t('register.check_connection_then_try_again')
+					: t('register.manager_adds_one_in_stores')
+			}
 			action={{
 				label: t('register.try_again'),
 				onPress: () => void retry(),

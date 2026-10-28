@@ -114,12 +114,10 @@ export function useLastClosure(
 		? t('reports.unavailable_offline')
 		: data.status === 'ready'
 			? undefined
-			: t(
-					data.status === 'denied'
-						? 'reports.no_access'
-						: data.status === 'error'
-							? 'reports.load_failed'
-							: 'common.loading'
-				);
+			: data.status === 'denied'
+				? t('reports.no_access')
+				: data.status === 'error'
+					? t('reports.load_failed')
+					: t('common.loading');
 	return { data, online, load, revalidate, unavailable };
 }

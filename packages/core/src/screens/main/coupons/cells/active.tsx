@@ -30,7 +30,7 @@ export function ActiveBadge({
 	return (
 		<StatusBadge
 			variant={isActive ? 'ok' : 'muted'}
-			label={t(isActive ? 'coupons.active' : 'coupons.inactive')}
+			label={isActive ? t('coupons.active') : t('coupons.inactive')}
 		/>
 	);
 }

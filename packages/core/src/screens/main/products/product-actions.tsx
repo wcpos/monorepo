@@ -116,9 +116,9 @@ function DeleteCatalogueDialog({
 					<AlertDialogTitle>{t('products.delete', { product: name })}</AlertDialogTitle>
 					<AlertDialogDescription>
 						{/* A variation has no Trash on the server: its copy says so. */}
-						{t(
-							product ? 'products.are_you_sure_you_want_to' : 'products.are_you_sure_you_want_to_2'
-						)}
+						{product
+							? t('products.are_you_sure_you_want_to')
+							: t('products.are_you_sure_you_want_to_2')}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter

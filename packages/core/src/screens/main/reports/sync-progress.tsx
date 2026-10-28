@@ -43,16 +43,18 @@ export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comp
 		>
 			<Text testID="reports-sync-progress-label" className="text-muted-foreground text-sm">
 				{progress.total === null
-					? t(
-							comparison
-								? 'reports.comparison_downloading_unknown_total'
-								: 'reports.downloading_orders_unknown_total',
-							{ downloaded: progress.downloaded }
-						)
-					: t(comparison ? 'reports.comparison_downloading' : 'reports.downloading_orders', {
-							downloaded: progress.downloaded,
-							total: progress.total,
-						})}
+					? comparison
+						? t('reports.comparison_downloading_unknown_total', { downloaded: progress.downloaded })
+						: t('reports.downloading_orders_unknown_total', { downloaded: progress.downloaded })
+					: comparison
+						? t('reports.comparison_downloading', {
+								downloaded: progress.downloaded,
+								total: progress.total,
+							})
+						: t('reports.downloading_orders', {
+								downloaded: progress.downloaded,
+								total: progress.total,
+							})}
 			</Text>
 			{percent === null ? null : <Progress testID="reports-sync-progress-bar" value={percent} />}
 		</View>

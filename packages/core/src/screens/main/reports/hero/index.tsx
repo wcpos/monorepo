@@ -286,13 +286,11 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		<>
 			{waiting && (
 				<Text testID="hero-print-waiting" className="text-muted-foreground text-sm">
-					{t(
-						waiting === 'store'
-							? 'reports.loading_store'
-							: waiting === 'cashier'
-								? 'reports.loading_cashier'
-								: 'reports.loading_register_names'
-					)}
+					{waiting === 'store'
+						? t('reports.loading_store')
+						: waiting === 'cashier'
+							? t('reports.loading_cashier')
+							: t('reports.loading_register_names')}
 				</Text>
 			)}
 			<IconButton
@@ -334,7 +332,9 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const label =
 		period === 'day'
 			? comparisons.find((row) => row.value === cmp)!.label
-			: t(period === 'week' ? 'reports.vs_week_before' : 'reports.vs_month_before');
+			: period === 'week'
+				? t('reports.vs_week_before')
+				: t('reports.vs_month_before');
 	const chips = (
 		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
 			<React.Suspense
@@ -389,7 +389,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			segments={[
 				{
 					value: 'hour',
-					label: t(period === 'day' ? 'reports.by_hour' : 'reports.by_day'),
+					label: period === 'day' ? t('reports.by_hour') : t('reports.by_day'),
 					testID: 'hero-chart-toggle-hour',
 				},
 				{ value: 'run', label: t('reports.running_total'), testID: 'hero-chart-toggle-run' },

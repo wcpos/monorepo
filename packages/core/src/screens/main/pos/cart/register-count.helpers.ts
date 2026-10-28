@@ -16,5 +16,5 @@ export function varianceText(
 	t: (key: string) => string
 ) {
 	if (!variance) return t('register.exact');
-	return `${variance < 0 ? '−' : '+'}${format(Number(fromMinor(Math.abs(variance), 2)))} ${t(variance < 0 ? 'register.short' : 'register.over')}`;
+	return `${variance < 0 ? '−' : '+'}${format(Number(fromMinor(Math.abs(variance), 2)))} ${variance < 0 ? t('register.short') : t('register.over')}`;
 }

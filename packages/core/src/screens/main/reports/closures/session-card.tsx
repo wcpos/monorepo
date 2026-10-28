@@ -115,7 +115,7 @@ function SessionCardContent({
 	return (
 		<Card testID="reports-session-card" padding="body" className="gap-3">
 			<Text className="font-semibold">
-				{binding.registerName} · {t(active ? 'reports.open' : 'reports.register_closed')}
+				{binding.registerName} · {active ? t('reports.open') : t('reports.register_closed')}
 			</Text>
 			{active && (
 				<>
@@ -148,7 +148,7 @@ function SessionCardContent({
 					disabled={busy || unavailable || !!unavailableReason}
 					onPress={dispatch}
 				>
-					{t(active ? 'register.print_x_report' : 'reports.reprint')}
+					{active ? t('register.print_x_report') : t('reports.reprint')}
 				</Button>
 			)}
 			{(unavailable || unavailableReason) && (

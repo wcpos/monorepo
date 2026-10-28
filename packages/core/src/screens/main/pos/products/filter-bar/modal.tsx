@@ -99,11 +99,9 @@ export function FilterBarModal() {
 											(item): item is QuickFilter =>
 												item.type === 'quick' && item.id === editing.quickFilter.id
 										)?.label ?? editing.quickFilter.label)
-									: t(
-											editing.mode === 'capture'
-												? 'pos_products.save_as_button'
-												: 'pos_products.new_quick_filter'
-										)
+									: editing.mode === 'capture'
+										? t('pos_products.save_as_button')
+										: t('pos_products.new_quick_filter')
 								: t('common.filter_bar')}
 						</DialogTitle>
 					</HStack>

@@ -86,7 +86,7 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 			loading: doc.isDownloadingPdf,
 		},
 		{
-			label: t(doc.printedTo ? 'receipt.print_again' : 'receipt.print_receipt'),
+			label: doc.printedTo ? t('receipt.print_again') : t('receipt.print_receipt'),
 			testID: 'receipt-print-button',
 			// One coded row and a toast on failure (a closed print dialog is a cancel).
 			onPress: () => void doc.printAndReport(),
