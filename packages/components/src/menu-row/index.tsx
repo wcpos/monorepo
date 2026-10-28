@@ -5,6 +5,7 @@ import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text, TextClassContext, type TextProps } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 
 export type MenuRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed'> & {
 	/** Set on every row of a choice list to reserve the leading check slot. */
@@ -86,7 +87,7 @@ export function MenuRow({
 							label
 						)}
 						{description != null && (
-							<TextClassContext.Provider value="text-muted-foreground text-sm">
+							<TextClassContext.Provider value={TEXT_LADDER.key}>
 								{typeof description === 'string' || typeof description === 'number' ? (
 									<Text>{description}</Text>
 								) : (

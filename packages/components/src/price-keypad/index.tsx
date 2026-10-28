@@ -217,7 +217,9 @@ function Display({
 	return (
 		<View className={cn('items-end', sheet || field ? 'px-3' : 'px-1')}>
 			{derivation !== undefined && (
-				<Text className="text-muted-foreground text-xs tabular-nums">{derivation}</Text>
+				<Text variant="help" tabular>
+					{derivation}
+				</Text>
 			)}
 			<Text
 				testID="price-keypad-value"

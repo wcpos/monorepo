@@ -83,7 +83,8 @@ export function GateScreen({
 							<Text
 								testID={`${testID}-detail`}
 								selectable
-								className="text-muted-foreground bg-muted w-full rounded-md px-3 py-2 font-mono text-xs"
+								variant="help"
+								className="bg-muted w-full rounded-md px-3 py-2 font-mono"
 							>
 								{detail}
 							</Text>

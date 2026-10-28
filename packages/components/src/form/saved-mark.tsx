@@ -66,7 +66,7 @@ export function SavedMark({ name, label }: { name: string; label: string }) {
 			className="flex-row items-center gap-1"
 		>
 			<Icon name="check" size="xs" className="text-muted-foreground" />
-			<Text numberOfLines={1} className="text-muted-foreground text-xs">
+			<Text numberOfLines={1} variant="help">
 				{label}
 			</Text>
 		</Animated.View>

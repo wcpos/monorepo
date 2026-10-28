@@ -82,13 +82,7 @@ function FormLabel({
 function FormDescription({ className, ...props }: TextProps) {
 	const { formDescriptionNativeID } = useFormField();
 
-	return (
-		<Text
-			nativeID={formDescriptionNativeID}
-			className={cn('text-muted-foreground text-sm', className)}
-			{...props}
-		/>
-	);
+	return <Text nativeID={formDescriptionNativeID} variant="key" className={className} {...props} />;
 }
 
 function FormMessage({

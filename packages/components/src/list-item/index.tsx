@@ -111,9 +111,15 @@ export function ListItem({
 			<View className="flex-1 gap-0.5">
 				{children ?? (
 					<>
-						{title && <Text className="text-base leading-tight font-medium">{title}</Text>}
+						{title && (
+							<Text variant="subheading" className="leading-tight">
+								{title}
+							</Text>
+						)}
 						{subtitle && (
-							<Text className="text-muted-foreground text-sm leading-tight">{subtitle}</Text>
+							<Text variant="key" className="leading-tight">
+								{subtitle}
+							</Text>
 						)}
 					</>
 				)}
