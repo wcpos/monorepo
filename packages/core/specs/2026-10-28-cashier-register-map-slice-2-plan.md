@@ -203,7 +203,7 @@ it('opens one sheet for one request when two entries are mounted and one is focu
 - Test: `user-sheet.test.tsx`, `cashier-entry/index.test.tsx` (`'opens the one cashier surface from the avatar, on the host and with the rows it is given'` drops its `onSwitchRegister` expectation)
 
 **Interfaces:**
-- Produces: the **Register** band only when `binding.registers.length > 1`: heading `t('register.register')`, one `MenuRow` per register, `testID={`user-sheet-register-${id}`}`, label the name, description from the register's state: `row.session ?? readLiveSession(site.uuid, row.id)` → `t('register.open_since_name', { time, name })` for `open`, `t('register.counting_short')` for `counting`, else `t('register.closed_last_closure_short', { number: row.last_closure?.number ?? '—' })`; the current (`id === binding.registerId`) checked; the others `onPress={() => bind(id)}` (`useRegisterBinding().bind`), disabled with `description={t('register.switch_register_blocked_cart')}` while `attributed` (today's rule, `isCartAttributed(currentOrder.payload)`); the band hidden while `binding.status !== 'bound'` (the cart column's picker owns the unbound case).
+- Produces: the **Register** band only when `binding.registers.length > 1`: heading `t('register.register')`, one `MenuRow` per register, `testID={`user-sheet-register-${id}`}`, label the name, description from the register's state, read from the device's live-session cache FIRST and reactively (`useObservableState(observeRegister$(userDB))`, then `sites[site.uuid].registers[row.id].live`), and from the directory row `row.session` only when the cache holds nothing for that register (the directory reuses its request until an explicit refresh, so it goes stale; the cache is what the hook's actions and the cycle keep current): → `t('register.open_since_name', { time, name })` for `open`, `t('register.counting_short')` for `counting`, else `t('register.closed_last_closure_short', { number: row.last_closure?.number ?? '—' })`; the current (`id === binding.registerId`) checked; the others `onPress={() => bind(id)}` (`useRegisterBinding().bind`), disabled with `description={t('register.switch_register_blocked_cart')}` while `attributed` (today's rule, `isCartAttributed(currentOrder.payload)`); the band hidden while `binding.status !== 'bound'` (the cart column's picker owns the unbound case).
 - Consumes: `useRegisterBinding()` (`registers`, `registerId`, `status`, `bind`), `readLiveSession` (slice 1).
 
 - [ ] **Step 1: Failing tests:**
@@ -216,6 +216,9 @@ describe('register band', () => {
 		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain('Closed · last closure #41');
 		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
 		await waitFor(() => expect(mockBind).toHaveBeenCalledWith('back'));
+	});
+	it('follows the cache after the directory loaded: counting, then cleared', async () => {
+		// directory: Front counter open; then recordLiveSession(... status 'counting') → row reads Counting; then recordLiveSession(..., null) → row reads Closed · last closure
 	});
 	it('disables the other registers with the reason while a cart is attributed', () => {
 		expect(screen.getByTestId('user-sheet-register-back')).toHaveAttribute('aria-disabled', 'true');
