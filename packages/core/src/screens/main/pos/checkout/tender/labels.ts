@@ -3,16 +3,15 @@ import type { PaymentRow } from '@wcpos/order-math';
 
 import type { TileDisabledReason } from './tiles';
 
-const STATUS_KEYS: Record<PaymentRow['status'], string> = {
-	pending: 'pos_checkout.status_pending',
-	authorized: 'pos_checkout.status_authorized',
-	captured: 'pos_checkout.status_captured',
-	failed: 'pos_checkout.status_failed',
-	voided: 'pos_checkout.status_voided',
-};
-
-export function statusLabelKey(status: PaymentRow['status']): string {
-	return STATUS_KEYS[status] ?? 'pos_checkout.status_pending';
+export function statusLabel(status: PaymentRow['status'], t: (key: string) => string): string {
+	const labels: Record<string, string> = {
+		pending: t('pos_checkout.status_pending'),
+		authorized: t('pos_checkout.status_authorized'),
+		captured: t('pos_checkout.status_captured'),
+		failed: t('pos_checkout.status_failed'),
+		voided: t('pos_checkout.status_voided'),
+	};
+	return labels[status] ?? labels.pending;
 }
 
 /** Colour the chip by what the cashier has to do about the row, not by the wire value. */
@@ -27,46 +26,51 @@ export function statusVariant(status: PaymentRow['status']) {
  * the cashier's next step is to update the app for THAT gateway; the other two
  * are conditions of the till, so they read as statements about the tile.
  */
-export function disabledReasonKey(reason: TileDisabledReason): string {
-	if (typeof reason === 'object') return 'pos_checkout.reader_in_use';
+export function disabledReasonText(
+	reason: TileDisabledReason,
+	title: string,
+	t: (key: string, values: Record<string, string>) => string
+): string {
+	if (typeof reason === 'object') return t('pos_checkout.reader_in_use', { title, ...reason });
 	switch (reason) {
 		case 'unsupported_mode':
-			return 'pos_checkout.update_app_to_use';
 		case 'no_driver':
-			return 'pos_checkout.update_app_to_use';
-		case 'driver_web':
-		case 'driver_permission':
-		case 'driver_bluetooth_off':
-		case 'driver_not_logged_in':
-			return `pos_checkout.${reason}`;
-		case 'no_readers':
-			return 'pos_checkout.no_readers_set_up';
-		case 'offline':
-			return 'pos_checkout.needs_a_connection';
-		case 'not_with_split':
-			return 'pos_checkout.not_with_split';
 		case 'unsupported_fields':
-			return 'pos_checkout.update_app_to_use';
+			return t('pos_checkout.update_app_to_use', { title });
+		case 'driver_web':
+			return t('pos_checkout.driver_web', { title });
+		case 'driver_permission':
+			return t('pos_checkout.driver_permission', { title });
+		case 'driver_bluetooth_off':
+			return t('pos_checkout.driver_bluetooth_off', { title });
+		case 'driver_not_logged_in':
+			return t('pos_checkout.driver_not_logged_in', { title });
+		case 'no_readers':
+			return t('pos_checkout.no_readers_set_up', { title });
+		case 'offline':
+			return t('pos_checkout.needs_a_connection', { title });
+		case 'not_with_split':
+			return t('pos_checkout.not_with_split', { title });
 	}
 }
 
-const FAILURE_KEYS: Record<string, string> = {
-	reader_session_lost: 'pos_checkout.reader_session_lost',
-	card_declined: 'pos_checkout.reason_card_declined',
-	expired: 'pos_checkout.reason_expired',
-	// The reader's own collect window ran out with no card presented (Stripe CARD_READ_TIMED_OUT).
-	timed_out: 'pos_checkout.reason_timed_out',
-	cancelled: 'pos_checkout.reason_cancelled',
-	// A provider that reports a declined card and a cancel on the reader identically (SumUp:
-	// both are FAILED with no reason) must not be read back to the cashier as a cancel.
-	declined_or_cancelled: 'pos_checkout.reason_declined_or_cancelled',
-	not_found: 'pos_checkout.reason_not_found',
-	amount_mismatch: 'pos_checkout.reason_amount_mismatch',
-	// The leg's own reason for a 4xx that carried no code (a proxy answering for the store).
-	refused: 'pos_checkout.reason_refused',
-};
 export function failureReasonLabel(reason: string | null, t: (key: string) => string): string {
-	return reason && FAILURE_KEYS[reason] ? t(FAILURE_KEYS[reason]) : (reason ?? '');
+	const labels: Record<string, string> = {
+		reader_session_lost: t('pos_checkout.reader_session_lost'),
+		card_declined: t('pos_checkout.reason_card_declined'),
+		expired: t('pos_checkout.reason_expired'),
+		// The reader's own collect window ran out with no card presented (Stripe CARD_READ_TIMED_OUT).
+		timed_out: t('pos_checkout.reason_timed_out'),
+		cancelled: t('pos_checkout.reason_cancelled'),
+		// A provider that reports a declined card and a cancel on the reader identically (SumUp:
+		// both are FAILED with no reason) must not be read back to the cashier as a cancel.
+		declined_or_cancelled: t('pos_checkout.reason_declined_or_cancelled'),
+		not_found: t('pos_checkout.reason_not_found'),
+		amount_mismatch: t('pos_checkout.reason_amount_mismatch'),
+		// The leg's own reason for a 4xx that carried no code (a proxy answering for the store).
+		refused: t('pos_checkout.reason_refused'),
+	};
+	return (reason ? labels[reason] : undefined) ?? reason ?? '';
 }
 
 export type EventTone = 'ok' | 'muted' | 'void' | 'warning' | 'error';

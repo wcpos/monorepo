@@ -35,7 +35,7 @@ export function useEventTitle(): (row: LogRow) => string {
 		(row: LogRow) => {
 			const type = eventTypeOf(row);
 			if (type !== undefined && isSyncEventType(type)) {
-				return translateEventTitle((key) => t(key), type);
+				return translateEventTitle(t, type);
 			}
 			// Own-property check: `in` would accept `toString` or `constructor` as a code.
 			if (
@@ -43,7 +43,7 @@ export function useEventTitle(): (row: LogRow) => string {
 				typeof row.code === 'string' &&
 				Object.prototype.hasOwnProperty.call(ERROR_CATALOGUE, row.code)
 			) {
-				return translateErrorSummary((key) => t(key), row.code as ErrorCode);
+				return translateErrorSummary(t, row.code as ErrorCode);
 			}
 			if (typeof row.message === 'string' && row.message.trim() !== '') return row.message;
 			return type ?? '';

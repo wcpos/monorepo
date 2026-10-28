@@ -7,37 +7,40 @@ export type NotificationAction = 'update-plugin' | 'renew';
 export type NotificationKind = {
 	icon: IconName;
 	tone: NotificationTone;
-	labelKey?: string;
+	label?: string;
 	action?: NotificationAction;
 };
 
-export function kindOf(workflowId: string | undefined | null): NotificationKind {
+export function kindOf(
+	workflowId: string | undefined | null,
+	t: (key: string) => string
+): NotificationKind {
 	switch (workflowId) {
 		case WORKFLOW_IDS.WELCOME:
-			return { icon: 'wave', tone: 'neutral', labelKey: 'notifications.kind_welcome' };
+			return { icon: 'wave', tone: 'neutral', label: t('notifications.kind_welcome') };
 		case WORKFLOW_IDS.PLUGIN_UPDATE:
 			return {
 				icon: 'download',
 				tone: 'info',
-				labelKey: 'notifications.kind_plugin_update',
+				label: t('notifications.kind_plugin_update'),
 				action: 'update-plugin',
 			};
 		case WORKFLOW_IDS.LICENSE_EXPIRING:
 			return {
 				icon: 'warning',
 				tone: 'warn',
-				labelKey: 'notifications.kind_license',
+				label: t('notifications.kind_license'),
 				action: 'renew',
 			};
 		case WORKFLOW_IDS.LICENSE_EXPIRED:
 			return {
 				icon: 'alert',
 				tone: 'bad',
-				labelKey: 'notifications.kind_license',
+				label: t('notifications.kind_license'),
 				action: 'renew',
 			};
 		case WORKFLOW_IDS.ANNOUNCEMENT:
-			return { icon: 'info', tone: 'info', labelKey: 'notifications.kind_announcement' };
+			return { icon: 'info', tone: 'info', label: t('notifications.kind_announcement') };
 		default:
 			return { icon: 'notifications', tone: 'neutral' };
 	}

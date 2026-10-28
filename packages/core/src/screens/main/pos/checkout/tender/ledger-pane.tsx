@@ -9,7 +9,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { isOfflineDeviceAuthorization, isSettledPaymentRow, toMinor } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
-import { statusLabelKey, statusVariant } from './labels';
+import { statusLabel, statusVariant } from './labels';
 import { useLocalDate } from '../../../../../hooks/use-local-date';
 import { useT } from '../../../../../contexts/translations';
 
@@ -236,7 +236,7 @@ function LedgerLeg({
 					{title ?? row.method_id}
 				</Text>
 				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
-				<StatusBadge label={t(statusLabelKey(row.status))} variant={statusVariant(row.status)} />
+				<StatusBadge label={statusLabel(row.status, t)} variant={statusVariant(row.status)} />
 			</HStack>
 			{time ? (
 				<Text className="text-muted-foreground text-xs tabular-nums">
@@ -258,11 +258,9 @@ function LedgerLeg({
 			) : null}
 			{row.recorded_offline ? (
 				<Text className="text-muted-foreground text-xs">
-					{t(
-						isOfflineDeviceAuthorization(row)
-							? 'pos_checkout.settles_later'
-							: 'pos_checkout.recorded_offline'
-					)}
+					{isOfflineDeviceAuthorization(row)
+						? t('pos_checkout.settles_later')
+						: t('pos_checkout.recorded_offline')}
 				</Text>
 			) : null}
 		</VStack>

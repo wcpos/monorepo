@@ -23,7 +23,7 @@ import { actionUrl, kindOf } from './notification-kind';
 
 const TONES = {
 	info: { tile: 'bg-info/10', icon: 'text-info' },
-	warn: { tile: 'bg-warn-bg', icon: 'text-warn-text' },
+	warn: { tile: 'bg-warning-bg', icon: 'text-warning-text' },
 	bad: { tile: 'bg-bad-bg', icon: 'text-bad' },
 	neutral: { tile: 'bg-muted', icon: 'text-foreground' },
 };
@@ -40,9 +40,9 @@ function NotificationItem({
 	const t = useT();
 	const unread = notification.status === 'unread';
 	const timeAgo = useDateFormat(notification.createdAt);
-	const kind = kindOf(notification.workflowId);
+	const kind = kindOf(notification.workflowId, t);
 	const tone = TONES[kind.tone];
-	const kindLabel = kind.labelKey ? t(kind.labelKey) : '';
+	const kindLabel = kind.label ?? '';
 	const handlePress = () => {
 		if (unread) onMarkAsRead(notification.id);
 	};
