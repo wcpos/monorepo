@@ -133,6 +133,9 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 					paddingBottom: (insets.paddingBottom ?? 0) + gutter,
 					paddingStart: gutter,
 					paddingEnd: gutter,
+					// The rail's cashier square sits above the groups, one dense-strip gutter from the first item,
+					// the same gap the groups keep between their squares.
+					gap: rail ? gutter : undefined,
 					alignItems: rail ? 'center' : undefined,
 					justifyContent: 'flex-start',
 					// flexGrow (not height: '100%') so the bottom group's auto margin still anchors when
