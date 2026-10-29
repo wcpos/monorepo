@@ -52,6 +52,8 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	};
 });
 jest.mock('react-native', () => ({
+	// DeviceRow reads the layout boundary; a wide pane.
+	useWindowDimensions: () => ({ width: 1024, height: 768 }),
 	View: ({
 		children,
 		className,

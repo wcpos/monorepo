@@ -5,7 +5,7 @@ import { decode } from 'html-entities';
 
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { DeviceRow } from '@wcpos/components/device-row';
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { HStack } from '@wcpos/components/hstack';
@@ -284,9 +284,11 @@ function TapToPayRow({
 			}}
 		>
 			{canAccept ? (
-				<Button disabled={busy} onPress={onSetUp} testID={`tap-to-pay-row-${method.id}-set-up`}>
-					<ButtonText>{t('settings.card_readers.set_up_tap_to_pay')}</ButtonText>
-				</Button>
+				<DeviceRowActions>
+					<Button disabled={busy} onPress={onSetUp} testID={`tap-to-pay-row-${method.id}-set-up`}>
+						<ButtonText>{t('settings.card_readers.set_up_tap_to_pay')}</ButtonText>
+					</Button>
+				</DeviceRowActions>
 			) : null}
 		</DeviceRow>
 	);

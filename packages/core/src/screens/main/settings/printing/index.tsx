@@ -214,7 +214,7 @@ export function PrintingSettings() {
 						}}
 					/>
 				) : (
-					<View className="gap-2">
+					<View>
 						{printers.map((profile) => (
 							<PrinterRow
 								key={profile.id}
@@ -254,7 +254,7 @@ export function PrintingSettings() {
 				{templates.length === 0 ? (
 					<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
 				) : (
-					<View className="gap-2">
+					<View>
 						{templates.map((tmpl) => {
 							const tmplId = String(tmpl.id);
 							const currentOverride = overrides.get(tmplId);
