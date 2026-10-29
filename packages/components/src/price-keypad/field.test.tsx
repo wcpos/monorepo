@@ -70,17 +70,20 @@ jest.mock('../grow-keypad', () => ({
 		rows,
 		children,
 		onOpenChange,
+		className,
 	}: {
 		rows: { display?: React.ReactNode }[][];
 		children: React.ReactNode;
 		onOpenChange: (open: boolean) => void;
+		className?: string;
 	}) => {
 		mockOpenChange = onOpenChange;
+		// The primitive's root is a View around the trigger; the shell hands it these classes.
 		return (
-			<>
+			<div data-testid="grow-root" className={className}>
 				{children}
 				{rows[0][0].display}
-			</>
+			</div>
 		);
 	},
 }));
@@ -134,7 +137,10 @@ describe('a key (the Quick Discounts setting) rests as the quick key the cashier
 	it('reads the key in primary ink, filling its cell, its display row inset as a field', () => {
 		renderKeypad({ rest: 'key' });
 		const trigger = screen.getByTestId('price');
-		expect(trigger.className).toContain('h-full w-full');
+		// The key fills the popover root and the root fills the cell: a percentage height on the
+		// key alone drew it 18 px tall inside a content-sized root (#3069).
+		expect(trigger.className).toContain('w-full flex-1');
+		expect(screen.getByTestId('grow-root').className).toBe('flex-1');
 		expect(trigger.className).not.toContain('bg-primary');
 		expect(trigger.textContent).toBe('−10%');
 		expect(trigger.querySelector('span')!.className).toMatch(/\btext-primary(\s|$)/);

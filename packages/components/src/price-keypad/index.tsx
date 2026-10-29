@@ -157,6 +157,8 @@ export function PriceKeypad({
 	return (
 		<GrowKeypad
 			ref={shell}
+			// A key fills its cell: the popover root must fill it first (see `GrowKeypad`).
+			className={rest === 'key' ? 'flex-1' : undefined}
 			rows={[
 				display,
 				...(quick.length ? [quick] : []),
@@ -188,7 +190,8 @@ export function PriceKeypad({
 					on={open || (value === undefined ? undefined : false)}
 					// A blank slot's `–` is muted, at the keys' size.
 					textClassName={value === undefined && !open ? 'text-muted-foreground text-sm' : undefined}
-					className="h-full w-full"
+					// Fills the popover root, which fills the cell (`GrowKeypad`'s `className`).
+					className="w-full flex-1"
 				/>
 			) : rest === 'field' ? (
 				// A form's price rests as the field box, as an Input does.

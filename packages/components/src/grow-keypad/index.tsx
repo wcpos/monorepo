@@ -57,6 +57,12 @@ type GrowKeypadProps = {
 	/** `discarded`: Escape or `dismiss()`, so nothing typed is committed. */
 	onClose: (discarded: boolean) => void;
 	onOpenChange?: (open: boolean) => void;
+	/**
+	 * The popover root's classes. The primitive's root is a plain `View` around the trigger, so a
+	 * trigger meant to fill its cell (`flex-1`) must fill this first: a percentage height on the
+	 * trigger resolves against a content-sized root and draws 18 px tall (#3069, 2026-10-29).
+	 */
+	className?: string;
 	ref?: React.Ref<GrowKeypadHandle>;
 };
 
@@ -80,6 +86,7 @@ export function GrowKeypad({
 	onOpen,
 	onClose,
 	onOpenChange: onOpenChangeProp,
+	className,
 	ref,
 }: GrowKeypadProps) {
 	const trigger = React.useRef<TriggerRef>(null);
@@ -143,7 +150,7 @@ export function GrowKeypad({
 	};
 
 	return (
-		<Popover onOpenChange={onOpenChange}>
+		<Popover onOpenChange={onOpenChange} className={className}>
 			<PopoverTrigger ref={trigger} asChild disabled={disabled}>
 				{children}
 			</PopoverTrigger>
