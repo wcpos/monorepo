@@ -72,6 +72,7 @@ export function RegisterPanel({
 		terms,
 		salesCount,
 		blind,
+		figuresPending,
 		movements,
 		refusedMovements,
 		lastClosure,
@@ -228,7 +229,11 @@ export function RegisterPanel({
 					<View className="min-w-0 flex-1 gap-1.5">
 						<DialogTitle asChild>
 							<AmountFigure testID="register-panel-amount">
-								{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+								{blind
+									? binding.registerName
+									: figuresPending
+										? '—'
+										: format(Number(expected.cash ?? 0))}
 							</AmountFigure>
 						</DialogTitle>
 						{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
@@ -263,6 +268,14 @@ export function RegisterPanel({
 						/>
 					)}
 				</DialogHeader>
+				{figuresPending && (
+					<Notice
+						tone="info"
+						testID="register-panel-figures-pending"
+						className="mx-4"
+						title={t('register.figures_after_sync')}
+					/>
+				)}
 				{refused.length > 0 && (
 					<Notice
 						tone="bad"
@@ -309,7 +322,7 @@ export function RegisterPanel({
 									t('register.float'),
 									openedTime && t('register.opened_suffix', { time: openedTime })
 								)}
-								{amount(format(Number(terms.float)))}
+								{amount(figuresPending ? '—' : format(Number(terms.float)))}
 							</View>
 							<View className={STATIC_ROW}>
 								{term(t('register.cash_sales'), terms.cashSales.count)}
@@ -353,7 +366,7 @@ export function RegisterPanel({
 							{!blind && (
 								<View testID="register-panel-expected" className={STATIC_ROW}>
 									{term(t('register.expected_in_drawer'), undefined, false, true)}
-									{amount(format(Number(terms.expected)), false, true)}
+									{amount(figuresPending ? '—' : format(Number(terms.expected)), false, true)}
 								</View>
 							)}
 							{others.length > 0 && (
@@ -432,7 +445,7 @@ export function RegisterPanel({
 					intent={{
 						label: t('register.close_register'),
 						testID: 'register-panel-close-register',
-						disabled: !session,
+						disabled: !session || figuresPending,
 						onPress: () =>
 							void attempt(async () => {
 								await actions.startCounting();

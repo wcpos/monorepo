@@ -12,6 +12,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let currentFiguresPending = false;
 let expected: Record<string, string> = { cash: '155', card: '30' };
 const baseTerms = {
 	float: '100',
@@ -41,6 +42,7 @@ const showToast = jest.fn();
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
+		figuresPending: currentFiguresPending,
 		session: currentSession,
 		binding: { registerName: 'Front' },
 		expected,
@@ -242,6 +244,7 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
+	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
 	terms = baseTerms;
@@ -560,3 +563,28 @@ it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
 		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
 	}
 );
+
+it('says the figures are still to come on a seeded session and will not close the register', () => {
+	currentSession = {
+		...currentSession,
+		counted_float: null,
+		expected_float: null,
+		server_expected_at: null,
+	};
+	currentFiguresPending = true;
+	terms = { ...baseTerms, float: '0' };
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-figures-pending').textContent).toContain(
+		'register.figures_after_sync'
+	);
+	const floatRow = screen.getByText('register.float').parentElement;
+	expect(floatRow?.textContent).toContain('—');
+	expect(floatRow?.textContent).not.toContain('£0.00');
+	expect(screen.getByTestId('register-panel-amount').textContent).toBe('—');
+	expect(screen.getByTestId('register-panel-expected').textContent).toContain('—');
+	expect(screen.getByTestId('register-panel-expected').textContent).not.toContain('£');
+	const close = screen.getByTestId('register-panel-close-register');
+	expect(close.hasAttribute('disabled')).toBe(true);
+	fireEvent.click(close);
+	expect(startCounting).not.toHaveBeenCalled();
+});

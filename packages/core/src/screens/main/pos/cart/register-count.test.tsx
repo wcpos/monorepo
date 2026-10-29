@@ -78,6 +78,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
+let figuresPending = false;
 let blind = false,
 	approval_required = false,
 	varianceThreshold = '';
@@ -92,6 +93,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
+		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),
 }));
@@ -121,6 +123,7 @@ const enter = (value: string) =>
 beforeEach(() => {
 	approved_counted = null;
 	unsyncedCount = 3;
+	figuresPending = false;
 	blind = false;
 	approval_required = false;
 	varianceThreshold = '';
@@ -223,6 +226,18 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 		})
 	);
 	expect(closeSession).toHaveBeenCalledWith({ counted: { cash: '480.80', card: '22' } });
+});
+
+it('a seeded counting session says the figures are still to come and cannot close', () => {
+	figuresPending = true;
+	render(<RegisterCount onClosed={jest.fn()} />);
+	expect(screen.getByTestId('count-figures-pending').textContent).toContain(
+		'Figures arrive with the next sync.'
+	);
+	enter('480.80');
+	expect((screen.getByTestId('count-close') as HTMLButtonElement).disabled).toBe(true);
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(closeSession).not.toHaveBeenCalled();
 });
 
 it('returns to selling without closing', async () => {

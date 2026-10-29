@@ -13,6 +13,7 @@ import {
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,
 	markAnchored,
+	markCountingHere,
 	markSeededIn,
 	mintClosureNumber,
 	nextSaleCounter,
@@ -305,6 +306,7 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 		counted_float: null,
 		business_day: null,
 		seeded_in: ['db-a'],
+		counting_here: true,
 		at: '2026-10-28T13:05:00Z',
 	};
 	// A closure the source till has in flight is the source's, not the clone's.
@@ -343,7 +345,11 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 		register_store_id: 1,
 		registers: { 'server-register': { last_closure_number: 4, perpetual_sales_total: '10.0000' } },
 	});
-	expect(fresh.sites.site.registers?.['server-register']?.live).toEqual({ ...live, seeded_in: [] });
+	expect(fresh.sites.site.registers?.['server-register']?.live).toEqual({
+		...live,
+		seeded_in: [],
+		counting_here: false,
+	});
 	expect(fresh.sites.site.registers?.['server-register']).not.toHaveProperty('closure_reservation');
 	expect(fresh.sites.other.sale_counter).toBe(0);
 	// The next sale starts the new till's own run, and the cached identity moved with it.
@@ -555,15 +561,28 @@ it("caches a register's live session on the device and clears it", async () => {
 	expect(readLiveSession('site', 'A')).toMatchObject({
 		session_id: 's1',
 		status: 'open',
+		counting_here: false,
 	});
 	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'counting' });
+	expect(readLiveSession('site', 'A')?.counting_here).toBe(false);
+	await markCountingHere(db, 'site', 'A', true);
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'counting' });
+	expect(readLiveSession('site', 'A')?.counting_here).toBe(true);
+	await markCountingHere(db, 'site', 'A', false);
+	expect(readLiveSession('site', 'A')?.counting_here).toBe(false);
+	await markCountingHere(db, 'site', 'A', true);
+	await recordLiveSession(db, 'site', 'A', { ...base, session_id: 's1', status: 'open' });
+	expect(readLiveSession('site', 'A')?.counting_here).toBe(false);
+	await markCountingHere(db, 'site', 'A', true);
 	await recordLiveSession(db, 'site', 'A', {
 		...base,
 		session_id: 's2',
-		status: 'open',
+		status: 'counting',
 		opened_by: null,
 	});
+	expect(readLiveSession('site', 'A')?.counting_here).toBe(false);
 	await recordLiveSession(db, 'site', 'A', null);
+	await markCountingHere(db, 'site', 'A', true);
 	expect(readLiveSession('site', 'A')).toBeNull();
 });
 it('keeps seed destinations once per database for the same session and resets them for a new session', async () => {

@@ -20,6 +20,7 @@ export type LiveSession = {
 	counted_float: string | null;
 	business_day: string | null;
 	seeded_in: readonly string[];
+	counting_here: boolean;
 	at: string;
 };
 
@@ -160,7 +161,10 @@ function reminted(data: RegisterDocument, identity: TillIdentity): RegisterDocum
 									Object.entries(bucket.registers).map(
 										([register, { closure_reservation: _pending, live, ...counters }]) => [
 											register,
-											{ ...counters, ...(live ? { live: { ...live, seeded_in: [] } } : {}) },
+											{
+												...counters,
+												...(live ? { live: { ...live, seeded_in: [], counting_here: false } } : {}),
+											},
 										]
 									)
 								),
@@ -587,7 +591,7 @@ export async function recordLiveSession(
 	userDB: UserDatabase,
 	siteUuid: string,
 	registerId: string,
-	live: Omit<LiveSession, 'seeded_in' | 'at'> | null
+	live: Omit<LiveSession, 'seeded_in' | 'counting_here' | 'at'> | null
 ): Promise<void> {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
 	if (!doc) throw new Error('Register is not initialized');
@@ -597,6 +601,10 @@ export async function recordLiveSession(
 		if (live)
 			register.live = {
 				...live,
+				counting_here:
+					live.session_id === register.live?.session_id && live.status === 'counting'
+						? (register.live.counting_here ?? false)
+						: false,
 				seeded_in: live.session_id === register.live?.session_id ? register.live.seeded_in : [],
 				at: new Date().toISOString(),
 			};
@@ -620,6 +628,25 @@ export async function markSeededIn(
 		const register = bucket?.registers?.[registerId];
 		if (!register?.live || register.live.seeded_in.includes(storeDbName)) return data;
 		const live = { ...register.live, seeded_in: [...register.live.seeded_in, storeDbName] };
+		const registers = { ...bucket.registers, [registerId]: { ...register, live } };
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+
+export async function markCountingHere(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	here: boolean
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid];
+		const register = bucket?.registers?.[registerId];
+		if (!register?.live) return data;
+		const live = { ...register.live, counting_here: here };
 		const registers = { ...bucket.registers, [registerId]: { ...register, live } };
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});
