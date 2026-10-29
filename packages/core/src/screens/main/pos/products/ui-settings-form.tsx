@@ -11,7 +11,10 @@ import { useDialog } from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Form,
+	FormDescription,
 	FormField,
+	FormItem,
+	FormLabel,
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
@@ -224,9 +227,9 @@ export function UISettingsForm() {
 								control={form.control}
 								name="gridColumns"
 								render={({ field }) => (
-									<View className="gap-2 px-1">
+									<FormItem>
 										<HStack className="items-center justify-between">
-											<Text>{getUILabel('gridColumns')}</Text>
+											<FormLabel>{getUILabel('gridColumns')}</FormLabel>
 											<Text className="text-muted-foreground">{field.value}</Text>
 										</HStack>
 										<Slider
@@ -236,7 +239,7 @@ export function UISettingsForm() {
 											max={8}
 											step={1}
 										/>
-									</View>
+									</FormItem>
 								)}
 							/>
 							<View className="gap-2 px-1 pt-2">
@@ -266,22 +269,22 @@ export function UISettingsForm() {
 					) : (
 						<UISettingsColumnsForm getUILabel={getUILabel} />
 					)}
-					<View className="gap-1 px-1">
-						<HStack className="items-center justify-between">
-							<Text>{getUILabel('metaDataKeys')}</Text>
-							<DocsLink testID="meta-data-keys-docs-link" href={META_DATA_KEYS_DOCS_URL}>
-								{t('common.learn_more')}
-							</DocsLink>
-						</HStack>
-						<FormField
-							control={form.control}
-							name="metaDataKeys"
-							render={({ field }) => (
+					<FormField
+						control={form.control}
+						name="metaDataKeys"
+						render={({ field }) => (
+							<FormItem>
+								<HStack className="items-center justify-between">
+									<FormLabel>{getUILabel('metaDataKeys')}</FormLabel>
+									<DocsLink testID="meta-data-keys-docs-link" href={META_DATA_KEYS_DOCS_URL}>
+										{t('common.learn_more')}
+									</DocsLink>
+								</HStack>
 								<MetaDataKeysField value={field.value} onChange={field.onChange} />
-							)}
-						/>
-						<Text variant="key">{t('pos_products.meta_data_keys_description')}</Text>
-					</View>
+								<FormDescription>{t('pos_products.meta_data_keys_description')}</FormDescription>
+							</FormItem>
+						)}
+					/>
 					<View className="gap-2 px-1 pt-2">
 						<SectionHeading
 							title={getUILabel('filterBar')}
@@ -346,8 +349,8 @@ function BrowseByField({
 		},
 	];
 	return (
-		<View className="gap-1 px-1">
-			<Text>{t('pos_products.browse_by')}</Text>
+		<FormItem>
+			<FormLabel>{t('pos_products.browse_by')}</FormLabel>
 			<View
 				role="radiogroup"
 				aria-label={t('pos_products.browse_by')}
@@ -384,6 +387,6 @@ function BrowseByField({
 					);
 				})}
 			</View>
-		</View>
+		</FormItem>
 	);
 }

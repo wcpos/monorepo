@@ -122,9 +122,15 @@ jest.mock('@wcpos/components/form', () => {
 			</button>
 		));
 	}
+	const { FormDescription, FormItem, FormLabel } = jest.requireActual(
+		'../../../../../../components/src/form/common'
+	);
 	return {
 		Form: FormProvider,
+		FormDescription,
 		FormField,
+		FormItem,
+		FormLabel,
 		FormSegmentedControl,
 		FormSelect,
 		FormSwitch,
@@ -363,6 +369,14 @@ it('labels each segmented field with the form label that names its radiogroup', 
 		['sortDirection', 'sort-direction-asc'],
 	]) {
 		expect(screen.getByRole('radiogroup', { name })).toContainElement(screen.getByTestId(segment));
+	}
+});
+
+it('draws every other field label as the form label, never body text', () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
+	for (const label of ['pos_products.browse_by', 'gridColumns', 'metaDataKeys']) {
+		expect(screen.getByText(label).tagName).toBe('LABEL');
 	}
 });
 
