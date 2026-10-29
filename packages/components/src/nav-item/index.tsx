@@ -28,9 +28,9 @@ const sizes: Record<NavItemSize, string> = {
 };
 
 /**
- * One navigation row: the area list's rows, the drawer's items and its bell. The selected row
- * lifts onto `bg-card` (the surface the content sits on), and the surface's press and hover wash
- * is the same lift.
+ * One navigation row: the area list's rows and the drawer's items. The selected row lifts onto
+ * `bg-card` (the surface the content sits on), and the surface's press and hover wash is the same
+ * lift.
  */
 export function NavItem({
 	selected = false,

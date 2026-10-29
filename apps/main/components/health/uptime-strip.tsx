@@ -101,21 +101,15 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 			<HStack className="flex-wrap gap-x-4 gap-y-1">
 				<HStack className="items-center gap-1.5">
 					<View className="bg-ok h-3 w-3 rounded-sm opacity-75" />
-					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_running')}
-					</Text>
+					<Text variant="help">{t('health.performance.uptime_running')}</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
 					<View className="border-warning h-3 w-3 rounded-sm border" />
-					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_errors')}
-					</Text>
+					<Text variant="help">{t('health.performance.uptime_errors')}</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
 					<View className="border-border h-3 w-3 rounded-sm border" />
-					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_closed')}
-					</Text>
+					<Text variant="help">{t('health.performance.uptime_closed')}</Text>
 				</HStack>
 			</HStack>
 		</VStack>

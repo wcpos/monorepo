@@ -207,8 +207,8 @@ function DivergenceNotice({
 		<>
 			{named.map((entry) => (
 				<HStack key={entry.field} testID={`${testID}-field-${entry.field}`} className="gap-2">
-					<Text className="text-muted-foreground text-sm">{entry.label(t)}</Text>
-					<Text className="text-sm font-medium">
+					<Text variant="key">{entry.label(t)}</Text>
+					<Text variant="subheading">
 						{t('pos_cart.totals_disagree_change', {
 							before: entry.expected,
 							after: entry.got,
@@ -218,19 +218,17 @@ function DivergenceNotice({
 			))}
 
 			{lineLevelCount > 0 ? (
-				<Text testID={`${testID}-line-amounts`} className="text-muted-foreground text-xs">
+				<Text testID={`${testID}-line-amounts`} variant="help">
 					{t('pos_cart.totals_disagree_line_amounts', { count: lineLevelCount })}
 				</Text>
 			) : null}
 
 			{storeLevel ? (
 				<VStack testID={`${testID}-store-level`} className="border-warning/30 gap-1 border-t pt-1">
-					<Text className="text-sm font-medium">
+					<Text variant="subheading">
 						{t('pos_cart.totals_disagree_store_level_title', { count: divergedOrderCount })}
 					</Text>
-					<Text className="text-muted-foreground text-sm">
-						{t('pos_cart.totals_disagree_store_level_body')}
-					</Text>
+					<Text variant="key">{t('pos_cart.totals_disagree_store_level_body')}</Text>
 				</VStack>
 			) : null}
 		</>
@@ -259,15 +257,9 @@ function EngineWarningNotice({
 
 	return (
 		<VStack testID={`${testID}-engine-warnings`} className={separated ? 'mt-2 gap-1' : 'gap-1'}>
-			{separated && (
-				<Text className="text-sm font-medium">{t('pos_cart.engine_warnings_title')}</Text>
-			)}
+			{separated && <Text variant="subheading">{t('pos_cart.engine_warnings_title')}</Text>}
 			{warnings.map((code) => (
-				<Text
-					key={code}
-					testID={`${testID}-engine-warning-${code}`}
-					className="text-muted-foreground text-sm"
-				>
+				<Text key={code} testID={`${testID}-engine-warning-${code}`} variant="key">
 					{engineWarningText(code, t)}
 				</Text>
 			))}

@@ -67,11 +67,11 @@ export function TrendFrame({
 	return (
 		<View testID={testID} className="gap-2">
 			<HStack className="items-baseline justify-between">
-				<Text testID={`${testID}-label`} className="text-sm font-medium">
+				<Text testID={`${testID}-label`} variant="subheading">
 					{label}
 				</Text>
 				<HStack className="items-baseline gap-1.5">
-					<Text testID={`${testID}-time`} className="text-muted-foreground text-xs tabular-nums">
+					<Text testID={`${testID}-time`} variant="help" tabular>
 						{readout !== undefined && formatTime ? formatTime(readout.x) : ''}
 					</Text>
 					<Text testID={`${testID}-latest`} className="text-sm font-semibold tabular-nums">
@@ -84,7 +84,7 @@ export function TrendFrame({
 					children
 				) : (
 					<View className="bg-muted/30 flex-1 items-center justify-center rounded-md">
-						<Text testID={`${testID}-waiting`} className="text-muted-foreground text-xs">
+						<Text testID={`${testID}-waiting`} variant="help">
 							{t('health.performance.trend_not_enough_data')}
 						</Text>
 					</View>

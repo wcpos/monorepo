@@ -188,12 +188,12 @@ export function TerminalLegView({
 		>
 			<HStack className="w-full flex-wrap justify-between gap-2">
 				{leg.orderNumber ? (
-					<Text className="text-muted-foreground text-xs">
+					<Text variant="help">
 						{t('common.order')} #{leg.orderNumber} ·{' '}
 						{t('coupons.items_summary', { n: flow.lines.length })}
 					</Text>
 				) : null}
-				<Text className="text-muted-foreground text-xs" decodeHtml>
+				<Text variant="help" decodeHtml>
 					{flow.plan ? flow.planLabel : t('pos_checkout.payment_n_of', { n: 1, ways: 1 })}
 				</Text>
 			</HStack>
@@ -210,7 +210,7 @@ export function TerminalLegView({
 			{/* Flat on the pane: no card around the reader, no box around the log (owner, 2026-10-06). */}
 			<VStack className="w-full max-w-md" space="md">
 				<HStack className="items-center justify-between gap-2 pt-4">
-					<Text className="text-muted-foreground shrink text-xs" numberOfLines={1} decodeHtml>
+					<Text variant="help" className="shrink" numberOfLines={1} decodeHtml>
 						{method?.title ?? row.method_id} · {readerLabel}
 					</Text>
 					{connected ? (
@@ -235,7 +235,7 @@ export function TerminalLegView({
 					<HStack className="min-h-row items-center justify-between">
 						{/* The trigger draws its own chevron. */}
 						<CollapsibleTrigger testID="checkout-terminal-log-toggle">
-							<Text className="text-muted-foreground text-sm">
+							<Text variant="key">
 								{open ? t('pos_checkout.hide_details') : t('pos_checkout.details')}
 							</Text>
 						</CollapsibleTrigger>
@@ -327,7 +327,7 @@ export function TerminalLegView({
 				) : null}
 			</View>
 			{action === 'release' ? (
-				<Text className="text-muted-foreground text-sm">{t('pos_checkout.release_explainer')}</Text>
+				<Text variant="key">{t('pos_checkout.release_explainer')}</Text>
 			) : null}
 			<View className="min-h-4 flex-1" />
 		</ScrollView>

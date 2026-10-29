@@ -58,11 +58,11 @@ function LineItemRow({
 					{/* A line item's name is the product title copied at sale time, so it
 					    carries the same HTML entities the catalogue does — the cart decodes
 					    it via EditableField, and this read-only view must match. */}
-					<Text className="text-foreground text-sm font-medium" numberOfLines={2} decodeHtml>
+					<Text variant="subheading" numberOfLines={2} decodeHtml>
 						{item.name || '—'}
 					</Text>
 					{item.parent_name && item.parent_name !== item.name ? (
-						<Text className="text-muted-foreground text-xs" decodeHtml>
+						<Text variant="help" decodeHtml>
 							{item.parent_name}
 						</Text>
 					) : null}
@@ -82,7 +82,7 @@ function LineItemRow({
 							</Text>
 						))}
 						{phone ? (
-							<Text className="text-muted-foreground text-xs tabular-nums">
+							<Text variant="help" tabular>
 								{discounted ? `${format(unit)} · ` : ''}
 								{discounted ? (
 									<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
@@ -104,11 +104,15 @@ function LineItemRow({
 							{format(originalUnit)}
 						</Text>
 					) : null}
-					<Text className="text-muted-foreground text-sm tabular-nums">{format(unit)}</Text>
+					<Text variant="key" tabular>
+						{format(unit)}
+					</Text>
 				</View>
 			)}
 			<View className="w-20 items-end">
-				<Text className="text-foreground text-sm font-medium tabular-nums">{format(total)}</Text>
+				<Text variant="subheading" tabular>
+					{format(total)}
+				</Text>
 			</View>
 		</View>
 	);
@@ -137,10 +141,10 @@ function FeeRow({
 					<Text className="text-primary text-base font-semibold">+</Text>
 				</View>
 				<View className="min-w-0 flex-1 gap-0.5">
-					<Text className="text-foreground text-sm font-medium" decodeHtml>
+					<Text variant="subheading" decodeHtml>
 						{fee.name || t('pos_cart.fees')}
 					</Text>
-					<Text className="text-muted-foreground text-xs">
+					<Text variant="help">
 						{t('pos_cart.fees')}
 						{fee.tax_status === 'taxable' ? ` · ${t('common.taxable')}` : ''}
 					</Text>
@@ -148,7 +152,7 @@ function FeeRow({
 			</View>
 			{phone ? null : <View className="w-20" />}
 			<View className="w-20 items-end">
-				<Text className="text-foreground text-sm font-medium tabular-nums">
+				<Text variant="subheading" tabular>
 					{format(toNumber(fee.total))}
 				</Text>
 			</View>

@@ -50,7 +50,9 @@ export function OrderTotal({
 				<Text className="text-bad text-right text-sm tabular-nums">{format(-refundTotal)}</Text>
 			)}
 			{paymentMethodTitle && (
-				<Text className="text-muted-foreground text-right text-sm">{paymentMethodTitle}</Text>
+				<Text variant="key" className="text-right">
+					{paymentMethodTitle}
+				</Text>
 			)}
 		</>
 	);

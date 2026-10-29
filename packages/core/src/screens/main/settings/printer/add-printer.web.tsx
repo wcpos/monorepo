@@ -258,7 +258,7 @@ function EditPrinterDialog({
 					)}
 					{webDeviceSection}
 					{discovery.error && (
-						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-discovery-error" variant="help">
 							{formatDiscoveryError(discovery.error, t)}
 						</Text>
 					)}

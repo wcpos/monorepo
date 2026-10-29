@@ -13,7 +13,7 @@ const chevron = <Icon name="chevronRight" className="text-muted-foreground" />;
 const person = (name: string, line: string) => (
 	<>
 		<Text numberOfLines={1}>{name}</Text>
-		<Text numberOfLines={1} className="text-muted-foreground text-sm">
+		<Text numberOfLines={1} variant="key">
 			{line}
 		</Text>
 	</>

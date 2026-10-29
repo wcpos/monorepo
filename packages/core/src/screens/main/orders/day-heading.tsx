@@ -44,7 +44,7 @@ export function DayHeading({ day, label }: DayItem) {
 			// A band, not a row (`h-band`, 28 at Regular): at row height it read as an empty order.
 			className="h-band bg-background border-border justify-center border-b px-3"
 		>
-			<Text className="text-muted-foreground text-xs tracking-wide uppercase">{label}</Text>
+			<Text variant="caption">{label}</Text>
 		</View>
 	);
 }

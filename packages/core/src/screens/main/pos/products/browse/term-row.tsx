@@ -103,7 +103,7 @@ export function TermRow({
 				{name}
 			</Text>
 			{sub ? (
-				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+				<Text variant="help" numberOfLines={1}>
 					{sub}
 				</Text>
 			) : null}

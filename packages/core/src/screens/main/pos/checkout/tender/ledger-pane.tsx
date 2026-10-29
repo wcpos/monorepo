@@ -113,7 +113,7 @@ export function BalanceHeadline({
 				{format(flow.balanceMinor)}
 			</AmountFigure>
 			{partPaid ? (
-				<Text className="text-muted-foreground text-xs">
+				<Text variant="help">
 					{t('pos_checkout.paid_of_total', {
 						paid: format(flow.paidMinor),
 						total: format(flow.totalMinor),
@@ -152,7 +152,7 @@ export function LedgerLegs({
 	const legs =
 		view.rows.length === 0 ? (
 			view.invoiceSent ? (
-				<Text testID="checkout-ledger-sent" className="text-muted-foreground text-sm" decodeHtml>
+				<Text testID="checkout-ledger-sent" variant="key" decodeHtml>
 					{view.invoiceSent.destination
 						? t('pos_checkout.invoice_sent_awaiting', { destination: view.invoiceSent.destination })
 						: t('pos_checkout.invoice_sent_awaiting_customer')}
@@ -233,32 +233,28 @@ function LedgerLeg({
 	return (
 		<VStack space="xs" testID={`checkout-leg-${row.id}`} className="border-border border-b py-2">
 			<HStack className="items-center justify-between gap-2">
-				<Text className="flex-1 text-sm font-medium" decodeHtml>
+				<Text variant="subheading" className="flex-1" decodeHtml>
 					{title ?? row.method_id}
 				</Text>
 				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
 				<StatusBadge label={statusLabel(row.status, t)} variant={statusVariant(row.status)} />
 			</HStack>
 			{time ? (
-				<Text className="text-muted-foreground text-xs tabular-nums">
+				<Text variant="help" tabular>
 					{formatDate(new Date(time), 'p')}
 				</Text>
 			) : null}
-			{next ? (
-				<Text className="text-muted-foreground text-xs">{t('pos_checkout.next_leg')}</Text>
-			) : null}
+			{next ? <Text variant="help">{t('pos_checkout.next_leg')}</Text> : null}
 			{row.tip && toMinor(row.tip, view.dp) > 0 ? (
-				<Text testID={`checkout-leg-tip-${row.id}`} className="text-muted-foreground text-xs">
+				<Text testID={`checkout-leg-tip-${row.id}`} variant="help">
 					{t('pos_checkout.leg_tip', { amount: format(toMinor(row.tip, view.dp)) })}
 				</Text>
 			) : null}
 			{tendered ? (
-				<Text className="text-muted-foreground text-xs">
-					{t('pos_checkout.leg_tendered_change', tendered)}
-				</Text>
+				<Text variant="help">{t('pos_checkout.leg_tendered_change', tendered)}</Text>
 			) : null}
 			{row.recorded_offline ? (
-				<Text className="text-muted-foreground text-xs">
+				<Text variant="help">
 					{isOfflineDeviceAuthorization(row)
 						? t('pos_checkout.settles_later')
 						: t('pos_checkout.recorded_offline')}

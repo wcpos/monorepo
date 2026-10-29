@@ -58,7 +58,7 @@ export function SiteHeader({ site }: { site: Pick<ReadonlySiteRecord, 'name' | '
 			/>
 			<VStack className="flex-1 gap-0.5">
 				<Text className="text-base font-semibold">{site.name}</Text>
-				<Text className="text-muted-foreground text-sm">{site.url}</Text>
+				<Text variant="key">{site.url}</Text>
 			</VStack>
 		</HStack>
 	);

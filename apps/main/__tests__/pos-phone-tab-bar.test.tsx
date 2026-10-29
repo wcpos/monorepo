@@ -16,6 +16,9 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/core/screens/main/pos/cart/cart-tab-count', () => ({
+	CartTabCount: () => 'cart-tab-count',
+}));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'Slot' }));
 
 let view: ReactTestRenderer | undefined;
@@ -40,6 +43,19 @@ it('draws Products and Cart, marks the active tab and hands a press back', () =>
 	expect(tab('pos-tab-bar').props.edges).toEqual(['bottom']);
 	act(() => tab('pos-tab-products').props.onPress());
 	expect(onSelect).toHaveBeenCalledWith('products');
+});
+
+// The Cart tab counts the cart over its icon; the Products tab carries no badge, and the label
+// stays the word (Paul, 2026-10-28).
+it('draws the cart count on the Cart tab only', () => {
+	act(() => {
+		view = create(<POSPhoneTabBar active="products" onSelect={jest.fn()} />);
+	});
+	const badges = (id: string) =>
+		tab(id).findAll((node) => node.children.includes('cart-tab-count')).length;
+	expect(badges('pos-tab-cart')).toBeGreaterThan(0);
+	expect(badges('pos-tab-products')).toBe(0);
+	expect(labels()).toEqual(expect.arrayContaining(['pos_cart.tab_cart']));
 });
 
 // The (tabs) navigator's adapter: its focused route is the active tab, and a press on the other

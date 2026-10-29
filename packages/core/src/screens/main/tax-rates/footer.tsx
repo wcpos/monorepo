@@ -52,7 +52,7 @@ export function TaxRatesFooter({ shownCount, handle, shown, applies }: TaxRatesF
 		// it, so a long count never pushes the sync button out or Close (`shrink-0`) over. A phone
 		// stacks the footer, where `basis-0` would collapse the slot to nothing in Yoga's column.
 		<HStack className={cn('min-w-0 gap-1', !isPhone && 'shrink grow basis-0')}>
-			<Text className="text-muted-foreground min-w-0 shrink text-sm">
+			<Text variant="key" className="min-w-0 shrink">
 				{[
 					rateCount(shownCount, vouched, t),
 					applies ? appliesCount(applies.n, applies.country, t) : null,

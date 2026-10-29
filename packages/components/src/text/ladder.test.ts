@@ -1,4 +1,14 @@
+import * as React from 'react';
+
+import { render } from '@testing-library/react';
+
+import { Text, TextClassContext } from './index';
 import { textVariants } from './ladder';
+
+jest.mock('react-native', () => {
+	const mockReact = jest.requireActual('react');
+	return { Text: (props: object) => mockReact.createElement('span', props) };
+});
 
 const classes = (props: Parameters<typeof textVariants>[0]) => textVariants(props).split(/\s+/);
 
@@ -35,5 +45,32 @@ describe('textVariants', () => {
 			expect.arrayContaining(['text-xs', 'tabular-nums'])
 		);
 		expect(classes({ variant: 'help', tabular: false })).not.toContain('tabular-nums');
+	});
+});
+
+describe('Text under an inherited text context', () => {
+	const renderIn = (context: string, props: React.ComponentProps<typeof Text>) =>
+		render(
+			React.createElement(
+				TextClassContext.Provider,
+				{ value: context },
+				React.createElement(Text, props, 'x')
+			)
+		).container.querySelector('span');
+
+	it('lets an explicit rank win over the context (an overlay paints text-foreground)', () => {
+		const text = renderIn('text-foreground', { variant: 'caption' });
+		expect(text).toHaveClass('text-muted-foreground', 'uppercase');
+		expect(text).not.toHaveClass('text-foreground');
+	});
+
+	it('lets the context style a Text with no rank, and the caller className win over both', () => {
+		expect(renderIn('text-sm text-muted-foreground', {})).toHaveClass(
+			'text-sm',
+			'text-muted-foreground'
+		);
+		const toned = renderIn('text-foreground', { variant: 'help', className: 'text-warning-text' });
+		expect(toned).toHaveClass('text-warning-text', 'text-xs');
+		expect(toned).not.toHaveClass('text-muted-foreground');
 	});
 });

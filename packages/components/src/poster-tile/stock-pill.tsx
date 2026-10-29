@@ -32,7 +32,9 @@ export function StockPill({ label, testID, ...props }: StockPillProps) {
 			testID={testID}
 		>
 			<Icon name="pending" size="xs" className="text-muted-foreground" />
-			<Text className="text-muted-foreground text-xs font-bold">{label}</Text>
+			<Text variant="help" className="font-bold">
+				{label}
+			</Text>
 		</View>
 	);
 }

@@ -33,7 +33,7 @@ export function SettingsDangerZone({
 				!phone && 'flex-row items-center justify-between'
 			)}
 		>
-			<Text className={cn('text-muted-foreground text-xs', !phone && 'max-w-96 flex-1')}>
+			<Text variant="help" className={cn(!phone && 'max-w-96 flex-1')}>
 				{description}
 			</Text>
 			<Button variant="outline-destructive" onPress={onPress} loading={loading} testID={testID}>

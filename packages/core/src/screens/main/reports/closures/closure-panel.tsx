@@ -4,9 +4,8 @@ import { ScrollView, View } from 'react-native';
 import get from 'lodash/get';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
-import { Button } from '@wcpos/components/button';
-import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
-import { MoneyList } from '@wcpos/components/money-list';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Dialog, DialogFooter, DialogHeader } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import {
 	CLOSURE_DOCUMENT_LIMIT,
@@ -26,20 +25,20 @@ import {
 	type RecordedFigures,
 } from '../../../../services/register-session/settled-figures';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { ClosureBody, ClosureHeading } from './closure-body';
 import { RecountSheet } from './recount-sheet';
 import { ReportPanel } from '../report-panel';
-import { ReceiptBody } from '../../receipt/receipt-body';
-import { TemplateSwitcher } from '../../receipt/template-switcher';
-import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
 export function ClosurePanel({
 	row,
 	onClose,
+	onBack,
 	onRecountSaved,
 }: {
 	row: ClosureRow;
 	onClose: () => void;
+	onBack?: () => void;
 	onRecountSaved?: () => void;
 }) {
 	const t = useT();
@@ -96,55 +95,37 @@ export function ClosurePanel({
 	};
 	const corrections = recorded.corrections ?? [];
 	const { settled, touched } = deriveSettled(recorded, corrections);
-	const labels: Record<string, string> = {
-		expected: t('register.expected', { amount: '' }).trim(),
-		counted: t('register.counted'),
-		variance: t('register.variance'),
-		period_sales_total: t('register.period_sales'),
-		period_refunds_total: t('register.period_refunds'),
-		perpetual_sales_total: t('register.perpetual_sales'),
-		perpetual_refunds_total: t('register.perpetual_refunds'),
-	};
-	const title = t('reports.closure_n', { n: recorded.number });
 	const synced = ['synced', 'superseded'].includes(row.sync_status);
+	// The count this pane's last print reached. A local row updates live and overtakes it; a
+	// server-listed row never does; the greater of the two is right either way (Codex, #3036).
+	const [printedTo, setPrintedTo] = React.useState(0);
 	const reprint = async () => {
 		setError('');
 		try {
 			if (!(await doc.print())) setError(t('reports.reprint_failed'));
+			else setPrintedTo((reached) => Math.max(row.print_count ?? 0, reached) + 1);
 		} catch (error) {
 			setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
 		}
 	};
-	return (
-		<ReportPanel testID="closure-panel" onClose={onClose}>
-			{phone && (
-				<Button testID="closure-back" variant="ghost" className="self-start" onPress={onClose}>
-					{t('common.back')}
-				</Button>
-			)}
+	const content = (
+		<>
 			<DialogHeader className="flex-row items-center gap-3">
-				{phone ? (
-					<Text variant="dialog" className="shrink">
-						{title}
-					</Text>
-				) : (
-					<DialogTitle className="shrink">{title}</DialogTitle>
-				)}
-				<View className="min-w-0 flex-1 gap-2">
-					<TemplateSwitcher
-						templates={doc.templates}
-						selectedId={doc.selectedTemplateId}
-						onSelect={doc.setSelectedTemplateId}
-						isOffline={doc.isOffline}
-						alwaysVisible
-					/>
-					<PrinterSwitcher
-						printers={doc.allPrinters}
-						printerSelection={doc.printerSelection}
-						resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
-						onSelect={doc.setPrinterSelection}
-					/>
-				</View>
+				<ClosureHeading
+					row={row}
+					settled={settled}
+					blind={false}
+					leading={
+						(onBack || phone) && (
+							<IconButton
+								name="chevronLeft"
+								testID="closure-back"
+								accessibilityLabel={t('common.back')}
+								onPress={onBack ?? onClose}
+							/>
+						)
+					}
+				/>
 			</DialogHeader>
 			<ScrollView
 				testID="closure-panel-body"
@@ -152,56 +133,16 @@ export function ClosurePanel({
 				contentContainerClassName="gap-4 px-4"
 				contentContainerStyle={{ overflow: 'hidden' }}
 			>
-				{documentError ? (
-					<View className="gap-3">
-						<Text testID="closure-document-error">{t('reports.load_failed')}</Text>
-						<Button testID="closure-document-retry" variant="outline" onPress={doc.refetch}>
-							{t('common.retry')}
-						</Button>
-					</View>
-				) : (
-					<ReceiptBody doc={doc} hideSelects fullWidth />
-				)}
-				{!documentError && !!corrections.length && touched.size > 0 && (
-					<MoneyList testID="closure-settled" className="border-t pt-3">
-						<Text className="font-semibold">{t('reports.recorded_settled')}</Text>
-						{[...touched].map((field) => (
-							<MoneyList.Row
-								key={field}
-								testID={`closure-settled-${field}`}
-								label={`${labels[field.split('.')[0]]}${field.includes('.') ? ` · ${field.split('.')[1]}` : ''}`}
-								amount={`${context.formatMoney(get(recorded, field, '0'))} → ${context.formatMoney(get(settled, field, '0'))}`}
-							/>
-						))}
-					</MoneyList>
-				)}
-				{(documentError ? [] : corrections).map((c) => (
-					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">
-						<Text className="font-semibold">
-							{c.type === 'recount'
-								? t('reports.recount')
-								: c.type === 'late_sale'
-									? t('reports.late_sale')
-									: t('reports.late_movement')}
-						</Text>
-						<Text>
-							{c.actor.name}
-							{c.approver ? ` · ${t('reports.approver', { name: c.approver.name })}` : ''}
-						</Text>
-						<Text>{c.reason}</Text>
-						<Text className="text-muted-foreground">
-							{new Intl.DateTimeFormat(context.locale, {
-								dateStyle: 'medium',
-								timeStyle: 'short',
-								...(context.timezone === 'device' ? {} : { timeZone: context.timezone }),
-							}).format(
-								new Date(
-									c.created_at.endsWith('Z') ? c.created_at : `${c.created_at.replace(' ', 'T')}Z`
-								)
-							)}
-						</Text>
-					</View>
-				))}
+				<ClosureBody
+					row={row}
+					doc={doc}
+					settled={settled}
+					touched={touched}
+					corrections={corrections}
+					blind={false}
+					context={context}
+					printCount={Math.max(row.print_count ?? 0, printedTo)}
+				/>
 			</ScrollView>
 			{(doc.isOffline || !synced) && (
 				<Text className="px-4">
@@ -215,6 +156,7 @@ export function ClosurePanel({
 			)}
 			<DialogFooter
 				testID="closure-panel-footer"
+				close={onBack ? false : undefined}
 				record={{
 					label: t('reports.recount'),
 					testID: 'closure-recount',
@@ -243,6 +185,25 @@ export function ClosurePanel({
 					onOpenChange={setRecounting}
 				/>
 			)}
+		</>
+	);
+	if (onBack)
+		return (
+			<View testID="closure-panel" className="bg-card min-h-0 flex-1 gap-4 py-4">
+				{content}
+			</View>
+		);
+	const panel = (
+		<ReportPanel testID="closure-panel" onClose={onClose}>
+			{content}
 		</ReportPanel>
+	);
+	// A page has no modal surface, but its shared web title/description still need context.
+	return phone ? (
+		<Dialog open onOpenChange={(open) => !open && onClose()}>
+			{panel}
+		</Dialog>
+	) : (
+		panel
 	);
 }

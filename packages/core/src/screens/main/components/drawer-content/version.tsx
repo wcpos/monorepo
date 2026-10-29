@@ -55,9 +55,7 @@ function AboutDialogContent() {
 				<VStack space="md">
 					{/* App Info Section */}
 					<VStack space="xs">
-						<Text className="text-muted-foreground text-xs font-semibold uppercase">
-							{t('common.application')}
-						</Text>
+						<Text variant="caption">{t('common.application')}</Text>
 						<InfoRow label={t('common.app_version')} value={appVersion} />
 						<InfoRow
 							label={t('common.version', { platform: platformLabels[platform] })}
@@ -69,9 +67,7 @@ function AboutDialogContent() {
 					{/* Server Info Section (if connected) */}
 					{site && (
 						<VStack space="xs">
-							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('common.server')}
-							</Text>
+							<Text variant="caption">{t('common.server')}</Text>
 							{/* Show Pro version if present, otherwise show free version */}
 							{site.wcposProVersion ? (
 								<InfoRow label={t('common.wcpos_pro_plugin')} value={site.wcposProVersion} />
@@ -86,9 +82,7 @@ function AboutDialogContent() {
 					{/* License Section (if connected) */}
 					{license && (
 						<VStack space="xs">
-							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('common.license')}
-							</Text>
+							<Text variant="caption">{t('common.license')}</Text>
 							<InfoRow
 								label={t('common.status')}
 								value={license.isPro ? t('common.pro') : t('common.free')}

@@ -291,7 +291,11 @@ export function PrinterSetupDialog({
 					</Button>
 				)}
 			</View>
-			{help && <Text className="text-muted-foreground ml-8 text-sm">{help}</Text>}
+			{help && (
+				<Text variant="key" className="ml-8">
+					{help}
+				</Text>
+			)}
 		</View>
 	);
 	const guide = (
@@ -371,7 +375,7 @@ export function PrinterSetupDialog({
 			>
 				<Text className="text-base font-semibold">{p.name}</Text>
 				<View className="flex-row items-center gap-2">
-					<Text className="text-muted-foreground text-sm">
+					<Text variant="key">
 						{p.source === 'network' ? p.address : words[`setup_source_${p.source}`]}
 						{p.identity?.model
 							? ` · ${p.identity.model}`
@@ -391,7 +395,7 @@ export function PrinterSetupDialog({
 	const headline = (
 		<View className="gap-0.5">
 			<Text className="text-2xl font-bold tracking-tight">{draft.name}</Text>
-			<Text className="text-muted-foreground text-sm">
+			<Text variant="key">
 				{deviceLane
 					? t('settings.setup_details_device', {
 							source: words[`setup_source_${selected?.source ?? 'usb'}`],
@@ -423,13 +427,13 @@ export function PrinterSetupDialog({
 	const widthToggle =
 		selectedPrintable &&
 		(columnsPending ? (
-			<Text testID="printer-setup-width-checking" className="text-muted-foreground ml-1 text-sm">
+			<Text testID="printer-setup-width-checking" variant="key" className="ml-1">
 				{t('settings.setup_width_checking')}
 			</Text>
 		) : (
 			!columnsKnown &&
 			row(
-				<Text key="label" className="text-muted-foreground text-sm">
+				<Text key="label" variant="key">
 					{t('settings.setup_paper_label')}
 				</Text>,
 				...([32, 48] as const).map((n) =>
@@ -683,7 +687,7 @@ export function PrinterSetupDialog({
 										{action('setup_short', answer('short'), { size: 'default' })}
 										{action('setup_nothing', answer('none'), { icon: 'close', size: 'default' })}
 									</VStack>
-									<Text testID="printer-setup-footer" className="text-muted-foreground text-xs">
+									<Text testID="printer-setup-footer" variant="help">
 										{t('settings.setup_footer', { n: testPages, columns })}
 									</Text>
 								</>

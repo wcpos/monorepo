@@ -205,6 +205,8 @@ jest.mock('@wcpos/components/suspense', () => {
 });
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
+// The Cart tab's count reads the current order through the mocked provider, which has no record.
+jest.mock('@wcpos/core/screens/main/pos/cart/cart-tab-count', () => ({ CartTabCount: () => null }));
 jest.mock('@wcpos/components/panels', () => {
 	const react = jest.requireActual('react');
 	return {

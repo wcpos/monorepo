@@ -166,9 +166,7 @@ export function PrinterSettingsRows(props: {
 				label={t('settings.print_receipts_as_image')}
 				testID="add-printer-raster-toggle"
 			>
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.print_receipts_as_image_help')}
-				</Text>
+				<Text variant="help">{t('settings.print_receipts_as_image_help')}</Text>
 			</SwitchRow>
 		</>
 	);

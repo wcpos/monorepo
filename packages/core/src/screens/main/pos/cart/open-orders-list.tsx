@@ -177,7 +177,8 @@ function OrderRow({
 								/>
 								<Text
 									testID={`open-orders-row-${order.uuid}-age`}
-									className={`text-xs ${stale ? 'text-warning-text font-semibold' : 'text-muted-foreground'}`}
+									variant="help"
+									className={stale ? 'text-warning-text font-semibold' : undefined}
 								>
 									{relative(openedMs, nowMs)}
 								</Text>
@@ -191,11 +192,7 @@ function OrderRow({
 			<Text className="font-semibold" numberOfLines={1}>
 				{name || t('pos_cart.guest')}
 			</Text>
-			<Text
-				testID={`open-orders-row-${order.uuid}-items`}
-				className="text-muted-foreground text-xs"
-				numberOfLines={1}
-			>
+			<Text testID={`open-orders-row-${order.uuid}-items`} variant="help" numberOfLines={1}>
 				{items || t('pos_cart.cart_empty')}
 			</Text>
 		</ListRow>

@@ -68,7 +68,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 						<HStack key={meta.id || meta.key} className="flex-wrap gap-0">
 							{/* Same meta the line-item cell decodes next door — a fee's meta is
 							    no less server-supplied than a product's. */}
-							<Text className="text-muted-foreground text-xs" decodeHtml>{`${meta.key}: `}</Text>
+							<Text variant="help" decodeHtml>{`${meta.key}: `}</Text>
 							<Text className="text-xs" decodeHtml>
 								{formatMetaDataValue(meta.value)}
 							</Text>

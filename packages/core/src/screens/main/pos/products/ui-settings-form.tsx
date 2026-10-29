@@ -327,9 +327,7 @@ export function UISettingsForm() {
 								<MetaDataKeysField value={field.value} onChange={field.onChange} />
 							)}
 						/>
-						<Text className="text-muted-foreground text-sm">
-							{t('pos_products.meta_data_keys_description')}
-						</Text>
+						<Text variant="key">{t('pos_products.meta_data_keys_description')}</Text>
 					</View>
 					<View className="gap-2 px-1 pt-2">
 						<SectionHeading
@@ -423,7 +421,7 @@ function BrowseByField({
 							testID={`ui-settings-browse-by-${row.value}`}
 							leading={<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />}
 							trailing={
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{disabled ? row.empty : count === undefined ? '' : row.countLabel}
 								</Text>
 							}

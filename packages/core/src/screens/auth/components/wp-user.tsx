@@ -218,8 +218,8 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 						/>
 					}
 				>
-					<Text className="text-base font-medium">{displayName}</Text>
-					{roleLabel && <Text className="text-muted-foreground text-sm">{roleLabel}</Text>}
+					<Text variant="subheading">{displayName}</Text>
+					{roleLabel && <Text variant="key">{roleLabel}</Text>}
 					{isLoading ? (
 						<Loader size="xs" variant="muted" />
 					) : (

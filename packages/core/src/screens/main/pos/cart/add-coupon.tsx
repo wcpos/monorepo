@@ -209,15 +209,15 @@ function CouponItemContent({ coupon }: { coupon: CouponPayload }) {
 				    inherit that decode — and the closed trigger (ComboboxValue) renders the
 				    same `code` as its label. A coupon code is the shop_coupon post title,
 				    encoded like any other title, so both ends decode. */}
-				<Text className="text-sm font-medium" decodeHtml>
+				<Text variant="subheading" decodeHtml>
 					{coupon.code}
 				</Text>
 				{coupon.description ? (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
+					<Text variant="help" numberOfLines={1} decodeHtml>
 						{coupon.description}
 					</Text>
 				) : (
-					<Text className="text-muted-foreground text-xs">{typeLabel}</Text>
+					<Text variant="help">{typeLabel}</Text>
 				)}
 			</VStack>
 			{amountLabel && (

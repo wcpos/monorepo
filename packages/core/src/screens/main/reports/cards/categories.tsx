@@ -79,12 +79,12 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 			{group === 'brands' &&
 				summary.parts.some((row) => row.key === 'nobrand') &&
 				!products.some((product) => product.brands?.length) && (
-					<Text testID="card-brands-empty" className="text-muted-foreground text-sm">
+					<Text testID="card-brands-empty" variant="key">
 						{t('reports.no_brands_on_products')}
 					</Text>
 				)}
 			{summary.unknownLines > 0 && (
-				<Text testID={`card-${group}-unknown`} className="text-muted-foreground text-sm">
+				<Text testID={`card-${group}-unknown`} variant="key">
 					{t('reports.lines_without_local_product', {
 						n: quantity(summary.unknownLines),
 						m: quantity(summary.totalLines),

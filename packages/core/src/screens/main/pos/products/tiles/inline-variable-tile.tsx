@@ -228,27 +228,27 @@ export function VariableProductTile({ record, gridFields, grow }: VariableProduc
 								</>
 							)}
 							{gridFields.sku && fields.sku ? (
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{t('common.sku')}: {fields.sku}
 								</Text>
 							) : null}
 							{gridFields.barcode && fields.barcode ? (
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{t('common.barcode')}: {fields.barcode}
 								</Text>
 							) : null}
 							{gridFields.category && fields.categories.length > 0 && (
-								<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
+								<Text variant="help" numberOfLines={1} decodeHtml>
 									{fields.categories.map((c) => c.name ?? '').join(', ')}
 								</Text>
 							)}
 							{gridFields.stock_quantity && fields.stockQuantity != null && (
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{t('common.stock')}: {fields.stockQuantity}
 								</Text>
 							)}
 							{gridFields.cost_of_goods_sold && fields.costOfGoodsSold != null ? (
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{t('common.cogs')}: {format(fields.costOfGoodsSold?.total_value ?? 0)}
 								</Text>
 							) : null}

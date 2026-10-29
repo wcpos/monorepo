@@ -225,7 +225,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 										{stockRejection!.items.map((item) => (
 											<Text
 												key={`${item.product_id}-${item.variation_id}`}
-												className="text-muted-foreground text-sm"
+												variant="key"
 												decodeHtml
 											>
 												{item.available === null

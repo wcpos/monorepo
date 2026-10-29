@@ -53,7 +53,7 @@ export function ProductGridFooter({
 	if (short) return <GridLoadingRow />;
 	return (
 		<View className="items-center justify-center p-3" testID="pos-products-grid-end">
-			<Text className="text-muted-foreground text-sm">{t('pos_products.no_more_products')}</Text>
+			<Text variant="key">{t('pos_products.no_more_products')}</Text>
 		</View>
 	);
 }

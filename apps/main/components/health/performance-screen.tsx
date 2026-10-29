@@ -195,7 +195,7 @@ export function PerformanceScreen() {
 							? t('health.performance.status_normal')
 							: t('health.performance.status_attention')}
 					</Text>
-					<Text className="text-muted-foreground text-sm" testID="performance-summary">
+					<Text variant="key" testID="performance-summary">
 						{hasHistory
 							? t('health.performance.summary', {
 									requests: summary.requests.toLocaleString(),
@@ -266,9 +266,7 @@ export function PerformanceScreen() {
 										</HStack>
 										<VStack className="gap-0.5 pt-1.5">
 											<Text className="text-sm">{hint}</Text>
-											<Text className="text-muted-foreground text-xs">
-												{describeCadence(value)}
-											</Text>
+											<Text variant="help">{describeCadence(value)}</Text>
 										</VStack>
 									</View>
 								))}
@@ -296,12 +294,8 @@ export function PerformanceScreen() {
 								/>
 							</View>
 							<HStack className="justify-between">
-								<Text className="text-muted-foreground text-xs">
-									{t('health.performance.seconds_short', { s: 5 })}
-								</Text>
-								<Text className="text-muted-foreground text-xs">
-									{t('health.performance.minutes_short', { m: 5 })}
-								</Text>
+								<Text variant="help">{t('health.performance.seconds_short', { s: 5 })}</Text>
+								<Text variant="help">{t('health.performance.minutes_short', { m: 5 })}</Text>
 							</HStack>
 						</VStack>
 
@@ -324,13 +318,13 @@ export function PerformanceScreen() {
 								/>
 							</View>
 							<HStack className="justify-between">
-								<Text className="text-muted-foreground text-xs">10</Text>
-								<Text className="text-muted-foreground text-xs">100</Text>
+								<Text variant="help">10</Text>
+								<Text variant="help">100</Text>
 							</HStack>
 						</VStack>
 
 						<HStack className="flex-wrap items-center justify-between gap-2">
-							<Text className="text-muted-foreground text-sm" testID="settings-math-line">
+							<Text variant="key" testID="settings-math-line">
 								{nextCheck !== null
 									? `${t('health.performance.right_now', {
 											every:
@@ -362,10 +356,8 @@ export function PerformanceScreen() {
 						    advisory line claims nothing about measured speed: at x1 the engine
 						    may still be inside its ten-sample slow window. */}
 						<Text
-							className={cn(
-								'text-sm',
-								pace.kind === 'normal' ? 'text-muted-foreground' : 'text-warning-text'
-							)}
+							variant="key"
+							className={cn(pace.kind !== 'normal' && 'text-warning-text')}
 							testID="server-pace"
 						>
 							{pace.kind === 'paused'
@@ -391,7 +383,7 @@ export function PerformanceScreen() {
 						    frame says so. Not yet asked = we know nothing about this server
 						    yet, so claim nothing — the frame covers that too. */}
 						{loadUnavailable ? (
-							<Text className="text-muted-foreground text-sm" testID="server-load-unavailable">
+							<Text variant="key" testID="server-load-unavailable">
 								{t('health.performance.load_unavailable')}
 							</Text>
 						) : (

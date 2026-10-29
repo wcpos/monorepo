@@ -308,7 +308,7 @@ export function EditOrderMetaForm({
 								</Button>
 							}
 						>
-							<Text className="text-muted-foreground text-sm">{t('pos_cart.hand_over_hint')}</Text>
+							<Text variant="key">{t('pos_cart.hand_over_hint')}</Text>
 						</PropertyRow>
 					</Form>
 					{currencyRow.shown && (

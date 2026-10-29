@@ -6,6 +6,7 @@ import { Icon, type IconName } from '@wcpos/components/icon';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { useT } from '@wcpos/core/contexts/translations';
+import { CartTabCount } from '@wcpos/core/screens/main/pos/cart/cart-tab-count';
 
 import type { BottomTabBarProps } from 'expo-router/tabs';
 
@@ -22,7 +23,8 @@ const TABS: { tab: POSPhoneTab; icon: IconName }[] = [
  * The phone till's Products / Cart tab bar, drawn by both routes that reach a phone: the (tabs)
  * navigator hands it its state (`tabBar`), and the (columns) resize fallback its own. Each tab is a
  * library surface, so it carries the tab role and the native press haptic; the bar pads the home
- * indicator inside its own card colour.
+ * indicator inside its own card colour. The Cart tab counts the cart over its icon (Paul,
+ * 2026-10-28): both routes sit under `CurrentOrderProvider` (the (pos) layout), so it can.
  */
 export function POSPhoneTabBar({
 	active,
@@ -50,7 +52,17 @@ export function POSPhoneTabBar({
 						onPress={() => onSelect(tab)}
 						className="flex-1 items-center gap-1 py-2"
 					>
-						<Icon name={icon} variant={active === tab ? 'primary' : 'muted'} />
+						{tab === 'cart' ? (
+							// The badge's left edge two thirds across the 18 icon, hanging off its right.
+							<View>
+								<Icon name={icon} variant={active === tab ? 'primary' : 'muted'} />
+								<View className="absolute -top-2 left-3">
+									<CartTabCount />
+								</View>
+							</View>
+						) : (
+							<Icon name={icon} variant={active === tab ? 'primary' : 'muted'} />
+						)}
 						<Text variant="help" className={active === tab ? 'text-primary' : undefined}>
 							{labels[tab]}
 						</Text>

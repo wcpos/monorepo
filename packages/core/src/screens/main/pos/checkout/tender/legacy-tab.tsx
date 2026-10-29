@@ -48,7 +48,8 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 					<Text
 						key={method.id}
 						testID={`checkout-legacy-${method.id}`}
-						className="text-muted-foreground border-border rounded-md border p-3 text-sm"
+						variant="key"
+						className="border-border rounded-md border p-3"
 						decodeHtml
 					>
 						{method.title}

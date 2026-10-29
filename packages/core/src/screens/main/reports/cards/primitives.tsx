@@ -10,7 +10,7 @@ export function StatGrid({ items }: { items: Stat[] }) {
 		<View className="flex-row flex-wrap gap-y-3">
 			{items.map((item) => (
 				<View key={item.testID} className="w-1/3 gap-1 pr-2">
-					<Text className="text-muted-foreground text-sm">{item.label}</Text>
+					<Text variant="key">{item.label}</Text>
 					<Text testID={item.testID} className="text-foreground tabular-nums">
 						{item.value}
 					</Text>
@@ -57,7 +57,7 @@ export function Legend({
 					<Text testID={item.testID} className="font-semibold tabular-nums">
 						{item.value}
 					</Text>
-					{item.note && <Text className="text-muted-foreground text-sm">{item.note}</Text>}
+					{item.note && <Text variant="key">{item.note}</Text>}
 				</View>
 			))}
 		</View>
@@ -86,7 +86,7 @@ export function ShareBar({
 				<Text className="font-semibold tabular-nums">{value}</Text>
 			</View>
 			<Progress value={Math.max(0.02, Math.min(1, share)) * 100} />
-			<Text className="text-muted-foreground text-sm">{note}</Text>
+			<Text variant="key">{note}</Text>
 		</View>
 	);
 }

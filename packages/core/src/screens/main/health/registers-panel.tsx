@@ -104,8 +104,8 @@ function CheckRow({
 	);
 	const lines = (
 		<VStack className="flex-1 gap-0.5">
-			<Text className="text-sm font-medium">{title}</Text>
-			{sub ? <Text className="text-muted-foreground text-xs">{sub}</Text> : null}
+			<Text variant="subheading">{title}</Text>
+			{sub ? <Text variant="help">{sub}</Text> : null}
 		</VStack>
 	);
 	if (!children) {
@@ -172,7 +172,7 @@ function skewRows(
 		<>
 			{rows.map((skew) => skewRow(t, skew, registerId))}
 			{counted && total > rows.length ? (
-				<Text testID="health-register-skew-sample-note" className="text-muted-foreground text-xs">
+				<Text testID="health-register-skew-sample-note" variant="help">
 					{t('health.registers.skew_sample_note', { count: total, shown: rows.length })}
 				</Text>
 			) : null}
@@ -301,7 +301,7 @@ function CheckView({
 							>
 								<Text className="text-sm">{line}</Text>
 								{orders !== '' ? (
-									<Text className="text-muted-foreground text-xs">
+									<Text variant="help">
 										{
 											// The ids are a capped sample whenever the true count is unknown or larger.
 											!exact || duplicateSales(duplicate) > duplicate.order_ids.length
@@ -405,9 +405,9 @@ function RegisterBlock({
 			<HStack className="flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
 				<HStack className="items-baseline gap-2">
 					<Text className="font-medium">{register.name}</Text>
-					<Text className="text-muted-foreground text-xs">{shortId(register.id)}</Text>
+					<Text variant="help">{shortId(register.id)}</Text>
 				</HStack>
-				<Text className="text-muted-foreground text-xs">
+				<Text variant="help">
 					{register.orders === 0
 						? truncated
 							? t('health.registers.no_sales_sampled')
@@ -468,7 +468,7 @@ export function RegistersPanel() {
 			testID="health-registers"
 		>
 			{data?.truncated ? (
-				<Text testID="health-registers-truncated" className="text-muted-foreground text-xs">
+				<Text testID="health-registers-truncated" variant="help">
 					{
 						// The "closures are checked in full" clause holds only if the plugin audits them.
 						closuresSupported(data.registers)
@@ -477,9 +477,7 @@ export function RegistersPanel() {
 					}
 				</Text>
 			) : null}
-			{loading ? (
-				<Text className="text-muted-foreground text-sm">{t('common.loading')}</Text>
-			) : null}
+			{loading ? <Text variant="key">{t('common.loading')}</Text> : null}
 			{error !== null ? (
 				<Notice
 					testID="health-registers-error"
@@ -498,9 +496,7 @@ export function RegistersPanel() {
 			{data && data.unregistered.length > 0 ? (
 				<VStack testID="health-unregistered" className="gap-1">
 					<Text className="font-medium">{t('health.registers.unregistered_title')}</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.registers.unregistered_sub')}
-					</Text>
+					<Text variant="help">{t('health.registers.unregistered_sub')}</Text>
 					{data.unregistered.map((till) => {
 						const orders = orderNumberList(till.order_numbers);
 						const values = { id: shortId(till.register_id), count: till.orders, orders };
@@ -515,7 +511,7 @@ export function RegistersPanel() {
 				</VStack>
 			) : null}
 			{unknownSales > 0 ? (
-				<Text testID="health-unknown-sessions" className="text-muted-foreground text-xs">
+				<Text testID="health-unknown-sessions" variant="help">
 					{t('health.registers.unknown_sessions', { count: unknownSales })}
 				</Text>
 			) : null}

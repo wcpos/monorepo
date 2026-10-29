@@ -44,7 +44,7 @@ export function CustomerRow({ record }: { record: ReadonlyEngineRecord<'customer
 			}
 			trailing={
 				<>
-					<Text numberOfLines={1} className="text-muted-foreground max-w-1/3 text-sm">
+					<Text numberOfLines={1} variant="key" className="max-w-1/3">
 						{[customer.billing?.city, customer.billing?.country].filter(Boolean).join(', ')}
 					</Text>
 					<Icon name="chevronRight" className="text-muted-foreground" />
@@ -62,7 +62,7 @@ export function CustomerRow({ record }: { record: ReadonlyEngineRecord<'customer
 			<Text
 				testID={customer.email ? `customer-email-${customer.email}` : undefined}
 				numberOfLines={1}
-				className="text-muted-foreground text-sm"
+				variant="key"
 			>
 				{customer.email}
 			</Text>

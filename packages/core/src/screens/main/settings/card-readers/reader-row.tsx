@@ -141,7 +141,7 @@ export function ReaderRow({
 								{readerName(candidate, t)}
 							</Text>
 							{candidate.serial || candidate.id !== candidate.label ? (
-								<Text className="text-muted-foreground font-mono text-sm">
+								<Text variant="key" className="font-mono">
 									{candidate.serial ?? candidate.id}
 								</Text>
 							) : null}

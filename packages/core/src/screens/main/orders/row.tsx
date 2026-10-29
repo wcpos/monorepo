@@ -50,7 +50,7 @@ export function OrderRow({
 			</View>
 			<View className="flex-row items-center gap-1">
 				<OrderStatusBadge status={order.status} />
-				<Text className="text-muted-foreground min-w-0 shrink text-sm" numberOfLines={1}>
+				<Text variant="key" className="min-w-0 shrink" numberOfLines={1}>
 					{[
 						order.date_created_gmt &&
 							(phone ? day(order.date_created_gmt) : dateTime(order.date_created_gmt)),

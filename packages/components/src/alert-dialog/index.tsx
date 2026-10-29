@@ -17,6 +17,7 @@ import {
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
+import { TEXT_LADDER } from '../text/ladder';
 
 import type { FooterButton } from '../dialog';
 
@@ -152,7 +153,7 @@ function AlertDialogTitle({ className, asChild, ...props }: AlertDialogPrimitive
 	const Component = asChild ? Slot : Text;
 
 	return (
-		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
+		<TextClassContext.Provider value={`${TEXT_LADDER.dialog} text-foreground leading-none`}>
 			<AlertDialogPrimitive.Title asChild>
 				<Component {...props} />
 			</AlertDialogPrimitive.Title>
