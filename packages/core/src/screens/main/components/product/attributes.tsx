@@ -33,7 +33,7 @@ export function PlainAttributes({
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-muted-foreground text-xs" decodeHtml>{`${attr.name}: `}</Text>
+						<Text variant="help" decodeHtml>{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<Text className="text-xs" key={index} decodeHtml>
 								{option}
@@ -93,7 +93,7 @@ export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal
 				.filter((attr: any) => attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-muted-foreground text-xs" decodeHtml>{`${attr.name}: `}</Text>
+						<Text variant="help" decodeHtml>{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={index}>
 								<Text

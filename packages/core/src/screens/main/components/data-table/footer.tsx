@@ -53,7 +53,7 @@ export function DataTableFooter({
 			    never grown), so a trigger inside it is pressable on its text and icons alone. */}
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
-				<Text testID="data-table-count" className="text-muted-foreground text-sm">
+				<Text testID="data-table-count" variant="key">
 					{label ??
 						(total === null
 							? t('common.showing_n', { shown: drawnCount.toLocaleString() })

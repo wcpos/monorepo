@@ -317,5 +317,5 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 }
 
 function Help({ children }: { children: string }) {
-	return <Text className="text-muted-foreground text-sm">{children}</Text>;
+	return <Text variant="help">{children}</Text>;
 }

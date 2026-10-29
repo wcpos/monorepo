@@ -253,7 +253,7 @@ function LedgerRow({
 			    <button> is invalid DOM on web, so siblings-by-z-order it is. */}
 			<View className={cn('web:hover:bg-muted/20 relative', phone && 'hidden')}>
 				<HStack className="items-baseline gap-3 py-2">
-					<Text className="text-muted-foreground w-20 font-mono text-xs tabular-nums">
+					<Text variant="help" tabular className="w-20 font-mono">
 						{timeText}
 					</Text>
 					<View className="z-20 w-16">
@@ -274,7 +274,7 @@ function LedgerRow({
 							recordTestID={`logs-record-${row.logId}`}
 						/>
 					</View>
-					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
+					<Text variant="help" tabular className="w-16 text-right font-mono">
 						{formatDurationMs(row.durationMs) ?? '—'}
 					</Text>
 					<View pointerEvents="box-none" className="z-20 w-32">
@@ -301,7 +301,9 @@ function LedgerRow({
 					className="gap-0.5 py-2"
 				>
 					<HStack className="items-center gap-2 pr-32">
-						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
+						<Text variant="help" tabular className="font-mono">
+							{timeText}
+						</Text>
 						<StatusBadge size="caption" variant={LEVEL_TONE[kind]} label={levelLabel} />
 					</HStack>
 					<Text className="text-sm">{title}</Text>
@@ -482,7 +484,7 @@ export function LedgerFooter({
 	const t = useT();
 	return (
 		<HStack className="border-border/50 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-2">
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{/* Grouped to match every other footer and the Database page; the hidden
 				    markers below stay raw digits for E2E. */}
 				{t('common.showing_of', {
