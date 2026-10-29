@@ -3079,7 +3079,6 @@
 	"register.you_join_it": "You join it.",
 	"register.open_carts_count_other": "{count} open carts",
 	"register.unsent_sales_count_other": "{count} unsent sales",
-	"register.register": "Register",
 	"register.open_since": "open since {time}",
 	"register.closed_at_time": "closed {time}",
 	"register.age_h_m": "{h} h {m} m",
