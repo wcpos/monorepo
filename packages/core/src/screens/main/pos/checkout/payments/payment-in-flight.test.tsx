@@ -14,14 +14,41 @@ const mockService = {
 	},
 	getSnapshot: () => mockLegs,
 };
+let mockRunning: typeof mockService | null = mockService;
+const mockStartListeners = new Set<() => void>();
 jest.mock('../../../../../services/terminal-payments', () => ({
-	getTerminalPaymentsService: () => mockService,
+	getTerminalPaymentsService: () => mockRunning,
+	subscribeTerminalPaymentsServiceStart: (listener: () => void) => {
+		mockStartListeners.add(listener);
+		return () => {
+			mockStartListeners.delete(listener);
+		};
+	},
 }));
 function setLegs(legs: typeof mockLegs) {
 	mockLegs = legs;
 	mockListeners.forEach((listener) => listener());
 }
-beforeEach(() => setLegs(new Map()));
+function startService() {
+	mockRunning = mockService;
+	mockStartListeners.forEach((listener) => listener());
+}
+beforeEach(() => {
+	mockRunning = mockService;
+	setLegs(new Map());
+});
+it('reads a service that starts after the hook mounted: its collecting leg holds the sheet', () => {
+	mockRunning = null;
+	const { result } = renderHook(() => usePaymentInFlight());
+	expect(result.current).toBe(false);
+	act(() => {
+		mockLegs = new Map([['o1', { phase: 'collecting' }]]);
+		startService();
+	});
+	expect(result.current).toBe(true);
+	act(() => setLegs(new Map([['o1', { phase: 'final' }]])));
+	expect(result.current).toBe(false);
+});
 it('is false with no legs and no pay frame', () => {
 	expect(renderHook(() => usePaymentInFlight()).result.current).toBe(false);
 });

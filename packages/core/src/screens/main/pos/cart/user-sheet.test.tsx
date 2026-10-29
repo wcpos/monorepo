@@ -695,6 +695,7 @@ let mockDrawer = {
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter' },
 	countingHere: false,
+	loaded: true,
 	actions: { startCounting: jest.fn(async () => {}) },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -712,6 +713,7 @@ describe('drawer door', () => {
 		mockDrawer.figuresPending = false;
 		mockDrawer.blind = false;
 		mockDrawer.binding.status = 'bound';
+		mockDrawer.loaded = true;
 	});
 	it('shows the drawer as a door and opens the register panel on the POS', () => {
 		const onOpenRegister = jest.fn();
@@ -1025,6 +1027,12 @@ describe('switch confirmations and guards', () => {
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-secondary')));
 		expect(mockLogout).toHaveBeenCalledTimes(1);
 		expect(mockDrawer.actions.startCounting).not.toHaveBeenCalled();
+	});
+	it('Sign out waits while a bound register is still loading, never treating it as closed', () => {
+		Object.assign(mockDrawer, { session: null, loaded: false });
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect((screen.getByTestId('user-sheet-sign-out') as HTMLButtonElement).disabled).toBe(true);
+		expect(mockLogout).not.toHaveBeenCalled();
 	});
 	it.each(['closed', 'unbound'])(
 		'Sign out with the register %s signs out at once',

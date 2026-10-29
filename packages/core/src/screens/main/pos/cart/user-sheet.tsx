@@ -388,7 +388,7 @@ export function UserSheet({
 	const router = useRouter();
 	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
 	const paying = usePaymentInFlight();
-	const { countingHere, session, actions, binding } = useRegisterSession();
+	const { countingHere, session, loaded, actions, binding } = useRegisterSession();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
@@ -582,7 +582,9 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
-							disabled: busy || paying,
+							// A bound register whose session has not loaded is not closed; Sign out waits for
+							// the answer rather than skipping the question (Codex, #3056).
+							disabled: busy || paying || (binding.status === 'bound' && !loaded),
 							onPress: () =>
 								binding.status === 'bound' && session
 									? setRequest({ kind: 'sign-out' })
