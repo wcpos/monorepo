@@ -95,7 +95,6 @@ export function RegisterCount({
 }: {
 	description: string;
 	onBack: () => void;
-	onClose: () => void;
 	onClosed: (count: ClosureCount) => void;
 }) {
 	const {

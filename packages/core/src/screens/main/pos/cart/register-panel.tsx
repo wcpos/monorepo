@@ -233,7 +233,6 @@ export function RegisterPanel({
 					<RegisterCount
 						description={description}
 						onBack={() => setPane('register')}
-						onClose={() => close(false)}
 						onClosed={(count) => {
 							setWritten(count);
 							setPane('written');

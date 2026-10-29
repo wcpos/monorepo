@@ -208,7 +208,9 @@ function CartColumn({
 					) : sessionLoading ? (
 						LOADING_ROWS
 					) : sessionsOn && !session && bindingStatus === 'bound' ? (
-						<OpenRegisterCard onLastClosure={() => requestRegisterPanel()} />
+						<React.Suspense fallback={LOADING_ROWS}>
+							<OpenRegisterCard onLastClosure={() => requestRegisterPanel()} />
+						</React.Suspense>
 					) : countingElsewhere ? (
 						<CountingElsewhereCard />
 					) : isColumn && receiptOrderUuid ? (

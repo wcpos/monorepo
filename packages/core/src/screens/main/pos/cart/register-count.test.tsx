@@ -138,7 +138,6 @@ it('shows short and exact with check', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -156,7 +155,6 @@ it('counts two notes, clears their contribution on typing, and clears the tiles'
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -179,7 +177,6 @@ it('holds for ten, repeats, and does not also single tap', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -202,7 +199,6 @@ it('blind cashier sees neither expected nor local manager line', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -217,7 +213,6 @@ it('requires manager over threshold', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -245,7 +240,6 @@ it('server refusal requires approval even for an exact blind count', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -259,7 +253,6 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={onClosed}
 		/>
 	);
@@ -286,7 +279,6 @@ it('a seeded counting session says the figures are still to come and cannot clos
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -304,7 +296,6 @@ it('returns to selling without closing', async () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -322,7 +313,6 @@ it.each([
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -339,7 +329,6 @@ it('retries a failed close without a second approval for the same count', async 
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -373,7 +362,6 @@ it('requires approval for the same count after returning to selling and counting
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -384,7 +372,6 @@ it('requires approval for the same count after returning to selling and counting
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -401,7 +388,6 @@ it('requests approval again when the count changes after approval', () => {
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
-			onClose={jest.fn()}
 			onClosed={jest.fn()}
 		/>
 	);
@@ -432,14 +418,7 @@ it.each([0, 2])(
 		const previous = mockCarts;
 		mockCarts = { count };
 		try {
-			render(
-				<RegisterCount
-					description="Shop · Pat"
-					onBack={jest.fn()}
-					onClose={jest.fn()}
-					onClosed={jest.fn()}
-				/>
-			);
+			render(<RegisterCount description="Shop · Pat" onBack={jest.fn()} onClosed={jest.fn()} />);
 			enter('480.80');
 			expect(screen.getByRole('heading').textContent).toBe('Close Front');
 			expect(screen.getByText('Shop · Pat')).toBeTruthy();
@@ -458,9 +437,7 @@ it.each([0, 2])(
 );
 it('backs out only after returning the session to selling', async () => {
 	const onBack = jest.fn();
-	render(
-		<RegisterCount description="Shop" onBack={onBack} onClose={jest.fn()} onClosed={jest.fn()} />
-	);
+	render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('count-back'));
 	await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
 	expect(backToSelling.mock.invocationCallOrder[0]).toBeLessThan(

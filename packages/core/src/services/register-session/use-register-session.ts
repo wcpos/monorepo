@@ -326,7 +326,7 @@ export function useRegisterSession() {
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!live?.counting_here,
-		countingElsewhere: session?.status === 'counting' && !live?.counting_here,
+		countingElsewhere: !!session && session.status === 'counting' && !live?.counting_here,
 		countingBy,
 		closedElsewhere:
 			!session && lastClosure && live?.session_id === lastClosure.id && !live.counting_here

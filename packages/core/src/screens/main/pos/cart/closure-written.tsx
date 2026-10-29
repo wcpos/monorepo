@@ -36,9 +36,6 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 					title={t('register.closure_n_written', { n: row.server_number ?? row.number })}
 					leading={<ToneDisc tone="ok" size="sm" />}
 				/>
-				<Text testID="closure-number" className="hidden">
-					{row.server_number ?? row.number}
-				</Text>
 			</DialogHeader>
 			<ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 px-4">
 				<ClosureBody

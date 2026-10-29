@@ -157,7 +157,6 @@ it('shows the written heading and the three row figures; Done closes', () => {
 	const onDone = jest.fn();
 	render(<ClosureWritten count={count()} onDone={onDone} />);
 	expect(screen.getByTestId('closure-written')).toBeTruthy();
-	expect(screen.getByTestId('closure-number').textContent).toBe('1');
 	expect(screen.getByTestId('closure-title').textContent).toContain('Closure 1 written');
 	expect(screen.getByTestId('closure-figure-counted').textContent).toBe('£463.30');
 	expect(screen.getByTestId('closure-figure-expected').textContent).toBe('£480.80');

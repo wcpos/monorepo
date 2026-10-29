@@ -144,7 +144,15 @@ export function RegisterBar({
 			{/* Always mounted: on web the shell can only play the panel's exit while the caller keeps
 			    rendering the closed Dialog (OVERLAY_EXIT_MOUNTED); a conditional mount tore it down in
 			    the same commit, so the panel vanished where every other sheet slides. */}
-			<RegisterPanel open={panelOpen} initialPane={initialPane} onOpenChange={onPanelOpenChange} />
+			{/* The panel reads the cashier list through a suspending resource; its first mount must
+			    not bubble past the bar (the dialog is closed then, so an empty fallback shows nothing). */}
+			<React.Suspense fallback={null}>
+				<RegisterPanel
+					open={panelOpen}
+					initialPane={initialPane}
+					onOpenChange={onPanelOpenChange}
+				/>
+			</React.Suspense>
 		</>
 	);
 }
