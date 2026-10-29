@@ -24,7 +24,7 @@ export function CashierEntry({
 	onOpenRegister,
 }: {
 	testID: string;
-	/** The POS host inside the till; the root (`null`) where the till may be hidden or detached. */
+	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
 	portalHost: string | null;
 	onOpenRegister?: () => void;
 }) {

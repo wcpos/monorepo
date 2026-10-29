@@ -68,10 +68,11 @@ it('rehosts drawer and avatar on a phone and opens the user sheet', () => {
 });
 // On wide the rail is always on screen, so no menu; the avatar stays on the bar (the rail lists
 // pages only, Paul 2026-10-29).
-it('leaves the drawer to the wide rail and keeps the avatar', () => {
+it('leaves the drawer to the wide rail and keeps the avatar, its sheet beside the rail', () => {
 	bar();
 	expect(screen.queryByTestId('orders-bar-menu')).toBeNull();
-	expect(screen.getByTestId('orders-bar-avatar')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('orders-bar-avatar'));
+	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
 });
 it.each([
 	['offline', 'common.status_offline'],
