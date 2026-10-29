@@ -627,7 +627,7 @@ let mockDrawer = {
 	figuresPending: false,
 	blind: false,
 	salesCount: 3,
-	lastClosure: null as { number: number } | null,
+	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound' },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -685,6 +685,18 @@ describe('drawer door', () => {
 			'Register closed · last closure 12'
 		);
 		Object.assign(mockDrawer, { session, lastClosure: null });
+	});
+	it('shows the acknowledged closure number over the provisional one', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: { number: 12, server_number: 58 } });
+		try {
+			render(<UserSheet open onOpenChange={onOpenChange} />);
+			expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+				'Register closed · last closure 58'
+			);
+		} finally {
+			Object.assign(mockDrawer, { session, lastClosure: null });
+		}
 	});
 	it('offers no drawer door when the register panel has no session or closure to show', () => {
 		const session = mockDrawer.session;

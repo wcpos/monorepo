@@ -143,7 +143,10 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 						</>
 					) : (
 						<Text>
-							{t('register.register_closed_last_closure', { n: lastClosure?.number ?? '—' })}
+							{t('register.register_closed_last_closure', {
+								// A closure numbered offline takes the store's number on acknowledgement; the panel shows the same.
+								n: lastClosure?.server_number ?? lastClosure?.number ?? '—',
+							})}
 						</Text>
 					)}
 				</PressableSurface>
