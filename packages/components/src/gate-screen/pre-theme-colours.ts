@@ -7,14 +7,14 @@
  * them on an sRGB screen.
  */
 export const PRE_THEME_COLOURS = {
-	background: '#f3f5f8', // --background
-	foreground: '#141b24', // --foreground
+	background: '#f3f5f9', // --background
+	foreground: '#0c0d0f', // --foreground
 	card: '#ffffff', // --card
-	border: '#d4dae0', // --border
-	primary: '#0068d0', // --primary
-	primaryForeground: '#f7fcff', // --primary-foreground
-	muted: '#ebeff3', // --muted
-	mutedForeground: '#5b646f', // --muted-foreground
+	border: '#d5d9e0', // --border
+	primary: '#0031cc', // --primary
+	primaryForeground: '#f8fcff', // --primary-foreground
+	muted: '#eceff3', // --muted
+	mutedForeground: '#52555b', // --muted-foreground
 	warningBg: '#fff4d7', // --warning-bg
 	warningText: '#915200', // --warning-text
 	badBg: '#fff0ee', // --bad-bg

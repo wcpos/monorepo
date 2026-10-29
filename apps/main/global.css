@@ -15,8 +15,8 @@
      app.config.ts has no dark variant), so its bar is the light theme's muted and primary
      whatever the system or chosen theme. */
   --color-splash: #F0F4F8;
-  --color-splash-track: oklch(0.95 0.007 250);
-  --color-splash-indicator: oklch(0.52 0.19 250);
+  --color-splash-track: oklch(0.95 0.007 262);
+  --color-splash-indicator: oklch(0.42 0.24 262);
 }
 
 /* The page gutter (CODING_STANDARDS § Design, Gutters): three spacing units: the space between
@@ -309,34 +309,40 @@
      * LIGHT THEME
      * Surface lightness: rail 0.935, background/table-row-alt 0.97,
      * card/table-row 1, muted/headers/footer 0.95, border 0.885.
+     * Every cool neutral carries the primary's hue (262) at a trace of chroma, so there is one
+     * blue on the screen; the ink is neutral, so the primary separates from it by chroma.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
     @variant light {
       --hairline-width: 1px;
       
       /* Base colors */
-      --background: oklch(0.97 0.005 250);
-      --foreground: oklch(0.22 0.02 250);
-      
+      --background: oklch(0.97 0.005 262);
+      /* Neutral ink (Paul, 2026-10-29, deep-blue board K3): a chroma-free black beside a deep
+         saturated primary separates by chroma; a slate-tinted ink would merge with it. */
+      --foreground: oklch(0.16 0.005 262);
+
       /* Card - Pure white for contrast */
       --card: oklch(1 0 0);
-      --card-foreground: oklch(0.22 0.02 250);
+      --card-foreground: oklch(0.16 0.005 262);
       
       /* Popover */
       --popover: var(--card);
       --popover-foreground: var(--card-foreground);
       
-      /* Primary - Professional blue */
-      --primary: oklch(0.52 0.19 250);
-      --primary-foreground: oklch(0.99 0.01 250);
+      /* Primary - deep sapphire (Paul, 2026-10-29, deep-blue board K3): L 0.42 is the floor at
+         which the button still reads lit beside the ink; hue 262 is the sRGB blue axis, where
+         C 0.24 is inside the gamut, so every screen shows the same blue. */
+      --primary: oklch(0.42 0.24 262);
+      --primary-foreground: oklch(0.99 0.01 262);
       
       /* Secondary - quiet muted foreground on card */
       --secondary: var(--muted-foreground);
       --secondary-foreground: var(--card);
       
       /* Muted surface and text */
-      --muted: oklch(0.95 0.007 250);
-      --muted-foreground: oklch(0.50 0.02 250);
+      --muted: oklch(0.95 0.007 262);
+      --muted-foreground: oklch(0.45 0.01 262);
       
       /* Accent - subtle hover/focus states */
       --accent: var(--muted);
@@ -349,7 +355,7 @@
       --destructive-foreground: oklch(0.99 0.01 25);
       --success: var(--ok);
       --success-foreground: oklch(0.98 0.01 160);
-      --info: oklch(0.50 0.14 240);
+      --info: oklch(0.48 0.12 262);
       --info-foreground: oklch(0.98 0.01 240);
       --action: oklch(0.55 0.18 295);
       --action-foreground: oklch(0.98 0.01 295);
@@ -360,12 +366,12 @@
       --warning-foreground: oklch(0.25 0.03 90);
       
       /* Borders and inputs */
-      --border: oklch(0.885 0.01 250);
+      --border: oklch(0.885 0.01 262);
       --input: var(--card);
-      --ring: oklch(0.52 0.19 250);
+      --ring: oklch(0.42 0.24 262);
       /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-      --selected: oklch(0.935 0.045 250);
-      --selected-foreground: oklch(0.42 0.17 250);
+      --selected: oklch(0.935 0.045 262);
+      --selected-foreground: oklch(0.42 0.17 262);
       
       /* Card header - muted surface for headers and toolbars */
       --card-header: var(--muted);
@@ -391,9 +397,9 @@
       --chart-5: var(--c5);
 
       /* Drawn rail, status and overlay colors */
-      --rail: oklch(0.935 0.016 250);
-      --rail-foreground: oklch(0.38 0.035 250);
-      --rail-border: oklch(0.88 0.014 250);
+      --rail: oklch(0.935 0.016 262);
+      --rail-foreground: oklch(0.34 0.01 262);
+      --rail-border: oklch(0.88 0.014 262);
       --ok: oklch(0.52 0.16 155);
       --ok-bg: oklch(0.96 0.03 155);
       --warning: oklch(0.68 0.16 70);
@@ -401,18 +407,18 @@
       --warning-bg: oklch(0.97 0.04 85);
       --bad: var(--destructive);
       --bad-bg: oklch(0.97 0.02 25);
-      --neutral: oklch(0.62 0.01 250);
-      --scrim: oklch(0.2 0.02 250 / .28);
+      --neutral: oklch(0.62 0.01 262);
+      --scrim: oklch(0.2 0.01 262 / .28);
 
       /* Shared categories, independent of theme accents */
-      --c1: oklch(0.50 0.18 240);
+      --c1: oklch(0.42 0.24 262);
       --c2: oklch(0.62 0.15 160);
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
-      --c5: oklch(0.70 0.02 250);
+      --c5: oklch(0.70 0.02 262);
 
       /* Poster tile tints, by index (never by category) */
-      --tile-tint-0: oklch(0.86 0.09 250);
+      --tile-tint-0: oklch(0.86 0.09 262);
       --tile-tint-1: oklch(0.88 0.10 160);
       --tile-tint-2: oklch(0.88 0.10 40);
       --tile-tint-3: oklch(0.86 0.09 310);
