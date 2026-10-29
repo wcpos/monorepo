@@ -15,6 +15,8 @@ jest.mock('@wcpos/components/badge', () => ({
 	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('react-native', () => ({
+	// DeviceRow reads the layout boundary; a wide pane.
+	useWindowDimensions: () => ({ width: 1024, height: 768 }),
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
 	),

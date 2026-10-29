@@ -116,7 +116,9 @@ jest.mock('@wcpos/query/user-db', () => ({
 	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
 }));
 jest.mock('./components/settings-section', () => ({
-	SettingsSection: ({ children }: React.PropsWithChildren) => children,
+	SettingsSection: ({ title, children }: React.PropsWithChildren<{ title?: string }>) => (
+		<section aria-label={title}>{children}</section>
+	),
 }));
 
 beforeEach(() => {
@@ -127,9 +129,17 @@ beforeEach(() => {
 	mockAdaptive = false;
 });
 
-describe('the Scale row', () => {
+describe('the Scale section', () => {
+	// Theme, Scale, Icons: three titled sections, never a lone key row between two of them.
+	it('is a titled section whose description is the row that keys the steps', () => {
+		const { getByRole } = render(<ThemeSettings />);
+		const section = getByRole('region', { name: 'settings.scale' });
+		expect(section.textContent).toContain('settings.scale.description');
+		expect(section.querySelector('[data-testid="settings-scale-auto"]')).not.toBeNull();
+	});
+
 	it('offers four scale steps with Auto selected by default', () => {
-		const { getByTestId, getAllByTestId, getByRole, getAllByRole } = render(<ThemeSettings />);
+		const { getByTestId, getAllByTestId, getAllByRole } = render(<ThemeSettings />);
 
 		['auto', 'compact', 'regular', 'spacious'].forEach((option) => {
 			expect(getByTestId(`settings-scale-${option}`).textContent).toBe(`settings.scale.${option}`);

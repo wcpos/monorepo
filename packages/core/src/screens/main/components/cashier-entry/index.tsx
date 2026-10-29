@@ -28,7 +28,7 @@ export function CashierEntry({
 	testID: string;
 	/** `bar`: a control-height square in a page or register bar; `rail`: the rail's 48 square. */
 	placement: 'bar' | 'rail';
-	/** The POS host inside the till; the root (`null`) where the till may be hidden or detached. */
+	/** The POS host inside the till; the drawer layout's `scene` host from the rail; the root (`null`) where the till may be hidden or detached. */
 	portalHost: string | null;
 	onOpenRegister?: () => void;
 }) {

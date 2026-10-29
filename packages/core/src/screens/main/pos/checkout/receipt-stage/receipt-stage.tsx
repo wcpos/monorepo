@@ -281,17 +281,6 @@ function ReceiptStageDocument({
 						{label}
 					</Button>
 				))}
-				<Button
-					variant="outline"
-					className="shrink-0"
-					testID="receipt-no-receipt"
-					onPress={finishSale}
-					disabled={doc.autoPrintPending}
-				>
-					<ButtonText testID="checkout-paid-none">
-						{t('pos_checkout.no_receipt_new_sale')}
-					</ButtonText>
-				</Button>
 				{compact ? null : newSale}
 			</HStack>
 			{dialog}

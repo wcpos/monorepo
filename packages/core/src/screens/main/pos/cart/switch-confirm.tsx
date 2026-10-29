@@ -25,6 +25,7 @@ import {
 	useRegisterDirectory,
 } from '../../../../services/register/use-register-binding';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 
@@ -33,22 +34,25 @@ export type SwitchRequest =
 	| { kind: 'store'; store: ReadonlyStoreRecord }
 	// `state` is the band's description line and `open` the same resolved session (device cache
 	// first, then the directory row), so the confirm's two lines never disagree (CodeRabbit, #3046).
-	| { kind: 'register'; register: Register; state: string; open: boolean };
+	| { kind: 'register'; register: Register; state: string; open: boolean }
+	| { kind: 'sign-out' };
 
 export function SwitchConfirm({
 	request,
 	portalHost,
 	onOpenChange,
 	onConfirm,
+	onSignOutAnyway,
 }: {
 	request: SwitchRequest | null;
 	portalHost?: string;
 	onOpenChange: (open: boolean) => void;
 	onConfirm: (request: SwitchRequest) => void;
+	onSignOutAnyway: () => void;
 }) {
 	const t = useT();
 	const { wpCredentials, store, site } = useStoreSession();
-	const { session, binding } = useRegisterSession();
+	const { session, expected, blind, figuresPending, binding } = useRegisterSession();
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -71,6 +75,7 @@ export function SwitchConfirm({
 			? resolveDayTimezone(request.store, site).timezone
 			: timezone;
 	const time = (date: Date) => formatDate(date, 'HH:mm', zoneOptions(zone));
+	const { format } = useCurrencyFormat();
 	if (!request) return null;
 	let title: string, description: string, confirm: string;
 	let body: React.ReactNode;
@@ -156,6 +161,17 @@ export function SwitchConfirm({
 			confirm = t('register.switch_to', { name });
 			break;
 		}
+		case 'sign-out':
+			title =
+				blind || figuresPending
+					? t('register.still_open_close_first_blind', { name: binding.registerName })
+					: t('register.still_open_close_first', {
+							name: binding.registerName,
+							amount: format(Number(expected.cash ?? 0)),
+						});
+			description = t('register.open_till_stays_open');
+			if (figuresPending) description += ' ' + t('register.figures_after_sync');
+			confirm = t('register.close_register');
 	}
 	return (
 		<AlertDialog open onOpenChange={onOpenChange}>
@@ -170,11 +186,24 @@ export function SwitchConfirm({
 					confirm={{
 						label: confirm,
 						testID: 'switch-confirm-confirm',
+						disabled: request.kind === 'sign-out' && figuresPending,
 						onPress: () => {
 							onConfirm(request);
 							onOpenChange(false);
 						},
 					}}
+					secondary={
+						request.kind === 'sign-out'
+							? {
+									label: t('register.sign_out_anyway'),
+									testID: 'switch-confirm-secondary',
+									onPress: () => {
+										onSignOutAnyway();
+										onOpenChange(false);
+									},
+								}
+							: undefined
+					}
 				/>
 			</AlertDialogContent>
 		</AlertDialog>

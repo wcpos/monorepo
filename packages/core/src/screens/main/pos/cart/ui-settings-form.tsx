@@ -9,12 +9,12 @@ import {
 	Form,
 	FormField,
 	FormInput,
+	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
-import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
@@ -118,24 +118,16 @@ export function UISettingsForm() {
 					<FormField
 						control={form.control}
 						name="openOrdersPosition"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{getUILabel('openOrdersPosition')}</Text>
-								<SegmentedControl
-									value={value}
-									onValueChange={(val) => onChange(val || value)}
-									segments={
-										[
-											{ value: 'top', label: t('common.top'), testID: 'open-orders-position-top' },
-											{
-												value: 'bottom',
-												label: t('common.bottom'),
-												testID: 'open-orders-position-bottom',
-											},
-										] satisfies [Segment, Segment]
-									}
-								/>
-							</View>
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('openOrdersPosition')}
+								testID="open-orders-position"
+								segments={[
+									{ value: 'top', label: t('common.top') },
+									{ value: 'bottom', label: t('common.bottom') },
+								]}
+							/>
 						)}
 					/>
 					<FormField

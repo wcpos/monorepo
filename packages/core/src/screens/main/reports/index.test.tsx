@@ -6,14 +6,17 @@ import * as React from 'react';
 import { endOfDay } from 'date-fns/endOfDay';
 import { startOfDay } from 'date-fns/startOfDay';
 import { utc } from '@date-fns/utc';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import type { ClosureRow } from '@wcpos/query/register-session';
 import { compileQuery } from '@wcpos/query/query-state';
 
 import { ReportsScreen } from './index';
 
 import type { QueryHandle, QueryStateOf } from '../../../query';
+
+afterEach(() => jest.useRealTimers());
 
 type FakeHandle = QueryHandle & { set: (partial: object) => void; retry: () => void };
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
@@ -42,9 +45,11 @@ const mockClosureScope = jest.fn();
 jest.mock('./closures', () => ({
 	Closures: (props: { onClose?: () => void; initialClosureId?: string }) => {
 		mockClosureScope(props);
-		return props.initialClosureId ? (
-			<button data-testid="close-closure" onClick={props.onClose} />
-		) : null;
+		return (
+			<div data-testid="reports-closures">
+				{props.initialClosureId && <button data-testid="close-closure" onClick={props.onClose} />}
+			</div>
+		);
 	},
 }));
 let mockPro = true;
@@ -60,9 +65,37 @@ const mockViewedStores = of([
 	{ id: 9, timezone: 'UTC' },
 	{ id: 21, timezone: 'America/New_York' },
 ]);
+const mockLocalClosure = {
+	id: 'c',
+	business_day: '2026-09-16',
+	opened_at: '2026-09-16T09:00:00Z',
+	register_id: 'r',
+};
+const mockReadClosure = jest.fn();
+const mockStoreDB = {};
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readClosure: (...args: unknown[]) => mockReadClosure(...args),
+}));
+jest.mock('./closures/closure-panel', () => ({
+	ClosurePanel: ({ row, onClose }: { row: ClosureRow; onClose: () => void }) => (
+		<button data-testid="closure-panel" onClick={onClose}>
+			{row.id}
+		</button>
+	),
+}));
 jest.mock('./till-strip', () => ({
-	TillStrip: ({ onOpenClosures }: { onOpenClosures: () => void }) => (
-		<button data-testid="till-closures" onClick={onOpenClosures} />
+	TillStrip: ({
+		onOpenClosures,
+		onOpenClosure,
+	}: {
+		onOpenClosures?: () => void;
+		onOpenClosure?: (closure: typeof mockLocalClosure) => void;
+	}) => (
+		<>
+			{onOpenClosures && <button data-testid="till-closures" onClick={onOpenClosures} />}
+			<button data-testid="till-last-closure" onClick={() => onOpenClosure?.(mockLocalClosure)} />
+		</>
 	),
 }));
 // The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
@@ -129,6 +162,12 @@ beforeEach(() => {
 	mockHandles.clear();
 	mockAnswered = true;
 	mockProvided = null;
+	mockPro = true;
+	mockPhone = true;
+	mockRoute = {};
+	mockClosureScope.mockClear();
+	mockSetParams.mockClear();
+	mockReadClosure.mockReset().mockResolvedValue({ toMutableJSON: () => mockLocalClosure });
 });
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
@@ -208,6 +247,7 @@ jest.mock('./reports', () => ({
 	},
 }));
 jest.mock('../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ storeDB: mockStoreDB }),
 	useAppState: () => ({
 		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
 		site: { timezone_string: 'UTC', gmt_offset: '0' },
@@ -432,18 +472,13 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 		onClose: expect.any(Function),
 		renderScopeRow: expect.any(Function),
 	});
+	mockClosureScope.mockClear();
 	mockPro = false;
 	view.rerender(<ReportsScreen />);
-	expect(mockClosureScope).toHaveBeenLastCalledWith({
-		scope: expect.objectContaining({
-			from: '2026-07-15',
-			to: '2026-07-15',
-			registerId: 'r',
-			storeId: 9,
-		}),
-		onClose: expect.any(Function),
-		renderScopeRow: expect.any(Function),
-	});
+	// Free now protects the scope by not mounting the room at all.
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(latestState().filters).toMatchObject({ register: 'r', store: '9' });
 	mockPro = true;
 	jest.useRealTimers();
 });
@@ -512,9 +547,10 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ setParams: mockSetParams }),
 	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
 }));
+let mockPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
-	useIsPhone: () => true,
+	useIsPhone: () => mockPhone,
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
@@ -559,6 +595,9 @@ it('opens the requested closure room and business day for Pro', () => {
 			scope: expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' }),
 		})
 	);
+	expect(screen.getByTestId('reports-closures')).toBeTruthy();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(mockReadClosure).not.toHaveBeenCalled();
 	mockRoute = {};
 });
 
@@ -666,3 +705,70 @@ it('binds refunds by their date alone with the supported sort', () => {
 	expect(state.sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
 	expect(state.limit).toBe(Number.MAX_SAFE_INTEGER);
 });
+
+// Revert: route Free through the room, or gate yesterday's local document by history.
+it.each([true, false])('opens a Free deep link over Sales (phone: %s)', async (phone) => {
+	mockPro = false;
+	mockPhone = phone;
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	const view = render(<ReportsScreen />);
+	await waitFor(() => expect(screen.getByTestId('closure-panel').textContent).toBe('c'));
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	expect(!!screen.queryByTestId('legacy-register')).toBe(!phone);
+	// The phone's page keeps the Sales bar above it: the bar pads the status-bar inset.
+	expect(screen.getByTestId('reports-back-sales')).toBeTruthy();
+	expect(mockReadClosure).toHaveBeenCalledTimes(1);
+	expect(mockReadClosure).toHaveBeenCalledWith(mockStoreDB, { id: 'c', serverClosureId: 'c' });
+	fireEvent.click(screen.getByTestId('closure-panel'));
+	expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined });
+	view.rerender(<ReportsScreen />);
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+it('clears a missing local Free closure without opening a pane or room', async () => {
+	mockPro = false;
+	mockRoute = { closureId: 'missing' };
+	mockReadClosure.mockResolvedValue(null);
+	render(<ReportsScreen />);
+	await waitFor(() => expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined }));
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+// Revert: keep a failed local read as missing, clearing a link nothing proved absent.
+it('keeps a Free link whose local read failed, opening nothing', async () => {
+	mockPro = false;
+	mockRoute = { closureId: 'c' };
+	mockReadClosure.mockRejectedValue(new Error('storage closed'));
+	render(<ReportsScreen />);
+	await waitFor(() => expect(mockReadClosure).toHaveBeenCalledTimes(1));
+	// The rejection lands a tick later; a cleared link would call setParams from that render.
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockSetParams).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+// Revert: open the strip's door by id alone, so a closure this device never held clears itself.
+it.each([false, true])(
+	'routes the last-closure door with the register-panel params (Pro: %s)',
+	(pro) => {
+		mockPro = pro;
+		const view = render(<ReportsScreen />);
+		expect(!!screen.queryByTestId('till-closures')).toBe(pro);
+		fireEvent.click(screen.getByTestId('till-last-closure'));
+		expect(mockSetParams).toHaveBeenCalledWith({
+			closureId: 'c',
+			businessDay: '2026-09-16',
+			openedAt: '2026-09-16T09:00:00Z',
+			registerId: 'r',
+		});
+		if (pro) return;
+		// Free opens the row the strip drew, local or the server's, without a local read.
+		view.rerender(<ReportsScreen />);
+		expect(screen.getByTestId('closure-panel').textContent).toBe('c');
+		expect(mockReadClosure).not.toHaveBeenCalled();
+	}
+);

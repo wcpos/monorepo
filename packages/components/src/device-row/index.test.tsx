@@ -3,7 +3,7 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { TONE } from '../lib/tone';
-import { DeviceRow, DeviceRowActions } from './index';
+import { DeviceList, DeviceRow, DeviceRowActions } from './index';
 
 // Uniwind is not compiled in Jest; expose the classes.
 jest.mock('react-native', () => {
@@ -15,6 +15,11 @@ jest.mock('react-native', () => {
 		return React.createElement('span', { 'data-testid': testID, className }, children);
 	}
 	return { Platform: { OS: 'web' }, View, Text };
+});
+let mockPhone = false;
+jest.mock('../lib/device', () => ({ useIsPhone: () => mockPhone }));
+beforeEach(() => {
+	mockPhone = false;
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: ({ children }: any) => children }));
 jest.mock('../icon', () => ({
@@ -36,7 +41,7 @@ jest.mock('../badge', () => ({
 
 const icon = (container: HTMLElement) => container.querySelector('[data-icon]')!;
 
-it('stacks the name and its tag, the identifiers and ONE caption state line on a row card', () => {
+it('is a flush hairline row: the name and its tag, the identifiers and ONE caption state line', () => {
 	render(
 		<DeviceRow
 			testID="row"
@@ -47,8 +52,11 @@ it('stacks the name and its tag, the identifiers and ONE caption state line on a
 			state={{ label: 'Connected · 82%', tone: 'ok' }}
 		/>
 	);
-	expect(screen.getByTestId('row')).toHaveClass('bg-card', 'rounded-lg', 'border', 'p-3');
-	expect(screen.getByText('WisePad 3')).toHaveClass('text-lg', 'font-semibold');
+	const row = screen.getByTestId('row');
+	expect(row).toHaveClass('py-3', 'gap-3');
+	// Alone, outside a list, it draws no rule at all.
+	expect(row.className).not.toMatch(/rounded|bg-card|border/);
+	expect(screen.getByText('WisePad 3')).toHaveClass('text-base', 'font-medium');
 	expect(screen.getByTestId('row-tag')).toHaveTextContent('Stripe');
 	// Blanks drop out of line 2, so no stray separator.
 	expect(screen.getByTestId('row-identifiers')).toHaveTextContent(/^WPC-1 · London Shop$/);
@@ -97,18 +105,36 @@ it('names a caller state testID, spins the square while busy, and shows a known 
 	expect(screen.getByTestId('row-progress')).toHaveAttribute('data-indeterminate', 'true');
 });
 
-it('puts the actions last, on a full-width row of their own', () => {
+it('rules a hairline between the rows of a list, never above the first or under the last', () => {
+	render(
+		<DeviceList>
+			{['a', 'b', 'c'].map((id) => (
+				<DeviceRow key={id} testID={id} name={id} />
+			))}
+			{null}
+		</DeviceList>
+	);
+	expect(screen.getByTestId('a').className).not.toMatch(/border/);
+	for (const id of ['b', 'c']) expect(screen.getByTestId(id)).toHaveClass('border-t');
+	for (const id of ['a', 'b', 'c']) expect(screen.getByTestId(id)).not.toHaveClass('border-b');
+});
+
+it.each([
+	[false, 'inline at the right of the name line'],
+	[true, 'last, under the lines'],
+])('phone=%s puts the actions %s, after what the row grows', (phone) => {
+	mockPhone = phone;
 	render(
 		<DeviceRow testID="row" name="Reader">
-			<span>hint</span>
 			<DeviceRowActions>
 				<button type="button">Connect</button>
 			</DeviceRowActions>
+			<span>hint</span>
 		</DeviceRow>
 	);
-	const card = screen.getByTestId('row');
-	const slot = card.lastElementChild!;
-	expect(slot).toHaveClass('w-full', 'flex-row');
-	expect(slot).toHaveTextContent('Connect');
-	expect(slot.previousElementSibling).toHaveTextContent('hint');
+	const row = screen.getByTestId('row');
+	const slot = screen.getByText('Connect').parentElement!;
+	expect(slot).toHaveClass('flex-row', 'items-center');
+	expect(slot.parentElement).toBe(phone ? row : row.firstElementChild);
+	expect(row.lastElementChild).toBe(phone ? slot : screen.getByText('hint'));
 });

@@ -62,8 +62,8 @@ jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
 }));
 jest.mock('@wcpos/components/panels', () => ({
-	Panel: ({ children, testID, defaultSize }: PanelProps) => (
-		<div data-testid={testID} data-default-size={defaultSize}>
+	Panel: ({ children, testID, defaultSize, style }: PanelProps & { style?: object }) => (
+		<div data-testid={testID} data-default-size={defaultSize} data-style={JSON.stringify(style)}>
 			{children}
 		</div>
 	),
@@ -146,6 +146,14 @@ describe('POSColumns', () => {
 				.compareDocumentPosition(screen.getByTestId('pos-products-panel'))
 		).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 	});
+	it('the products panel lets a focus ring at its inner edge paint into the gutter; the cart clips', () => {
+		render(<POSColumns />);
+		expect(screen.getByTestId('pos-products-panel').dataset.style).toBe(
+			JSON.stringify({ overflow: 'visible' })
+		);
+		expect(screen.getByTestId('pos-cart-panel').dataset.style).toBeUndefined();
+	});
+
 	it('runs every column edge to edge: each pads both insets inside itself, the panels do not', () => {
 		const padded = (testID: string) => {
 			const { paddingTop, paddingBottom } = screen.getByTestId(testID).style;

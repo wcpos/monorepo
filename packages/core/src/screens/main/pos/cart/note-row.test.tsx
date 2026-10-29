@@ -8,6 +8,19 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+// The real surface and icon reach the icon sets (Uniwind's ESM); the row needs only its press and label.
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/pressable-surface', () => ({
+	PressableSurface: ({
+		testID,
+		onPress,
+		children,
+	}: React.PropsWithChildren<{ testID: string; onPress: () => void }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
 it('hides an empty note and opens the sheet for an existing note', () => {
 	const onPress = jest.fn();
 	const order = { payload: { customer_note: '' } } as React.ComponentProps<typeof NoteRow>['order'];

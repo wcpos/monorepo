@@ -23,13 +23,34 @@ jest.mock('../components/ui-settings', () => ({
 		mockDialogProps = props;
 		return children;
 	},
-	UISettingsColumnsOnlyForm: ({ id, before }: { id: string; before?: React.ReactNode }) => (
-		<div data-testid={`columns-${id}`}>
-			{before}
-			<div data-testid="columns-list" />
-		</div>
+	// `before` renders inside the columns form, whose context draws the field's label.
+	UISettingsColumnsOnlyForm: function Columns({
+		id,
+		before,
+	}: {
+		id: string;
+		before?: React.ReactNode;
+	}) {
+		const { FormProvider, useForm } = jest.requireActual('react-hook-form');
+		return (
+			<FormProvider {...useForm()}>
+				<div data-testid={`columns-${id}`}>
+					{before}
+					<div data-testid="columns-list" />
+				</div>
+			</FormProvider>
+		);
+	},
+}));
+// The label primitive needs a native host; the form's label names its control by this id.
+jest.mock('@wcpos/components/label', () => ({
+	Label: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<label id={nativeID}>{children}</label>
 	),
 }));
+jest.mock('@wcpos/components/form', () =>
+	jest.requireActual('../../../../../components/src/form/segmented-control')
+);
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -38,14 +59,14 @@ jest.mock('@wcpos/components/segmented-control', () => ({
 		value,
 		onValueChange,
 		segments,
-		'aria-label': label,
+		'aria-labelledby': labelledBy,
 	}: {
-		'aria-label'?: string;
+		'aria-labelledby'?: string;
 		value: string;
 		onValueChange: (value: string) => void;
 		segments: { value: string; label: string; testID: string }[];
 	}) => (
-		<div role="radiogroup" aria-label={label}>
+		<div role="radiogroup" aria-labelledby={labelledBy}>
 			{segments.map((segment) => (
 				<button
 					key={segment.value}
@@ -74,16 +95,13 @@ it('shows the POS panel’s variations style above the columns and writes it to 
 	expect(drill.textContent).toBe('pos_products.variations_open_in_place');
 	// Always a table here, so never "popover".
 	expect(inline.textContent).toBe('pos_products.variations_expanded_rows');
-	expect(screen.getByText('pos_products.variations_style')).toBeTruthy();
 	expect(
 		drill.compareDocumentPosition(screen.getByTestId('columns-list')) &
 			Node.DOCUMENT_POSITION_FOLLOWING
 	).toBeTruthy();
 	expect(inline.getAttribute('aria-pressed')).toBe('true');
-	// The group is named: a radiogroup with no name reads as a bare list of choices.
-	expect(screen.getByRole('radiogroup').getAttribute('aria-label')).toBe(
-		'pos_products.variations_style'
-	);
+	// The group is named by the form's label: a radiogroup with no name reads as a bare list.
+	expect(screen.getByRole('radiogroup', { name: 'pos_products.variations_style' })).toBeTruthy();
 	fireEvent.click(drill);
 	expect(mockSettingsIds).toContain('pos-products');
 	expect(mockPatch).toHaveBeenCalledWith({ variationsStyle: 'drill' });

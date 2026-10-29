@@ -34,9 +34,11 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { FigureTile } from './figure-tile';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
+import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { requestRegisterPanel } from './register-panel-request';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -205,12 +207,17 @@ function AwaitingStore() {
 
 function UserRows({
 	busy,
+	hold,
+	counting,
 	onChoose,
 }: {
 	busy: boolean;
+	hold: boolean;
+	counting: boolean;
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
+	const t = useT();
 	const credentials = useObservableSuspense(credentialsListResource(site));
 
 	return (
@@ -225,9 +232,14 @@ function UserRows({
 					}
 					choice
 					selected={credential.uuid === wpCredentials.uuid}
-					disabled={busy}
+					disabled={busy || hold || counting}
+					description={
+						!hold && counting && credential.uuid !== wpCredentials.uuid
+							? t('register.finish_count_first')
+							: undefined
+					}
 					onPress={
-						credential.uuid === wpCredentials.uuid || busy
+						credential.uuid === wpCredentials.uuid || busy || hold || counting
 							? undefined
 							: () => onChoose({ kind: 'cashier', credential })
 					}
@@ -248,9 +260,13 @@ function UserRows({
 
 function StoreBand({
 	busy,
+	hold,
+	online,
 	onChoose,
 }: {
 	busy: boolean;
+	hold: boolean;
+	online: boolean;
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { wpCredentials, store } = useStoreSession();
@@ -268,9 +284,10 @@ function StoreBand({
 					testID={`user-sheet-store-${row.localID}`}
 					choice
 					selected={row.localID === store.localID}
-					disabled={busy}
+					disabled={busy || hold || !online}
+					description={!hold && !online ? t('register.needs_store_to_switch') : undefined}
 					onPress={
-						row.localID === store.localID || busy
+						row.localID === store.localID || busy || hold || !online
 							? undefined
 							: () => onChoose({ kind: 'store', store: row })
 					}
@@ -285,11 +302,13 @@ function RegisterBand({
 	attributed,
 	reason,
 	busy,
+	hold,
 	onChoose,
 }: {
 	attributed: boolean;
 	reason: string;
 	busy: boolean;
+	hold: boolean;
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { userDB, site } = useStoreSession();
@@ -333,10 +352,10 @@ function RegisterBand({
 						choice
 						selected={row.id === registerId}
 						label={row.name}
-						description={attributed ? reason : description}
-						disabled={attributed || busy}
+						description={attributed && !hold ? reason : description}
+						disabled={attributed || busy || hold}
 						onPress={
-							row.id === registerId || attributed || busy
+							row.id === registerId || attributed || busy || hold
 								? undefined
 								: () =>
 										onChoose({ kind: 'register', register: row, state: description, open: !!live })
@@ -367,6 +386,9 @@ export function UserSheet({
 	const { login } = useAppState();
 	const router = useRouter();
 	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
+	const paying = usePaymentInFlight();
+	const { countingHere, session, loaded, actions, binding } = useRegisterSession();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	// One action at a time: a cashier switch or a register bind in flight holds the store band as
@@ -444,6 +466,23 @@ export function UserSheet({
 				});
 			case 'register':
 				return void act(() => bind(request.register.id));
+			case 'sign-out':
+				// The count first, the panel only once it started: a refusal (figures turned pending,
+				// the session gone) keeps the sheet and says so, as the register panel's own button
+				// does (CodeRabbit, #3056).
+				return void act(async () => {
+					try {
+						await actions.startCounting();
+					} catch (error) {
+						log.error('The count could not start', {
+							code: ERROR_CODES.REGISTER_CLOSE_REFUSED,
+							showToast: true,
+							context: { error },
+						});
+						return;
+					}
+					openRegister();
+				});
 		}
 	};
 	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
@@ -486,25 +525,40 @@ export function UserSheet({
 								<Figures busy={busy} onOpen={openRegister} />
 							</Suspense>
 							<AwaitingStore />
+							{paying && (
+								<Notice
+									tone="info"
+									testID="user-sheet-hold"
+									title={t('register.finish_payment_first')}
+								/>
+							)}
 							<View testID="user-sheet-switch-user">
 								<View className="h-band border-border mt-2 justify-center border-b px-2.5">
 									<Text variant="caption">{t('register.cashier')}</Text>
 								</View>
 								<Suspense>
-									<UserRows busy={busy} onChoose={setRequest} />
+									<UserRows
+										busy={busy}
+										hold={paying}
+										counting={countingHere}
+										onChoose={setRequest}
+									/>
 								</Suspense>
 								{/* Every session-changing action is inert while a store switch hydrates: the overlay
 								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
 								    when the switch publishes its session (Codex, #3045). */}
-								{!busy && <AddUserButton site={site} hasExistingUsers compact />}
+								{online && !busy && !paying && (
+									<AddUserButton site={site} hasExistingUsers compact />
+								)}
 							</View>
 							<Suspense>
-								<StoreBand busy={busy} onChoose={setRequest} />
+								<StoreBand busy={busy} hold={paying} online={online} onChoose={setRequest} />
 							</Suspense>
 							{status === 'bound' && registers.length > 1 && (
 								<RegisterBand
 									attributed={attributed}
 									busy={busy}
+									hold={paying}
 									onChoose={setRequest}
 									reason={
 										currentOrder
@@ -539,8 +593,16 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
-							disabled: busy,
-							onPress: () => void logout(),
+							// A bound register whose session has not loaded is not closed; Sign out waits for
+							// the answer rather than skipping the question (Codex, #3056).
+							disabled: busy || paying || (binding.status === 'bound' && !loaded),
+							// Only a session that is still open or being counted is one to close first: the hook
+							// also returns a closed session whose closure write was interrupted, and Close
+							// register would reopen it (Codex, #3056).
+							onPress: () =>
+								binding.status === 'bound' && session && session.status !== 'closed'
+									? setRequest({ kind: 'sign-out' })
+									: void act(() => logout()),
 						}}
 					/>
 				</DialogContent>
@@ -551,6 +613,7 @@ export function UserSheet({
 						if (!o) setRequest(null);
 					}}
 					onConfirm={run}
+					onSignOutAnyway={() => void act(() => logout())}
 				/>
 				{isSwitching ? (
 					<Portal name="store-switch-overlay">

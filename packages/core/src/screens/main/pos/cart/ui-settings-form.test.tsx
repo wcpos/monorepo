@@ -32,6 +32,7 @@ jest.mock('@wcpos/components/form', () => ({
 		render: (input: { field: Record<string, unknown> }) => React.ReactNode;
 	}) => renderField({ field: { name, value: undefined, onChange: () => {} } }),
 	FormInput: MockLabelled,
+	FormSegmentedControl: MockLabelled,
 	FormSelect: MockLabelled,
 	FormSwitch: MockLabelled,
 	useFormChangeHandler: () => ({ flush: async () => true }),
@@ -43,7 +44,6 @@ jest.mock('@wcpos/components/select', () => ({
 	SelectValue: () => null,
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: MockPassThrough }));
-jest.mock('@wcpos/components/segmented-control', () => ({ SegmentedControl: () => null }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: MockPassThrough }));
 jest.mock('@wcpos/query', () => ({ useDocField: () => ({}) }));
 jest.mock('../../../../contexts/translations', () => ({

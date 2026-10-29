@@ -16,6 +16,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
+import type { ClosureRow } from '@wcpos/query/register-session';
 
 import { useStoreSession } from '../../../contexts/app-state';
 import { useTheme } from '../../../contexts/theme';
@@ -31,7 +32,13 @@ import { useLastClosure } from './closures/use-last-closure';
 
 type Term = [id: string, sign: string, label: string, amount: string];
 
-export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
+export function TillStrip({
+	onOpenClosures,
+	onOpenClosure,
+}: {
+	onOpenClosures?: () => void;
+	onOpenClosure?: (closure: ClosureRow) => void;
+}) {
 	const t = useT();
 	const { roomy } = useTheme();
 	const phone = useIsPhone();
@@ -263,19 +270,26 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				)}
 			</View>
 			{bound && closure && (
-				<Text testID="till-last-closure" className="text-muted-foreground">
-					{t('reports.last_closure', { n: `#${closure.server_number ?? closure.number}` })} ·{' '}
-					{heading} {date(closure.closed_at, 'HH:mm')}
-					{!blind && (
-						<>
-							{' '}
-							·{' '}
-							<Text testID="till-last-result" className={resultColor}>
-								{result}
-							</Text>
-						</>
-					)}
-				</Text>
+				<Button
+					variant="ghost"
+					className="self-start px-0"
+					testID="till-last-closure"
+					onPress={() => onOpenClosure?.(closure)}
+				>
+					<Text className="text-muted-foreground">
+						{t('reports.last_closure', { n: `#${closure.server_number ?? closure.number}` })} ·{' '}
+						{heading} {date(closure.closed_at, 'HH:mm')}
+						{!blind && (
+							<>
+								{' '}
+								·{' '}
+								<Text testID="till-last-result" className={resultColor}>
+									{result}
+								</Text>
+							</>
+						)}
+					</Text>
+				</Button>
 			)}
 		</View>
 	);
@@ -354,12 +368,14 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					<ButtonText>{open ? t('register.print_x_report') : t('reports.reprint')}</ButtonText>
 				</Button>
 			)}
-			<IconButton
-				name="chevronRight"
-				testID="till-closures"
-				accessibilityLabel={t('reports.closures')}
-				onPress={onOpenClosures}
-			/>
+			{onOpenClosures && (
+				<IconButton
+					name="chevronRight"
+					testID="till-closures"
+					accessibilityLabel={t('reports.closures')}
+					onPress={onOpenClosures}
+				/>
+			)}
 		</View>
 	);
 	return (

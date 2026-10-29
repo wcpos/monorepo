@@ -17,6 +17,7 @@ import * as actions from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
 import {
+	markCountingHere,
 	markSeededIn,
 	recordLiveSession,
 	remintRegister,
@@ -1922,3 +1923,36 @@ it.each(['synced', 'pending'])(
 		}
 	}
 );
+
+it('reports counting on this device from the cached mark', async () => {
+	addRxPlugin(RxDBLocalDocumentsPlugin);
+	const userDB: UserDatabase = await createRxDatabase({
+		name: `counting${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		localDocuments: true,
+		multiInstance: false,
+	});
+	const previous = mockStoreSession.userDB;
+	mockStoreSession.userDB = userDB;
+	try {
+		await remintRegister(userDB);
+		await recordLiveSession(userDB, 'site', 'register', {
+			session_id: 'session',
+			status: 'counting',
+			opened_at_gmt: session.opened_at_gmt,
+			opened_by: { id: 7, name: 'Pat' },
+			acknowledged: true,
+			expected_float: '100',
+			counted_float: '100',
+			business_day: null,
+		});
+		await markCountingHere(userDB, 'site', 'register', true);
+		const result = await settled();
+		expect(result.current.countingHere).toBe(true);
+		await act(() => markCountingHere(userDB, 'site', 'register', false));
+		await waitFor(() => expect(result.current.countingHere).toBe(false));
+	} finally {
+		mockStoreSession.userDB = previous;
+		await userDB.remove();
+	}
+});

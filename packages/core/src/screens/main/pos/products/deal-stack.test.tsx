@@ -546,6 +546,49 @@ it('deals in place when the tile cannot be measured, without losing the tap', ()
 	expect(screen.getByTestId('lifted').textContent).toBe('null');
 });
 
+it('mounted with a detail already open, shows it dealt and landed in place, measuring nothing', () => {
+	const { rerender } = render(<Stage detail="Hoodie" />);
+	// On the stage itself: its tap target is a tile of a tree that has gone (the view toggle,
+	// a layout swap), and measuring it only held the root on screen for the grace period.
+	expect(deal()).toEqual({ name: 'Hoodie', dealt: true, origin: 'null', grid: 'null' });
+	expect(seen('cell-0')).toBe(true);
+	expect(styleOf('cell-0')).toEqual({ transform: [{ translateX: 0 }, { translateY: 0 }] });
+	const cell = styleOf('cell-1');
+	expect(cell.opacity).toBe(1);
+	expect(cell.transform![2].scale).toBeCloseTo(1);
+	// The root is covered under it, its tile not lifted: no copy is out.
+	const root = screen.getByTestId('lifted').closest('[data-style]') as HTMLElement;
+	expect(root.dataset.visibility).toBe('hidden');
+	expect(root.dataset.pointer).toBe('none');
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	// Furniture up and products away from the first paint; no clock set off at all.
+	expect(mockInitial.slice(0, 3)).toEqual([1, 0, 1]);
+	expect(mockTimings).toEqual([]);
+	act(() => jest.advanceTimersByTime(120));
+	expect(mockTimings).toEqual([]);
+	expect(deal()).toEqual({ name: 'Hoodie', dealt: true, origin: 'null', grid: 'null' });
+	// The next detail deals as any other, from its tapped tile.
+	rerender(<Stage detail="Tee" />);
+	expect(deal()).toEqual({
+		name: 'Tee',
+		dealt: false,
+		origin: { x: TILE.x - STAGE.x, y: TILE.y - STAGE.y, width: 92, height: 150 },
+		grid: 'undefined',
+	});
+	expect(seen('cell-0')).toBe(false);
+});
+
+it('a detail that mounted at rest gathers home as any other', () => {
+	const { rerender } = render(<Stage detail="Hoodie" />);
+	rerender(<Stage detail={null} />);
+	expect(deal().dealt).toBe(false);
+	const root = screen.getByTestId('lifted').closest('[data-style]') as HTMLElement;
+	expect(root.dataset.visibility).toBe('visible');
+	expect(root.dataset.pointer).toBe('auto');
+	finish(0);
+	expect(screen.queryByTestId('deal')).toBeNull();
+});
+
 it('keeps the detail on stage until its tiles are home, then puts the tile back', () => {
 	const { rerender } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);
@@ -679,6 +722,17 @@ it('a return interrupted by the same tile leaves the detail mounted', () => {
 	// The cancelled return reports `finished: false`; it must not unmount what is being dealt.
 	finish(0, false);
 	expect(deal()).toMatchObject({ name: 'Hoodie', dealt: true });
+});
+
+it('a detail that mounted at rest, closed and reopened by its own tile deals back out', () => {
+	const { rerender } = render(<Stage detail="Hoodie" />);
+	rerender(<Stage detail={null} />);
+	expect(deal().dealt).toBe(false);
+	// The same detail keeps its generation; its mount-only exemption ended with the close.
+	rerender(<Stage detail="Hoodie" />);
+	finish(0, false);
+	expect(deal()).toMatchObject({ name: 'Hoodie', dealt: true });
+	expect(mockTimings.some((call) => call.toValue === 1 && call.done)).toBe(true);
 });
 
 it('hides a gathering grid from the accessibility tree and gives focus back to the tapped tile', () => {

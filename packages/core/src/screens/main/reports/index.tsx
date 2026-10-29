@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,8 +10,11 @@ import { useObservableState } from 'observable-hooks';
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
+import type { ClosureRow } from '@wcpos/query/register-session';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { PortalHost } from '@wcpos/components/portal';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
@@ -33,6 +36,7 @@ import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
+import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
 import { HeroShell } from './hero';
 import { Reports } from './reports';
@@ -44,7 +48,7 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
-import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
+import { clampClosureScope, type ClosureScope, useLocalClosure } from './closures/use-closure-rows';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
 
@@ -81,7 +85,16 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+type SalesScreenProps = {
+	hasRoom: boolean;
+	onRoomChange: (room: string) => void;
+	onOpenClosure: (closure: ClosureRow) => void;
+	/** A page in the Sales page's place, under the bar: the phone's Free closure pane. */
+	page?: React.ReactNode;
+};
+
+function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreenProps) {
+	const router = useRouter();
 	const t = useT();
 	const ground = useGround();
 	const state = useQueryState<'orders'>();
@@ -180,7 +193,20 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 			lockedScopeName={t('reports.earlier_days')}
 		/>
 	);
-	const strip = <TillStrip onOpenClosures={() => onRoomChange('closures')} />;
+	const strip = (
+		<TillStrip
+			onOpenClosures={hasRoom ? () => onRoomChange('closures') : undefined}
+			onOpenClosure={onOpenClosure}
+		/>
+	);
+	// The Free pane portals into the `reports` host, which the settled page owns; while the first
+	// orders load, the fallback holds the host so the pane is never homeless (CodeRabbit, #3058).
+	const registerContainer = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer(
+			'reports',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
@@ -190,36 +216,41 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 				    query keeps the previous figures until it answers (the provider's drawn handle).
 				    The till strip scrolls with the page as its first row (owner, 2026-10-18), outside
 				    the date: it always shows the till now, and is the way into Closures. */}
-				<Suspense
-					fallback={
-						// The same scrolling shell as the settled page: on a short phone the strip
-						// can push the date button below the fold (Codex, #2720).
-						<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
-							{strip}
-							<HeroShell title={title} />
-						</ScrollView>
-					}
-				>
-					<ReportsProvider
-						handle={handle}
-						comparisonHandle={comparisonHandle}
-						refundsHandle={refundsHandle}
+				{page ?? (
+					<Suspense
+						fallback={
+							// The same scrolling shell as the settled page: on a short phone the strip
+							// can push the date button below the fold (Codex, #2720).
+							<View ref={registerContainer} className="min-h-0 flex-1">
+								<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
+									{strip}
+									<HeroShell title={title} />
+								</ScrollView>
+								<PortalHost name="reports" />
+							</View>
+						}
 					>
-						<ErrorBoundary
-							FallbackComponent={() => <Reports title={title} header={strip} />}
-							resetKeys={[refundsHandle, handle]}
-							// A new sales query can leave the failed refunds handle in place: the
-							// reset asks the engine again rather than rethrowing the old failure.
-							onReset={() => refundsHandle.retry()}
+						<ReportsProvider
+							handle={handle}
+							comparisonHandle={comparisonHandle}
+							refundsHandle={refundsHandle}
 						>
-							<React.Suspense fallback={<Reports title={title} header={strip} />}>
-								<ReportsRefunds>
-									<Reports title={title} header={strip} />
-								</ReportsRefunds>
-							</React.Suspense>
-						</ErrorBoundary>
-					</ReportsProvider>
-				</Suspense>
+							<ErrorBoundary
+								FallbackComponent={() => <Reports title={title} header={strip} />}
+								resetKeys={[refundsHandle, handle]}
+								// A new sales query can leave the failed refunds handle in place: the
+								// reset asks the engine again rather than rethrowing the old failure.
+								onReset={() => refundsHandle.retry()}
+							>
+								<React.Suspense fallback={<Reports title={title} header={strip} />}>
+									<ReportsRefunds>
+										<Reports title={title} header={strip} />
+									</ReportsRefunds>
+								</React.Suspense>
+							</ErrorBoundary>
+						</ReportsProvider>
+					</Suspense>
+				)}
 			</View>
 		</>
 	);
@@ -228,7 +259,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 /**
  *
  */
-function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+function SalesScreen({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreenProps) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const binding = useRegisterBinding();
@@ -267,7 +298,12 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 			<ErrorBoundary>
 				<Suspense>
 					<ReportsScopeProvider>
-						<ReportsScreenContent onRoomChange={onRoomChange} />
+						<ReportsScreenContent
+							hasRoom={hasRoom}
+							onRoomChange={onRoomChange}
+							onOpenClosure={onOpenClosure}
+							page={page}
+						/>
 					</ReportsScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
@@ -275,7 +311,13 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 	);
 }
 
-function ReportsShell() {
+function ReportsShell({
+	pressed,
+	onOpenClosure,
+}: {
+	pressed: ClosureRow | null;
+	onOpenClosure: (closure: ClosureRow) => void;
+}) {
 	const t = useT();
 	const phone = useIsPhone();
 	const ground = useGround();
@@ -286,19 +328,34 @@ function ReportsShell() {
 		openedAt?: string;
 		registerId?: string;
 	}>();
-	const [room, setRoom] = React.useState(params.closureId ? 'closures' : 'sales');
+	const { license } = useAppInfo();
+	const hasRoom = !!license?.isPro;
+	const [room, setRoom] = React.useState(hasRoom && params.closureId ? 'closures' : 'sales');
+	if (!hasRoom && room === 'closures') setRoom('sales');
+	const onRoomChange = (next: string) => {
+		if (next !== 'closures' || hasRoom) setRoom(next);
+	};
+	const held = !hasRoom && pressed && pressed.id === params.closureId ? pressed : null;
+	const local = useLocalClosure(hasRoom || held ? undefined : params.closureId);
+	const row = held ?? local.row;
+	const onClose = () => router.setParams({ closureId: undefined });
+	// Consume an unresolved external route so it cannot keep reopening a missing document; a
+	// failed read keeps the route, since nothing proved the closure absent.
+	React.useEffect(() => {
+		if (!hasRoom && params.closureId && !held && local.status === 'missing')
+			router.setParams({ closureId: undefined });
+	}, [hasRoom, params.closureId, held, local.status, router]);
 	const [selection, setSelection] = React.useState<ClosureScope | null>(null);
 	const { store, wpCredentials } = useAppState();
 	const binding = useRegisterBinding();
 	const { presets, timezone } = useStoreDay();
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
-	const { license } = useAppInfo();
-	const closureDay =
-		params.businessDay ??
-		(params.openedAt
-			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
-			: today);
-	const lockedClosure = !!params.closureId && !license?.isPro && closureDay !== today;
+	const closureDay = !hasRoom
+		? today
+		: (params.businessDay ??
+			(params.openedAt
+				? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
+				: today));
 	const initialScope = clampClosureScope(
 		{
 			from: license?.isPro ? closureDay : today,
@@ -313,14 +370,25 @@ function ReportsShell() {
 	const scope = license?.isPro
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
+	// The phone's pane is a page in the Sales page's place, under the bar that pads the status-bar
+	// inset, as the Pro room keeps its bar above its phone pane (Codex, #3058).
+	const pane = row && <ClosurePanel key={row.id} row={row} onClose={onClose} />;
 	return (
 		// Each room's bar pads the safe-area inset and shows the held-session banner and the Free
 		// strip under it, as every page bar does.
 		<View className="flex-1">
 			<ErrorBoundary>
 				<Suspense>
-					{room === 'sales' ? (
-						<SalesScreen onRoomChange={setRoom} />
+					{!(hasRoom && room === 'closures') ? (
+						<>
+							<SalesScreen
+								hasRoom={hasRoom}
+								onRoomChange={onRoomChange}
+								onOpenClosure={onOpenClosure}
+								page={phone ? pane || undefined : undefined}
+							/>
+							{!phone && pane}
+						</>
 					) : (
 						<>
 							<Bar
@@ -349,7 +417,6 @@ function ReportsShell() {
 											// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
 											key={license?.isPro ? 'pro' : 'free'}
 											lockedScopeName={t('reports.earlier_closures')}
-											initialLockedPeriod={lockedClosure}
 											initialHistoryLimit={outsideHistory}
 										/>
 										<CashierButton scope={scope} onScopeChange={setSelection} />
@@ -357,7 +424,7 @@ function ReportsShell() {
 									</View>
 								)}
 								scope={scope}
-								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
+								initialClosureId={outsideHistory ? undefined : params.closureId}
 								onClose={() => router.setParams({ closureId: undefined })}
 							/>
 						</>
@@ -375,12 +442,26 @@ export function ReportsScreen() {
 	if (link.closureId !== closureId) {
 		setLink({ closureId, key: closureId ? link.key + 1 : link.key });
 	}
+	// The strip hands over the row it drew, local or the server's: Free opens that row without a
+	// local read, so a closure this device never held still opens (CodeRabbit, #3058). It lives
+	// above the re-key, which a strip press is.
+	const [pressed, setPressed] = React.useState<ClosureRow | null>(null);
+	const router = useRouter();
+	const openClosure = (closure: ClosureRow) => {
+		setPressed(closure);
+		router.setParams({
+			closureId: closure.id,
+			businessDay: closure.business_day,
+			openedAt: closure.opened_at,
+			registerId: closure.register_id,
+		});
+	};
 	const { wpCredentials } = useAppState();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const t = useT();
 	const ground = useGround();
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
-		<ReportsShell key={link.key} />
+		<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
 	) : (
 		<View className="flex-1">
 			<ManagementBar title={t('common.reports')} testID="reports-bar" />
