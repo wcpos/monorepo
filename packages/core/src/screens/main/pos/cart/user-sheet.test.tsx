@@ -648,6 +648,16 @@ describe('drawer door', () => {
 		);
 		Object.assign(mockDrawer, { session, lastClosure: null });
 	});
+	it('offers no drawer door when the register panel has no session or closure to show', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: null });
+		try {
+			render(<UserSheet open onOpenChange={onOpenChange} />);
+			expect(screen.queryByTestId('user-sheet-drawer')).toBeNull();
+		} finally {
+			Object.assign(mockDrawer, { session });
+		}
+	});
 	it('shows only the sales count to a blind cashier', () => {
 		mockDrawer.blind = true;
 		render(<UserSheet open onOpenChange={onOpenChange} />);

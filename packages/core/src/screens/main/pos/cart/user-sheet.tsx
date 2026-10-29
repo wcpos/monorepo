@@ -103,7 +103,7 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 				<Text variant="key">{t('register.your_sales_today')}</Text>
 				<AmountFigure size="tile">{format(total)}</AmountFigure>
 			</View>
-			{binding.status === 'bound' && (
+			{binding.status === 'bound' && (session || lastClosure) && (
 				<PressableSurface
 					testID="user-sheet-drawer"
 					onPress={onOpen}
