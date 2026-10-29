@@ -30,13 +30,13 @@ import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 import { TEXT_LADDER } from '../text/ladder';
 import { isToastTarget } from '../toast/target';
-import { useDialogLabels } from './labels';
+import { useDialogLabels, useDismissIsClose } from './labels';
 
 import type { ButtonRef } from '../button';
 import type { IconName } from '../icon';
 import type { OverlayPresentation } from '../lib/overlay';
 import type { SlottableTextProps } from '@rn-primitives/types';
-export { DialogLabelsProvider, type DialogLabels } from './labels';
+export { DialogLabelsProvider, DismissIsClose, type DialogLabels } from './labels';
 
 export type DialogSide = 'center' | 'left' | 'right' | 'bottom';
 export type DialogSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
@@ -283,7 +283,11 @@ export type DialogFooterProps = {
 	record?: FooterSlot | FooterSlot[];
 	/** What loses something, outlined and apart from the intent. */
 	destructive?: FooterSlot | FooterSlot[];
-	/** The footer chooses Cancel with an intent, Close otherwise, from DialogLabels. */
+	/**
+	 * Every footer carries the dismiss (ruled 2026-10-29); `false` only where the intent IS the
+	 * dismissal (the closure sheet's Done). The footer chooses Cancel with an intent, Close
+	 * otherwise, from DialogLabels; a record shell (`DismissIsClose`) makes it Close beside an intent.
+	 */
 	close?: boolean | Pick<FooterButton, 'testID' | 'onPress' | 'disabled'>;
 	/** Non-button content leading the footer. Never a Button. */
 	aside?: React.ReactNode;
@@ -296,7 +300,7 @@ export function DialogFooter({
 	secondary,
 	record,
 	destructive,
-	close,
+	close = true,
 	aside,
 	size = 'default',
 	testID,
@@ -305,11 +309,13 @@ export function DialogFooter({
 	const presentation = useOverlayPresentation();
 	const phone = useIsPhone();
 	const labels = useDialogLabels();
+	const dismissIsClose = useDismissIsClose();
+	const dismissable = !!close && presentation !== undefined;
 	const alternatives = [secondary ?? []].flat().filter(isButton);
 	const records = [record ?? []].flat().filter(isButton);
 	const losses = [destructive ?? []].flat().filter(isButton);
 	const count =
-		alternatives.length + records.length + losses.length + Number(!!intent) + Number(!!close);
+		alternatives.length + records.length + losses.length + Number(!!intent) + Number(dismissable);
 	const fill = size === 'lg' && count === 1;
 	const buttonClass = cn(phone && 'w-full', fill && 'flex-1');
 	const buttons = (items: FooterButton[], variant: 'default' | 'outline' | 'outline-destructive') =>
@@ -325,7 +331,7 @@ export function DialogFooter({
 				{label}
 			</Button>
 		));
-	const dismiss = close ? (
+	const dismiss = dismissable ? (
 		<DialogPrimitive.Close asChild>
 			<Button
 				{...(typeof close === 'object' ? close : {})}
@@ -333,7 +339,7 @@ export function DialogFooter({
 				size={size}
 				className={buttonClass}
 			>
-				{intent ? labels.cancel : labels.close}
+				{intent && !dismissIsClose ? labels.cancel : labels.close}
 			</Button>
 		</DialogPrimitive.Close>
 	) : null;
@@ -371,7 +377,7 @@ export function DialogFooter({
 							{own}
 						</View>
 					)}
-					{(close || alternatives.length > 0 || intent) && (
+					{(dismissable || alternatives.length > 0 || intent) && (
 						<View className={cn(group, fill && 'flex-1')}>
 							{dismiss}
 							{other}

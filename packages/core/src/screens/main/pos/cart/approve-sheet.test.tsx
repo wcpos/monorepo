@@ -77,6 +77,7 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
+	...jest.requireActual('../../../../../jest/footer.test-utils'),
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (

@@ -160,6 +160,8 @@ export function ClosureSheet({
 					</Text>
 				) : null}
 				<DialogFooter
+					// Done is the dismissal (ruled 2026-10-29): the one footer without a separate Close.
+					close={false}
 					size="lg"
 					intent={{ label: t('register.done'), testID: 'closure-done', onPress: onDone }}
 					secondary={

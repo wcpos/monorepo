@@ -352,18 +352,20 @@ never shares a colour with Void (§7).
 
 A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` take slots and own the variant, the order, the side and the phone stacking; a `Button` is never written inside a footer (ruled 2026-10-25, after two Sync buttons shipped in two looks).
 
-| Slot            | Variant                                       | Side                                           | Examples                                                |
-| --------------- | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- |
-| `intent`        | `default`                                     | rightmost; phone first                         | Add to cart, Send, the cart's Sync order                |
-| `secondary`     | `outline`                                     | right, before intent; phone after intent       | Print, Email receipt, Download PDF, Update customer too |
-| `record`        | `outline`                                     | left, after destructive; phone after close     | Sync, Re-open                                           |
-| `destructive`   | `outline-destructive`                         | left, after aside; phone after record          | Void, Delete, Refund, Restore defaults, Sign out        |
-| `close`         | `outline`                                     | right, before secondary; phone after secondary | Cancel with intent, Close without                       |
-| `aside`         | no button                                     | leftmost; phone last                           | Count, status line                                      |
-| alert `confirm` | `destructive` for a loss, otherwise `default` | rightmost; phone first                         | Delete, Confirm                                         |
-| alert `cancel`  | `outline`                                     | before confirm; phone after confirm            | Cancel                                                  |
+| Slot            | Variant                                       | Side                                           | Examples                                                                      |
+| --------------- | --------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------- |
+| `intent`        | `default`                                     | rightmost; phone first                         | Add to cart, Send, the cart's Sync order                                      |
+| `secondary`     | `outline`                                     | right, before intent; phone after intent       | Print, Email receipt, Download PDF, Update customer too                       |
+| `record`        | `outline`                                     | left, after destructive; phone after close     | Sync, Re-open                                                                 |
+| `destructive`   | `outline-destructive`                         | left, after aside; phone after record          | Void, Delete, Refund, Restore defaults, Sign out                              |
+| `close`         | `outline`                                     | right, before secondary; phone after secondary | always present; Cancel with an intent, Close without, Close on a record shell |
+| `aside`         | no button                                     | leftmost; phone last                           | Count, status line                                                            |
+| alert `confirm` | `destructive` for a loss, otherwise `default` | rightmost; phone first                         | Delete, Confirm                                                               |
+| alert `cancel`  | `outline`                                     | before confirm; phone after confirm            | Cancel                                                                        |
 
 One intent per footer. A record action is never the intent. The footer chooses Cancel versus Close from `DialogLabels`; the caller never chooses the word.
+
+Every footer carries the dismiss: `close` defaults on, and `close={false}` is for a footer whose intent is the dismissal (the closure sheet's Done), nothing else (ruled 2026-10-29, after the cart's Order details sheet shipped without one). A form that saves as it is edited has nothing to cancel: `RecordDialog` wraps its body (tabs and footer) in `DismissIsClose`, so the dismiss reads Close beside Sync order or Re-open; a call site never chooses the word. Outside an overlay shell (a Reports panel's phone page) there is no dialog to close and no dismiss is drawn.
 
 The ESLint `designSystemOwnershipSelectors` footer selector in `packages/eslint/index.js` refuses a button written inside a footer, including its `aside` prop; a button rendered by a child component inside `aside` (the tax rates' sync control) is the caller's responsibility and the one place this rule is review, not lint.
 

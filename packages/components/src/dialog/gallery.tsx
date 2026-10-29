@@ -12,6 +12,7 @@ import {
 	type DialogFooterProps,
 	DialogHeader,
 	DialogTitle,
+	DismissIsClose,
 } from './index';
 
 const noop = () => {};
@@ -27,18 +28,20 @@ export const stories = [
 			},
 			{
 				id: 'footer-sale',
+				recordShell: true,
 				destructive: { label: 'Void' },
 				secondary: { label: 'Print', icon: 'print' },
 				intent: { label: 'Sync order' },
 			},
 			{
 				id: 'footer-register',
+				close: false,
 				size: 'lg',
 				secondary: { label: 'Print Z report' },
 				intent: { label: 'Done' },
 			},
-		] satisfies (DialogFooterProps & { id: string })[]
-	).map(({ id, ...footer }) => ({
+		] satisfies (DialogFooterProps & { id: string; recordShell?: boolean })[]
+	).map(({ id, recordShell, ...footer }) => ({
 		id,
 		render: () => (
 			<View className="border-border bg-background relative h-96 w-full overflow-hidden rounded-lg border">
@@ -50,7 +53,13 @@ export const stories = [
 						<DialogBody>
 							<Text>Actions for this record or sale.</Text>
 						</DialogBody>
-						<DialogFooter {...footer} />
+						{recordShell ? (
+							<DismissIsClose>
+								<DialogFooter {...footer} />
+							</DismissIsClose>
+						) : (
+							<DialogFooter {...footer} />
+						)}
 					</DialogContent>
 				</Dialog>
 			</View>
