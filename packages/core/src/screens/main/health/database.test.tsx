@@ -55,11 +55,6 @@ let mockCensusTotals: Record<
 
 // Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
 jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
-// The page heading's trailing controls are the area layout's on wide (`navigation-area`).
-jest.mock('../components/bar-controls', () => ({
-	BarControls: () => null,
-	useOnlineBadge: () => undefined,
-}));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));

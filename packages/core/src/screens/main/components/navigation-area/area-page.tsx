@@ -4,33 +4,18 @@ import { ScrollView, View } from 'react-native';
 import { Card } from '@wcpos/components/card';
 import { EdgeSurface, useEdgeInsets } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useGround } from '@wcpos/components/lib/ground';
 
-import { BarControls, useOnlineBadge } from '../bar-controls';
-
 export type AreaPageMode = 'scroll' | 'fill';
 
 /**
- * The area's bar testID on wide, where the area has no bar (`NavigationAreaLayout`): the page's
- * heading row then carries the bar's trailing controls, so the cashier door is on every page.
+ * The heading row's trailing slot, filled by `NavigationAreaLayout` on wide (where the area has no
+ * bar) with the bar's controls, so the cashier door is on every page. A context of a node, so this
+ * module never imports the cashier entry and its sheet.
  */
-export const AreaBarContext = React.createContext<string | null>(null);
-
-/** Offline, the bell and the avatar in the heading's trailing slot; nothing under a phone bar. */
-function HeadingControls() {
-	const barTestID = React.useContext(AreaBarContext);
-	const status = useOnlineBadge();
-	if (!barTestID) return null;
-	return (
-		<View className="flex-row items-center gap-2">
-			{status && <StatusBadge {...status} testID={`${barTestID}-status`} />}
-			<BarControls testID={barTestID} />
-		</View>
-	);
-}
+export const AreaHeadingTrailing = React.createContext<React.ReactNode>(null);
 
 const BOTTOM = ['bottom'] as const;
 
@@ -63,6 +48,7 @@ export function AreaPage({
 	// and the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's
 	// own body keeps its 16 (inside a surface).
 	const padding = useGround().p;
+	const trailing = React.useContext(AreaHeadingTrailing);
 	const heading = (
 		<View className="flex-row items-start gap-2 px-4 pt-4 pb-3">
 			<View className="min-w-0 flex-1 gap-0.5">
@@ -71,7 +57,7 @@ export function AreaPage({
 				</Text>
 				{!!description && <Text variant="help">{description}</Text>}
 			</View>
-			<HeadingControls />
+			{trailing}
 		</View>
 	);
 	const body = (

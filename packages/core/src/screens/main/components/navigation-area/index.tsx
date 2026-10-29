@@ -9,10 +9,12 @@ import { type IconName } from '@wcpos/components/icon';
 import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
+import { StatusBadge } from '@wcpos/components/status-badge';
 
+import { BarControls, useOnlineBadge } from '../bar-controls';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
-import { AreaBarContext } from './area-page';
+import { AreaHeadingTrailing } from './area-page';
 
 import type { Href } from 'expo-router';
 
@@ -51,6 +53,17 @@ function NavigationItems({
 }
 
 const TOP = ['top'] as const;
+
+/** On wide, the page heading's trailing slot: Offline, the bell and the avatar, as the phone bar has them. */
+function HeadingControls({ barTestID }: { barTestID: string }) {
+	const status = useOnlineBadge();
+	return (
+		<View className="flex-row items-center gap-2">
+			{status && <StatusBadge {...status} testID={`${barTestID}-status`} />}
+			<BarControls testID={barTestID} />
+		</View>
+	);
+}
 
 export function NavigationAreaLayout({
 	items,
@@ -129,7 +142,9 @@ export function NavigationAreaLayout({
 				{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
 				    rail's selected row (`bg-card`) and the page card read as the same surface. */}
 				<View testID={screenTestID} className="bg-background min-w-0 flex-1">
-					<AreaBarContext.Provider value={barTestID}>{children}</AreaBarContext.Provider>
+					<AreaHeadingTrailing.Provider value={<HeadingControls barTestID={barTestID} />}>
+						{children}
+					</AreaHeadingTrailing.Provider>
 				</View>
 			</View>
 		</EdgeSurface>
