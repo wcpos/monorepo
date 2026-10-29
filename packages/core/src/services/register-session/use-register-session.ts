@@ -307,6 +307,8 @@ export function useRegisterSession() {
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
 		figuresPending,
+		/** This device owns the cached count mark, not another till. */
+		countingHere: !!live?.counting_here,
 		salesCount:
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
