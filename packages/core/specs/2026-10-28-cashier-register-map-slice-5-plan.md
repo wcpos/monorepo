@@ -95,7 +95,7 @@ Strings: `register.unsynced_sales_closure_records` "{count} sales not yet on the
 
 **Files:**
 - Modify: `register-panel.tsx` (initial pane), `packages/core/src/screens/main/pos/cart/index.tsx` (the empty cart's overdue button; the one-shot after a reload), `register-bar.tsx` and `user-sheet.tsx` (`consumeRegisterPanelRequest()`'s new return)
-- Test: `register-panel.test.tsx`, `index.test.tsx` (the cart column's), `register-bar.test.tsx`, `user-sheet.test.tsx`
+- Test: `register-panel.test.tsx`, `index.test.tsx` (the cart column's register states; create it — the existing `open-orders-position.test.tsx` is about the open-orders band and stays), `register-bar.test.tsx`, `user-sheet.test.tsx`
 
 Rules: when the panel opens (the `open` prop turns true) with `session?.status === 'counting' && countingHere`, it opens on `count`; otherwise on the requested pane (`consumeRegisterPanelRequest()` from the bar's claim: `'count'` from the empty cart's `checkout-close-register`, `'register'` otherwise). After a reload with a counting session and the device's own mark, the cart column requests the panel once on mount (`requestRegisterPanel('count')` + `setPanelOpen(true)` in a `React.useEffect` keyed on `session?.id`, with the `react-you-might-not-need-an-effect` disable comment the file already uses for one-shot external requests).
 
@@ -131,7 +131,7 @@ Strings: `register.closure_n_written` "Closure {n} written", `register.print_aga
 
 **Files:**
 - Modify: `packages/core/src/screens/main/pos/cart/index.tsx` (the `session.status !== 'open'` branch), `packages/core/src/screens/main/pos/cart/buttons/pay.tsx`, `packages/core/src/screens/main/pos/cart/open-register-card.tsx` (the Notice; the Counting-elsewhere card as a second export `CountingElsewhereCard`)
-- Test: `index.test.tsx` (cart column), `pay.test.tsx` (or the buttons' suite), `open-register-card.test.tsx`
+- Test: `index.test.tsx` (the cart column's register states, created in Task 4), `pay.test.tsx` (or the buttons' suite), `open-register-card.test.tsx`
 
 Rules (§ 4.5): `countingHere` → the cart renders as when open, `PayButton` reads `useRegisterSession().session?.status === 'counting'` and renders `disabled` with the label `t('register.counting_the_drawer')` ("Counting the drawer"); `countingElsewhere` → `<CountingElsewhereCard />` in the column: a `Card` with the register disc, the register name as title, `t('register.counting_on_another_till')` ("Counting on another till"), and when `countingBy` is not null the line `t('register.counting_by_since', { name, time })` ("{name} · since {time}", name falling back to `t('register.unknown_cashier')`); no action. The Open register card gains, when `closedElsewhere`, a `Notice tone="info" testID="open-register-closed-elsewhere"` `t('register.closed_on_another_till', { name, time })` ("{register} was closed on another till at {time} by {name}", the closer resolved as the opener is). The products panel's own counting notice (`products/index.tsx` ~line 534) is unchanged.
 
