@@ -35,9 +35,9 @@
 ### Task 1: `counting_by` reaches the app
 
 **Files:**
-- Modify: `packages/database/src/collections/schemas/register-sessions.ts` (version 2 → 3, `counting_by: { type: ['number', 'null'] }` after `counting_started_at_gmt`), and the collection's migration strategies file beside it (the `2` strategy is the model: `3: (doc) => doc`).
+- Modify: `packages/database/src/collections/schemas/register-sessions.ts` (version 2 → 3, `counting_by: { type: ['number', 'null'] }` after `counting_started_at_gmt`), and `packages/database/src/collections/index.ts` ~line 628: the `register_sessions` creator's `migrationStrategies` gains `3: (oldDoc) => oldDoc` beside `1` and `2`.
 - Modify: `packages/query/src/register-session/queue.ts` (~line 207: the merge of a server row keeps `counting_by` from the server, as `counting_started_at_gmt` is kept) and `session-store.ts` (~line 113: the local `counting` transition does NOT set `counting_by`; the server stamps it — the client's own device mark is `counting_here`).
-- Test: the sessions schema/migration test beside the schema (`register-sessions*.test.ts`), `packages/query/tests/` queue test for the merged field.
+- Test: `packages/database/src/collections/closure-migration.test.ts` (the existing migration test for sessions; add the v2 → v3 case there), `packages/query/tests/` queue test for the merged field.
 
 **Interfaces:**
 - Produces: `RegisterSessionRow.counting_by?: number | null`.
