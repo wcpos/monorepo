@@ -90,7 +90,7 @@
  "receipt": "bill-linear",
  "refresh": "refresh-linear",
  "refund": "undo-left-linear",
- "register": "tabler:cash-register",
+ "register": "shop-2-linear",
  "rejected": "close-circle-linear",
  "reports": "chart-linear",
  "scan": "barcode-scan-linear",
