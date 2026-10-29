@@ -3084,5 +3084,6 @@
 	"register.closed_at_time": "closed {time}",
 	"register.age_h_m": "{h} h {m} m",
 	"register.age_m": "{m} m",
-	"register.session_sales": "Session sales"
+	"register.session_sales": "Session sales",
+	"register.term_count": "{term} · {count}"
 }

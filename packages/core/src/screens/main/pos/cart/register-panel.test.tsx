@@ -1,11 +1,12 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'text-muted-foreground' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/query', () => ({
@@ -226,8 +227,18 @@ jest.mock('@wcpos/components/keypad', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<span data-testid={testID}>{children}</span>
+	Text: ({
+		children,
+		testID,
+		className,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) => (
+		<span data-testid={testID} data-classes={className}>
+			{children}
+		</span>
 	),
 	// The real MenuRow wraps its row in the text recipe's provider.
 	TextClassContext: { Provider: ({ children }: { children: React.ReactNode }) => <>{children}</> },
@@ -283,10 +294,17 @@ it('lists a non-cash tender only while it holds money; cash is the derivation, n
 
 it("the body is the drawer's derivation and ends in Expected", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	// In order: float, cash sales, refunds, in, out, the sum line, then the tenders kept apart.
-	expect(screen.getByTestId('register-panel').textContent).toMatch(
-		/register\.float.*£100\.00register\.cash_sales 2£62\.00register\.cash_refunds.*register\.paid_in.*register\.paid_out 1 · Milk\u2212£7\.00register\.expected_in_drawer£155\.00register\.other_tendersCard£30\.00/
-	);
+	const ledger = screen.getByTestId('register-panel-ledger');
+	expect(
+		within(ledger)
+			.getAllByRole('listitem')
+			.map((row) => row.textContent)
+	).toEqual([
+		'register.opened_suffix 09:02register.float£100.00',
+		'register.term_count register.cash_sales 2register.cash_sales£62.00',
+		'register.term_count register.paid_out 1register.paid_out−£7.00Milk−£7.00register.void',
+		'register.expected_in_drawerregister.expected_in_drawer£155.00',
+	]);
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	// No session: no derivation, only the closure.
 	terms = undefined;
@@ -298,7 +316,6 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 it('hides every amount and the X report for blind cashiers', () => {
 	blind = true;
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	fireEvent.click(screen.getByTestId('register-panel-movements'));
 	expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
 	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
 	expect(screen.queryByTestId('register-panel-print')).toBeNull();
@@ -306,7 +323,6 @@ it('hides every amount and the X report for blind cashiers', () => {
 // Revert: stringify the session-report failure instead of translating it in this caller too.
 it('translates a failed X-report dispatch in the register panel', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	fireEvent.click(screen.getByTestId('register-panel-movements'));
 	fireEvent.click(screen.getByTestId('register-panel-print'));
 	await waitFor(() => expect(screen.getByText('reports.reprint_failed')).toBeTruthy());
 });
@@ -588,7 +604,7 @@ it('says the figures are still to come on a seeded session and will not close th
 	expect(screen.getByTestId('register-panel-figures-pending').textContent).toContain(
 		'register.figures_after_sync'
 	);
-	const floatRow = screen.getByText('register.float').parentElement;
+	const floatRow = screen.getByTestId('register-panel-float');
 	expect(floatRow?.textContent).toContain('—');
 	expect(floatRow?.textContent).not.toContain('£0.00');
 	expect(screen.getByTestId('register-panel-drawer').textContent).toContain('—');
@@ -676,5 +692,80 @@ it('a seeded session drawer tile reads — with the sync note', () => {
 		);
 	} finally {
 		currentFiguresPending = previous;
+	}
+});
+
+it('zero terms are not drawn; a voided movement step disappears', () => {
+	const previousTerms = terms,
+		previousMovements = movements;
+	try {
+		terms = {
+			...baseTerms,
+			cashSales: { amount: '0', count: 0 },
+			paidOut: { amount: '0', count: 0, note: '' },
+		};
+		movements = [
+			{ id: 'old', type: 'paid_out', amount: '7', voided_by: 'void' },
+			{ id: 'void', type: 'void', voids: 'old' },
+		];
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const ledger = screen.getByTestId('register-panel-ledger');
+		expect(within(ledger).getAllByRole('listitem')).toHaveLength(2);
+		expect(ledger.textContent).not.toMatch(/paid_in|paid_out|cash_sales|cash_refunds|no_sale/);
+		expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
+	} finally {
+		terms = previousTerms;
+		movements = previousMovements;
+	}
+});
+it('a refused movement is a bad sub-line with Refused and still offers Void', async () => {
+	const previous = movements;
+	try {
+		movements = [lost];
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(
+			within(screen.getByTestId('movement-row-lost'))
+				.getByText('Change')
+				.getAttribute('data-classes')
+		).toContain('text-bad');
+		expect(screen.getByTestId('movement-row-lost').textContent).toContain('register.refused_row');
+		expect(screen.getByTestId('movement-row-lost').textContent).toContain('£20.00');
+		fireEvent.click(screen.getByTestId('movement-void-lost'));
+		await waitFor(() => expect(voidMovement).toHaveBeenCalledWith('lost'));
+	} finally {
+		movements = previous;
+	}
+});
+it('server-baseline movements still draw a step without local sub-lines', () => {
+	const previousTerms = terms,
+		previousMovements = movements;
+	try {
+		movements = [];
+		terms = { ...baseTerms, paidIn: [{ amount: '10' }] };
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-paid-in-row').textContent).toContain('£10.00');
+		expect(screen.getByTestId('register-panel-movements').textContent).toContain('−£7.00');
+		expect(screen.queryByTestId('movement-void-old')).toBeNull();
+	} finally {
+		terms = previousTerms;
+		movements = previousMovements;
+	}
+});
+it('no-sale sub-lines carry a reason and Void but never an amount', () => {
+	const previousTerms = terms,
+		previousMovements = movements;
+	try {
+		terms = { ...baseTerms, noSales: 1 };
+		movements = [{ id: 'no-sale', type: 'no_sale', amount: '0', reason: 'Wrong change' }];
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-no-sales').textContent).toContain(
+			'register.term_count register.no_sale 1'
+		);
+		expect(screen.getByTestId('movement-row-no-sale').textContent).toBe(
+			'Wrong changeregister.void'
+		);
+	} finally {
+		terms = previousTerms;
+		movements = previousMovements;
 	}
 });
