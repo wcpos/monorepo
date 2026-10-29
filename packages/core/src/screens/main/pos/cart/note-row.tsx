@@ -37,6 +37,8 @@ export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress
 				onHoverOut={() => setReached(false)}
 				onFocus={() => setReached(true)}
 				onBlur={() => setReached(false)}
+				// Drawn at 36: the finger still gets the 44 the Button gave it (CODING_STANDARDS § Design 2).
+				minTarget
 				className="min-h-9 flex-row items-center gap-2 rounded-lg px-2"
 			>
 				<Icon name="note" className={cn(tint, MOTION)} />
