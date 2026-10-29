@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
@@ -38,6 +39,9 @@ const PANEL_VIEWS: Record<
 	left: { value: { side: 'left', isColumn: true }, subscribe: NEVER_CHANGES },
 	right: { value: { side: 'right', isColumn: true }, subscribe: NEVER_CHANGES },
 };
+
+// A panel that lets its content's focus ring paint past its edge (see the products Panel).
+const RING_ROOM = { overflow: 'visible' as const };
 
 export function POSColumns() {
 	const { currentOrderRecord } = useCurrentOrder();
@@ -92,6 +96,17 @@ export function POSColumns() {
 									}
 									minSize={25}
 									id={descriptor.id}
+									// The products panel does not clip on the web: its edge facing the cart
+									// keeps no inset (ledger line 8), so the search field and the chips sit
+									// flush with the panel, and a focus ring there (the field's 1 px, a chip's
+									// outline) draws into the gutter the handle owns; the primitive hides
+									// overflow by default and cut the ring off on that side (owner, 2026-10-29).
+									// The pane's own surfaces (stacks, lists, scrollers) clip themselves.
+									style={
+										descriptor.id === PRODUCTS_ENTRY_ID && Platform.OS === 'web'
+											? RING_ROOM
+											: undefined
+									}
 								>
 									{/* Each panel's content is a column touching the top and bottom edges in the
 									    colour that content paints, so it runs through both safe-area insets and the
