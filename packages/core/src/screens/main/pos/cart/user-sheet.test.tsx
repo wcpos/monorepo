@@ -2,8 +2,14 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
+import type { UserDatabase } from '@wcpos/database';
+import {
+	readRegister,
+	recordLiveSession,
+	type RegisterDocument,
+} from '@wcpos/query/register-session';
 import { Toast } from '@wcpos/components/toast';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
@@ -124,6 +130,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
 	useStoreSession: () => ({
+		userDB: mockUserDB,
 		wpCredentials: {
 			id: 7,
 			uuid: 'current',
@@ -151,12 +158,50 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
+const mockBind = jest.fn();
+const mockDirectory = [
+	{
+		id: 'A',
+		name: 'Front counter',
+		session: {
+			id: 's',
+			status: 'open',
+			opened_at_gmt: '2026-10-28T09:02:00Z',
+			opened_by: { id: 7, name: 'Amy' },
+		},
+	},
+	{ id: 'back', name: 'Back office', last_closure: { number: 41 } },
+];
+let mockRegisters = mockDirectory;
+let mockBindingStatus = 'bound';
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({
-		registers: [{ id: 'A' }, { id: 'B' }],
+		registers: mockRegisters,
 		registerName: 'Front counter',
+		registerId: 'A',
+		status: mockBindingStatus,
+		bind: mockBind,
 	}),
 }));
+let mockRegisterData: RegisterDocument;
+const mockRegisterDoc = {
+	toJSON: () => ({ data: mockRegisterData }),
+	incrementalModify: async (fn: (data: RegisterDocument) => RegisterDocument) => {
+		mockRegisterData = fn(mockRegisterData);
+		mockRegisterSource.next(mockRegisterDoc);
+		return mockRegisterDoc;
+	},
+};
+const mockRegisterSource = new BehaviorSubject(mockRegisterDoc);
+const mockUserDB = {
+	getLocal: async () => mockRegisterDoc,
+	getLocal$: () => mockRegisterSource,
+} as unknown as UserDatabase;
+beforeEach(async () => {
+	mockRegisterData = { id: 'device', name: 'Device', platform: 'web', created_at: '', sites: {} };
+	await readRegister(mockUserDB);
+	mockBind.mockClear();
+});
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 
 jest.mock('@wcpos/components/dialog', () => {
@@ -220,7 +265,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 
 it('switches credentials without retaining the previous cashier authentication override', async () => {
 	requestStateManager.setRefreshedToken('previous-cashier-token');
-	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={jest.fn()} />);
+	render(<UserSheet open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
 	await waitFor(() =>
 		expect(mockLogin).toHaveBeenCalledWith({
@@ -322,16 +367,12 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 					},
 				};
 	const blocked = attributed !== false;
-	const switchRegister = jest.fn();
-	render(
-		<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} portalHost={null} />
-	);
-	const button = screen.getByTestId('user-sheet-switch-register');
+	const switchRegister = mockBind;
+	render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+	const button = screen.getByTestId('user-sheet-register-back');
 	expect(button.getAttribute('aria-disabled') === 'true').toBe(blocked);
-	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(attributed === true);
-	expect(!!screen.queryByText('register.switch_register_unavailable_here')).toBe(
-		attributed === undefined
-	);
+	expect(button.textContent?.includes('register.switch_register_blocked_cart')).toBe(blocked);
+
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
 });
@@ -340,9 +381,9 @@ it('allows switching from an empty attributed template', () => {
 	mockCart = {
 		payload: { status: 'pos-open', meta_data: [{ key: '_wcpos_register', value: 'A' }] },
 	};
-	const switchRegister = jest.fn();
-	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-	const button = screen.getByTestId('user-sheet-switch-register');
+	const switchRegister = mockBind;
+	render(<UserSheet open onOpenChange={jest.fn()} />);
+	const button = screen.getByTestId('user-sheet-register-back');
 	expect(button.getAttribute('aria-disabled')).not.toBe('true');
 	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
 	fireEvent.click(button);
@@ -366,11 +407,11 @@ it.each(['pos-partial', 'ledger'])(
 					payments: [{ id: 'p1', amount: '50', method: 'cash', status: 'captured' }],
 				}),
 			});
-		const switchRegister = jest.fn();
-		render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-		const button = screen.getByTestId('user-sheet-switch-register');
+		const switchRegister = mockBind;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		const button = screen.getByTestId('user-sheet-register-back');
 		expect(button.getAttribute('aria-disabled')).toBe('true');
-		expect(screen.getByText('register.switch_register_blocked_cart')).toBeTruthy();
+		expect(button.textContent).toContain('register.switch_register_blocked_cart');
 		fireEvent.click(button);
 		expect(switchRegister).not.toHaveBeenCalled();
 	}
@@ -624,4 +665,78 @@ it('lists every cashier saved on this device with the current one checked', () =
 	expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
 		'true'
 	);
+});
+
+describe('register band', () => {
+	beforeEach(() => {
+		mockT = createTestT();
+		mockCart = { payload: { meta_data: [] } };
+		mockStoreTimezone = 'UTC';
+	});
+	afterEach(() => {
+		mockRegisters = mockDirectory;
+		mockBindingStatus = 'bound';
+		mockT = (key) => key;
+		mockStoreTimezone = undefined;
+	});
+	it('offers no register band on a store with one register', () => {
+		mockRegisters = [mockDirectory[0]];
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-register-band')).toBeNull();
+	});
+	it('leaves the unbound case to the cart picker', () => {
+		mockBindingStatus = 'choose';
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-register-band')).toBeNull();
+	});
+	it('lists each register with its live state and binds the tapped one', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain(
+			'Open since 09:02 · Amy'
+		);
+		expect(screen.getByTestId('user-sheet-register-A').getAttribute('aria-checked')).toBe('true');
+		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain(
+			'Closed · last closure #41'
+		);
+		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
+		await waitFor(() => expect(mockBind).toHaveBeenCalledWith('back'));
+	});
+	it('follows the cache after the directory loaded: counting, then cleared', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		await act(async () =>
+			recordLiveSession(mockUserDB, 'site', 'A', {
+				session_id: 's',
+				status: 'counting',
+				opened_at_gmt: '2026-10-28T09:02:00Z',
+				opened_by: { id: 7, name: 'Amy' },
+				acknowledged: true,
+				expected_float: null,
+				counted_float: null,
+				business_day: null,
+			})
+		);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain('Counting');
+		await act(async () => recordLiveSession(mockUserDB, 'site', 'A', null));
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain(
+			'Closed · last closure #—'
+		);
+	});
+	it('disables the other registers with the reason while a cart is attributed, not the cashiers', () => {
+		mockCart = {
+			payload: {
+				meta_data: [{ key: '_wcpos_register', value: 'A' }],
+				line_items: [{ product_id: 1 }],
+			},
+		};
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-back').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain(
+			'Finish or park the current sale'
+		);
+		expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
+			'true'
+		);
+	});
 });

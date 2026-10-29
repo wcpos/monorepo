@@ -44,14 +44,12 @@ export function useOnlineBadge(): { label: string; variant: 'warning' } | undefi
 export function BarControls({
 	testID,
 	portalHost = null,
-	onSwitchRegister,
 	onOpenRegister,
 }: {
 	/** The bar's testID: the bell is `<testID>-bell`, the avatar `<testID>-avatar`. */
 	testID: string;
 	/** The POS host inside the till; the root everywhere else. */
 	portalHost?: string | null;
-	onSwitchRegister?: () => void;
 	onOpenRegister?: () => void;
 }) {
 	const phone = useIsPhone();
@@ -63,7 +61,6 @@ export function BarControls({
 					testID={`${testID}-avatar`}
 					placement="bar"
 					portalHost={portalHost}
-					onSwitchRegister={onSwitchRegister}
 					onOpenRegister={onOpenRegister}
 				/>
 			)}

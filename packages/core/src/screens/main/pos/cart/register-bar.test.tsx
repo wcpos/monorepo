@@ -92,15 +92,11 @@ it.each([
 	['failed', 'register.offline'],
 ] as const)('keeps the %s pill while a retry is in flight', (retrying, pill) => {
 	mockBinding = { status: 'unknown', failed: false, retrying, registerName: null, registers: [] };
-	render(
-		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
-	);
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-pill').textContent).toBe(pill);
 });
 it('opens the user sheet from the bar avatar', () => {
-	render(
-		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
-	);
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	expect(screen.getByTestId('register-bar-place').textContent).toBe('Shop');
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));

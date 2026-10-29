@@ -6,6 +6,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
+import { observeRegister$, readLiveSession } from '@wcpos/query/register-session';
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
@@ -263,21 +264,65 @@ function StoreBand({
 	);
 }
 
+function RegisterBand({ attributed }: { attributed: boolean }) {
+	const { userDB, site } = useStoreSession();
+	const { registers, registerId, bind } = useRegisterBinding();
+	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
+	const device = useObservableState(register$);
+	const { timezone } = useStoreDay();
+	const t = useT();
+	return (
+		<View testID="user-sheet-register-band">
+			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+				<Text variant="caption">{t('register.register')}</Text>
+			</View>
+			{registers.map((row) => {
+				const cached = device?.sites[site.uuid!]?.registers?.[row.id];
+				const live = cached ? cached.live : (readLiveSession(site.uuid!, row.id) ?? row.session);
+				const description =
+					live?.status === 'counting'
+						? t('register.counting_short')
+						: live?.status === 'open'
+							? t('register.open_since_name', {
+									time: formatDate(
+										convertUTCStringToLocalDate(live.opened_at_gmt),
+										'HH:mm',
+										zoneOptions(timezone)
+									),
+									name: live.opened_by?.name ?? t('register.unknown_cashier'),
+								})
+							: t('register.closed_last_closure_short', {
+									number: row.last_closure?.number ?? '—',
+								});
+				return (
+					<MenuRow
+						key={row.id}
+						testID={`user-sheet-register-${row.id}`}
+						choice
+						selected={row.id === registerId}
+						label={row.name}
+						description={attributed ? t('register.switch_register_blocked_cart') : description}
+						disabled={attributed}
+						onPress={row.id === registerId ? undefined : () => void bind(row.id)}
+					/>
+				);
+			})}
+		</View>
+	);
+}
+
 /**
  * The cashier's sheet: who is signed in, what they sold today, and the ways to change who
- * or where. The till's money is the register panel's; Settings and Support are the drawer's;
- * this sheet carries no second copy of either (Paul, 2026-10-23).
+ * or where. The drawer figure is the door to its register panel; Settings and Support stay in the drawer.
  */
 export function UserSheet({
 	open,
 	onOpenChange,
-	onSwitchRegister,
 	onOpenRegister,
 	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSwitchRegister?: () => void;
 	onOpenRegister?: () => void;
 	portalHost?: string | null;
 }) {
@@ -288,7 +333,7 @@ export function UserSheet({
 	const onPOS = useSegments().includes('(pos)');
 	const cartSide = usePanelSide('cart');
 	const side = onPOS ? cartSide : 'right';
-	const { registers, registerName } = useRegisterBinding();
+	const { registers, registerName, status } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
 	const storeName = useDocField(store, (value) => value.name);
 	const { timezone } = useStoreDay();
@@ -362,25 +407,8 @@ export function UserSheet({
 									}}
 								/>
 							</Suspense>
-							{registers.length > 1 && onSwitchRegister && (
-								<MenuRow
-									testID="user-sheet-switch-register"
-									disabled={attributed}
-									aria-disabled={attributed}
-									onPress={() => {
-										onOpenChange(false);
-										onSwitchRegister();
-									}}
-									leading={<Icon name="register" className="text-muted-foreground" />}
-									label={t('register.switch_register')}
-									description={
-										attributed
-											? currentOrder
-												? t('register.switch_register_blocked_cart')
-												: t('register.switch_register_unavailable_here')
-											: undefined
-									}
-								/>
+							{status === 'bound' && registers.length > 1 && (
+								<RegisterBand attributed={attributed} />
 							)}
 							{/* A browser is where these two go: the desktop app has no admin tab to open, and
 							    already is the desktop app. */}

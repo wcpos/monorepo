@@ -23,7 +23,6 @@ export function CashierEntry({
 	testID,
 	placement,
 	portalHost,
-	onSwitchRegister,
 	onOpenRegister,
 }: {
 	testID: string;
@@ -31,8 +30,6 @@ export function CashierEntry({
 	placement: 'bar' | 'rail';
 	/** The POS host inside the till; the root (`null`) where the till may be hidden or detached. */
 	portalHost: string | null;
-	/** Absent where the register picker is not this surface's (the phone Products tab). */
-	onSwitchRegister?: () => void;
 	onOpenRegister?: () => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
@@ -40,13 +37,14 @@ export function CashierEntry({
 	const loginUrl = site.wcpos_login_url;
 	const [open, setOpen] = React.useState(false);
 	const focused = useIsFocused();
+	const canClaim = placement === 'rail' || focused;
 	const requested = useCashierSheetRequested();
 	React.useEffect(() => {
-		if ((placement === 'rail' || focused) && requested && consumeCashierSheetRequest()) {
+		if (canClaim && requested && consumeCashierSheetRequest()) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- claim the external request at commit, never in a discarded render.
 			setOpen(true);
 		}
-	}, [focused, placement, requested]);
+	}, [canClaim, requested]);
 	// The redirect-return claim: after a full-page OAuth return for this site the sheet opens, so
 	// its Add user consumer mounts to claim the one-shot result, as Connect does. Taken once per
 	// page load, by the first entry to COMMIT: an effect, so a render React discards (a Suspense
@@ -77,7 +75,6 @@ export function CashierEntry({
 				open={open}
 				onOpenChange={setOpen}
 				portalHost={portalHost}
-				onSwitchRegister={onSwitchRegister}
 				onOpenRegister={onOpenRegister}
 			/>
 		</View>

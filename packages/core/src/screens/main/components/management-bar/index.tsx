@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { PageBar } from '@wcpos/components/page-bar';
 
-import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { BarControls, useBarMenu, useOnlineBadge } from '../bar-controls';
 import { SessionHoldBanner } from '../session-hold-banner';
 
@@ -33,7 +32,7 @@ export function ManagementBar({ title, titleSlot, testID, search, back, children
 				{/* The root host: the POS host sits inside the POS screen, which is hidden (web) or
 				    detached (native) while a management page is on screen. Switch register raises the
 				    same request the rail's sheet does (ruling 2026-10-16, decision 6). */}
-				<BarControls testID={testID} onSwitchRegister={requestRegisterPicker} />
+				<BarControls testID={testID} />
 			</PageBar>
 			{/* Under the bar (and its phone search row), where the drawer header showed it: a held session is a state. */}
 			<SessionHoldBanner />

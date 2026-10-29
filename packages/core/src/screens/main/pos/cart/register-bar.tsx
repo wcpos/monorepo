@@ -22,12 +22,10 @@ import { describeRegisterBar } from './register-bar.helpers';
 import { requestCashierSheet } from '../../components/cashier-entry/cashier-sheet-request';
 
 export function RegisterBar({
-	onSwitchRegister,
 	panelOpen,
 	onPanelOpenChange,
 	strip = false,
 }: {
-	onSwitchRegister?: () => void;
 	panelOpen: boolean;
 	onPanelOpenChange: (open: boolean) => void;
 	/** The desktop's title-bar strip: 40 pt, no frame of its own (the strip is the frame). */
@@ -133,7 +131,7 @@ export function RegisterBar({
 				<BarControls
 					testID="register-bar"
 					portalHost="pos"
-					onSwitchRegister={onSwitchRegister}
+
 					onOpenRegister={() => onPanelOpenChange(true)}
 				/>
 			</HStack>

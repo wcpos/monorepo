@@ -28,18 +28,17 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 	UserSheet: ({
 		open,
 		portalHost,
-		onSwitchRegister,
+
 		onOpenRegister,
 	}: {
 		open: boolean;
 		portalHost?: string | null;
-		onSwitchRegister?: () => void;
+
 		onOpenRegister?: () => void;
 	}) =>
 		open ? (
 			<div data-testid="user-sheet" data-host={String(portalHost)}>
 				{onOpenRegister && <button data-testid="open-register" onClick={onOpenRegister} />}
-				{onSwitchRegister && <button data-testid="switch-register" onClick={onSwitchRegister} />}
 			</div>
 		) : null,
 }));
@@ -90,20 +89,10 @@ it('opens one sheet for one return when two entries are mounted', () => {
 });
 
 it('opens the one cashier surface from the avatar, on the host and with the rows it is given', () => {
-	const onSwitchRegister = jest.fn();
-	render(
-		<CashierEntry
-			testID="register-bar-avatar"
-			placement="rail"
-			portalHost="pos"
-			onSwitchRegister={onSwitchRegister}
-		/>
-	);
+	render(<CashierEntry testID="register-bar-avatar" placement="rail" portalHost="pos" />);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
-	fireEvent.click(screen.getByTestId('switch-register'));
-	expect(onSwitchRegister).toHaveBeenCalledTimes(1);
 });
 
 it('passes the drawer door from the bar to the sheet', () => {
