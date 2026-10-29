@@ -192,6 +192,8 @@ export function DealStack<T>({
 	const stage = React.useRef<ViewInstance>(null);
 	// Mounted with a detail: at rest, as the first generation (`RESTED`). Its deal is never
 	// measured or set off, and the detail that replaces it (the next generation) deals as any other.
+	// So does the same detail reopened: the exemption ends with the first close (a return
+	// interrupted by its own tile keeps the generation, and must deal back out — Codex on #3064).
 	const rested = detail !== null;
 	const restedAt = React.useRef(rested ? RESTED : 0);
 	const furniture = useSharedValue(rested ? 1 : 0);
@@ -357,6 +359,7 @@ export function DealStack<T>({
 	React.useEffect(() => {
 		// The staging this clock is started for: its completion clears the stage only for it.
 		const asked = current.current;
+		if (!open) restedAt.current = 0;
 		if (!open && fading) {
 			// Out where it stands, and the root in over it, on one clock: nothing travels. A frame
 			// later, as the deal sets off: the cut that sent it is a heavy commit, and a clock started

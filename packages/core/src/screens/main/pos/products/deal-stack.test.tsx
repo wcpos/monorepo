@@ -724,6 +724,17 @@ it('a return interrupted by the same tile leaves the detail mounted', () => {
 	expect(deal()).toMatchObject({ name: 'Hoodie', dealt: true });
 });
 
+it('a detail that mounted at rest, closed and reopened by its own tile deals back out', () => {
+	const { rerender } = render(<Stage detail="Hoodie" />);
+	rerender(<Stage detail={null} />);
+	expect(deal().dealt).toBe(false);
+	// The same detail keeps its generation; its mount-only exemption ended with the close.
+	rerender(<Stage detail="Hoodie" />);
+	finish(0, false);
+	expect(deal()).toMatchObject({ name: 'Hoodie', dealt: true });
+	expect(mockTimings.some((call) => call.toValue === 1 && call.done)).toBe(true);
+});
+
 it('hides a gathering grid from the accessibility tree and gives focus back to the tapped tile', () => {
 	const stage = (detail: string | null) => (
 		<>
