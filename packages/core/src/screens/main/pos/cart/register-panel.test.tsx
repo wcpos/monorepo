@@ -17,6 +17,8 @@ let mockRegisters = [{ id: 'front' }, { id: 'back' }];
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: mockRegisters }),
 }));
+let mockOverdue = false;
+let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
 jest.mock('../../reports/closures/closure-panel', () => ({
 	ClosurePanel: ({
@@ -66,6 +68,8 @@ const showToast = jest.fn();
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
+		overdue: mockOverdue,
+		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
 		session: currentSession,
 		binding: { registerName: 'Front' },
@@ -74,23 +78,25 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		salesCount: 2,
 		movements,
 		refusedMovements,
-		lastClosure: {
-			id: 'c',
-			number: 1,
-			server_number: serverNumber,
-			sync_status: syncStatus,
-			server_closure_id: 'winner',
-			sync_error: 'movement_refused',
-			counted: { cash: '570' },
-			till_expected: { cash: '570' },
-			variance: { cash: '0' },
-			opened_at: '2026-09-09T23:00:00Z',
-			closed_at: '2026-09-10T17:00:00Z',
-			synced_rows_at: syncedRowsAt,
-			server_findings: { gap: true },
-			business_day: '2026-09-10',
-			...mockClosureOverrides,
-		},
+		lastClosure: mockHasClosure
+			? {
+					id: 'c',
+					number: 1,
+					server_number: serverNumber,
+					sync_status: syncStatus,
+					server_closure_id: 'winner',
+					sync_error: 'movement_refused',
+					counted: { cash: '570' },
+					till_expected: { cash: '570' },
+					variance: { cash: '0' },
+					opened_at: '2026-09-09T23:00:00Z',
+					closed_at: '2026-09-10T17:00:00Z',
+					synced_rows_at: syncedRowsAt,
+					server_findings: { gap: true },
+					business_day: '2026-09-10',
+					...mockClosureOverrides,
+				}
+			: null,
 		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
 }));
@@ -836,5 +842,55 @@ it('a closure without a business-day stamp labels its recorded close day', () =>
 	} finally {
 		mockClosureOverrides = previous;
 		jest.useRealTimers();
+	}
+});
+
+it.each([false, true])('Close register names the close time only when overdue (%s)', (overdue) => {
+	const previous = mockOverdue;
+	try {
+		mockOverdue = overdue;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-close-register').textContent).toBe(
+			overdue ? 'register.close_register_past 17:30' : 'register.close_register'
+		);
+	} finally {
+		mockOverdue = previous;
+	}
+});
+it('closed with a last closure: closed time, the closure row only, Close register disabled', () => {
+	const previousSession = currentSession,
+		previousTerms = terms;
+	try {
+		currentSession = null;
+		terms = undefined;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-description').textContent).toBe(
+			'Shop · register.closed_at_time 17:00'
+		);
+		expect(screen.getByTestId('register-panel-open-closure')).toBeTruthy();
+		expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
+		expect(screen.queryByTestId('register-panel-session-sales')).toBeNull();
+		expect(screen.queryByTestId('register-panel-paid-in')).toBeNull();
+		expect(screen.queryByTestId('register-panel-ledger')).toBeNull();
+		expect(screen.queryByTestId('register-panel-print')).toBeNull();
+		expect(screen.getByTestId('register-panel-close-register').hasAttribute('disabled')).toBe(true);
+		fireEvent.click(screen.getByTestId('register-panel-close-register'));
+		expect(startCounting).not.toHaveBeenCalled();
+	} finally {
+		currentSession = previousSession;
+		terms = previousTerms;
+	}
+});
+it('closed without a closure or refused movement renders nothing', () => {
+	const previousSession = currentSession,
+		previousClosure = mockHasClosure;
+	try {
+		currentSession = null;
+		mockHasClosure = false;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel')).toBeNull();
+	} finally {
+		currentSession = previousSession;
+		mockHasClosure = previousClosure;
 	}
 });

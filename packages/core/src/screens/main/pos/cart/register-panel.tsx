@@ -74,6 +74,8 @@ export function RegisterPanel({
 		salesCount,
 		blind,
 		figuresPending,
+		overdue,
+		closeTime,
 		movements,
 		refusedMovements,
 		lastClosure,
@@ -285,24 +287,26 @@ export function RegisterPanel({
 						/>
 					</View>
 				)}
-				<View className="flex-row gap-2 px-4">
-					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
-						<Tile
-							key={type}
-							testID={`register-panel-${type.replace('_', '-')}`}
-							className="flex-1"
-							disabled={session?.status !== 'open'}
-							onPress={() => setMovement(type)}
-							title={movementNames[type]}
-						>
-							<Icon
-								name={
-									type === 'paid_in' ? 'paidIn' : type === 'paid_out' ? 'paidOut' : 'cashDrawer'
-								}
-							/>
-						</Tile>
-					))}
-				</View>
+				{session && (
+					<View className="flex-row gap-2 px-4">
+						{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
+							<Tile
+								key={type}
+								testID={`register-panel-${type.replace('_', '-')}`}
+								className="flex-1"
+								disabled={session?.status !== 'open'}
+								onPress={() => setMovement(type)}
+								title={movementNames[type]}
+							>
+								<Icon
+									name={
+										type === 'paid_in' ? 'paidIn' : type === 'paid_out' ? 'paidOut' : 'cashDrawer'
+									}
+								/>
+							</Tile>
+						))}
+					</View>
+				)}
 				<DialogBody className="gap-0">
 					{terms && (
 						<>
@@ -457,7 +461,9 @@ export function RegisterPanel({
 				<DialogFooter
 					size="lg"
 					intent={{
-						label: t('register.close_register'),
+						label: overdue
+							? t('register.close_register_past', { time: closeTime })
+							: t('register.close_register'),
 						testID: 'register-panel-close-register',
 						disabled: !session || figuresPending,
 						onPress: () =>
