@@ -3,6 +3,8 @@ import * as React from 'react';
 import type { WebViewLoadErrorEvent } from '@wcpos/components/webview';
 import type { CategoryLogger } from '@wcpos/utils/logger';
 
+import { markPayFrame } from '../payments/payment-in-flight';
+
 import type { PaymentFrameStatus } from './use-pay-frame-gate';
 
 // How long the first order-pay document may take before the frame reloads once. A healthy
@@ -27,6 +29,11 @@ interface PayFrameInput {
  * during a session refresh; `expire` latches failed until `src` changes; `remount` re-keys.
  */
 export function usePayFrame(input: PayFrameInput) {
+	// The cashier sheet holds switches while a redirect gateway frame is mounted (§ 4.6).
+	React.useEffect(() => {
+		markPayFrame(true);
+		return () => markPayFrame(false);
+	}, []);
 	const { src, retryToken, prepared, report, onLaterDocument, logger } = input;
 	const loadCountRef = React.useRef(0);
 	// Whether the engine's last load is one this hook counted; only that load may be retracted.
