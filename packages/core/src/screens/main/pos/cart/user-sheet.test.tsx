@@ -325,6 +325,10 @@ it('keeps only the WordPress admin and desktop links beside the till actions', (
 	expect(screen.queryByTestId('user-sheet-support')).toBeNull();
 	expect(screen.queryByTestId('user-sheet-clear-local-data')).toBeNull();
 	expect(screen.getByTestId('user-sheet-sign-out')).toBeTruthy();
+	const foot = screen.getByTestId('user-sheet-foot');
+	expect(foot.contains(screen.getByTestId('user-sheet-wp-admin'))).toBe(true);
+	expect(foot.lastElementChild).toBe(screen.getByTestId('user-sheet-desktop-app'));
+	expect(foot.parentElement?.lastElementChild).toBe(foot);
 	fireEvent.click(screen.getByTestId('user-sheet-wp-admin'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://shop.example/wp-admin');
 	fireEvent.click(screen.getByTestId('user-sheet-desktop-app'));

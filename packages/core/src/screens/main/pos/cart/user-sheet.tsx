@@ -18,7 +18,7 @@ import { Loader } from '@wcpos/components/loader';
 import { Portal } from '@wcpos/components/portal';
 import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { Notice } from '@wcpos/components/notice';
-import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
+import { MenuRow } from '@wcpos/components/menu-row';
 import {
 	Dialog,
 	DialogBody,
@@ -413,8 +413,7 @@ export function UserSheet({
 							{/* A browser is where these two go: the desktop app has no admin tab to open, and
 							    already is the desktop app. */}
 							{Platform.isWeb && (
-								<>
-									<MenuRowSeparator />
+								<View testID="user-sheet-foot" className="border-border mt-auto border-t">
 									<MenuRow
 										testID="user-sheet-wp-admin"
 										onPress={() => openExternalURL(`${site.url}/wp-admin`)}
@@ -429,7 +428,7 @@ export function UserSheet({
 										label={t('common.desktop_app')}
 										trailing={externalGlyph}
 									/>
-								</>
+								</View>
 							)}
 						</DialogBody>
 					)}

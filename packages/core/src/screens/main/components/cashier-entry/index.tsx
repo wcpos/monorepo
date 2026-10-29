@@ -40,8 +40,9 @@ export function CashierEntry({
 	const canClaim = placement === 'rail' || focused;
 	const requested = useCashierSheetRequested();
 	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- this is a one-shot external request, claimed after commit by the visible entry.
 		if (canClaim && requested && consumeCashierSheetRequest()) {
-			// eslint-disable-next-line react-hooks/set-state-in-effect -- claim the external request at commit, never in a discarded render.
+			// eslint-disable-next-line react-hooks/set-state-in-effect, react-you-might-not-need-an-effect/no-adjust-state-on-prop-change -- claim the external request at commit, never in a discarded render.
 			setOpen(true);
 		}
 	}, [canClaim, requested]);
