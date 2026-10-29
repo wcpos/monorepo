@@ -37,6 +37,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: () => null,
 }));
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: 'Select' }));
+jest.mock('@wcpos/components/segmented-control', () => ({ SegmentedControl: 'SegmentedControl' }));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: 'Collapsible',
 	CollapsibleTrigger: 'Trigger',
@@ -137,6 +138,30 @@ it('pre-selects the sole printer, prints on the button, then asks with three ans
 	expect(renderer.root.findByProps({ testID: 'printer-setup-footer' }).props.children).toBe(
 		'Test page 1 · 48 characters per line'
 	);
+	act(() => renderer.unmount());
+});
+
+it('chooses the paper width with one segmented control', async () => {
+	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+	// A sole USB printer that never says its width: the cashier picks the paper.
+	mockHideNetwork = true;
+	mockUsbPrinters.push({ id: 'usb', name: 'USB', address: 'usb:1:2:3:4', connectionType: 'usb' });
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	mockHideNetwork = false;
+	mockUsbPrinters.length = 0;
+	const paper = () => renderer.root.findByType('SegmentedControl' as React.ElementType);
+	expect(paper().props.segments.map((s: { testID: string }) => s.testID)).toEqual([
+		'printer-setup-setup_paper_32',
+		'printer-setup-setup_paper_48',
+	]);
+	expect(paper().props.segments.every((s: { disabled: boolean }) => !s.disabled)).toBe(true);
+	await act(async () => paper().props.onValueChange('32'));
+	expect(paper().props.value).toBe('32');
+	await act(async () => paper().props.onValueChange('48'));
+	expect(paper().props.value).toBe('48');
 	act(() => renderer.unmount());
 });
 
