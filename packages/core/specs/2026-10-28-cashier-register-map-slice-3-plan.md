@@ -10,6 +10,8 @@
 
 **Spec:** `packages/core/specs/2026-10-28-cashier-register-map-design.md` § 4.3 (rows open the confirm), § 4.6 (without the carry), § 4.9. Depends on slices 1 and 2 (merged: #3034, #3044, #3045).
 
+**Split at the budget gate (2026-10-29):** Tasks 1–5 in full measured 431 production lines against the 400 ceiling (the moved `switchUser` body counts as added lines). **3a** (this branch): Task 3's `useOpenOrdersOptional`, Task 4 without the `sign-out` case, Task 5 without the guards, Task 6. **3b** (next PR off `next`, ≤ 200): Task 1 (`AlertDialogFooter secondary`), Task 2 (`usePaymentInFlight`), Task 3's `countingHere`, the `sign-out` case and `onSignOutAnyway`, the `hold`/`counting`/`online` guards and the `user-sheet-hold` Notice, their strings and tests. The full work is preserved on `codex/switch-confirm-full`; 3b writes the count call as `act(async () => { await actions.startCounting(); })`.
+
 ## Global Constraints
 
 - Lane `next`; one PR, ≤ 400 added production lines (tests, strings, `.md` files excluded). Count with `git diff --numstat origin/next -- packages ':!*.test.*' ':!*.test-utils.tsx' ':!*.json' ':!*.md' | awk '{a+=$1} END {print a}'` after prettier.

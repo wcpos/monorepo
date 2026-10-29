@@ -81,14 +81,14 @@ visual language does not change; every surface is built from components the gall
 
 ### 4.1 Places
 
-| Place | Question it answers | Opened from | Side |
-| --- | --- | --- | --- |
-| Cart column | the register's state when there is no register to sell with | always | in place |
-| Register panel | what is in my drawer now and what moved it; the close | the bar's drawer icon; the empty cart's own Close register button past closing time (`checkout-close-register`) | products side (`usePanelSide('cart')`) |
-| Cashier sheet | who am I, where am I, how do I change that | the avatar (`CashierEntry`: rail on lg, bar below, on every screen); the register bar's store title (Pro, >1 store) | products side on the POS; `right` on any other screen |
-| The confirm | what a switch does before it happens | any switch row; Sign out with an open register | centred `AlertDialog` |
-| Closure pane | one closure, read back | the panel's last-closure row (pushed); Reports › Closures and the till strip (Reports side panel) | same side as its host |
-| Notifications | the shell's inbox | the bell | right (unchanged) |
+| Place          | Question it answers                                         | Opened from                                                                                                         | Side                                                  |
+| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Cart column    | the register's state when there is no register to sell with | always                                                                                                              | in place                                              |
+| Register panel | what is in my drawer now and what moved it; the close       | the bar's drawer icon; the empty cart's own Close register button past closing time (`checkout-close-register`)     | products side (`usePanelSide('cart')`)                |
+| Cashier sheet  | who am I, where am I, how do I change that                  | the avatar (`CashierEntry`: rail on lg, bar below, on every screen); the register bar's store title (Pro, >1 store) | products side on the POS; `right` on any other screen |
+| The confirm    | what a switch does before it happens                        | any switch row; Sign out with an open register                                                                      | centred `AlertDialog`                                 |
+| Closure pane   | one closure, read back                                      | the panel's last-closure row (pushed); Reports › Closures and the till strip (Reports side panel)                   | same side as its host                                 |
+| Notifications  | the shell's inbox                                           | the bell                                                                                                            | right (unchanged)                                     |
 
 One register-family panel is open at a time: opening the sheet while the panel is open replaces it;
 the sheet's drawer tile opens the panel and closes the sheet. Away from the POS the drawer tile
@@ -99,12 +99,12 @@ navigates to the POS with `openRegister=1`, which `RegisterBar` consumes once to
 `DialogHeader` row: a 48 pt leading element · `DialogTitle` · `DialogDescription` · ×. The description
 reads **place · register · when · who**, dropping whatever the title already says.
 
-| Panel | Leading | Title | Description |
-| --- | --- | --- | --- |
-| Cashier sheet | the cashier's `Avatar` | display name | `UK Store · Front counter · since 13:05 · 3 h 20 m` |
-| Register panel | a disc with the register glyph | register name (`Register` when the store has one) | `UK Store · open since 13:05 · 3 h 20 m · **Demo Cashier**` (the opener) |
-| Closure pane | ‹ when pushed, then the result's ToneDisc | `Closure 12` (`Closure 12 written` only on the moment) | `UK Store · Front counter · 09:02–18:02 · **Amy Okafor**` (the closer; the opener sits on the Float row) |
-| Count pane | ‹, the register disc | `Close Front counter` | as the register panel |
+| Panel          | Leading                                   | Title                                                  | Description                                                                                              |
+| -------------- | ----------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Cashier sheet  | the cashier's `Avatar`                    | display name                                           | `UK Store · Front counter · since 13:05 · 3 h 20 m`                                                      |
+| Register panel | a disc with the register glyph            | register name (`Register` when the store has one)      | `UK Store · open since 13:05 · 3 h 20 m · **Demo Cashier**` (the opener)                                 |
+| Closure pane   | ‹ when pushed, then the result's ToneDisc | `Closure 12` (`Closure 12 written` only on the moment) | `UK Store · Front counter · 09:02–18:02 · **Amy Okafor**` (the closer; the opener sits on the Float row) |
+| Count pane     | ‹, the register disc                      | `Close Front counter`                                  | as the register panel                                                                                    |
 
 The register's 40 pt `AmountFigure` leaves the title and becomes the first figure tile.
 
@@ -116,7 +116,7 @@ row and no second list anywhere.
 1. Header (4.2).
 2. Figure tiles: **Your sales today** (`useSalesToday`, `n sales` under it) · **In the drawer**
    (expected cash, `opened HH:MM by <avatar>`; a door to the register panel; `Register closed · last
-   closure N` when closed; absent while the device is unbound).
+closure N` when closed; absent while the device is unbound).
 3. `Notice warning` **n sales awaiting store** with the existing "Sent when you are signed in
    online." (replaces the hand-rolled rows; the 10-21 Notice sweep).
 4. **Cashier** band: a `MenuRow` per saved cashier on this device (avatar, name), the current one
@@ -153,7 +153,7 @@ Store band) instead of the deleted sheet; with one store it stays a plain title.
    action.
 5. **Other tenders** band and quiet rows, as today.
 6. **One** last-closure row: `Closure N · yesterday 18:02 · 980,00 £` with the result as `Badge
-   tinted` (Exact / 2,00 £ over / 2,00 £ short; Unsynced / Corrected in `warning`). Pressing it
+tinted` (Exact / 2,00 £ over / 2,00 £ short; Unsynced / Corrected in `warning`). Pressing it
    pushes `ClosurePanel` with `onBack` (§ 7). The panel never lists more closures. Reprint and the
    Reports `router.push` leave the panel; they live on the pane.
 7. Refused-movement `Notice bad` with Retry above the rail, surviving the close, as today.
@@ -169,7 +169,7 @@ nothing: the panel and the bar's drawer icon do not render (as today).
    today (the server blocks movements on a counting session) and pushes the **count pane** inside
    the panel (the pane-stack push used for the closure pane). While the session is counting the
    cart column stays in place but cannot sell: the Pay button is disabled with `Counting the
-   drawer`, the bar's pill reads Counting. The pane: header 4.2 with ‹; the typed count with its
+drawer`, the bar's pill reads Counting. The pane: header 4.2 with ‹; the typed count with its
    keypad and the denomination tiles (the existing `register-count` body, moved under the panel);
    `Expected N` and the result badge (hidden for a blind cashier); other tenders counted; `Notice`
    **n sales not yet on the server — the closure will record them**; `Notice` **n carts still open
@@ -200,12 +200,12 @@ One `AlertDialog`, four parameterisations. The confirm's button is the verb with
 cancel is the footer's cancel slot. `AlertDialogFooter` gains an optional `secondary` slot (outline,
 between cancel and confirm; phone after confirm), needed only by the Sign out case.
 
-| Trigger | Title · description | Body | Footer |
-| --- | --- | --- | --- |
-| A cashier row | **Hand the till to X?** · The POS reloads as them. The drawer stays open on Front counter. | figure tiles **Your sales today** (`n sales · 3 h 20 m`) · **Drawer stays at** N (`opened 13:05`; `Register closed · last closure N` when closed); `Notice info` **Your n open carts and n unsent sales wait here for you.** | confirm **Hand over to X** · cancel |
-| A store row | **Switch to Y?** · The POS reloads in Y. Y's register: closed / open since … / you'll choose one. | `RadioGroup` (only when Y's register is known and closed, § below): **Take the drawer with you** (closes Front counter at expected and opens Y's register with it as the float; default) · **Leave it open here**. When Y's register is open on another till, or unknown, one line says so and the drawer stays open here. | confirm **Switch to Y** · cancel |
-| A register row | **Switch to Z?** · This device moves to Z. Front counter's drawer stays open for whoever is there. | `Notice info` with Z's state (Closed · last closure #41 · You'll open it with a float / Open since … · you join it). | confirm **Switch to Z** · cancel |
-| Sign out with an open register | **Front counter is still open at N. Close it first?** | `Notice info`: a till left open stays open for the next cashier; the closure records who closed it. | confirm **Close register** (opens the panel on the count pane) · secondary **Sign out anyway** · cancel |
+| Trigger                        | Title · description                                                                                | Body                                                                                                                                                                                                                                                                                                                       | Footer                                                                                                  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| A cashier row                  | **Hand the till to X?** · The POS reloads as them. The drawer stays open on Front counter.         | figure tiles **Your sales today** (`n sales · 3 h 20 m`) · **Drawer stays at** N (`opened 13:05`; `Register closed · last closure N` when closed); `Notice info` **Your n open carts and n unsent sales wait here for you.**                                                                                               | confirm **Hand over to X** · cancel                                                                     |
+| A store row                    | **Switch to Y?** · The POS reloads in Y. Y's register: closed / open since … / you'll choose one.  | `RadioGroup` (only when Y's register is known and closed, § below): **Take the drawer with you** (closes Front counter at expected and opens Y's register with it as the float; default) · **Leave it open here**. When Y's register is open on another till, or unknown, one line says so and the drawer stays open here. | confirm **Switch to Y** · cancel                                                                        |
+| A register row                 | **Switch to Z?** · This device moves to Z. Front counter's drawer stays open for whoever is there. | `Notice info` with Z's state (Closed · last closure #41 · You'll open it with a float / Open since … · you join it).                                                                                                                                                                                                       | confirm **Switch to Z** · cancel                                                                        |
+| Sign out with an open register | **Front counter is still open at N. Close it first?**                                              | `Notice info`: a till left open stays open for the next cashier; the closure records who closed it.                                                                                                                                                                                                                        | confirm **Close register** (opens the panel on the count pane) · secondary **Sign out anyway** · cancel |
 
 **Guards.** Every switch and Sign out are disabled with a reason while a payment is in flight
 (terminal waiting, redirect gateway open): `Finish the payment first`. Hand over is disabled while
@@ -213,12 +213,13 @@ this device is counting: `Finish or abandon the count first`. Switch store, the 
 account… are disabled offline: `Needs the store to switch`. Hand over to a saved cashier works
 offline (§ 5.1).
 
-**Which register in Y.** The register pointer becomes one per (site, store) (`register-document.ts`
-keys `sites[siteUuid].registers[storeId]`), so switching store never drops Front counter's binding
+**Which register in Y.** The register pointer is one per (site, store) since slice 1 (`register-document.ts`
+keys `sites[siteUuid].bindings[storeId]`, read through `useRegisterDirectory(storeId).registerId`), so
+switching store never drops Front counter's binding
 and returning needs no second choice. Y's register in the confirm is Y's bound register, else Y's
 only register, else unknown ("you'll choose one there"; no carry).
 
-**Take the drawer with you** (disabled with *Send n sales first* while `unsyncedCount > 0`, § 4.9) is one server act: `POST /sessions/{id}/carry { to_register_id }` on
+**Take the drawer with you** (disabled with _Send n sales first_ while `unsyncedCount > 0`, § 4.9) is one server act: `POST /sessions/{id}/carry { to_register_id }` on
 the plugin closes the session at the server's expected cash (so a blind cashier carries the right
 figure and other tills' sales are included), writes the closure with `reason: 'store_switch'` (today's
 closures become `end_of_day` explicitly) and opens the target register's session with
@@ -252,11 +253,11 @@ touches drawer money cites them instead of restating them.
    exposes `figuresPending` (slice 1b: the session was seeded into this store database and has no
    `server_expected_at`). Every surface that shows or acts on drawer money reads it: the register
    panel's figure tiles and rail, the cashier sheet's drawer tile and the hand-over confirm's drawer
-   tile render `—` with *Figures arrive with the next sync*; Close register, `startCounting`, the
+   tile render `—` with _Figures arrive with the next sync_; Close register, `startCounting`, the
    carry and the count pane are disabled by it. No closure, count or carry is ever written from a
    pending session.
 2. **Cash leaves a session only after this device's accounting for it is delivered.** A close waits on
-   its accounting as the queue already does; the carry (§ 4.6) is disabled with *Send n sales first*
+   its accounting as the queue already does; the carry (§ 4.6) is disabled with _Send n sales first_
    while `useRegisterSession().unsyncedCount > 0`, and the confirm's description names the count.
    Slice 6 tests a reconnect with pending cash sales and movements: the carry stays disabled until the
    queue drains, then enables.
@@ -278,7 +279,10 @@ Budgets are added production lines (tests, snapshots, strings, docs, migrations 
    `pos/contexts/overlay-side` line 3 amended for the cashier.
 3. **The confirm (≤ 400).** § 4.6 without the carry: hand over, switch register, switch store with
    "Leave it open here" only, Sign out with an open register; `AlertDialogFooter secondary`; the
-   payment-in-flight and count-in-progress guards.
+   payment-in-flight and count-in-progress guards. Split 2026-10-29 at the budget gate (431 measured
+   against 400; the moved `switchUser` body counts as added lines): **3a** the confirm in front of the
+   three switches (≤ 400); **3b** Sign out with an open register, the three guards,
+   `AlertDialogFooter secondary` (≤ 200).
 4. **The register panel (≤ 450).** § 4.4: header, figure tiles, glyphs, the Derivation sub-line
    variant, the closure row pushing `ClosurePanel` (§ 7), the lg intent's time suffix.
 5. **The close in the panel (≤ 500).** § 4.5: the count pane and the written moment as pushes; the
