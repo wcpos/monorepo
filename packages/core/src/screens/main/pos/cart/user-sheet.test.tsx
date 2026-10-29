@@ -63,6 +63,7 @@ let mockStoreTimezone: string | undefined;
 let mockStores = ['store-a'];
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
+	{ uuid: 'current', display_name: 'Cashier' },
 	{
 		uuid: 'other',
 		display_name: 'Other cashier',
@@ -561,4 +562,14 @@ describe('drawer door', () => {
 		render(<UserSheet open onOpenChange={onOpenChange} />);
 		expect(screen.queryByTestId('user-sheet-drawer')).toBeNull();
 	});
+});
+
+it('lists every cashier saved on this device with the current one checked', () => {
+	render(<UserSheet open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('user-sheet-cashier-current').getAttribute('aria-checked')).toBe(
+		'true'
+	);
+	expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
+		'true'
+	);
 });

@@ -13,6 +13,7 @@ import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
+import { Notice } from '@wcpos/components/notice';
 import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
 import {
 	Dialog,
@@ -95,7 +96,7 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 				testID="user-sheet-sales-today"
 				className="border-border flex-1 rounded-lg border px-3 py-2.5"
 			>
-				<Text variant="caption">{t('register.your_sales_today')}</Text>
+				<Text variant="key">{t('register.your_sales_today')}</Text>
 				<AmountFigure size="tile">{format(total)}</AmountFigure>
 			</View>
 			{binding.status === 'bound' && (
@@ -104,7 +105,7 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 					onPress={onOpen}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
-					<Text variant="caption">{t('register.in_the_drawer_tile')}</Text>
+					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
 					{session ? (
 						<>
 							<AmountFigure size="tile">
@@ -115,10 +116,10 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 										: format(Number(expected.cash))}
 							</AmountFigure>
 							{figuresPending ? (
-								<Text variant="caption">{t('register.figures_after_sync')}</Text>
+								<Text variant="key">{t('register.figures_after_sync')}</Text>
 							) : (
 								<View className="flex-row items-center gap-1">
-									<Text variant="caption">
+									<Text variant="key">
 										{t('register.opened_at_by', {
 											time: formatDate(
 												convertUTCStringToLocalDate(session.opened_at_gmt),
@@ -157,26 +158,12 @@ function AwaitingStore() {
 	const t = useT();
 	if (count === 0) return null;
 	return (
-		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b px-2.5 py-3">
-			<View className="flex-row items-center justify-between gap-2">
-				<Text>{t('register.awaiting_store_label')}</Text>
-				<Text className="text-warning-text tabular-nums">
-					{t('register.sales_count', { count })}
-				</Text>
-			</View>
-			<Text className="text-muted-foreground text-sm">
-				{t('register.awaiting_store_sent_when_signed_in')}
-			</Text>
-		</View>
-	);
-}
-
-/** The sentence-case section heading of the cart ledger (cart LEDGER line 83). */
-function SectionHeading({ children }: { children: React.ReactNode }) {
-	return (
-		<View className="min-h-row justify-center px-2.5">
-			<Text className="font-semibold">{children}</Text>
-		</View>
+		<Notice
+			tone="warning"
+			testID="user-sheet-awaiting-store"
+			title={`${t('register.awaiting_store_label')} · ${t('register.sales_count', { count })}`}
+			description={t('register.awaiting_store_sent_when_signed_in')}
+		/>
 	);
 }
 
@@ -214,24 +201,30 @@ function UserRows() {
 	};
 	return (
 		<>
-			{credentials
-				.filter((credential) => credential.uuid !== wpCredentials.uuid)
-				.map((credential) => (
-					<MenuRow
-						key={credential.uuid}
-						testID={`user-sheet-user-${credential.uuid}`}
-						onPress={() => void switchUser(credential)}
-						leading={
-							<RecordAvatar
-								record={credential}
-								avatarUrl={credential.avatar_url}
-								name={credential.display_name}
-								size="md"
-							/>
-						}
-						label={credential.display_name}
-					/>
-				))}
+			{credentials.map((credential) => (
+				<MenuRow
+					key={credential.uuid}
+					testID={
+						credential.uuid === wpCredentials.uuid
+							? 'user-sheet-cashier-current'
+							: `user-sheet-user-${credential.uuid}`
+					}
+					choice
+					selected={credential.uuid === wpCredentials.uuid}
+					onPress={
+						credential.uuid === wpCredentials.uuid ? undefined : () => void switchUser(credential)
+					}
+					leading={
+						<RecordAvatar
+							record={credential}
+							avatarUrl={credential.avatar_url}
+							name={credential.display_name}
+							size="md"
+						/>
+					}
+					label={credential.display_name}
+				/>
+			))}
 		</>
 	);
 }
@@ -315,7 +308,9 @@ export function UserSheet({
 							</Suspense>
 							<AwaitingStore />
 							<View testID="user-sheet-switch-user">
-								<SectionHeading>{t('register.switch_user')}</SectionHeading>
+								<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+									<Text variant="caption">{t('register.cashier')}</Text>
+								</View>
 								<Suspense>
 									<UserRows />
 								</Suspense>

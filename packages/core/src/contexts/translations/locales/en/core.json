@@ -231,6 +231,7 @@
 	"register.open_stores": "Open Stores",
 	"register.register_guide": "Register guide",
 	"register.no_register_for_store": "No register for this store",
+	"register.cashier": "Cashier",
 	"register.in_the_drawer_tile": "In the drawer",
 	"register.register_closed_last_closure": "Register closed · last closure {n}",
 	"register.on_the_till_since": "since {time}",
