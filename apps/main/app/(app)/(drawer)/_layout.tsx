@@ -12,6 +12,7 @@ import { PortalHost } from '@wcpos/components/portal';
 import type { IconName } from '@wcpos/components/icon';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
+import { TitleBarStripContent } from '@wcpos/core/screens/main/components/bar-controls/title-bar';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { useRailWidth } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
@@ -196,6 +197,8 @@ function DrawerLayoutContent() {
 				<View className="bg-background flex-1">
 					<ThemedSystemBars />
 					<RestartLockOverlay />
+					{/* The desktop title bar's one owner, beside the rail: the same on every page. */}
+					<TitleBarStripContent />
 					<ThemedDrawer phone={phone} t={t} unreadErrorCount={unreadErrorCount} />
 				</View>
 			</SessionHoldProvider>

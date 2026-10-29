@@ -26,6 +26,7 @@
     "./dnd": "./src/dnd/index.ts",
     "./dropdown-menu": "./src/dropdown-menu/index.tsx",
     "./edge-surface": "./src/edge-surface/index.tsx",
+    "./edge-surface/title-bar-strip": "./src/edge-surface/title-bar-strip.tsx",
     "./editable-field": "./src/editable-field/index.tsx",
     "./empty-state": "./src/empty-state/index.tsx",
     "./error-boundary": "./src/error-boundary/index.tsx",

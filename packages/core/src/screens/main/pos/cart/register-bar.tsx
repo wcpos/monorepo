@@ -24,12 +24,9 @@ import { requestCashierSheet } from '../../components/cashier-entry/cashier-shee
 export function RegisterBar({
 	panelOpen,
 	onPanelOpenChange,
-	strip = false,
 }: {
 	panelOpen: boolean;
 	onPanelOpenChange: (open: boolean) => void;
-	/** The desktop's title-bar strip: 40 pt, no frame of its own (the strip is the frame). */
-	strip?: boolean;
 }) {
 	const focused = useIsFocused();
 	const panelRequested = useRegisterPanelRequested();
@@ -80,10 +77,7 @@ export function RegisterBar({
 	// button: the avatar's sheet is the one door to the panel (Paul, 2026-10-29).
 	return (
 		<>
-			<HStack
-				testID={strip ? 'register-bar-strip' : undefined}
-				className={strip ? 'flex-1 gap-2 px-2' : 'border-border h-12 gap-2 border-b px-2'}
-			>
+			<HStack className="border-border h-12 gap-2 border-b px-2">
 				{menu && (
 					<IconButton
 						name="menu"

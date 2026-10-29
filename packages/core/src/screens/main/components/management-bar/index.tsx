@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { PageBar } from '@wcpos/components/page-bar';
 
-import { BarControls, useBarMenu, useOnlineBadge } from '../bar-controls';
+import { BarControls, useBarMenu, useBarStatus } from '../bar-controls';
 import { SessionHoldBanner } from '../session-hold-banner';
 
 type Props = React.PropsWithChildren<{
@@ -16,7 +16,7 @@ type Props = React.PropsWithChildren<{
 
 export function ManagementBar({ title, titleSlot, testID, search, back, children }: Props) {
 	const menu = useBarMenu();
-	const status = useOnlineBadge();
+	const status = useBarStatus();
 	return (
 		<>
 			<PageBar

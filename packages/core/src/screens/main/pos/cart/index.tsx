@@ -5,7 +5,6 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
-import { TitleBarStripPortal, useTitleBarStrip } from '@wcpos/components/edge-surface';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Skeleton } from '@wcpos/components/skeleton';
@@ -152,17 +151,6 @@ function CartColumn({
 		lastDraftOrderUuidRef.current = isNewOrder ? currentOrderRecord.uuid : undefined;
 	});
 
-	/**
-	 *
-	 */
-	// The desktop's title-bar strip is the till's topmost row: with the strip visible and
-	// the cart in its column, the register bar renders INTO the strip (prototype
-	// 2026-09-30-phone-md-chrome, desktop 7). Web, tablet and phone have no strip.
-	const strip = useTitleBarStrip();
-	const barInStrip = isColumn && strip.node !== null;
-	const registerBar = (
-		<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} strip={barInStrip} />
-	);
 	// The cart has no frame of its own: the register bar, the customer row and the foot run their
 	// hairlines to the column's edges (Paul, 2026-10-09), and on the phone to the screen's (Paul,
 	// 2026-10-23: the tab had kept an 8 inset that drew a frame around the rows). The column
@@ -171,7 +159,7 @@ function CartColumn({
 	// and the rows, the totals and the open-order tabs paint their own card colour.
 	return (
 		<VStack className={cn('h-full gap-0', isColumn ? 'bg-card' : 'bg-background')}>
-			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
+			<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
 			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(

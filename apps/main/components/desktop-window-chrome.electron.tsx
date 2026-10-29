@@ -49,10 +49,14 @@ function useTitleBarArea(): { left: number; width: number; height: number } {
 	}, [area]);
 }
 /**
- * The strip is the till's topmost row on the desktop: the register bar portals into
- * this node (`TitleBarStripPortal`, `@wcpos/components/edge-surface`). It sits over the drag region, sized to the
+ * The strip is the window's title bar (Paul, 2026-10-29): the drawer layout's
+ * `TitleBarStripContent` portals into this node (`TitleBarStripPortal`,
+ * `@wcpos/components/edge-surface`). It sits over the drag region, sized to the
  * title-bar area so it never covers the traffic lights or the Windows controls; its
- * buttons are `no-drag` by the global rule in public/index.html.
+ * buttons are `no-drag` by the global rule in public/index.html, and the control token
+ * is the strip's height inside it. Behind it, full window width, the band paints the
+ * rail's surface with a rule under it, so the strip reads as chrome, not page. Plain DOM:
+ * the rail's CSS variables, not classes.
  */
 function TitleBarStripHost({ children }: React.PropsWithChildren) {
 	const { left, width, height } = useTitleBarArea();
@@ -61,6 +65,21 @@ function TitleBarStripHost({ children }: React.PropsWithChildren) {
 	return (
 		<TitleBarStripProvider value={value}>
 			{children}
+			{height > 0 ? (
+				<div
+					data-testid="title-bar-band"
+					style={{
+						position: 'fixed',
+						inset: '0 0 auto 0',
+						height,
+						zIndex: 39,
+						pointerEvents: 'none',
+						background: 'var(--rail)',
+						borderBottom: '1px solid var(--rail-border)',
+						boxSizing: 'border-box',
+					}}
+				/>
+			) : null}
 			<div
 				ref={setNode}
 				data-testid="title-bar-strip"
@@ -73,6 +92,7 @@ function TitleBarStripHost({ children }: React.PropsWithChildren) {
 					zIndex: 40,
 					display: height > 0 ? 'flex' : 'none',
 					flexDirection: 'column',
+					['--spacing-ctl' as string]: `${height}px`,
 				}}
 			/>
 		</TitleBarStripProvider>

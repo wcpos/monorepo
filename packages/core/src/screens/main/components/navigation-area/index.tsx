@@ -11,7 +11,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
 import { StatusBadge } from '@wcpos/components/status-badge';
 
-import { BarControls, useOnlineBadge } from '../bar-controls';
+import { BarControls, useBarStatus } from '../bar-controls';
 import { ManagementBar } from '../management-bar';
 import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 import { AreaHeadingTrailing } from './area-page';
@@ -56,7 +56,7 @@ const TOP = ['top'] as const;
 
 /** On wide, the page heading's trailing slot: Offline, the bell and the avatar, as the phone bar has them. */
 function HeadingControls({ barTestID }: { barTestID: string }) {
-	const status = useOnlineBadge();
+	const status = useBarStatus();
 	return (
 		<View className="flex-row items-center gap-2">
 			{status && <StatusBadge {...status} testID={`${barTestID}-status`} />}
