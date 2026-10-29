@@ -21,6 +21,7 @@ export function CashierEntry({
 	placement,
 	portalHost,
 	onSwitchRegister,
+	onOpenRegister,
 }: {
 	testID: string;
 	/** `bar`: a control-height square in a page or register bar; `rail`: the rail's 48 square. */
@@ -29,6 +30,7 @@ export function CashierEntry({
 	portalHost: string | null;
 	/** Absent where the register picker is not this surface's (the phone Products tab). */
 	onSwitchRegister?: () => void;
+	onOpenRegister?: () => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
@@ -65,6 +67,7 @@ export function CashierEntry({
 				onOpenChange={setOpen}
 				portalHost={portalHost}
 				onSwitchRegister={onSwitchRegister}
+				onOpenRegister={onOpenRegister}
 			/>
 		</View>
 	);

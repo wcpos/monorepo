@@ -7,6 +7,9 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { AmountFigure } from '@wcpos/components/amount-figure';
+import { Avatar, getInitials } from '@wcpos/components/avatar';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
@@ -28,10 +31,15 @@ import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/q
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { requestRegisterPanel } from './register-panel-request';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
+import {
+	convertLocalDateToUTCString,
+	convertUTCStringToLocalDate,
+} from '../../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
@@ -42,13 +50,6 @@ import { SwitchStoreSheet } from './switch-store-sheet';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
-
-/**
- * The sheet is one list: every row, pressable or not, starts at the MenuRow's own inset
- * (`px-2.5`) so the labels share one left edge, and the static rows draw the list's hairline.
- */
-const STATIC_ROW =
-	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -78,14 +79,69 @@ export function useSalesToday() {
 	return useObservableState(sales$, 0);
 }
 
-function SalesToday() {
+function Figures({ onOpen }: { onOpen: () => void }) {
 	const total = useSalesToday();
 	const { format } = useCurrencyFormat();
+	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
+		useRegisterSession();
+	const { site } = useStoreSession();
+	const credentials = useObservableSuspense(credentialsListResource(site));
+	const opener = credentials.find((row) => row.id === session?.opened_by);
+	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
-		<View testID="user-sheet-sales-today" className={STATIC_ROW}>
-			<Text>{t('register.your_sales_today')}</Text>
-			<Text className="tabular-nums">{format(total)}</Text>
+		<View className="flex-row gap-2">
+			<View
+				testID="user-sheet-sales-today"
+				className="border-border flex-1 rounded-lg border px-3 py-2.5"
+			>
+				<Text variant="caption">{t('register.your_sales_today')}</Text>
+				<AmountFigure size="tile">{format(total)}</AmountFigure>
+			</View>
+			{binding.status === 'bound' && (
+				<PressableSurface
+					testID="user-sheet-drawer"
+					onPress={onOpen}
+					className="border-border flex-1 rounded-lg border px-3 py-2.5"
+				>
+					<Text variant="caption">{t('register.in_the_drawer_tile')}</Text>
+					{session ? (
+						<>
+							<AmountFigure size="tile">
+								{figuresPending
+									? '—'
+									: blind
+										? t('register.sales_count', { count: salesCount })
+										: format(Number(expected.cash))}
+							</AmountFigure>
+							{figuresPending ? (
+								<Text variant="caption">{t('register.figures_after_sync')}</Text>
+							) : (
+								<View className="flex-row items-center gap-1">
+									<Text variant="caption">
+										{t('register.opened_at_by', {
+											time: formatDate(
+												convertUTCStringToLocalDate(session.opened_at_gmt),
+												'HH:mm',
+												zoneOptions(timezone)
+											),
+										})}
+									</Text>
+									<Avatar
+										size="sm"
+										source={opener?.avatar_url ? { uri: opener.avatar_url } : undefined}
+										fallback={getInitials(opener?.display_name ?? t('register.unknown_cashier'))}
+									/>
+								</View>
+							)}
+						</>
+					) : (
+						<Text>
+							{t('register.register_closed_last_closure', { n: lastClosure?.number ?? '—' })}
+						</Text>
+					)}
+				</PressableSurface>
+			)}
 		</View>
 	);
 }
@@ -189,14 +245,17 @@ export function UserSheet({
 	open,
 	onOpenChange,
 	onSwitchRegister,
+	onOpenRegister,
 	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSwitchRegister?: () => void;
+	onOpenRegister?: () => void;
 	portalHost?: string | null;
 }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
+	const router = useRouter();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	// The register bar's condition for its store switch: more than one store on this login.
 	const stores = useDocField(wpCredentials, (value) => value.stores) as string[] | undefined;
@@ -242,7 +301,18 @@ export function UserSheet({
 					</DialogHeader>
 					{open && (
 						<DialogBody className="gap-0">
-							<SalesToday />
+							<Suspense>
+								<Figures
+									onOpen={() => {
+										if (onOpenRegister) onOpenRegister();
+										else {
+											router.push('/(app)/(drawer)/(pos)');
+											requestRegisterPanel();
+										}
+										onOpenChange(false);
+									}}
+								/>
+							</Suspense>
 							<AwaitingStore />
 							<View testID="user-sheet-switch-user">
 								<SectionHeading>{t('register.switch_user')}</SectionHeading>

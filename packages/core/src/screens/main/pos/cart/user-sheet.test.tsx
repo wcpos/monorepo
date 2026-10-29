@@ -9,6 +9,7 @@ import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { createTestT } from '../../../../../jest/translate';
+import { consumeRegisterPanelRequest } from './register-panel-request';
 import { UserSheet, useSalesToday } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
@@ -127,6 +128,7 @@ jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitingStoreCount: () => mockAwaitingStore,
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
+	convertUTCStringToLocalDate: (value: string) => new Date(value),
 	convertLocalDateToUTCString: (date: Date) => date.toISOString().slice(0, -5),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
@@ -480,5 +482,83 @@ describe('side and header', () => {
 		expect(screen.getByTestId('user-sheet-description').textContent).toBe(
 			'UK Store · Front counter · since 13:05'
 		);
+	});
+});
+
+let mockDrawer = {
+	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
+	expected: { cash: 345.03 },
+	figuresPending: false,
+	blind: false,
+	salesCount: 3,
+	lastClosure: null as { number: number } | null,
+	binding: { status: 'bound' },
+};
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => mockDrawer,
+}));
+describe('drawer door', () => {
+	const onOpenChange = jest.fn();
+	beforeEach(() => {
+		mockT = createTestT();
+		onOpenChange.mockClear();
+		mockPush.mockClear();
+	});
+	afterEach(() => {
+		mockT = (key) => key;
+		mockDrawer.figuresPending = false;
+		mockDrawer.blind = false;
+		mockDrawer.binding.status = 'bound';
+	});
+	it('shows the drawer as a door and opens the register panel on the POS', () => {
+		const onOpenRegister = jest.fn();
+		render(
+			<UserSheet
+				open
+				onOpenChange={onOpenChange}
+				portalHost="pos"
+				onOpenRegister={onOpenRegister}
+			/>
+		);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('345.03');
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(onOpenRegister).toHaveBeenCalled();
+		expect(onOpenChange).toHaveBeenLastCalledWith(false);
+	});
+	it('from the rail, the drawer door goes to the POS and asks for the panel', () => {
+		mockSegments = ['(app)', '(drawer)', 'orders'];
+		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
+		expect(consumeRegisterPanelRequest()).toBe(true);
+		mockSegments = ['(app)', '(drawer)', '(pos)'];
+	});
+	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
+		mockDrawer.figuresPending = true;
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('—');
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+			'Figures arrive with the next sync'
+		);
+	});
+	it('says the register is closed with its last closure when there is no session', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: { number: 12 } });
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+			'Register closed · last closure 12'
+		);
+		Object.assign(mockDrawer, { session, lastClosure: null });
+	});
+	it('shows only the sales count to a blind cashier', () => {
+		mockDrawer.blind = true;
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('3 sales');
+		expect(screen.getByTestId('user-sheet-drawer').textContent).not.toContain('345.03');
+	});
+	it('has no drawer tile while unbound', () => {
+		mockDrawer.binding.status = 'unbound';
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.queryByTestId('user-sheet-drawer')).toBeNull();
 	});
 });

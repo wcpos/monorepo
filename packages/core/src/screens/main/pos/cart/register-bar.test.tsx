@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { consumeRegisterPanelRequest, requestRegisterPanel } from './register-panel-request';
 import { RegisterBar } from './register-bar';
 
 jest.mock('expo-haptics', () => ({}));
@@ -128,4 +129,19 @@ it('has no avatar on wide, where the rail carries it', () => {
 it('has an avatar on the phone', () => {
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+});
+
+let mockFocused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+it('opens the register panel when the rail asked for it, on the focused bar only', () => {
+	const hiddenOpen = jest.fn();
+	const onPanelOpenChange = jest.fn();
+	requestRegisterPanel();
+	mockFocused = false;
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={hiddenOpen} />);
+	mockFocused = true;
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	expect(hiddenOpen).not.toHaveBeenCalled();
+	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	expect(consumeRegisterPanelRequest()).toBe(false);
 });

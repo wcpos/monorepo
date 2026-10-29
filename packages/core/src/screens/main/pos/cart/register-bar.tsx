@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsFocused } from 'expo-router/react-navigation';
+
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
@@ -8,6 +10,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
+import { consumeRegisterPanelRequest, useRegisterPanelRequested } from './register-panel-request';
 import { RegisterPanel } from './register-panel';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -30,6 +33,11 @@ export function RegisterBar({
 	/** The desktop's title-bar strip: 40 pt, no frame of its own (the strip is the frame). */
 	strip?: boolean;
 }) {
+	const focused = useIsFocused();
+	const panelRequested = useRegisterPanelRequested();
+	React.useEffect(() => {
+		if (focused && panelRequested && consumeRegisterPanelRequest()) onPanelOpenChange(true);
+	}, [focused, panelRequested, onPanelOpenChange]);
 	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
 	const { wpCredentials, store } = useStoreSession();
 	const menu = useBarMenu();
@@ -123,7 +131,12 @@ export function RegisterBar({
 					/>
 				)}
 				{/* The rail carries the avatar only on `lg`; the phone needs the bar's. */}
-				<BarControls testID="register-bar" portalHost="pos" onSwitchRegister={onSwitchRegister} />
+				<BarControls
+					testID="register-bar"
+					portalHost="pos"
+					onSwitchRegister={onSwitchRegister}
+					onOpenRegister={() => onPanelOpenChange(true)}
+				/>
 			</HStack>
 			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
 			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} />

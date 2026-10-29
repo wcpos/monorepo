@@ -28,13 +28,16 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 		open,
 		portalHost,
 		onSwitchRegister,
+		onOpenRegister,
 	}: {
 		open: boolean;
 		portalHost?: string | null;
 		onSwitchRegister?: () => void;
+		onOpenRegister?: () => void;
 	}) =>
 		open ? (
 			<div data-testid="user-sheet" data-host={String(portalHost)}>
+				{onOpenRegister && <button data-testid="open-register" onClick={onOpenRegister} />}
 				{onSwitchRegister && <button data-testid="switch-register" onClick={onSwitchRegister} />}
 			</div>
 		) : null,
@@ -100,4 +103,19 @@ it('opens the one cashier surface from the avatar, on the host and with the rows
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
 	fireEvent.click(screen.getByTestId('switch-register'));
 	expect(onSwitchRegister).toHaveBeenCalledTimes(1);
+});
+
+it('passes the drawer door from the bar to the sheet', () => {
+	const onOpenRegister = jest.fn();
+	render(
+		<CashierEntry
+			testID="avatar"
+			placement="bar"
+			portalHost="pos"
+			onOpenRegister={onOpenRegister}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('avatar'));
+	fireEvent.click(screen.getByTestId('open-register'));
+	expect(onOpenRegister).toHaveBeenCalledTimes(1);
 });

@@ -45,12 +45,14 @@ export function BarControls({
 	testID,
 	portalHost = null,
 	onSwitchRegister,
+	onOpenRegister,
 }: {
 	/** The bar's testID: the bell is `<testID>-bell`, the avatar `<testID>-avatar`. */
 	testID: string;
 	/** The POS host inside the till; the root everywhere else. */
 	portalHost?: string | null;
 	onSwitchRegister?: () => void;
+	onOpenRegister?: () => void;
 }) {
 	const phone = useIsPhone();
 	return (
@@ -62,6 +64,7 @@ export function BarControls({
 					placement="bar"
 					portalHost={portalHost}
 					onSwitchRegister={onSwitchRegister}
+					onOpenRegister={onOpenRegister}
 				/>
 			)}
 		</>
