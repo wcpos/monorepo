@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** the close happens inside the register panel (§ 4.5): Close register pushes the count pane, Close & print pushes the written moment, Done closes the panel. The cart column loses its counting state: while this device counts, the cart stays with Pay held (*Counting the drawer*); while another till counts, the column shows the **Counting elsewhere** card; a register closed on another till says so on the Open register card. The empty cart's overdue Close register opens the panel on the count pane.
+**Goal:** the close happens inside the register panel (§ 4.5): Close register pushes the count pane, Close & print pushes the written moment, Done closes the panel. The cart column loses its counting state: while this device counts, the cart stays with Pay held (_Counting the drawer_); while another till counts, the column shows the **Counting elsewhere** card; a register closed on another till says so on the Open register card. The empty cart's overdue Close register opens the panel on the count pane.
 
 **Architecture:** `RegisterPanel` (slice 4, `pos/cart/register-panel.tsx`) already has a two-pane stack (`register` | `closure`); it grows to four (`+ count` | `written`). `RegisterCount` (`register-count.tsx`) keeps its state and its body and loses its shell: it becomes the count pane (the § 4.2 header with ‹, its body, a `DialogFooter`); `ClosureSheet` (`closure-sheet.tsx`) is replaced by the written moment (`closure-written.tsx`), which renders the Reports session's `ClosureHeading`/`ClosureBody` (§ 7, #3036) through one hook lifted out of `ClosurePanel`. `useRegisterSession` gains two derived facts (`countingElsewhere`, `closedElsewhere`) and the plugin's `counting_by` reaches the app through the sessions schema. The register-panel request (slice 2) learns which pane. No new primitive in `@wcpos/components`.
 
@@ -27,7 +27,7 @@
 1. A reload mid-count on this device: the session reads `counting` with `counting_here`; the panel must open on the count pane once (not on every render) — pinned in Task 4.
 2. A count started on another till: the cart column shows the Counting-elsewhere card, Pay is not reachable, and the sheet's Register band names the counter only when `counting_by` is present — pinned in Task 6 (card) and Task 2 (name resolution).
 3. Back to selling from the count pane via ‹ and via ×: both run `backToSelling`, the session returns to `open`, the panel closes on ×, returns to the register pane on ‹ — pinned in Task 3.
-4. The written moment after a close that printed automatically vs one whose print failed: *✓ Printed* line vs the error line with **Print again** — pinned in Task 5.
+4. The written moment after a close that printed automatically vs one whose print failed: _✓ Printed_ line vs the error line with **Print again** — pinned in Task 5.
 5. A register closed on another till: the Open register card carries the Notice with the closer and the time, and NOT after a close this device made — pinned in Task 2 (the fact) and Task 6 (the card).
 
 ---
@@ -35,11 +35,13 @@
 ### Task 1: `counting_by` reaches the app
 
 **Files:**
+
 - Modify: `packages/database/src/collections/schemas/register-sessions.ts` (version 2 → 3, `counting_by: { type: ['number', 'null'] }` after `counting_started_at_gmt`), and `packages/database/src/collections/index.ts` ~line 628: the `register_sessions` creator's `migrationStrategies` gains `3: (oldDoc) => oldDoc` beside `1` and `2`.
 - Modify: `packages/query/src/register-session/queue.ts` (~line 207: the merge of a server row keeps `counting_by` from the server, as `counting_started_at_gmt` is kept) and `session-store.ts` (~line 113: the local `counting` transition does NOT set `counting_by`; the server stamps it — the client's own device mark is `counting_here`).
 - Test: `packages/database/src/collections/closure-migration.test.ts` (the existing migration test for sessions; add the v2 → v3 case there), `packages/query/tests/` queue test for the merged field.
 
 **Interfaces:**
+
 - Produces: `RegisterSessionRow.counting_by?: number | null`.
 
 - [ ] **Step 1: Write the failing tests** — the migration keeps a v2 row and `counting_by` is absent (`undefined`) on it; the queue merge copies the server's `counting_by` onto the local row.
@@ -51,11 +53,13 @@
 ### Task 2: the hook's two facts, the counter's name, the pane request
 
 **Files:**
+
 - Modify: `packages/core/src/services/register-session/use-register-session.ts` (the returned object, ~line 289)
 - Modify: `packages/core/src/screens/main/pos/cart/register-panel-request.ts`
 - Test: `use-register-session.test.tsx`, `register-panel-request.test.ts` (create if absent), `src/seam.test.ts`
 
 **Interfaces:**
+
 - Produces on `useRegisterSession()`:
   - `countingElsewhere: boolean` — `session?.status === 'counting' && !countingHere`.
   - `countingBy: { id: number; name: string | null; at: string | null } | null` — when `session?.status === 'counting'`: `id = session.counting_by` (null → `null` result), `name` resolved from the credentials list the hook already reads for the opener (the same lookup `Opener` in the panel does; `null` when unknown), `at = session.counting_started_at_gmt ?? null`. `null` when not counting or when the plugin sent no `counting_by`.
@@ -71,11 +75,13 @@
 ### Task 3: the count pane
 
 **Files:**
+
 - Modify: `packages/core/src/screens/main/pos/cart/register-count.tsx` (`RegisterCount` becomes the pane: props `{ onBack: () => void; onClose: () => void; onClosed: (count: ClosureCount) => void }`)
 - Modify: `packages/core/src/screens/main/pos/cart/register-panel.tsx` (pane `count`)
 - Test: `register-count.test.tsx` (existing facts kept, the shell's assertions updated), `register-panel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId)` + `React.useSyncExternalStore` for the open carts (as `switch-confirm.tsx` reads it), `DialogFooter`, `IconButton`, `ToneDisc`, `Notice`.
 - Produces: `RegisterCount({ onBack, onClose, onClosed })` rendering header → body → footer with no `Dialog` of its own (the panel's `DialogContent` is the host, as the pushed `ClosurePanel` is).
 
@@ -94,6 +100,7 @@ Strings: `register.unsynced_sales_closure_records` "{count} sales not yet on the
 ### Task 4: the panel opens on the count pane when it should
 
 **Files:**
+
 - Modify: `register-panel.tsx` (initial pane), `packages/core/src/screens/main/pos/cart/index.tsx` (the empty cart's overdue button; the one-shot after a reload), `register-bar.tsx` and `user-sheet.tsx` (`consumeRegisterPanelRequest()`'s new return)
 - Test: `register-panel.test.tsx`, `index.test.tsx` (the cart column's register states; create it — the existing `open-orders-position.test.tsx` is about the open-orders band and stays), `register-bar.test.tsx`, `user-sheet.test.tsx`
 
@@ -108,6 +115,7 @@ Rules: when the panel opens (the `open` prop turns true) with `session?.status =
 ### Task 5: the written moment
 
 **Files:**
+
 - Create: `packages/core/src/screens/main/pos/cart/closure-written.tsx` (`ClosureWritten({ count, onDone })`)
 - Modify: `packages/core/src/screens/main/reports/closures/closure-panel.tsx` — lift the document plumbing into `export function useClosureView(row: ClosureRow)` returning `{ doc, context, settled, touched, corrections, synced, printCount, reprint, error }` (the `useReceiptDocument` call, `persistSnapshot` and its effect, `deriveSettled`, `printedTo` + `reprint`); `ClosurePanel` calls it (no behaviour change; its suite stays green).
 - Delete: `packages/core/src/screens/main/pos/cart/closure-sheet.tsx` and its test (facts move).
@@ -115,6 +123,7 @@ Rules: when the panel opens (the `open` prop turns true) with `session?.status =
 - Test: `closure-written.test.tsx` (new), `closure-panel.test.tsx` (unchanged, must stay green)
 
 **Interfaces:**
+
 - Consumes: `ClosureHeading({ row, settled, blind, title, leading })`, `ClosureBody({ row, doc, settled, touched, corrections, blind, context, printCount })`, `readClosure(storeDB, { id, serverClosureId })` (`@wcpos/query/register-session`) to read the written row from the `ReadonlyClosureDocument` `closeSession` resolved (`use-last-closure.ts` maps one the same way), `useClosureView`.
 
 The moment (§ 4.5 item 2): `ClosureHeading` with `title` `t('register.closure_n_written', { n })` and `leading` `<ToneDisc tone="ok" size="sm" />`; `ClosureBody`; under it `✓ Printed` (`Text className="text-success"`, `t('register.printed_on', { time })`, exists) when the auto-print recorded `printed_at`, else the print error line (`testID="closure-print-error"`) when the last print failed; `DialogFooter size="lg" intent={{ label: t('register.done'), testID: 'closure-done', onPress: onDone }} secondary={!blind && { label: printed ? t('register.print_again') : t('register.print_z_report'), testID: 'closure-print', icon: 'print', loading, onPress: reprint }}`. `onDone` → the panel's `close(false)` (§ 4.5 item 3: only now does the cart column become the Open register card — it does so by itself once `session` is null; nothing else to do).
@@ -130,6 +139,7 @@ Strings: `register.closure_n_written` "Closure {n} written", `register.print_aga
 ### Task 6: the cart column during a count, and the two cards
 
 **Files:**
+
 - Modify: `packages/core/src/screens/main/pos/cart/index.tsx` (the `session.status !== 'open'` branch), `packages/core/src/screens/main/pos/cart/buttons/pay.tsx`, `packages/core/src/screens/main/pos/cart/open-register-card.tsx` (the Notice; the Counting-elsewhere card as a second export `CountingElsewhereCard`)
 - Test: `index.test.tsx` (the cart column's register states, created in Task 4), `pay.test.tsx` (or the buttons' suite), `open-register-card.test.tsx`
 
