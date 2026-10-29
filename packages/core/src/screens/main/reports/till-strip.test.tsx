@@ -537,3 +537,22 @@ it('drops a read in flight across a disable and reads afresh when re-enabled', a
 	expect(screen.getByTestId('till-last-closure').textContent).not.toContain('#413');
 	expect((screen.getByTestId('till-reprint') as HTMLButtonElement).disabled).toBe(true);
 });
+
+// Removing either door contract would expose the room on Free or make the document unreachable.
+it('hides the closures chevron without a room handler', () => {
+	render(<TillStrip />);
+	expect(screen.queryByTestId('till-closures')).toBeNull();
+});
+it.each([false, true])('opens the shown closure (authoritative: %s)', async (remote) => {
+	data.session = null;
+	online = remote;
+	const onOpenClosure = jest.fn();
+	render(<TillStrip onOpenClosure={onOpenClosure} />);
+	await waitFor(() =>
+		expect(screen.getByTestId('till-last-closure').textContent).toContain(remote ? '#413' : '#412')
+	);
+	fireEvent.click(screen.getByTestId('till-last-closure'));
+	expect(onOpenClosure).toHaveBeenCalledWith(
+		remote ? expect.objectContaining({ id: 'B', server_number: 413 }) : data.lastClosure
+	);
+});

@@ -525,38 +525,6 @@ it('uses the viewed store day for presets and custom history bounds', () => {
 	});
 });
 
-// Revert: silently discard a Free historical link's day but keep its selection, or block today's link too.
-it.each([
-	['2026-09-15', true],
-	['2026-09-16', false],
-])('handles a Free last-closure link for %s in the store day', (businessDay, locked) => {
-	mockRoute = { closureId: locked ? 'historical' : 'last-closure', businessDay, registerId: 'r' };
-	try {
-		render(<ReportsScreen />);
-		expect(mockClosureRows).toHaveBeenLastCalledWith(
-			expect.objectContaining({
-				from: '2026-09-16',
-				to: '2026-09-16',
-				registerId: 'r',
-				storeId: 1,
-			})
-		);
-		expect(screen.getByTestId('reports-period').textContent).toBe('Today · Wed 16 Sep');
-		if (locked) {
-			expect(screen.queryByTestId('selected-closure')).toBeNull();
-			expect(screen.getByTestId('reports-lock-hint').textContent).toBe(
-				'Earlier closures are in WCPOS Pro'
-			);
-			expect(screen.getAllByTestId('reports-see-pro')).toHaveLength(1);
-		} else {
-			expect(screen.getByTestId('selected-closure').textContent).toBe('last-closure');
-			expect(screen.queryByTestId('reports-lock-hint')).toBeNull();
-		}
-	} finally {
-		mockRoute = {};
-	}
-});
-
 // Revert: clamp only inside the rows hook, leaving the route's old/future heading and selection.
 it.each([
 	['2026-01-01', '2026-06-16', 'Tue 16 Jun'],
