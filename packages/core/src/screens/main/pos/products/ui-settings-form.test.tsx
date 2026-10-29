@@ -62,6 +62,12 @@ jest.mock('@wcpos/components/dialog', () => ({ useDialog: () => ({ close: closeS
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: pushSpy }) }));
 
+// The label primitive needs a native host; the form's label names its control by this id.
+jest.mock('@wcpos/components/label', () => ({
+	Label: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<label id={nativeID}>{children}</label>
+	),
+}));
 jest.mock('@wcpos/components/form', () => {
 	const { Controller, FormProvider } = jest.requireActual('react-hook-form');
 	const { useFormChangeHandler } = jest.requireActual(
@@ -96,46 +102,39 @@ jest.mock('@wcpos/components/form', () => {
 			</>
 		);
 	}
-	return { Form: FormProvider, FormField, FormSwitch, useFormChangeHandler };
-});
-
-/**
- * The Select double and SegmentedControl keep the production prop contracts (`onValueChange`
- * receives an Option / a string) and render each choice as a plain button, so a click
- * goes through the same field `onChange` the real popovers call.
- */
-jest.mock('@wcpos/components/select', () => {
-	type SelectOption = { value: string; label: string };
-	type OnValueChange = (option: SelectOption | undefined) => void;
-	const SelectCtx = React.createContext<OnValueChange>(() => {});
-	function Select({
-		onValueChange,
-		children,
-	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
-		return <SelectCtx.Provider value={onValueChange ?? (() => {})}>{children}</SelectCtx.Provider>;
-	}
-	function PassThrough({ children }: React.PropsWithChildren) {
-		return <>{children}</>;
-	}
-	function SelectItem({ value, label, testID }: SelectOption & { testID?: string }) {
-		const onValueChange = React.useContext(SelectCtx);
-		return (
+	// The real field: its label is the form's, and its segments keep `${testID}-${value}`.
+	const { FormSegmentedControl } = jest.requireActual(
+		'../../../../../../components/src/form/segmented-control'
+	);
+	/** Each option a plain button, so a click goes through the field `onChange` the list calls. */
+	function FormSelect({
+		options,
+		onChange,
+	}: FormItemProps<string> & { options: { value: string; label: string }[] }) {
+		return options.map((option) => (
 			<button
+				key={option.value}
 				type="button"
-				data-testid={testID ?? `option-${value}`}
-				onClick={() => onValueChange({ value, label })}
+				data-testid={`option-${option.value}`}
+				onClick={() => onChange?.(option.value)}
 			>
-				{label}
+				{option.label}
 			</button>
-		);
+		));
 	}
+	const { FormDescription, FormItem, FormLabel } = jest.requireActual(
+		'../../../../../../components/src/form/common'
+	);
 	return {
-		Select,
-		SelectTrigger: PassThrough,
-		SelectValue: () => null,
-		SelectContent: PassThrough,
-		SelectGroup: PassThrough,
-		SelectItem,
+		Form: FormProvider,
+		FormDescription,
+		FormField,
+		FormItem,
+		FormLabel,
+		FormSegmentedControl,
+		FormSelect,
+		FormSwitch,
+		useFormChangeHandler,
 	};
 });
 
@@ -359,6 +358,26 @@ it('offers Browse by with All products first and dims a source with nothing to s
 	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'tags' });
 	await settle();
 	expect(screen.getByTestId('ui-settings-browse-by-tags')).toHaveAttribute('aria-checked', 'true');
+});
+
+it('labels each segmented field with the form label that names its radiogroup', () => {
+	render(<UISettingsForm />);
+	for (const [name, segment] of [
+		['viewMode', 'view-mode-grid'],
+		['pos_products.variations_style', 'products-variations-style-drill'],
+		['position', 'panel-position-left'],
+		['sortDirection', 'sort-direction-asc'],
+	]) {
+		expect(screen.getByRole('radiogroup', { name })).toContainElement(screen.getByTestId(segment));
+	}
+});
+
+it('draws every other field label as the form label, never body text', () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
+	for (const label of ['pos_products.browse_by', 'gridColumns', 'metaDataKeys']) {
+		expect(screen.getByText(label).tagName).toBe('LABEL');
+	}
 });
 
 it('persists a Sort By selection', async () => {

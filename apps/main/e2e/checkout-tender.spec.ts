@@ -533,7 +533,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect(page.getByTestId('checkout-paid')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-change-due')).toBeVisible();
-			await page.getByTestId('receipt-no-receipt').click();
+			await page.getByTestId('receipt-new-sale').click();
 		}
 	);
 
