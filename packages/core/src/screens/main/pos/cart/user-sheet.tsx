@@ -468,9 +468,21 @@ export function UserSheet({
 			case 'register':
 				return void act(() => bind(request.register.id));
 			case 'sign-out':
-				openRegister();
-				void act(async () => {
-					await actions.startCounting();
+				// The count first, the panel only once it started: a refusal (figures turned pending,
+				// the session gone) keeps the sheet and says so, as the register panel's own button
+				// does (CodeRabbit, #3056).
+				return void act(async () => {
+					try {
+						await actions.startCounting();
+					} catch (error) {
+						log.error('The count could not start', {
+							code: ERROR_CODES.REGISTER_CLOSE_REFUSED,
+							showToast: true,
+							context: { error },
+						});
+						return;
+					}
+					openRegister();
 				});
 		}
 	};

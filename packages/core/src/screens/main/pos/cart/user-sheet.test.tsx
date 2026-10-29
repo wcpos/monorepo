@@ -68,6 +68,14 @@ jest.mock('@wcpos/components/portal', () => ({
 	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+const mockLogError = jest.fn();
+jest.mock('@wcpos/utils/logger', () => {
+	const actual = jest.requireActual('@wcpos/utils/logger');
+	return {
+		...actual,
+		log: { ...actual.log, error: (...args: unknown[]) => mockLogError(...args) },
+	};
+});
 
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
 
@@ -1023,6 +1031,20 @@ describe('switch confirmations and guards', () => {
 		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
 		expect(consumeRegisterPanelRequest()).toBe(true);
 		expect(close).toHaveBeenCalledWith(false);
+		expect(mockLogout).not.toHaveBeenCalled();
+	});
+	it('a refused count keeps the sheet and says so; the register panel is not opened', async () => {
+		const close = jest.fn();
+		mockDrawer.actions.startCounting.mockRejectedValueOnce(new Error('register_figures_pending'));
+		render(<UserSheet open onOpenChange={close} />);
+		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+		expect(consumeRegisterPanelRequest()).toBe(false);
+		expect(close).not.toHaveBeenCalledWith(false);
+		expect(mockLogError).toHaveBeenCalledWith(
+			'The count could not start',
+			expect.objectContaining({ showToast: true })
+		);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
 	it('Sign out anyway signs out', async () => {
