@@ -122,6 +122,8 @@ function isPastClose(closeTime: string | null | undefined) {
 export function useRegisterSession() {
 	const { store, wpCredentials, userDB, storeDB, site } = useStoreSession();
 	const actor = useRegisterActor();
+	const cashiers$ = React.useMemo(() => observeSiteCredentials(site), [site]);
+	const cashiers = useObservableState(cashiers$, PENDING_USER_DB_READ);
 	const { today, timezone } = useStoreDay();
 	const runtime = useQueryRuntime();
 	const binding = useRegisterBinding();
@@ -285,6 +287,19 @@ export function useRegisterSession() {
 		: readLiveSession(site.uuid!, binding.registerId!);
 	const figuresPending =
 		!!session && session.server_expected_at == null && !!live?.seeded_in.includes(storeDB.name);
+	const lastClosure =
+		data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null;
+	const countingBy =
+		session?.status === 'counting' && session.counting_by != null
+			? {
+					id: session.counting_by,
+					name:
+						(cashiers === PENDING_USER_DB_READ ? [] : cashiers).find(
+							(row) => row.id === session.counting_by
+						)?.display_name ?? null,
+					at: session.counting_started_at_gmt ?? null,
+				}
+			: null;
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -311,6 +326,12 @@ export function useRegisterSession() {
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!live?.counting_here,
+		countingElsewhere: session?.status === 'counting' && !live?.counting_here,
+		countingBy,
+		closedElsewhere:
+			!session && lastClosure && live?.session_id === lastClosure.id && !live.counting_here
+				? { by: lastClosure.closed_by, at: lastClosure.closed_at }
+				: null,
 		salesCount:
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
@@ -318,8 +339,7 @@ export function useRegisterSession() {
 						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
 					).length
 				: orders.length,
-		lastClosure:
-			data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null,
+		lastClosure,
 		lastClosed:
 			data?.closed.sort((a, b) =>
 				(b.closed_at_gmt ?? '').localeCompare(a.closed_at_gmt ?? '')
