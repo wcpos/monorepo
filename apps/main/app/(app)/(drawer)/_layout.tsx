@@ -1,11 +1,13 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import type { IconName } from '@wcpos/components/icon';
 import { useT } from '@wcpos/core/contexts/translations';
@@ -111,15 +113,7 @@ function ThemedDrawer({
 			// An element, not a call: called as a function its hooks would run in the drawer's own
 			// fiber, and a hook list that changed with the presentation would break React Compiler
 			// ("Expected a constant size argument for each invocation of useMemoCache").
-			// The scene host: every screen's overlay surface beside the rail, where the rail's cashier
-			// sheet renders (the root host wraps the rail too, and a sheet there covered it; Paul,
-			// 2026-10-29). The POS keeps its own `pos` host inside its providers for the till's dialogs.
-			screenLayout={({ children }) => (
-				<View className="flex-1">
-					{children}
-					<PortalHost name="scene" />
-				</View>
-			)}
+			screenLayout={({ children }) => <Scene>{children}</Scene>}
 			drawerContent={(props) => (
 				<DrawerContent
 					{...props}
@@ -145,6 +139,30 @@ function ThemedDrawer({
 			<Drawer.Screen name="settings" options={{ title: t('common.settings') }} />
 			<Drawer.Screen name="support" options={{ title: t('common.support') }} />
 		</Drawer>
+	);
+}
+
+/**
+ * The scene host: the focused screen's overlay surface beside the rail, where the rail's cashier
+ * sheet renders (the root host wraps the rail too, and a sheet there covered it; Paul, 2026-10-29).
+ * Only the focused scene carries the host and the web container: the drawer keeps its other
+ * screens mounted, and two hosts of one name would draw the sheet twice. The POS keeps its own
+ * `pos` host inside its providers for the till's dialogs.
+ */
+function Scene({ children }: { children: React.ReactNode }) {
+	const focused = useIsFocused();
+	// On web the dialog portals into the registered DOM container, not the RN host (dialog ledger 7).
+	const register = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer(
+			'scene',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
+	return (
+		<View ref={focused ? register : undefined} className="flex-1">
+			{children}
+			{focused && <PortalHost name="scene" />}
+		</View>
 	);
 }
 
