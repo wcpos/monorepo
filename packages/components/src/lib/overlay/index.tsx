@@ -25,7 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useEdgeInsets } from '../../edge-surface';
+import { useEdgeInsets, useTitleBarStrip } from '../../edge-surface';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
 import { TextClassContext } from '../../text';
 import { useIsPhone } from '../device';
@@ -328,6 +328,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	// The top through the edge surfaces: a modal that is a screen's root view under the POS
 	// upgrade notice, which pads the status bar itself, pads none again.
 	const { paddingTop = 0 } = useEdgeInsets(TOP);
+	// The desktop title bar stays a thing apart, above every overlay: the scrim starts under it.
+	const { height: stripHeight } = useTitleBarStrip();
 	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -513,6 +515,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
+			style={stripHeight > 0 ? { top: stripHeight } : undefined}
 			onPress={onDismiss ? onScrimPress : undefined}
 			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
@@ -644,6 +647,7 @@ export function AnchoredOverlay({
 }: AnchoredOverlayProps) {
 	const { className, testID, inline, portalHost, children, ...position } = content;
 	const phone = useIsPhone();
+	const { height: stripHeight } = useTitleBarStrip();
 	const close = () => onOpenChange(false);
 	const shell = (
 		<OverlayShell
@@ -669,6 +673,8 @@ export function AnchoredOverlay({
 					</OverlaySheetPanel>
 				) : (
 					<anchor.Content
+						// The primitives' name for Radix's collisionPadding: a menu never slides over the title bar.
+						{...(stripHeight > 0 ? { insets: { top: stripHeight } } : null)}
 						{...position}
 						testID={testID}
 						className={cn(

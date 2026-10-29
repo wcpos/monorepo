@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { TitleBarStripProvider } from '../edge-surface';
 import { DeviceScope } from './device';
 import { type AnchoredContent, AnchoredOverlay, type OverlayAnchor } from './overlay';
 
@@ -10,9 +11,9 @@ const { View: Part } = jest.requireMock('react-native');
 const ANCHOR: OverlayAnchor = {
 	Portal: ({ children }) => <div data-testid="portal">{children}</div>,
 	Scrim: Part,
-	Content: ({ children, align, ...props }) => (
+	Content: ({ children, align, insets, ...props }) => (
 		<Part {...props}>
-			<div data-testid="anchored" data-align={align}>
+			<div data-testid="anchored" data-align={align} data-insets={JSON.stringify(insets)}>
 				{children}
 			</div>
 		</Part>
@@ -89,4 +90,28 @@ it('renders nothing closed inline, and goes through the portal otherwise', () =>
 	closed.unmount();
 	overlay(false, { content: { inline: false } });
 	expect(screen.getByTestId('portal')).toContainElement(screen.getByTestId('panel'));
+});
+
+// A menu opened near the top never slides over the desktop title bar: the strip is the panel's
+// collision padding (Radix `collisionPadding`, the primitives' `insets`); none without a strip.
+it.each([
+	[28, '{"top":28}'],
+	[0, undefined],
+] as const)('with a title-bar strip of %s pads the anchored panel %s', (height, insets) => {
+	render(
+		<TitleBarStripProvider value={{ node: null, height }}>
+			<DeviceScope phone={false}>
+				<AnchoredOverlay
+					anchor={ANCHOR}
+					open
+					onOpenChange={onOpenChange}
+					size="min-w-50"
+					content={{ testID: 'panel', inline: true, children: <span>rows</span> }}
+				/>
+			</DeviceScope>
+		</TitleBarStripProvider>
+	);
+	const anchored = screen.getByTestId('anchored');
+	if (insets) expect(anchored).toHaveAttribute('data-insets', insets);
+	else expect(anchored).not.toHaveAttribute('data-insets');
 });

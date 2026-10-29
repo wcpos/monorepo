@@ -3,6 +3,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 
 import { act, render, screen } from '@testing-library/react';
 
+import { TitleBarStripProvider } from '../../edge-surface';
 import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from '../motion';
 import {
 	OVERLAY_MOTION,
@@ -117,6 +118,22 @@ it.each([
 	expect(classes?.join(' ')).not.toMatch(/:contents\b/);
 	expect(mockScrimProps.at(-1)).toMatchObject({ focusable: false });
 	expect(mockScrimProps.at(-1)?.onPress).toBeUndefined();
+});
+
+// The desktop title bar is a thing apart, above every overlay: the scrim starts under it (Paul,
+// 2026-10-29). Without a strip (web, full screen) the scrim keeps the whole window.
+it.each([
+	[28, { top: 28 }],
+	[0, undefined],
+] as const)('with a title-bar strip of %s gives the scrim the style %j', (height, style) => {
+	render(
+		<TitleBarStripProvider value={{ node: null, height }}>
+			<OverlayShell presentation="right" open Scrim={Pressable} testID="d">
+				<Probe />
+			</OverlayShell>
+		</TitleBarStripProvider>
+	);
+	expect(mockScrimProps.at(-1)?.style).toEqual(style);
 });
 
 it('marks the phone sheet out of the scrim rule that flattens a Radix wrapper', () => {
