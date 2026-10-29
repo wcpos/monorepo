@@ -15,7 +15,6 @@ import {
 	useRegisterBinding,
 	useRegisterDirectory,
 } from '../../../../services/register/use-register-binding';
-import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { exportCsv } from './export-csv';
 import { saveOrShareCsv } from './save-or-share-csv';
@@ -72,7 +71,6 @@ export function Closures({
 			!unavailableIds.has(row.server_closure_id ?? row.id)
 	);
 	const { store } = useStoreSession();
-	const { blind } = useRegisterSession();
 	const sessionKey = `${scope.storeId}:${scope.registerId}`;
 	const [resolved, setResolved] = React.useState({
 		key: sessionKey,
@@ -136,7 +134,6 @@ export function Closures({
 					sessions={sessions}
 					scopeFrom={scope.from}
 					scopeTo={scope.to}
-					blind={blind}
 					partial={hasMore}
 					filter={filter}
 					onFilterChange={setFilter}
