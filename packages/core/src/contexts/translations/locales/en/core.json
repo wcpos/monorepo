@@ -3086,5 +3086,6 @@
 	"register.age_m": "{m} m",
 	"register.session_sales": "Session sales",
 	"register.term_count": "{term} · {count}",
+	"register.taken": "Taken",
 	"register.close_register_past": "Close register · it's past {time}"
 }

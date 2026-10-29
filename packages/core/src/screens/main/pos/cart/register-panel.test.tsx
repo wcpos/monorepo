@@ -330,9 +330,9 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 			.map((row) => row.textContent)
 	).toEqual([
 		'register.opened_suffix 09:02register.float£100.00',
-		'register.term_count register.cash_sales 2register.cash_sales£62.00',
-		'register.term_count register.paid_out 1register.paid_out−£7.00Milk−£7.00register.void',
-		'register.expected_in_drawerregister.expected_in_drawer£155.00',
+		'register.term_count register.cash_sales 2register.taken£62.00',
+		'register.term_count register.paid_out 1−£7.00Milk−£7.00register.void',
+		'register.expected_in_drawer£155.00',
 	]);
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	// No session: no derivation, only the closure.

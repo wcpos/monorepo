@@ -25,7 +25,6 @@ import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
 import { fromMinor, toMinor } from '@wcpos/order-math';
-import { useDocField } from '@wcpos/query';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -92,7 +91,7 @@ export function RegisterPanel({
 		paid_out: t('register.paid_out'),
 		no_sale: t('register.no_sale'),
 	};
-	const { wpCredentials, store } = useStoreSession();
+	const { store } = useStoreSession();
 	const { registers } = useRegisterBinding();
 	const { heading, time } = useStoreDayLabel(store.id);
 	const { timezone } = useStoreDay();
@@ -103,9 +102,8 @@ export function RegisterPanel({
 			? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
 			: t('register.age_m', { m: minutes });
 	};
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
-	const reportsDenied =
-		blind || (!!capabilities && !capabilities.includes('view_woocommerce_pos_reports'));
+	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
+	const reportsDenied = blind;
 	const side = usePanelSide('cart');
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
@@ -321,14 +319,13 @@ export function RegisterPanel({
 								{terms.cashSales.count > 0 && (
 									<DerivationStep
 										label={countedLabel(t('register.cash_sales'), terms.cashSales.count)}
-										title={t('register.cash_sales')}
+										title={t('register.taken')}
 										trailing={trailing(format(Number(terms.cashSales.amount)))}
 									/>
 								)}
 								{Number(terms.cashRefunds.amount) !== 0 && (
 									<DerivationStep
 										label={countedLabel(t('register.cash_refunds'), terms.cashRefunds.count)}
-										title={t('register.cash_refunds')}
 										trailing={trailing(minus(terms.cashRefunds.amount))}
 									/>
 								)}
@@ -352,7 +349,6 @@ export function RegisterPanel({
 														: 'register-panel-no-sales'
 											}
 											label={countedLabel(movementNames[type], Math.max(count, rows.length))}
-											title={movementNames[type]}
 											trailing={
 												type === 'no_sale'
 													? undefined
@@ -395,7 +391,6 @@ export function RegisterPanel({
 										testID="register-panel-expected"
 										state="result"
 										label={t('register.expected_in_drawer')}
-										title={t('register.expected_in_drawer')}
 										trailing={trailing(figuresPending ? '—' : format(Number(terms.expected)))}
 										detail={figuresPending ? t('register.figures_after_sync') : undefined}
 									/>
