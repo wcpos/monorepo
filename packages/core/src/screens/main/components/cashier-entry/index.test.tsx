@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { consumeCashierSheetRequest, requestCashierSheet } from './cashier-sheet-request';
 import { CashierEntry } from './index';
 import {
 	__resetRedirectResultForTesting,
@@ -27,15 +28,17 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 	UserSheet: ({
 		open,
 		portalHost,
-		onSwitchRegister,
+
+		onOpenRegister,
 	}: {
 		open: boolean;
 		portalHost?: string | null;
-		onSwitchRegister?: () => void;
+
+		onOpenRegister?: () => void;
 	}) =>
 		open ? (
 			<div data-testid="user-sheet" data-host={String(portalHost)}>
-				{onSwitchRegister && <button data-testid="switch-register" onClick={onSwitchRegister} />}
+				{onOpenRegister && <button data-testid="open-register" onClick={onOpenRegister} />}
 			</div>
 		) : null,
 }));
@@ -86,18 +89,35 @@ it('opens one sheet for one return when two entries are mounted', () => {
 });
 
 it('opens the one cashier surface from the avatar, on the host and with the rows it is given', () => {
-	const onSwitchRegister = jest.fn();
-	render(
-		<CashierEntry
-			testID="register-bar-avatar"
-			placement="rail"
-			portalHost="pos"
-			onSwitchRegister={onSwitchRegister}
-		/>
-	);
+	render(<CashierEntry testID="register-bar-avatar" placement="rail" portalHost="pos" />);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
-	fireEvent.click(screen.getByTestId('switch-register'));
-	expect(onSwitchRegister).toHaveBeenCalledTimes(1);
+});
+
+it('passes the drawer door from the bar to the sheet', () => {
+	const onOpenRegister = jest.fn();
+	render(
+		<CashierEntry
+			testID="avatar"
+			placement="bar"
+			portalHost="pos"
+			onOpenRegister={onOpenRegister}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('avatar'));
+	fireEvent.click(screen.getByTestId('open-register'));
+	expect(onOpenRegister).toHaveBeenCalledTimes(1);
+});
+
+let mockFocused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+it('opens one sheet for one request when two entries are mounted and one is focused', () => {
+	requestCashierSheet();
+	mockFocused = false;
+	render(<CashierEntry testID="hidden" placement="bar" portalHost="pos" />);
+	mockFocused = true;
+	render(<CashierEntry testID="shown" placement="bar" portalHost="pos" />);
+	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
+	expect(consumeCashierSheetRequest()).toBe(false);
 });

@@ -2,13 +2,21 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
+import type { UserDatabase } from '@wcpos/database';
+import {
+	readRegister,
+	recordLiveSession,
+	type RegisterDocument,
+} from '@wcpos/query/register-session';
+import { Toast } from '@wcpos/components/toast';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { createTestT } from '../../../../../jest/translate';
+import { consumeRegisterPanelRequest } from './register-panel-request';
 import { UserSheet, useSalesToday } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
@@ -26,7 +34,18 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	return {
 		AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 			open ? <div>{children}</div> : null,
-		AlertDialogContent: Box,
+		AlertDialogContent: ({
+			children,
+			side,
+			testID,
+		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
+			<div data-testid={testID} data-side={side}>
+				{children}
+			</div>
+		),
+		DialogDescription: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		AlertDialogHeader: Box,
 		AlertDialogTitle: Box,
 		AlertDialogDescription: Box,
@@ -49,8 +68,19 @@ const mockReplace = jest.fn();
 let mockStoreId = 2;
 let mockStoreTimezone: string | undefined;
 let mockStores = ['store-a'];
+let mockSwitching = false;
+const mockSwitch = jest.fn(async () => {});
+jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => 'stores' }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('./use-switch-store', () => ({
+	useSwitchStore: () => ({
+		...jest.requireActual('./use-switch-store').useSwitchStore(),
+		...(mockSwitching ? { isSwitching: true } : {}),
+	}),
+}));
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
+	{ uuid: 'current', display_name: 'Cashier' },
 	{
 		uuid: 'other',
 		display_name: 'Other cashier',
@@ -58,11 +88,20 @@ const mockCredentials = [
 ];
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
-	useObservableSuspense: () => mockCredentials,
+	useObservableSuspense: (resource: unknown) =>
+		resource === 'stores'
+			? mockStores.map((localID) => ({ localID, name: localID }))
+			: mockCredentials,
 }));
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, push: mockPush }) }));
+let mockSegments = ['(app)', '(drawer)', '(pos)'];
+let mockCartSide = 'left';
+let mockLastAccess = '2026-10-28T13:05:00Z';
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace, push: mockPush }),
+	useSegments: () => mockSegments,
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/query/local-data-reset', () => ({
 	clearLocalDataNow: jest.fn(),
@@ -91,8 +130,16 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
 	useStoreSession: () => ({
-		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
-		store: { id: mockStoreId, price_num_decimals: 2 },
+		userDB: mockUserDB,
+		wpCredentials: {
+			id: 7,
+			uuid: 'current',
+			display_name: 'Cashier',
+			stores: mockStores,
+			last_access: mockLastAccess,
+		},
+		switchStore: mockSwitch,
+		store: { localID: 'store-a', id: mockStoreId, name: 'UK Store', price_num_decimals: 2 },
 		site: { uuid: 'site', url: 'https://shop.example', populateResource: () => ({}) },
 		logout: mockLogout,
 	}),
@@ -104,27 +151,88 @@ jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitingStoreCount: () => mockAwaitingStore,
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
+	convertUTCStringToLocalDate: (value: string) => new Date(value),
 	convertLocalDateToUTCString: (date: Date) => date.toISOString().slice(0, -5),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
+const mockBind = jest.fn();
+const mockRefresh = jest.fn(async () => undefined);
+const mockDirectory = [
+	{
+		id: 'A',
+		name: 'Front counter',
+		session: {
+			id: 's',
+			status: 'open',
+			opened_at_gmt: '2026-10-28T09:02:00Z',
+			opened_by: { id: 7, name: 'Amy' },
+		},
+	},
+	{ id: 'back', name: 'Back office', last_closure: { number: 41 } },
+];
+let mockRegisters = mockDirectory;
+let mockBindingStatus = 'bound';
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registers: [{ id: 'A' }, { id: 'B' }] }),
+	useRegisterBinding: () => ({
+		registers: mockRegisters,
+		registerName: 'Front counter',
+		registerId: 'A',
+		status: mockBindingStatus,
+		bind: mockBind,
+		refresh: mockRefresh,
+	}),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
-jest.mock('./switch-store-sheet', () => ({
-	SwitchStoreSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="switch-store-sheet" data-host={String(portalHost)} /> : null,
-}));
+let mockRegisterData: RegisterDocument;
+const mockRegisterDoc = {
+	toJSON: () => ({ data: mockRegisterData }),
+	incrementalModify: async (fn: (data: RegisterDocument) => RegisterDocument) => {
+		mockRegisterData = fn(mockRegisterData);
+		mockRegisterSource.next(mockRegisterDoc);
+		return mockRegisterDoc;
+	},
+};
+const mockRegisterSource = new BehaviorSubject(mockRegisterDoc);
+const mockUserDB = {
+	getLocal: async () => mockRegisterDoc,
+	getLocal$: () => mockRegisterSource,
+} as unknown as UserDatabase;
+beforeEach(async () => {
+	mockRegisterData = { id: 'device', name: 'Device', platform: 'web', created_at: '', sites: {} };
+	await readRegister(mockUserDB);
+	mockBind.mockClear();
+	mockRefresh.mockClear();
+});
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
+
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
 	return {
-		Dialog: Box,
-		DialogContent: Box,
+		Dialog: ({
+			children,
+			onOpenChange,
+		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => (
+			<div>
+				<button data-testid="dismiss" onClick={() => onOpenChange(false)} />
+				{children}
+			</div>
+		),
+		DialogContent: ({
+			children,
+			side,
+			testID,
+		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
+			<div data-testid={testID} data-side={side}>
+				{children}
+			</div>
+		),
+		DialogDescription: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		DialogHeader: Box,
 		DialogTitle: Box,
 		DialogBody: Box,
@@ -160,7 +268,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 
 it('switches credentials without retaining the previous cashier authentication override', async () => {
 	requestStateManager.setRefreshedToken('previous-cashier-token');
-	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={jest.fn()} />);
+	render(<UserSheet open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
 	await waitFor(() =>
 		expect(mockLogin).toHaveBeenCalledWith({
@@ -220,6 +328,10 @@ it('keeps only the WordPress admin and desktop links beside the till actions', (
 	expect(screen.queryByTestId('user-sheet-support')).toBeNull();
 	expect(screen.queryByTestId('user-sheet-clear-local-data')).toBeNull();
 	expect(screen.getByTestId('user-sheet-sign-out')).toBeTruthy();
+	const foot = screen.getByTestId('user-sheet-foot');
+	expect(foot.contains(screen.getByTestId('user-sheet-wp-admin'))).toBe(true);
+	expect(foot.lastElementChild).toBe(screen.getByTestId('user-sheet-desktop-app'));
+	expect(foot.parentElement?.lastElementChild).toBe(foot);
 	fireEvent.click(screen.getByTestId('user-sheet-wp-admin'));
 	expect(openExternalURL).toHaveBeenCalledWith('https://shop.example/wp-admin');
 	fireEvent.click(screen.getByTestId('user-sheet-desktop-app'));
@@ -262,16 +374,17 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 					},
 				};
 	const blocked = attributed !== false;
-	const switchRegister = jest.fn();
-	render(
-		<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} portalHost={null} />
-	);
-	const button = screen.getByTestId('user-sheet-switch-register');
+	const switchRegister = mockBind;
+	render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+	const button = screen.getByTestId('user-sheet-register-back');
 	expect(button.getAttribute('aria-disabled') === 'true').toBe(blocked);
-	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(attributed === true);
-	expect(!!screen.queryByText('register.switch_register_unavailable_here')).toBe(
+	// The rail's sheet has no cart to finish: its reason is that the switch is not available here.
+	const reason =
 		attributed === undefined
-	);
+			? 'register.switch_register_unavailable_here'
+			: 'register.switch_register_blocked_cart';
+	expect(button.textContent?.includes(reason)).toBe(blocked);
+
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
 });
@@ -280,9 +393,9 @@ it('allows switching from an empty attributed template', () => {
 	mockCart = {
 		payload: { status: 'pos-open', meta_data: [{ key: '_wcpos_register', value: 'A' }] },
 	};
-	const switchRegister = jest.fn();
-	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-	const button = screen.getByTestId('user-sheet-switch-register');
+	const switchRegister = mockBind;
+	render(<UserSheet open onOpenChange={jest.fn()} />);
+	const button = screen.getByTestId('user-sheet-register-back');
 	expect(button.getAttribute('aria-disabled')).not.toBe('true');
 	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
 	fireEvent.click(button);
@@ -306,35 +419,124 @@ it.each(['pos-partial', 'ledger'])(
 					payments: [{ id: 'p1', amount: '50', method: 'cash', status: 'captured' }],
 				}),
 			});
-		const switchRegister = jest.fn();
-		render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
-		const button = screen.getByTestId('user-sheet-switch-register');
+		const switchRegister = mockBind;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		const button = screen.getByTestId('user-sheet-register-back');
 		expect(button.getAttribute('aria-disabled')).toBe('true');
-		expect(screen.getByText('register.switch_register_blocked_cart')).toBeTruthy();
+		expect(button.textContent).toContain('register.switch_register_blocked_cart');
 		fireEvent.click(button);
 		expect(switchRegister).not.toHaveBeenCalled();
 	}
 );
 
-describe('switch store', () => {
+describe('store band', () => {
+	beforeEach(() => {
+		mockStores = ['store-a', 'store-b'];
+		mockSwitch.mockClear();
+		mockReplace.mockClear();
+	});
 	afterEach(() => {
 		mockStores = ['store-a'];
+		mockSwitching = false;
 	});
-
-	it('offers no store switch on a login with one store', () => {
+	it('offers no store band on a login with one store', () => {
+		mockStores = ['store-a'];
 		render(<UserSheet open onOpenChange={jest.fn()} />);
-		expect(screen.queryByTestId('user-sheet-switch-store')).toBeNull();
+		expect(screen.queryByTestId('user-sheet-store-band')).toBeNull();
 	});
-
-	it('closes the sheet and opens the store switch on its own host when the login has more stores', () => {
-		mockStores = ['store-a', 'store-b'];
+	it('lists the other stores in the Store band when the login has more', () => {
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet-store-store-a').getAttribute('aria-checked')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('user-sheet-store-store-b')).toBeTruthy();
+	});
+	it('switches to the chosen store from the band', async () => {
 		const onOpenChange = jest.fn();
-		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
-		expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
-		fireEvent.click(screen.getByTestId('user-sheet-switch-store'));
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		expect(mockSwitch).toHaveBeenCalledWith(expect.objectContaining({ localID: 'store-b' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
-		// Off the POS the sheet portals to the root host, so the store sheet must too.
-		expect(screen.getByTestId('switch-store-sheet').getAttribute('data-host')).toBe('null');
+	});
+	it('blocks the app and refuses dismissal while a switch is hydrating', () => {
+		mockSwitching = true;
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('store-switch-overlay')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('dismiss'));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		const row = screen.getByTestId('user-sheet-store-store-b');
+		expect(row.getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(row);
+		expect(mockSwitch).not.toHaveBeenCalled();
+	});
+	it('holds every other session-changing action while a switch is hydrating', () => {
+		mockSwitching = true;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		const other = screen.getByTestId('user-sheet-user-other');
+		expect(other.getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(other);
+		expect(mockLogin).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet-register-back').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
+		expect(mockBind).not.toHaveBeenCalled();
+		const signOut = screen.getByTestId('user-sheet-sign-out') as HTMLButtonElement;
+		expect(signOut.disabled).toBe(true);
+		mockLogout.mockClear();
+		fireEvent.click(signOut);
+		expect(mockLogout).not.toHaveBeenCalled();
+	});
+	it('holds the store band while a cashier switch is in flight', async () => {
+		let finish: () => void = () => {};
+		mockLogin.mockClear();
+		mockLogin.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+		const storeId = mockStoreId;
+		mockStoreId = 2;
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-user-other')));
+			await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(1));
+			const row = screen.getByTestId('user-sheet-store-store-b');
+			expect(row.getAttribute('aria-disabled')).toBe('true');
+			fireEvent.click(row);
+			expect(mockSwitch).not.toHaveBeenCalled();
+			await act(async () => finish());
+			expect(row.getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockStoreId = storeId;
+		}
+	});
+	it('holds the store band while a register bind is pending', async () => {
+		let finish: () => void = () => {};
+		mockBind.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+		const cart = mockCart;
+		mockCart = { payload: { meta_data: [] } };
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-register-back')));
+			expect(mockBind).toHaveBeenCalledWith('back');
+			const row = screen.getByTestId('user-sheet-store-store-b');
+			expect(row.getAttribute('aria-disabled')).toBe('true');
+			fireEvent.click(row);
+			expect(mockSwitch).not.toHaveBeenCalled();
+			await act(async () => finish());
+			expect(row.getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockCart = cart;
+		}
+	});
+	it('keeps the sheet open and shows a toast when hydration fails', async () => {
+		mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+		expect(screen.queryByTestId('store-switch-overlay')).toBeNull();
 	});
 });
 
@@ -410,5 +612,241 @@ describe('awaiting store', () => {
 		mockAwaitingStore = 3;
 		render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('user-sheet-awaiting-store').textContent).toContain('3 sales');
+	});
+});
+
+describe('side and header', () => {
+	afterEach(() => {
+		mockT = (key) => key;
+		mockSegments = ['(app)', '(drawer)', '(pos)'];
+		mockStoreTimezone = undefined;
+	});
+	it('comes from the products side on the POS, whichever host portals it, and from the right elsewhere', () => {
+		mockCartSide = 'left';
+		let r = render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
+		r.unmount();
+		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
+		r.unmount();
+		mockCartSide = 'right';
+		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
+		r.unmount();
+		mockCartSide = 'left';
+		mockSegments = ['(app)', '(drawer)', 'orders'];
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
+	});
+	it('describes the cashier by store, register and sign-in time', () => {
+		mockT = createTestT();
+		mockStoreTimezone = 'UTC';
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+		expect(screen.getByTestId('user-sheet-description').textContent).toBe(
+			'UK Store · Front counter · since 13:05'
+		);
+	});
+	it('drops the sign-in time when the credential carries an unreadable stamp', () => {
+		mockT = createTestT();
+		mockLastAccess = 'not a date';
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+			expect(screen.getByTestId('user-sheet-description').textContent).toBe(
+				'UK Store · Front counter'
+			);
+		} finally {
+			mockLastAccess = '2026-10-28T13:05:00Z';
+		}
+	});
+});
+
+let mockDrawer = {
+	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
+	expected: { cash: 345.03 },
+	figuresPending: false,
+	blind: false,
+	salesCount: 3,
+	lastClosure: null as { number: number; server_number?: number | null } | null,
+	binding: { status: 'bound' },
+};
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => mockDrawer,
+}));
+describe('drawer door', () => {
+	const onOpenChange = jest.fn();
+	beforeEach(() => {
+		mockT = createTestT();
+		onOpenChange.mockClear();
+		mockPush.mockClear();
+	});
+	afterEach(() => {
+		mockT = (key) => key;
+		mockDrawer.figuresPending = false;
+		mockDrawer.blind = false;
+		mockDrawer.binding.status = 'bound';
+	});
+	it('shows the drawer as a door and opens the register panel on the POS', () => {
+		const onOpenRegister = jest.fn();
+		render(
+			<UserSheet
+				open
+				onOpenChange={onOpenChange}
+				portalHost="pos"
+				onOpenRegister={onOpenRegister}
+			/>
+		);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('345.03');
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(onOpenRegister).toHaveBeenCalled();
+		expect(onOpenChange).toHaveBeenLastCalledWith(false);
+	});
+	it('from the rail, the drawer door goes to the POS and asks for the panel', () => {
+		mockSegments = ['(app)', '(drawer)', 'orders'];
+		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
+		expect(consumeRegisterPanelRequest()).toBe(true);
+		mockSegments = ['(app)', '(drawer)', '(pos)'];
+	});
+	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
+		mockDrawer.figuresPending = true;
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('—');
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+			'Figures arrive with the next sync'
+		);
+	});
+	it('says the register is closed with its last closure when there is no session', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: { number: 12 } });
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+			'Register closed · last closure 12'
+		);
+		Object.assign(mockDrawer, { session, lastClosure: null });
+	});
+	it('shows the acknowledged closure number over the provisional one', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: { number: 12, server_number: 58 } });
+		try {
+			render(<UserSheet open onOpenChange={onOpenChange} />);
+			expect(screen.getByTestId('user-sheet-drawer').textContent).toContain(
+				'Register closed · last closure 58'
+			);
+		} finally {
+			Object.assign(mockDrawer, { session, lastClosure: null });
+		}
+	});
+	it('offers no drawer door when the register panel has no session or closure to show', () => {
+		const session = mockDrawer.session;
+		Object.assign(mockDrawer, { session: null, lastClosure: null });
+		try {
+			render(<UserSheet open onOpenChange={onOpenChange} />);
+			expect(screen.queryByTestId('user-sheet-drawer')).toBeNull();
+		} finally {
+			Object.assign(mockDrawer, { session });
+		}
+	});
+	it('shows only the sales count to a blind cashier', () => {
+		mockDrawer.blind = true;
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('3 sales');
+		expect(screen.getByTestId('user-sheet-drawer').textContent).not.toContain('345.03');
+	});
+	it('has no drawer tile while unbound', () => {
+		mockDrawer.binding.status = 'unbound';
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.queryByTestId('user-sheet-drawer')).toBeNull();
+	});
+});
+
+it('lists every cashier saved on this device with the current one checked', () => {
+	render(<UserSheet open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('user-sheet-cashier-current').getAttribute('aria-checked')).toBe(
+		'true'
+	);
+	expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
+		'true'
+	);
+});
+
+describe('register band', () => {
+	beforeEach(() => {
+		mockT = createTestT();
+		mockCart = { payload: { meta_data: [] } };
+		mockStoreTimezone = 'UTC';
+	});
+	afterEach(() => {
+		mockRegisters = mockDirectory;
+		mockBindingStatus = 'bound';
+		mockT = (key) => key;
+		mockStoreTimezone = undefined;
+	});
+	it('refreshes the directory each time the band opens', () => {
+		const first = render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(mockRefresh).toHaveBeenCalledTimes(1);
+		first.unmount();
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(mockRefresh).toHaveBeenCalledTimes(2);
+	});
+	it('offers no register band on a store with one register', () => {
+		mockRegisters = [mockDirectory[0]];
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-register-band')).toBeNull();
+	});
+	it('leaves the unbound case to the cart picker', () => {
+		mockBindingStatus = 'choose';
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-register-band')).toBeNull();
+	});
+	it('lists each register with its live state and binds the tapped one', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain(
+			'Open since 09:02 · Amy'
+		);
+		expect(screen.getByTestId('user-sheet-register-A').getAttribute('aria-checked')).toBe('true');
+		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain(
+			'Closed · last closure #41'
+		);
+		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
+		await waitFor(() => expect(mockBind).toHaveBeenCalledWith('back'));
+	});
+	it('follows the cache after the directory loaded: counting, then cleared', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		await act(async () =>
+			recordLiveSession(mockUserDB, 'site', 'A', {
+				session_id: 's',
+				status: 'counting',
+				opened_at_gmt: '2026-10-28T09:02:00Z',
+				opened_by: { id: 7, name: 'Amy' },
+				acknowledged: true,
+				expected_float: null,
+				counted_float: null,
+				business_day: null,
+			})
+		);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain('Counting');
+		await act(async () => recordLiveSession(mockUserDB, 'site', 'A', null));
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain(
+			'Closed · last closure #—'
+		);
+	});
+	it('disables the other registers with the reason while a cart is attributed, not the cashiers', () => {
+		mockCart = {
+			payload: {
+				meta_data: [{ key: '_wcpos_register', value: 'A' }],
+				line_items: [{ product_id: 1 }],
+			},
+		};
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-back').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain(
+			'Finish or park the current sale'
+		);
+		expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
+			'true'
+		);
 	});
 });

@@ -56,6 +56,7 @@ jest.mock('expo-router/drawer', () => ({
 		state.history?.findLast?.((entry) => entry.type === 'drawer')?.status ?? 'closed',
 }));
 jest.mock('expo-router/react-navigation', () => ({
+	useIsFocused: () => true,
 	CommonActions: { navigate: (payload: object) => ({ type: 'NAVIGATE', payload }) },
 	DrawerActions: { closeDrawer: () => ({ type: 'CLOSE_DRAWER' }) },
 }));

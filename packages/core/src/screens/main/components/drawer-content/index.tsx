@@ -15,7 +15,6 @@ import type { IconName } from '@wcpos/components/icon';
 
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
-import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { CashierEntry } from '../cashier-entry';
 import { NotificationBell } from '../notification-bell/notification-bell';
 
@@ -142,15 +141,8 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 				}}
 			>
 				{/* On `lg` the rail is the cashier entry's one host (the bars carry it below `lg`), on the
-				    root host: Switch register raises the request the POS screen consumes. */}
-				{rail && (
-					<CashierEntry
-						testID="register-bar-avatar"
-						placement="rail"
-						portalHost={null}
-						onSwitchRegister={requestRegisterPicker}
-					/>
-				)}
+				    root host: its drawer door navigates to the POS and requests the register panel. */}
+				{rail && <CashierEntry testID="register-bar-avatar" placement="rail" portalHost={null} />}
 				{groups.map((routes, group) => (
 					<View key={group} className={group === 1 ? 'mt-auto' : undefined}>
 						{/* The rail's `gap-2` is the dense-strip gutter between its squares. */}

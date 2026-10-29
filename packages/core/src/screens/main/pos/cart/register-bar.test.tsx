@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { consumeRegisterPanelRequest, requestRegisterPanel } from './register-panel-request';
+import { consumeCashierSheetRequest } from '../../components/cashier-entry/cashier-sheet-request';
 import { RegisterBar } from './register-bar';
 
 jest.mock('expo-haptics', () => ({}));
@@ -12,6 +14,10 @@ jest.mock('../../components/notification-bell/notification-bell', () => ({
 	NotificationBell: ({ testID }: { testID?: string }) => <div data-testid={testID ?? 'bell'} />,
 }));
 
+jest.mock('./user-sheet', () => ({
+	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
+}));
+let mockStores: string[] = [];
 let mockIsPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({
 	useIsPhone: () => mockIsPhone,
@@ -26,7 +32,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { wcpos_login_url: 'https://shop.test/login' },
 		store: { name: 'Shop' },
-		wpCredentials: { display_name: 'Cashier', stores: [] },
+		wpCredentials: { display_name: 'Cashier', stores: mockStores },
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -74,10 +80,6 @@ jest.mock('@wcpos/components/status-badge', () => ({
 	),
 }));
 jest.mock('../../components/user-avatar', () => ({ UserAvatar: () => null }));
-jest.mock('./switch-store-sheet', () => ({ SwitchStoreSheet: () => null }));
-jest.mock('./user-sheet', () => ({
-	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
-}));
 
 beforeEach(() => {
 	mockIsPhone = true;
@@ -90,15 +92,11 @@ it.each([
 	['failed', 'register.offline'],
 ] as const)('keeps the %s pill while a retry is in flight', (retrying, pill) => {
 	mockBinding = { status: 'unknown', failed: false, retrying, registerName: null, registers: [] };
-	render(
-		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
-	);
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-pill').textContent).toBe(pill);
 });
 it('opens the user sheet from the bar avatar', () => {
-	render(
-		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
-	);
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	expect(screen.getByTestId('register-bar-place').textContent).toBe('Shop');
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
@@ -128,4 +126,29 @@ it('has no avatar on wide, where the rail carries it', () => {
 it('has an avatar on the phone', () => {
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+});
+
+let mockFocused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+it('opens the register panel when the rail asked for it, on the focused bar only', () => {
+	const hiddenOpen = jest.fn();
+	const onPanelOpenChange = jest.fn();
+	requestRegisterPanel();
+	mockFocused = false;
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={hiddenOpen} />);
+	mockFocused = true;
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	expect(hiddenOpen).not.toHaveBeenCalled();
+	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	expect(consumeRegisterPanelRequest()).toBe(false);
+});
+
+it('the store title asks for the cashier sheet instead of a sheet of its own', () => {
+	mockStores = ['a', 'b'];
+	mockIsPhone = false;
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-bar-store'));
+	expect(consumeCashierSheetRequest()).toBe(true);
+	expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
+	mockStores = [];
 });

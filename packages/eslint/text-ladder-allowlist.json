@@ -64,7 +64,6 @@
 	"packages/core/src/screens/main/pos/cart/register-picker.tsx": 1,
 	"packages/core/src/screens/main/pos/cart/totals-changed-banner.tsx": 7,
 	"packages/core/src/screens/main/pos/cart/ui-settings-form.tsx": 1,
-	"packages/core/src/screens/main/pos/cart/user-sheet.tsx": 1,
 	"packages/core/src/screens/main/pos/checkout/checkout.tsx": 1,
 	"packages/core/src/screens/main/pos/checkout/tender/cancel-payment-view.tsx": 1,
 	"packages/core/src/screens/main/pos/checkout/tender/declared-fields-view.tsx": 2,

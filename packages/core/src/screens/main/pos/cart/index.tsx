@@ -161,12 +161,7 @@ function CartColumn({
 	const strip = useTitleBarStrip();
 	const barInStrip = isColumn && strip.node !== null;
 	const registerBar = (
-		<RegisterBar
-			onSwitchRegister={() => setPickingRegister(true)}
-			panelOpen={panelOpen}
-			onPanelOpenChange={setPanelOpen}
-			strip={barInStrip}
-		/>
+		<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} strip={barInStrip} />
 	);
 	// The cart has no frame of its own: the register bar, the customer row and the foot run their
 	// hairlines to the column's edges (Paul, 2026-10-09), and on the phone to the screen's (Paul,

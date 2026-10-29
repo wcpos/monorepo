@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsFocused } from 'expo-router/react-navigation';
+
 import { cn } from '@wcpos/components/lib/utils';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { useDocField } from '@wcpos/query';
@@ -9,6 +11,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { takeRedirectReturn } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { UserAvatar } from '../user-avatar';
+import { consumeCashierSheetRequest, useCashierSheetRequested } from './cashier-sheet-request';
 
 /**
  * The cashier entry: the avatar that opens the one cashier surface (`UserSheet`, CODING_STANDARDS
@@ -20,20 +23,29 @@ export function CashierEntry({
 	testID,
 	placement,
 	portalHost,
-	onSwitchRegister,
+	onOpenRegister,
 }: {
 	testID: string;
 	/** `bar`: a control-height square in a page or register bar; `rail`: the rail's 48 square. */
 	placement: 'bar' | 'rail';
 	/** The POS host inside the till; the root (`null`) where the till may be hidden or detached. */
 	portalHost: string | null;
-	/** Absent where the register picker is not this surface's (the phone Products tab). */
-	onSwitchRegister?: () => void;
+	onOpenRegister?: () => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const loginUrl = site.wcpos_login_url;
 	const [open, setOpen] = React.useState(false);
+	const focused = useIsFocused();
+	const canClaim = placement === 'rail' || focused;
+	const requested = useCashierSheetRequested();
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- this is a one-shot external request, claimed after commit by the visible entry.
+		if (canClaim && requested && consumeCashierSheetRequest()) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect, react-you-might-not-need-an-effect/no-adjust-state-on-prop-change -- claim the external request at commit, never in a discarded render.
+			setOpen(true);
+		}
+	}, [canClaim, requested]);
 	// The redirect-return claim: after a full-page OAuth return for this site the sheet opens, so
 	// its Add user consumer mounts to claim the one-shot result, as Connect does. Taken once per
 	// page load, by the first entry to COMMIT: an effect, so a render React discards (a Suspense
@@ -64,7 +76,7 @@ export function CashierEntry({
 				open={open}
 				onOpenChange={setOpen}
 				portalHost={portalHost}
-				onSwitchRegister={onSwitchRegister}
+				onOpenRegister={onOpenRegister}
 			/>
 		</View>
 	);

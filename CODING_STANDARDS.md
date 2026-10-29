@@ -39,14 +39,14 @@ Applies to `**/*.tsx` and `**/global.css`.
 
 Prefer semantic classes over hardcoded colors to preserve theme compatibility.
 
-| Class             | Purpose                                                                                                                                                                                                   |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bg-background`   | Main app background                                                                                                                                                                                       |
-| `bg-card`         | Card/elevated surfaces                                                                                                                                                                                    |
-| `bg-sidebar`      | Navigation sidebar                                                                                                                                                                                        |
-| `bg-muted`        | Muted elements/buttons                                                                                                                                                                                    |
+| Class               | Purpose                                                                                                                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bg-background`     | Main app background                                                                                                                                                                                 |
+| `bg-card`           | Card/elevated surfaces                                                                                                                                                                              |
+| `bg-sidebar`        | Navigation sidebar                                                                                                                                                                                  |
+| `bg-muted`          | Muted elements/buttons                                                                                                                                                                              |
 | `text-warning-text` | warning words and every warning glyph (register-count lock, open-orders clock, Icon `warning`); `warning` is the fill (register-bar, StatusBadge dot, Badge); state classes come from `lib/tone.ts` |
-| `bg-table-header` | Data table headers                                                                                                                                                                                        |
+| `bg-table-header`   | Data table headers                                                                                                                                                                                  |
 
 ### Theme Switching and Native Issues
 
@@ -308,16 +308,16 @@ then built only if the owner confirms the exception.
 
 The seven kept variants (decision 1[^board]); nothing else is in the cva union, so TypeScript refuses any other.
 
-| Variant                         | Role                                                                                                                                               | Where it sits                                                                 | Examples                                                                                                        |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Variant                         | Role                                                                                                                                               | Where it sits                                                                 | Examples                                                                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `default` (filled `bg-primary`) | Primary: the action the screen exists for                                                                                                          | one per screen, full width on a phone                                         | _Take 18,00 € in Cash_, _Try again_ after a refusal, _Sync order_ (the cart's unsaved sale), _Connect a reader_ when nothing is connected |
-| `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_, _Sync_ as a record's own action                                                             |
-| `ghost` (muted label at rest)   | Quiet: navigation, escapes, more                                                                                                                   | after the buttons, on its own line, or in a toolbar                           | _Reader guide_, _Details_, _Cancel_ on a scan                                                                   |
-| `link`                          | Text that behaves as a button: no surface, the size's height                                                                                       | after the content; inline it is `DocsLink`, which drops the padding           | _Open docs_, _Reader settings_                                                                                  |
-| `outline-destructive`           | Destructive: what loses something (never filled)                                                                                                   | the footer's leading group, apart from the primary                                            | _Void_, _Cancel payment_, _Restore defaults_, _Cancel on terminal_                                              |
-| `ghost-destructive`             | The quiet form of the same, in a dense row                                                                                                         | inside a table or list row                                                    | _Remove_ on a queued email's row                                                                                |
-| `destructive` (solid red)       | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | _Delete_ in _Delete this order?_, _Reset and restart_                                                           |
-| any, `disabled`                 | Unavailable, with one line beside it saying why                                                                                                    | in the SAME slot the live button uses                                         | _Connecting…_, _Installing…_                                                                                    |
+| `outline`                       | Secondary: the reversible alternative beside the primary                                                                                           | same row or stacked under the primary, never heavier than it                  | _Disconnect_, _Choose another way_, _Close_, _Help_, _Sync_ as a record's own action                                                      |
+| `ghost` (muted label at rest)   | Quiet: navigation, escapes, more                                                                                                                   | after the buttons, on its own line, or in a toolbar                           | _Reader guide_, _Details_, _Cancel_ on a scan                                                                                             |
+| `link`                          | Text that behaves as a button: no surface, the size's height                                                                                       | after the content; inline it is `DocsLink`, which drops the padding           | _Open docs_, _Reader settings_                                                                                                            |
+| `outline-destructive`           | Destructive: what loses something (never filled)                                                                                                   | the footer's leading group, apart from the primary                            | _Void_, _Cancel payment_, _Restore defaults_, _Cancel on terminal_                                                                        |
+| `ghost-destructive`             | The quiet form of the same, in a dense row                                                                                                         | inside a table or list row                                                    | _Remove_ on a queued email's row                                                                                                          |
+| `destructive` (solid red)       | Only the confirm inside an `AlertDialog`, the swipe Remove block, and a gate's `destructive` primary when the gate itself is the confirm of a loss | the alert's footer, the swipe strip, the reset confirm on the root crash gate | _Delete_ in _Delete this order?_, _Reset and restart_                                                                                     |
+| any, `disabled`                 | Unavailable, with one line beside it saying why                                                                                                    | in the SAME slot the live button uses                                         | _Connecting…_, _Installing…_                                                                                                              |
 
 | Size      | Height                          | Where                                                                        |
 | --------- | ------------------------------- | ---------------------------------------------------------------------------- |
@@ -352,16 +352,16 @@ never shares a colour with Void (§7).
 
 A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` take slots and own the variant, the order, the side and the phone stacking; a `Button` is never written inside a footer (ruled 2026-10-25, after two Sync buttons shipped in two looks).
 
-| Slot | Variant | Side | Examples |
-| --- | --- | --- | --- |
-| `intent` | `default` | rightmost; phone first | Add to cart, Send, the cart's Sync order |
-| `secondary` | `outline` | right, before intent; phone after intent | Print, Email receipt, Download PDF, Update customer too |
-| `record` | `outline` | left, after destructive; phone after close | Sync, Re-open |
-| `destructive` | `outline-destructive` | left, after aside; phone after record | Void, Delete, Refund, Restore defaults, Sign out |
-| `close` | `outline` | right, before secondary; phone after secondary | Cancel with intent, Close without |
-| `aside` | no button | leftmost; phone last | Count, status line |
-| alert `confirm` | `destructive` for a loss, otherwise `default` | rightmost; phone first | Delete, Confirm |
-| alert `cancel` | `outline` | before confirm; phone after confirm | Cancel |
+| Slot            | Variant                                       | Side                                           | Examples                                                |
+| --------------- | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------- |
+| `intent`        | `default`                                     | rightmost; phone first                         | Add to cart, Send, the cart's Sync order                |
+| `secondary`     | `outline`                                     | right, before intent; phone after intent       | Print, Email receipt, Download PDF, Update customer too |
+| `record`        | `outline`                                     | left, after destructive; phone after close     | Sync, Re-open                                           |
+| `destructive`   | `outline-destructive`                         | left, after aside; phone after record          | Void, Delete, Refund, Restore defaults, Sign out        |
+| `close`         | `outline`                                     | right, before secondary; phone after secondary | Cancel with intent, Close without                       |
+| `aside`         | no button                                     | leftmost; phone last                           | Count, status line                                      |
+| alert `confirm` | `destructive` for a loss, otherwise `default` | rightmost; phone first                         | Delete, Confirm                                         |
+| alert `cancel`  | `outline`                                     | before confirm; phone after confirm            | Cancel                                                  |
 
 One intent per footer. A record action is never the intent. The footer chooses Cancel versus Close from `DialogLabels`; the caller never chooses the word.
 
@@ -373,16 +373,16 @@ One shell (`lib/overlay`) and one answer per situation (decisions 5 and 6[^board
 anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
 becomes a page.
 
-| Situation                                                           | Overlay                             | Notes                                                                      |
-| ------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------- |
-| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`    | `right` on a page; on the POS `usePanelSide` puts it over the other column |
-| Confirm a loss                                                      | `AlertDialog`                       | no ×, the scrim does not dismiss, the confirm is solid `destructive`       |
-| Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator                                |
-| Display or column settings                                          | side panel (`UISettingsDialog`)     | on every screen, never a popover                                           |
-| Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons                                            |
-| A small non-modal choice (the bell, a date range, the quantity box) | `Popover`                           | a list, a picker or a keypad with at most a Done; never a settings form    |
-| The cashier (switch user, register, store; sign out)                | `UserSheet` (right panel)           | the one cashier surface on every screen                                    |
-| A multi-step task (checkout)                                        | full screen                         | never a centred modal that grew                                            |
+| Situation                                                           | Overlay                                                                              | Notes                                                                           |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`                                                     | `right` on a page; on the POS `usePanelSide` puts it over the other column      |
+| Confirm a loss                                                      | `AlertDialog`                                                                        | no ×, the scrim does not dismiss, the confirm is solid `destructive`            |
+| Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮                                                  | destructive last and red, after a separator                                     |
+| Display or column settings                                          | side panel (`UISettingsDialog`)                                                      | on every screen, never a popover                                                |
+| Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem`                                                  | never a popover full of buttons                                                 |
+| A small non-modal choice (the bell, a date range, the quantity box) | `Popover`                                                                            | a list, a picker or a keypad with at most a Done; never a settings form         |
+| The cashier (switch user, register, store; sign out)                | `UserSheet` (products side on the POS via `usePanelSide('cart')`, `right` elsewhere) | the one cashier surface on every screen; the stores and registers are its bands |
+| A multi-step task (checkout)                                        | full screen                                                                          | never a centred modal that grew                                                 |
 
 #### Chips, badges and switches
 
