@@ -15,7 +15,6 @@ import type { IconName } from '@wcpos/components/icon';
 
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
-import { CashierEntry } from '../cashier-entry';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
@@ -133,9 +132,6 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 					paddingBottom: (insets.paddingBottom ?? 0) + gutter,
 					paddingStart: gutter,
 					paddingEnd: gutter,
-					// The rail's cashier square sits above the groups, one dense-strip gutter from the first item,
-					// the same gap the groups keep between their squares.
-					gap: rail ? gutter : undefined,
 					alignItems: rail ? 'center' : undefined,
 					justifyContent: 'flex-start',
 					// flexGrow (not height: '100%') so the bottom group's auto margin still anchors when
@@ -143,10 +139,6 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 					flexGrow: 1,
 				}}
 			>
-				{/* On `lg` the rail is the cashier entry's one host (the bars carry it below `lg`). Its
-				    sheet renders in the drawer layout's `scene` host, beside the rail as the register
-				    panel is, never over it; its drawer door navigates to the POS and requests the panel. */}
-				{rail && <CashierEntry testID="register-bar-avatar" placement="rail" portalHost="scene" />}
 				{groups.map((routes, group) => (
 					<View key={group} className={group === 1 ? 'mt-auto' : undefined}>
 						{/* The rail's `gap-2` is the dense-strip gutter between its squares. */}

@@ -79,7 +79,9 @@ test('opens a register, records paid out, and undoes it', async ({ posPage: page
 	await page.getByTestId('open-register-amount').fill('100');
 	await page.getByTestId('open-register-button').click();
 	await expect(page.getByTestId('open-register-card')).toHaveCount(0);
-	await page.getByTestId('register-bar-drawer').click();
+	// The one door to the register (Paul, 2026-10-29): avatar, cashier sheet, In the drawer.
+	await page.getByTestId('register-bar-avatar').click();
+	await page.getByTestId('user-sheet-drawer').click();
 	await expect(page.getByTestId('register-panel')).toBeVisible();
 	await page.getByTestId('register-panel-paid-out').click();
 	await page.getByTestId('movement-amount').fill('20');

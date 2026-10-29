@@ -62,7 +62,7 @@ beforeEach(() => {
 	window.history.replaceState({}, '', '/pos');
 });
 
-// The redirect-return claim, once for every host (the bars below `lg`, the rail on `lg`): after a
+// The redirect-return claim, once for every host (the bars, on every size): after a
 // full-page OAuth return the sheet opens for THIS site's login only, so the Add user consumer
 // mounts to claim the one-shot result; any other return leaves it closed.
 it.each([
@@ -71,7 +71,7 @@ it.each([
 	['no return', null, false],
 ])('claims a redirect return for %s: open %s', (_case, url, open) => {
 	if (url) returnFrom(url);
-	render(<CashierEntry testID="bar-avatar" placement="bar" portalHost={null} />);
+	render(<CashierEntry testID="bar-avatar" portalHost={null} />);
 	expect(screen.queryByTestId('user-sheet') !== null).toBe(open);
 });
 
@@ -81,15 +81,15 @@ it('opens one sheet for one return when two entries are mounted', () => {
 	returnFrom('https://shop.test/login');
 	render(
 		<>
-			<CashierEntry testID="products-avatar" placement="bar" portalHost="pos" />
-			<CashierEntry testID="cart-avatar" placement="bar" portalHost="pos" />
+			<CashierEntry testID="products-avatar" portalHost="pos" />
+			<CashierEntry testID="cart-avatar" portalHost="pos" />
 		</>
 	);
 	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
 });
 
 it('opens the one cashier surface from the avatar, on the host and with the rows it is given', () => {
-	render(<CashierEntry testID="register-bar-avatar" placement="rail" portalHost="pos" />);
+	render(<CashierEntry testID="register-bar-avatar" portalHost="pos" />);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
@@ -97,14 +97,7 @@ it('opens the one cashier surface from the avatar, on the host and with the rows
 
 it('passes the drawer door from the bar to the sheet', () => {
 	const onOpenRegister = jest.fn();
-	render(
-		<CashierEntry
-			testID="avatar"
-			placement="bar"
-			portalHost="pos"
-			onOpenRegister={onOpenRegister}
-		/>
-	);
+	render(<CashierEntry testID="avatar" portalHost="pos" onOpenRegister={onOpenRegister} />);
 	fireEvent.click(screen.getByTestId('avatar'));
 	fireEvent.click(screen.getByTestId('open-register'));
 	expect(onOpenRegister).toHaveBeenCalledTimes(1);
@@ -115,9 +108,9 @@ jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocus
 it('opens one sheet for one request when two entries are mounted and one is focused', () => {
 	requestCashierSheet();
 	mockFocused = false;
-	render(<CashierEntry testID="hidden" placement="bar" portalHost="pos" />);
+	render(<CashierEntry testID="hidden" portalHost="pos" />);
 	mockFocused = true;
-	render(<CashierEntry testID="shown" placement="bar" portalHost="pos" />);
+	render(<CashierEntry testID="shown" portalHost="pos" />);
 	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
 	expect(consumeCashierSheetRequest()).toBe(false);
 });

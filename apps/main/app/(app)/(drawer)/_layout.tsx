@@ -143,8 +143,8 @@ function ThemedDrawer({
 }
 
 /**
- * The scene host: the focused screen's overlay surface beside the rail, where the rail's cashier
- * sheet renders (the root host wraps the rail too, and a sheet there covered it; Paul, 2026-10-29).
+ * The scene host: the focused screen's overlay surface beside the rail, where a page bar's cashier
+ * sheet renders on wide (the root host wraps the rail too, and a sheet there covered it; Paul, 2026-10-29).
  * Only the focused scene carries the host and the web container: the drawer keeps its other
  * screens mounted, and two hosts of one name would draw the sheet twice. The POS keeps its own
  * `pos` host inside its providers for the till's dialogs.
