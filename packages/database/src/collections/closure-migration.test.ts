@@ -148,3 +148,41 @@ it.each([
 		}
 	}
 );
+
+// Omitting schema 3 or its strategy loses the upgrade path for existing drawers.
+it('migrates a v2 session without inventing a counter and accepts the server stamp', async () => {
+	const storage = wrappedValidateAjvStorage({ storage: getRxStorageMemory() });
+	const name = `countermigration${Math.random().toString(36).slice(2)}`;
+	let db = await createRxDatabase({ name, storage, multiInstance: false });
+	const oldSchema = JSON.parse(JSON.stringify(registerSessionsLiteral));
+	oldSchema.version = 2;
+	delete oldSchema.properties.counting_by;
+	const original = {
+		id: 's',
+		register_id: 'r',
+		status: 'counting',
+		opened_at_gmt: '2026-10-28T08:00:00Z',
+		counted_float: '100',
+		sync_status: 'synced',
+		sync_attempts: 0,
+	};
+	try {
+		await db.addCollections({
+			register_sessions: {
+				schema: oldSchema,
+				migrationStrategies: { 1: (doc) => doc, 2: (doc) => doc },
+			},
+		});
+		await db.register_sessions.insert(original);
+		await db.close();
+		db = await createRxDatabase({ name, storage, multiInstance: false });
+		await db.addCollections({ register_sessions: storeCollections.register_sessions });
+		const row = await db.register_sessions.findOne('s').exec();
+		expect(row.toJSON()).toMatchObject(original);
+		expect(row.counting_by).toBeUndefined();
+		await row.incrementalPatch({ counting_by: 7 });
+		expect(row.getLatest().counting_by).toBe(7);
+	} finally {
+		await db.remove();
+	}
+});

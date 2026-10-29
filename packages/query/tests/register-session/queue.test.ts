@@ -1477,3 +1477,15 @@ it('persists snapshot membership arrays and clears them when an older detail omi
 		});
 	}
 });
+
+// The server stamps who counts; the local transition must not guess that identity.
+it('merges counting_by from the server after the local count starts', async () => {
+	const row = await open();
+	http.post.mockResolvedValueOnce({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	const counting = await startCounting(db, row.id);
+	expect(counting.counting_by).toBeUndefined();
+	http.post.mockResolvedValueOnce({ data: { ...counting.toJSON(), counting_by: 8 } });
+	await drain();
+	expect(row.getLatest().counting_by).toBe(8);
+});
