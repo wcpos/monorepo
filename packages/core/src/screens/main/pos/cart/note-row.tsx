@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Icon } from '@wcpos/components/icon';
+import { usePointer } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
@@ -26,8 +27,12 @@ export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress
 	// Hover and focus kept apart: a pointer leaving a row the keyboard holds must not drop it.
 	const [hovered, setHovered] = React.useState(false);
 	const [focused, setFocused] = React.useState(false);
+	// A finger cannot hover: on a coarse pointer the edit glyph is simply there (no hover-only
+	// affordances, CODING_STANDARDS § Design); a fine pointer gets it on reaching the row.
+	const pointer = usePointer();
 	if (!note) return null;
 	const reached = hovered || focused;
+	const editShown = reached || pointer === 'coarse';
 	const tint = reached ? 'text-foreground' : 'text-muted-foreground';
 	return (
 		// Ruled off above: it closes the cart's lines. The row sits in the foot's gutter (p-2); the
@@ -53,7 +58,7 @@ export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress
 					size="sm"
 					className={cn(
 						'text-muted-foreground web:transition-opacity web:duration-overlay-fade',
-						reached ? 'opacity-100' : 'opacity-0'
+						editShown ? 'opacity-100' : 'opacity-0'
 					)}
 				/>
 			</PressableSurface>
