@@ -89,9 +89,11 @@ type SalesScreenProps = {
 	hasRoom: boolean;
 	onRoomChange: (room: string) => void;
 	onOpenClosure: (closure: ClosureRow) => void;
+	/** A page in the Sales page's place, under the bar: the phone's Free closure pane. */
+	page?: React.ReactNode;
 };
 
-function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure }: SalesScreenProps) {
+function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreenProps) {
 	const router = useRouter();
 	const t = useT();
 	const ground = useGround();
@@ -214,39 +216,41 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure }: SalesScr
 				    query keeps the previous figures until it answers (the provider's drawn handle).
 				    The till strip scrolls with the page as its first row (owner, 2026-10-18), outside
 				    the date: it always shows the till now, and is the way into Closures. */}
-				<Suspense
-					fallback={
-						// The same scrolling shell as the settled page: on a short phone the strip
-						// can push the date button below the fold (Codex, #2720).
-						<View ref={registerContainer} className="min-h-0 flex-1">
-							<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
-								{strip}
-								<HeroShell title={title} />
-							</ScrollView>
-							<PortalHost name="reports" />
-						</View>
-					}
-				>
-					<ReportsProvider
-						handle={handle}
-						comparisonHandle={comparisonHandle}
-						refundsHandle={refundsHandle}
+				{page ?? (
+					<Suspense
+						fallback={
+							// The same scrolling shell as the settled page: on a short phone the strip
+							// can push the date button below the fold (Codex, #2720).
+							<View ref={registerContainer} className="min-h-0 flex-1">
+								<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
+									{strip}
+									<HeroShell title={title} />
+								</ScrollView>
+								<PortalHost name="reports" />
+							</View>
+						}
 					>
-						<ErrorBoundary
-							FallbackComponent={() => <Reports title={title} header={strip} />}
-							resetKeys={[refundsHandle, handle]}
-							// A new sales query can leave the failed refunds handle in place: the
-							// reset asks the engine again rather than rethrowing the old failure.
-							onReset={() => refundsHandle.retry()}
+						<ReportsProvider
+							handle={handle}
+							comparisonHandle={comparisonHandle}
+							refundsHandle={refundsHandle}
 						>
-							<React.Suspense fallback={<Reports title={title} header={strip} />}>
-								<ReportsRefunds>
-									<Reports title={title} header={strip} />
-								</ReportsRefunds>
-							</React.Suspense>
-						</ErrorBoundary>
-					</ReportsProvider>
-				</Suspense>
+							<ErrorBoundary
+								FallbackComponent={() => <Reports title={title} header={strip} />}
+								resetKeys={[refundsHandle, handle]}
+								// A new sales query can leave the failed refunds handle in place: the
+								// reset asks the engine again rather than rethrowing the old failure.
+								onReset={() => refundsHandle.retry()}
+							>
+								<React.Suspense fallback={<Reports title={title} header={strip} />}>
+									<ReportsRefunds>
+										<Reports title={title} header={strip} />
+									</ReportsRefunds>
+								</React.Suspense>
+							</ErrorBoundary>
+						</ReportsProvider>
+					</Suspense>
+				)}
 			</View>
 		</>
 	);
@@ -255,7 +259,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure }: SalesScr
 /**
  *
  */
-function SalesScreen({ hasRoom, onRoomChange, onOpenClosure }: SalesScreenProps) {
+function SalesScreen({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreenProps) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const binding = useRegisterBinding();
@@ -298,6 +302,7 @@ function SalesScreen({ hasRoom, onRoomChange, onOpenClosure }: SalesScreenProps)
 							hasRoom={hasRoom}
 							onRoomChange={onRoomChange}
 							onOpenClosure={onOpenClosure}
+							page={page}
 						/>
 					</ReportsScopeProvider>
 				</Suspense>
@@ -365,7 +370,9 @@ function ReportsShell({
 	const scope = license?.isPro
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
-	if (phone && row) return <ClosurePanel row={row} onClose={onClose} />;
+	// The phone's pane is a page in the Sales page's place, under the bar that pads the status-bar
+	// inset, as the Pro room keeps its bar above its phone pane (Codex, #3058).
+	const pane = row && <ClosurePanel key={row.id} row={row} onClose={onClose} />;
 	return (
 		// Each room's bar pads the safe-area inset and shows the held-session banner and the Free
 		// strip under it, as every page bar does.
@@ -378,8 +385,9 @@ function ReportsShell({
 								hasRoom={hasRoom}
 								onRoomChange={onRoomChange}
 								onOpenClosure={onOpenClosure}
+								page={phone ? pane || undefined : undefined}
 							/>
-							{row && <ClosurePanel key={row.id} row={row} onClose={onClose} />}
+							{!phone && pane}
 						</>
 					) : (
 						<>

@@ -716,6 +716,8 @@ it.each([true, false])('opens a Free deep link over Sales (phone: %s)', async (p
 	expect(screen.queryByTestId('reports-closures')).toBeNull();
 	expect(mockClosureScope).not.toHaveBeenCalled();
 	expect(!!screen.queryByTestId('legacy-register')).toBe(!phone);
+	// The phone's page keeps the Sales bar above it: the bar pads the status-bar inset.
+	expect(screen.getByTestId('reports-back-sales')).toBeTruthy();
 	expect(mockReadClosure).toHaveBeenCalledTimes(1);
 	expect(mockReadClosure).toHaveBeenCalledWith(mockStoreDB, { id: 'c', serverClosureId: 'c' });
 	fireEvent.click(screen.getByTestId('closure-panel'));
