@@ -84,6 +84,21 @@ it('the regular trail separates every place with right chevrons only', () => {
 	expect(label?.className).not.toMatch(/truncate|whitespace-nowrap/);
 });
 
+it('decodes the entities WooCommerce sends in a name, in the trail and the title', () => {
+	render(
+		<Breadcrumb
+			testID="crumb"
+			parents={[
+				{ label: 'Categories', onPress: jest.fn() },
+				{ label: 'Hats &amp; Caps', onPress: jest.fn() },
+			]}
+			here="Flags &amp; Banners"
+		/>
+	);
+	expect(screen.getByTestId('crumb-parent-1')).toHaveTextContent('Hats & Caps');
+	expect(screen.getByTestId('crumb-here')).toHaveTextContent('Flags & Banners');
+});
+
 it('the phone shows only the immediate parent back control and the title', () => {
 	render(
 		<DeviceScope phone>
