@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
+import { DeviceList } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
@@ -214,7 +214,7 @@ export function PrintingSettings() {
 						}}
 					/>
 				) : (
-					<View>
+					<DeviceList>
 						{printers.map((profile) => (
 							<PrinterRow
 								key={profile.id}
@@ -226,7 +226,7 @@ export function PrintingSettings() {
 								onDelete={handleDelete}
 							/>
 						))}
-					</View>
+					</DeviceList>
 				)}
 				{/* The page's add control, not the empty state's: primary until a printer exists. */}
 				{isLoading ? null : (
@@ -254,7 +254,7 @@ export function PrintingSettings() {
 				{templates.length === 0 ? (
 					<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
 				) : (
-					<View>
+					<DeviceList>
 						{templates.map((tmpl) => {
 							const tmplId = String(tmpl.id);
 							const currentOverride = overrides.get(tmplId);
@@ -286,7 +286,7 @@ export function PrintingSettings() {
 								/>
 							);
 						})}
-					</View>
+					</DeviceList>
 				)}
 			</SettingsSection>
 

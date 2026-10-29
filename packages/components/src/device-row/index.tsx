@@ -33,10 +33,34 @@ type DeviceRowProps = {
 	testID?: string;
 };
 
+/** Whether the row opens its `DeviceList`: the first row draws no rule. Outside a list, none. */
+const FirstRow = React.createContext(true);
+
 /**
- * One device in a settings list (CODING_STANDARDS § Rows and cards): a flush list row, a hairline
- * under it, with an icon square tinted by the state, the name and its tag, the identifiers and ONE
- * state line, the actions (`DeviceRowActions`) at the right of the same line on a wide pane.
+ * The rows of one device list: they touch, and a hairline runs between them, never above the
+ * first or under the last. A context marks the first, so the pages' own row components need
+ * no index prop.
+ */
+export function DeviceList({ children }: { children: React.ReactNode }) {
+	return (
+		<View>
+			{React.Children.toArray(children).map((child, index) => (
+				<FirstRow.Provider
+					key={React.isValidElement(child) ? child.key : index}
+					value={index === 0}
+				>
+					{child}
+				</FirstRow.Provider>
+			))}
+		</View>
+	);
+}
+
+/**
+ * One device in a settings list (CODING_STANDARDS § Rows and cards): a flush row in a `DeviceList`,
+ * a hairline above every row but the first, with an icon square tinted by the state, the name and
+ * its tag, the identifiers and ONE state line, the actions (`DeviceRowActions`) at the right of the
+ * same line on a wide pane.
  */
 export function DeviceRow({
 	name,
@@ -54,14 +78,15 @@ export function DeviceRow({
 	const mark = state?.tone === 'ok' || state?.tone === 'bad' ? state.tone : 'muted';
 	const line2 = identifiers?.filter(Boolean).join(' · ');
 	const phone = useIsPhone();
+	const first = React.useContext(FirstRow);
 	const parts = React.Children.toArray(children);
 	const isActions = (child: React.ReactNode) =>
 		React.isValidElement(child) && child.type === DeviceRowActions;
 	const actions = parts.find(isActions) ?? null;
 	const below = parts.filter((child) => !isActions(child));
 	return (
-		// list-row's hairline and gap; the last row of a list closes on the section, not a rule.
-		<View testID={testID} className="border-border gap-3 border-b py-3 last:border-b-0">
+		// list-row's hairline and gap, drawn above the row so the last one closes on no rule.
+		<View testID={testID} className={cn('gap-3 py-3', !first && 'border-border border-t')}>
 			<View className="flex-row items-center gap-3">
 				{icon ? (
 					<View className={cn('size-10 items-center justify-center rounded-lg', TONE[mark].tinted)}>

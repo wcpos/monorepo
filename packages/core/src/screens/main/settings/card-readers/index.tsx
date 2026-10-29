@@ -5,7 +5,7 @@ import { decode } from 'html-entities';
 
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
+import { DeviceList, DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { HStack } from '@wcpos/components/hstack';
@@ -136,16 +136,18 @@ export function CardReadersSettings() {
 							title={t('settings.card_readers.section_this_phone')}
 							testID="card-readers-this-phone"
 						>
-							{phoneRows.map(row)}
-							{tapToPay.map((method) => (
-								<TapToPayRow
-									key={`ttp-${method.id}`}
-									method={method}
-									canAccept={caps.canAcceptReaderTerms}
-									busy={actions.working !== null}
-									onSetUp={() => void actions.start(method, 'tap_to_pay')}
-								/>
-							))}
+							<DeviceList>
+								{phoneRows.map(row)}
+								{tapToPay.map((method) => (
+									<TapToPayRow
+										key={`ttp-${method.id}`}
+										method={method}
+										canAccept={caps.canAcceptReaderTerms}
+										busy={actions.working !== null}
+										onSetUp={() => void actions.start(method, 'tap_to_pay')}
+									/>
+								))}
+							</DeviceList>
 						</SettingsSection>
 					) : null}
 					<SettingsSection
@@ -161,7 +163,7 @@ export function CardReadersSettings() {
 								title={t('settings.card_readers.empty_bluetooth')}
 							/>
 						) : (
-							bluetoothRows.map(row)
+							<DeviceList>{bluetoothRows.map(row)}</DeviceList>
 						)}
 					</SettingsSection>
 					{/* The page's call to action, full width: the primary while no reader is held,

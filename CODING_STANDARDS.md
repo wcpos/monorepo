@@ -471,8 +471,9 @@ A device is a list row, not a card (Paul, 2026-10-29): no border box; a hairline
 icon square (40 pt, tinted by state: success / destructive / muted), line 1 the name (14 medium)
 with an optional chip, line 2 the identifiers (serial · location), line 3 ONE state line (dot +
 words, or the error in `text-destructive`). The action slot sits at the right of the same line on
-a wide pane and under the lines on a phone. One `DeviceRow` (`@wcpos/components/device-row`) is
-the Printers, Receipt templates, Card readers, Scanners and Customer displays row.
+a wide pane and under the lines on a phone. One `DeviceRow` in a `DeviceList`
+(`@wcpos/components/device-row`) is the Printers, Receipt templates, Card readers, Scanners and
+Customer displays row; the list rules between rows, never above the first or under the last.
 
 #### Property rows
 

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { TONE } from '../lib/tone';
-import { DeviceRow, DeviceRowActions } from './index';
+import { DeviceList, DeviceRow, DeviceRowActions } from './index';
 
 // Uniwind is not compiled in Jest; expose the classes.
 jest.mock('react-native', () => {
@@ -53,9 +53,9 @@ it('is a flush hairline row: the name and its tag, the identifiers and ONE capti
 		/>
 	);
 	const row = screen.getByTestId('row');
-	expect(row).toHaveClass('border-b', 'py-3', 'gap-3', 'last:border-b-0');
-	expect(row).not.toHaveClass('border');
-	expect(row.className).not.toMatch(/rounded|bg-card/);
+	expect(row).toHaveClass('py-3', 'gap-3');
+	// Alone, outside a list, it draws no rule at all.
+	expect(row.className).not.toMatch(/rounded|bg-card|border/);
 	expect(screen.getByText('WisePad 3')).toHaveClass('text-base', 'font-medium');
 	expect(screen.getByTestId('row-tag')).toHaveTextContent('Stripe');
 	// Blanks drop out of line 2, so no stray separator.
@@ -103,6 +103,20 @@ it('names a caller state testID, spins the square while busy, and shows a known 
 	expect(screen.getByTestId('row-progress')).toHaveAttribute('data-value', '46');
 	rerender(<DeviceRow testID="row" name="Reader" progress={{}} />);
 	expect(screen.getByTestId('row-progress')).toHaveAttribute('data-indeterminate', 'true');
+});
+
+it('rules a hairline between the rows of a list, never above the first or under the last', () => {
+	render(
+		<DeviceList>
+			{['a', 'b', 'c'].map((id) => (
+				<DeviceRow key={id} testID={id} name={id} />
+			))}
+			{null}
+		</DeviceList>
+	);
+	expect(screen.getByTestId('a').className).not.toMatch(/border/);
+	for (const id of ['b', 'c']) expect(screen.getByTestId(id)).toHaveClass('border-t');
+	for (const id of ['a', 'b', 'c']) expect(screen.getByTestId(id)).not.toHaveClass('border-b');
 });
 
 it.each([
