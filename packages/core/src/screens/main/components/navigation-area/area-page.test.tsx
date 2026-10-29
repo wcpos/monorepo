@@ -7,6 +7,8 @@ import { render, screen } from '@testing-library/react';
 
 import { AreaPage } from './area-page';
 
+// The heading's trailing controls are the area layout's on wide (tested in `index.test.tsx`).
+jest.mock('../bar-controls', () => ({ BarControls: () => null, useOnlineBadge: () => undefined }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
