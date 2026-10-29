@@ -134,7 +134,10 @@ export function RegisterBar({
 					onOpenRegister={() => onPanelOpenChange(true)}
 				/>
 			</HStack>
-			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
+			{/* Always mounted: on web the shell can only play the panel's exit while the caller keeps
+			    rendering the closed Dialog (OVERLAY_EXIT_MOUNTED); a conditional mount tore it down in
+			    the same commit, so the panel vanished where every other sheet slides. */}
+			<RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />
 		</>
 	);
 }
