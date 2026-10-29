@@ -10,7 +10,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
+import { DeviceList, DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -21,7 +21,6 @@ import { EmptyState } from '@wcpos/components/empty-state';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 
 import { SettingsSection } from '../components/settings-section';
 import { useT } from '../../../../contexts/translations';
@@ -114,7 +113,7 @@ export function PairedDisplays({
 			{displays.length === 0 ? (
 				<EmptyState kind="empty" size="inline" title={t('settings.customer_display.empty')} />
 			) : (
-				<VStack className="gap-2">
+				<DeviceList>
 					{displays.map((display) => (
 						<DisplayRow
 							key={display.id}
@@ -123,7 +122,7 @@ export function PairedDisplays({
 							onForget={setPendingForget}
 						/>
 					))}
-				</VStack>
+				</DeviceList>
 			)}
 			<AlertDialog open={!!pendingForget} onOpenChange={(open) => !open && setPendingForget(null)}>
 				<AlertDialogContent>

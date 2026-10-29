@@ -88,6 +88,8 @@ jest.mock('@wcpos/components/icon-button', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('react-native', () => ({
+	// DeviceRow reads the layout boundary; a wide pane.
+	useWindowDimensions: () => ({ width: 1024, height: 768 }),
 	Platform: { OS: 'web' },
 	View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>

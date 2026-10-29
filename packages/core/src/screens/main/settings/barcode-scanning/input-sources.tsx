@@ -13,7 +13,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
-import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
+import { DeviceList, DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
@@ -336,14 +336,16 @@ export function InputSources() {
 				{/* Mid-flow replaces the list: one thing is happening, so one thing shows. */}
 				{midFlow ? null : (
 					<>
-						{profiles.map((profile) => (
-							<ScannerProfileRow
-								key={profile.deviceKey}
-								profile={profile}
-								live={liveKeys.has(profile.deviceKey)}
-								onRemove={handleRemove}
-							/>
-						))}
+						<DeviceList>
+							{profiles.map((profile) => (
+								<ScannerProfileRow
+									key={profile.deviceKey}
+									profile={profile}
+									live={liveKeys.has(profile.deviceKey)}
+									onRemove={handleRemove}
+								/>
+							))}
+						</DeviceList>
 						{profiles.length > 0 ? (
 							<Text variant="help" testID="scanner-registered-hint">
 								{registrationLane
