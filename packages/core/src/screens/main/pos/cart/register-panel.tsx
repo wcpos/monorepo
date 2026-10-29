@@ -53,8 +53,10 @@ const NOTE_INSET = 'px-2.5 py-1';
 export function RegisterPanel({
 	open,
 	onOpenChange,
+	initialPane = 'register',
 }: {
 	open: boolean;
+	initialPane?: 'register' | 'count';
 	onOpenChange: (open: boolean) => void;
 }) {
 	const {
@@ -65,6 +67,7 @@ export function RegisterPanel({
 		salesCount,
 		blind,
 		figuresPending,
+		countingHere,
 		overdue,
 		closeTime,
 		movements,
@@ -74,7 +77,14 @@ export function RegisterPanel({
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
-	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>('register');
+	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(
+		session?.status === 'counting' && countingHere ? 'count' : 'register'
+	);
+	const [opening, setOpening] = React.useState({ open, initialPane });
+	if (open !== opening.open || initialPane !== opening.initialPane) {
+		setOpening({ open, initialPane });
+		if (open) setPane(session?.status === 'counting' && countingHere ? 'count' : 'register');
+	}
 	const [, setWritten] = React.useState<ClosureCount | null>(null);
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
@@ -132,6 +142,18 @@ export function RegisterPanel({
 			);
 		}
 	};
+	// Opening is an external request, not a subscription to changes during a count.
+	const openPane = React.useEffectEvent(() => {
+		if (initialPane === 'count' && session?.status === 'open' && !figuresPending)
+			void attempt(async () => {
+				await actions.startCounting();
+				setPane('count');
+			});
+	});
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- The external opening requests the existing async count transition.
+		if (open) openPane();
+	}, [open, initialPane]);
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
 	if (!session && !lastClosure && refusedMovements.length === 0) return null;

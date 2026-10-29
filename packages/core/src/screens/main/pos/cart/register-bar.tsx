@@ -10,7 +10,12 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
-import { consumeRegisterPanelRequest, useRegisterPanelRequested } from './register-panel-request';
+import {
+	consumeRegisterPanelRequest,
+	requestRegisterPanel,
+	useRegisterPanelPane,
+	useRegisterPanelRequested,
+} from './register-panel-request';
 import { RegisterPanel } from './register-panel';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -33,9 +38,11 @@ export function RegisterBar({
 }) {
 	const focused = useIsFocused();
 	const panelRequested = useRegisterPanelRequested();
+	const initialPane = useRegisterPanelPane();
 	React.useEffect(() => {
 		if (focused && panelRequested && consumeRegisterPanelRequest()) onPanelOpenChange(true);
 	}, [focused, panelRequested, onPanelOpenChange]);
+
 	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
 	const { wpCredentials, store } = useStoreSession();
 	const menu = useBarMenu();
@@ -124,7 +131,7 @@ export function RegisterBar({
 						accessibilityLabel={t('common.register')}
 						testID="register-bar-drawer"
 						iconClassName={overdue ? 'text-warning' : undefined}
-						onPress={() => onPanelOpenChange(true)}
+						onPress={() => requestRegisterPanel()}
 					/>
 				)}
 				{/* The rail carries the avatar only on `lg`; the phone needs the bar's. */}
@@ -137,7 +144,7 @@ export function RegisterBar({
 			{/* Always mounted: on web the shell can only play the panel's exit while the caller keeps
 			    rendering the closed Dialog (OVERLAY_EXIT_MOUNTED); a conditional mount tore it down in
 			    the same commit, so the panel vanished where every other sheet slides. */}
-			<RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />
+			<RegisterPanel open={panelOpen} initialPane={initialPane} onOpenChange={onPanelOpenChange} />
 		</>
 	);
 }

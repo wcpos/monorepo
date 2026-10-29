@@ -448,11 +448,11 @@ export function UserSheet({
 			});
 		}
 	};
-	const openRegister = () => {
+	const openRegister = (pane: 'register' | 'count' = 'register') => {
 		if (onOpenRegister) onOpenRegister();
 		else {
 			router.push('/(app)/(drawer)/(pos)');
-			requestRegisterPanel();
+			requestRegisterPanel(pane);
 		}
 		onOpenChange(false);
 	};
@@ -481,7 +481,7 @@ export function UserSheet({
 						});
 						return;
 					}
-					openRegister();
+					openRegister('count');
 				});
 		}
 	};
@@ -522,7 +522,7 @@ export function UserSheet({
 					{open && (
 						<DialogBody className="gap-0">
 							<Suspense>
-								<Figures busy={busy} onOpen={openRegister} />
+								<Figures busy={busy} onOpen={() => openRegister()} />
 							</Suspense>
 							<AwaitingStore />
 							{paying && (

@@ -2,10 +2,11 @@ import * as React from 'react';
 
 /** The rail asks; only the focused POS bar claims the panel request. */
 let requested: 'register' | 'count' | null = null;
+let pane: 'register' | 'count' = 'register';
 const listeners = new Set<() => void>();
 
-export function requestRegisterPanel(pane: 'register' | 'count' = 'register') {
-	requested = pane;
+export function requestRegisterPanel(next: 'register' | 'count' = 'register') {
+	requested = pane = next;
 	listeners.forEach((listener) => listener());
 }
 
@@ -26,5 +27,14 @@ export function useRegisterPanelRequested(): boolean {
 		subscribe,
 		() => requested !== null,
 		() => false
+	);
+}
+
+/** The claimed pane stays reactive while its one-shot request is consumed. */
+export function useRegisterPanelPane() {
+	return React.useSyncExternalStore(
+		subscribe,
+		() => pane,
+		() => 'register' as const
 	);
 }

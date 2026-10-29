@@ -747,7 +747,7 @@ describe('drawer door', () => {
 		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('register');
 		mockSegments = ['(app)', '(drawer)', '(pos)'];
 	});
 	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
@@ -1029,7 +1029,7 @@ describe('switch confirmations and guards', () => {
 		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('count');
 		expect(close).toHaveBeenCalledWith(false);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
@@ -1039,7 +1039,7 @@ describe('switch confirmations and guards', () => {
 		render(<UserSheet open onOpenChange={close} />);
 		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
-		expect(consumeRegisterPanelRequest()).toBe(false);
+		expect(consumeRegisterPanelRequest()).toBeNull();
 		expect(close).not.toHaveBeenCalledWith(false);
 		expect(mockLogError).toHaveBeenCalledWith(
 			'The count could not start',

@@ -33,6 +33,7 @@ import { RegisterCount } from './register-count';
 import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
+import { requestRegisterPanel } from './register-panel-request';
 import { SessionHoldBanner } from '../../components/session-hold-banner';
 import { RegisterPicker } from './register-picker';
 import { RegisterGateCard } from './register-gate-card';
@@ -71,11 +72,20 @@ function CartColumn({
 	receiptOrderUuid?: string;
 }) {
 	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
-	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
+	const { sessionsOn, session, loaded, overdue, countingHere } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
 	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
+	const reopened = React.useRef<string | undefined>(undefined);
+	// A restored device-owned count asks once; closing/back must not reopen it on a render.
+	React.useEffect(() => {
+		if (session?.status !== 'counting' || !countingHere || reopened.current === session.id) return;
+		reopened.current = session.id;
+		requestRegisterPanel('count');
+
+		setPanelOpen(true);
+	}, [session?.id, session?.status, countingHere]);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
 	// The open-orders list slides over the cart. Covered, the cart leaves the tab order and
 	// the accessibility tree: a keyboard or screen-reader user must not reach a line, a total
@@ -230,7 +240,10 @@ function CartColumn({
 								<Button
 									testID="checkout-close-register"
 									size="lg"
-									onPress={() => setPanelOpen(true)}
+									onPress={() => {
+										requestRegisterPanel('count');
+										setPanelOpen(true);
+									}}
 								>
 									{t('register.close_register')}
 								</Button>

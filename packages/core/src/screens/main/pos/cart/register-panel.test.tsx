@@ -68,6 +68,7 @@ const showToast = jest.fn();
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
+		countingHere: mockCountingHere,
 		overdue: mockOverdue,
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
@@ -964,3 +965,28 @@ it.each(['count-back', 'panel-x'])(
 		}
 	}
 );
+
+let mockCountingHere = false;
+it('opens on the count pane while this device is counting, only when opened', async () => {
+	const previous = currentSession,
+		previousHere = mockCountingHere;
+	try {
+		currentSession = { ...currentSession, status: 'counting' };
+		mockCountingHere = true;
+		const view = render(<RegisterPanel open={false} onOpenChange={jest.fn()} />);
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(screen.getByTestId('register-panel-close-register')).toBeTruthy());
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('count-back')).toBeNull();
+	} finally {
+		currentSession = previous;
+		mockCountingHere = previousHere;
+	}
+});
+it('a requested count starts counting before showing the pane', async () => {
+	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+	await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
+	expect(startCounting).toHaveBeenCalledTimes(1);
+});
