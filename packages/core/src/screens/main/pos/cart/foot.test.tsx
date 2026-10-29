@@ -20,6 +20,19 @@ jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-nat
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
+// The note row's surface and glyphs reach the icon sets (Uniwind's ESM); the foot needs only the press.
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/pressable-surface', () => ({
+	PressableSurface: ({
+		testID,
+		onPress,
+		children,
+	}: React.PropsWithChildren<{ testID: string; onPress: () => void }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		testID,
