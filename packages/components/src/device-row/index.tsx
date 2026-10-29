@@ -2,8 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Badge } from '../badge';
-import { Card } from '../card';
 import { Icon, type IconName } from '../icon';
+import { useIsPhone } from '../lib/device';
 import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Progress } from '../progress';
@@ -25,16 +25,42 @@ type DeviceRowProps = {
 	state?: DeviceState | null;
 	/** A bar under the lines; no `value` is an unknown wait. */
 	progress?: { value?: number } | null;
-	/** What the row grows under its lines (a hint, the readers a scan found), then its actions. */
+	/**
+	 * What the row grows under its lines (a hint, the readers a scan found). A `DeviceRowActions`
+	 * child is lifted out: inline at the line's right on a wide pane, last under the lines on a phone.
+	 */
 	children?: React.ReactNode;
 	testID?: string;
 };
 
+/** Whether the row opens its `DeviceList`: the first row draws no rule. Outside a list, none. */
+const FirstRow = React.createContext(true);
+
 /**
- * One device in a settings list (CODING_STANDARDS § Rows and cards): a card with an icon square
- * tinted by the state, the name and its tag, the identifiers, ONE state line, then the children
- * with the actions last in `DeviceRowActions`.
- * Stacked lines, never a wrap, so nothing shares a line with free text.
+ * The rows of one device list: they touch, and a hairline runs between them, never above the
+ * first or under the last. A context marks the first, so the pages' own row components need
+ * no index prop.
+ */
+export function DeviceList({ children }: { children: React.ReactNode }) {
+	return (
+		<View>
+			{React.Children.toArray(children).map((child, index) => (
+				<FirstRow.Provider
+					key={React.isValidElement(child) ? child.key : index}
+					value={index === 0}
+				>
+					{child}
+				</FirstRow.Provider>
+			))}
+		</View>
+	);
+}
+
+/**
+ * One device in a settings list (CODING_STANDARDS § Rows and cards): a flush row in a `DeviceList`,
+ * a hairline above every row but the first, with an icon square tinted by the state, the name and
+ * its tag, the identifiers and ONE state line, the actions (`DeviceRowActions`) at the right of the
+ * same line on a wide pane.
  */
 export function DeviceRow({
 	name,
@@ -51,9 +77,17 @@ export function DeviceRow({
 	// Only a live link or a failure earns colour on the square; every other state is muted.
 	const mark = state?.tone === 'ok' || state?.tone === 'bad' ? state.tone : 'muted';
 	const line2 = identifiers?.filter(Boolean).join(' · ');
+	const phone = useIsPhone();
+	const first = React.useContext(FirstRow);
+	const parts = React.Children.toArray(children);
+	const isActions = (child: React.ReactNode) =>
+		React.isValidElement(child) && child.type === DeviceRowActions;
+	const actions = parts.find(isActions) ?? null;
+	const below = parts.filter((child) => !isActions(child));
 	return (
-		<Card testID={testID} padding="row" className="gap-3">
-			<View className="flex-row items-start gap-3">
+		// list-row's hairline and gap, drawn above the row so the last one closes on no rule.
+		<View testID={testID} className={cn('gap-3 py-3', !first && 'border-border border-t')}>
+			<View className="flex-row items-center gap-3">
 				{icon ? (
 					<View className={cn('size-10 items-center justify-center rounded-lg', TONE[mark].tinted)}>
 						<Icon name={icon} variant={mark} size="lg" loading={busy} />
@@ -61,7 +95,7 @@ export function DeviceRow({
 				) : null}
 				<View className="min-w-0 flex-1 gap-0.5">
 					<View className="flex-row items-start gap-2">
-						<Text variant="dialog" className="flex-1" numberOfLines={1}>
+						<Text variant="subheading" className="flex-1" numberOfLines={1}>
 							{name}
 						</Text>
 						{tag ? (
@@ -84,6 +118,7 @@ export function DeviceRow({
 						/>
 					) : null}
 				</View>
+				{phone ? null : actions}
 			</View>
 			{progress ? (
 				<Progress
@@ -92,12 +127,13 @@ export function DeviceRow({
 					indeterminate={progress.value === undefined}
 				/>
 			) : null}
-			{children}
-		</Card>
+			{below}
+			{phone ? actions : null}
+		</View>
 	);
 }
 
-/** The action slot: a full-width row of its own under the lines, never beside free text. */
+/** The action slot: `DeviceRow` places it (inline right, or under the lines on a phone). */
 export function DeviceRowActions({ children }: { children: React.ReactNode }) {
-	return <View className="w-full flex-row items-center justify-end gap-2">{children}</View>;
+	return <View className="shrink-0 flex-row items-center justify-end gap-2">{children}</View>;
 }

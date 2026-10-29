@@ -301,7 +301,7 @@ it('shows a failed connect as one line with Try again, and the update progress a
 		'Could not connect: not supported at this location'
 	);
 	expect(screen.getByTestId(`${row}-retry`)).toBeTruthy();
-	// Help is a full-width button now, still opening the reader docs.
+	// Help is a button in the row's action slot, still opening the reader docs.
 	fireEvent.click(screen.getByTestId(`${row}-help`));
 	expect(mockOpenExternalURL).toHaveBeenCalledWith(CARD_READER_DOCS_URL);
 	// The list went with the choice; the error is the row's one line.

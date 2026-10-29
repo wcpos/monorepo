@@ -121,10 +121,11 @@ function ThemeGrid({
 const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 
 /**
- * The Scale row. The step itself reaches the screens through `ScaleProvider`,
+ * The Scale section, shaped as Icons is: a section title, then its description as the row
+ * that carries the Saved mark. The step itself reaches the screens through `ScaleProvider`,
  * which reads this field off the store document — nothing here touches a token.
  */
-function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
+function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
 	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
@@ -149,21 +150,23 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	};
 
 	return (
-		<PropertyRow label={t('settings.scale')} help={t('settings.scale.description')} name="scale">
-			<SegmentedControl
-				segments={
-					SCALE_OPTIONS.map((option) => ({
-						value: option,
-						label: labels[option],
-						testID: `settings-scale-${option}`,
-					})) as [Segment, Segment, Segment, Segment]
-				}
-				value={scale}
-				onValueChange={(value) => {
-					void handleScaleChange(value);
-				}}
-			/>
-		</PropertyRow>
+		<SettingsSection title={t('settings.scale')}>
+			<PropertyRow stacked name="scale" label={t('settings.scale.description')}>
+				<SegmentedControl
+					segments={
+						SCALE_OPTIONS.map((option) => ({
+							value: option,
+							label: labels[option],
+							testID: `settings-scale-${option}`,
+						})) as [Segment, Segment, Segment, Segment]
+					}
+					value={scale}
+					onValueChange={(value) => {
+						void handleScaleChange(value);
+					}}
+				/>
+			</PropertyRow>
+		</SettingsSection>
 	);
 }
 
@@ -340,10 +343,7 @@ function ThemeSettingsContent() {
 			>
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
 			</SettingsSection>
-			{/* The row carries the label and the reason; a titled section would say Scale twice. */}
-			<SettingsSection>
-				<ScaleRow t={t} />
-			</SettingsSection>
+			<ScaleSection t={t} />
 			<IconsSection t={t} />
 		</VStack>
 	);

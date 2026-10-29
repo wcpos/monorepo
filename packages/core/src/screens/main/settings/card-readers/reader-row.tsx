@@ -88,7 +88,7 @@ export function ReaderRow({
 
 	const updating = status.connection === 'updating';
 	const connecting = status.connection === 'connecting' || status.connection === 'discovering';
-	// One line of state under the name; the actions get a full-width row of their own below.
+	// One line of state under the name; the actions sit in `DeviceRowActions`, which the row places.
 	let line: string | null = null;
 	let lineTone: DeviceState['tone'] = 'muted';
 	let below: React.ReactNode = null;
@@ -210,12 +210,10 @@ export function ReaderRow({
 			}
 		>
 			{below}
-			{/* The actions are a full-width row of their own: nothing shares a line with free text. */}
 			{!scan || found === null || foundNone ? (
 				<DeviceRowActions>
 					{foundNone ? (
 						<Button
-							className="flex-1"
 							disabled={busy}
 							onPress={() => void actions.start(method, scan?.transport)}
 							testID={`reader-row-${method.id}-retry`}
@@ -226,7 +224,6 @@ export function ReaderRow({
 					{scan && found === null ? (
 						<Button
 							variant="outline"
-							className="flex-1"
 							onPress={actions.cancelScan}
 							testID={`reader-row-${method.id}-cancel-scan`}
 						>
@@ -237,7 +234,6 @@ export function ReaderRow({
 					{error && !connected ? (
 						<>
 							<Button
-								className="flex-1"
 								disabled={busy}
 								// A failed Tap to Pay set-up retries Tap to Pay, not a Bluetooth scan.
 								onPress={() => void actions.start(method, error.transport)}
@@ -247,7 +243,6 @@ export function ReaderRow({
 							</Button>
 							<Button
 								variant="outline"
-								className="flex-1"
 								rightIcon="openExternal"
 								onPress={() => void openExternalURL(CARD_READER_DOCS_URL)}
 								testID={`reader-row-${method.id}-help`}
@@ -259,7 +254,6 @@ export function ReaderRow({
 					{sdkUi && !(error && !connected) ? (
 						<Button
 							variant="outline"
-							className="flex-1"
 							// Signing in is what the SDK's own screen is for; every other block stays a block.
 							disabled={
 								busy ||
@@ -281,12 +275,7 @@ export function ReaderRow({
 					) : null}
 					{/* Connecting and installing keep a disabled button in the slot: it never empties. */}
 					{!sdkUi && !scan && !error && (connecting || updating) ? (
-						<Button
-							variant="outline"
-							className="flex-1"
-							disabled
-							testID={`reader-row-${method.id}-connect`}
-						>
+						<Button variant="outline" disabled testID={`reader-row-${method.id}-connect`}>
 							<ButtonText>
 								{updating
 									? t('settings.card_readers.installing_button')
@@ -296,7 +285,6 @@ export function ReaderRow({
 					) : null}
 					{!sdkUi && !scan && !error && !connected && status.connection === 'disconnected' ? (
 						<Button
-							className="flex-1"
 							disabled={busy || Boolean(unavailable)}
 							loading={working}
 							onPress={() => void actions.start(method, reader?.transport)}
@@ -308,7 +296,6 @@ export function ReaderRow({
 					{connected && !sdkUi ? (
 						<Button
 							variant="outline"
-							className="flex-1"
 							disabled={working}
 							loading={working}
 							onPress={() => void actions.disconnect(method)}

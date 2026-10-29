@@ -438,3 +438,29 @@ test('allows only the highlighted-row class pair, not generic tint boxes', async
 	</>;`);
 	assert.equal(restrictedSyntax(messages, NOTICE).length, 2);
 });
+
+const FIELD_SEGMENTS = "A field's SegmentedControl is FormSegmentedControl";
+
+test('rejects a bare SegmentedControl in a FormField render under the core and main configs', async () => {
+	// Walk 1 (2026-10-29): the hand-rolled field drew its label as body text beside muted form keys.
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(
+			`export const Bad = () => <FormField name="mode" render={({ field }) => <View><Text>Mode</Text><SegmentedControl value={field.value} segments={[]} /></View>} />;`,
+			file,
+			'no-restricted-syntax',
+			base,
+			cwd
+		);
+		assert.equal(restrictedSyntax(messages, FIELD_SEGMENTS).length, 1);
+	}
+});
+
+test('allows FormSegmentedControl in a FormField, and a SegmentedControl outside one', async () => {
+	const messages = await variantOwnership(
+		`export const Fine = () => <><FormField name="mode" render={({ field }) => <FormSegmentedControl label="Mode" segments={[]} {...field} />} /><SegmentedControl value="a" segments={[]} /></>;`
+	);
+	assert.equal(restrictedSyntax(messages, FIELD_SEGMENTS).length, 0);
+});

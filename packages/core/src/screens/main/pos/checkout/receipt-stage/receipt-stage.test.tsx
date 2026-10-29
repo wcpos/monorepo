@@ -56,7 +56,7 @@ jest.mock('../../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
 jest.mock('../../../receipt/receipt-actions', () => ({
 	useReceiptActions: () => ({
 		sync: undefined,
-		choices: [],
+		choices: [{ label: 'Print', testID: 'receipt-print-button', onPress: () => undefined }],
 		dialog: null,
 	}),
 }));
@@ -327,24 +327,21 @@ it('shows successful printing and omits zero change', () => {
 	expect(screen.getByTestId('receipt-printed-to').textContent).toContain('Till printer');
 	expect(screen.queryByTestId('receipt-change-due')).toBeNull();
 });
-it.each(['receipt-no-receipt', 'receipt-new-sale'])(
-	'%s finishes the sale on both layouts',
-	(testID) => {
-		const wide = render(<ReceiptStage orderUuid="paid" compact={false} />);
-		fireEvent.click(screen.getByTestId(testID));
-		expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).not.toHaveBeenCalled();
-		wide.unmount();
-		enterReceipt('paid');
-		render(<ReceiptStage orderUuid="paid" compact />);
-		fireEvent.click(screen.getByTestId(testID));
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
-		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(2);
-		expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
-		expect(mockReplace).not.toHaveBeenCalled();
-	}
-);
+it('New sale finishes the sale on both layouts', () => {
+	const wide = render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	expect(mockReplace).not.toHaveBeenCalled();
+	wide.unmount();
+	enterReceipt('paid');
+	render(<ReceiptStage orderUuid="paid" compact />);
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(2);
+	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+	expect(mockReplace).not.toHaveBeenCalled();
+});
 it('a standalone checkout modal on a wide screen leaves for the wide cart when the sale is done', () => {
 	// The modal's layout is compact on every width; leaving it is the host's, never the width's.
 	mockScreenSize = 'lg';
@@ -404,10 +401,8 @@ it.each([false, true])(
 		expect(screen.getByTestId('checkout-paid-print').closest('button')).toBe(
 			screen.getByTestId('receipt-new-sale')
 		);
-		expect(screen.getByTestId('checkout-paid-none').closest('button')).toBe(
-			screen.getByTestId('receipt-no-receipt')
-		);
-		expect(screen.getByTestId('receipt-no-receipt').textContent).toBe('No receipt · New sale');
+		// The finish is ONE button: there is no second "No receipt" route to the same press.
+		expect(screen.queryByTestId('receipt-no-receipt')).toBeNull();
 	}
 );
 it.each([
@@ -418,18 +413,16 @@ it.each([
 	(compact, position) => {
 		render(<ReceiptStage orderUuid="paid" compact={compact} />);
 		const newSale = screen.getByTestId('receipt-new-sale');
-		expect(newSale.compareDocumentPosition(screen.getByTestId('receipt-no-receipt'))).toBe(
+		expect(newSale.compareDocumentPosition(screen.getByTestId('receipt-print-button'))).toBe(
 			position
 		);
 	}
 );
-it('keeps both finish actions disabled while auto-print is pending', () => {
+it('keeps New sale disabled while auto-print is pending', () => {
 	mockAutoPrintPending = true;
 	render(<ReceiptStage orderUuid="paid" compact />);
-	for (const id of ['receipt-new-sale', 'receipt-no-receipt']) {
-		fireEvent.click(screen.getByTestId(id));
-		expect((screen.getByTestId(id) as HTMLButtonElement).disabled).toBe(true);
-	}
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect((screen.getByTestId('receipt-new-sale') as HTMLButtonElement).disabled).toBe(true);
 	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(true);
 	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 });
