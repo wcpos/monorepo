@@ -23,8 +23,11 @@ const MOTION = 'web:transition-colors web:duration-overlay-fade';
  */
 export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress: () => void }) {
 	const note = useDocField(order, (value) => value.payload.customer_note);
-	const [reached, setReached] = React.useState(false);
+	// Hover and focus kept apart: a pointer leaving a row the keyboard holds must not drop it.
+	const [hovered, setHovered] = React.useState(false);
+	const [focused, setFocused] = React.useState(false);
 	if (!note) return null;
+	const reached = hovered || focused;
 	const tint = reached ? 'text-foreground' : 'text-muted-foreground';
 	return (
 		// Ruled off above: it closes the cart's lines. The row sits in the foot's gutter (p-2); the
@@ -33,10 +36,10 @@ export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress
 			<PressableSurface
 				testID="cart-note-row"
 				onPress={onPress}
-				onHoverIn={() => setReached(true)}
-				onHoverOut={() => setReached(false)}
-				onFocus={() => setReached(true)}
-				onBlur={() => setReached(false)}
+				onHoverIn={() => setHovered(true)}
+				onHoverOut={() => setHovered(false)}
+				onFocus={() => setFocused(true)}
+				onBlur={() => setFocused(false)}
 				// Drawn at 36: the finger still gets the 44 the Button gave it (CODING_STANDARDS § Design 2).
 				minTarget
 				className="min-h-9 flex-row items-center gap-2 rounded-lg px-2"
