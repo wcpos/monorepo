@@ -5,8 +5,6 @@ import type { CategoryLogger } from '@wcpos/utils/logger';
 
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, usePayFrame } from './use-pay-frame';
 
-jest.mock('../payments/payment-in-flight', () => ({ markPayFrame: jest.fn() }));
-
 type Input = Parameters<typeof usePayFrame>[0];
 type Handlers = { onLoad(): void; onLoadStart(): void; onError(event: object): void };
 const PAY_URL = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';

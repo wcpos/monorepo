@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DialogLabelsProvider } from '../dialog/labels';
 import { DeviceScope } from '../lib/device';
@@ -174,36 +174,3 @@ it('can omit cancel and fills a lone lg confirm', () => {
 	expect(screen.queryByText('Cancel')).toBeNull();
 	expect(screen.getByText('Confirm')).toHaveClass('flex-1');
 });
-
-it.each([false, true])(
-	'places the secondary between cancel and confirm by device (%s)',
-	(phone) => {
-		const secondary = jest.fn();
-		render(
-			<DeviceScope phone={phone}>
-				<C.AlertDialog defaultOpen>
-					<C.AlertDialogContent inline>
-						<C.AlertDialogFooter
-							testID="footer"
-							confirm={{ label: 'Close register' }}
-							secondary={{ label: 'Sign out anyway', onPress: secondary, testID: 'secondary' }}
-						/>
-					</C.AlertDialogContent>
-				</C.AlertDialog>
-			</DeviceScope>
-		);
-		expect(
-			within(screen.getByTestId('footer'))
-				.getAllByRole('button')
-				.map((b) => b.textContent)
-		).toEqual(
-			phone
-				? ['Close register', 'Sign out anyway', 'Cancel']
-				: ['Cancel', 'Sign out anyway', 'Close register']
-		);
-		expect(screen.getByTestId('secondary')).toHaveClass('border-border', 'bg-card');
-		fireEvent.click(screen.getByTestId('secondary'));
-		expect(secondary).toHaveBeenCalledTimes(1);
-		expect(screen.getByTestId('footer')).toBeInTheDocument();
-	}
-);

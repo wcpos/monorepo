@@ -287,16 +287,8 @@ const amy = { uuid: 'amy', display_name: 'Amy Okafor' } as Extract<
 const store = { id: 2, name: 'Other store' } as Extract<SwitchRequest, { kind: 'store' }>['store'];
 const onOpenChange = jest.fn();
 const onConfirm = jest.fn();
-const onSignOutAnyway = jest.fn();
 const show = (request: SwitchRequest | null) =>
-	render(
-		<SwitchConfirm
-			request={request}
-			onOpenChange={onOpenChange}
-			onConfirm={onConfirm}
-			onSignOutAnyway={onSignOutAnyway}
-		/>
-	);
+	render(<SwitchConfirm request={request} onOpenChange={onOpenChange} onConfirm={onConfirm} />);
 beforeEach(() => {
 	mockOpenOrders = [];
 	mockAwaitingStore = 0;
@@ -305,7 +297,6 @@ beforeEach(() => {
 	mockDirectoryY = { registerId: null, registers: [] };
 	onOpenChange.mockClear();
 	onConfirm.mockClear();
-	onSignOutAnyway.mockClear();
 });
 it('renders nothing while there is no request', () => {
 	show(null);
@@ -371,33 +362,4 @@ it('register: the state notice and the verb', () => {
 	);
 	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(onConfirm).toHaveBeenCalledWith(request);
-});
-it('sign out: close first, or sign out anyway', () => {
-	show({ kind: 'sign-out' });
-	expect(screen.getByTestId('switch-confirm').textContent).toContain(
-		'Front counter is still open at $345.03. Close it first?'
-	);
-	fireEvent.click(screen.getByTestId('switch-confirm-secondary'));
-	expect(onSignOutAnyway).toHaveBeenCalledTimes(1);
-	expect(onConfirm).not.toHaveBeenCalled();
-	expect(onOpenChange).toHaveBeenCalledWith(false);
-});
-it('sign out with figures pending: Close register is disabled, Sign out anyway is not', () => {
-	mockDrawer.figuresPending = true;
-	show({ kind: 'sign-out' });
-	expect((screen.getByTestId('switch-confirm-confirm') as HTMLButtonElement).disabled).toBe(true);
-	expect((screen.getByTestId('switch-confirm-secondary') as HTMLButtonElement).disabled).toBe(
-		false
-	);
-	expect(screen.getByTestId('switch-confirm').textContent).toContain(
-		'Figures arrive with the next sync'
-	);
-});
-it('sign out for a blind cashier names no amount', () => {
-	mockDrawer.blind = true;
-	show({ kind: 'sign-out' });
-	expect(screen.getByTestId('switch-confirm').textContent).toContain(
-		'Front counter is still open. Close it first?'
-	);
-	expect(screen.getByTestId('switch-confirm').textContent).not.toContain('345.03');
 });

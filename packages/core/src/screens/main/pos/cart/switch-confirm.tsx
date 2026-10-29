@@ -25,32 +25,28 @@ import {
 	useRegisterDirectory,
 } from '../../../../services/register/use-register-binding';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { useOpenOrdersOptional } from '../contexts/current-order/context';
 
 export type SwitchRequest =
 	| { kind: 'cashier'; credential: ReadonlyWpCredentialsRecord }
 	| { kind: 'store'; store: ReadonlyStoreRecord }
-	| { kind: 'register'; register: Register; state: string }
-	| { kind: 'sign-out' };
+	| { kind: 'register'; register: Register; state: string };
 
 export function SwitchConfirm({
 	request,
 	portalHost,
 	onOpenChange,
 	onConfirm,
-	onSignOutAnyway,
 }: {
 	request: SwitchRequest | null;
 	portalHost?: string;
 	onOpenChange: (open: boolean) => void;
 	onConfirm: (request: SwitchRequest) => void;
-	onSignOutAnyway: () => void;
 }) {
 	const t = useT();
 	const { wpCredentials, store } = useStoreSession();
-	const { session, expected, blind, figuresPending, salesCount, binding } = useRegisterSession();
+	const { session, salesCount, binding } = useRegisterSession();
 	const y = useRegisterDirectory(request?.kind === 'store' ? request.store.id : store.id);
 	const carts = useOpenOrdersOptional().length;
 	const unsent = useAwaitingStoreCount();
@@ -58,7 +54,6 @@ export function SwitchConfirm({
 	const signedIn = lastAccess ? new Date(lastAccess) : null;
 	const { timezone } = useStoreDay();
 	const time = (date: Date) => formatDate(date, 'HH:mm', zoneOptions(timezone));
-	const { format } = useCurrencyFormat();
 	if (!request) return null;
 	let title: string, description: string, confirm: string;
 	let body: React.ReactNode;
@@ -141,17 +136,6 @@ export function SwitchConfirm({
 			confirm = t('register.switch_to', { name });
 			break;
 		}
-		case 'sign-out':
-			title =
-				blind || figuresPending
-					? t('register.still_open_close_first_blind', { name: binding.registerName })
-					: t('register.still_open_close_first', {
-							name: binding.registerName,
-							amount: format(Number(expected.cash ?? 0)),
-						});
-			description = t('register.open_till_stays_open');
-			if (figuresPending) description += ' ' + t('register.figures_after_sync');
-			confirm = t('register.close_register');
 	}
 	return (
 		<AlertDialog open onOpenChange={onOpenChange}>
@@ -162,28 +146,15 @@ export function SwitchConfirm({
 				</AlertDialogHeader>
 				{body && <View className="gap-4 px-4">{body}</View>}
 				<AlertDialogFooter
-					cancel={{ testID: 'switch-confirm-cancel' }}
+					cancel={{ testID: 'switch-confirm-cancel', onPress: () => onOpenChange(false) }}
 					confirm={{
 						label: confirm,
 						testID: 'switch-confirm-confirm',
-						disabled: request.kind === 'sign-out' && figuresPending,
 						onPress: () => {
 							onConfirm(request);
 							onOpenChange(false);
 						},
 					}}
-					secondary={
-						request.kind === 'sign-out'
-							? {
-									label: t('register.sign_out_anyway'),
-									testID: 'switch-confirm-secondary',
-									onPress: () => {
-										onSignOutAnyway();
-										onOpenChange(false);
-									},
-								}
-							: undefined
-					}
 				/>
 			</AlertDialogContent>
 		</AlertDialog>

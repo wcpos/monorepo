@@ -17,5 +17,3 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 7. The footer takes role slots and owns variant, order, side and phone stacking — evidence: #2934 edit modal Sync outline beside Close; cart Order details sheet Void / Print / Sync order primary; owner's ruling 2026-10-25.
 
 8. The footer accepts slots only: the children path and the two legacy action exports are removed — evidence: footer-slots PR 2b, migrated callers, footer tests and package typechecks.
-
-9. The footer takes an optional secondary slot (outline, between cancel and confirm; after the confirm on phone) for the one confirm that offers an alternative to its verb — evidence: spec § 4.6 Sign out with an open register (Close register · Sign out anyway); test "places the secondary between cancel and confirm by device".
