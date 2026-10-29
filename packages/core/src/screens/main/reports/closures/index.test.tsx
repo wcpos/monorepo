@@ -237,3 +237,12 @@ it('keeps export failures in the full-width room without a placeholder pane', as
 	expect(screen.queryByTestId('closure-panel-placeholder')).toBeNull();
 	expect(screen.queryByTestId('closures-overflow')).toBeNull();
 });
+
+// Revert: draw the export failure only in the list branch while the phone shows a closure.
+it('shows an export failure beside the header while the phone shows a closure', async () => {
+	share.mockRejectedValueOnce(new Error('share failed'));
+	render(<Closures scope={scope} initialClosureId="c" renderScopeRow={({ actions }) => actions} />);
+	expect(screen.getByTestId('selected-closure')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closures-export'));
+	await waitFor(() => expect(screen.getByTestId('closures-export-error')).toBeTruthy());
+});

@@ -126,6 +126,7 @@ export function Closures({
 		return (
 			<>
 				{header}
+				{!!error && <Text testID="closures-export-error">{error}</Text>}
 				<ClosurePanel
 					key={row.id}
 					row={row}
