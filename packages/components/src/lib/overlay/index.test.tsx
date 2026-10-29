@@ -3,7 +3,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 
 import { act, render, screen } from '@testing-library/react';
 
-import { TitleBarStripProvider } from '../../edge-surface';
+import { EdgeSurface, TitleBarStripProvider } from '../../edge-surface';
 import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from '../motion';
 import {
 	OVERLAY_MOTION,
@@ -121,16 +121,25 @@ it.each([
 });
 
 // The desktop title bar is a thing apart, above every overlay: the scrim starts under it (Paul,
-// 2026-10-29). Without a strip (web, full screen) the scrim keeps the whole window.
+// 2026-10-29). A portalled shell is laid out from the window's top, so it takes the whole strip even
+// when opened from inside the POS ground (its context says the strip is padded); an inline one (a
+// route dialog) is laid out inside that ground and takes only what is still owed. No strip, no offset.
 it.each([
-	[28, { top: 28 }],
-	[0, undefined],
-] as const)('with a title-bar strip of %s gives the scrim the style %j', (height, style) => {
+	['portalled', 28, false, false, { top: 28 }],
+	['portalled from a padded ground', 28, false, true, { top: 28 }],
+	['inline', 28, true, false, { top: 28 }],
+	['inline in a padded ground', 28, true, true, undefined],
+	['portalled without a strip', 0, false, false, undefined],
+	['inline without a strip', 0, true, false, undefined],
+] as const)('%s with a strip of %s gives the scrim %#', (_case, height, inline, padded, style) => {
+	const shell = (
+		<OverlayShell presentation="right" open Scrim={Pressable} inline={inline} testID="d">
+			<Probe />
+		</OverlayShell>
+	);
 	render(
 		<TitleBarStripProvider value={{ node: null, height }}>
-			<OverlayShell presentation="right" open Scrim={Pressable} testID="d">
-				<Probe />
-			</OverlayShell>
+			{padded ? <EdgeSurface edges={['strip']}>{shell}</EdgeSurface> : shell}
 		</TitleBarStripProvider>
 	);
 	expect(mockScrimProps.at(-1)?.style).toEqual(style);
