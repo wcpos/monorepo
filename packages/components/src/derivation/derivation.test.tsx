@@ -1,8 +1,10 @@
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
-import { Derivation, DerivationStep } from './index';
+import { Derivation, DerivationLine, DerivationStep } from './index';
+
+jest.mock('../loader', () => ({ Loader: () => null }));
 
 // Expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
@@ -92,4 +94,45 @@ it('sets the label in the head recipe, the title semibold, the detail muted, and
 	expect(classes(screen.getByText('Add one in WooCommerce › Tax'))).toContain('text-sm');
 	expect(screen.getByText('22%')).toBeTruthy();
 	expect(screen.queryByTestId('derivation-rail')).toBeNull();
+});
+
+it('a sub-line carries its reason, amount and action, and reads bad when refused', () => {
+	const onPress = jest.fn();
+	render(
+		<Derivation>
+			<DerivationStep label="Paid out · 2" title="Paid out">
+				<DerivationLine
+					label="Window cleaner"
+					amount="−20,00 £"
+					action={{ label: 'Void', testID: 'void-1', onPress }}
+				/>
+				<DerivationLine
+					label="Petty cash"
+					note="Refused"
+					amount="−5,00 £"
+					tone="bad"
+					testID="line-2"
+				/>
+			</DerivationStep>
+		</Derivation>
+	);
+	expect(screen.getByText('Window cleaner')).toBeTruthy();
+	expect(screen.getByText('−20,00 £')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('void-1'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(screen.getByText('Refused')).toBeTruthy();
+	expect(classes(screen.getByText('Petty cash'))).toContain('text-bad');
+});
+
+it('a blind sub-line omits money and a disabled Void cannot act', () => {
+	const onPress = jest.fn();
+	render(
+		<DerivationLine
+			label="Change"
+			action={{ label: 'Void', testID: 'void', onPress, disabled: true }}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('void'));
+	expect(onPress).not.toHaveBeenCalled();
+	expect(screen.queryByText(/£/)).toBeNull();
 });
