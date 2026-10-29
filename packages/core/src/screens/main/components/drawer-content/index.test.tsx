@@ -70,6 +70,7 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	TooltipContent: () => null,
 }));
+// The bell left the drawer (2026-10-28): were it imported again, this mock would show it.
 jest.mock('../notification-bell/notification-bell', () => ({
 	NotificationBell: () => <div data-testid="bell" />,
 }));
@@ -213,7 +214,9 @@ it.each(['web', 'ios'])('wraps the rail items in a tooltip on web only (%s)', (o
 	expect(screen.queryAllByTestId('tooltip')).toHaveLength(os === 'web' ? names.length : 0);
 });
 
-it('puts the avatar on the rail and the bell in the front drawer', () => {
+// Every bar carries the bell since #3018, so the drawer does not: a phone showed it twice
+// (Paul, 2026-10-28).
+it('puts the avatar on the rail only, and no bell in either drawer', () => {
 	const { unmount } = render(<Drawer presentation="rail" />);
 	expect(screen.queryByTestId('bell')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
@@ -222,17 +225,18 @@ it('puts the avatar on the rail and the bell in the front drawer', () => {
 
 	render(<Drawer presentation="front" />);
 	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
-	expect(screen.getByTestId('bell')).toBeTruthy();
+	expect(screen.queryByTestId('bell')).toBeNull();
 });
 
-// The panel insets its items by the dense-strip gutter, 8 at Regular, on both presentations,
-// and the items carry no margin of their own (CODING_STANDARDS § Gutters).
+// The panel insets its items by the dense-strip gutter, 8 at Regular, from every edge on both
+// presentations (the top too: Paul, 2026-10-28), and the items carry no margin of their own
+// (CODING_STANDARDS § Gutters).
 it.each(['rail', 'front'] as const)('insets the %s items from its own sides', (presentation) => {
 	mockSpacing = undefined;
 	render(<Drawer presentation={presentation} />);
 	expect(JSON.parse(scroll().dataset.contentStyle!)).toMatchObject({
-		paddingTop: 0,
-		paddingBottom: 0,
+		paddingTop: 8,
+		paddingBottom: 8,
 		paddingStart: 8,
 		paddingEnd: 8,
 	});
