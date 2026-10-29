@@ -87,8 +87,41 @@ export function useSalesToday() {
 /** Runs one band's action while the sheet holds every other. */
 type Act = (work: () => Promise<void>) => Promise<void>;
 
-function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
+export function SalesTile({ sub }: { sub?: string }) {
 	const total = useSalesToday();
+	const { format } = useCurrencyFormat();
+	const t = useT();
+	return (
+		<View
+			testID="user-sheet-sales-today"
+			className="border-border flex-1 rounded-lg border px-3 py-2.5"
+		>
+			<Text variant="key">{t('register.your_sales_today')}</Text>
+			<AmountFigure size="tile">{format(total)}</AmountFigure>
+			{sub && <Text variant="key">{sub}</Text>}
+		</View>
+	);
+}
+
+function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
+	const t = useT();
+	return (
+		<View className="flex-row gap-2">
+			<SalesTile />
+			<DrawerTile label={t('register.in_the_drawer_tile')} onOpen={onOpen} busy={busy} />
+		</View>
+	);
+}
+
+export function DrawerTile({
+	label,
+	onOpen,
+	busy,
+}: {
+	label: string;
+	onOpen?: () => void;
+	busy?: boolean;
+}) {
 	const { format } = useCurrencyFormat();
 	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
 		useRegisterSession();
@@ -98,14 +131,7 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
-		<View className="flex-row gap-2">
-			<View
-				testID="user-sheet-sales-today"
-				className="border-border flex-1 rounded-lg border px-3 py-2.5"
-			>
-				<Text variant="key">{t('register.your_sales_today')}</Text>
-				<AmountFigure size="tile">{format(total)}</AmountFigure>
-			</View>
+		<>
 			{binding.status === 'bound' && (session || lastClosure) && (
 				<PressableSurface
 					testID="user-sheet-drawer"
@@ -113,7 +139,7 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 					disabled={busy}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
-					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
+					<Text variant="key">{label}</Text>
 					{session ? (
 						<>
 							<AmountFigure size="tile">
@@ -154,7 +180,7 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 					)}
 				</PressableSurface>
 			)}
-		</View>
+		</>
 	);
 }
 

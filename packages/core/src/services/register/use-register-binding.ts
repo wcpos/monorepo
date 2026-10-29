@@ -17,7 +17,7 @@ import { recordRegisterFact, useRegisterActor } from '../register-session/audit'
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 
-type Register = {
+export type Register = {
 	id: string;
 	name: string;
 	store_id?: number | null;
