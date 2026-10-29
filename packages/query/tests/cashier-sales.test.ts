@@ -33,13 +33,21 @@ afterEach(async () => {
 
 it('sums 10.10 and 20.20 without floating-point drift', async () => {
 	await database.collections.orders.bulkInsert([order('a', '10.10'), order('b', '20.20')]);
-	const total = await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope));
+	const { total, count } = await firstValueFrom(
+		observeCashierSalesTotal(createFakeEngine(database), scope)
+	);
 	expect(total).toBe(30.3);
 	expect(total * 100).toBe(3030);
+	expect(count).toBe(2);
 });
 
 it('returns zero when no completed orders match', async () => {
-	expect(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).toBe(0);
+	expect(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).toEqual(
+		{
+			total: 0,
+			count: 0,
+		}
+	);
 });
 
 it('counts only this cashier and store, completed, including the start but excluding the end', async () => {
@@ -61,8 +69,8 @@ it('counts only this cashier and store, completed, including the start but exclu
 			],
 		}),
 	]);
-	expect(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).toBe(
-		10
+	expect(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).toEqual(
+		{ total: 10, count: 1 }
 	);
 });
 
@@ -72,7 +80,7 @@ it.each([
 	['10.123456', '20.123456', 30.246912],
 ])('preserves persisted precision when summing %s + %s', async (a, b, expected) => {
 	await database.collections.orders.bulkInsert([order('a', String(a)), order('b', String(b))]);
-	expect(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).toBe(
-		expected
-	);
+	expect(
+		(await firstValueFrom(observeCashierSalesTotal(createFakeEngine(database), scope))).total
+	).toBe(expected);
 });

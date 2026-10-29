@@ -168,7 +168,7 @@ const mockDirectory = [
 let mockRegisters = mockDirectory;
 let mockBindingStatus = 'bound';
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterDirectory: () => mockDirectoryY,
+	useRegisterDirectory: jest.fn(() => mockDirectoryY),
 	useRegisterBinding: () => ({
 		registers: mockRegisters,
 		registerName: 'Front counter',
@@ -262,10 +262,13 @@ jest.mock('@wcpos/components/suspense', () => ({
 let mockDirectoryY: {
 	registerId: string | null;
 	registers: { id: string; session?: { opened_at_gmt: string } | null }[];
+	loaded?: boolean;
 };
-let mockOpenOrders: { id: string }[] = [];
-jest.mock('../contexts/current-order/context', () => ({
-	useOpenOrdersOptional: () => mockOpenOrders,
+// The open-orders handle as the confirm reads it: one stable handle, a snapshot swapped whole
+// (useSyncExternalStore needs the same object back until the store changes).
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: jest.fn(() => mockOpenOrdersHandle),
 }));
 let mockDrawer = {
 	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
@@ -274,7 +277,7 @@ let mockDrawer = {
 	blind: false,
 	salesCount: 3,
 	lastClosure: null as { number: number; server_number?: number | null } | null,
-	binding: { status: 'bound', registerName: 'Front counter' },
+	binding: { status: 'bound', registerName: 'Front counter', registerId: 'front' },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => mockDrawer,
@@ -290,11 +293,11 @@ const onConfirm = jest.fn();
 const show = (request: SwitchRequest | null) =>
 	render(<SwitchConfirm request={request} onOpenChange={onOpenChange} onConfirm={onConfirm} />);
 beforeEach(() => {
-	mockOpenOrders = [];
+	mockOpenOrdersHandle.value = { count: 0 };
 	mockAwaitingStore = 0;
 	mockDrawer.figuresPending = false;
 	mockDrawer.blind = false;
-	mockDirectoryY = { registerId: null, registers: [] };
+	mockDirectoryY = { registerId: null, registers: [], loaded: true };
 	onOpenChange.mockClear();
 	onConfirm.mockClear();
 });
@@ -303,7 +306,7 @@ it('renders nothing while there is no request', () => {
 	expect(screen.queryByTestId('switch-confirm')).toBeNull();
 });
 it('hand over: the tiles, the waiting notice and the verb', () => {
-	mockOpenOrders = [{ id: 'a' }, { id: 'b' }];
+	mockOpenOrdersHandle.value = { count: 2 };
 	mockAwaitingStore = 1;
 	show({ kind: 'cashier', credential: amy });
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
@@ -312,9 +315,15 @@ it('hand over: the tiles, the waiting notice and the verb', () => {
 	expect(screen.getByTestId('switch-confirm-waits').textContent).toBe(
 		'Waits here for you2 open carts · 1 unsent sale'
 	);
+	// The cashier's own scope: this cashier, this store, this register.
+	const { useOpenOrdersHandle } = jest.requireMock(
+		'../contexts/current-order/use-open-orders-handle'
+	);
+	expect(useOpenOrdersHandle).toHaveBeenLastCalledWith(7, mockStoreId, 'front');
 	expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('Drawer stays at');
+	// Two completed orders of this cashier today (the engine mock), not the register's 3.
 	expect(screen.getByTestId('user-sheet-sales-today').textContent).toContain(
-		'3 sales · since 13:05'
+		'2 sales · since 13:05'
 	);
 	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(onConfirm).toHaveBeenCalledWith({ kind: 'cashier', credential: amy });
@@ -338,16 +347,38 @@ it.each([
 ] as const)('store: %s register in the target store', (_name, session, description) => {
 	mockDirectoryY = { registerId: 'target', registers: [{ id: 'target', session }] };
 	show({ kind: 'store', store });
+	const { useRegisterDirectory } = jest.requireMock(
+		'../../../../services/register/use-register-binding'
+	);
+	expect(useRegisterDirectory).toHaveBeenLastCalledWith(store.id, { fresh: true });
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(description);
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
 		"Front counter's drawer stays open here."
 	);
 });
 it('store: unknown register when the target has several and none bound', () => {
-	mockDirectoryY = { registerId: null, registers: [{ id: 'a' }, { id: 'b' }] };
+	mockDirectoryY = { registerId: null, registers: [{ id: 'a' }, { id: 'b' }], loaded: true };
 	show({ kind: 'store', store });
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
 		"You'll choose a register there."
+	);
+});
+it('store: says nothing about the register while its directory is still loading', () => {
+	mockDirectoryY = { registerId: null, registers: [], loaded: false };
+	show({ kind: 'store', store });
+	const text = screen.getByTestId('switch-confirm').textContent ?? '';
+	expect(text).toContain('The POS reloads in Other store.');
+	expect(text).not.toContain('register');
+});
+it("store: the target register's time is told in the target store's day", () => {
+	mockDirectoryY = {
+		registerId: 'target',
+		registers: [{ id: 'target', session: { opened_at_gmt: '2026-10-28T09:02:00Z' } }],
+		loaded: true,
+	};
+	show({ kind: 'store', store: { ...store, timezone: 'America/New_York' } });
+	expect(screen.getByTestId('switch-confirm').textContent).toContain(
+		'Its register is open since 05:02.'
 	);
 });
 it('register: the state notice and the verb', () => {
@@ -355,6 +386,7 @@ it('register: the state notice and the verb', () => {
 		kind: 'register',
 		register: { id: 'back', name: 'Back office', session: null },
 		state: 'Closed · last closure #41',
+		open: false,
 	};
 	show(request);
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
@@ -362,4 +394,15 @@ it('register: the state notice and the verb', () => {
 	);
 	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(onConfirm).toHaveBeenCalledWith(request);
+});
+it('register: joins a register the device knows to be open, whatever the directory row says', () => {
+	show({
+		kind: 'register',
+		register: { id: 'back', name: 'Back office', session: null },
+		state: 'Open since 09:02 · Amy Okafor',
+		open: true,
+	});
+	expect(screen.getByTestId('switch-confirm').textContent).toContain(
+		'Open since 09:02 · Amy OkaforYou join it.'
+	);
 });

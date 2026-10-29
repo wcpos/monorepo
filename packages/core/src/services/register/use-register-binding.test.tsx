@@ -434,6 +434,17 @@ it('reads the default-store directory without rebinding the physical till', asyn
 	});
 });
 
+it('a fresh reader asks the directory again although it is loaded', async () => {
+	mockHttp.get.mockResolvedValue({ data: rows });
+	const cached = renderHook(() => useRegisterDirectory(mockStoreId));
+	await waitFor(() => expect(cached.result.current.registers).toEqual(rows));
+	expect(mockHttp.get).toHaveBeenCalledTimes(1);
+	renderHook(() => useRegisterDirectory(mockStoreId));
+	expect(mockHttp.get).toHaveBeenCalledTimes(1);
+	renderHook(() => useRegisterDirectory(mockStoreId, { fresh: true }));
+	await waitFor(() => expect(mockHttp.get).toHaveBeenCalledTimes(2));
+});
+
 it('reloads the directory on remount after a rejected request', async () => {
 	mockHttp.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ data: rows });
 	const first = renderHook(() => useRegisterDirectory(mockStoreId));

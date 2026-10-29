@@ -147,6 +147,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 let mockT: (key: string, options?: Record<string, unknown>) => string = (key) => key;
 jest.mock('../../../../contexts/translations', () => ({ useT: () => mockT }));
 let mockAwaitingStore = 0;
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => mockOpenOrdersHandle,
+}));
 jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitingStoreCount: () => mockAwaitingStore,
 }));
@@ -303,7 +307,7 @@ it.each([
 		mockStoreId = storeId;
 		mockObserve.mockClear();
 		const { result } = renderHook(() => useSalesToday());
-		await waitFor(() => expect(result.current).toBe(20));
+		await waitFor(() => expect(result.current).toEqual({ total: 20, count: 2 }));
 		const descriptor = mockObserve.mock.calls[0][1] as { selector: { date_created_gmt: unknown } };
 		expect(descriptor).toMatchObject({
 			collection: 'orders',
@@ -366,7 +370,6 @@ let mockCart:
 };
 jest.mock('../contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => mockCart,
-	useOpenOrdersOptional: () => [],
 }));
 // Undefined is the rail variant: outside CurrentOrderProvider, switching fails closed.
 it.each([true, false, undefined])('guards cart and rail switching: %s', (attributed) => {

@@ -82,11 +82,11 @@ export function useSalesToday() {
 			})
 		);
 	}, [runtime.engine, runtime.locale, wpCredentials.id, store.id, storeDay]);
-	return useObservableState(sales$, 0);
+	return useObservableState(sales$, { total: 0, count: 0 });
 }
 
 export function SalesTile({ sub }: { sub?: string }) {
-	const total = useSalesToday();
+	const { total } = useSalesToday();
 	const { format } = useCurrencyFormat();
 	const t = useT();
 	return (
@@ -339,7 +339,8 @@ function RegisterBand({
 						onPress={
 							row.id === registerId || attributed || busy
 								? undefined
-								: () => onChoose({ kind: 'register', register: row, state: description })
+								: () =>
+										onChoose({ kind: 'register', register: row, state: description, open: !!live })
 						}
 					/>
 				);

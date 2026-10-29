@@ -99,7 +99,3 @@ export const useCurrentOrderActions = (): CurrentOrderActions => {
 	}
 	return context;
 };
-
-/** The rail renders outside the provider and has no open carts to report. */
-export const useOpenOrdersOptional = (): OpenOrderHit[] =>
-	React.useContext(CurrentOrderContext)?.openOrders ?? [];

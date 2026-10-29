@@ -255,15 +255,36 @@ export function useRegisterBindingSession(): void {
 }
 
 /** Read another store's directory without changing the physical till binding. */
-export function useRegisterDirectory(storeId: number | undefined) {
+/** Drops the cached answer and asks again; concurrent callers join the one request in flight. */
+function refreshDirectory(
+	entry: Directory,
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	storeId: number | undefined
+) {
+	if (entry.refresh) return entry.refresh;
+	entry.request = undefined;
+	entry.loaded = false;
+	entry.refresh = loadDirectory(entry, http, storeId).finally(() => {
+		entry.refresh = undefined;
+	});
+	return entry.refresh;
+}
+
+/**
+ * Another store's directory, without binding. `fresh` asks again on every mount and whenever it
+ * turns true, for a reader that must not trust a cached answer (the store confirm's target rows).
+ */
+export function useRegisterDirectory(storeId: number | undefined, { fresh = false } = {}) {
 	const { site } = useStoreSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const entry = directory(site.uuid!, storeId);
 	// A reader mounted before (or without) the session hook still gets the directory.
 	React.useEffect(() => {
-		if (online && !entry.loaded) void loadDirectory(entry, http, storeId);
-	}, [entry, http, online, storeId]);
+		if (!online) return;
+		if (fresh) void refreshDirectory(entry, http, storeId);
+		else if (!entry.loaded) void loadDirectory(entry, http, storeId);
+	}, [entry, fresh, http, online, storeId]);
 	const subscribe = React.useCallback(
 		(notify: () => void) => {
 			entry.listeners.add(notify);
@@ -324,15 +345,9 @@ export function useRegisterBinding() {
 			});
 		return current.retry;
 	}, [http, online, site.uuid, store.id, userDB]);
-	const refresh = React.useCallback(() => {
-		const current = directory(site.uuid!, store.id);
-		if (current.refresh) return current.refresh;
-		current.request = undefined;
-		current.loaded = false;
-		current.refresh = loadDirectory(current, http, store.id).finally(() => {
-			current.refresh = undefined;
-		});
-		return current.refresh;
-	}, [http, site.uuid, store.id]);
+	const refresh = React.useCallback(
+		() => refreshDirectory(directory(site.uuid!, store.id), http, store.id),
+		[http, site.uuid, store.id]
+	);
 	return { ...value, bind, retry, refresh };
 }
