@@ -9,22 +9,20 @@ import * as z from 'zod';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { useDialog } from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
+import {
+	Form,
+	FormField,
+	FormSegmentedControl,
+	FormSelect,
+	FormSwitch,
+	useFormChangeHandler,
+} from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { ListRow } from '@wcpos/components/list-row';
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
 import { SectionHeading } from '@wcpos/components/section-heading';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
-import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
@@ -116,51 +114,40 @@ export function UISettingsForm() {
 					<FormField
 						control={form.control}
 						name="viewMode"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{getUILabel('viewMode')}</Text>
-								<SegmentedControl
-									value={value}
-									onValueChange={onChange}
-									segments={
-										[
-											{ value: 'grid', label: t('common.grid'), testID: 'view-mode-grid' },
-											{ value: 'table', label: t('common.table'), testID: 'view-mode-table' },
-										] satisfies [Segment, Segment]
-									}
-								/>
-							</View>
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('viewMode')}
+								testID="view-mode"
+								segments={[
+									{ value: 'grid', label: t('common.grid') },
+									{ value: 'table', label: t('common.table') },
+								]}
+							/>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="variationsStyle"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{t('pos_products.variations_style')}</Text>
-								<SegmentedControl
-									aria-label={t('pos_products.variations_style')}
-									value={value ?? 'drill'}
-									onValueChange={onChange}
-									segments={[
-										{
-											value: 'drill',
-											label: t('pos_products.variations_open_in_place'),
-											testID: 'products-variations-style-drill',
-										},
-										{
-											value: 'inline',
-											// What the inline style does in the view the form is set to: a popover on
-											// a tile, expanded rows under a table row.
-											label:
-												viewMode === 'grid'
-													? t('pos_products.variations_popover')
-													: t('pos_products.variations_expanded_rows'),
-											testID: 'products-variations-style-inline',
-										},
-									]}
-								/>
-							</View>
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={t('pos_products.variations_style')}
+								testID="products-variations-style"
+								value={field.value ?? 'drill'}
+								segments={[
+									{ value: 'drill', label: t('pos_products.variations_open_in_place') },
+									{
+										value: 'inline',
+										// What the inline style does in the view the form is set to: a popover on
+										// a tile, expanded rows under a table row.
+										label:
+											viewMode === 'grid'
+												? t('pos_products.variations_popover')
+												: t('pos_products.variations_expanded_rows'),
+									},
+								]}
+							/>
 						)}
 					/>
 					<FormField
@@ -173,35 +160,23 @@ export function UISettingsForm() {
 					<FormField
 						control={form.control}
 						name="position"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{getUILabel('position')}</Text>
-								<SegmentedControl
-									value={value}
-									onValueChange={(val) => onChange(val || value)}
-									segments={
-										[
-											{
-												value: 'left',
-												label: t('pos_products.products_left'),
-												testID: 'panel-position-left',
-											},
-											{
-												value: 'right',
-												label: t('pos_products.products_right'),
-												testID: 'panel-position-right',
-											},
-										] satisfies [Segment, Segment]
-									}
-								/>
-							</View>
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('position')}
+								testID="panel-position"
+								segments={[
+									{ value: 'left', label: t('pos_products.products_left') },
+									{ value: 'right', label: t('pos_products.products_right') },
+								]}
+							/>
 						)}
 					/>
 					<HStack className="items-end px-1">
 						<FormField
 							control={form.control}
 							name="sortBy"
-							render={({ field: { value, onChange } }) => {
+							render={({ field }) => {
 								const sortLabels: Record<string, string> = {
 									name: t('common.name'),
 									sku: t('common.sku'),
@@ -216,23 +191,13 @@ export function UISettingsForm() {
 									menu_order: t('common.menu_order'),
 								};
 								return (
-									<View className="flex-1 gap-1">
-										<Text>{getUILabel('sortBy')}</Text>
-										<Select
-											value={{ value, label: sortLabels[value] ?? value }}
-											onValueChange={(val) => onChange(val?.value || 'name')}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={getUILabel('sortBy')} />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectGroup>
-													{SORT_FIELD_VALUES.map((v) => (
-														<SelectItem key={v} label={sortLabels[v]} value={v} />
-													))}
-												</SelectGroup>
-											</SelectContent>
-										</Select>
+									<View className="flex-1">
+										<FormSelect
+											{...field}
+											label={getUILabel('sortBy')}
+											options={SORT_FIELD_VALUES.map((v) => ({ value: v, label: sortLabels[v] }))}
+											placeholder={getUILabel('sortBy')}
+										/>
 									</View>
 								);
 							}}
@@ -240,28 +205,16 @@ export function UISettingsForm() {
 						<FormField
 							control={form.control}
 							name="sortDirection"
-							render={({ field: { value, onChange } }) => (
-								<View className="gap-1">
-									<Text>{getUILabel('sortDirection')}</Text>
-									<SegmentedControl
-										value={value}
-										onValueChange={(val) => onChange(val || value)}
-										segments={
-											[
-												{
-													value: 'asc',
-													label: t('common.ascending'),
-													testID: 'sort-direction-asc',
-												},
-												{
-													value: 'desc',
-													label: t('common.descending'),
-													testID: 'sort-direction-desc',
-												},
-											] satisfies [Segment, Segment]
-										}
-									/>
-								</View>
+							render={({ field }) => (
+								<FormSegmentedControl
+									{...field}
+									label={getUILabel('sortDirection')}
+									testID="sort-direction"
+									segments={[
+										{ value: 'asc', label: t('common.ascending') },
+										{ value: 'desc', label: t('common.descending') },
+									]}
+								/>
 							)}
 						/>
 					</HStack>
