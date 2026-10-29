@@ -34,11 +34,12 @@ beforeEach(() => {
 	mockOpenDrawer.mockClear();
 });
 
-// Below `lg` the bar opens the drawer and carries the cashier entry; on `lg` the rail does both.
+// Below `lg` the bar opens the drawer; on `lg` the rail is always on screen. The cashier entry is
+// the bar's on every size: the rail lists pages only (Paul, 2026-10-29).
 it.each([
 	['sm', true],
 	['lg', false],
-] as const)('on %s the bar has the menu and the avatar: %s', (size, below) => {
+] as const)('on %s the bar has the menu: %s, and the avatar always', (size, below) => {
 	mockSize = size;
 	const { result } = renderHook(() => useBarMenu());
 	expect(result.current?.label).toBe(below ? 'common.menu' : undefined);
@@ -47,7 +48,7 @@ it.each([
 
 	render(<BarControls testID="register-bar" portalHost="pos" />);
 	expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
-	expect(screen.queryByTestId('register-bar-avatar') !== null).toBe(below);
+	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
 });
 
 it('puts the bell and the entry on the root host unless the bar names one', () => {

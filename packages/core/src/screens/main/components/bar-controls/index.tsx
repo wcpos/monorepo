@@ -40,7 +40,7 @@ export function useOnlineBadge(): { label: string; variant: 'warning' } | undefi
 	return undefined;
 }
 
-/** The bar's trailing pair: the bell, then the cashier entry where the rail does not carry it. */
+/** The bar's trailing pair: the bell, then the cashier entry, on every size (the rail lists pages only). */
 export function BarControls({
 	testID,
 	portalHost = null,
@@ -50,20 +50,17 @@ export function BarControls({
 	testID: string;
 	/** The POS host inside the till; the root everywhere else. */
 	portalHost?: string | null;
+	/** The register bar's: the cashier sheet's drawer figure opens its panel (the one door). */
 	onOpenRegister?: () => void;
 }) {
-	const phone = useIsPhone();
 	return (
 		<>
 			<NotificationBell testID={`${testID}-bell`} portalHost={portalHost ?? undefined} />
-			{phone && (
-				<CashierEntry
-					testID={`${testID}-avatar`}
-					placement="bar"
-					portalHost={portalHost}
-					onOpenRegister={onOpenRegister}
-				/>
-			)}
+			<CashierEntry
+				testID={`${testID}-avatar`}
+				portalHost={portalHost}
+				onOpenRegister={onOpenRegister}
+			/>
 		</>
 	);
 }

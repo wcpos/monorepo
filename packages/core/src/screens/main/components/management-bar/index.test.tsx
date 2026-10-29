@@ -66,10 +66,12 @@ it('rehosts drawer and avatar on a phone and opens the user sheet', () => {
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('null');
 	expect(screen.getByTestId('orders-bar-bell')).toBeTruthy();
 });
-it('leaves drawer and avatar to the wide rail', () => {
+// On wide the rail is always on screen, so no menu; the avatar stays on the bar (the rail lists
+// pages only, Paul 2026-10-29).
+it('leaves the drawer to the wide rail and keeps the avatar', () => {
 	bar();
 	expect(screen.queryByTestId('orders-bar-menu')).toBeNull();
-	expect(screen.queryByTestId('orders-bar-avatar')).toBeNull();
+	expect(screen.getByTestId('orders-bar-avatar')).toBeTruthy();
 });
 it.each([
 	['offline', 'common.status_offline'],
@@ -111,10 +113,8 @@ it.each([false, true])('omits the empty search slot (phone: %s)', (phone) => {
 	expect(container.children).toHaveLength(1);
 	expect(screen.getByTestId('settings-bar').children).toHaveLength(1);
 	expect(screen.queryByTestId('settings-bar-search')).toBeNull();
-	// The bell, then on a phone the avatar the rail carries off a phone.
-	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(
-		phone ? 2 : 1
-	);
+	// The bell, then the avatar, on every size.
+	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(2);
 });
 it('passes the phone back crumb through with its label, selector and action', () => {
 	mockPhone = true;

@@ -136,11 +136,15 @@ export function DrawerTile({
 					testID="user-sheet-drawer"
 					onPress={onOpen}
 					disabled={busy}
-					// In the confirm the tile only shows: no wash, so it does not read as a door.
+					// The one door to the register panel (Paul, 2026-10-29): the row's chevron and wash. In
+					// the confirm the tile only shows: no chevron, no wash, so it does not read as a door.
 					wash={onOpen ? 'muted' : 'none'}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
-					<Text variant="key">{label}</Text>
+					<View className="flex-row items-center justify-between gap-1">
+						<Text variant="key">{label}</Text>
+						{onOpen && <Icon name="chevronRight" className="text-muted-foreground" />}
+					</View>
 					{session ? (
 						<>
 							<AmountFigure size="tile">
@@ -418,7 +422,7 @@ export function UserSheet({
 	const storeName = useDocField(store, (value) => value.name);
 	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
-	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
+	// A page bar is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
 	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
