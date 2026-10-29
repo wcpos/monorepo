@@ -22,6 +22,7 @@ import {
 	observeRegisterSessions,
 	observeSessionAccounting,
 	openSession,
+	readClosedElsewhere,
 	readLiveSession,
 	readMovement,
 	recordLiveSession,
@@ -122,6 +123,8 @@ function isPastClose(closeTime: string | null | undefined) {
 export function useRegisterSession() {
 	const { store, wpCredentials, userDB, storeDB, site } = useStoreSession();
 	const actor = useRegisterActor();
+	const cashiers$ = React.useMemo(() => observeSiteCredentials(site), [site]);
+	const cashiers = useObservableState(cashiers$, PENDING_USER_DB_READ);
 	const { today, timezone } = useStoreDay();
 	const runtime = useQueryRuntime();
 	const binding = useRegisterBinding();
@@ -280,11 +283,23 @@ export function useRegisterSession() {
 	// The same anchor as `expected`, so the strip's terms add up to its total.
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
 	// The emitted document: a render from an emission can precede the writer's cache assignment.
-	const live = registerDoc
-		? registerDoc.sites[site.uuid!]?.registers?.[binding.registerId!]?.live
-		: readLiveSession(site.uuid!, binding.registerId!);
+	const bucket = registerDoc?.sites[site.uuid!]?.registers?.[binding.registerId!];
+	const live = registerDoc ? bucket?.live : readLiveSession(site.uuid!, binding.registerId!);
 	const figuresPending =
 		!!session && session.server_expected_at == null && !!live?.seeded_in.includes(storeDB.name);
+	const lastClosure =
+		data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null;
+	const countingBy =
+		session?.status === 'counting' && session.counting_by != null
+			? {
+					id: session.counting_by,
+					name:
+						(cashiers === PENDING_USER_DB_READ ? [] : cashiers).find(
+							(row) => row.id === session.counting_by
+						)?.display_name ?? null,
+					at: session.counting_started_at_gmt ?? null,
+				}
+			: null;
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -311,6 +326,18 @@ export function useRegisterSession() {
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!live?.counting_here,
+		countingElsewhere: !!session && session.status === 'counting' && !live?.counting_here,
+		countingBy,
+		// The refresh clears the live record as the remote close lands; the marker outlives it.
+		closedElsewhere:
+			!session &&
+			lastClosure &&
+			(registerDoc
+				? bucket?.closed_elsewhere
+				: readClosedElsewhere(site.uuid!, binding.registerId!)
+			)?.session_id === lastClosure.id
+				? { by: lastClosure.closed_by, at: lastClosure.closed_at }
+				: null,
 		salesCount:
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
@@ -318,8 +345,7 @@ export function useRegisterSession() {
 						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
 					).length
 				: orders.length,
-		lastClosure:
-			data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null,
+		lastClosure,
 		lastClosed:
 			data?.closed.sort((a, b) =>
 				(b.closed_at_gmt ?? '').localeCompare(a.closed_at_gmt ?? '')

@@ -1925,6 +1925,7 @@ it.each(['synced', 'pending'])(
 );
 
 it('reports counting on this device from the cached mark', async () => {
+	active = [{ ...active[0], status: 'counting' }];
 	addRxPlugin(RxDBLocalDocumentsPlugin);
 	const userDB: UserDatabase = await createRxDatabase({
 		name: `counting${Math.random().toString(36).slice(2)}`,
@@ -1949,10 +1950,94 @@ it('reports counting on this device from the cached mark', async () => {
 		await markCountingHere(userDB, 'site', 'register', true);
 		const result = await settled();
 		expect(result.current.countingHere).toBe(true);
+		expect(result.current.countingElsewhere).toBe(false);
 		await act(() => markCountingHere(userDB, 'site', 'register', false));
 		await waitFor(() => expect(result.current.countingHere).toBe(false));
+		expect(result.current.countingElsewhere).toBe(true);
 	} finally {
 		mockStoreSession.userDB = previous;
 		await userDB.remove();
 	}
 });
+
+// Dropping either the device mark or the server identity mislabels another till's count.
+it.each([
+	[undefined, null],
+	[null, null],
+	[8, { id: 8, name: 'Alex', at: '2026-10-29T17:00:00Z' }],
+	[99, { id: 99, name: null, at: '2026-10-29T17:00:00Z' }],
+])('names the counter only when the plugin supplied %s', async (counting_by, want) => {
+	const previous = active;
+	try {
+		active = [
+			{
+				...active[0],
+				status: 'counting',
+				counting_by,
+				counting_started_at_gmt: '2026-10-29T17:00:00Z',
+			},
+		];
+		const result = await settled();
+		await waitFor(() => expect(result.current.countingBy).toEqual(want));
+	} finally {
+		active = previous;
+	}
+});
+
+it('does not name a counter while selling', async () => {
+	const result = await settled();
+	expect(result.current.countingBy).toBeNull();
+	expect(result.current.countingElsewhere).toBe(false);
+});
+
+it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
+	'identifies a close %s from the closed-elsewhere marker',
+	async (kind) => {
+		addRxPlugin(RxDBLocalDocumentsPlugin);
+		const userDB: UserDatabase = await createRxDatabase({
+			name: `closedwhere${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			localDocuments: true,
+			multiInstance: false,
+		});
+		const previous = mockStoreSession.userDB,
+			previousActive = active,
+			previousClosures = closureRows;
+		mockStoreSession.userDB = userDB;
+		try {
+			await remintRegister(userDB);
+			await recordLiveSession(userDB, 'site', 'register', {
+				session_id: kind === 'different-session' ? 'other' : 'session',
+				status: 'counting',
+				opened_at_gmt: session.opened_at_gmt,
+				opened_by: null,
+				acknowledged: true,
+				expected_float: null,
+				counted_float: null,
+				business_day: null,
+			});
+			if (kind === 'here') await markCountingHere(userDB, 'site', 'register', true);
+			// A remote refresh clears live; our own close clears it with counting_here still set.
+			if (kind !== 'no-marker') await recordLiveSession(userDB, 'site', 'register', null);
+			active = [];
+			closureRows =
+				kind === 'no-closure'
+					? []
+					: [{ id: 'session', closed_by: 8, closed_at: '2026-10-29T17:00:00Z' }];
+			const { result, unmount } = renderHook(() => useRegisterSession());
+			try {
+				await waitFor(() => expect(result.current.loaded).toBe(true));
+				expect(result.current.closedElsewhere).toEqual(
+					kind === 'elsewhere' ? { by: 8, at: '2026-10-29T17:00:00Z' } : null
+				);
+			} finally {
+				unmount();
+			}
+		} finally {
+			mockStoreSession.userDB = previous;
+			active = previousActive;
+			closureRows = previousClosures;
+			await userDB.remove();
+		}
+	}
+);

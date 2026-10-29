@@ -709,6 +709,7 @@ let mockDrawer = {
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter' },
 	countingHere: false,
+	countingBy: null as { id: number; name: string | null; at: string | null } | null,
 	loaded: true,
 	actions: { startCounting: jest.fn(async () => {}) },
 };
@@ -759,7 +760,7 @@ describe('drawer door', () => {
 		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('register');
 		mockSegments = ['(app)', '(drawer)', '(pos)'];
 	});
 	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
@@ -1041,7 +1042,7 @@ describe('switch confirmations and guards', () => {
 		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('count');
 		expect(close).toHaveBeenCalledWith(false);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
@@ -1051,7 +1052,7 @@ describe('switch confirmations and guards', () => {
 		render(<UserSheet open onOpenChange={close} />);
 		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
-		expect(consumeRegisterPanelRequest()).toBe(false);
+		expect(consumeRegisterPanelRequest()).toBeNull();
 		expect(close).not.toHaveBeenCalledWith(false);
 		expect(mockLogError).toHaveBeenCalledWith(
 			'The count could not start',
@@ -1085,4 +1086,34 @@ describe('switch confirmations and guards', () => {
 			expect(screen.queryByTestId('switch-confirm')).toBeNull();
 		}
 	);
+});
+
+it('the Register band names the current counter only when the plugin supplies one', () => {
+	const previous = mockDrawer,
+		previousRegisters = mockRegisters,
+		previousT = mockT,
+		previousCart = mockCart;
+	mockT = createTestT();
+	mockCart = { payload: { meta_data: [] } };
+	mockRegisters = [
+		{
+			...mockDirectory[0],
+			last_closure: undefined,
+			session: { ...mockDirectory[0].session!, status: 'counting' },
+		},
+		mockDirectory[1],
+	];
+	mockDrawer = { ...mockDrawer, countingBy: { id: 7, name: 'Alex', at: '2026-10-29T17:41:00Z' } };
+	try {
+		const view = render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain('Alex');
+		mockDrawer = { ...mockDrawer, countingBy: null };
+		view.rerender(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).not.toContain('Alex');
+	} finally {
+		mockDrawer = previous;
+		mockRegisters = previousRegisters;
+		mockT = previousT;
+		mockCart = previousCart;
+	}
 });

@@ -35,6 +35,7 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { usePanelSide } from '../contexts/overlay-side';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
+import { RegisterCount } from './register-count';
 import { FigureTile } from './figure-tile';
 import { useNowMs } from '../../../../hooks/use-relative-time';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -42,27 +43,19 @@ import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
+import { type ClosureCount, ClosureWritten } from './closure-written';
 
 const STATIC_ROW =
 	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 const NOTE_INSET = 'px-2.5 py-1';
 
-function Opener({ id }: { id?: number | null }) {
-	const { site } = useStoreSession();
-	const credentials = useObservableSuspense(credentialsListResource(site));
-	const t = useT();
-	return (
-		<Text>
-			{credentials.find((row) => row.id === id)?.display_name ?? t('register.unknown_cashier')}
-		</Text>
-	);
-}
-
 export function RegisterPanel({
 	open,
 	onOpenChange,
+	initialPane = 'register',
 }: {
 	open: boolean;
+	initialPane?: 'register' | 'count';
 	onOpenChange: (open: boolean) => void;
 }) {
 	const {
@@ -73,6 +66,7 @@ export function RegisterPanel({
 		salesCount,
 		blind,
 		figuresPending,
+		countingHere,
 		overdue,
 		closeTime,
 		movements,
@@ -82,7 +76,19 @@ export function RegisterPanel({
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
-	const [pane, setPane] = React.useState<'register' | 'closure'>('register');
+	// This device's own count, or a close awaiting its closure write, opens on the count pane.
+	const landing =
+		(session?.status === 'counting' && countingHere) || session?.status === 'closed'
+			? 'count'
+			: 'register';
+	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
+	const [opening, setOpening] = React.useState({ open, initialPane });
+	if (open !== opening.open || initialPane !== opening.initialPane) {
+		setOpening({ open, initialPane });
+		if (open) setPane(landing);
+	}
+	const [written, setWritten] = React.useState<ClosureCount | null>(null);
+	const [countBusy, setCountBusy] = React.useState(false);
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
 	const t = useT();
@@ -91,7 +97,8 @@ export function RegisterPanel({
 		paid_out: t('register.paid_out'),
 		no_sale: t('register.no_sale'),
 	};
-	const { store } = useStoreSession();
+	const { store, site } = useStoreSession();
+	const credentials = useObservableSuspense(credentialsListResource(site));
 	const { registers } = useRegisterBinding();
 	const { heading, time } = useStoreDayLabel(store.id);
 	const { timezone } = useStoreDay();
@@ -107,14 +114,20 @@ export function RegisterPanel({
 	const side = usePanelSide('cart');
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
-	const close = (next: boolean) => {
-		if (!next) {
-			setPane('register');
-			setMovement(null);
-			setError('');
-		}
-		onOpenChange(next);
-	};
+	const close = (next: boolean) =>
+		void attempt(async () => {
+			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
+			// would write `open` over the closed session.
+			if (!next && countBusy) return;
+			if (!next && pane === 'count' && session?.status === 'counting')
+				await actions.backToSelling();
+			if (!next) {
+				setPane('register');
+				setMovement(null);
+				setError('');
+			}
+			onOpenChange(next);
+		});
 	// The store's own name for each tender (the gateway title), never its id: the drawer
 	// lists what the cashier took money as, and `stripe_terminal_for_woocommerce` is not that.
 	// The same fallback as the closure document for a method the store no longer advertises.
@@ -135,9 +148,21 @@ export function RegisterPanel({
 			);
 		}
 	};
+	// Opening is an external request, not a subscription to changes during a count.
+	const openPane = React.useEffectEvent(() => {
+		if (initialPane === 'count' && session?.status === 'open' && !figuresPending)
+			void attempt(async () => {
+				await actions.startCounting();
+				setPane('count');
+			});
+	});
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- The external opening requests the existing async count transition.
+		if (open) openPane();
+	}, [open, initialPane]);
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
-	if (!session && !lastClosure && refusedMovements.length === 0) return null;
+	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
 	const activeMovements = movements.filter(
 		(row) =>
 			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
@@ -187,6 +212,43 @@ export function RegisterPanel({
 			: variance < 0
 				? 'bad'
 				: 'ok';
+	const description = [
+		store.name,
+		openedTime &&
+			(session
+				? t('register.open_since', { time: openedTime })
+				: t('register.closed_at_time', { time: openedTime })),
+		session && openedDate && ageLabel(openedDate.getTime(), nowMs),
+		session &&
+			(credentials.find((row) => row.id === session.opened_by)?.display_name ??
+				t('register.unknown_cashier')),
+	]
+		.filter(Boolean)
+		.join(' · ');
+	if (pane === 'written' && written)
+		return (
+			<Dialog open={open} onOpenChange={close}>
+				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+					<ClosureWritten count={written} onDone={() => close(false)} />
+				</DialogContent>
+			</Dialog>
+		);
+	if (pane === 'count' && session)
+		return (
+			<Dialog open={open} onOpenChange={close}>
+				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+					<RegisterCount
+						description={description}
+						onBusyChange={setCountBusy}
+						onBack={() => setPane('register')}
+						onClosed={(count) => {
+							setWritten(count);
+							setPane('written');
+						}}
+					/>
+				</DialogContent>
+			</Dialog>
+		);
 	if (pane === 'closure' && lastClosure)
 		return (
 			<Dialog open={open} onOpenChange={close}>
@@ -209,27 +271,7 @@ export function RegisterPanel({
 						<DialogTitle numberOfLines={1}>
 							{registers.length === 1 ? t('register.register') : binding.registerName}
 						</DialogTitle>
-						<DialogDescription testID="register-panel-description">
-							{[
-								store.name,
-								openedTime &&
-									(session
-										? t('register.open_since', { time: openedTime })
-										: t('register.closed_at_time', { time: openedTime })),
-								session && openedDate && ageLabel(openedDate.getTime(), nowMs),
-							]
-								.filter(Boolean)
-								.join(' · ')}
-							{session && (
-								<>
-									{' '}
-									·{' '}
-									<React.Suspense fallback={null}>
-										<Opener id={session.opened_by} />
-									</React.Suspense>
-								</>
-							)}
-						</DialogDescription>
+						<DialogDescription testID="register-panel-description">{description}</DialogDescription>
 					</View>
 					{/* The X-report is a glyph beside the figure it prints. `mr-3` clears the panel's own ×,
 					    which sits 4 px past the header's `pr-ctl` reserve, and leaves the 8 between targets. */}
@@ -480,7 +522,7 @@ export function RegisterPanel({
 						onPress: () =>
 							void attempt(async () => {
 								await actions.startCounting();
-								close(false);
+								setPane('count');
 							}),
 					}}
 				/>

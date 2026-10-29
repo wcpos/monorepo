@@ -627,7 +627,7 @@ export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
 export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
 const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
 	schema: registerSessionsLiteral,
-	migrationStrategies: { 1: (oldDoc) => oldDoc, 2: (oldDoc) => oldDoc },
+	migrationStrategies: { 1: (oldDoc) => oldDoc, 2: (oldDoc) => oldDoc, 3: (oldDoc) => oldDoc },
 };
 export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
 export type CashMovementDocument = RxDocument<CashMovementRow>;

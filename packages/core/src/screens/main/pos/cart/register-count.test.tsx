@@ -75,7 +75,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
+	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
+let mockSessionStatus = 'counting';
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let figuresPending = false;
@@ -89,7 +93,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		varianceThreshold,
-		session: { id: 's', register_id: 'r', approval_required, approved_counted },
+		session: {
+			id: 's',
+			register_id: 'r',
+			status: mockSessionStatus,
+			approval_required,
+			approved_counted,
+		},
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
@@ -121,6 +131,7 @@ jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="appr
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
+	mockSessionStatus = 'counting';
 	approved_counted = null;
 	unsyncedCount = 3;
 	figuresPending = false;
@@ -131,7 +142,13 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 it('shows short and exact with check', () => {
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('463.30');
 	expect(screen.getByTestId('count-variance').textContent).toBe('−£17.50 short');
 	expect(screen.getByTestId('count-variance').parentElement?.parentElement?.textContent).toContain(
@@ -142,7 +159,13 @@ it('shows short and exact with check', () => {
 	expect(screen.getByTestId('count-exact')).toBeTruthy();
 });
 it('counts two notes, clears their contribution on typing, and clears the tiles', () => {
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	expect(screen.queryByTestId('den-tile-20')).toBeNull();
 	fireEvent.click(screen.getByTestId('count-denominations'));
 	fireEvent.click(screen.getByTestId('den-tile-20'));
@@ -158,7 +181,13 @@ it('counts two notes, clears their contribution on typing, and clears the tiles'
 });
 it('holds for ten, repeats, and does not also single tap', () => {
 	jest.useFakeTimers();
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('count-denominations'));
 	const tile = screen.getByTestId('den-tile-20');
 	fireEvent.mouseDown(tile);
@@ -174,7 +203,13 @@ it('holds for ten, repeats, and does not also single tap', () => {
 it('blind cashier sees neither expected nor local manager line', () => {
 	blind = true;
 	varianceThreshold = '5';
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('463.30');
 	expect(screen.queryByTestId('count-variance')).toBeNull();
 	expect(screen.queryByTestId('count-manager-line')).toBeNull();
@@ -182,7 +217,13 @@ it('blind cashier sees neither expected nor local manager line', () => {
 });
 it('requires manager over threshold', () => {
 	varianceThreshold = '5';
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('463.30');
 	expect(screen.getByTestId('count-manager-line-title').textContent).toContain('£5.00');
 	expect(screen.getByTestId('count-close').textContent).toBe('Approve & close');
@@ -203,14 +244,26 @@ it('requires manager over threshold', () => {
 it('server refusal requires approval even for an exact blind count', () => {
 	blind = true;
 	approval_required = true;
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('480.80');
 	expect(screen.getByTestId('count-manager-line-title').textContent).toBe('Approval needed');
 	expect(screen.queryByTestId('count-variance')).toBeNull();
 });
 it('closes with other tenders and reports the snapshot; blank cash is disabled', async () => {
 	const onClosed = jest.fn();
-	render(<RegisterCount onClosed={onClosed} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={onClosed}
+		/>
+	);
 	expect((screen.getByTestId('count-close') as HTMLButtonElement).disabled).toBe(true);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain('3 sales');
 	enter('480.80');
@@ -230,7 +283,13 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 
 it('a seeded counting session says the figures are still to come and cannot close', () => {
 	figuresPending = true;
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	expect(screen.getByTestId('count-figures-pending').textContent).toContain(
 		'Figures arrive with the next sync.'
 	);
@@ -241,7 +300,13 @@ it('a seeded counting session says the figures are still to come and cannot clos
 });
 
 it('returns to selling without closing', async () => {
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('count-back'));
 	await waitFor(() => expect(backToSelling).toHaveBeenCalledTimes(1));
 	expect(closeSession).not.toHaveBeenCalled();
@@ -252,7 +317,13 @@ it.each([
 	[3, '3 sales not yet'],
 ] as const)('pluralizes %s unsynced sales', (count, text) => {
 	unsyncedCount = count;
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
 
@@ -262,7 +333,13 @@ it('retries a failed close without a second approval for the same count', async 
 	varianceThreshold = '5';
 	approved_counted = { cash: '463.30' };
 	closeSession.mockRejectedValueOnce(new Error('offline'));
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('463.30');
 	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
 	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
@@ -289,11 +366,23 @@ it('requires approval for the same count after returning to selling and counting
 	backToSelling.mockImplementationOnce(async () => {
 		await resumeSelling(storeDB, 's');
 	});
-	const view = render(<RegisterCount onClosed={jest.fn()} />);
+	const view = render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	await act(async () => fireEvent.click(screen.getByTestId('count-back')));
 	await startCounting(storeDB, 's');
 	view.unmount();
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(closeSession).not.toHaveBeenCalled();
@@ -303,9 +392,73 @@ it('requires approval for the same count after returning to selling and counting
 
 it('requests approval again when the count changes after approval', () => {
 	approved_counted = { cash: '463.30' };
-	render(<RegisterCount onClosed={jest.fn()} />);
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+		/>
+	);
 	enter('480.80');
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(closeSession).not.toHaveBeenCalled();
 	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+});
+
+let mockCarts = { count: 0 };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => ({ subscribe: () => () => {}, value: mockCarts }),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({
+		onPress,
+		testID,
+		disabled,
+	}: {
+		onPress: () => void;
+		testID: string;
+		disabled?: boolean;
+	}) => <button data-testid={testID} disabled={disabled} onClick={onPress} />,
+}));
+it.each([0, 2])(
+	'shows the open-carts warning only for %s carts, without blocking close',
+	(count) => {
+		const previous = mockCarts;
+		mockCarts = { count };
+		try {
+			render(<RegisterCount description="Shop · Pat" onBack={jest.fn()} onClosed={jest.fn()} />);
+			enter('480.80');
+			expect(screen.getByRole('heading').textContent).toBe('Close Front');
+			expect(screen.getByText('Shop · Pat')).toBeTruthy();
+			expect(screen.getByTestId('count-unsynced').textContent).toContain(
+				'the closure will record them'
+			);
+			expect(screen.queryByTestId('count-open-carts')?.textContent ?? null).toBe(
+				count ? '2 carts still open · they wait for their cashier' : null
+			);
+			expect((screen.getByTestId('count-close') as HTMLButtonElement).disabled).toBe(false);
+			expect(screen.getByTestId('count-close').textContent).toBe('Close & print');
+		} finally {
+			mockCarts = previous;
+		}
+	}
+);
+it('backs out only after returning the session to selling', async () => {
+	const onBack = jest.fn();
+	render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('count-back'));
+	await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+	expect(backToSelling.mock.invocationCallOrder[0]).toBeLessThan(
+		onBack.mock.invocationCallOrder[0]
+	);
+});
+
+it('backs out of a closed session without returning it to selling', async () => {
+	mockSessionStatus = 'closed';
+	const onBack = jest.fn();
+	render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('count-back'));
+	await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+	expect(backToSelling).not.toHaveBeenCalled();
+	expect(closeSession).not.toHaveBeenCalled();
 });

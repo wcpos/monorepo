@@ -2,6 +2,14 @@ import * as React from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import {
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
+import { IconButton } from '@wcpos/components/icon-button';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
@@ -10,6 +18,7 @@ import { TileGrid } from '@wcpos/components/tile-grid';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
+import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -27,7 +36,7 @@ import {
 } from './register-count.helpers';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
-import type { ClosureCount } from './closure-sheet';
+import type { ClosureCount } from './closure-written';
 
 export function DenominationTile({
 	currencyOptions,
@@ -67,14 +76,30 @@ export function DenominationTile({
 				if (!held.current) add(1);
 			}}
 		>
-			<Text className="max-w-full text-sm tabular-nums" numberOfLines={1} adjustsFontSizeToFit>
+			<Text
+				variant="key"
+				className="max-w-full tabular-nums"
+				numberOfLines={1}
+				adjustsFontSizeToFit
+			>
 				{format(Number(value))}
 			</Text>
 		</Tile>
 	);
 }
 
-export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) => void }) {
+export function RegisterCount({
+	description,
+	onBack,
+	onClosed,
+	onBusyChange,
+}: {
+	description: string;
+	onBack: () => void;
+	onClosed: (count: ClosureCount) => void;
+	/** The close in flight: the panel refuses its own dismissal meanwhile (Codex, #3073). */
+	onBusyChange?: (busy: boolean) => void;
+}) {
 	const {
 		session,
 		actions,
@@ -85,7 +110,9 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		unsyncedCount,
 		figuresPending,
 	} = useRegisterSession();
-	const { store } = useStoreSession();
+	const { store, wpCredentials } = useStoreSession();
+	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
+	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
@@ -123,6 +150,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
 		setBusy(true);
+		onBusyChange?.(true);
 		setError('');
 		try {
 			await action();
@@ -130,30 +158,15 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			setError(t('register.count_failed'));
 		} finally {
 			setBusy(false);
+			onBusyChange?.(false);
 		}
 	};
-	return (
+	const body = (
 		<ScrollView
 			className="flex-1"
 			contentContainerClassName="gap-4 px-4 py-5"
 			keyboardShouldPersistTaps="handled"
 		>
-			<View className="flex-row items-center">
-				<Text className="text-muted-foreground flex-1">
-					{t('register.close_register_title', { name: binding.registerName })}
-				</Text>
-				<Button
-					testID="count-back"
-					variant="ghost"
-					size="sm"
-					// Compact look, 44 pt target: 36 px tall plus 4 px of hit slop each side.
-					hitSlop={{ top: 4, bottom: 4 }}
-					disabled={busy}
-					onPress={() => attempt(actions.backToSelling)}
-				>
-					{t('register.back_to_selling')}
-				</Button>
-			</View>
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
@@ -276,9 +289,18 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						</View>
 					))}
 			{unsyncedCount > 0 && (
-				<Text testID="count-unsynced" className="text-muted-foreground min-h-row">
-					{t('register.unsynced_sales', { count: unsyncedCount })}
-				</Text>
+				<Notice
+					tone="info"
+					testID="count-unsynced"
+					title={t('register.unsynced_sales_closure_records', { count: unsyncedCount })}
+				/>
+			)}
+			{carts > 0 && (
+				<Notice
+					tone="warning"
+					testID="count-open-carts"
+					title={t('register.open_carts_wait', { count: carts })}
+				/>
 			)}
 			{!!error && (
 				<Text testID="count-error" className="text-bad">
@@ -288,35 +310,61 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			{approving && (
 				<ApproveSheet counted={counted} onClosed={completed} onOpenChange={setApproving} />
 			)}
-			<Button
-				testID="count-close"
-				size="lg"
-				className="w-full"
-				loading={busy}
-				disabled={
-					!valid ||
-					figuresPending ||
-					Object.values(others).some((value) => value !== '' && !validAmount(value))
-				}
-				onPress={() => {
-					if (!blind && valid && overThreshold(variance, varianceThreshold))
-						recordRegisterFact({
-							kind: 'variance-over-threshold',
-							actor,
-							sessionId: session?.id,
-							registerId: session?.register_id,
-							variance: fromMinor(variance, 2),
-							threshold: varianceThreshold,
-						});
-					if (needsManager) setApproving(true);
-					else
-						void attempt(async () => {
-							completed(await actions.closeSession({ counted }));
-						});
-				}}
-			>
-				{needsManager ? t('register.approve_and_close') : t('register.close_and_print')}
-			</Button>
 		</ScrollView>
+	);
+	return (
+		<>
+			<DialogHeader className="flex-row items-center gap-3">
+				<IconButton
+					name="chevronLeft"
+					testID="count-back"
+					disabled={busy}
+					accessibilityLabel={t('register.back_to_selling')}
+					onPress={() =>
+						attempt(async () => {
+							// A closed session awaiting its closure write is not one to reopen.
+							if (session?.status === 'counting') await actions.backToSelling();
+							onBack();
+						})
+					}
+				/>
+				<ToneDisc tone="muted" icon="register" size="sm" />
+				<View className="min-w-0 flex-1">
+					<DialogTitle>
+						{t('register.close_register_title', { name: binding.registerName })}
+					</DialogTitle>
+					<DialogDescription>{description}</DialogDescription>
+				</View>
+			</DialogHeader>
+			{body}
+			<DialogFooter
+				size="lg"
+				intent={{
+					label: needsManager ? t('register.approve_and_close') : t('register.close_and_print'),
+					testID: 'count-close',
+					loading: busy,
+					disabled:
+						!valid ||
+						figuresPending ||
+						Object.values(others).some((value) => value !== '' && !validAmount(value)),
+					onPress: () => {
+						if (!blind && valid && overThreshold(variance, varianceThreshold))
+							recordRegisterFact({
+								kind: 'variance-over-threshold',
+								actor,
+								sessionId: session?.id,
+								registerId: session?.register_id,
+								variance: fromMinor(variance, 2),
+								threshold: varianceThreshold,
+							});
+						if (needsManager) setApproving(true);
+						else
+							void attempt(async () => {
+								completed(await actions.closeSession({ counted }));
+							});
+					},
+				}}
+			/>
+		</>
 	);
 }
