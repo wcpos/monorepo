@@ -347,7 +347,10 @@ export function UserSheet({
 	const router = useRouter();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
-	const onPOS = useSegments().includes('(pos)');
+	// `string[]` as every other reader does: apps/main's typed routes make the tuple's members
+	// a union the literal is not assignable to.
+	const segments: string[] = useSegments();
+	const onPOS = segments.includes('(pos)');
 	const cartSide = usePanelSide('cart');
 	const side = onPOS ? cartSide : 'right';
 	const { registers, registerName, status } = useRegisterBinding();
