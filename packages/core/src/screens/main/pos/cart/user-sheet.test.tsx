@@ -159,6 +159,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
 const mockBind = jest.fn();
+const mockRefresh = jest.fn(async () => undefined);
 const mockDirectory = [
 	{
 		id: 'A',
@@ -181,6 +182,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 		registerId: 'A',
 		status: mockBindingStatus,
 		bind: mockBind,
+		refresh: mockRefresh,
 	}),
 }));
 let mockRegisterData: RegisterDocument;
@@ -201,6 +203,7 @@ beforeEach(async () => {
 	mockRegisterData = { id: 'device', name: 'Device', platform: 'web', created_at: '', sites: {} };
 	await readRegister(mockUserDB);
 	mockBind.mockClear();
+	mockRefresh.mockClear();
 });
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 
@@ -467,6 +470,24 @@ describe('store band', () => {
 		fireEvent.click(row);
 		expect(mockSwitch).not.toHaveBeenCalled();
 	});
+	it('holds every other session-changing action while a switch is hydrating', () => {
+		mockSwitching = true;
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		const other = screen.getByTestId('user-sheet-user-other');
+		expect(other.getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(other);
+		expect(mockLogin).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet-register-back').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
+		expect(mockBind).not.toHaveBeenCalled();
+		const signOut = screen.getByTestId('user-sheet-sign-out') as HTMLButtonElement;
+		expect(signOut.disabled).toBe(true);
+		mockLogout.mockClear();
+		fireEvent.click(signOut);
+		expect(mockLogout).not.toHaveBeenCalled();
+	});
 	it('keeps the sheet open and shows a toast when hydration fails', async () => {
 		mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
 		const onOpenChange = jest.fn();
@@ -697,6 +718,13 @@ describe('register band', () => {
 		mockBindingStatus = 'bound';
 		mockT = (key) => key;
 		mockStoreTimezone = undefined;
+	});
+	it('refreshes the directory each time the band opens', () => {
+		const first = render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(mockRefresh).toHaveBeenCalledTimes(1);
+		first.unmount();
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(mockRefresh).toHaveBeenCalledTimes(2);
 	});
 	it('offers no register band on a store with one register', () => {
 		mockRegisters = [mockDirectory[0]];

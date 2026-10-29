@@ -84,7 +84,7 @@ export function useSalesToday() {
 	return useObservableState(sales$, 0);
 }
 
-function Figures({ onOpen }: { onOpen: () => void }) {
+function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 	const total = useSalesToday();
 	const { format } = useCurrencyFormat();
 	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
@@ -107,6 +107,7 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 				<PressableSurface
 					testID="user-sheet-drawer"
 					onPress={onOpen}
+					disabled={busy}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
 					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
@@ -171,7 +172,7 @@ function AwaitingStore() {
 	);
 }
 
-function UserRows() {
+function UserRows({ busy }: { busy: boolean }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
 	const { login } = useAppState();
 	const router = useRouter();
@@ -215,8 +216,11 @@ function UserRows() {
 					}
 					choice
 					selected={credential.uuid === wpCredentials.uuid}
+					disabled={busy}
 					onPress={
-						credential.uuid === wpCredentials.uuid ? undefined : () => void switchUser(credential)
+						credential.uuid === wpCredentials.uuid || busy
+							? undefined
+							: () => void switchUser(credential)
 					}
 					leading={
 						<RecordAvatar
@@ -264,9 +268,22 @@ function StoreBand({
 	);
 }
 
-function RegisterBand({ attributed, reason }: { attributed: boolean; reason: string }) {
+function RegisterBand({
+	attributed,
+	reason,
+	busy,
+}: {
+	attributed: boolean;
+	reason: string;
+	busy: boolean;
+}) {
 	const { userDB, site } = useStoreSession();
-	const { registers, registerId, bind } = useRegisterBinding();
+	const { registers, registerId, bind, refresh } = useRegisterBinding();
+	// The directory keeps its loaded answer until asked again; the band asks on every opening,
+	// as the picker did, so another till's open, close or count reaches the rows (Codex, #3045).
+	React.useEffect(() => {
+		void refresh();
+	}, [refresh]);
 	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
 	const device = useObservableState(register$);
 	const { timezone } = useStoreDay();
@@ -302,8 +319,8 @@ function RegisterBand({ attributed, reason }: { attributed: boolean; reason: str
 						selected={row.id === registerId}
 						label={row.name}
 						description={attributed ? reason : description}
-						disabled={attributed}
-						onPress={row.id === registerId ? undefined : () => void bind(row.id)}
+						disabled={attributed || busy}
+						onPress={row.id === registerId || busy ? undefined : () => void bind(row.id)}
 					/>
 				);
 			})}
@@ -379,6 +396,7 @@ export function UserSheet({
 						<DialogBody className="gap-0">
 							<Suspense>
 								<Figures
+									busy={isSwitching}
 									onOpen={() => {
 										if (onOpenRegister) onOpenRegister();
 										else {
@@ -395,9 +413,12 @@ export function UserSheet({
 									<Text variant="caption">{t('register.cashier')}</Text>
 								</View>
 								<Suspense>
-									<UserRows />
+									<UserRows busy={isSwitching} />
 								</Suspense>
-								<AddUserButton site={site} hasExistingUsers compact />
+								{/* Every session-changing action is inert while a store switch hydrates: the overlay
+								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
+								    when the switch publishes its session (Codex, #3045). */}
+								{!isSwitching && <AddUserButton site={site} hasExistingUsers compact />}
 							</View>
 							<Suspense>
 								<StoreBand
@@ -410,6 +431,7 @@ export function UserSheet({
 							{status === 'bound' && registers.length > 1 && (
 								<RegisterBand
 									attributed={attributed}
+									busy={isSwitching}
 									reason={
 										currentOrder
 											? t('register.switch_register_blocked_cart')
@@ -443,6 +465,7 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
+							disabled: isSwitching,
 							onPress: () => void logout(),
 						}}
 					/>
