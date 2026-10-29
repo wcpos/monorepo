@@ -22,9 +22,7 @@ function opener({ onPress, testID }: { onPress?: () => void; testID?: string }) 
 	return <button data-testid={testID} onClick={onPress} />;
 }
 jest.mock('react-native', () => ({ View: passthrough }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: opener }));
-jest.mock('@wcpos/components/nav-item', () => ({ NavItem: opener }));
 jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({
@@ -61,12 +59,12 @@ beforeEach(() => {
 	triggerChild = undefined;
 });
 
-it.each([false, true])('opens the sheet and marks seen from the opener (label=%s)', (showLabel) => {
-	render(<NotificationBell showLabel={showLabel} portalHost="pos" />);
-	expect(triggerChild?.props.testID).toBe('drawer-item-notifications');
+it('opens the sheet and marks seen from the opener', () => {
+	render(<NotificationBell testID="register-bar-bell" portalHost="pos" />);
+	expect(triggerChild?.props.testID).toBe('register-bar-bell');
 	expect(mockPanel).not.toHaveBeenCalled();
 	expect(mockSeen).not.toHaveBeenCalled();
-	fireEvent.click(screen.getByTestId('drawer-item-notifications'));
+	fireEvent.click(screen.getByTestId('register-bar-bell'));
 	expect(mockSeen).toHaveBeenCalledTimes(1);
 	expect(mockPanel).toHaveBeenCalledTimes(1);
 	const sheet = screen.getByTestId('notifications-sheet');
