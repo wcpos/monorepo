@@ -27,7 +27,8 @@ import {
 } from '../lib/overlay';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 import { isToastTarget } from '../toast/target';
 import { useDialogLabels } from './labels';

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View, ViewProps } from 'react-native';
 
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 // The inset is the card's job, not each caller's: `row` for a device or list row card (12),
 // `body` for a card's body (16, the gutter table's "inside a surface").

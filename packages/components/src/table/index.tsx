@@ -6,7 +6,7 @@ import * as TablePrimitive from '@rn-primitives/table';
 
 import { currentRowMark } from '../lib/current-row';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 import { PulseTableRow } from './pulse-row';
 

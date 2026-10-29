@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
-import { Text, TextClassContext, type TextProps } from '../text';
+import { Text, type TextProps } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 
 export type MenuRowProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'dimmed'> & {

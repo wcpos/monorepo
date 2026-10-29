@@ -6,7 +6,7 @@ import Animated from 'react-native-reanimated';
 
 import { OVERLAY_MOTION } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
 

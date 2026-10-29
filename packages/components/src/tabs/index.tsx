@@ -16,7 +16,7 @@ import { useIsPhone } from '../lib/device';
 import { hapticPress } from '../lib/haptics';
 import { cn } from '../lib/utils';
 import { OptionSelect } from '../select';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 // Wrap ScrollView with uniwind to support className prop
 const StyledScrollView = withUniwind(ScrollView);

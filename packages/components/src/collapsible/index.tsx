@@ -3,7 +3,7 @@ import * as React from 'react';
 import * as CollapsiblePrimitive from './primitives';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { CollapsibleRootProps } from './types';
 import type { SlottablePressableProps, SlottableViewProps } from '@rn-primitives/types';
