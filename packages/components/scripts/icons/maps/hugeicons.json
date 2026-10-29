@@ -90,7 +90,7 @@
  "receipt": "receipt",
  "refresh": "refresh",
  "refund": "undo",
- "register": "register",
+ "register": "cashier-02",
  "rejected": "circle-x",
  "reports": "chart-line",
  "scan": "scan",
