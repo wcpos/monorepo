@@ -46,7 +46,7 @@ export function AreaPage({
 			<Text role="heading" aria-level={1} className="text-xl font-semibold">
 				{title}
 			</Text>
-			{!!description && <Text className="text-muted-foreground text-sm">{description}</Text>}
+			{!!description && <Text variant="help">{description}</Text>}
 		</View>
 	);
 	const body = (

@@ -25,7 +25,7 @@ function GroupedNamesList({ handle }: { handle: QueryHandle }) {
 	 */
 	return (
 		<HStack className="flex-wrap gap-0">
-			<Text className="text-muted-foreground text-xs">{`${t('common.grouped')}: `}</Text>
+			<Text variant="help">{`${t('common.grouped')}: `}</Text>
 			<Text className="text-xs" decodeHtml>
 				{names.join(', ')}
 			</Text>

@@ -193,7 +193,9 @@ function StoreSelectReader({
 										labelClassName="text-base"
 										right={
 											store.id != null ? (
-												<Text className="text-muted-foreground ml-auto text-sm">#{store.id}</Text>
+												<Text variant="key" className="ml-auto">
+													#{store.id}
+												</Text>
 											) : null
 										}
 									/>

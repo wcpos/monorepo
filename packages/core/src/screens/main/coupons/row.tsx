@@ -49,11 +49,11 @@ export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
 				{coupon.code}
 			</Text>
 			{!!coupon.description && (
-				<Text numberOfLines={1} className="text-muted-foreground text-sm">
+				<Text numberOfLines={1} variant="key">
 					{coupon.description}
 				</Text>
 			)}
-			<Text numberOfLines={1} className="text-muted-foreground text-sm">
+			<Text numberOfLines={1} variant="key">
 				{[
 					discountTypeLabel(type, t),
 					format(Number(coupon.amount)),

@@ -190,7 +190,7 @@ export function RejectedMutationsPanel() {
 							    its REST error copy with entities baked in ("vous n&rsquo;etes
 							    pas autorise"). Rendered raw it puts markup in front of the
 							    cashier, so decode it like every other server-supplied string. */}
-							<Text className="text-muted-foreground text-xs" decodeHtml>
+							<Text variant="help" decodeHtml>
 								{describeReason(row, t)}
 							</Text>
 							{row.rejectedAt ? (

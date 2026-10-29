@@ -201,7 +201,7 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 			return (
 				<HStack className="items-center justify-end gap-2">
 					<Loader size="sm" />
-					<Text className="text-muted-foreground text-xs">{coverage.label}</Text>
+					<Text variant="help">{coverage.label}</Text>
 				</HStack>
 			);
 		case 'complete':
@@ -224,7 +224,11 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 				</Tooltip>
 			);
 		default:
-			return <Text className="text-muted-foreground text-right text-xs">{coverage.label}</Text>;
+			return (
+				<Text variant="help" className="text-right">
+					{coverage.label}
+				</Text>
+			);
 	}
 }
 
@@ -371,7 +375,7 @@ function CollectionRowView({
 
 	const clearingSub =
 		phase === 'clearing' ? (
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{t('health.database.redownloading_count', {
 					count: row.local.toLocaleString(),
 				})}
@@ -394,12 +398,10 @@ function CollectionRowView({
 						) : null}
 					</HStack>
 					{isVariations ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.variations_policy')}
-						</Text>
+						<Text variant="help">{t('health.database.variations_policy')}</Text>
 					) : null}
 					{row.key === 'orders' || row.key === 'refunds' ? (
-						<Text className="text-muted-foreground text-xs">
+						<Text variant="help">
 							{row.key === 'refunds'
 								? t('health.database.refunds_policy', { days: HISTORY_DAYS })
 								: t('health.database.orders_policy')}
@@ -411,7 +413,7 @@ function CollectionRowView({
 					<Text className="text-right tabular-nums">{row.local.toLocaleString()}</Text>
 				</TableCell>
 				<TableCell className={DB_COLUMN.server}>
-					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+					<Text variant="key" tabular className="text-right">
 						{story.serverText}
 					</Text>
 				</TableCell>
@@ -419,7 +421,7 @@ function CollectionRowView({
 					<CoverageCell coverage={story.coverage} />
 				</TableCell>
 				<TableCell className={DB_COLUMN.size}>
-					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+					<Text variant="key" tabular className="text-right">
 						{sizeText ? `≈ ${sizeText}` : '—'}
 					</Text>
 				</TableCell>
@@ -442,9 +444,7 @@ function CollectionRowView({
 							</Badge>
 						) : null}
 					</HStack>
-					<Text
-						className={`text-muted-foreground text-xs tabular-nums ${isVariations ? 'pl-4' : ''}`}
-					>
+					<Text variant="help" tabular className={isVariations ? 'pl-4' : undefined}>
 						{phase === 'clearing'
 							? t('health.database.redownloading_count', {
 									count: row.local.toLocaleString(),
@@ -464,7 +464,7 @@ function CollectionRowView({
 					</Text>
 				</View>
 				<View className="items-end">
-					<Text className="text-muted-foreground text-sm tabular-nums">
+					<Text variant="key" tabular>
 						{sizeText ? `≈ ${sizeText}` : '—'}
 					</Text>
 					{story.coverage.kind === 'partial' || story.coverage.kind === 'windowed' ? (
@@ -547,7 +547,7 @@ function FootprintRow({
 				{sub ? <Text className="text-muted-foreground/80 text-xs">{sub}</Text> : null}
 			</TableCell>
 			<TableCell className="flex-none items-end px-0 py-0">
-				<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
+				<Text variant="key" tabular className="text-right">{`≈ ${text}`}</Text>
 			</TableCell>
 			<TableCell className={DB_COLUMN.actions} />
 		</TableRow>
@@ -789,10 +789,7 @@ export function DatabaseScreen() {
 								bytes={footprint.unattributedBytes}
 							/>
 							{showBrowserEstimateNote && browserEstimateText ? (
-								<Text
-									testID="db-note-browser-estimate"
-									className="text-muted-foreground py-2 text-xs"
-								>
+								<Text testID="db-note-browser-estimate" variant="help" className="py-2">
 									{t('health.database.storage_browser_estimate_note', {
 										size: browserEstimateText,
 									})}

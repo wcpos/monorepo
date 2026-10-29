@@ -85,7 +85,7 @@ export function HelpSheet({
 				{/* The two chords collide with Firefox's menu mnemonics on Windows only; on a Mac the
 				    modifier is Option and the note would mislead. */}
 				{chordPlatform() !== 'mac' && (
-					<Text className="text-muted-foreground px-4 text-sm">
+					<Text variant="key" className="px-4">
 						{t('pos_commands.help_firefox_note')}
 					</Text>
 				)}
