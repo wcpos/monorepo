@@ -24,6 +24,15 @@ jest.mock('@wcpos/query/user-db', () => ({
 	observeCredentialStores: () => of(PENDING_USER_DB_READ, mockOtherStores),
 }));
 
+let mockPaying = false;
+let mockOnline = true;
+jest.mock('../checkout/payments/payment-in-flight', () => ({
+	usePaymentInFlight: () => mockPaying,
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
+}));
+
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
@@ -161,7 +170,9 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
-jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
+jest.mock('../../../auth/components/add-user-button', () => ({
+	AddUserButton: () => <button data-testid="another-account">Another account…</button>,
+}));
 const mockBind = jest.fn();
 const mockRefresh = jest.fn(async () => undefined);
 const mockDirectory = [
@@ -683,6 +694,8 @@ let mockDrawer = {
 	salesCount: 3,
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter' },
+	countingHere: false,
+	actions: { startCounting: jest.fn(async () => {}) },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => mockDrawer,
@@ -867,7 +880,7 @@ describe('register band', () => {
 	});
 });
 
-describe('switch confirmations', () => {
+describe('switch confirmations and guards', () => {
 	let previous: {
 		storeId: typeof mockStoreId;
 		cart: typeof mockCart;
@@ -887,6 +900,7 @@ describe('switch confirmations', () => {
 		mockT = createTestT();
 		mockLogin.mockClear();
 		mockLogout.mockClear();
+		mockDrawer.actions.startCounting.mockClear();
 		consumeRegisterPanelRequest();
 	});
 	afterEach(() => {
@@ -894,6 +908,8 @@ describe('switch confirmations', () => {
 		mockCart = previous.cart;
 		mockStores = previous.stores;
 		mockDrawer = previous.drawer;
+		mockPaying = false;
+		mockOnline = true;
 		mockT = (key) => key;
 	});
 	it('asks before handing the till over, and runs the login on confirm', async () => {
@@ -917,6 +933,98 @@ describe('switch confirmations', () => {
 		expect(mockLogin).not.toHaveBeenCalled();
 		expect(close).not.toHaveBeenCalled();
 		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	});
+	it('holds every row and Sign out while a payment is in flight, and says why once', () => {
+		const previous = mockPaying;
+		mockPaying = true;
+		try {
+			const { rerender } = render(<UserSheet open onOpenChange={jest.fn()} />);
+			expect(screen.queryByTestId('another-account')).toBeNull();
+			expect(screen.getAllByTestId('user-sheet-hold')).toHaveLength(1);
+			expect(screen.getByTestId('user-sheet-hold').textContent).toContain(
+				'Finish the payment first'
+			);
+			for (const id of [
+				'user-sheet-user-other',
+				'user-sheet-store-store-b',
+				'user-sheet-register-back',
+			]) {
+				expect(screen.getByTestId(id).getAttribute('aria-disabled')).toBe('true');
+				fireEvent.click(screen.getByTestId(id));
+			}
+			expect((screen.getByTestId('user-sheet-sign-out') as HTMLButtonElement).disabled).toBe(true);
+			expect(screen.queryByTestId('switch-confirm')).toBeNull();
+			mockPaying = false;
+			rerender(<UserSheet open onOpenChange={jest.fn()} />);
+			expect(screen.queryByTestId('user-sheet-hold')).toBeNull();
+			expect(screen.getByTestId('another-account')).toBeTruthy();
+			for (const id of [
+				'user-sheet-user-other',
+				'user-sheet-store-store-b',
+				'user-sheet-register-back',
+			])
+				expect(screen.getByTestId(id).getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockPaying = previous;
+		}
+	});
+	it('holds only the cashier rows while this device is counting', () => {
+		const previous = mockDrawer.countingHere;
+		mockDrawer.countingHere = true;
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).toBe(
+				'true'
+			);
+			expect(screen.getByTestId('user-sheet-user-other').textContent).toContain(
+				'Finish or abandon the count first'
+			);
+			for (const id of ['user-sheet-store-store-b', 'user-sheet-register-back'])
+				expect(screen.getByTestId(id).getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockDrawer.countingHere = previous;
+		}
+	});
+	it('offline: store rows are held and Another account is hidden, a saved cashier is not', async () => {
+		const previous = mockOnline;
+		mockOnline = false;
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('user-sheet-store-store-b').getAttribute('aria-disabled')).toBe(
+				'true'
+			);
+			expect(screen.getByTestId('user-sheet-store-store-b').textContent).toContain(
+				'Needs the store to switch'
+			);
+			expect(screen.queryByTestId('another-account')).toBeNull();
+			expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
+				'true'
+			);
+			fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+			expect(screen.getByTestId('switch-confirm')).toBeTruthy();
+			await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+			expect(mockLogin).toHaveBeenCalledTimes(1);
+		} finally {
+			mockOnline = previous;
+		}
+	});
+	it('Sign out with an open register asks to close first; Close register opens the count', async () => {
+		const close = jest.fn();
+		render(<UserSheet open onOpenChange={close} />);
+		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
+		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
+		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(close).toHaveBeenCalledWith(false);
+		expect(mockLogout).not.toHaveBeenCalled();
+	});
+	it('Sign out anyway signs out', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-secondary')));
+		expect(mockLogout).toHaveBeenCalledTimes(1);
+		expect(mockDrawer.actions.startCounting).not.toHaveBeenCalled();
 	});
 	it.each(['closed', 'unbound'])(
 		'Sign out with the register %s signs out at once',

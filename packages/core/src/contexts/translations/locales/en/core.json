@@ -3061,6 +3061,13 @@
 	"register.register_switch_moves_device_short": "This device moves to {name}.",
 	"register.you_open_with_float": "You'll open it with a float.",
 	"register.you_join_it": "You join it.",
+	"register.still_open_close_first": "{name} is still open at {amount}. Close it first?",
+	"register.still_open_close_first_blind": "{name} is still open. Close it first?",
+	"register.open_till_stays_open": "A till left open stays open for the next cashier. The closure records who closed it.",
+	"register.sign_out_anyway": "Sign out anyway",
+	"register.finish_payment_first": "Finish the payment first",
+	"register.finish_count_first": "Finish or abandon the count first",
+	"register.needs_store_to_switch": "Needs the store to switch",
 	"register.open_carts_count_other": "{count} open carts",
 	"register.unsent_sales_count_other": "{count} unsent sales"
 }
