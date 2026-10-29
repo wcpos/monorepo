@@ -28,10 +28,12 @@ export function ClosureList({
 	onSelect,
 	unavailableIds,
 	storeId,
-	sessions = [],
+	sessions: allSessions = [],
 	sessionRows,
 	blind,
 	scopeDay,
+	scopeFrom,
+	scopeTo,
 	status,
 	footer,
 	showEmpty = true,
@@ -45,6 +47,9 @@ export function ClosureList({
 	sessionRows?: React.ReactNode;
 	blind?: boolean;
 	scopeDay?: string;
+	/** The scope's days; open sessions belong to today and count only when the scope spans it. */
+	scopeFrom?: string;
+	scopeTo?: string;
 	status?: React.ReactNode;
 	footer?: React.ReactNode;
 	showEmpty?: boolean;
@@ -78,6 +83,9 @@ export function ClosureList({
 	};
 	const { timezone } = useStoreDay(storeId);
 	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
+	// A historical scope keeps its figures and its list free of today's open tills (Codex, #3048).
+	const inPeriod = !scopeFrom || !scopeTo || (scopeFrom <= today && today <= scopeTo);
+	const sessions = inPeriod ? allSessions : [];
 	const todayRows = rows.filter((row) => row.business_day === today);
 	const result = (variance: number) =>
 		variance
@@ -121,7 +129,9 @@ export function ClosureList({
 			</View>
 			{(sessions.length > 0 || todayRows.length > 0) && dayHeading(today, todayRows)}
 			{/* Keep the readers mounted when filtering, so toggling Closed neither drops summaries nor reloads. */}
-			<View style={filter === 'closed' ? { display: 'none' } : undefined}>{sessionRows}</View>
+			<View style={filter === 'closed' || !inPeriod ? { display: 'none' } : undefined}>
+				{sessionRows}
+			</View>
 			{scopeDay === today && !todayRows.length && sessions.length > 0 && filter !== 'open' && (
 				<ListRow size="sm">
 					<Text className="text-muted-foreground">{t('reports.no_closures_today')}</Text>

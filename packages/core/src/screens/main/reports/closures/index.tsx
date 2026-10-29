@@ -134,6 +134,8 @@ export function Closures({
 					rows={rows}
 					storeId={scope.storeId}
 					sessions={sessions}
+					scopeFrom={scope.from}
+					scopeTo={scope.to}
 					blind={blind}
 					partial={hasMore}
 					filter={filter}
