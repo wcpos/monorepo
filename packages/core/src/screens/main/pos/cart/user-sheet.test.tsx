@@ -687,7 +687,11 @@ describe('side and header', () => {
 });
 
 let mockDrawer = {
-	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
+	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7, status: 'open' } as {
+		opened_at_gmt: string;
+		opened_by: number;
+		status: string;
+	} | null,
 	expected: { cash: 345.03 },
 	figuresPending: false,
 	blind: false,
@@ -1034,10 +1038,12 @@ describe('switch confirmations and guards', () => {
 		expect((screen.getByTestId('user-sheet-sign-out') as HTMLButtonElement).disabled).toBe(true);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
-	it.each(['closed', 'unbound'])(
+	it.each(['closed', 'closed but awaiting its closure write', 'unbound'])(
 		'Sign out with the register %s signs out at once',
 		async (state) => {
 			if (state === 'closed') Object.assign(mockDrawer, { session: null });
+			else if (state === 'closed but awaiting its closure write')
+				Object.assign(mockDrawer, { session: { ...mockDrawer.session, status: 'closed' } });
 			else mockDrawer.binding = { ...mockDrawer.binding, status: 'choose' };
 			render(<UserSheet open onOpenChange={jest.fn()} />);
 			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-sign-out')));

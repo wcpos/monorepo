@@ -585,8 +585,11 @@ export function UserSheet({
 							// A bound register whose session has not loaded is not closed; Sign out waits for
 							// the answer rather than skipping the question (Codex, #3056).
 							disabled: busy || paying || (binding.status === 'bound' && !loaded),
+							// Only a session that is still open or being counted is one to close first: the hook
+							// also returns a closed session whose closure write was interrupted, and Close
+							// register would reopen it (Codex, #3056).
 							onPress: () =>
-								binding.status === 'bound' && session
+								binding.status === 'bound' && session && session.status !== 'closed'
 									? setRequest({ kind: 'sign-out' })
 									: void act(() => logout()),
 						}}
