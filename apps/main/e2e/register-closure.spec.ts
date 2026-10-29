@@ -110,7 +110,9 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 }) => {
 	await page.getByTestId('open-register-amount').fill('100');
 	await page.getByTestId('open-register-button').click();
-	await page.getByTestId('register-bar-drawer').click();
+	// The one door to the register (Paul, 2026-10-29): avatar, cashier sheet, In the drawer.
+	await page.getByTestId('register-bar-avatar').click();
+	await page.getByTestId('user-sheet-drawer').click();
 	await page.getByTestId('register-panel-close-register').click();
 	await expect(page.getByTestId('count-amount')).toBeVisible();
 	await page.getByTestId('count-amount').fill('100');
@@ -122,7 +124,9 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 	await expect(page.getByTestId('closure-title')).toContainText('1');
 	await page.getByTestId('closure-done').click();
 	await expect(page.getByTestId('closure-written')).toHaveCount(0);
-	await page.getByTestId('register-bar-drawer').click();
+	// The one door to the register (Paul, 2026-10-29): avatar, cashier sheet, In the drawer.
+	await page.getByTestId('register-bar-avatar').click();
+	await page.getByTestId('user-sheet-drawer').click();
 	await expect(page.getByTestId('register-panel-last-closure')).toBeVisible();
 	await page.unrouteAll({ behavior: 'ignoreErrors' });
 });

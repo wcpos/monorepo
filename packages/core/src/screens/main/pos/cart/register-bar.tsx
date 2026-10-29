@@ -42,8 +42,7 @@ export function RegisterBar({
 	React.useEffect(() => {
 		if (focused && panelRequested && consumeRegisterPanelRequest()) onPanelOpenChange(true);
 	}, [focused, panelRequested, onPanelOpenChange]);
-
-	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
+	const { session, sessionsOn, overdue } = useRegisterSession();
 	const { wpCredentials, store } = useStoreSession();
 	const menu = useBarMenu();
 	const t = useT();
@@ -83,7 +82,8 @@ export function RegisterBar({
 	};
 	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
 	// and inside the bar's gap row that root was an invisible 8 pt cell pushing the bell and
-	// the drawer icon out of line with the row below (Paul, 2026-10-09).
+	// the avatar out of line with the row below (Paul, 2026-10-09). The bar has no register
+	// button: the avatar's sheet is the one door to the panel (Paul, 2026-10-29).
 	return (
 		<>
 			<HStack
@@ -125,16 +125,6 @@ export function RegisterBar({
 					<StatusBadge testID="register-bar-pill" label={pillLabels[pill]} variant="warning" />
 				)}
 				<View className="flex-1" />
-				{(session || lastClosure) && (
-					<IconButton
-						name="register"
-						accessibilityLabel={t('common.register')}
-						testID="register-bar-drawer"
-						iconClassName={overdue ? 'text-warning' : undefined}
-						onPress={() => requestRegisterPanel()}
-					/>
-				)}
-				{/* The rail carries the avatar only on `lg`; the phone needs the bar's. */}
 				<BarControls
 					testID="register-bar"
 					portalHost="pos"
