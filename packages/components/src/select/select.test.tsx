@@ -31,7 +31,7 @@ it('emits an option before closing and marks only the selected row', () => {
 	// The rows sit in a group (the sheet's container and the SelectGroup); the label reads at the floor.
 	expect(screen.getAllByRole('group')).toHaveLength(2);
 	expect(screen.queryByRole('listbox')).toBeNull();
-	expect(screen.getByTestId('label').querySelector('.text-sm')).not.toBeNull();
+	expect(screen.getByTestId('label').querySelector('[data-variant="caption"]')).not.toBeNull();
 	// A caller's press handler runs, and closeOnPress={false} keeps the sheet open.
 	fireEvent.click(screen.getByTestId('stay'));
 	expect(pressed).toHaveBeenCalledTimes(1);

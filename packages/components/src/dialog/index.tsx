@@ -243,12 +243,7 @@ export function DialogTitle(allProps: SlottableTextProps): React.JSX.Element {
 }
 export function DialogDescription(allProps: DialogPrimitive.DescriptionProps): React.JSX.Element {
 	const { className, ...props } = allProps;
-	return (
-		<DialogPrimitive.Description
-			className={cn('text-muted-foreground text-sm', className)}
-			{...props}
-		/>
-	);
+	return <DialogPrimitive.Description className={cn(TEXT_LADDER.key, className)} {...props} />;
 }
 export function DialogBody({ className, ...props }: ScrollViewProps): React.JSX.Element {
 	const { presentation } = useOverlay();

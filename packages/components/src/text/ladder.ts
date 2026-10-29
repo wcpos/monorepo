@@ -18,12 +18,15 @@ export const TEXT_LADDER = {
 	caption: 'text-muted-foreground text-xs font-medium tracking-wide uppercase',
 } as const;
 
+/** Every `variant` and its classes: the ladder's ranks plus `link`. */
+export const TEXT_VARIANTS = {
+	...TEXT_LADDER,
+	link: 'web:hover:underline web:focus:underline web:hover:cursor-pointer',
+} as const;
+
 export const textVariants = cva('text-foreground web:select-text text-base', {
 	variants: {
-		variant: {
-			...TEXT_LADDER,
-			link: 'web:hover:underline web:focus:underline web:hover:cursor-pointer',
-		},
+		variant: TEXT_VARIANTS,
 		// Tabular numerals, for every amount (CODING_STANDARDS § Design 3).
 		tabular: { true: 'tabular-nums', false: '' },
 	},

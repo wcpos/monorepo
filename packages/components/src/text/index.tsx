@@ -8,7 +8,7 @@ import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
 import { MAX_FONT_SCALE } from '../lib/scale';
-import { textVariants } from './ladder';
+import { TEXT_VARIANTS, textVariants } from './ladder';
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
 
@@ -35,7 +35,14 @@ function Text({
 
 	return (
 		<Component
-			className={cn(textVariants({ variant, tabular }), textClass, className)}
+			// An inherited context styles a plain Text; an explicit rank is the caller's word and
+			// lands after it (a muted `help` inside an overlay's `text-foreground` stays muted).
+			className={cn(
+				textVariants({ tabular }),
+				textClass,
+				variant ? TEXT_VARIANTS[variant] : undefined,
+				className
+			)}
 			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			{...props}
 		>

@@ -83,11 +83,7 @@ function FormDescription({ className, ...props }: TextProps) {
 	const { formDescriptionNativeID } = useFormField();
 
 	return (
-		<Text
-			nativeID={formDescriptionNativeID}
-			className={cn('text-muted-foreground text-sm', className)}
-			{...props}
-		/>
+		<Text nativeID={formDescriptionNativeID} variant="help" className={className} {...props} />
 	);
 }
 
