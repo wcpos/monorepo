@@ -166,6 +166,10 @@ export function RegisterPanel({
 		Number(terms?.cashSales.amount ?? 0) -
 		Number(terms?.cashRefunds.amount ?? 0) +
 		others.reduce((sum, [, amount]) => sum + Number(amount), 0);
+	// One scope or no money: an older plugin's baseline carries `server_expected` without
+	// `server_terms`, so the cash terms are this device's while the other tenders are the
+	// register's; the sum would understate a shared register (Codex, #3059). The count stays.
+	const salesMoneyKnown = !session?.server_expected_at || !!session.server_terms;
 	const trailing = (value: string) => !blind && <Text className="tabular-nums">{value}</Text>;
 	const countedLabel = (term: string, count: number) => t('register.term_count', { term, count });
 
@@ -281,14 +285,14 @@ export function RegisterPanel({
 							testID="register-panel-session-sales"
 							label={t('register.session_sales')}
 							value={
-								blind
+								blind || !salesMoneyKnown
 									? t('register.sales_count', { count: salesCount })
 									: figuresPending
 										? '—'
 										: format(sessionSales)
 							}
 							sub={
-								blind
+								blind || !salesMoneyKnown
 									? undefined
 									: figuresPending
 										? t('register.figures_after_sync')

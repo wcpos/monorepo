@@ -660,6 +660,20 @@ it('the two figure tiles separate drawer money from net sales across every tende
 		terms = previousTerms;
 	}
 });
+it('a baseline without server terms (older plugin): Session sales is the count, no money', () => {
+	currentSession = {
+		...currentSession,
+		server_expected_at: '2026-09-11T10:00:00Z',
+		server_expected: { cash: '155', card: '30' },
+	};
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
+		'register.session_salesregister.sales_count 2'
+	);
+	expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
+		'register.in_the_drawer£155.00'
+	);
+});
 it('a blind cashier gets one figure tile with the sales count and no money', () => {
 	const previous = blind;
 	try {
