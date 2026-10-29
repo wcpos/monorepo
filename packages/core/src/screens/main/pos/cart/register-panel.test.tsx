@@ -11,6 +11,10 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
+let mockRegisters = [{ id: 'front' }, { id: 'back' }];
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registers: mockRegisters }),
+}));
 let blind = false;
 let currentFiguresPending = false;
 let expected: Record<string, string> = { cash: '155', card: '30' };
@@ -74,9 +78,14 @@ const mockSite = {
 };
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
-	useStoreSession: () => ({ site: mockSite, wpCredentials: { capabilities } }),
+	useStoreSession: () => ({
+		store: { id: 1, name: 'Shop' },
+		site: mockSite,
+		wpCredentials: { capabilities },
+	}),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
+	...jest.requireActual('../../../../hooks/use-store-day'),
 	useStoreDay: () => ({ timezone: 'UTC' }),
 	useViewedStore: () => ({ name: 'Shop', currency: 'GBP' }),
 }));
@@ -233,7 +242,9 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<h2 data-testid={testID}>{children}</h2>
 	),
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+	DialogDescription: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<p data-testid={testID}>{children}</p>
+	),
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
@@ -288,7 +299,7 @@ it('hides every amount and the X report for blind cashiers', () => {
 	blind = true;
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-movements'));
-	expect(screen.getByTestId('register-panel-amount').textContent).toBe('Front');
+	expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
 	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
 	expect(screen.queryByTestId('register-panel-print')).toBeNull();
 });
@@ -301,7 +312,7 @@ it('translates a failed X-report dispatch in the register panel', async () => {
 });
 it('records paid out and Undo inserts a void', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.getByTestId('register-panel-amount').textContent).toBe('£155.00');
+	expect(screen.getByTestId('register-panel-drawer').textContent).toContain('£155.00');
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
 	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '20' } });
 	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Milk' } });
@@ -580,11 +591,90 @@ it('says the figures are still to come on a seeded session and will not close th
 	const floatRow = screen.getByText('register.float').parentElement;
 	expect(floatRow?.textContent).toContain('—');
 	expect(floatRow?.textContent).not.toContain('£0.00');
-	expect(screen.getByTestId('register-panel-amount').textContent).toBe('—');
+	expect(screen.getByTestId('register-panel-drawer').textContent).toContain('—');
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('—');
 	expect(screen.getByTestId('register-panel-expected').textContent).not.toContain('£');
 	const close = screen.getByTestId('register-panel-close-register');
 	expect(close.hasAttribute('disabled')).toBe(true);
 	fireEvent.click(close);
 	expect(startCounting).not.toHaveBeenCalled();
+});
+
+it('the header is the recipe: disc, register name, store · open since · live age · opener', () => {
+	jest.useFakeTimers();
+	jest.setSystemTime(new Date('2026-09-11T12:22:00Z'));
+	try {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-disc')).toBeTruthy();
+		expect(screen.getByRole('heading').textContent).toBe('Front');
+		expect(screen.getByTestId('register-panel-description').textContent).toBe(
+			'Shop · register.open_since 09:02 · register.age_h_m 3 20 · Alex'
+		);
+		act(() => jest.advanceTimersByTime(60_000));
+		expect(screen.getByTestId('register-panel-description').textContent).toContain(
+			'register.age_h_m 3 21'
+		);
+	} finally {
+		jest.useRealTimers();
+	}
+});
+it('a sole register is titled Register and an age below an hour reads minutes', () => {
+	const previous = mockRegisters;
+	jest.useFakeTimers();
+	jest.setSystemTime(new Date('2026-09-11T09:22:00Z'));
+	try {
+		mockRegisters = [{ id: 'front' }];
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByRole('heading').textContent).toBe('register.register');
+		expect(screen.getByTestId('register-panel-description').textContent).toContain(
+			'register.age_m 20'
+		);
+	} finally {
+		mockRegisters = previous;
+		jest.useRealTimers();
+	}
+});
+it('the two figure tiles separate drawer money from net sales across every tender', () => {
+	const previousExpected = expected,
+		previousTerms = terms;
+	try {
+		expected = { cash: '345.03', card: '30', other: '-5' };
+		terms = { ...baseTerms, cashRefunds: { amount: '2', count: 1 } };
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
+			'register.in_the_drawer£345.03'
+		);
+		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
+			'register.session_sales£85.00register.sales_count 2'
+		);
+	} finally {
+		expected = previousExpected;
+		terms = previousTerms;
+	}
+});
+it('a blind cashier gets one figure tile with the sales count and no money', () => {
+	const previous = blind;
+	try {
+		blind = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
+		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
+			'register.session_salesregister.sales_count 2'
+		);
+		expect(screen.getByTestId('register-panel').textContent).not.toContain('£');
+	} finally {
+		blind = previous;
+	}
+});
+it('a seeded session drawer tile reads — with the sync note', () => {
+	const previous = currentFiguresPending;
+	try {
+		currentFiguresPending = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
+			'register.in_the_drawer—register.figures_after_sync'
+		);
+	} finally {
+		currentFiguresPending = previous;
+	}
 });

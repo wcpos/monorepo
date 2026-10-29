@@ -35,6 +35,7 @@ import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/q
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { FigureTile } from './figure-tile';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { requestRegisterPanel } from './register-panel-request';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -90,14 +91,12 @@ export function SalesTile({ sub }: { sub?: string }) {
 	const { format } = useCurrencyFormat();
 	const t = useT();
 	return (
-		<View
+		<FigureTile
 			testID="user-sheet-sales-today"
-			className="border-border flex-1 rounded-lg border px-3 py-2.5"
-		>
-			<Text variant="key">{t('register.your_sales_today')}</Text>
-			<AmountFigure size="tile">{format(total)}</AmountFigure>
-			{sub && <Text variant="key">{sub}</Text>}
-		</View>
+			label={t('register.your_sales_today')}
+			value={format(total)}
+			sub={sub}
+		/>
 	);
 }
 

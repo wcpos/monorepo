@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { format as formatDate } from 'date-fns/format';
 import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
@@ -19,7 +20,7 @@ import {
 } from '@wcpos/components/dialog';
 import { MenuRow } from '@wcpos/components/menu-row';
 import { Notice } from '@wcpos/components/notice';
-import { AmountFigure } from '@wcpos/components/amount-figure';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
@@ -33,6 +34,11 @@ import { useRegisterSession } from '../../../../services/register-session/use-re
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { usePanelSide } from '../contexts/overlay-side';
+import { FigureTile } from './figure-tile';
+import { useNowMs } from '../../../../hooks/use-relative-time';
+import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
@@ -90,7 +96,16 @@ export function RegisterPanel({
 		paid_out: t('register.paid_out'),
 		no_sale: t('register.no_sale'),
 	};
-	const { wpCredentials } = useStoreSession();
+	const { wpCredentials, store } = useStoreSession();
+	const { registers } = useRegisterBinding();
+	const { timezone } = useStoreDay();
+	const nowMs = useNowMs(60_000);
+	const ageLabel = (openedMs: number, nowMs: number) => {
+		const minutes = Math.max(0, Math.floor((nowMs - openedMs) / 60_000));
+		return minutes >= 60
+			? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
+			: t('register.age_m', { m: minutes });
+	};
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
 	const router = useRouter();
@@ -138,8 +153,9 @@ export function RegisterPanel({
 	const refused = refusedMovements;
 	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
 	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
-	const openedTime = stamp
-		? new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+	const openedDate = stamp ? convertUTCStringToLocalDate(stamp) : undefined;
+	const openedTime = openedDate
+		? formatDate(openedDate, 'HH:mm', zoneOptions(timezone))
 		: undefined;
 	const paidIn = terms
 		? fromMinor(
@@ -150,6 +166,10 @@ export function RegisterPanel({
 	const others = Object.entries(expected).filter(
 		([method, amount]) => method !== 'cash' && Number(amount) !== 0
 	);
+	const sessionSales =
+		Number(terms?.cashSales.amount ?? 0) -
+		Number(terms?.cashRefunds.amount ?? 0) +
+		others.reduce((sum, [, amount]) => sum + Number(amount), 0);
 	/** One term of the derivation: the label with its muted count or note, the amount at the right. */
 	const term = (label: string, suffix?: React.ReactNode, quiet?: boolean, strong?: boolean) => (
 		<Text
@@ -233,37 +253,33 @@ export function RegisterPanel({
 	return (
 		<Dialog open={open} onOpenChange={close}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
-				{/* The header block: on the phone the panel is a page, and its padding comes from here. */}
-				<DialogHeader className="flex-row items-start gap-2">
-					<View className="min-w-0 flex-1 gap-1.5">
-						<DialogTitle asChild>
-							<AmountFigure testID="register-panel-amount">
-								{blind
-									? binding.registerName
-									: figuresPending
-										? '—'
-										: format(Number(expected.cash ?? 0))}
-							</AmountFigure>
+				<DialogHeader className="flex-row items-center gap-3">
+					<ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc" />
+					<View className="min-w-0 flex-1">
+						<DialogTitle numberOfLines={1}>
+							{registers.length === 1 ? t('register.register') : binding.registerName}
 						</DialogTitle>
-						{/* The identity line under the figure, in the order modal's recipe: muted, small. */}
-						{blind ? (
-							<DialogDescription>
-								{t('register.sales_count', { count: salesCount })}
-							</DialogDescription>
-						) : (
-							<DialogDescription>
-								{t('register.in_the_drawer')} · {binding.registerName}
-								{openedTime && (
-									<>
-										{' · '}
-										{t('register.opened_at_by', { time: openedTime })}{' '}
-										<React.Suspense fallback={null}>
-											<Opener id={session?.opened_by} />
-										</React.Suspense>
-									</>
-								)}
-							</DialogDescription>
-						)}
+						<DialogDescription testID="register-panel-description">
+							{[
+								store.name,
+								openedTime &&
+									(session
+										? t('register.open_since', { time: openedTime })
+										: t('register.closed_at_time', { time: openedTime })),
+								session && openedDate && ageLabel(openedDate.getTime(), nowMs),
+							]
+								.filter(Boolean)
+								.join(' · ')}
+							{session && (
+								<>
+									{' '}
+									·{' '}
+									<React.Suspense fallback={null}>
+										<Opener id={session.opened_by} />
+									</React.Suspense>
+								</>
+							)}
+						</DialogDescription>
 					</View>
 					{/* The X-report is a glyph beside the figure it prints. `mr-3` clears the panel's own ×,
 					    which sits 4 px past the header's `pr-ctl` reserve, and leaves the 8 between targets. */}
@@ -302,6 +318,26 @@ export function RegisterPanel({
 							},
 						]}
 					/>
+				)}
+				{session && (
+					<View className="flex-row gap-2 px-4">
+						{!blind && (
+							<FigureTile
+								testID="register-panel-drawer"
+								label={t('register.in_the_drawer')}
+								value={figuresPending ? '—' : format(Number(expected.cash ?? 0))}
+								sub={figuresPending ? t('register.figures_after_sync') : undefined}
+							/>
+						)}
+						<FigureTile
+							testID="register-panel-session-sales"
+							label={t('register.session_sales')}
+							value={
+								blind ? t('register.sales_count', { count: salesCount }) : format(sessionSales)
+							}
+							sub={blind ? undefined : t('register.sales_count', { count: salesCount })}
+						/>
+					</View>
 				)}
 				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (

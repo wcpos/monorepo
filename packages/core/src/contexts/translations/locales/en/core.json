@@ -3078,5 +3078,11 @@
 	"register.you_open_with_float": "You'll open it with a float.",
 	"register.you_join_it": "You join it.",
 	"register.open_carts_count_other": "{count} open carts",
-	"register.unsent_sales_count_other": "{count} unsent sales"
+	"register.unsent_sales_count_other": "{count} unsent sales",
+	"register.register": "Register",
+	"register.open_since": "open since {time}",
+	"register.closed_at_time": "closed {time}",
+	"register.age_h_m": "{h} h {m} m",
+	"register.age_m": "{m} m",
+	"register.session_sales": "Session sales"
 }
