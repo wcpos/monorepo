@@ -6,6 +6,7 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { PortalHost } from '@wcpos/components/portal';
 import type { IconName } from '@wcpos/components/icon';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
@@ -110,6 +111,15 @@ function ThemedDrawer({
 			// An element, not a call: called as a function its hooks would run in the drawer's own
 			// fiber, and a hook list that changed with the presentation would break React Compiler
 			// ("Expected a constant size argument for each invocation of useMemoCache").
+			// The scene host: every screen's overlay surface beside the rail, where the rail's cashier
+			// sheet renders (the root host wraps the rail too, and a sheet there covered it; Paul,
+			// 2026-10-29). The POS keeps its own `pos` host inside its providers for the till's dialogs.
+			screenLayout={({ children }) => (
+				<View className="flex-1">
+					{children}
+					<PortalHost name="scene" />
+				</View>
+			)}
 			drawerContent={(props) => (
 				<DrawerContent
 					{...props}

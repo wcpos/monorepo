@@ -90,7 +90,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../user-avatar', () => ({ UserAvatar: () => <div data-testid="avatar" /> }));
 jest.mock('../../pos/cart/user-sheet', () => ({
 	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="user-sheet" data-root={String(portalHost === null)} /> : null,
+		open ? <div data-testid="user-sheet" data-host={String(portalHost)} /> : null,
 }));
 
 const names = ['(pos)', 'orders', 'health', 'settings'];
@@ -220,7 +220,8 @@ it('puts the avatar on the rail only, and no bell in either drawer', () => {
 	const { unmount } = render(<Drawer presentation="rail" />);
 	expect(screen.queryByTestId('bell')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
-	expect(screen.getByTestId('user-sheet').getAttribute('data-root')).toBe('true');
+	// Beside the rail, as the register panel is: the drawer layout's scene host, never the root.
+	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
 	unmount();
 
 	render(<Drawer presentation="front" />);
