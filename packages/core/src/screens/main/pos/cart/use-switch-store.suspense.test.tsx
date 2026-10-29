@@ -31,6 +31,11 @@ jest.mock('@wcpos/query/user-db', () => ({
 }));
 
 jest.mock('expo-haptics', () => ({}));
+// The sheet's guards (3b) read these two; the real online-status module pulls in NetInfo.
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../checkout/payments/payment-in-flight', () => ({ usePaymentInFlight: () => false }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: passthrough,
