@@ -212,7 +212,13 @@ export function Chip({
 						{action ? (
 							<Icon
 								name={action.icon}
-								className={action.muted ? 'text-muted-foreground' : 'text-foreground'}
+								className={
+									action.muted
+										? 'text-muted-foreground'
+										: on
+											? 'text-selected-foreground'
+											: 'text-foreground'
+								}
 							/>
 						) : (
 							<Icon
