@@ -4,6 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { consumeCashierSheetRequest, requestCashierSheet } from './cashier-sheet-request';
+import { CurrentOrderContext } from '../../pos/contexts/current-order/context';
 import { CashierEntry } from './index';
 import {
 	__resetRedirectResultForTesting,
@@ -37,7 +38,15 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 		onOpenRegister?: () => void;
 	}) =>
 		open ? (
-			<div data-testid="user-sheet" data-host={String(portalHost)}>
+			<div
+				data-testid="user-sheet"
+				data-host={String(portalHost)}
+				// What the sheet's register rows read: no order in context disables every switch.
+				data-order={String(
+					jest.requireActual('../../pos/contexts/current-order/context').useCurrentOrderOptional()
+						?.uuid
+				)}
+			>
 				{onOpenRegister && <button data-testid="open-register" onClick={onOpenRegister} />}
 			</div>
 		) : null,
@@ -113,4 +122,43 @@ it('opens one sheet for one request when two entries are mounted and one is focu
 	render(<CashierEntry testID="shown" portalHost="pos" />);
 	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
 	expect(consumeCashierSheetRequest()).toBe(false);
+});
+
+// The desktop title bar's entry is outside the till (#3074). On POS a till bar keeps an avatarless
+// entry inside CurrentOrderProvider; the title bar's avatar and store name REQUEST the sheet and that
+// entry opens it with the order (an empty cart: the register rows stay live). Off the till there is
+// no focused till entry and the title bar's own entry opens it.
+function Till({ children }: React.PropsWithChildren) {
+	const value = { currentOrderRecord: { uuid: 'empty-cart' } } as unknown as React.ContextType<
+		typeof CurrentOrderContext
+	>;
+	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
+}
+it.each([
+	['the avatar', () => fireEvent.click(screen.getByTestId('title-bar-avatar'))],
+	['the store name', () => requestCashierSheet()],
+])('on POS, %s in the title bar opens the till sheet with the order', (_door, open) => {
+	mockFocused = true;
+	render(
+		<>
+			<CashierEntry testID="title-bar-avatar" portalHost="scene" />
+			<Till>
+				<CashierEntry testID="register-bar-avatar" portalHost="pos" headless />
+			</Till>
+		</>
+	);
+	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
+	React.act(() => open());
+	const sheets = screen.getAllByTestId('user-sheet');
+	expect(sheets).toHaveLength(1);
+	expect(sheets[0].getAttribute('data-host')).toBe('pos');
+	expect(sheets[0].getAttribute('data-order')).toBe('empty-cart');
+});
+
+it('off the till, the title bar opens its own sheet', () => {
+	mockFocused = true;
+	render(<CashierEntry testID="title-bar-avatar" portalHost="scene" />);
+	fireEvent.click(screen.getByTestId('title-bar-avatar'));
+	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
+	expect(screen.getByTestId('user-sheet').getAttribute('data-order')).toBe('undefined');
 });

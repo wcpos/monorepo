@@ -8,6 +8,7 @@ import { useTitleBarStrip } from '@wcpos/components/edge-surface/title-bar-strip
 import { useIsPhone } from '@wcpos/components/lib/device';
 
 import { useT } from '../../../../contexts/translations';
+import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 import { CashierEntry } from '../cashier-entry';
 import { NotificationBell } from '../notification-bell/notification-bell';
 
@@ -68,15 +69,27 @@ export function BarControls({
 	// While the desktop title bar shows it is the one home of the bell and the avatar on the
 	// window (Paul, 2026-10-29): every other bar draws neither. Full screen (0) gives them back.
 	const titleBarShown = useTitleBarStrip().height > 0;
-	if (titleBarShown && !inTitleBar) return null;
+	const inTill = useCurrentOrderOptional() !== undefined;
+	// With the rail on screen (wide) the sheet opens beside it, never over it (#3061; the 10-28
+	// map); the POS host is already beside it. A phone has no rail: the root.
+	const entryHost = portalHost ?? (phone ? null : 'scene');
+	if (titleBarShown && !inTitleBar) {
+		// A till bar keeps the sheet's host, avatarless: the title bar's requests open it with the order.
+		return inTill ? (
+			<CashierEntry
+				testID={`${testID}-avatar`}
+				portalHost={entryHost}
+				onOpenRegister={onOpenRegister}
+				headless
+			/>
+		) : null;
+	}
 	return (
 		<>
 			<NotificationBell testID={`${testID}-bell`} portalHost={portalHost ?? undefined} />
 			<CashierEntry
 				testID={`${testID}-avatar`}
-				// With the rail on screen (wide) the sheet opens beside it, never over it (#3061; the
-				// 10-28 map); the POS host is already beside it. A phone has no rail: the root.
-				portalHost={portalHost ?? (phone ? null : 'scene')}
+				portalHost={entryHost}
 				onOpenRegister={onOpenRegister}
 			/>
 		</>
