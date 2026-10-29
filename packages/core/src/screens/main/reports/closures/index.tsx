@@ -20,15 +20,27 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { exportCsv } from './export-csv';
 import { saveOrShareCsv } from './save-or-share-csv';
 import { ClosurePanel } from './closure-panel';
-import { ClosureList } from './closure-list';
+import { type ClosureFilter, ClosureList } from './closure-list';
 import { RemoteSessionCard, SessionCard, type SessionSummary } from './session-card';
 import { SessionCards } from './session-cards';
 import { type ClosureScope, useClosureRows } from './use-closure-rows';
 
-export function ClosuresExportButton({ onPress }: { onPress: () => Promise<void> }) {
+export function ClosuresExportButton({
+	onPress,
+	disabled = false,
+}: {
+	onPress: () => Promise<void>;
+	disabled?: boolean;
+}) {
 	const t = useT();
 	return (
-		<Button testID="closures-export" variant="outline" leftIcon="document" onPress={onPress}>
+		<Button
+			testID="closures-export"
+			variant="outline"
+			leftIcon="document"
+			disabled={disabled}
+			onPress={onPress}
+		>
 			{t('reports.export_csv')}
 		</Button>
 	);
@@ -96,7 +108,11 @@ export function Closures({
 			setError(t('reports.export_failed'));
 		}
 	};
-	const header = renderScopeRow?.({ actions: <ClosuresExportButton onPress={exportRows} /> });
+	// The CSV holds closures; with Open selected nothing shown is a closure, so there is nothing to export.
+	const [filter, setFilter] = React.useState<ClosureFilter>('all');
+	const header = renderScopeRow?.({
+		actions: <ClosuresExportButton onPress={exportRows} disabled={filter === 'open'} />,
+	});
 	if (row && phone)
 		return (
 			<>
@@ -119,6 +135,9 @@ export function Closures({
 					storeId={scope.storeId}
 					sessions={sessions}
 					blind={blind}
+					partial={hasMore}
+					filter={filter}
+					onFilterChange={setFilter}
 					scopeDay={scope.from === scope.to ? scope.from : undefined}
 					showEmpty={status === 'ready'}
 					unavailableIds={unavailableIds}

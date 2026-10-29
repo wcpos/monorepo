@@ -5,6 +5,7 @@
 	"reports.no_closures_today": "No closures yet today",
 	"reports.stat_sessions": "Sessions",
 	"reports.stat_open_closed": "{open} open · {closed} closed",
+	"reports.stat_partial": "{count} loaded · more to load",
 	"reports.stat_cash_at_open": "Cash at open",
 	"reports.stat_floats": "floats",
 	"reports.stat_cash_activity": "Cash activity",

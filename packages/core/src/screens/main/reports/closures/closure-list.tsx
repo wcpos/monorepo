@@ -21,6 +21,8 @@ import { ClosureStats, closureTotals } from './closure-stats';
 
 import type { SessionSummary } from './session-card';
 
+export type ClosureFilter = 'all' | 'open' | 'closed';
+
 export function ClosureList({
 	rows,
 	onSelect,
@@ -33,6 +35,9 @@ export function ClosureList({
 	status,
 	footer,
 	showEmpty = true,
+	partial = false,
+	filter: controlledFilter,
+	onFilterChange,
 }: {
 	rows: readonly ClosureRow[];
 	storeId?: number;
@@ -43,6 +48,11 @@ export function ClosureList({
 	status?: React.ReactNode;
 	footer?: React.ReactNode;
 	showEmpty?: boolean;
+	/** More pages of the period remain unloaded (the strip says so). */
+	partial?: boolean;
+	/** The All / Open / Closed filter, owned by the room when it must share it (the export). */
+	filter?: ClosureFilter;
+	onFilterChange?: (filter: ClosureFilter) => void;
 	unavailableIds?: ReadonlySet<string>;
 	onSelect?: (row: ClosureRow) => void;
 }) {
@@ -60,7 +70,12 @@ export function ClosureList({
 	// The viewed store's registers, never the bound store's.
 	const names = useRegisterNames(storeId);
 
-	const [filter, setFilter] = React.useState('all');
+	const [localFilter, setLocalFilter] = React.useState<ClosureFilter>('all');
+	const filter = controlledFilter ?? localFilter;
+	const setFilter = (next: ClosureFilter) => {
+		setLocalFilter(next);
+		onFilterChange?.(next);
+	};
 	const { timezone } = useStoreDay(storeId);
 	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
 	const todayRows = rows.filter((row) => row.business_day === today);
@@ -93,7 +108,7 @@ export function ClosureList({
 			<View className="flex-row items-center justify-between border-b px-3 py-2">
 				<SegmentedControl
 					value={filter}
-					onValueChange={setFilter}
+					onValueChange={(value) => setFilter(value as ClosureFilter)}
 					segments={[
 						{ value: 'all', label: t('reports.all'), testID: 'closures-filter-all' },
 						{ value: 'open', label: t('reports.open'), testID: 'closures-filter-open' },
@@ -193,7 +208,13 @@ export function ClosureList({
 	);
 	return (
 		<>
-			<ClosureStats rows={rows} sessions={sessions} blind={blind} storeId={storeId} />
+			<ClosureStats
+				rows={rows}
+				sessions={sessions}
+				blind={blind}
+				storeId={storeId}
+				partial={partial}
+			/>
 			{card}
 		</>
 	);

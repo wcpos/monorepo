@@ -42,11 +42,14 @@ export function ClosureStats({
 	sessions,
 	blind,
 	storeId,
+	partial = false,
 }: {
 	rows: readonly ClosureRow[];
 	sessions: readonly SessionSummary[];
 	blind?: boolean;
 	storeId?: number;
+	/** More pages of the period remain unloaded: the figures are a prefix, and say so. */
+	partial?: boolean;
 }) {
 	const t = useT();
 	const phone = useIsPhone();
@@ -61,8 +64,9 @@ export function ClosureStats({
 	});
 	if (blind) return null;
 	const totals = closureTotals(rows);
+	// The cash the cashier counted in, not the float the card suggested (Codex, #3048).
 	const floats = sessions.reduce(
-		(sum, session) => sum + toMinor(session.expected_float, 4),
+		(sum, session) => sum + toMinor(session.counted_float ?? session.expected_float ?? '0', 4),
 		toMinor(totals.opening, 4)
 	);
 	const signed = (value: number) => `${value < 0 ? '−' : '+'}${format(Math.abs(value))}`;
@@ -81,14 +85,22 @@ export function ClosureStats({
 		? t('reports.stat_counts', { count: rows.length })
 		: t('reports.stat_nothing_closed');
 	// The rows' own result tokens (closure-list.tsx): short is bad, over is ok, exact is quiet.
-	const discrepancyColor =
-		totals.variance < 0 ? 'text-bad' : totals.variance > 0 ? 'text-ok' : 'text-muted-foreground';
+	// A partial period's sign can still flip with the next page: no verdict colour until it is whole.
+	const discrepancyColor = partial
+		? 'text-muted-foreground'
+		: totals.variance < 0
+			? 'text-bad'
+			: totals.variance > 0
+				? 'text-ok'
+				: 'text-muted-foreground';
 	// Literal labels: the i18n ratchet refuses a computed key, and the catalogue needs each string.
 	const cells = {
 		sessions: [
 			t('reports.stat_sessions'),
 			rows.length + sessions.length,
-			t('reports.stat_open_closed', { open: sessions.length, closed: rows.length }),
+			partial
+				? t('reports.stat_partial', { count: rows.length })
+				: t('reports.stat_open_closed', { open: sessions.length, closed: rows.length }),
 		],
 		cash_at_open: [
 			t('reports.stat_cash_at_open'),
