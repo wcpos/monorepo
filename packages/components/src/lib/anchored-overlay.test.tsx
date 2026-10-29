@@ -115,3 +115,26 @@ it.each([
 	if (insets) expect(anchored).toHaveAttribute('data-insets', insets);
 	else expect(anchored).not.toHaveAttribute('data-insets');
 });
+
+// A caller's own collision padding survives the strip: the strip is the floor of the top edge,
+// never a replacement for the rest.
+it.each([
+	[28, { top: 8, right: 16 }, '{"top":28,"right":16}'],
+	[28, { top: 40, right: 16 }, '{"top":40,"right":16}'],
+	[0, { top: 8, right: 16 }, '{"top":8,"right":16}'],
+] as const)('with a strip of %s merges caller insets %j into %s', (height, own, insets) => {
+	render(
+		<TitleBarStripProvider value={{ node: null, height }}>
+			<DeviceScope phone={false}>
+				<AnchoredOverlay
+					anchor={ANCHOR}
+					open
+					onOpenChange={onOpenChange}
+					size="min-w-50"
+					content={{ testID: 'panel', inline: true, insets: own, children: <span>rows</span> }}
+				/>
+			</DeviceScope>
+		</TitleBarStripProvider>
+	);
+	expect(screen.getByTestId('anchored')).toHaveAttribute('data-insets', insets);
+});

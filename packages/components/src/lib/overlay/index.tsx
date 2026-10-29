@@ -617,6 +617,8 @@ export type OverlayAnchor = {
 	Scrim: OverlayScrimComponent;
 	Content: React.ComponentType<any>;
 };
+/** The primitives' collision padding: how far a positioned panel stays from each window edge. */
+type Insets = { top?: number; right?: number; bottom?: number; left?: number };
 export type AnchoredContent = {
 	className?: string;
 	testID?: string;
@@ -653,9 +655,16 @@ export function AnchoredOverlay({
 	list,
 	outsidePress,
 }: AnchoredOverlayProps) {
-	const { className, testID, inline, portalHost, children, ...position } = content;
+	const { className, testID, inline, portalHost, children, insets, ...position } = content;
 	const phone = useIsPhone();
 	const { height: stripHeight } = useTitleBarStrip();
+	// The primitives' name for Radix's collisionPadding: a menu never slides over the title bar,
+	// whatever else its caller keeps it clear of.
+	const collision = React.useMemo(() => {
+		const own = insets as Insets | undefined;
+		if (stripHeight <= 0) return own;
+		return { ...own, top: Math.max(stripHeight, own?.top ?? 0) };
+	}, [insets, stripHeight]);
 	const close = () => onOpenChange(false);
 	const shell = (
 		<OverlayShell
@@ -682,8 +691,7 @@ export function AnchoredOverlay({
 					</OverlaySheetPanel>
 				) : (
 					<anchor.Content
-						// The primitives' name for Radix's collisionPadding: a menu never slides over the title bar.
-						{...(stripHeight > 0 ? { insets: { top: stripHeight } } : null)}
+						{...(collision ? { insets: collision } : null)}
 						{...position}
 						testID={testID}
 						className={cn(
