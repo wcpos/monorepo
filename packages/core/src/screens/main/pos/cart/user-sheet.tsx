@@ -36,6 +36,7 @@ import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
+import { FigureTile } from './figure-tile';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { requestRegisterPanel } from './register-panel-request';
@@ -92,14 +93,12 @@ export function SalesTile({ sub }: { sub?: string }) {
 	const { format } = useCurrencyFormat();
 	const t = useT();
 	return (
-		<View
+		<FigureTile
 			testID="user-sheet-sales-today"
-			className="border-border flex-1 rounded-lg border px-3 py-2.5"
-		>
-			<Text variant="key">{t('register.your_sales_today')}</Text>
-			<AmountFigure size="tile">{format(total)}</AmountFigure>
-			{sub && <Text variant="key">{sub}</Text>}
-		</View>
+			label={t('register.your_sales_today')}
+			value={format(total)}
+			sub={sub}
+		/>
 	);
 }
 

@@ -114,7 +114,7 @@ const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [
 	{ release: mockReleaseParents, ready: Promise.resolve() },
 ]);
 const mockRuntime = { engine: {}, locale: 'en' };
-let mockCloseTime: string | null = null;
+let mockCloseTime: string | null | undefined = null;
 const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
@@ -1302,6 +1302,18 @@ describe('overdue', () => {
 	});
 	afterEach(() => {
 		jest.useRealTimers();
+	});
+
+	it.each(['17:30', undefined])('exposes the store close time %s', async (closeTime) => {
+		const previous = mockCloseTime;
+		try {
+			mockCloseTime = closeTime;
+			const { result } = rendered();
+			await settle(result);
+			expect(result.current.closeTime).toBe(closeTime);
+		} finally {
+			mockCloseTime = previous;
+		}
 	});
 
 	it('never re-renders from the clock when the store has no close time', async () => {

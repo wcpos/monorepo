@@ -3084,5 +3084,13 @@
 	"register.finish_count_first": "Finish or abandon the count first",
 	"register.needs_store_to_switch": "Needs the store to switch",
 	"register.open_carts_count_other": "{count} open carts",
-	"register.unsent_sales_count_other": "{count} unsent sales"
+	"register.unsent_sales_count_other": "{count} unsent sales",
+	"register.open_since": "open since {time}",
+	"register.closed_at_time": "closed {time}",
+	"register.age_h_m": "{h} h {m} m",
+	"register.age_m": "{m} m",
+	"register.session_sales": "Session sales",
+	"register.term_count": "{term} · {count}",
+	"register.taken": "Taken",
+	"register.close_register_past": "Close register · it's past {time}"
 }

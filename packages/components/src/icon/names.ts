@@ -61,6 +61,8 @@ export const ICON_NAMES = [
 	'split', // Split payment / split a line
 	'refund', // Refund
 	'cashDrawer', // The cash drawer
+	'paidIn', // Cash into the drawer (paid in)
+	'paidOut', // Cash out of the drawer (paid out)
 	'customer', // A customer / the user
 	'customers', // Customers (plural)
 	'addCustomer', // Add a customer

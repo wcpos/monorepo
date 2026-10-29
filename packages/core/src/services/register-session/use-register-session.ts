@@ -304,6 +304,8 @@ export function useRegisterSession() {
 			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
 		overdue,
+		/** The store's HH:MM close time; what `overdue` is measured against. */
+		closeTime,
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
 		figuresPending,
