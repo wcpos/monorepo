@@ -36,7 +36,7 @@ import {
 } from './register-count.helpers';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
-import type { ClosureCount } from './closure-sheet';
+import type { ClosureCount } from './closure-written';
 
 export function DenominationTile({
 	currencyOptions,

@@ -30,7 +30,6 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { OpenRegisterCard } from './open-register-card';
 import { RegisterCount } from './register-count';
-import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { requestRegisterPanel } from './register-panel-request';
@@ -75,7 +74,6 @@ function CartColumn({
 	const { sessionsOn, session, loaded, overdue, countingHere } = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
-	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const reopened = React.useRef<string | undefined>(undefined);
 	// A restored device-owned count asks once; closing/back must not reopen it on a render.
@@ -217,7 +215,7 @@ function CartColumn({
 							description=""
 							onBack={() => setPanelOpen(false)}
 							onClose={() => setPanelOpen(false)}
-							onClosed={setClosure}
+							onClosed={() => setPanelOpen(true)}
 						/>
 					) : isColumn && receiptOrderUuid ? (
 						<React.Suspense fallback={LOADING_ROWS}>
@@ -279,7 +277,6 @@ function CartColumn({
 					)}
 				</ErrorBoundary>
 			</View>
-			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
 			<OrderSheet
 				open={editingOrder !== null}
 				order={editingOrder ?? currentOrderRecord}

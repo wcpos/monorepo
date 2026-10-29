@@ -104,6 +104,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			retryMovement,
 			startCounting,
 			backToSelling: mockBackToSelling,
+			closeSession: mockCloseSession,
 		},
 	}),
 }));
@@ -989,4 +990,33 @@ it('a requested count starts counting before showing the pane', async () => {
 	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
 	await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
 	expect(startCounting).toHaveBeenCalledTimes(1);
+});
+
+jest.mock('./closure-written', () => ({
+	ClosureWritten: ({ onDone }: { onDone: () => void }) => (
+		<button data-testid="closure-done" onClick={onDone} />
+	),
+}));
+const mockCloseSession = jest.fn(async () => ({ id: 'written' }));
+it('pushes the written moment after close, survives the session disappearing, and Done closes', async () => {
+	const previous = currentSession,
+		previousClosure = mockHasClosure;
+	try {
+		const onOpenChange = jest.fn();
+		const view = render(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+		fireEvent.change(screen.getByTestId('count-amount'), { target: { value: '155' } });
+		fireEvent.click(screen.getByTestId('count-close'));
+		await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+		currentSession = null;
+		mockHasClosure = false;
+		view.rerender(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('closure-done')).toBeTruthy();
+		expect(onOpenChange).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('closure-done'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+	} finally {
+		currentSession = previous;
+		mockHasClosure = previousClosure;
+	}
 });

@@ -43,8 +43,7 @@ import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
-
-import type { ClosureCount } from './closure-sheet';
+import { type ClosureCount, ClosureWritten } from './closure-written';
 
 const STATIC_ROW =
 	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
@@ -85,7 +84,7 @@ export function RegisterPanel({
 		setOpening({ open, initialPane });
 		if (open) setPane(session?.status === 'counting' && countingHere ? 'count' : 'register');
 	}
-	const [, setWritten] = React.useState<ClosureCount | null>(null);
+	const [written, setWritten] = React.useState<ClosureCount | null>(null);
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
 	const t = useT();
@@ -156,7 +155,7 @@ export function RegisterPanel({
 	}, [open, initialPane]);
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
-	if (!session && !lastClosure && refusedMovements.length === 0) return null;
+	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
 	const activeMovements = movements.filter(
 		(row) =>
 			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
@@ -219,6 +218,14 @@ export function RegisterPanel({
 	]
 		.filter(Boolean)
 		.join(' · ');
+	if (pane === 'written' && written)
+		return (
+			<Dialog open={open} onOpenChange={close}>
+				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+					<ClosureWritten count={written} onDone={() => close(false)} />
+				</DialogContent>
+			</Dialog>
+		);
 	if (pane === 'count' && session)
 		return (
 			<Dialog open={open} onOpenChange={close}>

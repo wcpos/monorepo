@@ -350,6 +350,7 @@ export function ClosureBody({
 				)}
 				<MenuRow
 					testID="closure-zreport"
+					disabled={blind}
 					className={ACTION_ROW}
 					onPress={() => setPreview(!preview)}
 					label={t('register.z_report')}
@@ -376,7 +377,7 @@ export function ClosureBody({
 						</Button>
 					</View>
 				)}
-				{preview && !documentError && (
+				{!blind && preview && !documentError && (
 					<View className="gap-2 py-2">
 						<View className="min-w-0 gap-2">
 							<TemplateSwitcher

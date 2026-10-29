@@ -97,9 +97,9 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await expect(page.getByTestId('den-tile-20-badge')).toHaveText('2');
 	await expect(page.getByTestId('count-amount')).toHaveValue('40.00');
 	await page.getByTestId('count-close').click();
-	await expect(page.getByTestId('closure-sheet')).toBeVisible();
+	await expect(page.getByTestId('closure-written')).toBeVisible();
 	await page.getByTestId('closure-done').click();
-	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
+	await expect(page.getByTestId('closure-written')).toHaveCount(0);
 	await expect(page.getByTestId('open-register-card')).toBeVisible();
 	// Routes stay armed after the last assertion; a late fetch would otherwise abort the run.
 	await page.unrouteAll({ behavior: 'ignoreErrors' });

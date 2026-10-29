@@ -122,7 +122,7 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 	await expect(page.getByTestId('closure-title')).toBeVisible();
 	await expect(page.getByTestId('closure-title')).toContainText('1');
 	await page.getByTestId('closure-done').click();
-	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
+	await expect(page.getByTestId('closure-written')).toHaveCount(0);
 	await page.getByTestId('register-bar-drawer').click();
 	await expect(page.getByTestId('register-panel-last-closure')).toBeVisible();
 	await page.unrouteAll({ behavior: 'ignoreErrors' });

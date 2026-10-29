@@ -30,22 +30,9 @@ import { RecountSheet } from './recount-sheet';
 import { ReportPanel } from '../report-panel';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
-export function ClosurePanel({
-	row,
-	onClose,
-	onBack,
-	onRecountSaved,
-}: {
-	row: ClosureRow;
-	onClose: () => void;
-	onBack?: () => void;
-	onRecountSaved?: () => void;
-}) {
+export function useClosureView(row: ClosureRow) {
 	const t = useT();
-	const http = useRestHttpClient();
-	const [recounting, setRecounting] = React.useState(false);
 	const [error, setError] = React.useState('');
-	const phone = useIsPhone();
 	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const { storeDB } = useStoreSession();
 	const getLocalClosure = React.useCallback(
@@ -88,7 +75,6 @@ export function ClosurePanel({
 			log.warn('Closure history could not be saved', { context: { error: String(error) } })
 		);
 	}, [remote, persistSnapshot]);
-	const documentError = doc.documentError && !doc.isOffline;
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures & {
 		number: number;
 		corrections?: Correction[];
@@ -108,6 +94,49 @@ export function ClosurePanel({
 			setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
 		}
 	};
+	return {
+		doc,
+		context,
+		settled,
+		touched,
+		corrections,
+		synced,
+		printCount: Math.max(row.print_count ?? 0, printedTo),
+		reprint,
+		error,
+		persistSnapshot,
+	};
+}
+
+export function ClosurePanel({
+	row,
+	onClose,
+	onBack,
+	onRecountSaved,
+}: {
+	row: ClosureRow;
+	onClose: () => void;
+	onBack?: () => void;
+	onRecountSaved?: () => void;
+}) {
+	const t = useT();
+	const http = useRestHttpClient();
+	const [recounting, setRecounting] = React.useState(false);
+	const phone = useIsPhone();
+	const {
+		doc,
+		context,
+		settled,
+		touched,
+		corrections,
+		synced,
+		printCount,
+		reprint,
+		error,
+		persistSnapshot,
+	} = useClosureView(row);
+	const remote = doc.serverReceiptData;
+	const documentError = doc.documentError && !doc.isOffline;
 	const content = (
 		<>
 			<DialogHeader className="flex-row items-center gap-3">
@@ -141,7 +170,7 @@ export function ClosurePanel({
 					corrections={corrections}
 					blind={false}
 					context={context}
-					printCount={Math.max(row.print_count ?? 0, printedTo)}
+					printCount={printCount}
 				/>
 			</ScrollView>
 			{(doc.isOffline || !synced) && (
