@@ -12,6 +12,9 @@ import { ClosurePanel } from './closure-panel';
 import { mergeAvailablePrinterProfiles } from '../../settings/printer/available-printer-profiles';
 
 // Keep routing real without loading printer transports/encoders in jsdom.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
@@ -104,7 +107,6 @@ jest.mock('@wcpos/query', () => ({
 	// override rows (`mockOverrides`) drive the Thermal route exactly as the collection did.
 	observeTemplatePrinterOverrides: () => mockOverrides,
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		testID,
@@ -123,7 +125,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: { children: React.ReactNode }) => children,
+	Dialog: jest.requireActual('@radix-ui/react-dialog').Root,
 	DialogContent: ({
 		children,
 		side,
@@ -143,7 +145,16 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</div>
 	),
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogTitle: require('react-native').Text,
+	DialogTitle: jest.requireActual('@radix-ui/react-dialog').Title,
+	DialogDescription: ({ children }: { children: React.ReactNode }) => {
+		const Description = jest.requireActual('@radix-ui/react-dialog').Description;
+		const Text = jest.requireActual('react-native').Text;
+		return (
+			<Description asChild>
+				<Text>{children}</Text>
+			</Description>
+		);
+	},
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('@wcpos/components/select', () => {
@@ -198,6 +209,9 @@ jest.mock('@wcpos/components/select', () => {
 		},
 	};
 });
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({ r: 'Front till' }),
+}));
 const mockPrint = jest.fn(async (_printer?: PrinterProfile | null) => true);
 const mockRefetch = jest.fn();
 const mockGet = jest.fn();
@@ -311,6 +325,7 @@ beforeEach(() => {
 it('opens a template-backed phone page with its single selector and available reprint action', () => {
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('document').textContent).toBe('4');
 	expect(screen.getByTestId('receipt-template-select')).toBeTruthy();
 	expect(screen.getByTestId('receipt-template-core').textContent).toBe('Default');
@@ -349,9 +364,12 @@ it('shows settled figures below the server document and retains its baseline/cor
 	};
 	const view = render(<ClosurePanel row={row} onClose={() => {}} />);
 	expect(screen.getByTestId('dialog-right')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('document').textContent).toBe('9');
-	expect(screen.getByTestId('closure-settled').textContent).toContain('$99.00 → $111.00');
-	expect(screen.getByTestId('closure-settled').textContent).toContain('-$11.00 → $1.00');
+	expect(screen.getByTestId('closure-settled').textContent).toContain(
+		'Recorded $99.00 · −$11.00 short. Settled at $111.00 after 1 recount.'
+	);
+	expect(screen.getByTestId('closure-figure-counted').textContent).toBe('$111.00');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Pat');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Alex');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Second count');
@@ -366,8 +384,11 @@ it('shows settled figures below the server document and retains its baseline/cor
 	view.unmount();
 	mockRemote = null;
 	render(<ClosurePanel row={{ ...row, ...snapshot }} onClose={() => {}} />);
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('document').textContent).toBe('9');
-	expect(screen.getByTestId('closure-settled').textContent).toContain('$99.00 → $111.00');
+	expect(screen.getByTestId('closure-settled').textContent).toContain(
+		'Recorded $99.00 · −$11.00 short. Settled at $111.00 after 1 recount.'
+	);
 });
 
 // Revert: leave Reprint disabled, suppress dispatch errors, or reprint automatically after refusal.
@@ -396,6 +417,7 @@ it('hosts the tablet panel in Reports with a full-width document and close actio
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
 	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
 	expect(screen.getByTestId('closure-panel-close')).toBeTruthy();
 	expect(screen.queryByTestId('closure-back')).toBeNull();
@@ -439,9 +461,12 @@ it.each([2, null])(
 				},
 			};
 			render(<ClosurePanel row={{ ...row, store_id: storeId }} onClose={() => {}} />);
-			expect(screen.getByTestId('closure-settled').textContent).toContain('¥99 → ¥101');
+			expect(screen.getByTestId('closure-settled').textContent).toContain(
+				'Recorded ¥99 · −¥1 short. Settled at ¥101 after 1 recount.'
+			);
+			// The document's own formatter: the store's zone, 24-hour, as the Z-report prints it.
 			expect(screen.getByTestId('closure-correction-1').textContent).toContain(
-				'Sep 12, 2026, 3:00 AM'
+				'Sep 12, 2026, 03:00'
 			);
 		} finally {
 			mockSession.store = previous;
@@ -455,6 +480,7 @@ it('replaces the online fallback with a document error and a manual retry', () =
 	mockLoadError = new Error('document refused');
 	const view = render(<ClosurePanel row={row} onClose={jest.fn()} />);
 	expect(screen.queryByTestId('document')).toBeNull();
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('closure-document-error').textContent).toContain(
 		'Could not load closures'
 	);
@@ -471,6 +497,7 @@ it('keeps the offline document and warning rather than online Retry', () => {
 	mockOffline = true;
 	mockLoadError = new Error('disconnected');
 	render(<ClosurePanel row={row} onClose={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('closure-zreport'));
 	expect(screen.getByTestId('document').textContent).toBe('4');
 	expect(screen.queryByTestId('closure-document-retry')).toBeNull();
 	expect(screen.getByText('Connect to recount')).toBeTruthy();
@@ -514,13 +541,14 @@ it.each([true, false])(
 	async (phone) => {
 		mockPhone = phone;
 		render(<ClosurePanel row={row} onClose={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('closure-zreport'));
 		const selector = screen.getByTestId('receipt-printer-select');
 		expect(selector.textContent).toContain('Thermal');
 		expect(selector.className).toContain('min-h-12');
 		const templateSelector = screen.getByTestId('receipt-template-select');
 		expect(templateSelector.parentElement).toBe(selector.parentElement);
 		expect(getComputedStyle(selector.parentElement!).flexDirection).toBe('column');
-		expect(screen.getByTestId('closure-panel-body').contains(selector)).toBe(false);
+		expect(screen.getByTestId('closure-panel-body').contains(selector)).toBe(true);
 		fireEvent.click(screen.getByTestId('closure-reprint'));
 		await waitFor(() =>
 			expect(mockPrint).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'thermal' }))
@@ -617,5 +645,7 @@ it('persists the recounted document before completion even when the panel immedi
 	expect(JSON.parse(localRow.receipt_snapshot).closure.corrections).toEqual([correction]);
 	mockRemote = null;
 	render(<ClosurePanel row={localRow} onClose={jest.fn()} />);
-	expect(screen.getByTestId('closure-settled').textContent).toContain('$99.00 → $105.00');
+	expect(screen.getByTestId('closure-settled').textContent).toContain(
+		'Settled at $105.00 after 1 recount.'
+	);
 });

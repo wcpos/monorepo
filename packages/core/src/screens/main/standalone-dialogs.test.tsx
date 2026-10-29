@@ -58,7 +58,10 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('@wcpos/components/keyboard-controller', () => ({ KeyboardAvoidingView: mockView }));
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => mockPhone,
+	usePointer: () => 'fine',
+}));
 // Exercise the real dialog, shell and parts; substitute native primitives and unrelated form controls.
 jest.mock('@rn-primitives/dialog', () => {
 	const Context = React.createContext({ open: false, onOpenChange: (_open: boolean) => {} });
@@ -100,6 +103,7 @@ jest.mock('@rn-primitives/dialog', () => {
 		},
 		Overlay: mockView,
 		Title: mockView,
+		Description: mockView,
 		Close: ({ children }: React.PropsWithChildren) => {
 			const { onOpenChange } = React.useContext(Context);
 			return React.isValidElement<{ onPress?: () => void }>(children)
@@ -159,6 +163,7 @@ jest.mock('../../hooks/use-local-date', () => ({
 }));
 jest.mock('../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({ presets: () => [] }),
+	useViewedStore: () => null,
 	zoneOptions: () => undefined,
 }));
 jest.mock('../../query', () => ({
@@ -173,13 +178,14 @@ jest.mock('../../services/register/use-register-names', () => ({
 	useRegisterNamesReady: () => true,
 }));
 jest.mock('../../services/register-session/closure-document', () => ({
-	buildClosureDocument: () => null,
+	buildClosureDocument: () => ({ closure: { tenders: [] } }),
+	formatClosureDate: () => ({}),
 }));
 jest.mock('../../services/register-session/settled-figures', () => ({
-	deriveSettled: () => ({ settled: {}, touched: new Set() }),
+	deriveSettled: () => ({ settled: { counted: {}, expected: {} }, touched: new Set() }),
 }));
 jest.mock('../../services/register-session/use-closure-document-context', () => ({
-	useClosureDocumentContext: () => ({}),
+	useClosureDocumentContext: () => ({ formatMoney: (value: string) => value, i18n: {} }),
 }));
 jest.mock('./hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
 jest.mock('./receipt/use-receipt-document', () => ({
