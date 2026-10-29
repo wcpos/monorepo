@@ -95,7 +95,10 @@ export function Chip({
 	const band = sm && <MinTargetBand />;
 	const content = (
 		<>
-			{leading ?? (icon && <Icon name={icon} className="text-foreground" />)}
+			{leading ??
+				(icon && (
+					<Icon name={icon} className={on ? 'text-selected-foreground' : 'text-foreground'} />
+				))}
 			<Text
 				testID={trail ? undefined : id('label')}
 				// One line: a long label (a customer's full name) truncates inside the pill
@@ -105,7 +108,7 @@ export function Chip({
 					'shrink font-medium',
 					sm ? 'text-sm' : 'text-base',
 					add ? 'text-muted-foreground' : 'text-foreground',
-					on && 'text-primary font-semibold'
+					on && 'text-selected-foreground font-semibold'
 				)}
 			>
 				{label}
@@ -142,7 +145,8 @@ export function Chip({
 				// With an action each cell fills on its own (the strip rule, 2026-10-09), so the
 				// label half carries the padding and the pill neither fills nor pads.
 				action ? 'gap-0 px-0' : 'active:bg-muted web:hover:bg-muted',
-				on ? 'border-primary' : 'border-border',
+				on && 'active:bg-selected web:hover:bg-selected',
+				on ? 'bg-selected border-selected' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',
 				className
@@ -161,7 +165,11 @@ export function Chip({
 							'flex-1 flex-row items-center gap-1.5 self-stretch',
 							!action
 								? 'active:opacity-70'
-								: cn('active:bg-muted web:hover:bg-muted rounded-l-full', sm ? 'px-2.5' : 'px-3')
+								: cn(
+										'active:bg-muted web:hover:bg-muted rounded-l-full',
+										on && 'active:bg-selected web:hover:bg-selected',
+										sm ? 'px-2.5' : 'px-3'
+									)
 						)}
 						// The label's press bubbles: with a trailing cell the root has no handler, so
 						// nothing fires twice, and a menu trigger wrapping the chip (`asChild`) listens
@@ -187,6 +195,7 @@ export function Chip({
 							action
 								? cn(
 										'border-border active:bg-muted web:hover:bg-muted rounded-r-full border-l',
+										on && 'active:bg-selected web:hover:bg-selected',
 										sm ? 'min-w-8' : 'min-w-ctl'
 									)
 								: cn('active:opacity-70', sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3')
@@ -206,7 +215,11 @@ export function Chip({
 								className={action.muted ? 'text-muted-foreground' : 'text-foreground'}
 							/>
 						) : (
-							<Icon name="close" size="sm" className="text-foreground" />
+							<Icon
+								name="close"
+								size="sm"
+								className={on ? 'text-selected-foreground' : 'text-foreground'}
+							/>
 						)}
 						{band}
 					</Pressable>

@@ -44,6 +44,8 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 });
 const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
 const newColors = [
+	'selected',
+	'selected-foreground',
 	'rail',
 	'rail-foreground',
 	'rail-border',
@@ -374,6 +376,7 @@ for (const name of themeNames) {
 
 for (const name of themeNames) {
 	for (const [text, ground] of [
+		['selected-foreground', 'selected'],
 		['warning-text', 'card'],
 		['warning-text', 'background'],
 		['destructive', 'card'],

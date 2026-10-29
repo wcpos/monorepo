@@ -25,6 +25,7 @@ export function PosterThumb({
 	testID,
 }: PosterThumbProps) {
 	const tint = picture.kind === 'tint' ? picture.tint : null;
+	const filled = picture.kind === 'fill';
 	return (
 		<View
 			className={`relative overflow-visible ${size === 'md' ? 'size-14' : 'size-10'}`}
@@ -40,7 +41,7 @@ export function PosterThumb({
 				</View>
 			)}
 			<View
-				className={`h-full w-full overflow-hidden rounded-lg border ${tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`} ${out ? 'opacity-40' : ''}`}
+				className={`h-full w-full overflow-hidden rounded-lg border ${filled ? 'bg-primary border-transparent' : tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`} ${out ? 'opacity-40' : ''}`}
 			>
 				<View className="h-full w-full">
 					{picture.kind === 'slot' ? (
@@ -58,12 +59,17 @@ export function PosterThumb({
 			{mark && (
 				<View
 					className={
-						tint === null
+						tint === null && !filled
 							? 'absolute -top-1 -left-1'
 							: 'absolute inset-0 items-center justify-center'
 					}
 				>
-					<Mark mark={mark} bare={tint !== null} compact />
+					<Mark
+						mark={mark}
+						bare={tint !== null || filled}
+						compact
+						className={filled ? 'text-primary-foreground' : undefined}
+					/>
 				</View>
 			)}
 		</View>

@@ -28,4 +28,6 @@ Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291
 17. A `size="sm"` Chip keeps a 44 pt target on every platform: each press target (the root of a plain chip; the label half and the trailing cell of a split one) carries `MinTargetBand` (`lib/min-target`, `pressable-surface` line 7), so a split root takes no press and nothing routes by position; the clear control's `hitSlop` 8 went with the slop — evidence: card 4 of the 2026-10-28 component-library review; test "gives each press target of a sm chip the 44 pt band…".
 18. `action` puts a second, icon-only cell after a hairline (`border-l border-border`) with its own press, accessible name and test ID; it fills on its own on press and hover (the label half takes the pill's fill and padding), and takes the clear control's place, so `onClear` is ignored when both are given. Lines 1, 3, 7, 8 and 17 hold for it as for the clear control — evidence: line 15 (owner decision 2026-10-22); test `index.test.tsx`.
 
+19. The on state is a `bg-selected` block with `text-selected-foreground` words and glyphs, never an outline — evidence: owner, 2026-10-29, primary board P2 on construction I.
+
 _Cells: a chip hugs its label, so each story is content-width. If a cell renders full-width the baseline is stale — see the shoot note on wcpos/monorepo#2189._

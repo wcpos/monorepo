@@ -17,7 +17,7 @@ import { useT } from '../../../../../contexts/translations';
 import { type Measurable, useCopyPicture, useDealCards, useLiftedLayout } from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
 
-// All products and a shortcut are not a category: their glyph on the last tint.
+// A shortcut is not a category: its glyph on the last tint.
 const OTHER = { kind: 'tint', tint: 5 } as const;
 
 export function termTestId(term: BrowseTerm): string {
@@ -82,6 +82,7 @@ function useTermPicture(term: BrowseTerm, still?: boolean): PosterPicture {
 	const src = term.kind === 'term' ? (term.imageSrc ?? '') : '';
 	// Keyed by the source: a new picture gets its own chance to load.
 	const [failed, setFailed] = React.useState<string | null>(null);
+	if (term.kind === 'all') return { kind: 'fill' };
 	if (term.kind !== 'term') return OTHER;
 	if (!src || failed === src) return { kind: 'tint', tint: tintOf(term.id) };
 	return {
@@ -123,7 +124,11 @@ function useTermWords(term: BrowseTerm) {
 		label,
 		mark,
 		title: (
-			<Text className="leading-tight font-bold" numberOfLines={2} decodeHtml>
+			<Text
+				className={`leading-tight font-bold ${term.kind === 'all' ? 'text-primary-foreground' : ''}`}
+				numberOfLines={2}
+				decodeHtml
+			>
 				{label}
 			</Text>
 		),

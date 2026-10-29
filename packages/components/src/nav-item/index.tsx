@@ -46,7 +46,7 @@ export function NavItem({
 	const drawer = size === 'drawer';
 	const tint = selected
 		? drawer
-			? 'text-primary'
+			? 'text-selected-foreground'
 			: 'text-foreground'
 		: drawer
 			? 'text-sidebar-foreground'
@@ -60,7 +60,8 @@ export function NavItem({
 				'flex-row items-center gap-3 px-3',
 				sizes[size],
 				!label && 'justify-center',
-				selected && 'bg-card',
+				selected && (drawer ? 'bg-selected' : 'bg-card'),
+				selected && drawer && 'web:hover:bg-selected active:bg-selected',
 				className
 			)}
 			testID={testID}

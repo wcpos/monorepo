@@ -7,19 +7,19 @@
  * them on an sRGB screen.
  */
 export const PRE_THEME_COLOURS = {
-	background: '#f5f7f9', // --background
+	background: '#f3f5f8', // --background
 	foreground: '#141b24', // --foreground
 	card: '#ffffff', // --card
-	border: '#dadee3', // --border
-	primary: '#0069bd', // --primary
-	primaryForeground: '#f6fdff', // --primary-foreground
-	muted: '#edf0f4', // --muted
+	border: '#d4dae0', // --border
+	primary: '#0068d0', // --primary
+	primaryForeground: '#f7fcff', // --primary-foreground
+	muted: '#ebeff3', // --muted
 	mutedForeground: '#5b646f', // --muted-foreground
 	warningBg: '#fff4d7', // --warning-bg
 	warningText: '#915200', // --warning-text
 	badBg: '#fff0ee', // --bad-bg
 	// The fill and ink of a destructive confirm, the same pair as the Button's `destructive` variant.
-	destructive: '#cd001d', // --destructive
+	destructive: '#c90019', // --destructive
 	destructiveForeground: '#fff9f8', // --destructive-foreground
 } as const;
 

@@ -160,7 +160,7 @@ describe.each(['rail', 'front'] as const)('the %s', (presentation) => {
 		// NavItem paints the tint from the route's icon name.
 		const tint = (name: string) =>
 			container.querySelector(`[data-icon="${name}"]`)?.getAttribute('data-classes');
-		expect(tint('register')).toContain('text-primary');
+		expect(tint('register')).toContain('text-selected-foreground');
 		expect(tint('receipt')).toContain('text-sidebar-foreground');
 		expect(
 			screen.getByTestId('drawer-bottom-group').contains(screen.getByTestId('health-badge'))

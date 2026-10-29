@@ -38,7 +38,7 @@ jest.mock('../icon', () => ({
 
 it.each([
 	[{}, 'border-border', 'text-foreground'],
-	[{ on: true }, 'border-primary', 'text-primary font-semibold'],
+	[{ on: true }, 'bg-selected border-selected', 'text-selected-foreground font-semibold'],
 	[{ dimmed: true }, 'opacity-45', 'text-foreground'],
 	[{ add: true }, 'border-dashed', 'text-muted-foreground'],
 ])('renders chip state %j', (state, root, label) => {
@@ -66,9 +66,20 @@ it.each([
 ])('size %s sets the height and label size, keeping the on-state', (size, height, text) => {
 	render(<Chip label="Menu" testID="chip" size={size} on />);
 	const root = screen.getByTestId('chip').dataset.classes?.split(' ') ?? [];
-	expect(root).toEqual(expect.arrayContaining([height, 'rounded-full', 'border-primary']));
+	expect(root).toEqual(
+		expect.arrayContaining([
+			height,
+			'rounded-full',
+			'bg-selected',
+			'border-selected',
+			'active:bg-selected',
+			'web:hover:bg-selected',
+		])
+	);
 	const label = screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? [];
-	expect(label).toEqual(expect.arrayContaining([text, 'text-primary', 'font-semibold']));
+	expect(label).toEqual(
+		expect.arrayContaining([text, 'text-selected-foreground', 'font-semibold'])
+	);
 });
 it('announces the on-state on the press target, with or without a clear control', () => {
 	// Web: a button's toggle state is aria-pressed (aria-selected is not allowed on role=button).
