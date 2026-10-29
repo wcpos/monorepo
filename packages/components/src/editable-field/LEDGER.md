@@ -9,3 +9,4 @@ Seeded 2026-10-28 by card 18 of the component-library review, when the field mov
 ## Lines
 
 1. The empty value reads as the shared property placeholder in muted ink (`PROPERTY_PLACEHOLDER_CLASS`, `property-row` line 7) — evidence: `property-row/LEDGER.md` line 7 — platform: all.
+2. Leaving the editor writes through `onChangeText` only when the text was edited to something other than the synced value; a focus-and-leave writes nothing — evidence: `index.test.tsx` "a blur without an edit writes nothing" (W4-H) — platform: all.
