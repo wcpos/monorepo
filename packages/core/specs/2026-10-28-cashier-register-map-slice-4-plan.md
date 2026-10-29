@@ -35,27 +35,31 @@
 ### Task 1: `DerivationLine` — a step's sub-line with an action
 
 **Files:**
+
 - Modify: `packages/components/src/derivation/index.tsx`
 - Modify: `packages/components/src/derivation/gallery.tsx` (one sub-line under an existing step)
 - Test: `packages/components/src/derivation/derivation.test.tsx`
 
 **Interfaces:**
-- Produces: `DerivationLine({ label, note?, amount?, action?, tone?, testID? })` exported beside `DerivationStep`:
-  ```ts
-  interface DerivationLineProps extends ViewProps {
-  	/** The movement's reason. */
-  	label: string;
-  	/** Muted, after the label: "Refused". */
-  	note?: string;
-  	/** Right of the label, tabular: the amount; omitted for a blind cashier or a no sale. */
-  	amount?: string;
-  	/** A ghost `Button size="sm"` at the right: Void. */
-  	action?: { label: string; testID?: string; onPress: () => void; disabled?: boolean };
-  	/** `bad` colours the label (a refused row). */
-  	tone?: 'bad';
-  }
-  ```
-  Rendered as `View className="min-h-row flex-row items-center gap-2"` inside a step's children (the step already indents children under its title): label `Text numberOfLines={1} className="min-w-0 flex-1"` (+ `TONE.bad.text` when `tone`), note `Text variant="key"`, amount `Text className="tabular-nums"`, action `Button variant="ghost" size="sm"`.
+
+Produces: `DerivationLine({ label, note?, amount?, action?, tone?, testID? })` exported beside `DerivationStep`:
+
+```ts
+interface DerivationLineProps extends ViewProps {
+	/** The movement's reason. */
+	label: string;
+	/** Muted, after the label: "Refused". */
+	note?: string;
+	/** Right of the label, tabular: the amount; omitted for a blind cashier or a no sale. */
+	amount?: string;
+	/** A ghost `Button size="sm"` at the right: Void. */
+	action?: { label: string; testID?: string; onPress: () => void; disabled?: boolean };
+	/** `bad` colours the label (a refused row). */
+	tone?: 'bad';
+}
+```
+
+Rendered as `View className="min-h-row flex-row items-center gap-2"` inside a step's children (the step already indents children under its title): label `Text numberOfLines={1} className="min-w-0 flex-1"` (+ `TONE.bad.text` when `tone`), note `Text variant="key"`, amount `Text className="tabular-nums"`, action `Button variant="ghost" size="sm"`.
 
 - [ ] **Step 1: Write the failing tests** in `derivation.test.tsx`:
 
@@ -65,8 +69,18 @@ it('a sub-line carries its reason, amount and action, and reads bad when refused
 	render(
 		<Derivation>
 			<DerivationStep label="Paid out · 2" title="Paid out">
-				<DerivationLine label="Window cleaner" amount="−20,00 £" action={{ label: 'Void', testID: 'void-1', onPress }} />
-				<DerivationLine label="Petty cash" note="Refused" amount="−5,00 £" tone="bad" testID="line-2" />
+				<DerivationLine
+					label="Window cleaner"
+					amount="−20,00 £"
+					action={{ label: 'Void', testID: 'void-1', onPress }}
+				/>
+				<DerivationLine
+					label="Petty cash"
+					note="Refused"
+					amount="−5,00 £"
+					tone="bad"
+					testID="line-2"
+				/>
 			</DerivationStep>
 		</Derivation>
 	);
@@ -86,11 +100,13 @@ it('a sub-line carries its reason, amount and action, and reads bad when refused
 ### Task 2: the register panel's reads — `closeTime`, the two drawer glyphs
 
 **Files:**
+
 - Modify: `packages/core/src/services/register-session/use-register-session.ts` (~line 289: the returned object)
 - Modify: `packages/components/src/icon/names.ts`, `packages/components/scripts/icons/maps/hugeicons.json`, `packages/components/scripts/icons/maps/solar.json`; run `pnpm svg` from `packages/components`
 - Test: `packages/core/src/services/register-session/use-register-session.test.tsx`, `packages/core/src/seam.test.ts`
 
 **Interfaces:**
+
 - Produces: `useRegisterSession().closeTime: string | null | undefined` — the store's `expected_close_time` (`HH:MM`) the hook already reads for `overdue`; and icon names `paidIn`, `paidOut`.
 
 - [ ] **Step 1: Write the failing test** in `use-register-session.test.tsx` beside the `overdue` test: `closeTime` returns the store's `expected_close_time` (`'17:30'`) and `undefined` when the store has none.
@@ -102,16 +118,18 @@ it('a sub-line carries its reason, amount and action, and reads bad when refused
 ### Task 3: `FigureTile`, the header and the two figure tiles
 
 **Files:**
+
 - Create: `packages/core/src/screens/main/pos/cart/figure-tile.tsx`
 - Modify: `packages/core/src/screens/main/pos/cart/user-sheet.tsx` (`SalesTile` draws a `FigureTile`; nothing else in the file)
 - Modify: `packages/core/src/screens/main/pos/cart/register-panel.tsx` (the header block and a new tiles row above the movement tiles)
 - Test: `packages/core/src/screens/main/pos/cart/register-panel.test.tsx`, `packages/core/src/screens/main/pos/cart/user-sheet.test.tsx` (existing tiles tests stay green)
 
 **Interfaces:**
+
 - Produces: `FigureTile({ label, value, sub, testID })` — `View testID className="border-border flex-1 rounded-lg border px-3 py-2.5"`, `Text variant="key"` label, `AmountFigure size="tile"` value, optional `Text variant="key"` sub (the recipe `SalesTile` draws today).
 - Consumes: `ToneDisc` (`@wcpos/components/tone-disc`), `useRegisterBinding().registers` (`services/register/use-register-binding`), `useNowMs` (`hooks/use-relative-time`), `Opener` (already in the panel), `useStoreDay().timezone` + `formatDate`/`zoneOptions` (as `user-sheet.tsx` formats `HH:mm`).
 
-Header, per § 4.2: leading `ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc"`; `DialogTitle numberOfLines={1}` = `binding.registerName`, or `t('register.register')` when `registers.length === 1`; `DialogDescription testID="register-panel-description"` = parts joined with ` · `: the store name (`store.name`), then while open `t('register.open_since', { time })` and the age, then the opener's display name (`Opener`, Suspense); while closed with a last closure `t('register.closed_at_time', { time })` (the closure's `closed_at`). The age is `ageLabel(openedMs, nowMs)` in the panel: `t('register.age_h_m', { h, m })` ("3 h 20 m") when ≥ 1 h, else `t('register.age_m', { m })` ("20 m"); `nowMs` from `useNowMs(60_000)`. The X-report `IconButton` stays at the header's right, unchanged.
+Header, per § 4.2: leading `ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc"`; `DialogTitle numberOfLines={1}` = `binding.registerName`, or `t('register.register')` when `registers.length === 1`; `DialogDescription testID="register-panel-description"` = parts joined with `·`: the store name (`store.name`), then while open `t('register.open_since', { time })` and the age, then the opener's display name (`Opener`, Suspense); while closed with a last closure `t('register.closed_at_time', { time })` (the closure's `closed_at`). The age is `ageLabel(openedMs, nowMs)` in the panel: `t('register.age_h_m', { h, m })` ("3 h 20 m") when ≥ 1 h, else `t('register.age_m', { m })` ("20 m"); `nowMs` from `useNowMs(60_000)`. The X-report `IconButton` stays at the header's right, unchanged.
 
 Tiles row (`View className="flex-row gap-2 px-4"`, above the movement tiles, only while `session`): `FigureTile testID="register-panel-drawer" label=t('register.in_the_drawer')` value `—` when `figuresPending` (sub `t('register.figures_after_sync')`) else `format(expected.cash)`; `FigureTile testID="register-panel-session-sales" label=t('register.session_sales')` value `format(sessionSales)` sub `t('register.sales_count', { count: salesCount })`, where `sessionSales = Number(terms.cashSales.amount) − Number(terms.cashRefunds.amount) + Σ others` (`others` as the panel computes it today: every non-cash `expected` entry). Blind cashier: ONE tile, label `Session sales`, value `t('register.sales_count', { count })`, no money.
 
@@ -126,14 +144,17 @@ Strings: `register.register` "Register", `register.open_since` "open since {time
 ### Task 4: the ledger as the `Derivation` rail
 
 **Files:**
+
 - Modify: `packages/core/src/screens/main/pos/cart/register-panel.tsx` (the `DialogBody`'s `terms` block; delete `term`, `amount`, `fold`, `expanded`, `STATIC_ROW` where no longer used)
 - Modify: the movement tiles' glyphs (`paidIn`, `paidOut`, `cashDrawer`)
 - Test: `register-panel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `Derivation`, `DerivationStep`, `DerivationLine` (Task 1); `activeMovements` (already computed), `terms`, `actions.voidMovement`.
 
 The rail (`Derivation testID="register-panel-ledger" className="px-4 pt-2"`), one step per term that happened, in this order, each `label` the term with its count (`t('register.term_count', { term, count })` → "Cash sales · 3"; the float's label is `t('register.opened_suffix', { time })` "Opened 09:02"), `title` the term's plain name, `trailing` the amount (`Text className="tabular-nums"`; omitted for blind):
+
 1. Float — always (`—` when `figuresPending`).
 2. Cash sales — when `terms.cashSales.count > 0`.
 3. Cash refunds — when `Number(terms.cashRefunds.amount) !== 0` (minus).
@@ -155,10 +176,12 @@ Strings: `register.term_count` "{term} · {count}".
 ### Task 5: one last-closure row, and the closure pane pushed inside the panel
 
 **Files:**
+
 - Modify: `register-panel.tsx` (the `lastClosure` block; the pane stack)
 - Test: `register-panel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ClosurePanel` (`../../reports/closures/closure-panel`, `{ row, onClose, onBack }`), `Badge` (`variant`, `tinted`, `size="lg"`), `useStoreDayLabel(store.id)` (`hooks/use-store-day-label`: `relative`-style heading and `time`), `useCurrencyFormat`.
 
 The row: `MenuRow testID="register-panel-open-closure"` label `Closure N · <day> <HH:mm> · <counted cash>` (N = `server_number ?? number`; day = `heading(lastClosure.business_day)` from `useStoreDayLabel(store.id)`, which already answers Today / Yesterday / the dated form; time = `time(lastClosure.closed_at)`; the amount omitted for blind), `trailing` a `Badge tinted size="lg"`: `Unsynced` (`warning`) when `!synced_rows_at`, else `Corrected` (`warning`) when `corrections_count`, else by `variance.cash`: `Exact` (`ok`), `<amount> over` (`ok`), `<amount> short` (`bad`) — the same words `closure-list.tsx` uses. `disabled={reportsDenied}` with the existing restricted note. Pressing sets the pane to `closure`. Removed: the Reports `router.push`, the `closure-reprint` row and `useSessionReport(lastClosure, true)`, the `closure-unsynced` note (it is the badge now), the `listed_in_health` note. Kept: `closure-sync-error`.
@@ -174,6 +197,7 @@ The pane stack: `const [pane, setPane] = React.useState<'register' | 'closure'>(
 ### Task 6: Close register knows the time; the closed states
 
 **Files:**
+
 - Modify: `register-panel.tsx` (the `DialogFooter`)
 - Test: `register-panel.test.tsx`
 
