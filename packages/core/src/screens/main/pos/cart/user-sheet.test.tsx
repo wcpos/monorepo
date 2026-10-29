@@ -707,6 +707,7 @@ let mockDrawer = {
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter' },
 	countingHere: false,
+	countingBy: null as { id: number; name: string | null; at: string | null } | null,
 	loaded: true,
 	actions: { startCounting: jest.fn(async () => {}) },
 };
@@ -1073,4 +1074,34 @@ describe('switch confirmations and guards', () => {
 			expect(screen.queryByTestId('switch-confirm')).toBeNull();
 		}
 	);
+});
+
+it('the Register band names the current counter only when the plugin supplies one', () => {
+	const previous = mockDrawer,
+		previousRegisters = mockRegisters,
+		previousT = mockT,
+		previousCart = mockCart;
+	mockT = createTestT();
+	mockCart = { payload: { meta_data: [] } };
+	mockRegisters = [
+		{
+			...mockDirectory[0],
+			last_closure: undefined,
+			session: { ...mockDirectory[0].session!, status: 'counting' },
+		},
+		mockDirectory[1],
+	];
+	mockDrawer = { ...mockDrawer, countingBy: { id: 7, name: 'Alex', at: '2026-10-29T17:41:00Z' } };
+	try {
+		const view = render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain('Alex');
+		mockDrawer = { ...mockDrawer, countingBy: null };
+		view.rerender(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).not.toContain('Alex');
+	} finally {
+		mockDrawer = previous;
+		mockRegisters = previousRegisters;
+		mockT = previousT;
+		mockCart = previousCart;
+	}
 });

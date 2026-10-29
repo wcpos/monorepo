@@ -320,6 +320,7 @@ function RegisterBand({
 	}, [refresh]);
 	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
 	const device = useObservableState(register$);
+	const { countingBy } = useRegisterSession();
 	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
@@ -332,7 +333,18 @@ function RegisterBand({
 				const live = cached ? cached.live : (readLiveSession(site.uuid!, row.id) ?? row.session);
 				const description =
 					live?.status === 'counting'
-						? t('register.counting_short')
+						? row.id === registerId && countingBy
+							? t('register.counting_by_since', {
+									name: countingBy.name ?? t('register.unknown_cashier'),
+									time: countingBy.at
+										? formatDate(
+												convertUTCStringToLocalDate(countingBy.at),
+												'HH:mm',
+												zoneOptions(timezone)
+											)
+										: '—',
+								})
+							: t('register.counting_short')
 						: live?.status === 'open'
 							? t('register.open_since_name', {
 									time: formatDate(

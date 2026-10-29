@@ -138,7 +138,7 @@ export function RegisterBar({
 				<BarControls
 					testID="register-bar"
 					portalHost="pos"
-					onOpenRegister={() => onPanelOpenChange(true)}
+					onOpenRegister={() => requestRegisterPanel()}
 				/>
 			</HStack>
 			{/* Always mounted: on web the shell can only play the panel's exit while the caller keeps

@@ -15,7 +15,12 @@ jest.mock('../../components/notification-bell/notification-bell', () => ({
 }));
 
 jest.mock('./user-sheet', () => ({
-	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
+	UserSheet: ({ open, onOpenRegister }: { open: boolean; onOpenRegister?: () => void }) =>
+		open ? (
+			<div data-testid="user-sheet">
+				<button data-testid="sheet-drawer" onClick={onOpenRegister} />
+			</div>
+		) : null,
 }));
 let mockStores: string[] = [];
 let mockIsPhone = true;
@@ -162,6 +167,22 @@ it('passes the count pane claimed from an external request to its panel', () => 
 		requestRegisterPanel('count');
 		render(<RegisterBar panelOpen onPanelOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('requested-pane').textContent).toBe('count');
+	} finally {
+		consumeRegisterPanelRequest();
+	}
+});
+
+it('an ordinary cashier-sheet opening replaces a consumed count request', () => {
+	try {
+		requestRegisterPanel('count');
+		const onPanelOpenChange = jest.fn();
+		const view = render(<RegisterBar panelOpen onPanelOpenChange={onPanelOpenChange} />);
+		expect(consumeRegisterPanelRequest()).toBeNull();
+		view.rerender(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+		fireEvent.click(screen.getByTestId('register-bar-avatar'));
+		fireEvent.click(screen.getByTestId('sheet-drawer'));
+		expect(screen.getByTestId('requested-pane').textContent).toBe('register');
+		expect(onPanelOpenChange).toHaveBeenCalledWith(true);
 	} finally {
 		consumeRegisterPanelRequest();
 	}

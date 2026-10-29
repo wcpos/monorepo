@@ -39,6 +39,7 @@ jest.mock('./register-gate-card', () => ({
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,
+	CountingElsewhereCard: () => <div data-testid="counting-elsewhere-card" />,
 }));
 jest.mock('./register-count', () => ({ RegisterCount: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
@@ -173,6 +174,25 @@ it('a reload mid-count reopens the count pane once', async () => {
 		view.rerender(<OpenOrders isColumn />);
 		expect(screen.queryByTestId('panel-open')).toBeNull();
 		expect(consumeRegisterPanelRequest()).toBeNull();
+	} finally {
+		mockSession = previous;
+		consumeRegisterPanelRequest();
+	}
+});
+
+it.each([true, false])('keeps the cart only for this device’s count (countingHere=%s)', (here) => {
+	const previous = mockSession;
+	mockSession = {
+		session: { id: 's', status: 'counting' },
+		sessionsOn: true,
+		countingHere: here,
+		countingElsewhere: !here,
+	};
+	try {
+		render(<OpenOrders isColumn />);
+		expect(!!screen.queryByTestId('cart-table')).toBe(here);
+		expect(!!screen.queryByTestId('checkout-button')).toBe(here);
+		expect(!!screen.queryByTestId('counting-elsewhere-card')).toBe(!here);
 	} finally {
 		mockSession = previous;
 		consumeRegisterPanelRequest();

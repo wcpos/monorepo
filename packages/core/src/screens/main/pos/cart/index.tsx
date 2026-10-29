@@ -28,8 +28,7 @@ import { OrderSheet } from './order-sheet';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { OpenRegisterCard } from './open-register-card';
-import { RegisterCount } from './register-count';
+import { CountingElsewhereCard, OpenRegisterCard } from './open-register-card';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { requestRegisterPanel } from './register-panel-request';
@@ -71,7 +70,8 @@ function CartColumn({
 	receiptOrderUuid?: string;
 }) {
 	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
-	const { sessionsOn, session, loaded, overdue, countingHere } = useRegisterSession();
+	const { sessionsOn, session, loaded, overdue, countingHere, countingElsewhere } =
+		useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
 	const [panelOpen, setPanelOpen] = React.useState(false);
@@ -130,7 +130,7 @@ function CartColumn({
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
 		!sessionLoading &&
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
-		!(session && session.status !== 'open');
+		!(session && session.status !== 'open' && !countingHere);
 	const cartBar =
 		cartShown || gateShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
 	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
@@ -208,15 +208,9 @@ function CartColumn({
 					) : sessionLoading ? (
 						LOADING_ROWS
 					) : sessionsOn && !session && bindingStatus === 'bound' ? (
-						<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
-					) : session && session.status !== 'open' ? (
-						<RegisterCount
-							key={session.id}
-							description=""
-							onBack={() => setPanelOpen(false)}
-							onClose={() => setPanelOpen(false)}
-							onClosed={() => setPanelOpen(true)}
-						/>
+						<OpenRegisterCard onLastClosure={() => requestRegisterPanel()} />
+					) : countingElsewhere ? (
+						<CountingElsewhereCard />
 					) : isColumn && receiptOrderUuid ? (
 						<React.Suspense fallback={LOADING_ROWS}>
 							<ReceiptLedger uuid={receiptOrderUuid} />
@@ -269,7 +263,7 @@ function CartColumn({
 								</ErrorBoundary>
 								<CartFoot
 									onOpenRegister={() => setPickingRegister(true)}
-									onCloseRegister={() => setPanelOpen(true)}
+									onCloseRegister={() => requestRegisterPanel()}
 									onOpenSheet={() => setEditingOrder(currentOrderRecord)}
 								/>
 							</View>
