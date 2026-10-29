@@ -16,6 +16,11 @@ jest.mock('react-native', () => {
 	}
 	return { Platform: { OS: 'web' }, View, Text };
 });
+let mockPhone = false;
+jest.mock('../lib/device', () => ({ useIsPhone: () => mockPhone }));
+beforeEach(() => {
+	mockPhone = false;
+});
 jest.mock('@rn-primitives/slot', () => ({ Slot: ({ children }: any) => children }));
 jest.mock('../icon', () => ({
 	Icon: ({ name, variant, loading }: any) =>
@@ -36,7 +41,7 @@ jest.mock('../badge', () => ({
 
 const icon = (container: HTMLElement) => container.querySelector('[data-icon]')!;
 
-it('stacks the name and its tag, the identifiers and ONE caption state line on a row card', () => {
+it('is a flush hairline row: the name and its tag, the identifiers and ONE caption state line', () => {
 	render(
 		<DeviceRow
 			testID="row"
@@ -47,8 +52,11 @@ it('stacks the name and its tag, the identifiers and ONE caption state line on a
 			state={{ label: 'Connected · 82%', tone: 'ok' }}
 		/>
 	);
-	expect(screen.getByTestId('row')).toHaveClass('bg-card', 'rounded-lg', 'border', 'p-3');
-	expect(screen.getByText('WisePad 3')).toHaveClass('text-lg', 'font-semibold');
+	const row = screen.getByTestId('row');
+	expect(row).toHaveClass('border-b', 'py-3', 'gap-3', 'last:border-b-0');
+	expect(row).not.toHaveClass('border');
+	expect(row.className).not.toMatch(/rounded|bg-card/);
+	expect(screen.getByText('WisePad 3')).toHaveClass('text-base', 'font-medium');
 	expect(screen.getByTestId('row-tag')).toHaveTextContent('Stripe');
 	// Blanks drop out of line 2, so no stray separator.
 	expect(screen.getByTestId('row-identifiers')).toHaveTextContent(/^WPC-1 · London Shop$/);
@@ -97,18 +105,22 @@ it('names a caller state testID, spins the square while busy, and shows a known 
 	expect(screen.getByTestId('row-progress')).toHaveAttribute('data-indeterminate', 'true');
 });
 
-it('puts the actions last, on a full-width row of their own', () => {
+it.each([
+	[false, 'inline at the right of the name line'],
+	[true, 'last, under the lines'],
+])('phone=%s puts the actions %s, after what the row grows', (phone) => {
+	mockPhone = phone;
 	render(
 		<DeviceRow testID="row" name="Reader">
-			<span>hint</span>
 			<DeviceRowActions>
 				<button type="button">Connect</button>
 			</DeviceRowActions>
+			<span>hint</span>
 		</DeviceRow>
 	);
-	const card = screen.getByTestId('row');
-	const slot = card.lastElementChild!;
-	expect(slot).toHaveClass('w-full', 'flex-row');
-	expect(slot).toHaveTextContent('Connect');
-	expect(slot.previousElementSibling).toHaveTextContent('hint');
+	const row = screen.getByTestId('row');
+	const slot = screen.getByText('Connect').parentElement!;
+	expect(slot).toHaveClass('flex-row', 'items-center');
+	expect(slot.parentElement).toBe(phone ? row : row.firstElementChild);
+	expect(row.lastElementChild).toBe(phone ? slot : screen.getByText('hint'));
 });
