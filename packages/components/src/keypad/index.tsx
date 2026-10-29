@@ -56,10 +56,25 @@ const keyText = cva('font-semibold', {
 	},
 });
 
-type KeyProps = KeypadKey & { face?: 'key' | 'cell'; onPress: () => void } & ViewProps;
+type KeyProps = KeypadKey & {
+	face?: 'key' | 'cell';
+	/** Optional only for a popover trigger, whose press its `asChild` slot supplies. */
+	onPress?: () => void;
+	textClassName?: string;
+} & ViewProps;
 
 /** One key: role, name, `keypad-key-<name>` unless the caller names it, the face. */
-export function Key({ face = 'key', name, label, text, icon, variant, on, ...props }: KeyProps) {
+export function Key({
+	face = 'key',
+	name,
+	label,
+	text,
+	icon,
+	variant,
+	on,
+	textClassName,
+	...props
+}: KeyProps) {
 	const quick = on === undefined ? 'none' : on ? 'lit' : 'off';
 	return (
 		<PressableSurface
@@ -75,7 +90,7 @@ export function Key({ face = 'key', name, label, text, icon, variant, on, ...pro
 			{icon ? (
 				<Icon name={icon} variant={variant} />
 			) : (
-				<Text className={cn(keyText({ face, quick }))}>{text ?? label}</Text>
+				<Text className={cn(keyText({ face, quick }), textClassName)}>{text ?? label}</Text>
 			)}
 		</PressableSurface>
 	);

@@ -16,7 +16,8 @@ export interface AmountFieldProps {
 	/** A quantity committed as 0, or the keypad's − at 1: the line's own remove. */
 	onRemove?: () => void;
 	/** `quiet`: a grid cell's text, pressed to edit in place. A quantity or count is always the box. */
-	look?: 'quiet' | 'field';
+	/** `key`: the price keypad's own quick-key cell, for the Quick Discounts setting. */
+	look?: 'quiet' | 'field' | 'key';
 	/** Money held to other places than the store's prices (a refund's). */
 	places?: number;
 	/** The price keypad's quick discounts, in percent. */

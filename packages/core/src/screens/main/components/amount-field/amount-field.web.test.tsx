@@ -15,7 +15,7 @@ type MockKeypadProps = {
 	decimals: number;
 	decimalSeparator: string;
 	discounts?: number[];
-	field?: boolean;
+	rest?: string;
 	tone?: string;
 	labelledBy?: string;
 	invalid?: boolean;
@@ -64,21 +64,23 @@ const renderField = (props: Partial<AmountFieldProps>) =>
 beforeEach(() => onCommit.mockReset());
 
 it.each([
-	// [kind, look, keypad, decimals, rest text of 1234.5, outlined]
-	['money', 'field', 'price', 0, '1.235', true], // the store's places; a form's box
-	['money', 'quiet', 'price', 0, '1.235', false], // a grid's text
-	['percent', 'field', 'price', 2, '1.234,5', true], // hundredths on a store pricing to none
+	// [kind, look, keypad, decimals, rest text of 1234.5, the keypad's rest face]
+	['money', 'field', 'price', 0, '1.235', 'field'], // the store's places; a form's box
+	['money', undefined, 'price', 0, '1.235', 'field'], // a form's box is the default
+	['money', 'quiet', 'price', 0, '1.235', 'text'], // a grid's text
+	['percent', 'field', 'price', 2, '1.234,5', 'field'], // hundredths on a store pricing to none
+	['percent', 'key', 'price', 2, '1.234,5', 'key'], // a Quick Discounts slot
 	['quantity', 'field', 'quantity', 6, '1.234,5', undefined],
 	['count', 'field', 'quantity', 0, '1.234', undefined], // stock: whole, no decimal key (truncated, as before)
 ] as const)(
 	'%s (%s) is the %s keypad at %d places, reading %s',
-	(kind, look, keypad, places, rest, outlined) => {
+	(kind, look, keypad, places, text, rest) => {
 		renderField({ kind, look });
 		expect(mockKeypad.name).toBe(keypad);
 		expect(mockKeypad.decimals).toBe(places);
 		expect(mockKeypad.decimalSeparator).toBe(',');
-		expect(mockKeypad.format(1234.5)).toContain(rest);
-		expect(mockKeypad.field).toBe(outlined);
+		expect(mockKeypad.format(1234.5)).toContain(text);
+		expect(mockKeypad.rest).toBe(rest);
 	}
 );
 
