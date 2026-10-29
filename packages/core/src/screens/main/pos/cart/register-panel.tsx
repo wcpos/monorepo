@@ -2,9 +2,9 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns/format';
-import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Badge } from '@wcpos/components/badge';
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -34,6 +34,8 @@ import { useRegisterSession } from '../../../../services/register-session/use-re
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { usePanelSide } from '../contexts/overlay-side';
+import { ClosurePanel } from '../../reports/closures/closure-panel';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { FigureTile } from './figure-tile';
 import { useNowMs } from '../../../../hooks/use-relative-time';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -79,9 +81,9 @@ export function RegisterPanel({
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
+	const [pane, setPane] = React.useState<'register' | 'closure'>('register');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
-	const { print: reprint } = useSessionReport(lastClosure, true);
 	const t = useT();
 	const movementNames = {
 		paid_in: t('register.paid_in'),
@@ -90,6 +92,7 @@ export function RegisterPanel({
 	};
 	const { wpCredentials, store } = useStoreSession();
 	const { registers } = useRegisterBinding();
+	const { heading, time } = useStoreDayLabel(store.id);
 	const { timezone } = useStoreDay();
 	const nowMs = useNowMs(60_000);
 	const ageLabel = (openedMs: number, nowMs: number) => {
@@ -99,13 +102,14 @@ export function RegisterPanel({
 			: t('register.age_m', { m: minutes });
 	};
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
-	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
-	const router = useRouter();
+	const reportsDenied =
+		blind || (!!capabilities && !capabilities.includes('view_woocommerce_pos_reports'));
 	const side = usePanelSide('cart');
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
 	const close = (next: boolean) => {
 		if (!next) {
+			setPane('register');
 			setMovement(null);
 			setError('');
 		}
@@ -164,6 +168,33 @@ export function RegisterPanel({
 		others.reduce((sum, [, amount]) => sum + Number(amount), 0);
 	const trailing = (value: string) => !blind && <Text className="tabular-nums">{value}</Text>;
 	const countedLabel = (term: string, count: number) => t('register.term_count', { term, count });
+
+	const variance = Number(lastClosure?.variance.cash ?? 0);
+	const closureBadge = !lastClosure?.synced_rows_at
+		? t('register.unsynced')
+		: lastClosure.corrections_count
+			? t('reports.corrected')
+			: variance
+				? `${blind ? '' : `${format(Math.abs(variance))} `}${variance < 0 ? t('register.short') : t('register.over')}`
+				: t('reports.exact');
+	const closureTone =
+		!lastClosure?.synced_rows_at || lastClosure.corrections_count
+			? 'warning'
+			: variance < 0
+				? 'bad'
+				: 'ok';
+	if (pane === 'closure' && lastClosure)
+		return (
+			<Dialog open={open} onOpenChange={close}>
+				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+					<ClosurePanel
+						row={lastClosure}
+						onBack={() => setPane('register')}
+						onClose={() => close(false)}
+					/>
+				</DialogContent>
+			</Dialog>
+		);
 
 	return (
 		<Dialog open={open} onOpenChange={close}>
@@ -388,22 +419,18 @@ export function RegisterPanel({
 							<MenuRow
 								testID="register-panel-open-closure"
 								disabled={reportsDenied}
-								onPress={() => {
-									router.push({
-										pathname: '/reports',
-										params: {
-											closureId: lastClosure.id,
-											businessDay: lastClosure.business_day,
-											openedAt: lastClosure.opened_at,
-											registerId: lastClosure.register_id,
-										},
-									});
-									close(false);
-								}}
-								label={`${t('register.closure_written_n', {
-									n: lastClosure.server_number ?? lastClosure.number,
-								})}${blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}`}
-								trailing={<Icon name="chevronRight" size="sm" className="text-muted-foreground" />}
+								onPress={() => setPane('closure')}
+								label={`${t('reports.closure_n', { n: lastClosure.server_number ?? lastClosure.number })} · ${heading(lastClosure.business_day ?? lastClosure.closed_at)} ${time(lastClosure.closed_at)}${blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}`}
+								trailing={
+									<Badge
+										tinted
+										size="lg"
+										variant={closureTone}
+										testID="register-panel-closure-result"
+									>
+										{closureBadge}
+									</Badge>
+								}
 							/>
 							{blind && (
 								<Text
@@ -414,32 +441,18 @@ export function RegisterPanel({
 									{t('register.closure_blind_restricted')}
 								</Text>
 							)}
-							{!lastClosure.synced_rows_at ? (
-								<Text testID="closure-unsynced" variant="key" className={NOTE_INSET}>
-									{t('register.unsynced')}
-								</Text>
-							) : !blind ? (
-								<MenuRow
-									testID="closure-reprint"
-									onPress={() => attempt(reprint)}
-									label={t('register.reprint_copy')}
-									trailing={<Icon name="print" size="sm" className="text-muted-foreground" />}
-								/>
-							) : null}
 							{lastClosure.sync_status === 'failed' && (
-								<Text testID="closure-sync-error" className="text-bad px-2.5 py-1 text-sm">
+								<Text testID="closure-sync-error" variant="key" className="text-bad px-2.5 py-1">
 									{lastClosure.sync_error}
 								</Text>
 							)}
-							{lastClosure.server_findings &&
-								Object.keys(lastClosure.server_findings).length > 0 && (
-									<Text variant="key" className={NOTE_INSET}>
-										{t('register.listed_in_health')}
-									</Text>
-								)}
 						</View>
 					)}
-					{!!error && <Text className="text-bad px-2.5 py-2 text-sm">{error}</Text>}
+					{!!error && (
+						<Text variant="key" className="text-bad px-2.5 py-2">
+							{error}
+						</Text>
+					)}
 				</DialogBody>
 				<DialogFooter
 					size="lg"

@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { RegisterPanel } from './register-panel';
 
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'text-muted-foreground' }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/query', () => ({
@@ -15,6 +16,24 @@ jest.mock('@wcpos/query', () => ({
 let mockRegisters = [{ id: 'front' }, { id: 'back' }];
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: mockRegisters }),
+}));
+let mockClosureOverrides: Record<string, unknown> = {};
+jest.mock('../../reports/closures/closure-panel', () => ({
+	ClosurePanel: ({
+		row,
+		onBack,
+		onClose,
+	}: {
+		row: { id: string };
+		onBack: () => void;
+		onClose: () => void;
+	}) => (
+		<div data-testid="closure-panel">
+			{row.id}
+			<button data-testid="closure-back" onClick={onBack} />
+			<button data-testid="closure-close" onClick={onClose} />
+		</div>
+	),
 }));
 let blind = false;
 let currentFiguresPending = false;
@@ -69,6 +88,8 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			closed_at: '2026-09-10T17:00:00Z',
 			synced_rows_at: syncedRowsAt,
 			server_findings: { gap: true },
+			business_day: '2026-09-10',
+			...mockClosureOverrides,
 		},
 		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
@@ -90,7 +111,9 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({ timezone: 'UTC' }),
 	useViewedStore: () => ({ name: 'Shop', currency: 'GBP' }),
 }));
-jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
+jest.mock('../../../../hooks/use-locale', () => ({
+	useLocale: () => ({ code: 'en-GB', shortCode: 'en' }),
+}));
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
@@ -506,52 +529,10 @@ it('coalesces same-tick movement taps before React renders saving state', () => 
 	expect(recordMovement).toHaveBeenCalledTimes(1);
 });
 
-it('shows Unsynced until every named row is acknowledged, then offers Reprint', () => {
-	syncedRowsAt = null;
-	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain('£570.00');
-	expect(screen.getByTestId('closure-unsynced')).toBeTruthy();
-	expect(screen.queryByTestId('closure-reprint')).toBeNull();
-	syncedRowsAt = '2026-09-12T12:00:00Z';
-	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.queryByTestId('closure-unsynced')).toBeNull();
-	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
-});
-
-it('shows the server number and offers Reprint for an acknowledged superseded closure', () => {
-	serverNumber = 4;
-	syncStatus = 'superseded';
-	syncedRowsAt = '2026-09-12T12:00:00Z';
-	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain(
-		'register.closure_written_n 4'
-	);
-	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
-});
-it('hides acknowledged closure reprinting from blind cashiers', () => {
-	blind = true;
-	syncedRowsAt = '2026-09-12T12:00:00Z';
-	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.queryByTestId('closure-reprint')).toBeNull();
-});
 it('shows the dead-lettered closure movement error', () => {
 	syncStatus = 'failed';
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
-});
-
-const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-// Revert: navigate to Sales, omit the selected closure, or leave the register overlay open.
-it('opens the last closure in Reports Closures and dismisses the register panel', () => {
-	const onOpenChange = jest.fn();
-	render(<RegisterPanel open onOpenChange={onOpenChange} />);
-	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
-	expect(mockPush).toHaveBeenCalledWith({
-		pathname: '/reports',
-		params: expect.objectContaining({ closureId: 'c', openedAt: '2026-09-09T23:00:00Z' }),
-	});
-	expect(onOpenChange).toHaveBeenCalledWith(false);
 });
 
 // Revert: leave the disabled closure control unexplained for blind cashiers.
@@ -574,20 +555,25 @@ it('explains the closure restriction only while blind counting is enabled', () =
 	);
 });
 
-// Revert: use blind counting, rather than a known capability denial, to disable the link.
 it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
-	'keeps unknown report capabilities navigable, but hides blind amounts (%j)',
-	(capabilitiesValue) => {
-		blind = true;
-		capabilities = capabilitiesValue;
-		const denied = capabilitiesValue?.length === 0;
-		render(<RegisterPanel open onOpenChange={jest.fn()} />);
-		const link = screen.getByTestId('register-panel-open-closure') as HTMLButtonElement;
-		expect(link.disabled).toBe(denied);
-		expect(link.textContent).not.toContain('£570');
-		expect(screen.getByTestId('register-panel-closure-restricted')).toBeTruthy();
-		fireEvent.click(link);
-		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
+	'a blind closure row never opens the amount-bearing pane (%j)',
+	(value) => {
+		const previousBlind = blind,
+			previousCapabilities = capabilities;
+		try {
+			blind = true;
+			capabilities = value;
+			render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			const row = screen.getByTestId('register-panel-open-closure') as HTMLButtonElement;
+			expect(row.disabled).toBe(true);
+			expect(row.textContent).not.toContain('£');
+			fireEvent.click(row);
+			expect(screen.queryByTestId('closure-panel')).toBeNull();
+			expect(screen.getByTestId('register-panel-closure-restricted')).toBeTruthy();
+		} finally {
+			blind = previousBlind;
+			capabilities = previousCapabilities;
+		}
 	}
 );
 
@@ -767,5 +753,88 @@ it('no-sale sub-lines carry a reason and Void but never an amount', () => {
 	} finally {
 		terms = previousTerms;
 		movements = previousMovements;
+	}
+});
+
+it.each([
+	['0', 'synced', 0, 'reports.exact'],
+	['2', 'synced', 0, '£2.00 register.over'],
+	['-2', 'synced', 0, '£2.00 register.short'],
+	['2', null, 1, 'register.unsynced'],
+	['-2', 'synced', 1, 'reports.corrected'],
+])(
+	'the closure row names the closure, day, time and counted cash with its result (%s, %s, %s)',
+	(variance, synced, corrections, badge) => {
+		const previous = mockClosureOverrides;
+		jest.useFakeTimers();
+		jest.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+		try {
+			mockClosureOverrides = {
+				server_number: 4,
+				variance: { cash: variance },
+				synced_rows_at: synced,
+				corrections_count: corrections,
+			};
+			render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('register-panel-open-closure').textContent).toBe(
+				`reports.closure_n 4 · common.yesterday 17:00 · £570.00${badge}`
+			);
+			expect(screen.queryByTestId('closure-reprint')).toBeNull();
+		} finally {
+			mockClosureOverrides = previous;
+			jest.useRealTimers();
+		}
+	}
+);
+it('pressing the closure row pushes the closure pane; back returns to the register', () => {
+	const onOpenChange = jest.fn();
+	render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
+	expect(screen.getByTestId('closure-panel').textContent).toBe('c');
+	expect(screen.queryByTestId('register-panel-ledger')).toBeNull();
+	expect(onOpenChange).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('closure-back'));
+	expect(screen.getByTestId('register-panel-ledger')).toBeTruthy();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+});
+it('closing the pushed pane dismisses the panel and reopening starts at the register', () => {
+	const onOpenChange = jest.fn();
+	const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
+	fireEvent.click(screen.getByTestId('closure-close'));
+	expect(onOpenChange).toHaveBeenCalledWith(false);
+	view.rerender(<RegisterPanel open={false} onOpenChange={onOpenChange} />);
+	view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByTestId('register-panel-ledger')).toBeTruthy();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+});
+it('a blind cashier gets no money even in a short closure badge', () => {
+	const previous = mockClosureOverrides,
+		previousBlind = blind;
+	try {
+		mockClosureOverrides = { variance: { cash: '-2' }, synced_rows_at: 'synced' };
+		blind = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel').textContent).not.toContain('£');
+		expect(screen.getByTestId('register-panel-closure-restricted')).toBeTruthy();
+	} finally {
+		mockClosureOverrides = previous;
+		blind = previousBlind;
+	}
+});
+
+it('a closure without a business-day stamp labels its recorded close day', () => {
+	const previous = mockClosureOverrides;
+	jest.useFakeTimers();
+	jest.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+	try {
+		mockClosureOverrides = { business_day: undefined };
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-open-closure').textContent).toContain(
+			'common.yesterday 17:00'
+		);
+	} finally {
+		mockClosureOverrides = previous;
+		jest.useRealTimers();
 	}
 });
