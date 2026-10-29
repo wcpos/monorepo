@@ -84,6 +84,9 @@ export function useSalesToday() {
 	return useObservableState(sales$, 0);
 }
 
+/** Runs one band's action while the sheet holds every other. */
+type Act = (work: () => Promise<void>) => Promise<void>;
+
 function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 	const total = useSalesToday();
 	const { format } = useCurrencyFormat();
@@ -175,7 +178,7 @@ function AwaitingStore() {
 	);
 }
 
-function UserRows({ busy }: { busy: boolean }) {
+function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
 	const { login } = useAppState();
 	const router = useRouter();
@@ -223,7 +226,7 @@ function UserRows({ busy }: { busy: boolean }) {
 					onPress={
 						credential.uuid === wpCredentials.uuid || busy
 							? undefined
-							: () => void switchUser(credential)
+							: () => void act(() => switchUser(credential))
 					}
 					leading={
 						<RecordAvatar
@@ -275,10 +278,12 @@ function RegisterBand({
 	attributed,
 	reason,
 	busy,
+	act,
 }: {
 	attributed: boolean;
 	reason: string;
 	busy: boolean;
+	act: Act;
 }) {
 	const { userDB, site } = useStoreSession();
 	const { registers, registerId, bind, refresh } = useRegisterBinding();
@@ -323,7 +328,7 @@ function RegisterBand({
 						label={row.name}
 						description={attributed ? reason : description}
 						disabled={attributed || busy}
-						onPress={row.id === registerId || busy ? undefined : () => void bind(row.id)}
+						onPress={row.id === registerId || busy ? undefined : () => void act(() => bind(row.id))}
 					/>
 				);
 			})}
@@ -350,6 +355,19 @@ export function UserSheet({
 	const router = useRouter();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
+	// One action at a time: a cashier switch or a register bind in flight holds the store band as
+	// the store switch holds them, so a later tap never commits a login or a binding against the
+	// store the earlier one is replacing (CodeRabbit, #3045).
+	const [acting, setActing] = React.useState(false);
+	const busy = isSwitching || acting;
+	const act: Act = async (work) => {
+		setActing(true);
+		try {
+			await work();
+		} finally {
+			setActing(false);
+		}
+	};
 	// `string[]` as every other reader does: apps/main's typed routes make the tuple's members
 	// a union the literal is not assignable to.
 	const segments: string[] = useSegments();
@@ -405,7 +423,7 @@ export function UserSheet({
 						<DialogBody className="gap-0">
 							<Suspense>
 								<Figures
-									busy={isSwitching}
+									busy={busy}
 									onOpen={() => {
 										if (onOpenRegister) onOpenRegister();
 										else {
@@ -422,16 +440,16 @@ export function UserSheet({
 									<Text variant="caption">{t('register.cashier')}</Text>
 								</View>
 								<Suspense>
-									<UserRows busy={isSwitching} />
+									<UserRows busy={busy} act={act} />
 								</Suspense>
 								{/* Every session-changing action is inert while a store switch hydrates: the overlay
 								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
 								    when the switch publishes its session (Codex, #3045). */}
-								{!isSwitching && <AddUserButton site={site} hasExistingUsers compact />}
+								{!busy && <AddUserButton site={site} hasExistingUsers compact />}
 							</View>
 							<Suspense>
 								<StoreBand
-									isSwitching={isSwitching}
+									isSwitching={busy}
 									onSwitch={async (next) => {
 										if (await handleSwitchStore(next)) onOpenChange(false);
 									}}
@@ -440,7 +458,8 @@ export function UserSheet({
 							{status === 'bound' && registers.length > 1 && (
 								<RegisterBand
 									attributed={attributed}
-									busy={isSwitching}
+									busy={busy}
+									act={act}
 									reason={
 										currentOrder
 											? t('register.switch_register_blocked_cart')
@@ -474,7 +493,7 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
-							disabled: isSwitching,
+							disabled: busy,
 							onPress: () => void logout(),
 						}}
 					/>

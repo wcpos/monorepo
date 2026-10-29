@@ -488,6 +488,45 @@ describe('store band', () => {
 		fireEvent.click(signOut);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
+	it('holds the store band while a cashier switch is in flight', async () => {
+		let finish: () => void = () => {};
+		mockLogin.mockClear();
+		mockLogin.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+		const storeId = mockStoreId;
+		mockStoreId = 2;
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-user-other')));
+			await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(1));
+			const row = screen.getByTestId('user-sheet-store-store-b');
+			expect(row.getAttribute('aria-disabled')).toBe('true');
+			fireEvent.click(row);
+			expect(mockSwitch).not.toHaveBeenCalled();
+			await act(async () => finish());
+			expect(row.getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockStoreId = storeId;
+		}
+	});
+	it('holds the store band while a register bind is pending', async () => {
+		let finish: () => void = () => {};
+		mockBind.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+		const cart = mockCart;
+		mockCart = { payload: { meta_data: [] } };
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-register-back')));
+			expect(mockBind).toHaveBeenCalledWith('back');
+			const row = screen.getByTestId('user-sheet-store-store-b');
+			expect(row.getAttribute('aria-disabled')).toBe('true');
+			fireEvent.click(row);
+			expect(mockSwitch).not.toHaveBeenCalled();
+			await act(async () => finish());
+			expect(row.getAttribute('aria-disabled')).not.toBe('true');
+		} finally {
+			mockCart = cart;
+		}
+	});
 	it('keeps the sheet open and shows a toast when hydration fails', async () => {
 		mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
 		const onOpenChange = jest.fn();
