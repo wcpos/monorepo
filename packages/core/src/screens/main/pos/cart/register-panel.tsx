@@ -275,13 +275,25 @@ export function RegisterPanel({
 								sub={figuresPending ? t('register.figures_after_sync') : undefined}
 							/>
 						)}
+						{/* A seeded session's money is unknown until the baseline arrives (§ 4.9 rule 1); the
+						    count is this device's and stays. */}
 						<FigureTile
 							testID="register-panel-session-sales"
 							label={t('register.session_sales')}
 							value={
-								blind ? t('register.sales_count', { count: salesCount }) : format(sessionSales)
+								blind
+									? t('register.sales_count', { count: salesCount })
+									: figuresPending
+										? '—'
+										: format(sessionSales)
 							}
-							sub={blind ? undefined : t('register.sales_count', { count: salesCount })}
+							sub={
+								blind
+									? undefined
+									: figuresPending
+										? t('register.figures_after_sync')
+										: t('register.sales_count', { count: salesCount })
+							}
 						/>
 					</View>
 				)}

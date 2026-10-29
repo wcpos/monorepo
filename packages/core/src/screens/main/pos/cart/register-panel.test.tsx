@@ -674,13 +674,16 @@ it('a blind cashier gets one figure tile with the sales count and no money', () 
 		blind = previous;
 	}
 });
-it('a seeded session drawer tile reads — with the sync note', () => {
+it('a seeded session: both figure tiles read — with the sync note', () => {
 	const previous = currentFiguresPending;
 	try {
 		currentFiguresPending = true;
 		render(<RegisterPanel open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
 			'register.in_the_drawer—register.figures_after_sync'
+		);
+		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
+			'register.session_sales—register.figures_after_sync'
 		);
 	} finally {
 		currentFiguresPending = previous;
