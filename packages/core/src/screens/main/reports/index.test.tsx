@@ -734,11 +734,27 @@ it('clears a missing local Free closure without opening a pane or room', async (
 	expect(screen.queryByTestId('reports-closures')).toBeNull();
 	expect(screen.getByTestId('legacy-register')).toBeTruthy();
 });
+// Revert: keep a failed local read as missing, clearing a link nothing proved absent.
+it('keeps a Free link whose local read failed, opening nothing', async () => {
+	mockPro = false;
+	mockRoute = { closureId: 'c' };
+	mockReadClosure.mockRejectedValue(new Error('storage closed'));
+	render(<ReportsScreen />);
+	await waitFor(() => expect(mockReadClosure).toHaveBeenCalledTimes(1));
+	// The rejection lands a tick later; a cleared link would call setParams from that render.
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockSetParams).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+// Revert: open the strip's door by id alone, so a closure this device never held clears itself.
 it.each([false, true])(
 	'routes the last-closure door with the register-panel params (Pro: %s)',
 	(pro) => {
 		mockPro = pro;
-		render(<ReportsScreen />);
+		const view = render(<ReportsScreen />);
 		expect(!!screen.queryByTestId('till-closures')).toBe(pro);
 		fireEvent.click(screen.getByTestId('till-last-closure'));
 		expect(mockSetParams).toHaveBeenCalledWith({
@@ -747,5 +763,10 @@ it.each([false, true])(
 			openedAt: '2026-09-16T09:00:00Z',
 			registerId: 'r',
 		});
+		if (pro) return;
+		// Free opens the row the strip drew, local or the server's, without a local read.
+		view.rerender(<ReportsScreen />);
+		expect(screen.getByTestId('closure-panel').textContent).toBe('c');
+		expect(mockReadClosure).not.toHaveBeenCalled();
 	}
 );

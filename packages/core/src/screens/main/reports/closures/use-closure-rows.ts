@@ -90,12 +90,15 @@ export function normalizeClosureRow(
 }
 export function useLocalClosure(id?: string): {
 	row: ClosureRow | null;
-	status: 'loading' | 'ready' | 'missing';
+	/** `missing` only when a read answered with no row; a failed read is `error` (CodeRabbit, #3058). */
+	status: 'loading' | 'ready' | 'missing' | 'error';
 } {
 	const { storeDB } = useStoreSession();
-	const [result, setResult] = React.useState<{ id?: string; row: ClosureRow | null }>({
-		row: null,
-	});
+	const [result, setResult] = React.useState<{
+		id?: string;
+		row: ClosureRow | null;
+		failed?: boolean;
+	}>({ row: null });
 	// A deep link needs one local read; discard its answer if the link changes or unmounts.
 	React.useEffect(() => {
 		if (!id) return;
@@ -106,7 +109,7 @@ export function useLocalClosure(id?: string): {
 			},
 			(error) => {
 				log.warn('Local closure could not be read', { context: { error: String(error) } });
-				if (!cancelled) setResult({ id, row: null });
+				if (!cancelled) setResult({ id, row: null, failed: true });
 			}
 		);
 		return () => {
@@ -115,7 +118,7 @@ export function useLocalClosure(id?: string): {
 	}, [id, storeDB]);
 	if (!id) return { row: null, status: 'missing' };
 	if (result.id !== id) return { row: null, status: 'loading' };
-	return { row: result.row, status: result.row ? 'ready' : 'missing' };
+	return { row: result.row, status: result.row ? 'ready' : result.failed ? 'error' : 'missing' };
 }
 // Match the REST list default; a full final page costs one extra read, not a totals query.
 const PAGE_SIZE = 50;
