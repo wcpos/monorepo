@@ -81,7 +81,13 @@ export function Closures({
 		key: sessionKey,
 		sessions: [] as SessionSummary[],
 	});
-	const sessions = resolved.key === sessionKey ? resolved.sessions : [];
+	const resolvedSessions = resolved.key === sessionKey ? resolved.sessions : [];
+	// Closures are scoped by their closer; an open session has none yet, so its opener stands in
+	// (Codex, #3048).
+	const sessions =
+		scope.cashier === undefined
+			? resolvedSessions
+			: resolvedSessions.filter((session) => session.opened_by === scope.cashier);
 	const setSessions = React.useCallback(
 		(sessions: SessionSummary[]) => setResolved({ key: sessionKey, sessions }),
 		[sessionKey]
@@ -154,16 +160,18 @@ export function Closures({
 								registers={directory.registers}
 								storeId={scope.storeId}
 								onSessions={setSessions}
+								cashier={scope.cashier}
 								localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
 							/>
 						) : scope.storeId === store.id && scope.registerId === binding.registerId ? (
-							<SessionCard onSessions={setSessions} />
+							<SessionCard onSessions={setSessions} cashier={scope.cashier} />
 						) : register ? (
 							<RemoteSessionCard
 								key={sessionKey}
 								register={register}
 								storeId={scope.storeId}
 								onSessions={setSessions}
+								cashier={scope.cashier}
 							/>
 						) : null
 					}

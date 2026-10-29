@@ -107,6 +107,14 @@ it('keeps expected hidden for blind cashiers but retains the opener and sales co
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('3');
 	expect(screen.getByTestId('reports-session-card').textContent).not.toContain('155');
 });
+// Revert: draw every open session whatever cashier the scope names.
+it('draws the open session only for the cashier who opened it when the scope names one', () => {
+	const { unmount } = render(<SessionCard cashier={9} />);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	unmount();
+	render(<SessionCard cashier={7} />);
+	expect(screen.getByTestId('reports-session-card').textContent).toContain('Pat');
+});
 // Revert: omit the closed branch or dispatch X rather than the last closure.
 it('offers the local last closure Reprint offline when the register is closed', async () => {
 	session = null;

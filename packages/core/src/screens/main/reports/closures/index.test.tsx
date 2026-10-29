@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { Closures } from './index';
 const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 1 };
@@ -28,27 +28,30 @@ let status = 'ready';
 let unavailableIds = new Set<string>();
 const loadMore = jest.fn();
 jest.mock('./use-closure-rows', () => ({
-	useClosureRows: () => ({
+	useClosureRows: (requested: { cashier?: number }) => ({
 		rows,
 		localRows,
-		scope,
+		scope: { ...scope, cashier: requested.cashier },
 		status,
 		loadMore,
 		hasMore: true,
 		unavailableIds,
 	}),
 }));
+const closureList = jest.fn();
 jest.mock('./closure-list', () => ({
 	ClosureList: ({
 		sessionRows,
 		status,
 		footer,
+		...props
 	}: {
 		sessionRows: React.ReactNode;
 		status: React.ReactNode;
 		footer: React.ReactNode;
 	}) => (
 		<>
+			{void closureList(props)}
 			{sessionRows}
 			{status}
 			{footer}
@@ -210,6 +213,19 @@ it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) 
 it('does not substitute scoped history for the register last closure', () => {
 	render(<Closures scope={scope} />);
 	expect(sessionCard).toHaveBeenLastCalledWith({ onSessions: expect.any(Function) });
+});
+
+// Revert: count every open session toward a scope that names a cashier.
+it('scopes the aggregated sessions and the till card to the named cashier', () => {
+	render(<Closures scope={{ ...scope, cashier: 9 }} />);
+	expect(sessionCard).toHaveBeenLastCalledWith(expect.objectContaining({ cashier: 9 }));
+	const { onSessions } = sessionCard.mock.calls.at(-1)![0] as {
+		onSessions: (sessions: { opened_by: number }[]) => void;
+	};
+	act(() => onSessions([{ opened_by: 7 }, { opened_by: 9 }]));
+	expect(closureList).toHaveBeenLastCalledWith(
+		expect.objectContaining({ sessions: [{ opened_by: 9 }] })
+	);
 });
 
 // Revert: swallow CSV failures or return the old adjacent placeholder.

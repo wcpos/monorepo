@@ -29,6 +29,8 @@ type BatchProps = {
 	summary?: SessionCardData;
 	reload?: () => void;
 	onSessions?: (sessions: SessionSummary[]) => void;
+	/** The scope's cashier; a session another cashier opened draws no row (Codex, #3048). */
+	cashier?: number;
 };
 
 export function SessionCard(batch: BatchProps) {
@@ -57,13 +59,20 @@ export function SessionCard(batch: BatchProps) {
 				storeId={store.id}
 				localCard={
 					data.lastClosure
-						? (reason) => <SessionCardContent {...data} print={print} unavailableReason={reason} />
+						? (reason) => (
+								<SessionCardContent
+									{...data}
+									print={print}
+									cashier={batch.cashier}
+									unavailableReason={reason}
+								/>
+							)
 						: undefined
 				}
 			/>
 		);
 	}
-	return <SessionCardContent {...data} print={print} />;
+	return <SessionCardContent {...data} print={print} cashier={batch.cashier} />;
 }
 function SessionCardContent({
 	session,
@@ -75,6 +84,7 @@ function SessionCardContent({
 	unavailable = false,
 	unavailableReason,
 	storeId,
+	cashier,
 }: {
 	session: Pick<RegisterSessionRow, 'status' | 'opened_at_gmt' | 'opened_by'> | null;
 	binding: { registerName: string | null };
@@ -85,6 +95,7 @@ function SessionCardContent({
 	unavailable?: boolean;
 	unavailableReason?: string;
 	storeId?: number;
+	cashier?: number;
 }) {
 	const active = session?.status === 'open' || session?.status === 'counting';
 	const { site } = useStoreSession();
@@ -121,7 +132,7 @@ function SessionCardContent({
 			setBusy(false);
 		}
 	};
-	if (!active) return null;
+	if (!active || (cashier !== undefined && session?.opened_by !== cashier)) return null;
 	return (
 		<>
 			<ListRow
@@ -189,6 +200,7 @@ export function RemoteSessionCard({
 	summary,
 	reload,
 	onSessions,
+	cashier,
 }: BatchProps & {
 	register: { id: string; name: string };
 	storeId?: number;
@@ -230,6 +242,7 @@ export function RemoteSessionCard({
 			) : data.status === 'ready' ? (
 				<SessionCardContent
 					storeId={storeId}
+					cashier={cashier}
 					session={data.session}
 					binding={{ registerName: register.name }}
 					expected={data.session?.expected ?? (summary ? undefined : {})}
