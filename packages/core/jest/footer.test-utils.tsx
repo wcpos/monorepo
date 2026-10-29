@@ -60,10 +60,16 @@ export function DialogFooter({
 	return testID ? <div data-testid={testID}>{buttons}</div> : buttons;
 }
 
-export function AlertDialogFooter({ confirm, cancel = true }: AlertDialogFooterProps) {
+export function AlertDialogFooter({
+	confirm,
+	cancel = true,
+	secondary,
+	size,
+	testID,
+}: AlertDialogFooterProps) {
 	const cancelProps = typeof cancel === 'object' ? cancel : {};
 	return (
-		<>
+		<div data-testid={testID}>
 			{cancel ? (
 				<button
 					data-testid={cancelProps.testID}
@@ -73,9 +79,13 @@ export function AlertDialogFooter({ confirm, cancel = true }: AlertDialogFooterP
 					Cancel
 				</button>
 			) : null}
-			{React.cloneElement(actionButton(confirm), {
+			{secondary &&
+				React.cloneElement(actionButton(secondary, size), {
+					'data-variant': 'outline',
+				} as React.HTMLAttributes<HTMLButtonElement>)}
+			{React.cloneElement(actionButton(confirm, size), {
 				'data-variant': confirm.destructive ? 'destructive' : 'default',
 			} as React.HTMLAttributes<HTMLButtonElement>)}
-		</>
+		</div>
 	);
 }
