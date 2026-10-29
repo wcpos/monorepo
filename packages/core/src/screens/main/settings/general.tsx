@@ -412,7 +412,7 @@ function GeneralSettingsForm({
 				<SavedMark name="restore" label={t('settings.restored')} />
 				{restoreFailed && (
 					<VStack>
-						<Text className="text-muted-foreground text-xs">{t('settings.restore_failed')}</Text>
+						<Text variant="help">{t('settings.restore_failed')}</Text>
 						{/* Try again after a refusal is the one action this line exists for. */}
 						<Button testID="settings-general-restore-retry" onPress={() => setRestoreOpen(true)}>
 							{t('settings.try_again')}

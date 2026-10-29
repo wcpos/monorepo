@@ -74,7 +74,7 @@ export function PairingCode({
 					<Text testID="customer-display-pairing-code" className="font-mono text-3xl font-semibold">
 						{pairingCode.code}
 					</Text>
-					<Text className="text-muted-foreground text-xs">
+					<Text variant="help">
 						{t('settings.customer_display.code_expires', { time: expiresAt })}
 					</Text>
 				</View>
@@ -83,10 +83,7 @@ export function PairingCode({
 				<ButtonText>{t('settings.customer_display.generate_code')}</ButtonText>
 			</Button>
 			{disabled ? (
-				<Text
-					testID="customer-display-service-unavailable"
-					className="text-muted-foreground text-xs"
-				>
+				<Text testID="customer-display-service-unavailable" variant="help">
 					{t('settings.customer_display.service_unavailable')}
 				</Text>
 			) : null}

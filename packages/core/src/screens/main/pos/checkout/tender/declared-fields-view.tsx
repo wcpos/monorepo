@@ -47,7 +47,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 			{fields.components.map((component, index) => {
 				if (isNote(component)) {
 					return (
-						<Text key={`note-${index}`} className="text-muted-foreground text-sm" decodeHtml>
+						<Text key={`note-${index}`} variant="key" decodeHtml>
 							{component.text}
 						</Text>
 					);
@@ -89,7 +89,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 				const value = typeof values[component.id] === 'string' ? String(values[component.id]) : '';
 				return (
 					<View key={component.id} className="gap-1">
-						<Text className="text-muted-foreground text-xs" decodeHtml>
+						<Text variant="help" decodeHtml>
 							{component.label}
 						</Text>
 						{component.component === 'select' ? (

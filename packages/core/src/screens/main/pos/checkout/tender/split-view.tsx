@@ -84,7 +84,7 @@ export function SplitView({
 				}[tab];
 	return (
 		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+			<Text variant="caption">
 				{flow.paidMinor > 0 ? t('pos_checkout.split_the_remaining') : t('pos_checkout.split')}
 			</Text>
 			<View className="size-48 items-center justify-center">
@@ -185,7 +185,7 @@ export function SplitView({
 											{line.name}
 										</Text>
 										{paid ? (
-											<Text className="text-muted-foreground text-xs" decodeHtml>
+											<Text variant="help" decodeHtml>
 												{t('pos_checkout.line_paid_by', { methods: paid.join(' + ') })}
 											</Text>
 										) : null}
@@ -207,9 +207,7 @@ export function SplitView({
 						</Button>
 						{sum > 0 ? (
 							<View className="flex-row flex-wrap items-center justify-center gap-2">
-								<Text className="text-muted-foreground text-sm">
-									{t('pos_checkout.share_these_between')}
-								</Text>
+								<Text variant="key">{t('pos_checkout.share_these_between')}</Text>
 								{[2, 3, 4].map((ways) => (
 									<Button
 										key={ways}
@@ -293,7 +291,9 @@ export function SplitView({
 						) : null}
 					</TileGrid>
 				)}
-				<Text className="text-muted-foreground text-center text-sm">{hint}</Text>
+				<Text variant="key" className="text-center">
+					{hint}
+				</Text>
 				{flow.plan ? (
 					<Button
 						variant="ghost"

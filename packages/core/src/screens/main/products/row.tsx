@@ -137,7 +137,7 @@ export function ProductRow({
 			<Text decodeHtml numberOfLines={1}>
 				{variation ? resolveVariationName(product) : product.name}
 			</Text>
-			<Text className="text-muted-foreground text-sm" numberOfLines={1}>
+			<Text variant="key" numberOfLines={1}>
 				{product.sku}
 			</Text>
 		</ListRow>

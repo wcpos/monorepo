@@ -24,7 +24,7 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 	return (
 		<VStack className="gap-2">
 			<HStack className="justify-between">
-				<Text className="text-sm font-medium">{t('settings.usb_printer')}</Text>
+				<Text variant="subheading">{t('settings.usb_printer')}</Text>
 				<SavedMark name="address" label={t('settings.saved')} />
 			</HStack>
 			{devices.length === 0 && (
@@ -65,7 +65,7 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
-							<Text className="text-muted-foreground text-xs">{device.address}</Text>
+							<Text variant="help">{device.address}</Text>
 						</VStack>
 					</ListItem>
 				);

@@ -94,7 +94,11 @@ function MenuChip({
 						))}
 					</MenuRowGroup>
 				</ScrollView>
-				{hint && <Text className="text-muted-foreground p-3 text-sm">{hint}</Text>}
+				{hint && (
+					<Text variant="key" className="p-3">
+						{hint}
+					</Text>
+				)}
 			</PopoverContent>
 		</Popover>
 	);
@@ -245,7 +249,7 @@ function Figures({
 			<View testID="hero-companions" className={`flex-row gap-4 ${phone ? '' : 'flex-1'}`}>
 				{companions.map((item) => (
 					<View key={item.id} className="min-w-0 flex-1 gap-1">
-						<Text className="text-muted-foreground text-sm">{item.label}</Text>
+						<Text variant="key">{item.label}</Text>
 						<Text testID={`hero-${item.id}`} className="text-2xl font-semibold tabular-nums">
 							{item.format(item.value)}
 						</Text>
@@ -285,7 +289,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	return (
 		<>
 			{waiting && (
-				<Text testID="hero-print-waiting" className="text-muted-foreground text-sm">
+				<Text testID="hero-print-waiting" variant="key">
 					{waiting === 'store'
 						? t('reports.loading_store')
 						: waiting === 'cashier'

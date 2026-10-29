@@ -62,7 +62,7 @@ function TimingChart({
 									style={{ height }}
 								/>
 								<Text className="font-mono text-xs">{keyGlyph(keys[index] ?? '')}</Text>
-								<Text className="text-muted-foreground text-xs">{index === 0 ? '—' : gap}</Text>
+								<Text variant="help">{index === 0 ? '—' : gap}</Text>
 							</View>
 						);
 					})}
@@ -71,7 +71,7 @@ function TimingChart({
 					) : null}
 				</View>
 			</ScrollView>
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{t('settings.barcode_test_chart_threshold', {
 					threshold,
 				})}
@@ -225,9 +225,11 @@ function Verdict({
 				<>
 					<HStack className="min-h-9 items-center gap-2">
 						<Icon name="check" className="text-success" />
-						<Text className="flex-1 text-sm font-medium">{headline}</Text>
+						<Text variant="subheading" className="flex-1">
+							{headline}
+						</Text>
 					</HStack>
-					<Text className="text-muted-foreground text-xs">
+					<Text variant="help">
 						{t('settings.barcode_test_scan_detail', {
 							avg,
 							threshold: settings.threshold,
@@ -237,7 +239,7 @@ function Verdict({
 			) : analysis.nearMiss ? (
 				<Notice tone="warning" title={headline} />
 			) : (
-				<Text className="text-muted-foreground text-sm">{headline}</Text>
+				<Text variant="key">{headline}</Text>
 			)}
 
 			{analysis.suggestions.map((suggestion) => (
@@ -260,9 +262,7 @@ function Verdict({
 			) : null}
 
 			{analysis.trailingEnter ? (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.barcode_test_trailing_enter')}
-				</Text>
+				<Text variant="help">{t('settings.barcode_test_trailing_enter')}</Text>
 			) : null}
 		</VStack>
 	);
@@ -294,7 +294,7 @@ function History({ history }: { history: TraceAnalysis[] }) {
 
 	return (
 		<VStack space="xs" testID="barcode-test-history">
-			<Text className="text-sm font-medium">{t('settings.barcode_test_recent')}</Text>
+			<Text variant="subheading">{t('settings.barcode_test_recent')}</Text>
 			{history.map((entry, index) => {
 				const result = entry.detectedAsScan
 					? entry.tooShort
@@ -310,7 +310,7 @@ function History({ history }: { history: TraceAnalysis[] }) {
 						<Badge variant={tone} tinted>
 							{result}
 						</Badge>
-						<Text className="text-muted-foreground w-16 text-right text-xs">
+						<Text variant="help" className="w-16 text-right">
 							{Number.isFinite(entry.avgGapMs) ? `${Math.round(entry.avgGapMs)}ms` : '—'}
 						</Text>
 					</Card>

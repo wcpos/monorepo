@@ -1,34 +1,18 @@
 /**
- * Burn-down: the type ladder is `Text variant=…` (help, key, subheading, caption). Each
- * baselined file moves its literals to the variant and lowers its count; the baseline only
- * shrinks. Regenerate it after a migration, from the repo root:
- *   node --input-type=module -e "import { countByPath, scanRepository } from './packages/eslint/tests/text-ladder-scanner.mjs'; import { writeFileSync } from 'node:fs'; writeFileSync('packages/eslint/text-ladder-allowlist.json', JSON.stringify(countByPath(scanRepository()), null, '\t') + '\n');"
+ * A plain ban: the type ladder is `Text variant=…` (help, key, subheading, caption), and no `Text`
+ * restates a rank as class strings. The burn-down baseline emptied with card 6's migration
+ * (W4-F, 2026-10-29) and was deleted; a site is refused, not counted. Read the site the failure
+ * names and use the variant (`TEXT_LADDER.<rank>` on a text context).
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { prContext, readBlob, readEvent } from '../../../scripts/check-test-removal.mjs';
-import { CONSTRUCT, countByPath, scanRepository, scanSource } from './text-ladder-scanner.mjs';
-import { ratchetErrors, ROOT } from './uniwind-scanner.mjs';
+import { CONSTRUCT, scanRepository, scanSource } from './text-ladder-scanner.mjs';
 
-const FILE = 'packages/eslint/text-ladder-allowlist.json';
-const nested = (counts) =>
-	Object.fromEntries(Object.entries(counts).map(([path, count]) => [path, { [CONSTRUCT]: count }]));
-const allowlist = JSON.parse(readFileSync(`${ROOT}/${FILE}`, 'utf8'));
-// Reuse the Lint job's immutable PR base; local edits compare with HEAD. No fetch.
-const base = readEvent(prContext()?.eventPath)?.pull_request?.base?.sha ?? 'HEAD';
-const prior = readBlob(base, FILE, ROOT);
-// Bootstrap only: today's literals must already exist in the base source.
-const baseline = prior
-	? JSON.parse(prior)
-	: countByPath(
-			Object.keys(allowlist).flatMap((path) => scanSource(readBlob(base, path, ROOT), path))
-		);
 const path = 'packages/core/src/screens/main/new-file.tsx';
 
-test('ladder literals on Text match the shrinking baseline exactly', () => {
-	assert.deepEqual(ratchetErrors(scanRepository(), nested(allowlist), nested(baseline)), []);
+test('no Text restates a ladder rank as class strings', () => {
+	assert.deepEqual(scanRepository(), []);
 });
 
 test('each ladder combo on a Text is one site; a variant is none', () => {
@@ -61,10 +45,4 @@ test('reads one literal or one constant at a time; ignores other elements and lo
 		`${path}:3:1:${CONSTRUCT}`,
 		`${path}:4:1:${CONSTRUCT}`,
 	]);
-});
-
-test('a new site in a baselined file fails, and so does a grown baseline', () => {
-	const live = scanSource('<Text className="text-muted-foreground text-xs" />', path);
-	assert.match(ratchetErrors(live, {})[0], /New violation/);
-	assert.match(ratchetErrors(live, nested({ [path]: 1 }), {})[0], /Allowlist grew/);
 });

@@ -104,10 +104,10 @@ export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 							<Text decodeHtml numberOfLines={1}>
 								{rate.name}
 							</Text>
-							<Text className="text-muted-foreground text-sm" numberOfLines={1}>
+							<Text variant="key" numberOfLines={1}>
 								{phoneLocation(rate, t)}
 							</Text>
-							{tags ? <Text className="text-muted-foreground text-xs">{tags}</Text> : null}
+							{tags ? <Text variant="help">{tags}</Text> : null}
 						</ListRow>
 					);
 				})}
@@ -167,7 +167,7 @@ export function TaxRateTable({ rates, appliesTo }: TaxRateTableProps) {
 							<TableCell className={`px-0 ${COLUMNS.name}`}>
 								{/* Merchant-authored in WooCommerce settings, so "VAT &amp; Duty" arrives encoded. */}
 								<Text decodeHtml>{rate.name}</Text>
-								{tags ? <Text className="text-muted-foreground text-xs">{tags}</Text> : null}
+								{tags ? <Text variant="help">{tags}</Text> : null}
 							</TableCell>
 							<TableCell className={`px-0 ${COLUMNS.priority}`}>
 								<Text className="text-muted-foreground text-right tabular-nums">

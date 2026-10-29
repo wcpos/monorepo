@@ -89,13 +89,13 @@ export function TestPrintError({ error, hideGuide = false }: TestPrintErrorProps
 			/>
 			<Collapsible>
 				<CollapsibleTrigger testID="add-printer-support-details-toggle">
-					<Text className="text-muted-foreground text-xs font-medium">
+					<Text variant="help" className="font-medium">
 						{t('settings.support_details')}
 					</Text>
 				</CollapsibleTrigger>
 				<CollapsibleContent>
 					<VStack className="items-start gap-1 pt-1">
-						<Text testID="add-printer-support-details" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-support-details" variant="help">
 							{buildSupportDetails(error)}
 						</Text>
 						{canCopy && (

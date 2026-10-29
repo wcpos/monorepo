@@ -10,7 +10,7 @@ export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress
 	return (
 		// Ruled off above: it closes the cart's lines.
 		<ListRow testID="cart-note-row" size="sm" onPress={onPress} className="border-t border-b-0">
-			<Text className="text-muted-foreground text-sm">{note}</Text>
+			<Text variant="key">{note}</Text>
 		</ListRow>
 	);
 }

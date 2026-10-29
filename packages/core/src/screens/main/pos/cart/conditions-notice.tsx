@@ -38,13 +38,13 @@ export function CartConditionsNotice() {
 						)}
 					>
 						<Icon name="product" className="text-foreground" />
-						<Text className="flex-1 text-sm font-medium" numberOfLines={1}>
+						<Text variant="subheading" className="flex-1" numberOfLines={1}>
 							{reasonKey === 'pos_cart.only_n_available'
 								? t('pos_cart.only_n_available', params)
 								: t('pos_products.out_of_stock', params)}
 						</Text>
 						{!!lineUuid && (
-							<Text className="text-primary text-sm font-medium">
+							<Text variant="subheading" className="text-primary">
 								{fix === 'reduce' ? t('pos_cart.reduce_line') : t('pos_cart.remove_line')}
 							</Text>
 						)}

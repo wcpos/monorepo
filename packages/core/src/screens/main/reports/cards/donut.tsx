@@ -102,7 +102,7 @@ export function Donut({
 					>
 						{centre.figure}
 					</Text>
-					<Text numberOfLines={1} className="text-muted-foreground text-xs">
+					<Text numberOfLines={1} variant="help">
 						{centre.label}
 					</Text>
 				</View>
@@ -117,7 +117,7 @@ export function Donut({
 						<View className="size-2.5" style={{ backgroundColor: colors[index < 5 ? index : 4] }} />
 						<View className="min-w-0 flex-1">
 							<Text numberOfLines={1}>{part.label}</Text>
-							{part.note && <Text className="text-muted-foreground text-xs">{part.note}</Text>}
+							{part.note && <Text variant="help">{part.note}</Text>}
 						</View>
 						<Text testID={`${testID}-row-${part.key}-value`} className="font-semibold tabular-nums">
 							{part.valueText}

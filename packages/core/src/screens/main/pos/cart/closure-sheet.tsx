@@ -110,7 +110,7 @@ export function ClosureSheet({
 				<View className="flex-row flex-wrap gap-2">
 					{figures.map(([key, label, value]) => (
 						<Card key={key} padding="row" className="min-w-28 flex-1">
-							<Text className="text-muted-foreground text-sm">{label}</Text>
+							<Text variant="key">{label}</Text>
 							<AmountFigure
 								testID={`closure-${key}`}
 								size="tile"

@@ -44,7 +44,7 @@ const STATIC_ROW =
 	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 /** A pressable row of the same list: the MenuRow's surface, squared, with the hairline. */
 const ACTION_ROW = 'border-border rounded-none border-b';
-const NOTE = 'text-muted-foreground px-2.5 py-1 text-sm';
+const NOTE_INSET = 'px-2.5 py-1';
 const MUTED = 'text-muted-foreground';
 
 function Opener({ id }: { id?: number | null }) {
@@ -148,7 +148,7 @@ export function RegisterPanel({
 			className={cn('min-w-0 flex-1', quiet && MUTED, strong && 'font-semibold')}
 		>
 			{label}
-			{suffix != null && suffix !== '' && <Text className={`${MUTED} text-sm`}> {suffix}</Text>}
+			{suffix != null && suffix !== '' && <Text variant="key"> {suffix}</Text>}
 		</Text>
 	);
 	const amount = (value: string, quiet?: boolean, strong?: boolean) =>
@@ -374,9 +374,7 @@ export function RegisterPanel({
 									{/* A band, not a row: these tenders are not in the drawer. No count: a split
 									    sale is both a cash and a card sale, so no subtraction names it honestly. */}
 									<View className="h-band border-border mt-2 justify-center border-b px-2.5">
-										<Text className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-											{t('register.other_tenders')}
-										</Text>
+										<Text variant="caption">{t('register.other_tenders')}</Text>
 									</View>
 									{others.map(([method, value]) => (
 										<View key={method} className={STATIC_ROW}>
@@ -411,12 +409,16 @@ export function RegisterPanel({
 								trailing={<Icon name="chevronRight" size="sm" className="text-muted-foreground" />}
 							/>
 							{blind && (
-								<Text testID="register-panel-closure-restricted" className={NOTE}>
+								<Text
+									testID="register-panel-closure-restricted"
+									variant="key"
+									className={NOTE_INSET}
+								>
 									{t('register.closure_blind_restricted')}
 								</Text>
 							)}
 							{!lastClosure.synced_rows_at ? (
-								<Text testID="closure-unsynced" className={NOTE}>
+								<Text testID="closure-unsynced" variant="key" className={NOTE_INSET}>
 									{t('register.unsynced')}
 								</Text>
 							) : !blind ? (
@@ -434,7 +436,9 @@ export function RegisterPanel({
 							)}
 							{lastClosure.server_findings &&
 								Object.keys(lastClosure.server_findings).length > 0 && (
-									<Text className={NOTE}>{t('register.listed_in_health')}</Text>
+									<Text variant="key" className={NOTE_INSET}>
+										{t('register.listed_in_health')}
+									</Text>
 								)}
 						</View>
 					)}

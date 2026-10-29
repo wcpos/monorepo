@@ -83,7 +83,7 @@ function DeviceList({
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
-							<Text className="text-muted-foreground text-xs">{device.address}</Text>
+							<Text variant="help">{device.address}</Text>
 						</VStack>
 					</ListItem>
 				);
@@ -240,11 +240,11 @@ function EditPrinterDialog({
 						)}
 					</HStack>
 				)}
-				<Text testID="add-printer-bt-scan-hint" className="text-muted-foreground text-xs">
+				<Text testID="add-printer-bt-scan-hint" variant="help">
 					{t('settings.bt_scan_hint')}
 				</Text>
 				{isBluetoothScanning && (
-					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
+					<Text testID="add-printer-bt-searching" variant="help">
 						{t('settings.bt_searching')}
 					</Text>
 				)}
@@ -305,7 +305,7 @@ function EditPrinterDialog({
 				<>
 					{connectionSection}
 					{discoveryError && !suppressedDiscoveryError && (
-						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-discovery-error" variant="help">
 							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}

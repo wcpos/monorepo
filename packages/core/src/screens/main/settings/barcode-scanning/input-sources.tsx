@@ -328,7 +328,7 @@ export function InputSources() {
 		>
 			<VStack space="sm" className="pt-1">
 				{profiles.length === 0 && !midFlow ? (
-					<Text className="text-sm font-medium" testID="scanner-no-setup-needed">
+					<Text variant="subheading" testID="scanner-no-setup-needed">
 						{t('settings.scanner_no_setup_needed')}
 					</Text>
 				) : null}
@@ -345,7 +345,7 @@ export function InputSources() {
 							/>
 						))}
 						{profiles.length > 0 ? (
-							<Text className="text-muted-foreground text-xs" testID="scanner-registered-hint">
+							<Text variant="help" testID="scanner-registered-hint">
 								{registrationLane
 									? t('settings.scanner_registered_hint_keyboard')
 									: t('settings.scanner_registered_hint')}
@@ -375,7 +375,7 @@ export function InputSources() {
 					>
 						<DialogBody>
 							<VStack space="sm" testID="scanner-advanced-content">
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{registrationLane
 										? t('settings.scanner_register_explainer')
 										: t('settings.scanner_direct_explainer')}
@@ -442,9 +442,7 @@ export function InputSources() {
 
 								{canConnectDirectly ? (
 									<View testID="scanner-keyboard-wall-note">
-										<Text className="text-muted-foreground text-xs">
-											{t('settings.scanner_keyboard_wall_note')}
-										</Text>
+										<Text variant="help">{t('settings.scanner_keyboard_wall_note')}</Text>
 									</View>
 								) : null}
 
@@ -459,9 +457,7 @@ export function InputSources() {
 								{serial.available ? (
 									<View testID="bluetooth-service-class-id-control">
 										<VStack space="xs">
-											<Text className="text-sm font-medium">
-												{t('settings.scanner_uuid_disclosure')}
-											</Text>
+											<Text variant="subheading">{t('settings.scanner_uuid_disclosure')}</Text>
 											<HStack space="sm">
 												<Input
 													className="flex-1 font-mono"

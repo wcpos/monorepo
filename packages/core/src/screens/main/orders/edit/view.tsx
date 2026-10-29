@@ -38,28 +38,27 @@ function OrderIdentity({ order }: { order: EngineRecord<'orders'> }) {
 	const cashier = useCashierLabel(cashierId ?? undefined).label;
 	const { dateTime } = useStoreDayLabel();
 	// Each part is its own Text: the base Text draws foreground at base size, so a bare nested
-	// Text would not inherit the line's muted small recipe.
-	const muted = 'text-muted-foreground text-sm';
+	// Text would not inherit the line's key rank.
 	const parts = [
 		created && (
-			<Text key="when" className={muted}>
+			<Text key="when" variant="key">
 				{dateTime(created)}
 			</Text>
 		),
 		store && (
-			<Text key="store" className="text-foreground text-sm font-medium">
+			<Text key="store" variant="subheading">
 				{store}
 			</Text>
 		),
 		cashier && (
-			<Text key="cashier" className={muted}>
+			<Text key="cashier" variant="key">
 				{cashier}
 			</Text>
 		),
 	].filter(Boolean);
 	return (
 		<View testID="order-modal-identity" className="flex-row flex-wrap items-center">
-			<Text className={muted}>
+			<Text variant="key">
 				{parts.flatMap((part, index) => (index > 0 ? [' · ', part] : [part]))}
 				{parts.length > 0 ? ' · ' : null}
 			</Text>

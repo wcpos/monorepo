@@ -69,14 +69,12 @@ export function OsPrintersSection({
 	return (
 		<VStack className="gap-2">
 			<HStack className="justify-between">
-				<Text className="text-sm font-medium">{heading}</Text>
+				<Text variant="subheading">{heading}</Text>
 				<SavedMark name="address" label={t('settings.saved')} />
 			</HStack>
-			<Text className="text-muted-foreground text-xs">{hint}</Text>
-			{scanning && <Text className="text-muted-foreground text-xs">{loadingText}</Text>}
-			{!scanning && filtered.length === 0 && (
-				<Text className="text-muted-foreground text-xs">{emptyText}</Text>
-			)}
+			<Text variant="help">{hint}</Text>
+			{scanning && <Text variant="help">{loadingText}</Text>}
+			{!scanning && filtered.length === 0 && <Text variant="help">{emptyText}</Text>}
 			{filtered.map((p) => {
 				const selected = p.address === selectedAddress;
 				return (

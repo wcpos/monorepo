@@ -173,7 +173,7 @@ function EditPrinterDialog({
 				<>
 					{connectionSection}
 					{discoveryError && (
-						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-discovery-error" variant="help">
 							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}

@@ -61,7 +61,7 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 						<RegisterStatus register={register} />
 					</ListRow>
 				))}
-				<Text className="text-muted-foreground px-3 py-2 text-xs">
+				<Text variant="help" className="px-3 py-2">
 					{t('register.change_later_from_avatar')}
 				</Text>
 			</ScrollView>
