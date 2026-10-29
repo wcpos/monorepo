@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { Toast } from '@wcpos/components/toast';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
@@ -61,6 +62,16 @@ const mockReplace = jest.fn();
 let mockStoreId = 2;
 let mockStoreTimezone: string | undefined;
 let mockStores = ['store-a'];
+let mockSwitching = false;
+const mockSwitch = jest.fn(async () => {});
+jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => 'stores' }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('./use-switch-store', () => ({
+	useSwitchStore: () => ({
+		...jest.requireActual('./use-switch-store').useSwitchStore(),
+		...(mockSwitching ? { isSwitching: true } : {}),
+	}),
+}));
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
 	{ uuid: 'current', display_name: 'Cashier' },
@@ -71,7 +82,10 @@ const mockCredentials = [
 ];
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
-	useObservableSuspense: () => mockCredentials,
+	useObservableSuspense: (resource: unknown) =>
+		resource === 'stores'
+			? mockStores.map((localID) => ({ localID, name: localID }))
+			: mockCredentials,
 }));
 
 const mockPush = jest.fn();
@@ -117,7 +131,8 @@ jest.mock('../../../../contexts/app-state', () => ({
 			stores: mockStores,
 			last_access: mockLastAccess,
 		},
-		store: { id: mockStoreId, name: 'UK Store', price_num_decimals: 2 },
+		switchStore: mockSwitch,
+		store: { localID: 'store-a', id: mockStoreId, name: 'UK Store', price_num_decimals: 2 },
 		site: { uuid: 'site', url: 'https://shop.example', populateResource: () => ({}) },
 		logout: mockLogout,
 	}),
@@ -143,16 +158,21 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	}),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
-jest.mock('./switch-store-sheet', () => ({
-	SwitchStoreSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="switch-store-sheet" data-host={String(portalHost)} /> : null,
-}));
+
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
 	return {
-		Dialog: Box,
+		Dialog: ({
+			children,
+			onOpenChange,
+		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => (
+			<div>
+				<button data-testid="dismiss" onClick={() => onOpenChange(false)} />
+				{children}
+			</div>
+		),
 		DialogContent: ({
 			children,
 			side,
@@ -356,25 +376,57 @@ it.each(['pos-partial', 'ledger'])(
 	}
 );
 
-describe('switch store', () => {
+describe('store band', () => {
+	beforeEach(() => {
+		mockStores = ['store-a', 'store-b'];
+		mockSwitch.mockClear();
+		mockReplace.mockClear();
+	});
 	afterEach(() => {
 		mockStores = ['store-a'];
+		mockSwitching = false;
 	});
-
-	it('offers no store switch on a login with one store', () => {
+	it('offers no store band on a login with one store', () => {
+		mockStores = ['store-a'];
 		render(<UserSheet open onOpenChange={jest.fn()} />);
-		expect(screen.queryByTestId('user-sheet-switch-store')).toBeNull();
+		expect(screen.queryByTestId('user-sheet-store-band')).toBeNull();
 	});
-
-	it('closes the sheet and opens the store switch on its own host when the login has more stores', () => {
-		mockStores = ['store-a', 'store-b'];
+	it('lists the other stores in the Store band when the login has more', () => {
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet-store-store-a').getAttribute('aria-checked')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('user-sheet-store-store-b')).toBeTruthy();
+	});
+	it('switches to the chosen store from the band', async () => {
 		const onOpenChange = jest.fn();
-		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
-		expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
-		fireEvent.click(screen.getByTestId('user-sheet-switch-store'));
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		expect(mockSwitch).toHaveBeenCalledWith(expect.objectContaining({ localID: 'store-b' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
-		// Off the POS the sheet portals to the root host, so the store sheet must too.
-		expect(screen.getByTestId('switch-store-sheet').getAttribute('data-host')).toBe('null');
+	});
+	it('blocks the app and refuses dismissal while a switch is hydrating', () => {
+		mockSwitching = true;
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('store-switch-overlay')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('dismiss'));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		const row = screen.getByTestId('user-sheet-store-store-b');
+		expect(row.getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(row);
+		expect(mockSwitch).not.toHaveBeenCalled();
+	});
+	it('keeps the sheet open and shows a toast when hydration fails', async () => {
+		mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+		expect(screen.queryByTestId('store-switch-overlay')).toBeNull();
 	});
 });
 

@@ -13,6 +13,9 @@ import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
+import { Loader } from '@wcpos/components/loader';
+import { Portal } from '@wcpos/components/portal';
+import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { Notice } from '@wcpos/components/notice';
 import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
 import {
@@ -26,7 +29,6 @@ import {
 } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
@@ -47,7 +49,8 @@ import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RecordAvatar, UserAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
-import { SwitchStoreSheet } from './switch-store-sheet';
+import { useSwitchStore } from './use-switch-store';
+import { storeListResource } from '../../hooks/store-list-resource';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
@@ -229,6 +232,37 @@ function UserRows() {
 	);
 }
 
+function StoreBand({
+	isSwitching,
+	onSwitch,
+}: {
+	isSwitching: boolean;
+	onSwitch: (store: ReadonlyStoreRecord) => Promise<void>;
+}) {
+	const { wpCredentials, store } = useStoreSession();
+	const stores = useObservableSuspense(storeListResource(wpCredentials));
+	const t = useT();
+	if (stores.length <= 1) return null;
+	return (
+		<View testID="user-sheet-store-band">
+			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+				<Text variant="caption">{t('register.store')}</Text>
+			</View>
+			{stores.map((row) => (
+				<MenuRow
+					key={row.localID}
+					testID={`user-sheet-store-${row.localID}`}
+					choice
+					selected={row.localID === store.localID}
+					disabled={isSwitching}
+					onPress={row.localID === store.localID ? undefined : () => void onSwitch(row)}
+					label={row.name}
+				/>
+			))}
+		</View>
+	);
+}
+
 /**
  * The cashier's sheet: who is signed in, what they sold today, and the ways to change who
  * or where. The till's money is the register panel's; Settings and Support are the drawer's;
@@ -250,9 +284,7 @@ export function UserSheet({
 	const { site, store, wpCredentials, logout } = useStoreSession();
 	const router = useRouter();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
-	// The register bar's condition for its store switch: more than one store on this login.
-	const stores = useDocField(wpCredentials, (value) => value.stores) as string[] | undefined;
-	const [storeOpen, setStoreOpen] = React.useState(false);
+	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	const onPOS = useSegments().includes('(pos)');
 	const cartSide = usePanelSide('cart');
 	const side = onPOS ? cartSide : 'right';
@@ -267,7 +299,13 @@ export function UserSheet({
 	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
 	return (
 		<>
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog
+				open={open}
+				onOpenChange={(next) => {
+					if (!next && isSwitching) return;
+					onOpenChange(next);
+				}}
+			>
 				<DialogContent
 					side={side}
 					size="lg"
@@ -316,6 +354,14 @@ export function UserSheet({
 								</Suspense>
 								<AddUserButton site={site} hasExistingUsers compact />
 							</View>
+							<Suspense>
+								<StoreBand
+									isSwitching={isSwitching}
+									onSwitch={async (next) => {
+										if (await handleSwitchStore(next)) onOpenChange(false);
+									}}
+								/>
+							</Suspense>
 							{registers.length > 1 && onSwitchRegister && (
 								<MenuRow
 									testID="user-sheet-switch-register"
@@ -334,17 +380,6 @@ export function UserSheet({
 												: t('register.switch_register_unavailable_here')
 											: undefined
 									}
-								/>
-							)}
-							{(stores?.length ?? 0) > 1 && (
-								<MenuRow
-									testID="user-sheet-switch-store"
-									onPress={() => {
-										onOpenChange(false);
-										setStoreOpen(true);
-									}}
-									leading={<Icon name="store" className="text-muted-foreground" />}
-									label={t('register.switch_store')}
 								/>
 							)}
 							{/* A browser is where these two go: the desktop app has no admin tab to open, and
@@ -378,8 +413,18 @@ export function UserSheet({
 						}}
 					/>
 				</DialogContent>
+				{isSwitching ? (
+					<Portal name="store-switch-overlay">
+						<View
+							testID="store-switch-overlay"
+							className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3"
+						>
+							<Loader size="xl" />
+							<Text>{t('common.switching_store')}</Text>
+						</View>
+					</Portal>
+				) : null}
 			</Dialog>
-			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} portalHost={portalHost} />
 		</>
 	);
 }

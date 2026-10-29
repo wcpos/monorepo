@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsFocused } from 'expo-router/react-navigation';
+
 import { cn } from '@wcpos/components/lib/utils';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { useDocField } from '@wcpos/query';
@@ -9,6 +11,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { takeRedirectReturn } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { UserAvatar } from '../user-avatar';
+import { consumeCashierSheetRequest, useCashierSheetRequested } from './cashier-sheet-request';
 
 /**
  * The cashier entry: the avatar that opens the one cashier surface (`UserSheet`, CODING_STANDARDS
@@ -36,6 +39,14 @@ export function CashierEntry({
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const loginUrl = site.wcpos_login_url;
 	const [open, setOpen] = React.useState(false);
+	const focused = useIsFocused();
+	const requested = useCashierSheetRequested();
+	React.useEffect(() => {
+		if ((placement === 'rail' || focused) && requested && consumeCashierSheetRequest()) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- claim the external request at commit, never in a discarded render.
+			setOpen(true);
+		}
+	}, [focused, placement, requested]);
 	// The redirect-return claim: after a full-page OAuth return for this site the sheet opens, so
 	// its Add user consumer mounts to claim the one-shot result, as Connect does. Taken once per
 	// page load, by the first entry to COMMIT: an effect, so a render React discards (a Suspense

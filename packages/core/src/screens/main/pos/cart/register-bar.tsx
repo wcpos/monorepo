@@ -19,7 +19,7 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { BarControls, useBarMenu, useOnlineBadge } from '../../components/bar-controls';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { describeRegisterBar } from './register-bar.helpers';
-import { SwitchStoreSheet } from './switch-store-sheet';
+import { requestCashierSheet } from '../../components/cashier-entry/cashier-sheet-request';
 
 export function RegisterBar({
 	onSwitchRegister,
@@ -76,7 +76,6 @@ export function RegisterBar({
 		'register.closed': t('register.closed', { count: awaitingStore }),
 		'register.awaiting_store': t('register.awaiting_store', { count: awaitingStore }),
 	};
-	const [storeOpen, setStoreOpen] = React.useState(false);
 	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
 	// and inside the bar's gap row that root was an invisible 8 pt cell pushing the bell and
 	// the drawer icon out of line with the row below (Paul, 2026-10-09).
@@ -100,7 +99,7 @@ export function RegisterBar({
 							testID="register-bar-store"
 							variant="ghost"
 							className="min-w-11 shrink items-start px-0"
-							onPress={() => setStoreOpen(true)}
+							onPress={requestCashierSheet}
 						>
 							{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label. */}
 							<Text
@@ -139,7 +138,6 @@ export function RegisterBar({
 				/>
 			</HStack>
 			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
-			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} />
 		</>
 	);
 }

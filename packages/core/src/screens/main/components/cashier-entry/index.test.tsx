@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { consumeCashierSheetRequest, requestCashierSheet } from './cashier-sheet-request';
 import { CashierEntry } from './index';
 import {
 	__resetRedirectResultForTesting,
@@ -118,4 +119,16 @@ it('passes the drawer door from the bar to the sheet', () => {
 	fireEvent.click(screen.getByTestId('avatar'));
 	fireEvent.click(screen.getByTestId('open-register'));
 	expect(onOpenRegister).toHaveBeenCalledTimes(1);
+});
+
+let mockFocused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+it('opens one sheet for one request when two entries are mounted and one is focused', () => {
+	requestCashierSheet();
+	mockFocused = false;
+	render(<CashierEntry testID="hidden" placement="bar" portalHost="pos" />);
+	mockFocused = true;
+	render(<CashierEntry testID="shown" placement="bar" portalHost="pos" />);
+	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
+	expect(consumeCashierSheetRequest()).toBe(false);
 });
