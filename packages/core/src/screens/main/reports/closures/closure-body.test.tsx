@@ -251,3 +251,24 @@ it('lists a newly settled non-cash tender with its document label', () => {
 	);
 	expect(screen.getByText('Gift voucher').parentElement?.textContent).toContain('$12.00');
 });
+
+it.each([true, false])(
+	'shows counted card variance only to a sighted cashier (blind=%s)',
+	(blind) => {
+		const counted = { ...row, counted: { ...row.counted, card: '48' } };
+		render(
+			<ClosureBody
+				row={counted}
+				doc={doc}
+				{...deriveSettled(counted, [])}
+				corrections={[]}
+				blind={blind}
+				context={context}
+			/>
+		);
+		const tender = screen.getByTestId('closure-tender-counted-card');
+		expect(tender.textContent).toContain('Visa · Counted');
+		if (blind) expect(tender.textContent).not.toMatch(/short|over|Exact|−\$2\.00/);
+		else expect(tender.textContent).toContain('−$2.00 short');
+	}
+);

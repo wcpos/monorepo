@@ -18,6 +18,7 @@ import {
 	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
+	readClosedElsewhere,
 	readCounters,
 	readLiveSession,
 	readRegister,
@@ -607,3 +608,44 @@ it('keeps seed destinations once per database for the same session and resets th
 	await recordLiveSession(db, 'site', 'A', { ...live, session_id: 's2' });
 	expect(readLiveSession('site', 'A')?.seeded_in).toEqual([]);
 });
+
+it.each([false, true])(
+	'records a remote close only without this device’s count mark (counting_here=%s)',
+	async (here) => {
+		await remintRegister(db);
+		const live = {
+			session_id: 's1',
+			status: 'counting' as const,
+			opened_at_gmt: '2026-10-28T13:05:00Z',
+			opened_by: null,
+			acknowledged: true,
+			expected_float: null,
+			counted_float: null,
+			business_day: null,
+		};
+		expect(readClosedElsewhere('site', 'A')).toBeNull();
+		await recordLiveSession(db, 'site', 'A', live);
+		if (here) await markCountingHere(db, 'site', 'A', true);
+		const before = Date.now();
+		await recordLiveSession(db, 'site', 'A', null);
+		const after = Date.now();
+		expect(readLiveSession('site', 'A')).toBeNull();
+		const register = (await readRegister(db))?.sites.site.registers?.A;
+		if (here) {
+			expect(register).not.toHaveProperty('closed_elsewhere');
+			expect(readClosedElsewhere('site', 'A')).toBeNull();
+		} else {
+			expect(register?.closed_elsewhere).toEqual({ session_id: 's1', at: expect.any(String) });
+			const marker = readClosedElsewhere('site', 'A');
+			expect(marker).toEqual(register?.closed_elsewhere);
+			expect(Date.parse(marker!.at)).toBeGreaterThanOrEqual(before);
+			expect(Date.parse(marker!.at)).toBeLessThanOrEqual(after);
+		}
+		await recordLiveSession(db, 'site', 'A', { ...live, session_id: 's2', status: 'open' });
+		expect((await readRegister(db))?.sites.site.registers?.A).not.toHaveProperty(
+			'closed_elsewhere'
+		);
+		expect(readClosedElsewhere('site', 'A')).toBeNull();
+		expect(readLiveSession('site', 'A')?.session_id).toBe('s2');
+	}
+);

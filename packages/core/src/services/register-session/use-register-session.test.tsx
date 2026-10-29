@@ -1990,8 +1990,8 @@ it('does not name a counter while selling', async () => {
 	expect(result.current.countingElsewhere).toBe(false);
 });
 
-it.each(['elsewhere', 'here', 'counted-here', 'no-closure', 'different-session'])(
-	'identifies a close %s from the device live record',
+it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
+	'identifies a close %s from the closed-elsewhere marker',
 	async (kind) => {
 		addRxPlugin(RxDBLocalDocumentsPlugin);
 		const userDB: UserDatabase = await createRxDatabase({
@@ -2016,9 +2016,9 @@ it.each(['elsewhere', 'here', 'counted-here', 'no-closure', 'different-session']
 				counted_float: null,
 				business_day: null,
 			});
-			if (kind === 'counted-here') await markCountingHere(userDB, 'site', 'register', true);
-			// useRegisterSession.actions.closeSession calls recordLiveSession(..., null) after writeClosure.
-			if (kind === 'here') await recordLiveSession(userDB, 'site', 'register', null);
+			if (kind === 'here') await markCountingHere(userDB, 'site', 'register', true);
+			// A remote refresh clears live; our own close clears it with counting_here still set.
+			if (kind !== 'no-marker') await recordLiveSession(userDB, 'site', 'register', null);
 			active = [];
 			closureRows =
 				kind === 'no-closure'

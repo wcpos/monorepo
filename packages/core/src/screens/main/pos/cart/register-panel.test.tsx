@@ -1020,3 +1020,16 @@ it('pushes the written moment after close, survives the session disappearing, an
 		mockHasClosure = previousClosure;
 	}
 });
+
+it.each([true, false])(
+	'lands on the count pane for a closed session (initially open=%s)',
+	(open) => {
+		currentSession = { ...currentSession, status: 'closed' };
+		const view = render(<RegisterPanel open={open} onOpenChange={jest.fn()} />);
+		if (!open) view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		expect(screen.queryByTestId('register-panel-ledger')).toBeNull();
+		expect(startCounting).not.toHaveBeenCalled();
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+	}
+);

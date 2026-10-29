@@ -43,6 +43,8 @@ export interface RegisterDocument {
 				string,
 				Partial<RegisterCounters> & {
 					live?: LiveSession;
+					/** The session another till closed while this device held it live; cleared by the next open. */
+					closed_elsewhere?: { session_id: string; at: string };
 					closure_reservation?: { row: DeepReadonly<ClosureRow>; applied: boolean };
 				}
 			>;
@@ -587,6 +589,11 @@ export function readLiveSession(siteUuid: string, registerId: string): LiveSessi
 	return currentRegister?.sites[siteUuid]?.registers?.[registerId]?.live ?? null;
 }
 
+/** The session another till closed while this device held it live, until the next open. */
+export function readClosedElsewhere(siteUuid: string, registerId: string) {
+	return currentRegister?.sites[siteUuid]?.registers?.[registerId]?.closed_elsewhere ?? null;
+}
+
 export async function recordLiveSession(
 	userDB: UserDatabase,
 	siteUuid: string,
@@ -598,7 +605,7 @@ export async function recordLiveSession(
 	const updated = await doc.incrementalModify((data) => {
 		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
 		const register = { ...bucket.registers?.[registerId] };
-		if (live)
+		if (live) {
 			register.live = {
 				...live,
 				counting_here:
@@ -608,7 +615,16 @@ export async function recordLiveSession(
 				seeded_in: live.session_id === register.live?.session_id ? register.live.seeded_in : [],
 				at: new Date().toISOString(),
 			};
-		else delete register.live;
+			delete register.closed_elsewhere;
+		} else {
+			// Ended without this device's count mark: closed on another till; kept until the next open.
+			if (register.live && !register.live.counting_here)
+				register.closed_elsewhere = {
+					session_id: register.live.session_id,
+					at: new Date().toISOString(),
+				};
+			delete register.live;
+		}
 		const registers = { ...bucket.registers, [registerId]: register };
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});

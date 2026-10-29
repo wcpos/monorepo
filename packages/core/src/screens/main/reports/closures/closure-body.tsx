@@ -311,11 +311,14 @@ export function ClosureBody({
 										{term(
 											`${label} · ${t('register.counted')}`,
 											[
-												varianceText(
-													countVariance(settled.counted[name], settled.expected[name] ?? '0'),
-													format,
-													t
-												),
+												// The result names the expected by subtraction: never for a blind cashier.
+												blind
+													? ''
+													: varianceText(
+															countVariance(settled.counted[name], settled.expected[name] ?? '0'),
+															format,
+															t
+														),
 												touched.has(`counted.${name}`) ? t('reports.settled') : '',
 											]
 												.filter(Boolean)

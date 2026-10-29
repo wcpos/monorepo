@@ -76,14 +76,15 @@ function CartColumn({
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const reopened = React.useRef<string | undefined>(undefined);
-	// A restored device-owned count asks once; closing/back must not reopen it on a render.
+	// This device's own count, or a close awaiting its closure write (kept for recovery), asks for
+	// the count pane once; only the focused bar opens it (the phone mounts both tabs; Codex, #3073).
+	const recovering = session?.status === 'closed';
 	React.useEffect(() => {
-		if (session?.status !== 'counting' || !countingHere || reopened.current === session.id) return;
+		if (!session || reopened.current === session.id) return;
+		if (!(session.status === 'counting' && countingHere) && !recovering) return;
 		reopened.current = session.id;
 		requestRegisterPanel('count');
-
-		setPanelOpen(true);
-	}, [session?.id, session?.status, countingHere]);
+	}, [session?.id, session?.status, countingHere, recovering, session]);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
 	// The open-orders list slides over the cart. Covered, the cart leaves the tab order and
 	// the accessibility tree: a keyboard or screen-reader user must not reach a line, a total
@@ -130,7 +131,7 @@ function CartColumn({
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
 		!sessionLoading &&
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
-		!(session && session.status !== 'open' && !countingHere);
+		!(session && session.status !== 'open' && !countingHere && !recovering);
 	const cartBar =
 		cartShown || gateShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
 	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
@@ -234,10 +235,7 @@ function CartColumn({
 								<Button
 									testID="checkout-close-register"
 									size="lg"
-									onPress={() => {
-										requestRegisterPanel('count');
-										setPanelOpen(true);
-									}}
+									onPress={() => requestRegisterPanel('count')}
 								>
 									{t('register.close_register')}
 								</Button>

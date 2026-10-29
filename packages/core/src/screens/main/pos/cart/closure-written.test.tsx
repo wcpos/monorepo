@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
 import { ClosureWritten } from './closure-written';
+import { useClosureView } from '../../reports/closures/closure-panel';
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
@@ -32,7 +33,7 @@ const mockContext = {
 };
 const mockPrint = jest.fn(async () => true);
 jest.mock('../../reports/closures/closure-panel', () => ({
-	useClosureView: (row: typeof mockClosure) => {
+	useClosureView: jest.fn((row: typeof mockClosure) => {
 		const [error, setError] = React.useState('');
 		const [printCount, setPrintCount] = React.useState(row.print_count);
 		return {
@@ -50,7 +51,7 @@ jest.mock('../../reports/closures/closure-panel', () => ({
 				} else setError('Print failed');
 			},
 		};
-	},
+	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { name: 'UK Store' } }),
@@ -220,3 +221,18 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+
+it.each([
+	[0, false],
+	[1, true],
+] as const)('uses print_count %s to select isReprint=%s', (print_count, isReprint) => {
+	const previous = mockClosure;
+	mockClosure = { ...mockClosure, print_count };
+	jest.mocked(useClosureView).mockClear();
+	try {
+		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
+		expect(useClosureView).toHaveBeenCalledWith(mockClosure, { isReprint });
+	} finally {
+		mockClosure = previous;
+	}
+});

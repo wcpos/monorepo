@@ -30,7 +30,11 @@ import { RecountSheet } from './recount-sheet';
 import { ReportPanel } from '../report-panel';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
-export function useClosureView(row: ClosureRow) {
+/** One closure's document, figures and print state; the history panel reprints, the written moment prints first. */
+export function useClosureView(
+	row: ClosureRow,
+	{ isReprint = true }: { isReprint?: boolean } = {}
+) {
 	const t = useT();
 	const [error, setError] = React.useState('');
 	const context = useClosureDocumentContext(row.store_id ?? 0);
@@ -46,7 +50,7 @@ export function useClosureView(row: ClosureRow) {
 	);
 	const doc = useReceiptDocument({
 		autoPrintAllowed: false,
-		isReprint: true,
+		isReprint,
 		getLocalClosure,
 		document: `closure:${row.server_closure_id ?? row.id}`,
 		documentReady: row.sync_status === 'synced' || row.sync_status === 'superseded',

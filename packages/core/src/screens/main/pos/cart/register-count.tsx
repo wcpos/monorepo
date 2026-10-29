@@ -317,7 +317,8 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							await actions.backToSelling();
+							// A closed session awaiting its closure write is not one to reopen.
+							if (session?.status === 'counting') await actions.backToSelling();
 							onBack();
 						})
 					}

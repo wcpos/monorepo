@@ -22,6 +22,7 @@ import {
 	observeRegisterSessions,
 	observeSessionAccounting,
 	openSession,
+	readClosedElsewhere,
 	readLiveSession,
 	readMovement,
 	recordLiveSession,
@@ -282,9 +283,8 @@ export function useRegisterSession() {
 	// The same anchor as `expected`, so the strip's terms add up to its total.
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput, baselineHas) : undefined;
 	// The emitted document: a render from an emission can precede the writer's cache assignment.
-	const live = registerDoc
-		? registerDoc.sites[site.uuid!]?.registers?.[binding.registerId!]?.live
-		: readLiveSession(site.uuid!, binding.registerId!);
+	const bucket = registerDoc?.sites[site.uuid!]?.registers?.[binding.registerId!];
+	const live = registerDoc ? bucket?.live : readLiveSession(site.uuid!, binding.registerId!);
 	const figuresPending =
 		!!session && session.server_expected_at == null && !!live?.seeded_in.includes(storeDB.name);
 	const lastClosure =
@@ -328,8 +328,14 @@ export function useRegisterSession() {
 		countingHere: !!live?.counting_here,
 		countingElsewhere: !!session && session.status === 'counting' && !live?.counting_here,
 		countingBy,
+		// The refresh clears the live record as the remote close lands; the marker outlives it.
 		closedElsewhere:
-			!session && lastClosure && live?.session_id === lastClosure.id && !live.counting_here
+			!session &&
+			lastClosure &&
+			(registerDoc
+				? bucket?.closed_elsewhere
+				: readClosedElsewhere(site.uuid!, binding.registerId!)
+			)?.session_id === lastClosure.id
 				? { by: lastClosure.closed_by, at: lastClosure.closed_at }
 				: null,
 		salesCount:

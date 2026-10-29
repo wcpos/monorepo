@@ -21,7 +21,8 @@ export type ClosureCount = {
 
 export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone: () => void }) {
 	const row = useDocField(count.closure, (value) => value)!;
-	const view = useClosureView(row);
+	// A closure printed at the close reprints from here; one never printed prints first.
+	const view = useClosureView(row, { isReprint: (row.print_count ?? 0) > 0 });
 	const { doc, context, settled, touched, corrections, printCount, reprint, error } = view;
 	const t = useT();
 	const printed = !!row.printed_at || printCount > 0;

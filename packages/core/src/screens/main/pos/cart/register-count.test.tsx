@@ -79,6 +79,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
+let mockSessionStatus = 'counting';
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let figuresPending = false;
@@ -92,7 +93,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		varianceThreshold,
-		session: { id: 's', register_id: 'r', approval_required, approved_counted },
+		session: {
+			id: 's',
+			register_id: 'r',
+			status: mockSessionStatus,
+			approval_required,
+			approved_counted,
+		},
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
@@ -124,6 +131,7 @@ jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="appr
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
+	mockSessionStatus = 'counting';
 	approved_counted = null;
 	unsyncedCount = 3;
 	figuresPending = false;
@@ -443,4 +451,14 @@ it('backs out only after returning the session to selling', async () => {
 	expect(backToSelling.mock.invocationCallOrder[0]).toBeLessThan(
 		onBack.mock.invocationCallOrder[0]
 	);
+});
+
+it('backs out of a closed session without returning it to selling', async () => {
+	mockSessionStatus = 'closed';
+	const onBack = jest.fn();
+	render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('count-back'));
+	await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+	expect(backToSelling).not.toHaveBeenCalled();
+	expect(closeSession).not.toHaveBeenCalled();
 });

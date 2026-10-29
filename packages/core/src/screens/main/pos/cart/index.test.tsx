@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrders } from './index';
 import { consumeRegisterPanelRequest } from './register-panel-request';
@@ -147,7 +147,7 @@ jest.mock('@wcpos/components/text', () => ({
 
 jest.mock('../checkout/checkout-mode', () => ({ useOrderCheckoutStage: () => mockStage }));
 jest.mock('./stilled-cart', () => ({ StilledCart: () => <div data-testid="cart-card" /> }));
-it("the empty cart's Close register opens the panel on the count pane", async () => {
+it("the empty cart's Close register requests the count pane without opening its panel", async () => {
 	const previous = mockSession,
 		previousNew = mockIsNew;
 	mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true, overdue: true };
@@ -155,7 +155,7 @@ it("the empty cart's Close register opens the panel on the count pane", async ()
 	try {
 		render(<OpenOrders isColumn />);
 		fireEvent.click(screen.getByTestId('checkout-close-register'));
-		expect(screen.getByTestId('panel-open')).toBeTruthy();
+		expect(screen.queryByTestId('panel-open')).toBeNull();
 		expect(consumeRegisterPanelRequest()).toBe('count');
 	} finally {
 		mockSession = previous;
@@ -163,22 +163,32 @@ it("the empty cart's Close register opens the panel on the count pane", async ()
 		consumeRegisterPanelRequest();
 	}
 });
-it('a reload mid-count reopens the count pane once', async () => {
-	const previous = mockSession;
-	mockSession = { session: { id: 's', status: 'counting' }, sessionsOn: true, countingHere: true };
-	try {
-		const view = render(<OpenOrders isColumn />);
-		await waitFor(() => expect(screen.getByTestId('panel-open')).toBeTruthy());
-		expect(consumeRegisterPanelRequest()).toBe('count');
-		fireEvent.click(screen.getByTestId('panel-open'));
-		view.rerender(<OpenOrders isColumn />);
-		expect(screen.queryByTestId('panel-open')).toBeNull();
-		expect(consumeRegisterPanelRequest()).toBeNull();
-	} finally {
-		mockSession = previous;
-		consumeRegisterPanelRequest();
+it.each(['counting', 'closed'])(
+	'a restored %s session keeps the cart and requests the count pane once',
+	(status) => {
+		const previous = mockSession;
+		mockSession = {
+			session: { id: 's', status },
+			sessionsOn: true,
+			countingHere: status === 'counting',
+		};
+		try {
+			const view = render(<OpenOrders isColumn />);
+			expect(screen.getByTestId('cart-table')).toBeTruthy();
+			expect(screen.getByTestId('checkout-button')).toBeTruthy();
+			expect(screen.queryByTestId('counting-elsewhere-card')).toBeNull();
+			expect(screen.queryByTestId('panel-open')).toBeNull();
+			expect(consumeRegisterPanelRequest()).toBe('count');
+			mockSession = { ...mockSession, session: { id: 's', status } };
+			view.rerender(<OpenOrders isColumn />);
+			expect(screen.queryByTestId('panel-open')).toBeNull();
+			expect(consumeRegisterPanelRequest()).toBeNull();
+		} finally {
+			mockSession = previous;
+			consumeRegisterPanelRequest();
+		}
 	}
-});
+);
 
 it.each([true, false])('keeps the cart only for this device’s count (countingHere=%s)', (here) => {
 	const previous = mockSession;

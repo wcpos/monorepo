@@ -41,7 +41,9 @@ const BLOCKED_OPACITY = 0.38; // the dimmed Pay of the checkout-conditions board
  */
 export function PayButton() {
 	const { currentOrderRecord } = useCurrentOrder();
-	const counting = useRegisterSession().session?.status === 'counting';
+	// Held while the drawer is counted or a close awaits its closure write (kept for recovery).
+	const status = useRegisterSession().session?.status;
+	const counting = status === 'counting' || status === 'closed';
 	const total = useRecordField(currentOrderRecord, (order) => order.payload.total);
 	const refunds = useRecordField(currentOrderRecord, (order) => order.payload.refunds);
 	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);

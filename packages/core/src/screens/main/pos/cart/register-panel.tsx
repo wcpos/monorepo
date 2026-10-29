@@ -76,13 +76,16 @@ export function RegisterPanel({
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
-	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(
-		session?.status === 'counting' && countingHere ? 'count' : 'register'
-	);
+	// This device's own count, or a close awaiting its closure write, opens on the count pane.
+	const landing =
+		(session?.status === 'counting' && countingHere) || session?.status === 'closed'
+			? 'count'
+			: 'register';
+	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
 	const [opening, setOpening] = React.useState({ open, initialPane });
 	if (open !== opening.open || initialPane !== opening.initialPane) {
 		setOpening({ open, initialPane });
-		if (open) setPane(session?.status === 'counting' && countingHere ? 'count' : 'register');
+		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
 	const { format } = useCurrencyFormat();
