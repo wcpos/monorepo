@@ -276,6 +276,14 @@ describe('quiet: a grid cell edits in place', () => {
 	});
 });
 
+it('key: a Quick Discounts slot is the typed field on native, a percentage at its places', () => {
+	const { onCommit, input } = field({ kind: 'percent', look: 'key', value: 10 });
+	expect(input().tagName).toBe('INPUT');
+	expect(input().value).toBe('10');
+	type(input(), '12.5');
+	expect(onCommit).toHaveBeenCalledWith(12.5);
+});
+
 describe('FormAmountField hands the form the number in the form’s own type', () => {
 	function Harness({ initial, live }: { initial: string | number; live?: boolean }) {
 		const form = useForm({ defaultValues: { amount: initial } });

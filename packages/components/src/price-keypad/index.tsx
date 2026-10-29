@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Button, ButtonText } from '../button';
 import { fieldBox } from '../field-box';
 import { closingRows, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
-import { DIGIT_ROWS } from '../keypad';
+import { DIGIT_ROWS, Key } from '../keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
@@ -17,7 +17,7 @@ const CELL = 64;
  * Three quick keys is enough (Paul 2026-10-24): one row of the panel's three cells, the one
  * place the cap lives. Fewer stretch to fill the row, as ✓ fills its own.
  */
-const QUICK_KEYS = 3;
+export const QUICK_KEYS = 3;
 const ANIMATION = { down: 'web:animate-price-grow', up: 'web:animate-price-grow-up' };
 
 export type PriceKeypadLabels = {
@@ -54,8 +54,11 @@ export type PriceKeypadProps = {
 	testID?: string;
 	/** The trigger's text classes at rest. */
 	textClassName?: string;
-	/** Rests as an outlined input field, as a grid's amount does; bare text otherwise. */
-	field?: boolean;
+	/**
+	 * At rest: `text`, bare text (a grid's price); `field`, the field box (a form's amount);
+	 * `key`, a quick key's own cell, filling it and lit while open (the Quick Discounts setting).
+	 */
+	rest?: 'text' | 'field' | 'key';
 	/** A blank field's rest text (a form's "No minimum"); `–` without one. */
 	placeholder?: string;
 	/** A form label's id: the trigger is named by the label, then its own number. */
@@ -91,7 +94,7 @@ export function PriceKeypad({
 	disabled = false,
 	testID,
 	textClassName,
-	field = false,
+	rest = 'text',
 	placeholder,
 	labelledBy,
 	describedBy,
@@ -102,6 +105,7 @@ export function PriceKeypad({
 	const shell = React.useRef<GrowKeypadHandle>(null);
 	const ownID = React.useId();
 	const [entry, dispatch] = React.useReducer(priceEntryReducer, EMPTY_PRICE);
+	const [open, setOpen] = React.useState(false);
 	React.useImperativeHandle(ref, () => ({
 		focus: () => shell.current?.open(),
 		dismiss: () => shell.current?.dismiss(),
@@ -137,7 +141,7 @@ export function PriceKeypad({
 	const derivation =
 		entry.discount === undefined ? undefined : `${format(stored)} −${entry.discount} %`;
 	const display: GrowCell[] = [
-		{ display: <Display shown={shown} derivation={derivation} field={field} />, span: 3 },
+		{ display: <Display shown={shown} derivation={derivation} inset={rest !== 'text'} />, span: 3 },
 	];
 
 	const trigger = {
@@ -168,9 +172,25 @@ export function PriceKeypad({
 			onPress={press}
 			onOpen={() => dispatch({ type: 'reset' })}
 			onClose={onClose}
-			onOpenChange={onOpenChange}
+			onOpenChange={(next) => {
+				setOpen(next);
+				onOpenChange?.(next);
+			}}
 		>
-			{field ? (
+			{rest === 'key' ? (
+				// The Quick Discounts setting: the key as the cashier sees it, primary ink at rest.
+				<Key
+					{...trigger}
+					face="cell"
+					name="discount"
+					label={value === undefined ? text : labels.discount(value)}
+					text={value === undefined ? text : labels.discountKey(value)}
+					on={open || (value === undefined ? undefined : false)}
+					// A blank slot's `–` is muted, at the keys' size.
+					textClassName={value === undefined && !open ? 'text-muted-foreground text-sm' : undefined}
+					className="h-full w-full"
+				/>
+			) : rest === 'field' ? (
 				// A form's price rests as the field box, as an Input does.
 				<PressableSurface
 					{...trigger}
@@ -202,20 +222,20 @@ export function PriceKeypad({
 
 /**
  * Right-aligned over the trigger's text; a quick key adds its derivation above the result.
- * A field's text sits inside its padding, so the number does not jump right as it opens.
+ * A field's or key's text sits inside its padding, so the number does not jump as it opens.
  */
 function Display({
 	shown,
 	derivation,
-	field,
+	inset,
 }: {
 	shown: string;
 	derivation?: string;
-	field: boolean;
+	inset: boolean;
 }) {
 	const sheet = useOverlayPresentation() === 'bottom';
 	return (
-		<View className={cn('items-end', sheet || field ? 'px-3' : 'px-1')}>
+		<View className={cn('items-end', sheet || inset ? 'px-3' : 'px-1')}>
 			{derivation !== undefined && (
 				<Text variant="help" tabular>
 					{derivation}

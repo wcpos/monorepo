@@ -31,7 +31,6 @@ jest.mock('@wcpos/components/form', () => ({
 		name: string;
 		render: (input: { field: Record<string, unknown> }) => React.ReactNode;
 	}) => renderField({ field: { name, value: undefined, onChange: () => {} } }),
-	FormInput: MockLabelled,
 	FormSegmentedControl: MockLabelled,
 	FormSelect: MockLabelled,
 	FormSwitch: MockLabelled,
@@ -49,6 +48,7 @@ jest.mock('@wcpos/query', () => ({ useDocField: () => ({}) }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
+jest.mock('./quick-discount-keys', () => ({ QuickDiscountKeys: MockLabelled }));
 jest.mock('../../components/ui-settings', () => ({
 	columnsFormSchema: { shape: {} },
 	UISettingsColumnsForm: () => null,
@@ -78,5 +78,6 @@ it('renders only cart-setting labels the table resolves', () => {
 
 	expect(container.textContent).not.toContain('common.label_not_found');
 	expect(screen.getByText('common.automatically_print_receipt_after_checkout')).toBeTruthy();
+	expect(screen.getByText('common.quick_discounts')).toBeTruthy();
 	expect(container.textContent).not.toMatch(/output_type|open_cash_drawer/);
 });
