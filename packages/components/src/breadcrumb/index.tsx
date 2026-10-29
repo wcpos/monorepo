@@ -7,6 +7,8 @@ import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
+// A label is a store name as WooCommerce sends it, entities and all ("Flags &amp; Banners"):
+// the crumb decodes it, as the tile and the row for the same term do.
 type Crumb = { label: string; onPress: () => void; testID?: string };
 export type BreadcrumbProps = ViewProps & {
 	parents: readonly [Crumb, ...Crumb[]];
@@ -65,7 +67,9 @@ export function Breadcrumb({
 									<TextClassContext.Provider value={undefined}>
 										<HStack className="max-w-full gap-1">
 											{phone && <Icon name="chevronLeft" size="sm" />}
-											<Text className="text-foreground shrink font-medium">{parent.label}</Text>
+											<Text className="text-foreground shrink font-medium" decodeHtml>
+												{parent.label}
+											</Text>
 										</HStack>
 									</TextClassContext.Provider>
 								</View>
@@ -77,7 +81,11 @@ export function Breadcrumb({
 			{here !== undefined && (
 				<>
 					{!phone && separator}
-					<Text testID={id('here')} className="text-foreground shrink px-1 font-semibold">
+					<Text
+						testID={id('here')}
+						className="text-foreground shrink px-1 font-semibold"
+						decodeHtml
+					>
 						{here}
 					</Text>
 				</>
