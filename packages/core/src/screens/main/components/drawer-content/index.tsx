@@ -143,9 +143,10 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 					flexGrow: 1,
 				}}
 			>
-				{/* On `lg` the rail is the cashier entry's one host (the bars carry it below `lg`), on the
-				    root host: its drawer door navigates to the POS and requests the register panel. */}
-				{rail && <CashierEntry testID="register-bar-avatar" placement="rail" portalHost={null} />}
+				{/* On `lg` the rail is the cashier entry's one host (the bars carry it below `lg`). Its
+				    sheet renders in the drawer layout's `scene` host, beside the rail as the register
+				    panel is, never over it; its drawer door navigates to the POS and requests the panel. */}
+				{rail && <CashierEntry testID="register-bar-avatar" placement="rail" portalHost="scene" />}
 				{groups.map((routes, group) => (
 					<View key={group} className={group === 1 ? 'mt-auto' : undefined}>
 						{/* The rail's `gap-2` is the dense-strip gutter between its squares. */}
