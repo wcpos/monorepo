@@ -78,6 +78,8 @@ jest.mock('@wcpos/components/input', () => {
 	};
 });
 jest.mock('@wcpos/components/text', () => ({
+	// The real context: a real Chip below provides its ink through it.
+	TextClassContext: jest.requireActual('@wcpos/components/text').TextClassContext,
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),

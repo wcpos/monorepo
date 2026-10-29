@@ -4,7 +4,7 @@ import { Platform, Pressable, type PressableProps, View } from 'react-native';
 import { Icon, type IconName } from '../icon';
 import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
-import { Text } from '../text';
+import { Text, TextClassContext } from '../text';
 
 type ChipProps = Omit<PressableProps, 'children'> & {
 	label: string;
@@ -88,6 +88,11 @@ export function Chip({
 			: {};
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const sm = size === 'sm';
+	// ONE ink for the whole chip, resolved once from its state and provided through
+	// `TextClassContext`, which every `Text` and `Icon` below reads (as Button and Card do). No
+	// glyph names a colour of its own: a per-site ternary is how the action glyph of an on chip
+	// drifted (#3068). The one exception, a muted action, says so explicitly and wins.
+	const ink = on ? 'text-selected-foreground' : add ? 'text-muted-foreground' : 'text-foreground';
 	const onClear = action ? undefined : clearProp;
 	// The trailing cell's press: the action's, or the clear control's. Either makes the chip split.
 	const trail = action?.onPress ?? onClear;
@@ -95,24 +100,19 @@ export function Chip({
 	const band = sm && <MinTargetBand />;
 	const content = (
 		<>
-			{leading ?? (icon && <Icon name={icon} className="text-foreground" />)}
+			{leading ?? (icon && <Icon name={icon} />)}
 			<Text
 				testID={trail ? undefined : id('label')}
 				// One line: a long label (a customer's full name) truncates inside the pill
 				// instead of pushing the pill over the controls beside it.
 				numberOfLines={1}
-				className={cn(
-					'shrink font-medium',
-					sm ? 'text-sm' : 'text-base',
-					add ? 'text-muted-foreground' : 'text-foreground',
-					on && 'text-primary font-semibold'
-				)}
+				className={cn('shrink font-medium', sm ? 'text-sm' : 'text-base', on && 'font-semibold')}
 			>
 				{label}
 			</Text>
 			{count !== undefined && (
 				<View className="bg-background min-w-5 items-center rounded-full px-1">
-					<Text testID={id('count')} className="text-foreground text-xs font-bold">
+					<Text testID={id('count')} className="text-xs font-bold">
 						{count}
 					</Text>
 				</View>
@@ -142,81 +142,89 @@ export function Chip({
 				// With an action each cell fills on its own (the strip rule, 2026-10-09), so the
 				// label half carries the padding and the pill neither fills nor pads.
 				action ? 'gap-0 px-0' : 'active:bg-muted web:hover:bg-muted',
-				on ? 'border-primary' : 'border-border',
+				on && 'active:bg-selected web:hover:bg-selected',
+				on ? 'bg-selected border-selected' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',
 				className
 			)}
 		>
-			{trail ? (
-				<>
-					<Pressable
-						testID={id('label')}
-						onLongPress={onLongPress}
-						{...contextMenu}
-						role="button"
-						{...selectedState(on)}
-						disabled={inactive}
-						className={cn(
-							'flex-1 flex-row items-center gap-1.5 self-stretch',
-							!action
-								? 'active:opacity-70'
-								: cn('active:bg-muted web:hover:bg-muted rounded-l-full', sm ? 'px-2.5' : 'px-3')
-						)}
-						// The label's press bubbles: with a trailing cell the root has no handler, so
-						// nothing fires twice, and a menu trigger wrapping the chip (`asChild`) listens
-						// on the root's DOM node on web. Stopping it here made a selected filter
-						// impossible to reopen. Only the clear control stops its own press.
-						onPress={(event) => {
-							onPress?.(event);
-						}}
-					>
+			<TextClassContext.Provider value={ink}>
+				{trail ? (
+					<>
+						<Pressable
+							testID={id('label')}
+							onLongPress={onLongPress}
+							{...contextMenu}
+							role="button"
+							{...selectedState(on)}
+							disabled={inactive}
+							className={cn(
+								'flex-1 flex-row items-center gap-1.5 self-stretch',
+								!action
+									? 'active:opacity-70'
+									: cn(
+											'active:bg-muted web:hover:bg-muted rounded-l-full',
+											on && 'active:bg-selected web:hover:bg-selected',
+											sm ? 'px-2.5' : 'px-3'
+										)
+							)}
+							// The label's press bubbles: with a trailing cell the root has no handler, so
+							// nothing fires twice, and a menu trigger wrapping the chip (`asChild`) listens
+							// on the root's DOM node on web. Stopping it here made a selected filter
+							// impossible to reopen. Only the clear control stops its own press.
+							onPress={(event) => {
+								onPress?.(event);
+							}}
+						>
+							{content}
+							{band}
+						</Pressable>
+						<Pressable
+							role="button"
+							disabled={inactive}
+							testID={action ? (action.testID ?? id('action')) : (clearTestID ?? id('clear'))}
+							accessibilityLabel={action ? action.accessibilityLabel : (clearLabel ?? 'Remove')}
+							className={cn(
+								'items-center justify-center self-stretch',
+								// The trailing cell spans the chip's height and as much width, so it is never
+								// smaller than the chip's own target (line 8); the clear control's negative
+								// margin cancels the chip's end padding (an action chip has none).
+								action
+									? cn(
+											'border-border active:bg-muted web:hover:bg-muted rounded-r-full border-l',
+											on && 'active:bg-selected web:hover:bg-selected',
+											sm ? 'min-w-8' : 'min-w-ctl'
+										)
+									: cn('active:opacity-70', sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3')
+							)}
+							onPress={(event) => {
+								event?.stopPropagation?.();
+								trail();
+							}}
+							// A web Select trigger (`asChild`) opens from the ROOT's mouse pointerdown, which
+							// stopping the press never reaches: clearing a select pill also opened its menu
+							// over the screen (#2284). Enter/Space already stop at this press's own keydown.
+							onPointerDown={(event) => event.stopPropagation()}
+						>
+							{action ? (
+								<Icon
+									name={action.icon}
+									className={action.muted ? 'text-muted-foreground' : undefined}
+								/>
+							) : (
+								<Icon name="close" size="sm" />
+							)}
+							{band}
+						</Pressable>
+					</>
+				) : (
+					<>
 						{content}
 						{band}
-					</Pressable>
-					<Pressable
-						role="button"
-						disabled={inactive}
-						testID={action ? (action.testID ?? id('action')) : (clearTestID ?? id('clear'))}
-						accessibilityLabel={action ? action.accessibilityLabel : (clearLabel ?? 'Remove')}
-						className={cn(
-							'items-center justify-center self-stretch',
-							// The trailing cell spans the chip's height and as much width, so it is never
-							// smaller than the chip's own target (line 8); the clear control's negative
-							// margin cancels the chip's end padding (an action chip has none).
-							action
-								? cn(
-										'border-border active:bg-muted web:hover:bg-muted rounded-r-full border-l',
-										sm ? 'min-w-8' : 'min-w-ctl'
-									)
-								: cn('active:opacity-70', sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3')
-						)}
-						onPress={(event) => {
-							event?.stopPropagation?.();
-							trail();
-						}}
-						// A web Select trigger (`asChild`) opens from the ROOT's mouse pointerdown, which
-						// stopping the press never reaches: clearing a select pill also opened its menu
-						// over the screen (#2284). Enter/Space already stop at this press's own keydown.
-						onPointerDown={(event) => event.stopPropagation()}
-					>
-						{action ? (
-							<Icon
-								name={action.icon}
-								className={action.muted ? 'text-muted-foreground' : 'text-foreground'}
-							/>
-						) : (
-							<Icon name="close" size="sm" className="text-foreground" />
-						)}
-						{band}
-					</Pressable>
-				</>
-			) : (
-				<>
-					{content}
-					{band}
-				</>
-			)}
+					</>
+				)}
+			</TextClassContext.Provider>
 		</Pressable>
 	);
 }

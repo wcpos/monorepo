@@ -169,6 +169,8 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleTrigger: 'div',
 }));
 jest.mock('@wcpos/components/text', () => ({
+	// The real context: the pane renders a real Chip, which provides its ink through it.
+	TextClassContext: jest.requireActual('@wcpos/components/text').TextClassContext,
 	Text: ({
 		children,
 		testID,

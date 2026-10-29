@@ -32,13 +32,47 @@ jest.mock('react-native', () => {
 	};
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+// The mocked Icon reads the real `TextClassContext`, as the real Icon does, so an inherited ink
+// shows up in its classes.
 jest.mock('../icon', () => ({
-	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const inherited = React.useContext(TextClassContext) as string | undefined;
+		return React.createElement('span', {
+			'data-icon': name,
+			'data-classes': [inherited, className].filter(Boolean).join(' '),
+		});
+	},
 }));
+
+// The chip resolves ONE ink from its state and provides it through `TextClassContext`; every glyph
+// and word inherits it. A per-site colour is how the action glyph of an on chip drifted (#3068).
+// Walk every inked node, not a named one, so a new glyph cannot be an outlier either.
+it('one ink: every glyph, the label and the count of an on chip carry the selected ink', () => {
+	const { container } = render(
+		<Chip
+			on
+			icon="check"
+			label="Paid"
+			count={3}
+			testID="chip"
+			action={{ icon: 'menu', onPress: jest.fn(), accessibilityLabel: 'More' }}
+		/>
+	);
+	const inked = Array.from(container.querySelectorAll<HTMLElement>('[data-classes]'))
+		.map((node) => node.dataset.classes ?? '')
+		.filter((classes) => /\btext-(?:muted-|selected-)?foreground\b/.test(classes));
+	// leading glyph, label, count, action glyph
+	expect(inked.length).toBeGreaterThanOrEqual(4);
+	for (const classes of inked) {
+		expect(classes).toMatch(/\btext-selected-foreground\b/);
+		expect(classes).not.toMatch(/\btext-(?:muted-)?foreground\b/);
+	}
+});
 
 it.each([
 	[{}, 'border-border', 'text-foreground'],
-	[{ on: true }, 'border-primary', 'text-primary font-semibold'],
+	[{ on: true }, 'bg-selected border-selected', 'text-selected-foreground'],
 	[{ dimmed: true }, 'opacity-45', 'text-foreground'],
 	[{ add: true }, 'border-dashed', 'text-muted-foreground'],
 ])('renders chip state %j', (state, root, label) => {
@@ -66,9 +100,20 @@ it.each([
 ])('size %s sets the height and label size, keeping the on-state', (size, height, text) => {
 	render(<Chip label="Menu" testID="chip" size={size} on />);
 	const root = screen.getByTestId('chip').dataset.classes?.split(' ') ?? [];
-	expect(root).toEqual(expect.arrayContaining([height, 'rounded-full', 'border-primary']));
+	expect(root).toEqual(
+		expect.arrayContaining([
+			height,
+			'rounded-full',
+			'bg-selected',
+			'border-selected',
+			'active:bg-selected',
+			'web:hover:bg-selected',
+		])
+	);
 	const label = screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? [];
-	expect(label).toEqual(expect.arrayContaining([text, 'text-primary', 'font-semibold']));
+	expect(label).toEqual(
+		expect.arrayContaining([text, 'text-selected-foreground', 'font-semibold'])
+	);
 });
 it('announces the on-state on the press target, with or without a clear control', () => {
 	// Web: a button's toggle state is aria-pressed (aria-selected is not allowed on role=button).

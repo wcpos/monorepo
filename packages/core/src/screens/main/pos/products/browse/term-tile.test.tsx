@@ -131,11 +131,11 @@ describe('TermTile', () => {
 		render(<TermRow term={{ ...snacks, count: 0 }} onPress={jest.fn()} />);
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
-	it('renders All products with its grid glyph on the last tint, and no count', () => {
+	it('renders All products with its grid glyph on the primary fill, and no count', () => {
 		render(<TermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
 		expect(screen.getByTestId('browse-all-products')).toHaveAttribute('aria-label', 'All products');
 		expect(screen.getByTestId('icon-viewGrid')).toBeTruthy();
-		expect(squareClasses('browse-all-products')).toContain('bg-tile-tint-5');
+		expect(squareClasses('browse-all-products')).toContain('bg-primary');
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
 	it('renders a shortcut with its sliders glyph and its description under the name', () => {

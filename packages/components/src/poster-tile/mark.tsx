@@ -17,6 +17,7 @@ import type { PosterMark } from './index';
 	testID,
 	bare,
 	compact,
+	className,
 }: {
 	mark: PosterMark;
 	label?: string;
@@ -24,6 +25,7 @@ import type { PosterMark } from './index';
 	/** On a tint a glyph sits in the tint itself, without its circle. */
 	bare?: boolean;
 	compact?: boolean;
+	className?: string;
 }) {
 	if (mark.kind === 'count')
 		return <StockPill value={mark.value} low={mark.low} label={label} testID={testID} />;
@@ -37,7 +39,7 @@ import type { PosterMark } from './index';
 			<Icon
 				name={mark.kind === 'folder' ? 'category' : mark.name}
 				size={bare ? 'lg' : compact ? 'xs' : 'sm'}
-				className="text-muted-foreground"
+				className={bare && className ? className : 'text-muted-foreground'}
 			/>
 		</View>
 	);
