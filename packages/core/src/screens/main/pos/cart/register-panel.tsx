@@ -95,6 +95,15 @@ export function RegisterPanel({
 	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
 	const router = useRouter();
 	const side = usePanelSide('cart');
+	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
+	// left behind: a failed action's line and a movement in flight. The expanded band is kept.
+	const close = (next: boolean) => {
+		if (!next) {
+			setMovement(null);
+			setError('');
+		}
+		onOpenChange(next);
+	};
 	// The store's own name for each tender (the gateway title), never its id: the drawer
 	// lists what the cashier took money as, and `stripe_terminal_for_woocommerce` is not that.
 	// The same fallback as the closure document for a method the store no longer advertises.
@@ -222,7 +231,7 @@ export function RegisterPanel({
 	const noteOf = (count: number, note?: string | null) =>
 		count === 1 && note ? `1 · ${note}` : count > 0 ? count : undefined;
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={close}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
 				{/* The header block: on the phone the panel is a page, and its padding comes from here. */}
 				<DialogHeader className="flex-row items-start gap-2">
@@ -401,7 +410,7 @@ export function RegisterPanel({
 											registerId: lastClosure.register_id,
 										},
 									});
-									onOpenChange(false);
+									close(false);
 								}}
 								label={`${t('register.closure_written_n', {
 									n: lastClosure.server_number ?? lastClosure.number,
@@ -453,7 +462,7 @@ export function RegisterPanel({
 						onPress: () =>
 							void attempt(async () => {
 								await actions.startCounting();
-								onOpenChange(false);
+								close(false);
 							}),
 					}}
 				/>
