@@ -55,6 +55,8 @@ import { SvgDecrement } from './decrement';
 import { SvgSplit } from './split';
 import { SvgRefund } from './refund';
 import { SvgCashDrawer } from './cashDrawer';
+import { SvgPaidIn } from './paidIn';
+import { SvgPaidOut } from './paidOut';
 import { SvgCustomer } from './customer';
 import { SvgCustomers } from './customers';
 import { SvgAddCustomer } from './addCustomer';
@@ -176,6 +178,8 @@ export const set = {
 	split: SvgSplit,
 	refund: SvgRefund,
 	cashDrawer: SvgCashDrawer,
+	paidIn: SvgPaidIn,
+	paidOut: SvgPaidOut,
 	customer: SvgCustomer,
 	customers: SvgCustomers,
 	addCustomer: SvgAddCustomer,
