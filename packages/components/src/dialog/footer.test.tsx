@@ -113,9 +113,20 @@ it('renders translated Close beside an intent inside DismissIsClose', () => {
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
 	expect(screen.queryByText('Cancel draft')).not.toBeInTheDocument();
 });
-it('renders translated Close by default', () => {
+it('renders translated Close by default, addressed by the footer testID', () => {
 	footer({});
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+	expect(screen.getByTestId('footer-close')).toHaveTextContent('Dismiss');
+});
+it('addresses a default dismiss without a footer testID as dialog-footer-close', () => {
+	render(
+		<Dialog open onOpenChange={jest.fn()}>
+			<DialogLabelsProvider labels={{ close: 'Dismiss', cancel: 'Cancel draft' }}>
+				<DialogFooter />
+			</DialogLabelsProvider>
+		</Dialog>
+	);
+	expect(screen.getByTestId('dialog-footer-close')).toHaveTextContent('Dismiss');
 });
 it('omits the dismiss when close is false beside an intent', () => {
 	footer({ close: false, intent: action('Intent') });

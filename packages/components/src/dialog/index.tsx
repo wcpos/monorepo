@@ -335,6 +335,11 @@ export function DialogFooter({
 		<DialogPrimitive.Close asChild>
 			<Button
 				{...(typeof close === 'object' ? close : {})}
+				// The default dismiss still has a stable address: the footer's own, or the dialog's.
+				testID={
+					(typeof close === 'object' && close.testID) ||
+					(testID ? `${testID}-close` : 'dialog-footer-close')
+				}
 				variant="outline"
 				size={size}
 				className={buttonClass}

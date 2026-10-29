@@ -64,7 +64,7 @@ export function DialogFooter({
 		<>
 			{close ? (
 				<button
-					data-testid={closeProps.testID}
+					data-testid={closeProps.testID ?? (testID ? `${testID}-close` : 'dialog-footer-close')}
 					data-variant="outline"
 					disabled={closeProps.disabled}
 					onClick={closeProps.onPress as unknown as React.MouseEventHandler}
