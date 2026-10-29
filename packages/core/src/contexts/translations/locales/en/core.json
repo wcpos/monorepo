@@ -231,6 +231,7 @@
 	"register.open_stores": "Open Stores",
 	"register.register_guide": "Register guide",
 	"register.no_register_for_store": "No register for this store",
+	"register.on_the_till_since": "since {time}",
 	"register.your_sales_today": "Your sales today",
 	"register.switch_user": "Switch user",
 	"register.another_account": "Another account…",

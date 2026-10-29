@@ -26,7 +26,18 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	return {
 		AlertDialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
 			open ? <div>{children}</div> : null,
-		AlertDialogContent: Box,
+		AlertDialogContent: ({
+			children,
+			side,
+			testID,
+		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
+			<div data-testid={testID} data-side={side}>
+				{children}
+			</div>
+		),
+		DialogDescription: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		AlertDialogHeader: Box,
 		AlertDialogTitle: Box,
 		AlertDialogDescription: Box,
@@ -62,7 +73,13 @@ jest.mock('observable-hooks', () => ({
 }));
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, push: mockPush }) }));
+let mockSegments = ['(app)', '(drawer)', '(pos)'];
+let mockCartSide = 'left';
+let mockLastAccess = '2026-10-28T13:05:00Z';
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace, push: mockPush }),
+	useSegments: () => mockSegments,
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/query/local-data-reset', () => ({
 	clearLocalDataNow: jest.fn(),
@@ -91,8 +108,14 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
 	useStoreSession: () => ({
-		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
-		store: { id: mockStoreId, price_num_decimals: 2 },
+		wpCredentials: {
+			id: 7,
+			uuid: 'current',
+			display_name: 'Cashier',
+			stores: mockStores,
+			last_access: mockLastAccess,
+		},
+		store: { id: mockStoreId, name: 'UK Store', price_num_decimals: 2 },
 		site: { uuid: 'site', url: 'https://shop.example', populateResource: () => ({}) },
 		logout: mockLogout,
 	}),
@@ -111,9 +134,12 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registers: [{ id: 'A' }, { id: 'B' }] }),
+	useRegisterBinding: () => ({
+		registers: [{ id: 'A' }, { id: 'B' }],
+		registerName: 'Front counter',
+	}),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 jest.mock('./switch-store-sheet', () => ({
 	SwitchStoreSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
 		open ? <div data-testid="switch-store-sheet" data-host={String(portalHost)} /> : null,
@@ -124,7 +150,18 @@ jest.mock('@wcpos/components/dialog', () => {
 	}
 	return {
 		Dialog: Box,
-		DialogContent: Box,
+		DialogContent: ({
+			children,
+			side,
+			testID,
+		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
+			<div data-testid={testID} data-side={side}>
+				{children}
+			</div>
+		),
+		DialogDescription: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		DialogHeader: Box,
 		DialogTitle: Box,
 		DialogBody: Box,
@@ -410,5 +447,38 @@ describe('awaiting store', () => {
 		mockAwaitingStore = 3;
 		render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('user-sheet-awaiting-store').textContent).toContain('3 sales');
+	});
+});
+
+describe('side and header', () => {
+	afterEach(() => {
+		mockT = (key) => key;
+		mockSegments = ['(app)', '(drawer)', '(pos)'];
+		mockStoreTimezone = undefined;
+	});
+	it('comes from the products side on the POS, whichever host portals it, and from the right elsewhere', () => {
+		mockCartSide = 'left';
+		let r = render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
+		r.unmount();
+		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
+		r.unmount();
+		mockCartSide = 'right';
+		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
+		r.unmount();
+		mockCartSide = 'left';
+		mockSegments = ['(app)', '(drawer)', 'orders'];
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
+	});
+	it('describes the cashier by store, register and sign-in time', () => {
+		mockT = createTestT();
+		mockStoreTimezone = 'UTC';
+		render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+		expect(screen.getByTestId('user-sheet-description').textContent).toBe(
+			'UK Store · Front counter · since 13:05'
+		);
 	});
 });

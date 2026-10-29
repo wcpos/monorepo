@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
+import { format as formatDate } from 'date-fns/format';
+import { useRouter, useSegments } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
@@ -14,6 +15,7 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
@@ -30,7 +32,7 @@ import { credentialsListResource } from '../../../../hooks/user-db-list-resource
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
-import { useStoreDay } from '../../../../hooks/use-store-day';
+import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -194,13 +196,18 @@ export function UserSheet({
 	onSwitchRegister?: () => void;
 	portalHost?: string | null;
 }) {
-	const { site, wpCredentials, logout } = useStoreSession();
+	const { site, store, wpCredentials, logout } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	// The register bar's condition for its store switch: more than one store on this login.
 	const stores = useDocField(wpCredentials, (value) => value.stores) as string[] | undefined;
 	const [storeOpen, setStoreOpen] = React.useState(false);
-	const side = usePanelSide('shell');
-	const { registers } = useRegisterBinding();
+	const onPOS = useSegments().includes('(pos)');
+	const cartSide = usePanelSide('cart');
+	const side = onPOS ? cartSide : 'right';
+	const { registers, registerName } = useRegisterBinding();
+	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
+	const storeName = useDocField(store, (value) => value.name);
+	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
 	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
@@ -217,9 +224,21 @@ export function UserSheet({
 				>
 					<DialogHeader className="flex-row items-center gap-3">
 						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-						<DialogTitle className="min-w-0 flex-1" numberOfLines={1}>
-							{displayName}
-						</DialogTitle>
+						<View className="min-w-0 flex-1">
+							<DialogTitle numberOfLines={1}>{displayName}</DialogTitle>
+							<DialogDescription testID="user-sheet-description">
+								{[
+									storeName,
+									registers.length > 1 && registerName,
+									lastAccess &&
+										t('register.on_the_till_since', {
+											time: formatDate(new Date(lastAccess), 'HH:mm', zoneOptions(timezone)),
+										}),
+								]
+									.filter(Boolean)
+									.join(' · ')}
+							</DialogDescription>
+						</View>
 					</DialogHeader>
 					{open && (
 						<DialogBody className="gap-0">
