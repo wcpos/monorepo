@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 import { TabsList, TabsTrigger } from './index';
 
 jest.mock('@rn-primitives/tabs', () => ({
@@ -25,7 +25,7 @@ jest.mock('expo-haptics', () => ({
 jest.mock('uniwind', () => ({ withUniwind: (component: unknown) => component }));
 jest.mock('../select', () => ({ OptionSelect: () => null }));
 jest.mock('../icon-button', () => ({ IconButton: () => null }));
-jest.mock('../text', () => ({ TextClassContext: React.createContext('') }));
+jest.mock('../text', () => ({}));
 
 function Label() {
 	return <span className={React.useContext(TextClassContext)}>Label</span>;
