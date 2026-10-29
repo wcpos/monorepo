@@ -673,18 +673,25 @@ describe('print intent through checkout and reprint receipt documents', () => {
 						? closure
 						: null,
 			}));
-			const receiptGet = mockGet.getMockImplementation()!;
-			mockGet.mockImplementation((url, options) => {
-				if (url === 'sessions') return Promise.resolve({ data: [] });
-				if (url === 'closures/last')
-					return Promise.resolve({
-						data: alias ? { id: 'losing-local', server_closure_id: 'server' } : { id: 'server' },
-					});
-				return receiptGet(url, options);
+			// The closure pane is the reprint door now (#3048 removed the closed-register card): the
+			// hook gets the pane's getter, the server identity a local row may hold as an alias.
+			const { readClosure } = jest.requireMock('@wcpos/query/register-session');
+			const { result } = renderHook(() =>
+				useReceiptDocument({
+					document: 'closure:server',
+					documentReady: true,
+					previewEnabled: false,
+					templateType: 'closure',
+					storeId: 5,
+					autoPrintAllowed: false,
+					isReprint: true,
+					getLocalClosure: () =>
+						readClosure(null, alias ? { serverClosureId: 'server' } : { id: 'server' }),
+				})
+			);
+			await act(async () => {
+				await result.current.print();
 			});
-			render(<SessionCard />);
-			await waitFor(() => expect(screen.getByTestId('reports-session-print')).toBeTruthy());
-			fireEvent.click(screen.getByTestId('reports-session-print'));
 			await waitFor(() => expect(mockPost).toHaveBeenCalledWith('closures/server/print', {}));
 			await waitFor(() => expect(localRow.print_count).toBe(6));
 			expect(mockThermalPrint).toHaveBeenCalledTimes(1);
@@ -750,11 +757,12 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		);
 		await act(async () => {});
 		expect(mockGet).not.toHaveBeenCalled();
+		// Card `a` is a closed register and draws no row since #3048; [1] is the open session `b`.
 		fireEvent.click(screen.getAllByTestId('reports-session-print')[1]);
 		await waitFor(() => expect(mockThermalPrint).toHaveBeenCalledTimes(1));
 		expect(mockGet).toHaveBeenCalledTimes(1);
 		expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
-			params: { document: 'closure:a', mode: 'fiscal' },
+			params: { document: 'xreport:b', mode: 'fiscal' },
 		});
 	});
 

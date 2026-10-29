@@ -131,10 +131,9 @@ it('groups stamped opening days newest first, falling back to the store day for 
 		'America/Los_Angeles'
 	);
 	render(<ClosureList rows={rows} />);
-	expect(screen.getAllByTestId(/^closure-day-/).map((n) => n.textContent)).toEqual([
-		'Wednesday, 16 Sep 2026',
-		'Tuesday, 15 Sep 2026',
-	]);
+	expect(
+		screen.getAllByTestId(/^closure-day-/).map((n) => n.firstElementChild?.textContent)
+	).toEqual(['Wednesday, 16 Sep 2026', 'Tuesday, 15 Sep 2026']);
 	expect(screen.getAllByTestId(/^closure-row-/).map((n) => n.getAttribute('data-testid'))).toEqual([
 		'closure-row-3',
 		'closure-row-1',
@@ -146,14 +145,19 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 	render(
 		<ClosureList
 			rows={[
-				row('1', { corrections_count: 2, synced_rows_at: null }),
+				row('1', { business_day: '2026-09-17', corrections_count: 2, synced_rows_at: null }),
 				row('2', {
+					business_day: '2026-09-17',
 					corrections_count: 1,
 					synced_rows_at: '2026-09-17',
 					unsynced_count: 8,
 					variance: { cash: '3' },
 				}),
-				row('3', { synced_rows_at: '2026-09-17', variance: { cash: '0' } }),
+				row('3', {
+					business_day: '2026-09-17',
+					synced_rows_at: '2026-09-17',
+					variance: { cash: '0' },
+				}),
 			]}
 		/>
 	);
@@ -168,9 +172,13 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 		['3', 'Exact'],
 	]) {
 		const r = screen.getByTestId(`closure-row-${id}`);
-		expect(r.lastElementChild?.textContent).toBe(text);
+		expect(screen.getByTestId(`closure-result-${id}`).textContent).toBe(text);
+		expect(r.lastElementChild?.getAttribute('data-icon')).toBe('chevronRight');
 	}
 	expect(screen.getByTestId('closure-row-1').textContent).toContain('£8.00');
+	expect(screen.getByTestId('closure-day-2026-09-17').textContent).toContain(
+		'£24.00 counted · £1.00 over'
+	);
 });
 // Revert: filter on the opener/any sale cashier instead of the recorded closer.
 it('filters by the closer', () => {
@@ -195,8 +203,10 @@ it('labels Today and Yesterday in store time', () => {
 			rows={[row('1', { business_day: '2026-09-16' }), row('2', { business_day: '2026-09-15' })]}
 		/>
 	);
-	expect(screen.getByTestId('closure-day-2026-09-16').textContent).toBe('Today');
-	expect(screen.getByTestId('closure-day-2026-09-15').textContent).toBe('Yesterday');
+	expect(screen.getByTestId('closure-day-2026-09-16').firstElementChild?.textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-09-15').firstElementChild?.textContent).toBe(
+		'Yesterday'
+	);
 	jest.useRealTimers();
 });
 
@@ -230,8 +240,10 @@ it('keeps overnight closures on their stamped days across DST and a later store 
 	const groups = () =>
 		screen.getAllByTestId(/^closure-day-/).map((node) => node.getAttribute('data-testid'));
 	expect(groups()).toEqual(['closure-day-2026-11-01', 'closure-day-2026-10-31']);
-	expect(screen.getByTestId('closure-day-2026-11-01').textContent).toBe('Today');
-	expect(screen.getByTestId('closure-day-2026-10-31').textContent).toBe('Yesterday');
+	expect(screen.getByTestId('closure-day-2026-11-01').firstElementChild?.textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-10-31').firstElementChild?.textContent).toBe(
+		'Yesterday'
+	);
 	// Both closed at 01:30 local, on opposite sides of the repeated hour.
 	for (const id of ['before-fallback', 'after-fallback'])
 		expect(screen.getByTestId(`closure-row-${id}`).textContent).toContain('01:30');
@@ -289,7 +301,7 @@ it('shows remote times and Today using the selected store timezone', () => {
 			{...{ storeId: 2 }}
 		/>
 	);
-	expect(screen.getByTestId('closure-day-2026-09-18').textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-09-18').firstElementChild?.textContent).toBe('Today');
 	expect(screen.getByTestId('closure-row-remote').textContent).toContain('02:00 → 03:00');
 });
 
@@ -331,8 +343,129 @@ it('preserves Today, Yesterday and past headings with time-only rows', () => {
 			]}
 		/>
 	);
-	expect(screen.getByTestId('closure-day-2026-09-16').textContent).toBe('Today');
-	expect(screen.getByTestId('closure-day-2026-09-15').textContent).toBe('Yesterday');
-	expect(screen.getByTestId('closure-day-2026-09-12').textContent).toBe('Saturday, 12 Sep 2026');
+	expect(screen.getByTestId('closure-day-2026-09-16').firstElementChild?.textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-09-15').firstElementChild?.textContent).toBe(
+		'Yesterday'
+	);
+	expect(screen.getByTestId('closure-day-2026-09-12').firstElementChild?.textContent).toBe(
+		'Saturday, 12 Sep 2026'
+	);
 	expect(screen.getByTestId('closure-row-1').textContent).toContain('03:00 → 18:00');
+});
+
+// Revert: filter the totals along with the rows, or drop the mounted session reader.
+it('filters All, Open and Closed without changing the scope count', () => {
+	const session = { id: 'open', expected_float: '50' } as import('./session-card').SessionSummary;
+	render(
+		<ClosureList
+			rows={[row('1', { business_day: '2026-10-01' })]}
+			sessions={[session]}
+			sessionRows={<span data-testid="open-row">Open</span>}
+		/>
+	);
+	expect(screen.getByText('2 sessions')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closures-filter-open'));
+	expect(screen.queryByTestId('closure-row-1')).toBeNull();
+	expect(getComputedStyle(screen.getByTestId('open-row').parentElement!).display).not.toBe('none');
+	fireEvent.click(screen.getByTestId('closures-filter-closed'));
+	expect(screen.getByTestId('closure-row-1')).toBeTruthy();
+	expect(getComputedStyle(screen.getByTestId('open-row').parentElement!).display).toBe('none');
+	fireEvent.click(screen.getByTestId('closures-filter-all'));
+	expect(getComputedStyle(screen.getByTestId('open-row').parentElement!).display).not.toBe('none');
+	expect(screen.getByText('2 sessions')).toBeTruthy();
+});
+
+// Revert: include open cash activity, prefer expected over counted float, or sum absolute variances.
+it('totals three closures and one open session in the viewed currency, hiding stats when blind', () => {
+	const sessions = [
+		{
+			id: 'open',
+			expected_float: '50',
+			expected: { cash: '999' },
+			register_id: 'r',
+			status: 'open',
+			sync_status: 'synced',
+			sync_attempts: 0,
+			opened_at_gmt: '2026-10-01 08:00:00',
+		},
+	] as import('./session-card').SessionSummary[];
+	const rows = [
+		row('1', {
+			expected: { cash: '120' },
+			counted: { cash: '118' },
+			variance: { cash: '-2' },
+			breakdowns: { opening_float: { counted: '100', expected: '90' } },
+		}),
+		row('2', {
+			expected: { cash: '150' },
+			counted: { cash: '153' },
+			variance: { cash: '3' },
+			breakdowns: { opening_float: { expected: '50' } },
+		}),
+		row('3', {
+			expected: { cash: '80' },
+			counted: { cash: '80' },
+			variance: { cash: '0' },
+			breakdowns: { opening_float: { counted: '0', expected: '20' } },
+		}),
+	];
+	const view = render(<ClosureList rows={rows} sessions={sessions} storeId={2} />);
+	for (const [id, value] of [
+		['sessions', '4'],
+		['cash-at-open', '200,000 €'],
+		['cash-activity', '+200,000 €'],
+		['cash-at-close', '351,000 €'],
+		['discrepancy', '+1,000 €'],
+	]) {
+		expect(screen.getByTestId(`closure-stat-${id}`).textContent).toBe(value);
+	}
+	expect(screen.getByText('1 open · 3 closed')).toBeTruthy();
+	expect(screen.getByText('1 short · 1 over · 1 exact')).toBeTruthy();
+	view.rerender(<ClosureList rows={rows} sessions={sessions} blind storeId={2} />);
+	expect(screen.queryByTestId('closure-stat-sessions')).toBeNull();
+});
+
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
+
+// Revert: show a closed total for an open-only day, or replace the quiet Today state with global empty.
+it('shows Today with an open row and no closed figures, retaining the empty-scope message', () => {
+	const sessions = [{ id: 's', expected_float: '20' }] as import('./session-card').SessionSummary[];
+	const view = render(
+		<ClosureList
+			rows={[]}
+			sessions={sessions}
+			scopeDay="2026-10-01"
+			sessionRows={<span>Open till</span>}
+		/>
+	);
+	expect(screen.getByTestId('closure-day-2026-10-01').textContent).toBe('Today');
+	expect(screen.getByText('No closures yet today')).toBeTruthy();
+	expect(screen.queryByTestId('closures-empty')).toBeNull();
+	expect(screen.getByTestId('closure-stat-cash-at-close').textContent).toBe('—');
+	expect(screen.getByTestId('closure-stat-discrepancy').textContent).toBe('—');
+	expect(screen.getByTestId('closure-stat-cash-activity').textContent).toBe('+£0.00');
+	view.rerender(<ClosureList rows={[]} sessions={[]} scopeDay="2026-10-01" />);
+	expect(screen.getByTestId('closures-empty')).toBeTruthy();
+});
+
+// Revert: let binary floating-point residue turn a net-exact day into a discrepancy.
+it('sums cash at stored precision and omits zero result counts', () => {
+	const rows = ['-0.1', '-0.2', '0.3'].map((cash, index) =>
+		row(String(index), {
+			business_day: '2026-09-17',
+			variance: { cash },
+		})
+	);
+	const view = render(<ClosureList rows={rows} />);
+	expect(screen.getByTestId('closure-stat-discrepancy').textContent).toBe('—');
+	expect(screen.getByTestId('closure-day-2026-09-17').textContent).toContain(
+		'£24.00 counted · Exact'
+	);
+	expect(screen.getByText('2 short · 1 over')).toBeTruthy();
+	view.rerender(<ClosureList rows={rows.slice(0, 2)} />);
+	expect(screen.getByTestId('closure-stat-discrepancy').textContent).toBe('−£0.30');
+	expect(screen.getByTestId('closure-stat-discrepancy').className).toContain('text-bad');
+	expect(screen.getByText('2 short')).toBeTruthy();
 });

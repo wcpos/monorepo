@@ -1,6 +1,11 @@
 import * as React from 'react';
+import { View } from 'react-native';
+
+import { format as formatDate } from 'date-fns/format';
 
 import { useDocField } from '@wcpos/query';
+import { Icon } from '@wcpos/components/icon';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
@@ -9,18 +14,50 @@ import type { ClosureRow } from '@wcpos/query/register-session';
 
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { useT } from '../../../../contexts/translations';
-import { useViewedStore } from '../../../../hooks/use-store-day';
+import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { ClosureStats, closureTotals } from './closure-stats';
+
+import type { SessionSummary } from './session-card';
+
+export type ClosureFilter = 'all' | 'open' | 'closed';
 
 export function ClosureList({
 	rows,
 	onSelect,
 	unavailableIds,
 	storeId,
+	sessions: allSessions = [],
+	sessionRows,
+	blind,
+	scopeDay,
+	scopeFrom,
+	scopeTo,
+	status,
+	footer,
+	showEmpty = true,
+	partial = false,
+	filter: controlledFilter,
+	onFilterChange,
 }: {
 	rows: readonly ClosureRow[];
 	storeId?: number;
+	sessions?: readonly SessionSummary[];
+	sessionRows?: React.ReactNode;
+	blind?: boolean;
+	scopeDay?: string;
+	/** The scope's days; open sessions belong to today and count only when the scope spans it. */
+	scopeFrom?: string;
+	scopeTo?: string;
+	status?: React.ReactNode;
+	footer?: React.ReactNode;
+	showEmpty?: boolean;
+	/** More pages of the period remain unloaded (the strip says so). */
+	partial?: boolean;
+	/** The All / Open / Closed filter, owned by the room when it must share it (the export). */
+	filter?: ClosureFilter;
+	onFilterChange?: (filter: ClosureFilter) => void;
 	unavailableIds?: ReadonlySet<string>;
 	onSelect?: (row: ClosureRow) => void;
 }) {
@@ -35,16 +72,79 @@ export function ClosureList({
 		thousandSeparator: settings?.price_thousand_sep,
 	});
 	const { heading, time } = useStoreDayLabel(storeId);
-	const names = useRegisterNames();
+	// The viewed store's registers, never the bound store's.
+	const names = useRegisterNames(storeId);
 
-	return (
+	const [localFilter, setLocalFilter] = React.useState<ClosureFilter>('all');
+	const filter = controlledFilter ?? localFilter;
+	const setFilter = (next: ClosureFilter) => {
+		setLocalFilter(next);
+		onFilterChange?.(next);
+	};
+	const { timezone } = useStoreDay(storeId);
+	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
+	// A historical scope keeps its figures and its list free of today's open tills (Codex, #3048).
+	const inPeriod = !scopeFrom || !scopeTo || (scopeFrom <= today && today <= scopeTo);
+	const sessions = inPeriod ? allSessions : [];
+	const todayRows = rows.filter((row) => row.business_day === today);
+	const result = (variance: number) =>
+		variance
+			? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
+			: t('reports.exact');
+	const tone = (variance: number) =>
+		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
+	const dayHeading = (day: string | undefined, dayRows: readonly ClosureRow[]) => {
+		const total = closureTotals(dayRows);
+		return (
+			<View
+				testID={`closure-day-${day}`}
+				className="bg-table-header flex-row justify-between px-4 py-2"
+			>
+				<Text>{day ? heading(day) : ''}</Text>
+				{!!dayRows.length && (
+					<Text className="text-muted-foreground tabular-nums">
+						{format(total.counted)} {t('reports.counted').toLocaleLowerCase()} ·{' '}
+						<Text className={tone(total.variance)}>{result(total.variance)}</Text>
+					</Text>
+				)}
+			</View>
+		);
+	};
+	const visibleRows = filter === 'open' ? [] : rows;
+	const card = (
 		<Card>
-			{!rows.length && (
+			<View className="flex-row items-center justify-between border-b px-3 py-2">
+				<SegmentedControl
+					value={filter}
+					onValueChange={(value) => setFilter(value as ClosureFilter)}
+					segments={[
+						{ value: 'all', label: t('reports.all'), testID: 'closures-filter-all' },
+						{ value: 'open', label: t('reports.open'), testID: 'closures-filter-open' },
+						{ value: 'closed', label: t('register.closed'), testID: 'closures-filter-closed' },
+					]}
+				/>
+				<Text className="text-muted-foreground">
+					{t('reports.n_sessions', { count: rows.length + sessions.length })}
+				</Text>
+			</View>
+			{(sessions.length > 0 || todayRows.length > 0) && dayHeading(today, todayRows)}
+			{/* Keep the readers mounted when filtering, so toggling Closed neither drops summaries nor reloads. */}
+			<View style={filter === 'closed' || !inPeriod ? { display: 'none' } : undefined}>
+				{sessionRows}
+			</View>
+			{scopeDay === today && !todayRows.length && sessions.length > 0 && filter !== 'open' && (
+				<ListRow size="sm">
+					<Text className="text-muted-foreground">{t('reports.no_closures_today')}</Text>
+				</ListRow>
+			)}
+			{status}
+			{!rows.length && !sessions.length && showEmpty && (
 				<Text testID="closures-empty" className="p-4">
 					{t('reports.no_closures')}
 				</Text>
 			)}
-			{rows.map((row, index) => {
+
+			{visibleRows.map((row, index) => {
 				const variance = Number(row.variance.cash ?? 0);
 				const badge = !row.synced_rows_at
 					? t('register.unsynced')
@@ -53,14 +153,12 @@ export function ClosureList({
 						: null;
 				return (
 					<React.Fragment key={row.id}>
-						{row.business_day !== rows[index - 1]?.business_day && (
-							<Text
-								testID={`closure-day-${row.business_day}`}
-								className="bg-table-header px-4 py-2"
-							>
-								{row.business_day ? heading(row.business_day) : ''}
-							</Text>
-						)}
+						{row.business_day !== today &&
+							(index === 0 || row.business_day !== rows[index - 1]?.business_day) &&
+							dayHeading(
+								row.business_day,
+								rows.filter((r) => r.business_day === row.business_day)
+							)}
 						<ListRow
 							disabled={unavailableIds?.has(row.server_closure_id ?? row.id)}
 							onPress={() => onSelect?.(row)}
@@ -77,10 +175,9 @@ export function ClosureList({
 										testID={`closure-result-${row.id}`}
 										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground'}`}
 									>
-										{variance
-											? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
-											: t('reports.exact')}
+										{result(variance)}
 									</Text>
+									<Icon name="chevronRight" className="text-muted-foreground" />
 								</>
 							}
 						>
@@ -104,7 +201,8 @@ export function ClosureList({
 							{badge && (
 								<Badge
 									testID={`closure-badge-${row.id}`}
-									variant="muted"
+									tinted
+									variant="warning"
 									size="lg"
 									className="self-start"
 								>
@@ -115,6 +213,19 @@ export function ClosureList({
 					</React.Fragment>
 				);
 			})}
+			{footer}
 		</Card>
+	);
+	return (
+		<>
+			<ClosureStats
+				rows={rows}
+				sessions={sessions}
+				blind={blind}
+				storeId={storeId}
+				partial={partial}
+			/>
+			{card}
+		</>
 	);
 }

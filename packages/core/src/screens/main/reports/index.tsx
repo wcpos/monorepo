@@ -329,30 +329,33 @@ function ReportsShell() {
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
-							<View
-								testID="reports-scope-row"
-								// The row under the wide bar brings the page gutter between the bar's
-								// controls and its own; the Closures body's `p-gutter` brings the gutter
-								// below. The phone keeps its 8 under its control-height bar.
-								className={cn(
-									'flex-row items-center justify-between gap-2',
-									ground.px,
-									phone ? 'py-2' : ground.pt
-								)}
-							>
-								<DateButton
-									scope={scope}
-									onScopeChange={setSelection}
-									storeId={scope.storeId}
-									// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
-									key={license?.isPro ? 'pro' : 'free'}
-									lockedScopeName={t('reports.earlier_closures')}
-									initialLockedPeriod={lockedClosure}
-									initialHistoryLimit={outsideHistory}
-								/>
-								<CashierButton scope={scope} onScopeChange={setSelection} />
-							</View>
 							<Closures
+								renderScopeRow={({ actions }) => (
+									<View
+										testID="reports-scope-row"
+										// The row under the wide bar brings the page gutter between the bar's
+										// controls and its own; the Closures body's `p-gutter` brings the gutter
+										// below. The phone keeps its 8 under its control-height bar.
+										className={cn(
+											'flex-row items-center justify-between gap-2',
+											ground.px,
+											phone ? 'py-2' : ground.pt
+										)}
+									>
+										<DateButton
+											scope={scope}
+											onScopeChange={setSelection}
+											storeId={scope.storeId}
+											// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
+											key={license?.isPro ? 'pro' : 'free'}
+											lockedScopeName={t('reports.earlier_closures')}
+											initialLockedPeriod={lockedClosure}
+											initialHistoryLimit={outsideHistory}
+										/>
+										<CashierButton scope={scope} onScopeChange={setSelection} />
+										{actions}
+									</View>
+								)}
 								scope={scope}
 								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
 								onClose={() => router.setParams({ closureId: undefined })}

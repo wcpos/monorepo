@@ -74,6 +74,7 @@ let session: { opened_at_gmt: string; opened_by: number; status: string } | null
 let blind = false;
 let lastClosure: { id: string } | null = { id: 'c' };
 const print = jest.fn(async () => true);
+const localReportHook = jest.fn();
 const reprint = jest.fn(async () => true);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
@@ -86,9 +87,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	}),
 }));
 jest.mock('../../../../services/register-session/use-session-report', () => ({
-	useSessionReport: (closure?: unknown, _isReprint?: boolean, known?: unknown) => ({
-		print: closure || known ? reprint : print,
-	}),
+	useSessionReport: (closure?: unknown, isReprint?: boolean, known?: unknown) => {
+		localReportHook(closure, isReprint);
+		return { print: closure || known ? reprint : print };
+	},
 }));
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -105,14 +107,23 @@ it('keeps expected hidden for blind cashiers but retains the opener and sales co
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('3');
 	expect(screen.getByTestId('reports-session-card').textContent).not.toContain('155');
 });
+// Revert: draw every open session whatever cashier the scope names.
+it('draws the open session only for the cashier who opened it when the scope names one', () => {
+	const { unmount } = render(<SessionCard cashier={9} />);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	unmount();
+	render(<SessionCard cashier={7} />);
+	expect(screen.getByTestId('reports-session-card').textContent).toContain('Pat');
+});
 // Revert: omit the closed branch or dispatch X rather than the last closure.
 it('offers the local last closure Reprint offline when the register is closed', async () => {
 	session = null;
 	online = false;
 	render(<SessionCard />);
-	expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed');
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	expect(localReportHook).toHaveBeenLastCalledWith(lastClosure, true);
+	expect(screen.queryByTestId('session-unavailable')).toBeNull();
+	expect(screen.queryByTestId('reports-session-print')).toBeNull();
 	expect(print).not.toHaveBeenCalled();
 	expect(get).not.toHaveBeenCalled();
 });
@@ -205,8 +216,11 @@ it.each([0, 2])(
 		}));
 		render(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={storeId} />);
 		await waitFor(() =>
-			expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed')
+			expect(documentHook).toHaveBeenLastCalledWith(
+				expect.objectContaining({ document: 'closure:last-remote' })
+			)
 		);
+		expect(screen.queryByTestId('reports-session-card')).toBeNull();
 		expect(get).toHaveBeenCalledWith(
 			'closures/last',
 			expect.objectContaining({ params: { register_id: 'back', store_id: storeId || null } })
@@ -225,15 +239,19 @@ it('fetches the actual last closure when the bound closed register has no local 
 		data: url === 'sessions' ? [] : { id: 'latest', number: 9 },
 	}));
 	render(<SessionCard />);
-	await waitFor(() => expect(screen.getByTestId('reports-session-print')).toBeTruthy());
+	await waitFor(() =>
+		expect(documentHook).toHaveBeenLastCalledWith(
+			expect.objectContaining({ document: 'closure:latest' })
+		)
+	);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	expect(get).toHaveBeenCalledWith('closures/last', {
 		params: { register_id: 'front', store_id: 1 },
 	});
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({ document: 'closure:latest', isReprint: true })
 	);
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	expect(reprint).not.toHaveBeenCalled();
 });
 
@@ -247,10 +265,10 @@ it('replaces local A with authoritative B for the bound register card and Reprin
 	});
 	get.mockImplementation(async (url) => (url === 'sessions' ? { data: [] } : pending));
 	const view = render(<SessionCard />);
-	expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed');
-	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('session-unavailable').textContent).toContain('Loading');
-	fireEvent.click(screen.getByTestId('reports-session-print'));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	expect(localReportHook).toHaveBeenLastCalledWith(lastClosure, true);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	expect(screen.getByTestId('session-loading').textContent).toContain('Loading');
 	expect(reprint).not.toHaveBeenCalled();
 	await waitFor(() =>
 		expect(get).toHaveBeenCalledWith('closures/last', {
@@ -263,14 +281,12 @@ it('replaces local A with authoritative B for the bound register card and Reprin
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({ document: 'closure:B', isReprint: true })
 	);
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	expect(reprint).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('session-unavailable')).toBeNull();
 	online = false;
 	view.rerender(<SessionCard />);
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-print')).toBeNull();
 });
 
 // Revert: hide the lookup error behind the local card or allow its stale closure to print.
@@ -283,22 +299,24 @@ it('disables the local Reprint after a failed lookup and retries to the server c
 	});
 	render(<SessionCard />);
 	await waitFor(() => expect(screen.getByTestId('session-retry-front')).toBeTruthy());
-	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('session-unavailable').textContent).toBe('Could not load closures');
-	fireEvent.click(screen.getByTestId('reports-session-print'));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
+	expect(screen.getByTestId('session-error').textContent).toBe('Could not load closures');
 	expect(reprint).not.toHaveBeenCalled();
 	get.mockImplementation(async (url) => ({
 		data: url === 'sessions' ? [] : { id: 'B', number: 10 },
 	}));
 	fireEvent.click(screen.getByTestId('session-retry-front'));
-	await waitFor(() => expect(screen.queryByTestId('session-unavailable')).toBeNull());
+	await waitFor(() =>
+		expect(documentHook).toHaveBeenLastCalledWith(
+			expect.objectContaining({ document: 'closure:B', isReprint: true })
+		)
+	);
 	expect(screen.queryByTestId('session-retry-front')).toBeNull();
-	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(false);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({ document: 'closure:B', isReprint: true })
 	);
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	expect(reprint).not.toHaveBeenCalled();
 });
 
@@ -313,7 +331,7 @@ it('reloads a ready remote card on reconnect and replaces its Reprint document',
 	);
 	online = false;
 	view.rerender(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
-	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 	get
 		.mockClear()
 		.mockImplementation(async (url) => ({ data: url === 'sessions' ? [] : { id: 'B' } }));
@@ -325,8 +343,7 @@ it('reloads a ready remote card on reconnect and replaces its Reprint document',
 		)
 	);
 	expect(get).toHaveBeenCalledTimes(3);
-	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(screen.queryByTestId('reports-session-card')).toBeNull();
 });
 
 const allRegisters = Array.from({ length: 20 }, (_, index) => ({
@@ -346,7 +363,20 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	useIsPhone: () => false,
 }));
 jest.mock('./closure-panel', () => ({ ClosurePanel: () => null }));
-jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./closure-list', () => ({
+	ClosureList: ({
+		sessionRows,
+		sessions,
+	}: {
+		sessionRows: React.ReactNode;
+		sessions: unknown[];
+	}) => (
+		<>
+			{sessionRows}
+			<span data-testid="resolved-session-count">{sessions.length}</span>
+		</>
+	),
+}));
 jest.mock('./save-or-share-csv', () => ({ saveOrShareCsv: jest.fn() }));
 jest.mock('./use-closure-rows', () => ({
 	useClosureRows: (scope: unknown) => ({
@@ -402,6 +432,7 @@ it('batches all-register sessions and limits closed-register reads to three conc
 		params: { store_id: 2, status: 'all', per_page: 100, page: 1 },
 	});
 	expect(screen.getAllByTestId('reports-session-card')).toHaveLength(16);
+	await waitFor(() => expect(screen.getByTestId('resolved-session-count').textContent).toBe('16'));
 	// Missing summary figures are unknown, not zero sales or a zero drawer.
 	expect(screen.queryByTestId('session-expected')).toBeNull();
 	expect(screen.getAllByTestId('reports-session-card')[0].textContent).not.toContain('0 sales');
@@ -413,7 +444,11 @@ it('batches all-register sessions and limits closed-register reads to three conc
 	await act(async () => {
 		complete.slice(1).forEach((done) => done());
 	});
-	await waitFor(() => expect(screen.getAllByTestId('reports-session-card')).toHaveLength(20));
+	await waitFor(() =>
+		expect(get.mock.calls.filter(([url]) => url === 'closures/last')).toHaveLength(4)
+	);
+	expect(screen.getAllByTestId('reports-session-card')).toHaveLength(16);
+	await waitFor(() => expect(screen.getByTestId('resolved-session-count').textContent).toBe('16'));
 	expect(get).toHaveBeenCalledTimes(5);
 	for (const index of [16, 17, 18, 19]) {
 		expect(get).toHaveBeenCalledWith('closures/last', {
@@ -457,7 +492,7 @@ it.each([false, true])('resolves a register on page 2 (retry: %s)', async (retry
 		fireEvent.click(screen.getByTestId('session-retry-r19'));
 	}
 	await waitFor(() =>
-		expect(screen.getByTestId('remote-session-r19').textContent).toContain('Print X-report')
+		expect(screen.getByTestId('remote-session-r19').textContent).toContain('X-report')
 	);
 	expect(
 		get.mock.calls.filter(([url]) => url === 'sessions').map(([, config]) => config.params.page)
@@ -468,5 +503,31 @@ it.each([false, true])('resolves a register on page 2 (retry: %s)', async (retry
 	expect(get).not.toHaveBeenCalledWith('closures/last', {
 		params: { store_id: 2, register_id: 'r19' },
 	});
-	await waitFor(() => expect(screen.getAllByTestId('reports-session-card')).toHaveLength(20));
+	await waitFor(() =>
+		expect(get.mock.calls.filter(([url]) => url === 'closures/last')).toHaveLength(19)
+	);
+	expect(screen.getAllByTestId('reports-session-card')).toHaveLength(1);
+	await waitFor(() => expect(screen.getByTestId('resolved-session-count').textContent).toBe('1'));
+});
+
+// Revert: omit the resolved local/remote summaries, or count a closed register as open.
+it('reports resolved local and remote open sessions upward without extra reads', async () => {
+	const onSessions = jest.fn();
+	const local = render(<SessionCard onSessions={onSessions} />);
+	expect(onSessions).toHaveBeenLastCalledWith([session]);
+	expect(get).not.toHaveBeenCalled();
+	local.unmount();
+	render(
+		<RemoteSessionCard
+			register={{ id: 'back', name: 'Back' }}
+			storeId={2}
+			onSessions={onSessions}
+		/>
+	);
+	await waitFor(() =>
+		expect(onSessions).toHaveBeenLastCalledWith([
+			expect.objectContaining({ id: 'remote', status: 'counting' }),
+		])
+	);
+	expect(get).toHaveBeenCalledTimes(3);
 });

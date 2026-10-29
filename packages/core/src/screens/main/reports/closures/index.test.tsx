@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { Closures } from './index';
 const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 1 };
@@ -28,17 +28,39 @@ let status = 'ready';
 let unavailableIds = new Set<string>();
 const loadMore = jest.fn();
 jest.mock('./use-closure-rows', () => ({
-	useClosureRows: () => ({
+	useClosureRows: (requested: { cashier?: number }) => ({
 		rows,
 		localRows,
-		scope,
+		scope: { ...scope, cashier: requested.cashier },
 		status,
 		loadMore,
 		hasMore: true,
 		unavailableIds,
 	}),
 }));
-jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+const closureList = jest.fn();
+jest.mock('./closure-list', () => ({
+	ClosureList: ({
+		sessionRows,
+		status,
+		footer,
+		...props
+	}: {
+		sessionRows: React.ReactNode;
+		status: React.ReactNode;
+		footer: React.ReactNode;
+	}) => (
+		<>
+			{void closureList(props)}
+			{sessionRows}
+			{status}
+			{footer}
+		</>
+	),
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ blind: false }),
+}));
 jest.mock('./session-cards', () => ({ SessionCards: () => null }));
 const sessionCard = jest.fn();
 jest.mock('./session-card', () => ({
@@ -113,8 +135,13 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 	),
 }));
 // Revert: export an unscoped collection instead of the exact rows shown.
-it('exports only visible rows from the overflow menu', async () => {
-	render(<Closures scope={scope} />);
+it('exports only visible rows from the export button', async () => {
+	render(
+		<Closures
+			scope={scope}
+			renderScopeRow={({ actions }) => <div data-testid="scope-actions">{actions}</div>}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('closures-export'));
 	await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
 	expect(share).toHaveBeenCalledWith(
@@ -185,5 +212,37 @@ it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) 
 // Revert: feed date/cashier-filtered rows to the current register's last-closure action.
 it('does not substitute scoped history for the register last closure', () => {
 	render(<Closures scope={scope} />);
-	expect(sessionCard).toHaveBeenLastCalledWith({});
+	expect(sessionCard).toHaveBeenLastCalledWith({ onSessions: expect.any(Function) });
+});
+
+// Revert: count every open session toward a scope that names a cashier.
+it('scopes the aggregated sessions and the till card to the named cashier', () => {
+	render(<Closures scope={{ ...scope, cashier: 9 }} />);
+	expect(sessionCard).toHaveBeenLastCalledWith(expect.objectContaining({ cashier: 9 }));
+	const { onSessions } = sessionCard.mock.calls.at(-1)![0] as {
+		onSessions: (sessions: { opened_by: number }[]) => void;
+	};
+	act(() => onSessions([{ opened_by: 7 }, { opened_by: 9 }]));
+	expect(closureList).toHaveBeenLastCalledWith(
+		expect.objectContaining({ sessions: [{ opened_by: 9 }] })
+	);
+});
+
+// Revert: swallow CSV failures or return the old adjacent placeholder.
+it('keeps export failures in the full-width room without a placeholder pane', async () => {
+	share.mockRejectedValueOnce(new Error('share failed'));
+	render(<Closures scope={scope} renderScopeRow={({ actions }) => actions} />);
+	fireEvent.click(screen.getByTestId('closures-export'));
+	await waitFor(() => expect(screen.getByTestId('closures-export-error')).toBeTruthy());
+	expect(screen.queryByTestId('closure-panel-placeholder')).toBeNull();
+	expect(screen.queryByTestId('closures-overflow')).toBeNull();
+});
+
+// Revert: draw the export failure only in the list branch while the phone shows a closure.
+it('shows an export failure beside the header while the phone shows a closure', async () => {
+	share.mockRejectedValueOnce(new Error('share failed'));
+	render(<Closures scope={scope} initialClosureId="c" renderScopeRow={({ actions }) => actions} />);
+	expect(screen.getByTestId('selected-closure')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closures-export'));
+	await waitFor(() => expect(screen.getByTestId('closures-export-error')).toBeTruthy());
 });
