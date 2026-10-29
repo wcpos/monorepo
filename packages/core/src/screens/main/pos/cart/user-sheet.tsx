@@ -117,7 +117,7 @@ function Figures({ onOpen }: { onOpen: () => void }) {
 									? '—'
 									: blind
 										? t('register.sales_count', { count: salesCount })
-										: format(Number(expected.cash))}
+										: format(Number(expected.cash ?? 0))}
 							</AmountFigure>
 							{figuresPending ? (
 								<Text variant="key">{t('register.figures_after_sync')}</Text>
@@ -264,7 +264,7 @@ function StoreBand({
 	);
 }
 
-function RegisterBand({ attributed }: { attributed: boolean }) {
+function RegisterBand({ attributed, reason }: { attributed: boolean; reason: string }) {
 	const { userDB, site } = useStoreSession();
 	const { registers, registerId, bind } = useRegisterBinding();
 	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
@@ -301,7 +301,7 @@ function RegisterBand({ attributed }: { attributed: boolean }) {
 						choice
 						selected={row.id === registerId}
 						label={row.name}
-						description={attributed ? t('register.switch_register_blocked_cart') : description}
+						description={attributed ? reason : description}
 						disabled={attributed}
 						onPress={row.id === registerId ? undefined : () => void bind(row.id)}
 					/>
@@ -408,7 +408,14 @@ export function UserSheet({
 								/>
 							</Suspense>
 							{status === 'bound' && registers.length > 1 && (
-								<RegisterBand attributed={attributed} />
+								<RegisterBand
+									attributed={attributed}
+									reason={
+										currentOrder
+											? t('register.switch_register_blocked_cart')
+											: t('register.switch_register_unavailable_here')
+									}
+								/>
 							)}
 							{/* A browser is where these two go: the desktop app has no admin tab to open, and
 							    already is the desktop app. */}

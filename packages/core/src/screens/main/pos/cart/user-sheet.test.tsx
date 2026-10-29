@@ -375,7 +375,12 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
 	const button = screen.getByTestId('user-sheet-register-back');
 	expect(button.getAttribute('aria-disabled') === 'true').toBe(blocked);
-	expect(button.textContent?.includes('register.switch_register_blocked_cart')).toBe(blocked);
+	// The rail's sheet has no cart to finish: its reason is that the switch is not available here.
+	const reason =
+		attributed === undefined
+			? 'register.switch_register_unavailable_here'
+			: 'register.switch_register_blocked_cart';
+	expect(button.textContent?.includes(reason)).toBe(blocked);
 
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);

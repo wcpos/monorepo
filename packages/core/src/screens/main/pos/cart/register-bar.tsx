@@ -131,7 +131,6 @@ export function RegisterBar({
 				<BarControls
 					testID="register-bar"
 					portalHost="pos"
-
 					onOpenRegister={() => onPanelOpenChange(true)}
 				/>
 			</HStack>
