@@ -201,7 +201,8 @@ export function ClosureBody({
 					</View>
 				))}
 			</View>
-			{touched.size > 0 && (
+			{/* The notice names the recorded result, which is money: never for a blind cashier. */}
+			{touched.size > 0 && !blind && (
 				<Notice
 					testID="closure-settled"
 					tone="warning"

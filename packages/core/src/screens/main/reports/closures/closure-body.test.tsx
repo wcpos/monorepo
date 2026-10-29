@@ -253,6 +253,35 @@ it('lists a newly settled non-cash tender with its document label', () => {
 });
 
 it.each([true, false])(
+	'shows the settled notice, which names the recorded result, only to a sighted cashier (blind=%s)',
+	(blind) => {
+		const corrections: Correction[] = [
+			{
+				id: 1,
+				type: 'recount',
+				created_at: '2026-09-11 18:00:00',
+				actor: { id: 1, name: 'Pat' },
+				approver: null,
+				reason: 'Second count',
+				figures: { counted: { cash: '111' } },
+			},
+		];
+		render(
+			<ClosureBody
+				row={row}
+				doc={doc}
+				{...deriveSettled(row, corrections)}
+				corrections={corrections}
+				blind={blind}
+				context={context}
+			/>
+		);
+		if (blind) expect(screen.queryByTestId('closure-settled')).toBeNull();
+		else expect(screen.getByTestId('closure-settled').textContent).toContain('Recorded $99.00');
+	}
+);
+
+it.each([true, false])(
 	'shows counted card variance only to a sighted cashier (blind=%s)',
 	(blind) => {
 		const counted = { ...row, counted: { ...row.counted, card: '48' } };

@@ -88,6 +88,7 @@ export function RegisterPanel({
 		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
+	const [countBusy, setCountBusy] = React.useState(false);
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
 	const t = useT();
@@ -115,6 +116,9 @@ export function RegisterPanel({
 	// left behind: a failed action's line and a movement in flight.
 	const close = (next: boolean) =>
 		void attempt(async () => {
+			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
+			// would write `open` over the closed session.
+			if (!next && countBusy) return;
 			if (!next && pane === 'count' && session?.status === 'counting')
 				await actions.backToSelling();
 			if (!next) {
@@ -235,6 +239,7 @@ export function RegisterPanel({
 				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
 					<RegisterCount
 						description={description}
+						onBusyChange={setCountBusy}
 						onBack={() => setPane('register')}
 						onClosed={(count) => {
 							setWritten(count);

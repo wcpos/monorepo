@@ -92,10 +92,13 @@ export function RegisterCount({
 	description,
 	onBack,
 	onClosed,
+	onBusyChange,
 }: {
 	description: string;
 	onBack: () => void;
 	onClosed: (count: ClosureCount) => void;
+	/** The close in flight: the panel refuses its own dismissal meanwhile (Codex, #3073). */
+	onBusyChange?: (busy: boolean) => void;
 }) {
 	const {
 		session,
@@ -147,6 +150,7 @@ export function RegisterCount({
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
 		setBusy(true);
+		onBusyChange?.(true);
 		setError('');
 		try {
 			await action();
@@ -154,6 +158,7 @@ export function RegisterCount({
 			setError(t('register.count_failed'));
 		} finally {
 			setBusy(false);
+			onBusyChange?.(false);
 		}
 	};
 	const body = (

@@ -1021,6 +1021,27 @@ it('pushes the written moment after close, survives the session disappearing, an
 	}
 });
 
+it('refuses × while the close is in flight, then closes once it lands', async () => {
+	let land: (closure: { id: string }) => void = () => {};
+	mockCloseSession.mockImplementationOnce(
+		() => new Promise<{ id: string }>((resolve) => (land = resolve))
+	);
+	const onOpenChange = jest.fn();
+	render(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+	await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+	fireEvent.change(screen.getByTestId('count-amount'), { target: { value: '155' } });
+	fireEvent.click(screen.getByTestId('count-close'));
+	await waitFor(() => expect(mockCloseSession).toHaveBeenCalled());
+	fireEvent.click(screen.getByTestId('panel-x'));
+	await act(async () => {});
+	expect(onOpenChange).not.toHaveBeenCalled();
+	expect(mockBackToSelling).not.toHaveBeenCalled();
+	await act(async () => land({ id: 'written' }));
+	await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+	fireEvent.click(screen.getByTestId('panel-x'));
+	await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+});
+
 it.each([true, false])(
 	'lands on the count pane for a closed session (initially open=%s)',
 	(open) => {
