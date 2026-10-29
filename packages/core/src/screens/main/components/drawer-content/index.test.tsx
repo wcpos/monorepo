@@ -61,9 +61,13 @@ jest.mock('expo-router/react-navigation', () => ({
 	DrawerActions: { closeDrawer: () => ({ type: 'CLOSE_DRAWER' }) },
 }));
 jest.mock('@wcpos/components/icon', () => ({
-	Icon: ({ name, className }: { name: string; className?: string }) => (
-		<span data-icon={name} data-classes={className} />
-	),
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		const { cn } = jest.requireActual('@wcpos/components/lib/utils');
+		return (
+			<span data-icon={name} data-classes={cn(React.useContext(TextClassContext), className)} />
+		);
+	},
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: ({ children }: React.PropsWithChildren) => <div data-testid="tooltip">{children}</div>,

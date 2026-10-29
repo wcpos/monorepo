@@ -8,6 +8,7 @@ import { Icon, type IconName } from '../icon';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 export type KeypadKey = {
 	/** What a press reports: a digit, `decimal`, `backspace`, or the caller's own key. */
@@ -52,7 +53,7 @@ const keyFace = cva('items-center justify-center', {
 const keyText = cva('font-semibold', {
 	variants: {
 		face: { key: 'text-xl', cell: 'text-lg' },
-		quick: { none: '', off: 'text-primary text-sm', lit: 'text-primary-foreground text-sm' },
+		quick: { none: '', off: 'text-sm', lit: 'text-sm' },
 	},
 });
 
@@ -76,6 +77,16 @@ export function Key({
 	...props
 }: KeyProps) {
 	const quick = on === undefined ? 'none' : on ? 'lit' : 'off';
+	const ink =
+		quick === 'lit'
+			? 'text-primary-foreground'
+			: quick === 'off'
+				? 'text-primary'
+				: variant === 'bad'
+					? 'text-bad'
+					: variant === 'primary'
+						? 'text-primary'
+						: undefined;
 	return (
 		<PressableSurface
 			{...props}
@@ -87,11 +98,13 @@ export function Key({
 			aria-pressed={on}
 			className={cn(keyFace({ face, quick }), props.className)}
 		>
-			{icon ? (
-				<Icon name={icon} variant={variant} />
-			) : (
-				<Text className={cn(keyText({ face, quick }), textClassName)}>{text ?? label}</Text>
-			)}
+			<TextClassContext.Provider value={ink}>
+				{icon ? (
+					<Icon name={icon} />
+				) : (
+					<Text className={cn(keyText({ face, quick }), textClassName)}>{text ?? label}</Text>
+				)}
+			</TextClassContext.Provider>
 		</PressableSurface>
 	);
 }

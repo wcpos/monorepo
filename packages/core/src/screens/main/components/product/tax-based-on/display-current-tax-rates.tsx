@@ -10,6 +10,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { useRootContext } from '@wcpos/components/popover';
 import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
 import type { CartConfig } from '@wcpos/order-math';
 
 import {
@@ -288,15 +289,17 @@ function RateLine({
 }) {
 	const tone = strong ? 'font-semibold' : 'text-muted-foreground';
 	return (
-		<View className={cn('min-h-6 flex-row items-baseline gap-3', className)}>
-			<Text className={cn('min-w-0 flex-1 text-base', tone, !strong && 'pl-3')}>
-				{/* Merchant-authored in WooCommerce settings, so "VAT &amp; Duty" reaches us encoded. */}
-				<Text decodeHtml className={cn('text-base', tone)}>
-					{name}
+		<TextClassContext.Provider value={tone}>
+			<View className={cn('min-h-6 flex-row items-baseline gap-3', className)}>
+				<Text className={cn('min-w-0 flex-1 text-base', !strong && 'pl-3')}>
+					{/* Merchant-authored in WooCommerce settings, so "VAT &amp; Duty" reaches us encoded. */}
+					<Text decodeHtml className="text-base">
+						{name}
+					</Text>
+					{why ? <Text className="text-muted-foreground text-base">{` · ${why}`}</Text> : null}
 				</Text>
-				{why ? <Text className="text-muted-foreground text-base">{` · ${why}`}</Text> : null}
-			</Text>
-			<Text className={cn('w-16 text-right text-base tabular-nums', tone)}>{percent}</Text>
-		</View>
+				<Text className="w-16 text-right text-base tabular-nums">{percent}</Text>
+			</View>
+		</TextClassContext.Provider>
 	);
 }

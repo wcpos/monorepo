@@ -157,10 +157,7 @@ function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabe
 				</Text>
 				<Text
 					selectable
-					className={cn(
-						'shrink font-mono text-xs',
-						level === 'error' ? 'text-bad' : 'text-foreground'
-					)}
+					className={cn('shrink font-mono text-xs', 'text-foreground', level === 'error' && tone)}
 				>
 					{word ? <Text className={cn('font-mono text-xs font-bold', tone)}>{word} </Text> : null}
 					{line.message}

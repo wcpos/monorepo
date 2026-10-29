@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
 import { useDocField } from '@wcpos/query';
 
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
@@ -47,6 +48,7 @@ export function TaxBasedOn() {
 		taxBasedOn === 'billing' || taxBasedOn === 'shipping'
 			? taxBasedOnSetting
 			: t('common.shop_base');
+	const none = rates.length === 0;
 	const taxBasedOnLabel = `${t('common.tax_based_on')}: ${taxBasedOnSetting}`;
 
 	// A popover, not a hover card: the chevron promises a press, a touch screen has no hover
@@ -55,20 +57,19 @@ export function TaxBasedOn() {
 	return (
 		<Popover>
 			<PopoverTrigger accessibilityLabel={taxBasedOnLabel} testID="tax-based-on-trigger">
-				<View className="flex-row items-center gap-1">
-					{rates.length > 0 ? (
-						<Icon name="percent" size="sm" className="text-muted-foreground" />
-					) : (
-						<Icon size="sm" variant="bad" name="warning" />
-					)}
-					<Text
-						className={rates.length > 0 ? 'shrink text-sm' : 'text-bad shrink text-sm'}
-						numberOfLines={1}
-					>
-						{valueLabel}
-					</Text>
-					<Icon name="chevronDown" size="sm" className="text-muted-foreground" />
-				</View>
+				<TextClassContext.Provider value={none ? 'text-bad' : undefined}>
+					<View className="flex-row items-center gap-1">
+						{!none ? (
+							<Icon name="percent" size="sm" className="text-muted-foreground" />
+						) : (
+							<Icon size="sm" name="warning" />
+						)}
+						<Text className="shrink text-sm" numberOfLines={1}>
+							{valueLabel}
+						</Text>
+						<Icon name="chevronDown" size="sm" className="text-muted-foreground" />
+					</View>
+				</TextClassContext.Provider>
 			</PopoverTrigger>
 			<PopoverContent side="top" align="start" className="w-96" testID="tax-based-on-content">
 				<DisplayCurrentTaxRates

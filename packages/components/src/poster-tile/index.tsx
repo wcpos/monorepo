@@ -5,6 +5,7 @@ import Animated from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
+import { TextClassContext } from '../text/context';
 import { Mark } from './mark';
 import { StockPill } from './stock-pill';
 import { CARD, CIRCLE, FAR, NEAR, TINTS } from './style';
@@ -230,6 +231,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 ) {
 	const tint = picture.kind === 'tint' ? picture.tint : null;
 	const filled = picture.kind === 'fill';
+	const ink = filled ? 'text-primary-foreground' : undefined;
 	const words = hasWords(title, money, sub, facts) && (
 		<>
 			{title}
@@ -250,7 +252,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 			testID={testID}
 		>
 			{({ pressed }) => (
-				<>
+				<TextClassContext.Provider value={ink}>
 					{stacked && (
 						<Animated.View
 							pointerEvents="none"
@@ -318,7 +320,6 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									label={markLabel}
 									testID={markTestID}
 									bare={tint !== null || filled}
-									className={filled ? 'text-primary-foreground' : undefined}
 								/>
 							</View>
 						)}
@@ -329,7 +330,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						)}
 						{corner != null && <View className="absolute top-2 right-2">{corner}</View>}
 					</View>
-				</>
+				</TextClassContext.Provider>
 			)}
 		</Pressable>
 	);

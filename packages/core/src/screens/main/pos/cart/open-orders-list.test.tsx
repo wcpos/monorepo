@@ -19,13 +19,14 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(`${value}Z`),
 }));
 jest.mock('./tab-chip', () => ({ TabChip: () => null }));
-jest.mock('@wcpos/components/text', () => ({
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
 	Text: ({
 		children,
-		testID,
 		className,
-	}: React.PropsWithChildren<{ testID?: string; className?: string }>) => (
-		<span data-testid={testID} className={className}>
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<span data-testid={testID} data-classes={className} className={className}>
 			{children}
 		</span>
 	),
@@ -36,9 +37,12 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({
-	Icon: ({ name, testID }: { name: string; testID?: string }) => (
-		<i data-testid={testID} data-icon={name} />
-	),
+	Icon: ({ name, testID }: { name: string; testID?: string }) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		return (
+			<i data-testid={testID} data-icon={name} data-classes={React.useContext(TextClassContext)} />
+		);
+	},
 }));
 jest.mock('@wcpos/components/avatar', () => ({
 	// The nameless Guest is drawn with a glyph, not initials.
@@ -190,6 +194,16 @@ it('a row says who, what, how long and its status; from three entries the line i
 		expect(screen.getByTestId('open-orders-row-d-age')).toBeTruthy();
 		// An emptied cart that cannot restart (it holds a payment) keeps its age and warning.
 		expect(screen.getByTestId('open-orders-row-e-age').className).toContain('text-warning-text');
+		for (const [id, ink] of [
+			['a', 'text-muted-foreground'],
+			['c', 'text-warning-text'],
+		]) {
+			const nodes = screen
+				.getByTestId(`open-orders-row-${id}-age`)
+				.parentElement!.querySelectorAll('[data-classes]');
+			expect(nodes).toHaveLength(2);
+			for (const node of nodes) expect(node.getAttribute('data-classes')).toContain(ink);
+		}
 		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {

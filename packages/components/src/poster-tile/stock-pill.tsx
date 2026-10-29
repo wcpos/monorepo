@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Icon } from '../icon';
 import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 const PILL = 'h-5.5 flex-row items-center gap-1 rounded-full px-2';
 
@@ -20,8 +21,10 @@ export function StockPill({ label, testID, ...props }: StockPillProps) {
 				accessibilityLabel={label}
 				testID={testID}
 			>
-				<Icon name="product" size="xs" className={tone} />
-				<Text className={`text-xs font-bold tabular-nums ${tone}`}>{props.value}</Text>
+				<TextClassContext.Provider value={tone}>
+					<Icon name="product" size="xs" />
+					<Text className="text-xs font-bold tabular-nums">{props.value}</Text>
+				</TextClassContext.Provider>
 			</View>
 		);
 	}

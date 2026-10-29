@@ -4,6 +4,7 @@ import { View, type ViewProps } from 'react-native';
 import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 
 /**
@@ -56,28 +57,29 @@ function Line({
 			)}
 			{...props}
 		>
-			<View className="min-w-0 flex-1 flex-row items-center gap-2">
-				{typeof label === 'string' ? (
-					<Text className={cn('shrink', text)} decodeHtml>
-						{label}
-					</Text>
-				) : (
-					label
-				)}
-				{beside}
-			</View>
-			{amount === undefined ? null : (
-				<Text
-					testID={amountTestID}
-					className={cn(
-						text,
-						!indent && tone === 'default' && 'text-foreground',
-						'text-right tabular-nums'
+			<TextClassContext.Provider value={text}>
+				<View className="min-w-0 flex-1 flex-row items-center gap-2">
+					{typeof label === 'string' ? (
+						<Text className="shrink" decodeHtml>
+							{label}
+						</Text>
+					) : (
+						label
 					)}
-				>
-					{amount}
-				</Text>
-			)}
+					{beside}
+				</View>
+				{amount === undefined ? null : (
+					<Text
+						testID={amountTestID}
+						className={cn(
+							!indent && tone === 'default' && 'text-foreground',
+							'text-right tabular-nums'
+						)}
+					>
+						{amount}
+					</Text>
+				)}
+			</TextClassContext.Provider>
 		</View>
 	);
 }
