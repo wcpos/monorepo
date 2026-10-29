@@ -162,7 +162,7 @@ export function SwitchConfirm({
 				</AlertDialogHeader>
 				{body && <View className="gap-4 px-4">{body}</View>}
 				<AlertDialogFooter
-					cancel={{ testID: 'switch-confirm-cancel', onPress: () => onOpenChange(false) }}
+					cancel={{ testID: 'switch-confirm-cancel' }}
 					confirm={{
 						label: confirm,
 						testID: 'switch-confirm-confirm',

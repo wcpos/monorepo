@@ -16,7 +16,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { Loader } from '@wcpos/components/loader';
 import { Portal } from '@wcpos/components/portal';
-import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { Notice } from '@wcpos/components/notice';
 import { MenuRow } from '@wcpos/components/menu-row';
 import {
@@ -35,6 +35,10 @@ import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/q
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+
+import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
+import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { requestRegisterPanel } from './register-panel-request';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -83,9 +87,6 @@ export function useSalesToday() {
 	}, [runtime.engine, runtime.locale, wpCredentials.id, store.id, storeDay]);
 	return useObservableState(sales$, 0);
 }
-
-/** Runs one band's action while the sheet holds every other. */
-type Act = (work: () => Promise<void>) => Promise<void>;
 
 export function SalesTile({ sub }: { sub?: string }) {
 	const total = useSalesToday();
@@ -204,38 +205,21 @@ function AwaitingStore() {
 	);
 }
 
-function UserRows({ busy, act }: { busy: boolean; act: Act }) {
-	const { site, store, wpCredentials, logout } = useStoreSession();
-	const { login } = useAppState();
-	const router = useRouter();
+function UserRows({
+	busy,
+	hold,
+	counting,
+	onChoose,
+}: {
+	busy: boolean;
+	hold: boolean;
+	counting: boolean;
+	onChoose: (request: SwitchRequest) => void;
+}) {
+	const { site, wpCredentials } = useStoreSession();
+	const t = useT();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
-		try {
-			// Switching is a one-shot read of the first non-pending database answer.
-			const stores = await firstValueFrom(
-				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
-			);
-			const next = stores.find((candidate) => candidate.id === store.id);
-			requestStateManager.clearRefreshedToken();
-			requestStateManager.setAuthFailed(false);
-			if (!next) {
-				await logout();
-				router.replace('/connect');
-				return;
-			}
-			await login({
-				siteID: site.uuid!,
-				wpCredentialsID: credential.uuid!,
-				storeID: next.localID!,
-			});
-		} catch (error) {
-			log.error('Store login failed', {
-				code: ERROR_CODES.AUTH_UNEXPECTED,
-				showToast: true,
-				context: { error },
-			});
-		}
-	};
+
 	return (
 		<>
 			{credentials.map((credential) => (
@@ -248,11 +232,16 @@ function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 					}
 					choice
 					selected={credential.uuid === wpCredentials.uuid}
-					disabled={busy}
+					disabled={busy || hold || counting}
+					description={
+						!hold && counting && credential.uuid !== wpCredentials.uuid
+							? t('register.finish_count_first')
+							: undefined
+					}
 					onPress={
-						credential.uuid === wpCredentials.uuid || busy
+						credential.uuid === wpCredentials.uuid || busy || hold || counting
 							? undefined
-							: () => void act(() => switchUser(credential))
+							: () => onChoose({ kind: 'cashier', credential })
 					}
 					leading={
 						<RecordAvatar
@@ -270,11 +259,15 @@ function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 }
 
 function StoreBand({
-	isSwitching,
-	onSwitch,
+	busy,
+	hold,
+	online,
+	onChoose,
 }: {
-	isSwitching: boolean;
-	onSwitch: (store: ReadonlyStoreRecord) => Promise<void>;
+	busy: boolean;
+	hold: boolean;
+	online: boolean;
+	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { wpCredentials, store } = useStoreSession();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
@@ -291,8 +284,13 @@ function StoreBand({
 					testID={`user-sheet-store-${row.localID}`}
 					choice
 					selected={row.localID === store.localID}
-					disabled={isSwitching}
-					onPress={row.localID === store.localID ? undefined : () => void onSwitch(row)}
+					disabled={busy || hold || !online}
+					description={!hold && !online ? t('register.needs_store_to_switch') : undefined}
+					onPress={
+						row.localID === store.localID || busy || hold || !online
+							? undefined
+							: () => onChoose({ kind: 'store', store: row })
+					}
 					label={row.name}
 				/>
 			))}
@@ -304,15 +302,17 @@ function RegisterBand({
 	attributed,
 	reason,
 	busy,
-	act,
+	hold,
+	onChoose,
 }: {
 	attributed: boolean;
 	reason: string;
 	busy: boolean;
-	act: Act;
+	hold: boolean;
+	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { userDB, site } = useStoreSession();
-	const { registers, registerId, bind, refresh } = useRegisterBinding();
+	const { registers, registerId, refresh } = useRegisterBinding();
 	// The directory keeps its loaded answer until asked again; the band asks on every opening,
 	// as the picker did, so another till's open, close or count reaches the rows (Codex, #3045).
 	React.useEffect(() => {
@@ -352,9 +352,13 @@ function RegisterBand({
 						choice
 						selected={row.id === registerId}
 						label={row.name}
-						description={attributed ? reason : description}
-						disabled={attributed || busy}
-						onPress={row.id === registerId || busy ? undefined : () => void act(() => bind(row.id))}
+						description={attributed && !hold ? reason : description}
+						disabled={attributed || busy || hold}
+						onPress={
+							row.id === registerId || attributed || busy || hold
+								? undefined
+								: () => onChoose({ kind: 'register', register: row, state: description })
+						}
 					/>
 				);
 			})}
@@ -378,7 +382,12 @@ export function UserSheet({
 	portalHost?: string | null;
 }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
+	const { login } = useAppState();
 	const router = useRouter();
+	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
+	const paying = usePaymentInFlight();
+	const { countingHere, session, actions, binding } = useRegisterSession();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	// One action at a time: a cashier switch or a register bind in flight holds the store band as
@@ -386,7 +395,7 @@ export function UserSheet({
 	// store the earlier one is replacing (CodeRabbit, #3045).
 	const [acting, setActing] = React.useState(false);
 	const busy = isSwitching || acting;
-	const act: Act = async (work) => {
+	const act = async (work: () => Promise<void>) => {
 		setActing(true);
 		try {
 			await work();
@@ -400,7 +409,7 @@ export function UserSheet({
 	const onPOS = segments.includes('(pos)');
 	const cartSide = usePanelSide('cart');
 	const side = onPOS ? cartSide : 'right';
-	const { registers, registerName, status } = useRegisterBinding();
+	const { registers, registerName, status, bind } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
 	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
 	const signedInAt = lastAccess ? new Date(lastAccess) : null;
@@ -411,6 +420,56 @@ export function UserSheet({
 	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
+	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
+		try {
+			// Switching is a one-shot read of the first non-pending database answer.
+			const stores = await firstValueFrom(
+				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+			);
+			const next = stores.find((candidate) => candidate.id === store.id);
+			requestStateManager.clearRefreshedToken();
+			requestStateManager.setAuthFailed(false);
+			if (!next) {
+				await logout();
+				router.replace('/connect');
+				return;
+			}
+			await login({
+				siteID: site.uuid!,
+				wpCredentialsID: credential.uuid!,
+				storeID: next.localID!,
+			});
+		} catch (error) {
+			log.error('Store login failed', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+				showToast: true,
+				context: { error },
+			});
+		}
+	};
+	const openRegister = () => {
+		if (onOpenRegister) onOpenRegister();
+		else {
+			router.push('/(app)/(drawer)/(pos)');
+			requestRegisterPanel();
+		}
+		onOpenChange(false);
+	};
+	const run = (request: SwitchRequest) => {
+		switch (request.kind) {
+			case 'cashier':
+				return void act(() => switchUser(request.credential));
+			case 'store':
+				return void act(async () => {
+					if (await handleSwitchStore(request.store)) onOpenChange(false);
+				});
+			case 'register':
+				return void act(() => bind(request.register.id));
+			case 'sign-out':
+				openRegister();
+				void act(() => actions.startCounting());
+		}
+	};
 	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
 	return (
 		<>
@@ -448,44 +507,44 @@ export function UserSheet({
 					{open && (
 						<DialogBody className="gap-0">
 							<Suspense>
-								<Figures
-									busy={busy}
-									onOpen={() => {
-										if (onOpenRegister) onOpenRegister();
-										else {
-											router.push('/(app)/(drawer)/(pos)');
-											requestRegisterPanel();
-										}
-										onOpenChange(false);
-									}}
-								/>
+								<Figures busy={busy} onOpen={openRegister} />
 							</Suspense>
 							<AwaitingStore />
+							{paying && (
+								<Notice
+									tone="info"
+									testID="user-sheet-hold"
+									title={t('register.finish_payment_first')}
+								/>
+							)}
 							<View testID="user-sheet-switch-user">
 								<View className="h-band border-border mt-2 justify-center border-b px-2.5">
 									<Text variant="caption">{t('register.cashier')}</Text>
 								</View>
 								<Suspense>
-									<UserRows busy={busy} act={act} />
+									<UserRows
+										busy={busy}
+										hold={paying}
+										counting={countingHere}
+										onChoose={setRequest}
+									/>
 								</Suspense>
 								{/* Every session-changing action is inert while a store switch hydrates: the overlay
 								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
 								    when the switch publishes its session (Codex, #3045). */}
-								{!busy && <AddUserButton site={site} hasExistingUsers compact />}
+								{online && !busy && !paying && (
+									<AddUserButton site={site} hasExistingUsers compact />
+								)}
 							</View>
 							<Suspense>
-								<StoreBand
-									isSwitching={busy}
-									onSwitch={async (next) => {
-										if (await handleSwitchStore(next)) onOpenChange(false);
-									}}
-								/>
+								<StoreBand busy={busy} hold={paying} online={online} onChoose={setRequest} />
 							</Suspense>
 							{status === 'bound' && registers.length > 1 && (
 								<RegisterBand
 									attributed={attributed}
 									busy={busy}
-									act={act}
+									hold={paying}
+									onChoose={setRequest}
 									reason={
 										currentOrder
 											? t('register.switch_register_blocked_cart')
@@ -519,11 +578,23 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
-							disabled: busy,
-							onPress: () => void logout(),
+							disabled: busy || paying,
+							onPress: () =>
+								binding.status === 'bound' && session
+									? setRequest({ kind: 'sign-out' })
+									: void act(() => logout()),
 						}}
 					/>
 				</DialogContent>
+				<SwitchConfirm
+					request={request}
+					portalHost={portalHost ?? undefined}
+					onOpenChange={(o) => {
+						if (!o) setRequest(null);
+					}}
+					onConfirm={run}
+					onSignOutAnyway={() => void act(() => logout())}
+				/>
 				{isSwitching ? (
 					<Portal name="store-switch-overlay">
 						<View

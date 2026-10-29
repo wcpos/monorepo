@@ -3053,6 +3053,9 @@
 	"register.still_open_close_first_blind": "{name} is still open. Close it first?",
 	"register.open_till_stays_open": "A till left open stays open for the next cashier. The closure records who closed it.",
 	"register.sign_out_anyway": "Sign out anyway",
+	"register.finish_payment_first": "Finish the payment first",
+	"register.finish_count_first": "Finish or abandon the count first",
+	"register.needs_store_to_switch": "Needs the store to switch",
 	"register.open_carts_count_other": "{count} open carts",
 	"register.unsent_sales_count_other": "{count} unsent sales"
 }
