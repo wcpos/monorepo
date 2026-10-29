@@ -202,7 +202,13 @@ function CartColumn({
 					) : sessionsOn && !session && bindingStatus === 'bound' ? (
 						<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
 					) : session && session.status !== 'open' ? (
-						<RegisterCount key={session.id} onClosed={setClosure} />
+						<RegisterCount
+							key={session.id}
+							description=""
+							onBack={() => setPanelOpen(false)}
+							onClose={() => setPanelOpen(false)}
+							onClosed={setClosure}
+						/>
 					) : isColumn && receiptOrderUuid ? (
 						<React.Suspense fallback={LOADING_ROWS}>
 							<ReceiptLedger uuid={receiptOrderUuid} />

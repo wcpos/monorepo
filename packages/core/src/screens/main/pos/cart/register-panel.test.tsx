@@ -97,7 +97,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 					...mockClosureOverrides,
 				}
 			: null,
-		actions: { voidMovement, recordMovement, retryMovement, startCounting },
+		actions: {
+			voidMovement,
+			recordMovement,
+			retryMovement,
+			startCounting,
+			backToSelling: mockBackToSelling,
+		},
 	}),
 }));
 const mockSite = {
@@ -171,6 +177,7 @@ jest.mock('@wcpos/components/notice', () => ({
 	),
 }));
 jest.mock('@wcpos/components/button', () => ({
+	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
 		children,
 		onPress,
@@ -273,8 +280,21 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: { Provider: ({ children }: { children: React.ReactNode }) => <>{children}</> },
 }));
 jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-		open ? <>{children}</> : null,
+	Dialog: ({
+		children,
+		open,
+		onOpenChange,
+	}: {
+		children: React.ReactNode;
+		open: boolean;
+		onOpenChange: (open: boolean) => void;
+	}) =>
+		open ? (
+			<>
+				<button data-testid="panel-x" onClick={() => onOpenChange(false)} />
+				{children}
+			</>
+		) : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
 	),
@@ -514,11 +534,12 @@ it('says nothing about refused movements when every row is delivered', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-panel-refused')).toBeNull();
 });
-it('Close register starts counting and dismisses the panel', async () => {
+it('Close register starts the count and pushes the count pane', async () => {
 	const onOpenChange = jest.fn();
 	render(<RegisterPanel open onOpenChange={onOpenChange} />);
 	fireEvent.click(screen.getByTestId('register-panel-close-register'));
-	await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+	await waitFor(() => expect(screen.getByTestId('count-amount')).toBeTruthy());
+	expect(onOpenChange).not.toHaveBeenCalled();
 	expect(startCounting).toHaveBeenCalled();
 });
 
@@ -911,3 +932,35 @@ it('closed without a closure or refused movement renders nothing', () => {
 		mockHasClosure = previousClosure;
 	}
 });
+
+const mockBackToSelling = jest.fn(async () => undefined);
+const mockOpenCarts = { count: 0 };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => ({ subscribe: () => () => {}, value: mockOpenCarts }),
+}));
+jest.mock('./approve-sheet', () => ({ ApproveSheet: () => null }));
+it.each(['count-back', 'panel-x'])(
+	'%s returns the count to selling, then leaves the count pane',
+	async (control) => {
+		const previous = currentSession;
+		try {
+			currentSession = { ...currentSession, status: 'counting' };
+			const onOpenChange = jest.fn();
+			render(<RegisterPanel open onOpenChange={onOpenChange} />);
+			fireEvent.click(screen.getByTestId('register-panel-close-register'));
+			await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
+			fireEvent.click(screen.getByTestId(control));
+			await waitFor(() => expect(mockBackToSelling).toHaveBeenCalledTimes(1));
+			if (control === 'panel-x')
+				await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+			else {
+				await waitFor(() =>
+					expect(screen.getByTestId('register-panel-close-register')).toBeTruthy()
+				);
+				expect(onOpenChange).not.toHaveBeenCalled();
+			}
+		} finally {
+			currentSession = previous;
+		}
+	}
+);
