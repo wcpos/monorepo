@@ -357,7 +357,7 @@ it('a blank field rests on its placeholder, named by its form label and then its
 		<DeviceScope phone={false}>
 			<PriceKeypad
 				testID="coupon-minimum"
-				field
+				rest="field"
 				placeholder="No minimum"
 				labelledBy="coupon-minimum-label"
 				describedBy="coupon-minimum-message"

@@ -17,6 +17,7 @@ export function AmountField(props: AmountFieldProps) {
 	const amount = useAmount(props);
 	const [editing, setEditing] = React.useState(false);
 	const { stored } = amount;
+	// `field` and `key` (a Quick Discounts slot) are both the typed field here (decision 16).
 	if (props.look !== 'quiet' || props.kind === 'quantity' || props.kind === 'count') {
 		return <TypedField {...props} amount={amount} />;
 	}
