@@ -55,7 +55,7 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 		>
 			<Text numberOfLines={1}>{item.type === 'pill' ? getUILabel(item.id) : item.label}</Text>
 			{item.type === 'quick' && (
-				<Text numberOfLines={1} className="text-muted-foreground text-sm">
+				<Text numberOfLines={1} variant="key">
 					{describeQuickFilter(item, t, formatPrice)}
 				</Text>
 			)}
@@ -64,7 +64,7 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 
 	return (
 		<VStack>
-			<Text className="text-muted-foreground text-sm">{t('pos_products.filter_bar_hint')}</Text>
+			<Text variant="key">{t('pos_products.filter_bar_hint')}</Text>
 			<SortableList
 				listId="filter-bar"
 				items={items}

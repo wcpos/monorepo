@@ -294,11 +294,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			showsVerticalScrollIndicator={false}
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
-				<Text
-					testID="checkout-label"
-					decodeHtml
-					className="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
-				>
+				<Text testID="checkout-label" decodeHtml variant="caption">
 					{plan
 						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
 						: flow.balanceMinor < flow.totalMinor
@@ -335,13 +331,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</AmountFigure>
 			<Text
 				testID="checkout-entry-hint"
-				className={`min-h-6 text-sm ${noChange ? 'text-warning-text' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
+				variant="key"
+				className={`min-h-6 ${noChange ? 'text-warning-text' : flow.entryChangeMinor > 0 ? 'text-success' : ''}`}
 				decodeHtml
 			>
 				{hint}
 			</Text>
 			{flow.roundingMinor !== 0 ? (
-				<Text testID="checkout-rounded-from" className="text-muted-foreground text-sm" decodeHtml>
+				<Text testID="checkout-rounded-from" variant="key" decodeHtml>
 					{t('pos_checkout.rounded_from', { amount: format(flow.balanceMinor) })}
 				</Text>
 			) : null}
@@ -443,7 +440,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									<Text className="text-foreground text-sm" decodeHtml>
 										{tile.method.title}
 									</Text>
-									<Text className="text-muted-foreground flex-1 text-xs">
+									<Text variant="help" className="flex-1">
 										{tile.reason ? disabledReasonText(tile.reason, tile.method.title, t) : ''}
 									</Text>
 								</View>
@@ -473,7 +470,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						<HStack className="items-center gap-2">
 							<Text
 								testID={locked ? 'checkout-reader-locked' : 'checkout-reader-selected'}
-								className="text-muted-foreground text-sm"
+								variant="key"
 							>
 								{t('pos_checkout.reader_line', {
 									label: (locked ? flow.readers[0] : selectedReader)?.label ?? '',
@@ -504,10 +501,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 										onPress={() => flow.pickReader(reader.id)}
 									/>
 									{reader.inUseBy !== null ? (
-										<Text
-											className="text-muted-foreground text-xs"
-											testID={`checkout-reader-${reader.id}-reason`}
-										>
+										<Text variant="help" testID={`checkout-reader-${reader.id}-reason`}>
 											{t('pos_checkout.reader_in_use', { number: reader.inUseBy })}
 										</Text>
 									) : null}
@@ -515,11 +509,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							))}
 						</View>
 					)}
-					{needsReader ? (
-						<Text className="text-muted-foreground text-sm">
-							{t('pos_checkout.choose_a_terminal')}
-						</Text>
-					) : null}
+					{needsReader ? <Text variant="key">{t('pos_checkout.choose_a_terminal')}</Text> : null}
 				</VStack>
 			) : null}
 
@@ -710,10 +700,7 @@ function MethodStatus({ tile, selected }: { tile: TenderTile; selected: boolean 
 				/>
 			) : null}
 			{battery != null ? (
-				<Text
-					testID={`checkout-method-status-${method.id}`}
-					className="text-muted-foreground text-xs"
-				>
+				<Text testID={`checkout-method-status-${method.id}`} variant="help">
 					{t('pos_checkout.reader_battery_percent', { battery })}
 				</Text>
 			) : null}

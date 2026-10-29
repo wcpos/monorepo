@@ -49,7 +49,7 @@ export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 						{format(displaySubtotal || 0)}
 					</Text>
 					{column.columnDef.meta?.show?.('tax') && (
-						<Text className="text-muted-foreground text-right text-sm tabular-nums line-through">
+						<Text variant="key" tabular className="text-right line-through">
 							{`${taxDisplayCart} ${format(Number(item.subtotal_tax) || 0)} tax`}
 						</Text>
 					)}
@@ -64,7 +64,7 @@ export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 				{format(displayTotal || 0)}
 			</Text>
 			{column.columnDef.meta?.show?.('tax') && (
-				<Text className="text-muted-foreground text-right text-sm tabular-nums">
+				<Text variant="key" tabular className="text-right">
 					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
 				</Text>
 			)}

@@ -59,26 +59,24 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 			{fallback ? (
 				<View testID="order-modal-payment" className="border-border gap-1 border-b py-2">
 					<View className="flex-row items-center justify-between gap-2">
-						<Text className="flex-1 text-sm font-medium" decodeHtml>
+						<Text variant="subheading" className="flex-1" decodeHtml>
 							{method ?? ''}
 						</Text>
 						<Text className="text-sm tabular-nums">{format(Number(payload.total || 0))}</Text>
 						{paidAt ? <StatusBadge label={t('pos_checkout.status_captured')} variant="ok" /> : null}
 					</View>
 					{paidAt ? (
-						<Text className="text-muted-foreground text-xs tabular-nums">
+						<Text variant="help" tabular>
 							{`${t('orders.captured')} ${paidAt}`}
 						</Text>
 					) : null}
 					{payload.transaction_id ? (
-						<Text className="text-muted-foreground text-xs">
-							{`${t('common.transaction_id')} ${payload.transaction_id}`}
-						</Text>
+						<Text variant="help">{`${t('common.transaction_id')} ${payload.transaction_id}`}</Text>
 					) : null}
 				</View>
 			) : null}
 			{stamp ? (
-				<Text className="text-muted-foreground mt-2 text-xs">
+				<Text variant="help" className="mt-2">
 					{`${t('pos_checkout.invoice_sent')} ${
 						stamp.destination
 							? t('pos_checkout.sent_to_on', { destination: stamp.destination, date: sentOn ?? '' })

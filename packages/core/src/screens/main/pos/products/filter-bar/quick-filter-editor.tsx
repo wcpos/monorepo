@@ -602,7 +602,7 @@ function QuickFilterEditorBody({
 						}}
 					>
 						<Text>{starter.title(t)}</Text>
-						<Text className="text-muted-foreground text-sm">{starter.line(t)}</Text>
+						<Text variant="key">{starter.line(t)}</Text>
 					</ListRow>
 				))}
 				<ListRow

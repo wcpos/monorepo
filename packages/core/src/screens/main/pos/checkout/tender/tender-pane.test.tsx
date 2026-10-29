@@ -173,12 +173,14 @@ jest.mock('@wcpos/components/text', () => ({
 		children,
 		testID,
 		className,
+		variant,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
 		className?: string;
+		variant?: string;
 	}) => (
-		<span data-testid={testID} className={className}>
+		<span data-testid={testID} data-variant={variant} className={className}>
 			{children}
 		</span>
 	),
@@ -778,9 +780,9 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).textContent).toContain(
 		'82%'
 	);
-	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).className).toContain(
-		'text-muted-foreground'
-	);
+	expect(
+		screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).getAttribute('data-variant')
+	).toBe('help');
 	expect(screen.getByTestId(`checkout-method-dot-${deviceMethod.id}`).className).toContain(
 		'bg-success'
 	);

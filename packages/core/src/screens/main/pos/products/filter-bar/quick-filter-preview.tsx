@@ -52,12 +52,7 @@ function PreviewResults({ handle }: { handle: QueryHandle }) {
 				/>
 			)}
 			{hits.slice(0, 5).map(({ id, record }, index) => (
-				<Text
-					key={id}
-					testID={`quick-filter-preview-item-${index}`}
-					className="text-muted-foreground text-sm"
-					decodeHtml
-				>
+				<Text key={id} testID={`quick-filter-preview-item-${index}`} variant="key" decodeHtml>
 					{record.payload.name ?? ''}
 				</Text>
 			))}

@@ -152,9 +152,7 @@ export function UISettingsForm() {
 									triggerTestID="cart-sort-items"
 									portalHost="pos"
 								/>
-								<Text className="text-muted-foreground text-sm">
-									{t('pos_cart.sort_fees_shipping_last')}
-								</Text>
+								<Text variant="key">{t('pos_cart.sort_fees_shipping_last')}</Text>
 							</View>
 						)}
 					/>

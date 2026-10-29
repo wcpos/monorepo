@@ -31,9 +31,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 				<EmptyState kind="empty" size="inline" title={t('pos_checkout.nothing_taken_yet')} />
 			) : (
 				<VStack space="xs">
-					<Text className="text-muted-foreground text-sm">
-						{t('pos_checkout.money_taken_has_to_go_back')}
-					</Text>
+					<Text variant="key">{t('pos_checkout.money_taken_has_to_go_back')}</Text>
 					{flow.liveRows.map((row) => {
 						const amount = format(toMinor(row.amount, flow.dp));
 						const title =

@@ -24,7 +24,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 	return (
 		<VStack className="gap-2">
 			<HStack className="justify-between">
-				<Text className="text-sm font-medium">{t('settings.bluetooth_printer')}</Text>
+				<Text variant="subheading">{t('settings.bluetooth_printer')}</Text>
 				<SavedMark name="address" label={t('settings.saved')} />
 			</HStack>
 			{devices.length === 0 && (
@@ -67,7 +67,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 					>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
-							<Text className="text-muted-foreground text-xs">{device.address}</Text>
+							<Text variant="help">{device.address}</Text>
 						</VStack>
 					</ListItem>
 				);

@@ -220,7 +220,7 @@ export function MovementSheet({
 					)}
 					{/* The consequence, said once: what the drawer holds, and what it will after. */}
 					{!blind && (
-						<Text testID="movement-after" className="text-muted-foreground text-sm tabular-nums">
+						<Text testID="movement-after" variant="key" tabular>
 							{hasAmount ? (
 								<>
 									{beforeAfter}
@@ -261,7 +261,7 @@ export function MovementSheet({
 						onChangeText={setReason}
 					/>
 					{!!invalid && (
-						<Text testID="movement-invalid" className="text-muted-foreground text-sm">
+						<Text testID="movement-invalid" variant="key">
 							{words[invalid]}
 						</Text>
 					)}

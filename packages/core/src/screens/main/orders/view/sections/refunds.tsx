@@ -48,12 +48,12 @@ function RefundCard({
 					<Text className="text-foreground text-xs font-medium tabular-nums">
 						{t('orders.refund')} #{refund.id || '—'}
 					</Text>
-					{date ? <Text className="text-muted-foreground text-xs">{date}</Text> : null}
+					{date ? <Text variant="help">{date}</Text> : null}
 				</View>
 				<View className="items-end">
 					<Text className="text-bad text-sm font-semibold tabular-nums">{format(-amount)}</Text>
 					{refund.refunded_by ? (
-						<Text className="text-muted-foreground text-xs">
+						<Text variant="help">
 							{t('orders.refunded_by')} {refund.refunded_by}
 						</Text>
 					) : null}
@@ -86,16 +86,16 @@ function RefundCard({
 			{lineItems.length ? (
 				<View className="px-3 py-2">
 					<View className="border-border/40 flex-row items-baseline gap-2 border-b pb-1">
-						<Text className="text-muted-foreground flex-1 text-xs font-medium tracking-wide uppercase">
+						<Text variant="caption" className="flex-1">
 							{t('common.product')}
 						</Text>
-						<Text className="text-muted-foreground w-8 text-right text-xs font-medium tracking-wide uppercase">
+						<Text variant="caption" className="w-8 text-right">
 							{t('pos_cart.qty_abbrev')}
 						</Text>
-						<Text className="text-muted-foreground w-14 text-right text-xs font-medium tracking-wide uppercase">
+						<Text variant="caption" className="w-14 text-right">
 							{t('common.tax')}
 						</Text>
-						<Text className="text-muted-foreground w-16 text-right text-xs font-medium tracking-wide uppercase">
+						<Text variant="caption" className="w-16 text-right">
 							{t('common.total')}
 						</Text>
 					</View>
@@ -116,10 +116,10 @@ function RefundCard({
 									</View>
 								) : null}
 							</View>
-							<Text className="text-muted-foreground w-8 text-right text-xs tabular-nums">
+							<Text variant="help" tabular className="w-8 text-right">
 								{item.quantity ?? '—'}
 							</Text>
-							<Text className="text-muted-foreground w-14 text-right text-xs tabular-nums">
+							<Text variant="help" tabular className="w-14 text-right">
 								{format(toNumber(item.total_tax))}
 							</Text>
 							<Text className="text-foreground w-16 text-right text-xs tabular-nums">
@@ -166,17 +166,13 @@ export function RefundsFallback({
 				/>
 				{refunds?.length ? (
 					<View className="gap-2">
-						<Text className="text-muted-foreground text-xs">
-							{t('orders.local_refund_summary')}
-						</Text>
+						<Text variant="help">{t('orders.local_refund_summary')}</Text>
 						{refunds.map((refund, index) => (
 							<Card key={`${refund.id || index}`} padding="row">
 								<Text className="text-foreground text-xs font-medium">
 									{t('orders.refund')} #{refund.id || '—'}
 								</Text>
-								<Text className="text-muted-foreground text-xs">
-									{refund.reason || t('orders.no_reason_provided')}
-								</Text>
+								<Text variant="help">{refund.reason || t('orders.no_reason_provided')}</Text>
 								<Text className="text-bad text-sm font-semibold tabular-nums">
 									{format(-refundValue(refund))}
 								</Text>
@@ -216,7 +212,7 @@ function RefundsDetail({
 		<Section
 			title={t('orders.refunds')}
 			right={
-				<Text className="text-muted-foreground text-xs tabular-nums">
+				<Text variant="help" tabular>
 					{t('orders.refund_count', { count: refunds.length })} · {format(-total)}
 				</Text>
 			}

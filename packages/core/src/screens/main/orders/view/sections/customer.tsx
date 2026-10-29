@@ -52,8 +52,6 @@ function orderTaxIds(order: OrderPayload) {
 	return Array.isArray(rawTaxIds) ? (rawTaxIds as TaxId[]) : [];
 }
 
-const LABEL = 'text-muted-foreground mb-1 text-xs tracking-wide uppercase';
-
 /**
  * The customer, last as on a receipt: avatar and name, the customer's note right under it,
  * then the addresses and tax ids in full. Nothing folds: the section is the end of the
@@ -83,18 +81,20 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 					size="md"
 				/>
 				<View className="min-w-0 flex-1">
-					<Text className="text-foreground text-sm font-medium" numberOfLines={1}>
+					<Text variant="subheading" numberOfLines={1}>
 						{name}
 					</Text>
 					{order.billing?.email ? (
-						<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+						<Text variant="help" numberOfLines={1}>
 							{order.billing.email}
 						</Text>
 					) : null}
 				</View>
 			</View>
 			{order.billing?.phone ? (
-				<Text className="text-muted-foreground mt-2 text-xs">{order.billing.phone}</Text>
+				<Text variant="help" className="mt-2">
+					{order.billing.phone}
+				</Text>
 			) : null}
 			{order.customer_note ? (
 				<View className="border-l-primary bg-primary/5 border-border mt-3 rounded-r-md border border-l-4 px-3 py-2.5">
@@ -106,23 +106,29 @@ export function CustomerSection({ order, last }: { order: OrderPayload; last?: b
 				<View testID="order-modal-addresses" className="mt-3 gap-3">
 					{hasAddress(billing) ? (
 						<View>
-							<Text className={LABEL}>{t('common.billing_address')}</Text>
+							<Text variant="caption" className="mb-1">
+								{t('common.billing_address')}
+							</Text>
 							<FormatAddress address={billing as Record<string, string>} showName />
 						</View>
 					) : null}
 					{!same && hasAddress(shipping) ? (
 						<View>
-							<Text className={LABEL}>{t('common.shipping_address')}</Text>
+							<Text variant="caption" className="mb-1">
+								{t('common.shipping_address')}
+							</Text>
 							<FormatAddress address={shipping as Record<string, string>} showName />
 						</View>
 					) : null}
 					{taxIds.length > 0 ? (
 						<View className="gap-1">
-							<Text className={LABEL}>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
+							<Text variant="caption" className="mb-1">
+								{t('tax_id.section_label', { _: 'Tax IDs' })}
+							</Text>
 							{taxIds.map((entry, index) => {
 								return (
 									<View key={`${entry.type}-${entry.value}-${index}`} className="flex-row gap-2">
-										<Text className="text-muted-foreground text-xs">
+										<Text variant="help">
 											{taxIdLabels[entry.type as TaxIdType] ?? taxIdLabels.other}
 										</Text>
 										<Text className="text-foreground text-xs font-medium">{entry.value}</Text>

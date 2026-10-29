@@ -217,7 +217,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 					</VStack>
 				</Form>
 				{isOffline ? (
-					<Text testID="receipt-email-offline-notice" className="text-muted-foreground text-xs">
+					<Text testID="receipt-email-offline-notice" variant="help">
 						{t('receipt.email_offline_notice')}
 					</Text>
 				) : null}

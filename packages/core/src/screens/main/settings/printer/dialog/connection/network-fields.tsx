@@ -127,9 +127,7 @@ export function NetworkFields({
 					</FormItem>
 				</HStack>
 			</PropertyRow>
-			{probing && (
-				<Text className="text-muted-foreground text-xs">{t('settings.detecting_printer')}</Text>
-			)}
+			{probing && <Text variant="help">{t('settings.detecting_printer')}</Text>}
 			{!probing && detectedVendor && (
 				<Text className="text-xs text-green-600">
 					{t('settings.detected_vendor').replace('%s', detectedVendorLabel)}
@@ -137,17 +135,14 @@ export function NetworkFields({
 			)}
 			{endpointHint && (
 				<VStack className="bg-muted/50 gap-0.5 rounded-md p-2">
-					<Text className="text-muted-foreground text-xs font-medium">
+					<Text variant="help" className="font-medium">
 						{t('settings.web_print_endpoint')}
 					</Text>
 					<Text testID="add-printer-endpoint-hint" className="text-xs">
 						{endpointHint}
 					</Text>
 					{endpointExplanation && (
-						<Text
-							testID="add-printer-endpoint-explanation"
-							className="text-muted-foreground text-xs"
-						>
+						<Text testID="add-printer-endpoint-explanation" variant="help">
 							{endpointExplanation}
 						</Text>
 					)}
@@ -157,7 +152,7 @@ export function NetworkFields({
 				<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="add-printer-scan-candidates">
 					{scanning ? (
 						<VStack className="gap-1.5">
-							<Text className="text-muted-foreground text-xs font-medium">
+							<Text variant="help" className="font-medium">
 								{t('settings.scan_candidates_progress')
 									.replace('%s', String(scanProgress.tested))
 									.replace('%s', String(scanProgress.total))}
@@ -172,7 +167,7 @@ export function NetworkFields({
 					) : (
 						<Collapsible>
 							<CollapsibleTrigger testID="add-printer-scan-candidates-toggle">
-								<Text className="text-muted-foreground text-xs font-medium">
+								<Text variant="help" className="font-medium">
 									{t('settings.scan_candidates_done').replace(
 										'%s',
 										String(scanProgress.total || scanCandidates.length)
@@ -180,17 +175,15 @@ export function NetworkFields({
 								</Text>
 							</CollapsibleTrigger>
 							<CollapsibleContent>
-								<Text className="text-muted-foreground text-xs">{scanCandidates.join(', ')}</Text>
+								<Text variant="help">{scanCandidates.join(', ')}</Text>
 							</CollapsibleContent>
 						</Collapsible>
 					)}
-					<Text className="text-muted-foreground text-xs">
-						{t('settings.scan_candidates_hint')}
-					</Text>
+					<Text variant="help">{t('settings.scan_candidates_hint')}</Text>
 				</VStack>
 			)}
 			{scanning && (
-				<Text testID="add-printer-network-searching" className="text-muted-foreground text-xs">
+				<Text testID="add-printer-network-searching" variant="help">
 					{t('settings.searching_for_printers')}
 				</Text>
 			)}
@@ -233,23 +226,17 @@ export function NetworkFields({
 									}
 								}}
 							>
-								<Text className="text-sm font-medium">{printer.name}</Text>
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="subheading">{printer.name}</Text>
+								<Text variant="help">
 									{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
 								</Text>
 								{endpoint && (
-									<Text
-										testID={`add-printer-network-result-endpoint-${printer.id}`}
-										className="text-muted-foreground text-xs"
-									>
+									<Text testID={`add-printer-network-result-endpoint-${printer.id}`} variant="help">
 										{t('settings.web_print_will_use').replace('%s', endpoint)}
 									</Text>
 								)}
 								{resultEndpoint && printer.port === 9100 && (
-									<Text
-										testID={`add-printer-network-result-raw-tcp-${printer.id}`}
-										className="text-muted-foreground text-xs"
-									>
+									<Text testID={`add-printer-network-result-raw-tcp-${printer.id}`} variant="help">
 										{t('settings.raw_tcp_not_supported_on_web')}
 									</Text>
 								)}

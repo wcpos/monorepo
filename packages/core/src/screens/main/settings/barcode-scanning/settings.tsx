@@ -243,7 +243,7 @@ function BarcodeSettingsForm() {
 											// parent that tall, since a touch area never reaches past its parent.
 											<HStack key={theme} space="sm" className="min-h-row items-center">
 												<RadioGroupOption value={theme} label={themeCopy[theme].label} />
-												<Text className="text-muted-foreground flex-1 text-xs">
+												<Text variant="help" className="flex-1">
 													{themeCopy[theme].desc}
 												</Text>
 												<Button

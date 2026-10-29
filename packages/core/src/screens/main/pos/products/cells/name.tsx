@@ -43,9 +43,7 @@ export function Name(props: CellContext<{ record: EngineRecord<'products'> }, 'n
 			</Text>
 			{fields.type === 'variable' &&
 				((uiSettings.variationsStyle ?? 'drill') === 'drill' ? (
-					<Text className="text-muted-foreground text-sm">
-						{t('pos_products.n_options', { count: fields.options })}
-					</Text>
+					<Text variant="key">{t('pos_products.n_options', { count: fields.options })}</Text>
 				) : (
 					<ProductAttributes {...props} />
 				))}

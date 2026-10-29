@@ -41,7 +41,7 @@ export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comp
 			testID={comparison ? 'reports-comparison-sync-progress' : 'reports-sync-progress'}
 			className={`border-border bg-muted/40 gap-1 rounded-md border px-2 py-1 ${comparison ? '' : 'mx-2 mb-1'}`}
 		>
-			<Text testID="reports-sync-progress-label" className="text-muted-foreground text-sm">
+			<Text testID="reports-sync-progress-label" variant="key">
 				{progress.total === null
 					? comparison
 						? t('reports.comparison_downloading_unknown_total', { downloaded: progress.downloaded })

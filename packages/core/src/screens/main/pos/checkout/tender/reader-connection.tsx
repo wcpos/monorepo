@@ -147,7 +147,8 @@ export function ReaderConnection({
 		<HStack className="flex-wrap items-center justify-center gap-x-2 gap-y-1">
 			<Text
 				testID="checkout-reader-status"
-				className={connected ? 'text-foreground text-sm' : 'text-muted-foreground text-sm'}
+				variant="key"
+				className={connected ? 'text-foreground' : undefined}
 			>
 				{line}
 			</Text>

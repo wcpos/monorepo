@@ -124,15 +124,11 @@ export function ScannerDeviceChooser() {
 			<Notice tone="info" title={t('settings.scanner_choose_device')} />
 			{candidates.length === 0 ? (
 				<VStack space="xs">
-					<Text className="text-muted-foreground text-xs">
-						{t('settings.scanner_searching_devices')}
-					</Text>
+					<Text variant="help">{t('settings.scanner_searching_devices')}</Text>
 					{/* The empty chooser is the moment a merchant concludes "broken" —
 					    teach the keyboard-mode wall right here (#712). */}
 					<View testID="scanner-chooser-empty-hint">
-						<Text className="text-muted-foreground text-xs">
-							{t('settings.scanner_chooser_empty_hint')}
-						</Text>
+						<Text variant="help">{t('settings.scanner_chooser_empty_hint')}</Text>
 					</View>
 					<DocsLink testID="scanner-chooser-wizard-link" href={WIZARD_DOCS_URL}>
 						{t('settings.scanner_setup_guide')}
