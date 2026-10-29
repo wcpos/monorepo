@@ -352,6 +352,9 @@ export function UserSheet({
 	const side = onPOS ? cartSide : 'right';
 	const { registers, registerName, status } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
+	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
+	const signedInAt = lastAccess ? new Date(lastAccess) : null;
+	const signedIn = signedInAt && !Number.isNaN(signedInAt.getTime()) ? signedInAt : null;
 	const storeName = useDocField(store, (value) => value.name);
 	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
@@ -382,9 +385,9 @@ export function UserSheet({
 								{[
 									storeName,
 									registers.length > 1 && registerName,
-									lastAccess &&
+									signedIn &&
 										t('register.on_the_till_since', {
-											time: formatDate(new Date(lastAccess), 'HH:mm', zoneOptions(timezone)),
+											time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
 										}),
 								]
 									.filter(Boolean)

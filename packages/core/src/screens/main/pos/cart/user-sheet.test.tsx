@@ -607,6 +607,18 @@ describe('side and header', () => {
 			'UK Store · Front counter · since 13:05'
 		);
 	});
+	it('drops the sign-in time when the credential carries an unreadable stamp', () => {
+		mockT = createTestT();
+		mockLastAccess = 'not a date';
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+			expect(screen.getByTestId('user-sheet-description').textContent).toBe(
+				'UK Store · Front counter'
+			);
+		} finally {
+			mockLastAccess = '2026-10-28T13:05:00Z';
+		}
+	});
 });
 
 let mockDrawer = {
