@@ -44,6 +44,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 29. Keep offline document labels aligned with shipped server-template keys — offline documents must speak the same template vocabulary — evidence: `reports/closures/document-labels.ts:1`, “Offline defaults use the same label keys as the shipped server closure template.” — platform: all.
 
 30. Supersedes line 12: the closure panel is a `ReportPanel` (`reports/report-panel.tsx`): a full phone page that pads the bottom safe area, and on a tablet `DialogContent side="right"` hosted inside Reports at the dialog's `lg` width with no positioning of its own; its footer is `DialogFooter` slots, Recount the `record` and Reprint a `secondary`; the Recount sheet's Save recount is its footer `intent` and the over-limit reason line sits under the reason — evidence: CODING_STANDARDS § Footers; `closure-panel.test.tsx` "pins the tablet footer outside the body…" and "pads the phone page above the bottom safe area"; slice W2-F.
+31. Extends line 30: the Recount sheet's intent reads _Record count_ (`reports.recount_save`, English value only; no button carries Save, the verb names the act) — evidence: Paul's ruling on Save buttons; slice W4-H — platform: all.
 
 ## Evidence footnotes
 
