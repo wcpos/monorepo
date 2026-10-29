@@ -9,7 +9,10 @@ import { observeEngineQuery } from '../engine-query';
 // Woo persists at most 6 fractional digits; rounding belongs to the display formatter.
 const AGGREGATE_DECIMALS = 6;
 
-/** Local completed sales only; this read does not declare server demand. */
+/**
+ * Local completed sales only; this read does not declare server demand. The count rides with
+ * the total so a figure and its "n sales" line always describe the same orders.
+ */
 export function observeCashierSalesTotal(
 	engine: RxdbSyncEngine,
 	{
@@ -23,7 +26,7 @@ export function observeCashierSalesTotal(
 		fromGmt: string;
 		toGmt: string;
 	}
-): Observable<number> {
+): Observable<{ total: number; count: number }> {
 	return observeEngineQuery(engine, {
 		collection: 'orders',
 		limit: Number.MAX_SAFE_INTEGER,
@@ -33,13 +36,14 @@ export function observeCashierSalesTotal(
 			...identityColumnFilter({ cashierId, storeId }),
 		},
 	}).pipe(
-		map(
-			(result) =>
+		map((result) => ({
+			total:
 				result.hits.reduce(
 					(sum, hit) => sum + toMinor(hit.record.payload.total as string, AGGREGATE_DECIMALS),
 					0
 				) /
-				10 ** AGGREGATE_DECIMALS
-		)
+				10 ** AGGREGATE_DECIMALS,
+			count: result.hits.length,
+		}))
 	);
 }

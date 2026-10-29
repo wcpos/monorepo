@@ -16,7 +16,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { Loader } from '@wcpos/components/loader';
 import { Portal } from '@wcpos/components/portal';
-import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { Notice } from '@wcpos/components/notice';
 import { MenuRow } from '@wcpos/components/menu-row';
 import {
@@ -35,6 +35,7 @@ import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/q
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { requestRegisterPanel } from './register-panel-request';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -81,14 +82,44 @@ export function useSalesToday() {
 			})
 		);
 	}, [runtime.engine, runtime.locale, wpCredentials.id, store.id, storeDay]);
-	return useObservableState(sales$, 0);
+	return useObservableState(sales$, { total: 0, count: 0 });
 }
 
-/** Runs one band's action while the sheet holds every other. */
-type Act = (work: () => Promise<void>) => Promise<void>;
+export function SalesTile({ sub }: { sub?: string }) {
+	const { total } = useSalesToday();
+	const { format } = useCurrencyFormat();
+	const t = useT();
+	return (
+		<View
+			testID="user-sheet-sales-today"
+			className="border-border flex-1 rounded-lg border px-3 py-2.5"
+		>
+			<Text variant="key">{t('register.your_sales_today')}</Text>
+			<AmountFigure size="tile">{format(total)}</AmountFigure>
+			{sub && <Text variant="key">{sub}</Text>}
+		</View>
+	);
+}
 
 function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
-	const total = useSalesToday();
+	const t = useT();
+	return (
+		<View className="flex-row gap-2">
+			<SalesTile />
+			<DrawerTile label={t('register.in_the_drawer_tile')} onOpen={onOpen} busy={busy} />
+		</View>
+	);
+}
+
+export function DrawerTile({
+	label,
+	onOpen,
+	busy,
+}: {
+	label: string;
+	onOpen?: () => void;
+	busy?: boolean;
+}) {
 	const { format } = useCurrencyFormat();
 	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
 		useRegisterSession();
@@ -98,22 +129,17 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
-		<View className="flex-row gap-2">
-			<View
-				testID="user-sheet-sales-today"
-				className="border-border flex-1 rounded-lg border px-3 py-2.5"
-			>
-				<Text variant="key">{t('register.your_sales_today')}</Text>
-				<AmountFigure size="tile">{format(total)}</AmountFigure>
-			</View>
+		<>
 			{binding.status === 'bound' && (session || lastClosure) && (
 				<PressableSurface
 					testID="user-sheet-drawer"
 					onPress={onOpen}
 					disabled={busy}
+					// In the confirm the tile only shows: no wash, so it does not read as a door.
+					wash={onOpen ? 'muted' : 'none'}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
-					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
+					<Text variant="key">{label}</Text>
 					{session ? (
 						<>
 							<AmountFigure size="tile">
@@ -154,7 +180,7 @@ function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 					)}
 				</PressableSurface>
 			)}
-		</View>
+		</>
 	);
 }
 
@@ -178,38 +204,16 @@ function AwaitingStore() {
 	);
 }
 
-function UserRows({ busy, act }: { busy: boolean; act: Act }) {
-	const { site, store, wpCredentials, logout } = useStoreSession();
-	const { login } = useAppState();
-	const router = useRouter();
+function UserRows({
+	busy,
+	onChoose,
+}: {
+	busy: boolean;
+	onChoose: (request: SwitchRequest) => void;
+}) {
+	const { site, wpCredentials } = useStoreSession();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
-		try {
-			// Switching is a one-shot read of the first non-pending database answer.
-			const stores = await firstValueFrom(
-				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
-			);
-			const next = stores.find((candidate) => candidate.id === store.id);
-			requestStateManager.clearRefreshedToken();
-			requestStateManager.setAuthFailed(false);
-			if (!next) {
-				await logout();
-				router.replace('/connect');
-				return;
-			}
-			await login({
-				siteID: site.uuid!,
-				wpCredentialsID: credential.uuid!,
-				storeID: next.localID!,
-			});
-		} catch (error) {
-			log.error('Store login failed', {
-				code: ERROR_CODES.AUTH_UNEXPECTED,
-				showToast: true,
-				context: { error },
-			});
-		}
-	};
+
 	return (
 		<>
 			{credentials.map((credential) => (
@@ -226,7 +230,7 @@ function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 					onPress={
 						credential.uuid === wpCredentials.uuid || busy
 							? undefined
-							: () => void act(() => switchUser(credential))
+							: () => onChoose({ kind: 'cashier', credential })
 					}
 					leading={
 						<RecordAvatar
@@ -244,11 +248,11 @@ function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 }
 
 function StoreBand({
-	isSwitching,
-	onSwitch,
+	busy,
+	onChoose,
 }: {
-	isSwitching: boolean;
-	onSwitch: (store: ReadonlyStoreRecord) => Promise<void>;
+	busy: boolean;
+	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { wpCredentials, store } = useStoreSession();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
@@ -265,8 +269,12 @@ function StoreBand({
 					testID={`user-sheet-store-${row.localID}`}
 					choice
 					selected={row.localID === store.localID}
-					disabled={isSwitching}
-					onPress={row.localID === store.localID ? undefined : () => void onSwitch(row)}
+					disabled={busy}
+					onPress={
+						row.localID === store.localID || busy
+							? undefined
+							: () => onChoose({ kind: 'store', store: row })
+					}
 					label={row.name}
 				/>
 			))}
@@ -278,15 +286,15 @@ function RegisterBand({
 	attributed,
 	reason,
 	busy,
-	act,
+	onChoose,
 }: {
 	attributed: boolean;
 	reason: string;
 	busy: boolean;
-	act: Act;
+	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { userDB, site } = useStoreSession();
-	const { registers, registerId, bind, refresh } = useRegisterBinding();
+	const { registers, registerId, refresh } = useRegisterBinding();
 	// The directory keeps its loaded answer until asked again; the band asks on every opening,
 	// as the picker did, so another till's open, close or count reaches the rows (Codex, #3045).
 	React.useEffect(() => {
@@ -328,7 +336,12 @@ function RegisterBand({
 						label={row.name}
 						description={attributed ? reason : description}
 						disabled={attributed || busy}
-						onPress={row.id === registerId || busy ? undefined : () => void act(() => bind(row.id))}
+						onPress={
+							row.id === registerId || attributed || busy
+								? undefined
+								: () =>
+										onChoose({ kind: 'register', register: row, state: description, open: !!live })
+						}
 					/>
 				);
 			})}
@@ -352,7 +365,9 @@ export function UserSheet({
 	portalHost?: string | null;
 }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
+	const { login } = useAppState();
 	const router = useRouter();
+	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	// One action at a time: a cashier switch or a register bind in flight holds the store band as
@@ -360,7 +375,7 @@ export function UserSheet({
 	// store the earlier one is replacing (CodeRabbit, #3045).
 	const [acting, setActing] = React.useState(false);
 	const busy = isSwitching || acting;
-	const act: Act = async (work) => {
+	const act = async (work: () => Promise<void>) => {
 		setActing(true);
 		try {
 			await work();
@@ -374,7 +389,7 @@ export function UserSheet({
 	const onPOS = segments.includes('(pos)');
 	const cartSide = usePanelSide('cart');
 	const side = onPOS ? cartSide : 'right';
-	const { registers, registerName, status } = useRegisterBinding();
+	const { registers, registerName, status, bind } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
 	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
 	const signedInAt = lastAccess ? new Date(lastAccess) : null;
@@ -385,6 +400,53 @@ export function UserSheet({
 	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
+	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
+		try {
+			// Switching is a one-shot read of the first non-pending database answer.
+			const stores = await firstValueFrom(
+				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+			);
+			const next = stores.find((candidate) => candidate.id === store.id);
+			requestStateManager.clearRefreshedToken();
+			requestStateManager.setAuthFailed(false);
+			if (!next) {
+				await logout();
+				router.replace('/connect');
+				return;
+			}
+			await login({
+				siteID: site.uuid!,
+				wpCredentialsID: credential.uuid!,
+				storeID: next.localID!,
+			});
+		} catch (error) {
+			log.error('Store login failed', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+				showToast: true,
+				context: { error },
+			});
+		}
+	};
+	const openRegister = () => {
+		if (onOpenRegister) onOpenRegister();
+		else {
+			router.push('/(app)/(drawer)/(pos)');
+			requestRegisterPanel();
+		}
+		onOpenChange(false);
+	};
+	const run = (request: SwitchRequest) => {
+		switch (request.kind) {
+			case 'cashier':
+				return void act(() => switchUser(request.credential));
+			case 'store':
+				return void act(async () => {
+					if (await handleSwitchStore(request.store)) onOpenChange(false);
+				});
+			case 'register':
+				return void act(() => bind(request.register.id));
+		}
+	};
 	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
 	return (
 		<>
@@ -422,17 +484,7 @@ export function UserSheet({
 					{open && (
 						<DialogBody className="gap-0">
 							<Suspense>
-								<Figures
-									busy={busy}
-									onOpen={() => {
-										if (onOpenRegister) onOpenRegister();
-										else {
-											router.push('/(app)/(drawer)/(pos)');
-											requestRegisterPanel();
-										}
-										onOpenChange(false);
-									}}
-								/>
+								<Figures busy={busy} onOpen={openRegister} />
 							</Suspense>
 							<AwaitingStore />
 							<View testID="user-sheet-switch-user">
@@ -440,7 +492,7 @@ export function UserSheet({
 									<Text variant="caption">{t('register.cashier')}</Text>
 								</View>
 								<Suspense>
-									<UserRows busy={busy} act={act} />
+									<UserRows busy={busy} onChoose={setRequest} />
 								</Suspense>
 								{/* Every session-changing action is inert while a store switch hydrates: the overlay
 								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
@@ -448,18 +500,13 @@ export function UserSheet({
 								{!busy && <AddUserButton site={site} hasExistingUsers compact />}
 							</View>
 							<Suspense>
-								<StoreBand
-									isSwitching={busy}
-									onSwitch={async (next) => {
-										if (await handleSwitchStore(next)) onOpenChange(false);
-									}}
-								/>
+								<StoreBand busy={busy} onChoose={setRequest} />
 							</Suspense>
 							{status === 'bound' && registers.length > 1 && (
 								<RegisterBand
 									attributed={attributed}
 									busy={busy}
-									act={act}
+									onChoose={setRequest}
 									reason={
 										currentOrder
 											? t('register.switch_register_blocked_cart')
@@ -498,6 +545,14 @@ export function UserSheet({
 						}}
 					/>
 				</DialogContent>
+				<SwitchConfirm
+					request={request}
+					portalHost={portalHost ?? undefined}
+					onOpenChange={(o) => {
+						if (!o) setRequest(null);
+					}}
+					onConfirm={run}
+				/>
 				{isSwitching ? (
 					<Portal name="store-switch-overlay">
 						<View

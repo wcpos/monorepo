@@ -147,6 +147,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 let mockT: (key: string, options?: Record<string, unknown>) => string = (key) => key;
 jest.mock('../../../../contexts/translations', () => ({ useT: () => mockT }));
 let mockAwaitingStore = 0;
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => mockOpenOrdersHandle,
+}));
 jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitingStoreCount: () => mockAwaitingStore,
 }));
@@ -176,6 +180,7 @@ const mockDirectory = [
 let mockRegisters = mockDirectory;
 let mockBindingStatus = 'bound';
 jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterDirectory: () => ({ registers: [], registerId: null }),
 	useRegisterBinding: () => ({
 		registers: mockRegisters,
 		registerName: 'Front counter',
@@ -270,6 +275,7 @@ it('switches credentials without retaining the previous cashier authentication o
 	requestStateManager.setRefreshedToken('previous-cashier-token');
 	render(<UserSheet open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	await waitFor(() =>
 		expect(mockLogin).toHaveBeenCalledWith({
 			siteID: 'site',
@@ -284,6 +290,7 @@ it('signs out to connect when the other cashier has no stores', async () => {
 	mockLogin.mockClear();
 	render(<UserSheet open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/connect'));
 	expect(mockLogout).toHaveBeenCalledTimes(1);
 	expect(mockLogin).not.toHaveBeenCalled();
@@ -300,7 +307,7 @@ it.each([
 		mockStoreId = storeId;
 		mockObserve.mockClear();
 		const { result } = renderHook(() => useSalesToday());
-		await waitFor(() => expect(result.current).toBe(20));
+		await waitFor(() => expect(result.current).toEqual({ total: 20, count: 2 }));
 		const descriptor = mockObserve.mock.calls[0][1] as { selector: { date_created_gmt: unknown } };
 		expect(descriptor).toMatchObject({
 			collection: 'orders',
@@ -361,7 +368,9 @@ let mockCart:
 	| undefined = {
 	payload: { meta_data: [] as { key: string; value: string }[] },
 };
-jest.mock('../contexts/current-order/context', () => ({ useCurrentOrderOptional: () => mockCart }));
+jest.mock('../contexts/current-order/context', () => ({
+	useCurrentOrderOptional: () => mockCart,
+}));
 // Undefined is the rail variant: outside CurrentOrderProvider, switching fails closed.
 it.each([true, false, undefined])('guards cart and rail switching: %s', (attributed) => {
 	mockCart =
@@ -386,6 +395,7 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	expect(button.textContent?.includes(reason)).toBe(blocked);
 
 	fireEvent.click(button);
+	if (!blocked) fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
 });
 
@@ -399,6 +409,7 @@ it('allows switching from an empty attributed template', () => {
 	expect(button.getAttribute('aria-disabled')).not.toBe('true');
 	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
 	fireEvent.click(button);
+	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(switchRegister).toHaveBeenCalledTimes(1);
 });
 
@@ -455,6 +466,7 @@ describe('store band', () => {
 		const onOpenChange = jest.fn();
 		render(<UserSheet open onOpenChange={onOpenChange} />);
 		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(mockSwitch).toHaveBeenCalledWith(expect.objectContaining({ localID: 'store-b' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
@@ -497,6 +509,7 @@ describe('store band', () => {
 		try {
 			render(<UserSheet open onOpenChange={jest.fn()} />);
 			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-user-other')));
+			await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 			await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(1));
 			const row = screen.getByTestId('user-sheet-store-store-b');
 			expect(row.getAttribute('aria-disabled')).toBe('true');
@@ -516,6 +529,7 @@ describe('store band', () => {
 		try {
 			render(<UserSheet open onOpenChange={jest.fn()} />);
 			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-register-back')));
+			await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 			expect(mockBind).toHaveBeenCalledWith('back');
 			const row = screen.getByTestId('user-sheet-store-store-b');
 			expect(row.getAttribute('aria-disabled')).toBe('true');
@@ -532,6 +546,7 @@ describe('store band', () => {
 		const onOpenChange = jest.fn();
 		render(<UserSheet open onOpenChange={onOpenChange} />);
 		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(onOpenChange).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
@@ -667,7 +682,7 @@ let mockDrawer = {
 	blind: false,
 	salesCount: 3,
 	lastClosure: null as { number: number; server_number?: number | null } | null,
-	binding: { status: 'bound' },
+	binding: { status: 'bound', registerName: 'Front counter' },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => mockDrawer,
@@ -809,6 +824,7 @@ describe('register band', () => {
 			'Closed · last closure #41'
 		);
 		fireEvent.click(screen.getByTestId('user-sheet-register-back'));
+		fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 		await waitFor(() => expect(mockBind).toHaveBeenCalledWith('back'));
 	});
 	it('follows the cache after the directory loaded: counting, then cleared', async () => {
@@ -849,4 +865,68 @@ describe('register band', () => {
 			'true'
 		);
 	});
+});
+
+describe('switch confirmations', () => {
+	let previous: {
+		storeId: typeof mockStoreId;
+		cart: typeof mockCart;
+		stores: typeof mockStores;
+		drawer: typeof mockDrawer;
+	};
+	beforeEach(() => {
+		previous = {
+			storeId: mockStoreId,
+			cart: mockCart,
+			stores: mockStores,
+			drawer: { ...mockDrawer },
+		};
+		mockStoreId = 2;
+		mockCart = { payload: { meta_data: [] } };
+		mockStores = ['store-a', 'store-b'];
+		mockT = createTestT();
+		mockLogin.mockClear();
+		mockLogout.mockClear();
+		consumeRegisterPanelRequest();
+	});
+	afterEach(() => {
+		mockStoreId = previous.storeId;
+		mockCart = previous.cart;
+		mockStores = previous.stores;
+		mockDrawer = previous.drawer;
+		mockT = (key) => key;
+	});
+	it('asks before handing the till over, and runs the login on confirm', async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
+		expect(mockLogin).not.toHaveBeenCalled();
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+		expect(mockLogin).toHaveBeenCalledWith({
+			siteID: 'site',
+			wpCredentialsID: 'other',
+			storeID: 'other-store',
+		});
+	});
+	it('cancelling the confirm leaves everything as it was', () => {
+		const close = jest.fn();
+		render(<UserSheet open onOpenChange={close} />);
+		fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+		fireEvent.click(screen.getByTestId('switch-confirm-cancel'));
+		expect(screen.queryByTestId('switch-confirm')).toBeNull();
+		expect(mockLogin).not.toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	});
+	it.each(['closed', 'unbound'])(
+		'Sign out with the register %s signs out at once',
+		async (state) => {
+			if (state === 'closed') Object.assign(mockDrawer, { session: null });
+			else mockDrawer.binding = { ...mockDrawer.binding, status: 'choose' };
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-sign-out')));
+			expect(mockLogout).toHaveBeenCalledTimes(1);
+			expect(screen.queryByTestId('switch-confirm')).toBeNull();
+		}
+	);
 });

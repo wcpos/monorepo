@@ -85,10 +85,14 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => false,
 }));
+// One engine for the suite: a fresh object per render would rebuild the sales observable every
+// render, and its object-valued emission never bails out of setState the way the old `0` did.
+const mockEngine = {};
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({ engine: {} }),
-	observeCashierSalesTotal: () => new (jest.requireActual('rxjs').BehaviorSubject)(0),
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	observeCashierSalesTotal: () =>
+		new (jest.requireActual('rxjs').BehaviorSubject)({ total: 0, count: 0 }),
 }));
 jest.mock('@wcpos/query/local-data-reset', () => ({
 	clearLocalDataNow: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
@@ -239,12 +243,17 @@ jest.mock('../../../../hooks/user-db-list-resources', () => ({
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [], status: 'unbound' }),
+	useRegisterDirectory: () => ({ registerId: null, registers: [] }),
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ binding: { status: 'unbound' } }),
 }));
 jest.mock('../contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => undefined,
+}));
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => mockOpenOrdersHandle,
 }));
 jest.mock('../checkout/use-awaiting-store', () => ({ useAwaitingStoreCount: () => 0 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
