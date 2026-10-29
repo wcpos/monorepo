@@ -99,6 +99,30 @@ it('shows only the root at rest and starts no push on mount', () => {
 	expect(screen.getByTestId('root-pane').getAttribute('aria-hidden')).toBe('false');
 });
 
+it('mounted with a detail already open, shows it at rest: the root covered, no push', () => {
+	const { rerender } = render(<Stage detail="Hoodie" />);
+	const [progress, width] = mockShared;
+	// The pane's first frame is already where a push lands it, before the stage has a width.
+	expect(progress.value).toBe(1);
+	expect(width.value).toBe(0);
+	const [rootStyle, detailStyle] = mockStyles.slice(-2);
+	expect(detailStyle().transform[0].translateX).toBe(0);
+	expect(rootStyle().opacity).toBeCloseTo(0.35);
+	expect(screen.getByTestId('detail').textContent).toBe('Hoodie');
+	const root = screen.getByTestId('root-pane');
+	expect(root.getAttribute('aria-hidden')).toBe('true');
+	expect(root.dataset.pointer).toBe('none');
+	expect(root.dataset.visibility).toBe('hidden');
+	// The only timing is the no-op settle to the resting value.
+	expect(mockTimings.map((call) => call.toValue)).toEqual([1]);
+	// A pop from there slides it off as any other.
+	rerender(<Stage detail={null} />);
+	expect(mockTimings.at(-1)!.toValue).toBe(0);
+	expect(screen.getByTestId('root-pane').dataset.visibility).toBe('visible');
+	finish(0);
+	expect(screen.queryByTestId('detail')).toBeNull();
+});
+
 it('a push keeps the root mounted under the detail and hides it only once covered', () => {
 	const { rerender } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);

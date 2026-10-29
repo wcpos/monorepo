@@ -122,6 +122,8 @@ const DEAL_SPAN = Math.max(
 	(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
 );
 const REDUCE = { reduceMotion: ReduceMotion.System };
+// The generation a stack mounted with a detail stages it as: the first; 0 stages nothing.
+const RESTED = 1;
 
 // Web only: covered products leave the tab order and the accessibility tree but keep their
 // layout, so the grid is still scrolled to the same row when it comes back.
@@ -173,7 +175,11 @@ function restAfterCrossFade(
  *
  * Both grids stay mounted for the whole transition. Only `transform` and `opacity` animate,
  * and nothing animates on mount: the detail is laid out invisibly, and the deal starts on the
- * frame after the tile's frame and the pane's own layout are both known.
+ * frame after the tile's frame and the pane's own layout are both known. A stack that mounts
+ * with a detail already open (the view toggle swaps the pane stack for this one at every open
+ * level; a layout swap remounts the stage over a kept path) shows it dealt and landed, in place,
+ * with no deal: its tap target is a tile of a tree that has gone, and measuring it only held
+ * the root on screen for the grace period before dealing in place anyway (web film, 2026-10-29).
  */
 export function DealStack<T>({
 	detail,
@@ -184,33 +190,37 @@ export function DealStack<T>({
 	testID,
 }: DealStackProps<T>) {
 	const stage = React.useRef<ViewInstance>(null);
-	const furniture = useSharedValue(0);
+	// Mounted with a detail: at rest, as the first generation (`RESTED`). Its deal is never
+	// measured or set off, and the detail that replaces it (the next generation) deals as any other.
+	const rested = detail !== null;
+	const restedAt = React.useRef(rested ? RESTED : 0);
+	const furniture = useSharedValue(rested ? 1 : 0);
 	// The products' own opacity. Going out they leave with the furniture's clock; coming back
 	// they take the parent's whole walk, on an accelerating curve, so they are still dim while
 	// the variations gather (the gaps between gathering tiles showed them at once, which
 	// read as a flash) and reach full on the frame the parent lands (owner, 2026-10-05).
-	const under = useSharedValue(1);
+	const under = useSharedValue(rested ? 0 : 1);
 	// The detail's own opacity: 1 but while it cross-fades away.
 	const veil = useSharedValue(1);
 	const [stageWidth, setStageWidth] = React.useState(0);
 	const spacing = Number.parseFloat(String(useCSSVariable('--spacing')));
 	const margin = Number.isFinite(spacing) && spacing > 0 ? spacing : TILE_MARGIN;
 	// The detail on stage outlives `detail` by one return, so its tiles can travel home.
-	const [staged, setStaged] = React.useState<T | null>(null);
-	const [generation, setGeneration] = React.useState(0);
-	const [origin, setOrigin] = React.useState<Rect | null | undefined>(undefined);
+	const [staged, setStaged] = React.useState<T | null>(detail);
+	const [generation, setGeneration] = React.useState(rested ? RESTED : 0);
+	const [origin, setOrigin] = React.useState<Rect | null | undefined>(rested ? null : undefined);
 	// Bumped by the lifted tile's layout: the tapped tile is measured again (`useLiftedLayout`).
 	const [relaid, setRelaid] = React.useState(0);
 	const relayOut = React.useCallback(() => setRelaid((times) => times + 1), []);
-	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
+	const [grid, setGrid] = React.useState<Rect | null | undefined>(rested ? null : undefined);
 	// Whether the parent's copy stands on the tapped tile on the UI thread: `undefined` while no
 	// copy has said it will report (a detail without one is shown as it is), `false` once it has,
-	// `true` once it has.
-	const [placed, setPlaced] = React.useState<boolean | undefined>(undefined);
-	const [dealt, setDealt] = React.useState(false);
-	const [settled, setSettled] = React.useState(false);
+	// `true` once it has. A rested detail's copy is placed where it stands.
+	const [placed, setPlaced] = React.useState<boolean | undefined>(rested ? true : undefined);
+	const [dealt, setDealt] = React.useState(rested);
+	const [settled, setSettled] = React.useState(rested);
 	// Not `settled`: that is the furniture's clock, which runs out long before the last tile lands.
-	const [landed, setLanded] = React.useState(false);
+	const [landed, setLanded] = React.useState(rested);
 	const [fading, setFading] = React.useState(false);
 	// Inside a detail that is cross-fading away, a stack keeps what it has on stage: its detail
 	// clears in the same render (the path was cut under it), and a gather would walk its parent
@@ -319,7 +329,7 @@ export function DealStack<T>({
 	// a resize moves the tile, and the copy pinned to its old frame stood at its old size beside
 	// every reflowed slot (owner, 2026-10-26). A tile no longer laid out answers 0 × 0.
 	React.useEffect(() => {
-		if (detail === null) return;
+		if (detail === null || restedAt.current === current.current) return;
 		let live = true;
 		const tile = target;
 		const frame = stage.current as Measurable;
@@ -382,7 +392,7 @@ export function DealStack<T>({
 		cancelAnimation(under);
 		// So does a tap during a cross-fade: the new detail is shown whole (its veil was put back
 		// up before its first paint, above).
-		if (!armed) return;
+		if (!armed || restedAt.current === asked) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
 		let landing: ReturnType<typeof setTimeout> | undefined;

@@ -37,7 +37,9 @@ export type PaneStackProps<T> = {
 /**
  * Two panes on one stage, pushed and popped like a navigator's: both stay mounted for the
  * whole transition and one shared value moves them together. Only `transform` and `opacity`
- * animate, and nothing animates on mount.
+ * animate, and nothing animates on mount: a stack that mounts with a detail already open (the
+ * products' view toggle swaps the tile stage for the pane stack at every open level; a modal
+ * deep-linked onto its edit pane) shows it at rest, covering the root, with no push.
  *
  * The push never waits for the detail's data: it answers the tap on the next frame. A
  * detail that loads late must load into a frame of the same size (see `DataTableSkeleton`),
@@ -51,12 +53,14 @@ export function PaneStack<T>({
 	paneClassName,
 	testID,
 }: PaneStackProps<T>) {
-	const progress = useSharedValue(0);
+	const open = detail !== null;
+	// Mounted open, the detail is where a push would land it: `progress` at 1 (and `width`
+	// still 0, so the pane's first frame is already at translateX 0) and the root covered.
+	const progress = useSharedValue(open ? 1 : 0);
 	const width = useSharedValue(0);
 	// The detail on stage outlives `detail` by one pop, so it can travel off.
-	const [staged, setStaged] = React.useState<T | null>(null);
-	const [settled, setSettled] = React.useState(false);
-	const open = detail !== null;
+	const [staged, setStaged] = React.useState<T | null>(detail);
+	const [settled, setSettled] = React.useState(open);
 	if (open && detail !== staged) setStaged(detail);
 	if (!open && settled) setSettled(false);
 
