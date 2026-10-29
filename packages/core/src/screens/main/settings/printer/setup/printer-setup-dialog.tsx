@@ -20,6 +20,7 @@ import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import type { IconName } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
 import { SectionHeading } from '@wcpos/components/section-heading';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { VStack } from '@wcpos/components/vstack';
@@ -436,12 +437,19 @@ export function PrinterSetupDialog({
 				<Text key="label" variant="key">
 					{t('settings.setup_paper_label')}
 				</Text>,
-				...([32, 48] as const).map((n) =>
-					action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
-						variant: columns === n ? 'default' : 'outline',
-						disabled: printerBusy,
-					})
-				)
+				<SegmentedControl
+					key="paper"
+					segments={
+						([32, 48] as const).map((n) => ({
+							value: String(n),
+							label: words[`setup_paper_${n}`],
+							testID: `printer-setup-setup_paper_${n}`,
+							disabled: printerBusy,
+						})) as [Segment, Segment]
+					}
+					value={String(columns)}
+					onValueChange={(value) => flow.updateDraft({ columns: Number(value) })}
+				/>
 			)
 		));
 	const scanHelp = web

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import isString from 'lodash/isString';
-import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
+import { WebView as RNWebView } from 'react-native-webview';
 
 import type {
 	WebViewErrorEvent,
@@ -9,38 +9,13 @@ import type {
 	WebViewMessageEvent,
 	WebViewNavigationEvent,
 } from 'react-native-webview/lib/WebViewTypes';
+import type { WebViewLoadErrorEvent, WebViewProps } from './types';
 
 export type WebViewHandle = Omit<RNWebView<object>, 'postMessage'> & {
 	postMessage(message: unknown): void;
 };
 
-/**
- * react-native-webview types `onContentSizeChange` without the `contentSize`
- * payload it actually delivers — declare the real shape so the host can size
- * itself to the rendered document.
- */
-export interface WebViewContentSizeChangeEvent {
-	nativeEvent: { contentSize: { width: number; height: number } };
-}
-
-/** `retractsLoad`: the load since the last start was this failed document's synthetic finish.
- * The host receives a plain copy of the event, without SyntheticEvent methods. */
-export type WebViewLoadErrorEvent = WebViewErrorEvent & {
-	nativeEvent: WebViewErrorEvent['nativeEvent'] & { retractsLoad: boolean };
-};
-
-export interface WebViewProps extends Omit<
-	RNWebViewProps,
-	'onContentSizeChange' | 'onMessage' | 'onError'
-> {
-	ref?: React.Ref<WebViewHandle>;
-	src?: string;
-	srcDoc?: string;
-	targetOrigin?: string;
-	onMessage: (event: { nativeEvent: { data: unknown } }) => void;
-	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
-	onError?: (event: WebViewLoadErrorEvent) => void;
-}
+export type { WebViewLoadErrorEvent };
 
 /** The URL a navigation event names, when it names one. */
 function eventURL(event: { nativeEvent?: { url?: unknown } }): string | null {
@@ -62,7 +37,7 @@ function WebView({
 	onLoadStart,
 	onError,
 	...props
-}: WebViewProps) {
+}: WebViewProps<WebViewHandle>) {
 	const localRef = React.useRef<RNWebView<object>>(null);
 	// react-native-webview 14.0.1 on Android (RNCWebViewClient.onReceivedError) reports a
 	// failed navigation as a FINISH and then an error, so `onLoad` fires for a document that

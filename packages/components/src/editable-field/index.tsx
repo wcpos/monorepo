@@ -12,7 +12,8 @@ import type { InputProps } from '../input';
  * An editable name field that displays as a button and switches to a textarea on click.
  *
  * This component maintains internal editing state separate from the controlled value.
- * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke.
+ * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke,
+ * and only when the text was edited to something other than the synced value.
  * At rest an empty value shows its `placeholder` in the property rows' placeholder ink.
  */
 export function EditableField({
@@ -81,12 +82,12 @@ export function EditableField({
 	}
 
 	/**
-	 * Submit the edited value and exit editing mode
+	 * Exit editing mode; write only an edit that changed the value (a focus-and-leave writes nothing).
 	 */
 	const handleSubmit = React.useCallback(() => {
 		setEditing(false);
-		onChangeText?.(editValue ?? '');
-	}, [onChangeText, editValue]);
+		if (editDirty && editValue !== syncedValue) onChangeText?.(editValue ?? '');
+	}, [onChangeText, editValue, editDirty, syncedValue]);
 
 	/**
 	 *

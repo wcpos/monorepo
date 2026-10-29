@@ -8,34 +8,11 @@ import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { withBase } from './with-base';
 
-import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
-
-/**
- * react-native-webview types `onContentSizeChange` without the `contentSize`
- * payload it actually delivers — declare the real shape so the host can size
- * itself to the rendered document.
- */
-export interface WebViewContentSizeChangeEvent {
-	nativeEvent: { contentSize: { width: number; height: number } };
-}
+import type { WebViewLoadErrorEvent, WebViewProps } from './types';
 
 export type WebViewHandle = HTMLIFrameElement & { postMessage(message: any): void };
 
-/** The native engine's error event. Never `retractsLoad` here: a browser fires `load` for a failed
- * iframe navigation and rarely `error`, so no error follows a load and nothing is retracted. */
-export type WebViewLoadErrorEvent = WebViewErrorEvent & {
-	nativeEvent: WebViewErrorEvent['nativeEvent'] & { retractsLoad?: boolean };
-};
-
-export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange' | 'onError'> {
-	ref: React.RefObject<WebViewHandle | null>;
-	src?: string;
-	srcDoc?: string;
-	targetOrigin?: string;
-	onMessage: (event: { nativeEvent: { data: any } }) => void;
-	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
-	onError?: (event: WebViewLoadErrorEvent) => void;
-}
+export type { WebViewLoadErrorEvent };
 
 /**
  *
@@ -51,7 +28,7 @@ function WebView({
 	targetOrigin,
 	className,
 	...props
-}: WebViewProps) {
+}: WebViewProps<WebViewHandle>) {
 	const [loading, setLoading] = React.useState(true);
 
 	const localRef = React.useRef<HTMLIFrameElement>(null);

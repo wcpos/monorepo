@@ -410,6 +410,19 @@ it.each([false, true])(
 		expect(screen.getByTestId('receipt-no-receipt').textContent).toBe('No receipt · New sale');
 	}
 );
+it.each([
+	[false, Node.DOCUMENT_POSITION_PRECEDING],
+	[true, Node.DOCUMENT_POSITION_FOLLOWING],
+])(
+	'the footer puts New sale last on a wide pane and first on a phone (compact %s)',
+	(compact, position) => {
+		render(<ReceiptStage orderUuid="paid" compact={compact} />);
+		const newSale = screen.getByTestId('receipt-new-sale');
+		expect(newSale.compareDocumentPosition(screen.getByTestId('receipt-no-receipt'))).toBe(
+			position
+		);
+	}
+);
 it('keeps both finish actions disabled while auto-print is pending', () => {
 	mockAutoPrintPending = true;
 	render(<ReceiptStage orderUuid="paid" compact />);

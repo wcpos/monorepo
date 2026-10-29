@@ -211,6 +211,25 @@ function ReceiptStageDocument({
 	const sent = stamp && Number(derived.balance) > 0 ? stamp : null;
 	const awaitsStore = useAwaitsStore(order.uuid);
 	const awaiting = sent ? false : awaitsStore;
+	const newSale = (
+		<Button
+			variant="default"
+			size="lg"
+			className={compact ? 'w-full' : 'shrink-0'}
+			testID={sent ? 'checkout-sent-new' : 'receipt-new-sale'}
+			onPress={finishSale}
+			// With auto-print on, finishing before the receipt data lands would unmount
+			// the stage before the configured print ever fires.
+			disabled={doc.autoPrintPending}
+			loading={doc.autoPrintPending}
+		>
+			<ButtonText testID={sent ? 'checkout-sent-print' : 'checkout-paid-print'}>
+				{uiSettings.autoPrintReceipt
+					? t('pos_checkout.print_receipt_new_sale')
+					: t('pos_checkout.new_sale')}
+			</ButtonText>
+		</Button>
+	);
 	return (
 		<View testID="checkout-receipt-stage" className="bg-card flex-1">
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
@@ -254,23 +273,8 @@ function ReceiptStageDocument({
 				<ReceiptBody doc={doc} selectsInline={!compact} />
 			</View>
 			<HStack className="border-border flex-wrap items-center gap-2 border-t p-3">
-				<Button
-					variant="default"
-					size="lg"
-					className={compact ? 'w-full' : 'shrink-0'}
-					testID={sent ? 'checkout-sent-new' : 'receipt-new-sale'}
-					onPress={finishSale}
-					// With auto-print on, finishing before the receipt data lands would unmount
-					// the stage before the configured print ever fires.
-					disabled={doc.autoPrintPending}
-					loading={doc.autoPrintPending}
-				>
-					<ButtonText testID={sent ? 'checkout-sent-print' : 'checkout-paid-print'}>
-						{uiSettings.autoPrintReceipt
-							? t('pos_checkout.print_receipt_new_sale')
-							: t('pos_checkout.new_sale')}
-					</ButtonText>
-				</Button>
+				{/* The footer's one intent: rightmost on a wide pane, first (full width) on a phone. */}
+				{compact ? newSale : null}
 				{/* The receipt actions are choices, not the primary action: New sale alone is filled. */}
 				{actions.map(({ label, icon, ...action }) => (
 					<Button key={action.testID} variant="outline" leftIcon={icon} {...action}>
@@ -288,6 +292,7 @@ function ReceiptStageDocument({
 						{t('pos_checkout.no_receipt_new_sale')}
 					</ButtonText>
 				</Button>
+				{compact ? null : newSale}
 			</HStack>
 			{dialog}
 		</View>
