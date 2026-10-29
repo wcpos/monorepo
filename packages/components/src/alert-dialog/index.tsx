@@ -83,11 +83,14 @@ export type AlertDialogFooterProps = {
 	confirm: FooterButton & { destructive?: boolean };
 	/** The translated Cancel, present unless false. */
 	cancel?: boolean | Pick<FooterButton, 'testID' | 'onPress' | 'disabled'>;
+	/** One alternative to the confirm (outline): the Sign out anyway beside Close register. */
+	secondary?: FooterButton;
 	size?: 'default' | 'lg';
 	testID?: string;
 };
 function AlertDialogFooter({
 	confirm,
+	secondary,
 	cancel = true,
 	size = 'default',
 	testID,
@@ -109,6 +112,18 @@ function AlertDialogFooter({
 			{label}
 		</Button>
 	);
+	const { label: alternativeLabel, icon: alternativeIcon, ...alternativeProps } = secondary ?? {};
+	const alternative = secondary ? (
+		<Button
+			{...alternativeProps}
+			leftIcon={alternativeIcon}
+			variant="outline"
+			size={size}
+			className={buttonClass}
+		>
+			{alternativeLabel}
+		</Button>
+	) : null;
 	const cancelProps = typeof cancel === 'object' ? cancel : {};
 	const dismiss = cancel ? (
 		<Button
@@ -136,11 +151,13 @@ function AlertDialogFooter({
 			{phone ? (
 				<>
 					{action}
+					{alternative}
 					{dismiss}
 				</>
 			) : (
 				<>
 					{dismiss}
+					{alternative}
 					{action}
 				</>
 			)}
