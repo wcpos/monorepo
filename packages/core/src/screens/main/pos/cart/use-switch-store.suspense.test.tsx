@@ -22,7 +22,7 @@ import { BehaviorSubject, Observable, startWith } from 'rxjs';
 
 import type { StoreDocument } from '@wcpos/database';
 
-import { SwitchStoreSheet } from './switch-store-sheet';
+import { UserSheet } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: {
@@ -37,6 +37,9 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogContent: passthrough,
 	DialogHeader: passthrough,
 	DialogTitle: passthrough,
+	DialogDescription: passthrough,
+	DialogBody: passthrough,
+	DialogFooter: passthrough,
 }));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: passthrough }));
 
@@ -51,6 +54,7 @@ let wpCredentials: Record<string, unknown>;
 
 const freshCredentials = () => ({
 	uuid: 'creds-1',
+	display_name: 'Ada Lovelace',
 	display_name$: new BehaviorSubject<string | undefined>('Ada Lovelace'),
 	avatar_url$: new BehaviorSubject<string | undefined>(undefined),
 	// Two stores, so the switcher renders at all.
@@ -73,7 +77,10 @@ jest.mock('../../../../contexts/app-state', () => {
 	return { useAppState, useStoreSession: useAppState };
 });
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+	useSegments: () => [],
+}));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => false,
@@ -81,6 +88,7 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({ engine: {} }),
+	observeCashierSalesTotal: () => new (jest.requireActual('rxjs').BehaviorSubject)(0),
 }));
 jest.mock('@wcpos/query/local-data-reset', () => ({
 	clearLocalDataNow: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
@@ -119,6 +127,9 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogFooter: passthrough,
 	AlertDialogHeader: passthrough,
 	AlertDialogTitle: passthrough,
+	DialogDescription: passthrough,
+	DialogBody: passthrough,
+	DialogFooter: passthrough,
 }));
 // Unlike `user-menu.test.tsx`, the menu bodies RENDER here: the suspending consumer lives
 // inside `DropdownMenuSubContent`, and a stub that returns `null` is exactly what kept this
@@ -183,7 +194,7 @@ const asyncStores = (): Observable<StoreDocument[]> =>
 const renderMenu = () =>
 	render(
 		<React.Suspense fallback={<div data-testid="route-fallback" />}>
-			<SwitchStoreSheet open onOpenChange={jest.fn()} />
+			<UserSheet open onOpenChange={jest.fn()} />
 		</React.Suspense>
 	);
 
@@ -218,7 +229,33 @@ describe('user menu store switcher', () => {
 		await settle();
 
 		expect(screen.queryByTestId('route-fallback')).toBeNull();
-		expect(screen.getByText('register.switch_store')).toBeTruthy();
+		expect(screen.getByText('Ada Lovelace')).toBeTruthy();
 		expect(screen.queryByText('Two')).toBeNull();
 	});
 });
+
+jest.mock('../../../../hooks/user-db-list-resources', () => ({
+	credentialsListResource: () => 'credentials',
+}));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registers: [], status: 'unbound' }),
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ binding: { status: 'unbound' } }),
+}));
+jest.mock('../contexts/current-order/context', () => ({
+	useCurrentOrderOptional: () => undefined,
+}));
+jest.mock('../checkout/use-awaiting-store', () => ({ useAwaitingStoreCount: () => 0 }));
+jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: String }),
+}));
+
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: (resource: unknown) =>
+		resource === 'credentials'
+			? []
+			: jest.requireActual('observable-hooks').useObservableSuspense(resource),
+}));

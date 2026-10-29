@@ -101,7 +101,7 @@ function DerivationStep({
 				) : null}
 				{children}
 				{detail != null ? (
-					<Text className={cn('text-muted-foreground text-sm', hasContent ? 'mt-2' : 'mt-1')}>
+					<Text variant="key" className={hasContent ? 'mt-2' : 'mt-1'}>
 						{detail}
 					</Text>
 				) : null}

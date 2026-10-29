@@ -3,6 +3,8 @@ import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-n
 
 import { useObservableState } from 'observable-hooks';
 
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -65,9 +67,7 @@ function TimingChart({
 						);
 					})}
 					{analysis.gaps.length === 0 ? (
-						<Text className="text-muted-foreground text-sm">
-							{t('settings.barcode_test_chart_empty')}
-						</Text>
+						<EmptyState kind="empty" size="inline" title={t('settings.barcode_test_chart_empty')} />
 					) : null}
 				</View>
 			</ScrollView>
@@ -303,7 +303,7 @@ function History({ history }: { history: TraceAnalysis[] }) {
 					: t('settings.barcode_test_result_typing');
 				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'ok') : 'muted';
 				return (
-					<HStack key={index} className="border-border rounded-md border p-2">
+					<Card key={index} padding="row" className="flex-row items-center gap-2">
 						<Text className="flex-1 font-mono text-sm" numberOfLines={1}>
 							{entry.code || entry.raw || '—'}
 						</Text>
@@ -313,7 +313,7 @@ function History({ history }: { history: TraceAnalysis[] }) {
 						<Text className="text-muted-foreground w-16 text-right text-xs">
 							{Number.isFinite(entry.avgGapMs) ? `${Math.round(entry.avgGapMs)}ms` : '—'}
 						</Text>
-					</HStack>
+					</Card>
 				);
 			})}
 		</VStack>

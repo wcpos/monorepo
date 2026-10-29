@@ -1,52 +1,60 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
+import { format as formatDate } from 'date-fns/format';
+import { useRouter, useSegments } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
+import { observeRegister$, readLiveSession } from '@wcpos/query/register-session';
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { AmountFigure } from '@wcpos/components/amount-figure';
+import { Avatar, getInitials } from '@wcpos/components/avatar';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
-import { MenuRow, MenuRowSeparator } from '@wcpos/components/menu-row';
+import { Loader } from '@wcpos/components/loader';
+import { Portal } from '@wcpos/components/portal';
+import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
+import { Notice } from '@wcpos/components/notice';
+import { MenuRow } from '@wcpos/components/menu-row';
 import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { requestRegisterPanel } from './register-panel-request';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
-import { useStoreDay } from '../../../../hooks/use-store-day';
+import {
+	convertLocalDateToUTCString,
+	convertUTCStringToLocalDate,
+} from '../../../../hooks/use-local-date';
+import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RecordAvatar, UserAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
-import { SwitchStoreSheet } from './switch-store-sheet';
+import { useSwitchStore } from './use-switch-store';
+import { storeListResource } from '../../hooks/store-list-resource';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
-
-/**
- * The sheet is one list: every row, pressable or not, starts at the MenuRow's own inset
- * (`px-2.5`) so the labels share one left edge, and the static rows draw the list's hairline.
- */
-const STATIC_ROW =
-	'min-h-row border-border flex-row items-center justify-between gap-2 border-b px-2.5';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -76,14 +84,76 @@ export function useSalesToday() {
 	return useObservableState(sales$, 0);
 }
 
-function SalesToday() {
+/** Runs one band's action while the sheet holds every other. */
+type Act = (work: () => Promise<void>) => Promise<void>;
+
+function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 	const total = useSalesToday();
 	const { format } = useCurrencyFormat();
+	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
+		useRegisterSession();
+	const { site } = useStoreSession();
+	const credentials = useObservableSuspense(credentialsListResource(site));
+	const opener = credentials.find((row) => row.id === session?.opened_by);
+	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
-		<View testID="user-sheet-sales-today" className={STATIC_ROW}>
-			<Text>{t('register.your_sales_today')}</Text>
-			<Text className="tabular-nums">{format(total)}</Text>
+		<View className="flex-row gap-2">
+			<View
+				testID="user-sheet-sales-today"
+				className="border-border flex-1 rounded-lg border px-3 py-2.5"
+			>
+				<Text variant="key">{t('register.your_sales_today')}</Text>
+				<AmountFigure size="tile">{format(total)}</AmountFigure>
+			</View>
+			{binding.status === 'bound' && (session || lastClosure) && (
+				<PressableSurface
+					testID="user-sheet-drawer"
+					onPress={onOpen}
+					disabled={busy}
+					className="border-border flex-1 rounded-lg border px-3 py-2.5"
+				>
+					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
+					{session ? (
+						<>
+							<AmountFigure size="tile">
+								{figuresPending
+									? '—'
+									: blind
+										? t('register.sales_count', { count: salesCount })
+										: format(Number(expected.cash ?? 0))}
+							</AmountFigure>
+							{figuresPending ? (
+								<Text variant="key">{t('register.figures_after_sync')}</Text>
+							) : (
+								<View className="flex-row items-center gap-1">
+									<Text variant="key">
+										{t('register.opened_at_by', {
+											time: formatDate(
+												convertUTCStringToLocalDate(session.opened_at_gmt),
+												'HH:mm',
+												zoneOptions(timezone)
+											),
+										})}
+									</Text>
+									<Avatar
+										size="sm"
+										source={opener?.avatar_url ? { uri: opener.avatar_url } : undefined}
+										fallback={getInitials(opener?.display_name ?? t('register.unknown_cashier'))}
+									/>
+								</View>
+							)}
+						</>
+					) : (
+						<Text>
+							{t('register.register_closed_last_closure', {
+								// A closure numbered offline takes the store's number on acknowledgement; the panel shows the same.
+								n: lastClosure?.server_number ?? lastClosure?.number ?? '—',
+							})}
+						</Text>
+					)}
+				</PressableSurface>
+			)}
 		</View>
 	);
 }
@@ -99,30 +169,16 @@ function AwaitingStore() {
 	const t = useT();
 	if (count === 0) return null;
 	return (
-		<View testID="user-sheet-awaiting-store" className="border-border gap-1 border-b px-2.5 py-3">
-			<View className="flex-row items-center justify-between gap-2">
-				<Text>{t('register.awaiting_store_label')}</Text>
-				<Text className="text-warning-text tabular-nums">
-					{t('register.sales_count', { count })}
-				</Text>
-			</View>
-			<Text className="text-muted-foreground text-sm">
-				{t('register.awaiting_store_sent_when_signed_in')}
-			</Text>
-		</View>
+		<Notice
+			tone="warning"
+			testID="user-sheet-awaiting-store"
+			title={`${t('register.awaiting_store_label')} · ${t('register.sales_count', { count })}`}
+			description={t('register.awaiting_store_sent_when_signed_in')}
+		/>
 	);
 }
 
-/** The sentence-case section heading of the cart ledger (cart LEDGER line 83). */
-function SectionHeading({ children }: { children: React.ReactNode }) {
-	return (
-		<View className="min-h-row justify-center px-2.5">
-			<Text className="font-semibold">{children}</Text>
-		</View>
-	);
-}
-
-function UserRows() {
+function UserRows({ busy, act }: { busy: boolean; act: Act }) {
 	const { site, store, wpCredentials, logout } = useStoreSession();
 	const { login } = useAppState();
 	const router = useRouter();
@@ -156,51 +212,175 @@ function UserRows() {
 	};
 	return (
 		<>
-			{credentials
-				.filter((credential) => credential.uuid !== wpCredentials.uuid)
-				.map((credential) => (
-					<MenuRow
-						key={credential.uuid}
-						testID={`user-sheet-user-${credential.uuid}`}
-						onPress={() => void switchUser(credential)}
-						leading={
-							<RecordAvatar
-								record={credential}
-								avatarUrl={credential.avatar_url}
-								name={credential.display_name}
-								size="md"
-							/>
-						}
-						label={credential.display_name}
-					/>
-				))}
+			{credentials.map((credential) => (
+				<MenuRow
+					key={credential.uuid}
+					testID={
+						credential.uuid === wpCredentials.uuid
+							? 'user-sheet-cashier-current'
+							: `user-sheet-user-${credential.uuid}`
+					}
+					choice
+					selected={credential.uuid === wpCredentials.uuid}
+					disabled={busy}
+					onPress={
+						credential.uuid === wpCredentials.uuid || busy
+							? undefined
+							: () => void act(() => switchUser(credential))
+					}
+					leading={
+						<RecordAvatar
+							record={credential}
+							avatarUrl={credential.avatar_url}
+							name={credential.display_name}
+							size="md"
+						/>
+					}
+					label={credential.display_name}
+				/>
+			))}
 		</>
+	);
+}
+
+function StoreBand({
+	isSwitching,
+	onSwitch,
+}: {
+	isSwitching: boolean;
+	onSwitch: (store: ReadonlyStoreRecord) => Promise<void>;
+}) {
+	const { wpCredentials, store } = useStoreSession();
+	const stores = useObservableSuspense(storeListResource(wpCredentials));
+	const t = useT();
+	if (stores.length <= 1) return null;
+	return (
+		<View testID="user-sheet-store-band">
+			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+				<Text variant="caption">{t('register.store')}</Text>
+			</View>
+			{stores.map((row) => (
+				<MenuRow
+					key={row.localID}
+					testID={`user-sheet-store-${row.localID}`}
+					choice
+					selected={row.localID === store.localID}
+					disabled={isSwitching}
+					onPress={row.localID === store.localID ? undefined : () => void onSwitch(row)}
+					label={row.name}
+				/>
+			))}
+		</View>
+	);
+}
+
+function RegisterBand({
+	attributed,
+	reason,
+	busy,
+	act,
+}: {
+	attributed: boolean;
+	reason: string;
+	busy: boolean;
+	act: Act;
+}) {
+	const { userDB, site } = useStoreSession();
+	const { registers, registerId, bind, refresh } = useRegisterBinding();
+	// The directory keeps its loaded answer until asked again; the band asks on every opening,
+	// as the picker did, so another till's open, close or count reaches the rows (Codex, #3045).
+	React.useEffect(() => {
+		void refresh();
+	}, [refresh]);
+	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
+	const device = useObservableState(register$);
+	const { timezone } = useStoreDay();
+	const t = useT();
+	return (
+		<View testID="user-sheet-register-band">
+			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+				<Text variant="caption">{t('register.register')}</Text>
+			</View>
+			{registers.map((row) => {
+				const cached = device?.sites[site.uuid!]?.registers?.[row.id];
+				const live = cached ? cached.live : (readLiveSession(site.uuid!, row.id) ?? row.session);
+				const description =
+					live?.status === 'counting'
+						? t('register.counting_short')
+						: live?.status === 'open'
+							? t('register.open_since_name', {
+									time: formatDate(
+										convertUTCStringToLocalDate(live.opened_at_gmt),
+										'HH:mm',
+										zoneOptions(timezone)
+									),
+									name: live.opened_by?.name ?? t('register.unknown_cashier'),
+								})
+							: t('register.closed_last_closure_short', {
+									number: row.last_closure?.number ?? '—',
+								});
+				return (
+					<MenuRow
+						key={row.id}
+						testID={`user-sheet-register-${row.id}`}
+						choice
+						selected={row.id === registerId}
+						label={row.name}
+						description={attributed ? reason : description}
+						disabled={attributed || busy}
+						onPress={row.id === registerId || busy ? undefined : () => void act(() => bind(row.id))}
+					/>
+				);
+			})}
+		</View>
 	);
 }
 
 /**
  * The cashier's sheet: who is signed in, what they sold today, and the ways to change who
- * or where. The till's money is the register panel's; Settings and Support are the drawer's;
- * this sheet carries no second copy of either (Paul, 2026-10-23).
+ * or where. The drawer figure is the door to its register panel; Settings and Support stay in the drawer.
  */
 export function UserSheet({
 	open,
 	onOpenChange,
-	onSwitchRegister,
+	onOpenRegister,
 	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSwitchRegister?: () => void;
+	onOpenRegister?: () => void;
 	portalHost?: string | null;
 }) {
-	const { site, wpCredentials, logout } = useStoreSession();
+	const { site, store, wpCredentials, logout } = useStoreSession();
+	const router = useRouter();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
-	// The register bar's condition for its store switch: more than one store on this login.
-	const stores = useDocField(wpCredentials, (value) => value.stores) as string[] | undefined;
-	const [storeOpen, setStoreOpen] = React.useState(false);
-	const side = usePanelSide('shell');
-	const { registers } = useRegisterBinding();
+	const { handleSwitchStore, isSwitching } = useSwitchStore();
+	// One action at a time: a cashier switch or a register bind in flight holds the store band as
+	// the store switch holds them, so a later tap never commits a login or a binding against the
+	// store the earlier one is replacing (CodeRabbit, #3045).
+	const [acting, setActing] = React.useState(false);
+	const busy = isSwitching || acting;
+	const act: Act = async (work) => {
+		setActing(true);
+		try {
+			await work();
+		} finally {
+			setActing(false);
+		}
+	};
+	// `string[]` as every other reader does: apps/main's typed routes make the tuple's members
+	// a union the literal is not assignable to.
+	const segments: string[] = useSegments();
+	const onPOS = segments.includes('(pos)');
+	const cartSide = usePanelSide('cart');
+	const side = onPOS ? cartSide : 'right';
+	const { registers, registerName, status } = useRegisterBinding();
+	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
+	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
+	const signedInAt = lastAccess ? new Date(lastAccess) : null;
+	const signedIn = signedInAt && !Number.isNaN(signedInAt.getTime()) ? signedInAt : null;
+	const storeName = useDocField(store, (value) => value.name);
+	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
 	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
@@ -208,7 +388,13 @@ export function UserSheet({
 	const externalGlyph = <Icon name="openExternal" size="sm" className="text-muted-foreground" />;
 	return (
 		<>
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog
+				open={open}
+				onOpenChange={(next) => {
+					if (!next && isSwitching) return;
+					onOpenChange(next);
+				}}
+			>
 				<DialogContent
 					side={side}
 					size="lg"
@@ -217,57 +403,74 @@ export function UserSheet({
 				>
 					<DialogHeader className="flex-row items-center gap-3">
 						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-						<DialogTitle className="min-w-0 flex-1" numberOfLines={1}>
-							{displayName}
-						</DialogTitle>
+						<View className="min-w-0 flex-1">
+							<DialogTitle numberOfLines={1}>{displayName}</DialogTitle>
+							<DialogDescription testID="user-sheet-description">
+								{[
+									storeName,
+									registers.length > 1 && registerName,
+									signedIn &&
+										t('register.on_the_till_since', {
+											time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
+										}),
+								]
+									.filter(Boolean)
+									.join(' · ')}
+							</DialogDescription>
+						</View>
 					</DialogHeader>
 					{open && (
 						<DialogBody className="gap-0">
-							<SalesToday />
+							<Suspense>
+								<Figures
+									busy={busy}
+									onOpen={() => {
+										if (onOpenRegister) onOpenRegister();
+										else {
+											router.push('/(app)/(drawer)/(pos)');
+											requestRegisterPanel();
+										}
+										onOpenChange(false);
+									}}
+								/>
+							</Suspense>
 							<AwaitingStore />
 							<View testID="user-sheet-switch-user">
-								<SectionHeading>{t('register.switch_user')}</SectionHeading>
+								<View className="h-band border-border mt-2 justify-center border-b px-2.5">
+									<Text variant="caption">{t('register.cashier')}</Text>
+								</View>
 								<Suspense>
-									<UserRows />
+									<UserRows busy={busy} act={act} />
 								</Suspense>
-								<AddUserButton site={site} hasExistingUsers compact />
+								{/* Every session-changing action is inert while a store switch hydrates: the overlay
+								    covers the pointer, not the keyboard, and a sign-out mid-switch would be undone
+								    when the switch publishes its session (Codex, #3045). */}
+								{!busy && <AddUserButton site={site} hasExistingUsers compact />}
 							</View>
-							{registers.length > 1 && onSwitchRegister && (
-								<MenuRow
-									testID="user-sheet-switch-register"
-									disabled={attributed}
-									aria-disabled={attributed}
-									onPress={() => {
-										onOpenChange(false);
-										onSwitchRegister();
+							<Suspense>
+								<StoreBand
+									isSwitching={busy}
+									onSwitch={async (next) => {
+										if (await handleSwitchStore(next)) onOpenChange(false);
 									}}
-									leading={<Icon name="register" className="text-muted-foreground" />}
-									label={t('register.switch_register')}
-									description={
-										attributed
-											? currentOrder
-												? t('register.switch_register_blocked_cart')
-												: t('register.switch_register_unavailable_here')
-											: undefined
-									}
 								/>
-							)}
-							{(stores?.length ?? 0) > 1 && (
-								<MenuRow
-									testID="user-sheet-switch-store"
-									onPress={() => {
-										onOpenChange(false);
-										setStoreOpen(true);
-									}}
-									leading={<Icon name="store" className="text-muted-foreground" />}
-									label={t('register.switch_store')}
+							</Suspense>
+							{status === 'bound' && registers.length > 1 && (
+								<RegisterBand
+									attributed={attributed}
+									busy={busy}
+									act={act}
+									reason={
+										currentOrder
+											? t('register.switch_register_blocked_cart')
+											: t('register.switch_register_unavailable_here')
+									}
 								/>
 							)}
 							{/* A browser is where these two go: the desktop app has no admin tab to open, and
 							    already is the desktop app. */}
 							{Platform.isWeb && (
-								<>
-									<MenuRowSeparator />
+								<View testID="user-sheet-foot" className="border-border mt-auto border-t">
 									<MenuRow
 										testID="user-sheet-wp-admin"
 										onPress={() => openExternalURL(`${site.url}/wp-admin`)}
@@ -282,7 +485,7 @@ export function UserSheet({
 										label={t('common.desktop_app')}
 										trailing={externalGlyph}
 									/>
-								</>
+								</View>
 							)}
 						</DialogBody>
 					)}
@@ -290,12 +493,23 @@ export function UserSheet({
 						destructive={{
 							label: t('register.sign_out'),
 							testID: 'user-sheet-sign-out',
+							disabled: busy,
 							onPress: () => void logout(),
 						}}
 					/>
 				</DialogContent>
+				{isSwitching ? (
+					<Portal name="store-switch-overlay">
+						<View
+							testID="store-switch-overlay"
+							className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3"
+						>
+							<Loader size="xl" />
+							<Text>{t('common.switching_store')}</Text>
+						</View>
+					</Portal>
+				) : null}
 			</Dialog>
-			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} portalHost={portalHost} />
 		</>
 	);
 }

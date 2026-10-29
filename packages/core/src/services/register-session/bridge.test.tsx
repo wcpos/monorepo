@@ -20,10 +20,14 @@ let observed: unknown = null;
 let registerDoc: unknown = { sites: {} };
 let storeId: number | null = 1;
 const closure = jest.fn();
-jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
+// The hook observes the register document too; the sentinel stream answers with the document.
+const registerStream = of(null);
+jest.mock('observable-hooks', () => ({
+	useObservableState: (stream: unknown) => (stream === registerStream ? registerDoc : observed),
+}));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
-const userDB = {};
+const userDB = { getLocal$: () => of(null) };
 const storeDB = {
 	collections: { register_sessions: sessions, cash_movements: sessions, closures: sessions },
 };
@@ -64,6 +68,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 jest.mock('../../../../query/src/register-session/register-document', () => ({
 	...jest.requireActual('../../../../query/src/register-session/register-document'),
 	readRegister: async () => registerDoc,
+	observeRegister$: () => registerStream,
 }));
 jest.mock('../../../../query/src/register-session/session-store', () => ({
 	...jest.requireActual('../../../../query/src/register-session/session-store'),

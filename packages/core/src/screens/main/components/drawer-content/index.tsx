@@ -15,9 +15,7 @@ import type { IconName } from '@wcpos/components/icon';
 
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
-import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { CashierEntry } from '../cashier-entry';
-import { NotificationBell } from '../notification-bell/notification-bell';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
@@ -47,7 +45,8 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 	const rail = presentation === 'rail';
 	const { state, navigation, descriptors } = props;
 	// The panel touches the top and bottom edges, and insets its items by the dense-strip gutter
-	// (8 at Regular; the rail is the `size-12` item plus that gutter each side), so they carry none.
+	// (8 at Regular; the rail is the `size-12` item plus that gutter each side) from every edge, so
+	// they carry none: the first item does not sit flush at the panel's top (Paul, 2026-10-28).
 	const insets = useEdgeInsets(VERTICAL);
 	const gutter = 2 * useSpacingUnit();
 
@@ -130,8 +129,8 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 				accessibilityElementsHidden={hideFromAssistiveTech}
 				// Every side named: the vendored view adds 4 and the insets under whatever is not.
 				contentContainerStyle={{
-					paddingTop: insets.paddingTop ?? 0,
-					paddingBottom: insets.paddingBottom ?? 0,
+					paddingTop: (insets.paddingTop ?? 0) + gutter,
+					paddingBottom: (insets.paddingBottom ?? 0) + gutter,
 					paddingStart: gutter,
 					paddingEnd: gutter,
 					alignItems: rail ? 'center' : undefined,
@@ -142,15 +141,8 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 				}}
 			>
 				{/* On `lg` the rail is the cashier entry's one host (the bars carry it below `lg`), on the
-				    root host: Switch register raises the request the POS screen consumes. */}
-				{rail && (
-					<CashierEntry
-						testID="register-bar-avatar"
-						placement="rail"
-						portalHost={null}
-						onSwitchRegister={requestRegisterPicker}
-					/>
-				)}
+				    root host: its drawer door navigates to the POS and requests the register panel. */}
+				{rail && <CashierEntry testID="register-bar-avatar" placement="rail" portalHost={null} />}
 				{groups.map((routes, group) => (
 					<View key={group} className={group === 1 ? 'mt-auto' : undefined}>
 						{/* The rail's `gap-2` is the dense-strip gutter between its squares. */}
@@ -160,7 +152,6 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 						>
 							{routes.map(renderItem)}
 						</View>
-						{group === 1 && !rail && <NotificationBell showLabel />}
 						{group === 1 && <Version />}
 					</View>
 				))}

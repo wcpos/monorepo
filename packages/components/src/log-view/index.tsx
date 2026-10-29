@@ -113,7 +113,9 @@ export function LogView({
 					)}
 				>
 					{typeof title === 'string' ? (
-						<Text className="text-muted-foreground text-xs font-semibold">{title}</Text>
+						<Text variant="help" className="font-semibold">
+							{title}
+						</Text>
 					) : (
 						(title ?? <View />)
 					)}
@@ -149,7 +151,7 @@ function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabe
 		<View className={cn('border-l-2 pr-2 pl-1', tint)}>
 			{/* Every column is text, separators included: a drag-select on web reads like `logToText`. */}
 			<View className="flex-row items-start">
-				<Text selectable className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+				<Text selectable variant="help" tabular className="shrink-0 font-mono">
 					{line.time}
 					{'  '}
 				</Text>
@@ -173,7 +175,7 @@ function Fields({ fields }: { fields: [string, string][] }) {
 	const width = Math.max(0, ...fields.map(([label]) => label.length));
 	return fields.map(([label, value], index) => (
 		<View key={`${label}-${index}`} className="flex-row items-start">
-			<Text selectable className="text-muted-foreground shrink-0 font-mono text-xs">
+			<Text selectable variant="help" className="shrink-0 font-mono">
 				{INDENT}
 				{label.padEnd(width)}
 				{'  '}

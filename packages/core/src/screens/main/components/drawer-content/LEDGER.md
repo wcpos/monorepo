@@ -4,7 +4,7 @@
 
 Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md` on `research/composed-ledger` (wcpos/roadmap#341) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
 
-**Job:** Render responsive drawer navigation, notification/version access, visibility reporting, and unread-log badges.
+**Job:** Render responsive drawer navigation, the rail's cashier entry, version access, visibility reporting, and unread-log badges.
 
 **Composes:** `@wcpos/components/{badge,button,dialog,hstack,icon,lib/utils,nav-item,text,tooltip,vstack}`.
 
@@ -36,3 +36,7 @@ Status (2026-10-16, C7 B3): `version.tsx` now composes `@wcpos/components/v2/dia
 18. The rail's avatar is the cashier entry (`components/cashier-entry`, `placement="rail"`, root host, Switch register through `requestRegisterPicker`), and on `lg` it is that entry's one host, so it also claims a redirect login; `RailAvatar` and its raw `Pressable` are deleted and `rail/index.tsx` holds only `useRailWidth` — evidence: card 13 of the 2026-10-28 component-library review; test "puts the avatar on the rail and the bell in the front drawer" — platform: all.
 
 19. The panel insets its items, the items carry no margin: the scroll content pads the dense-strip gutter (2 spacing units, 8 at Regular) on its start and end on both presentations, so the front drawer's items, the bell and the version share one edge and the rail's `w-12` squares sit 8 from each side of its 16 units, and the front drawer's `mx-2` on each item (line 17) and the bell is gone. The top and bottom insets come from `useEdgeInsets` (`@wcpos/components/edge-surface`), every side named because the vendored scroll view adds 4 and the insets under any side left out — evidence: card 18 of the 2026-10-28 component-library review; test "insets the … items from its own sides" in `index.test.tsx` — platform: all.
+
+20. The scroll content pads the dense-strip gutter on its top and bottom too, added to the safe-area insets (`(insets.paddingTop ?? 0) + gutter`, likewise the bottom), on both presentations, so the items sit the same gutter from every edge of the panel; the insets are 0 on web, so the front drawer's first item sat flush at the panel's top edge — evidence: Paul, 2026-10-28 ("why does the sidebar have no padding at the top"); test "insets the … items from its own sides" in `index.test.tsx` — platform: all. _(supersedes line 19's "top and bottom insets" clause; the rest of line 19 stands)_
+
+21. The front drawer's Notifications row (roadmap#268, when the drawer was the bell's only phone host) is deleted, and `NotificationBell` lost its `showLabel` row form: since #3018 every bar carries the bell, so a phone showed it twice. The rail never carried it; the cashier entry stays the rail's alone (line 18) — evidence: Paul, 2026-10-28 (phone screenshots); test "puts the avatar on the rail only, and no bell in either drawer" in `index.test.tsx` (line 18's test, renamed) — platform: all.

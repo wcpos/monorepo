@@ -16,7 +16,11 @@ import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template
 import * as actions from '@wcpos/query/register-session';
 
 import { useRegisterSession } from './use-register-session';
-import { remintRegister } from '../../../../query/src/register-session/register-document';
+import {
+	markSeededIn,
+	recordLiveSession,
+	remintRegister,
+} from '../../../../query/src/register-session/register-document';
 import { buildClosureDocument } from './closure-document';
 
 Object.assign(globalThis, { TextEncoder });
@@ -44,6 +48,8 @@ jest.mock('@wcpos/query/register-session', () => ({
 		jest.requireActual('@wcpos/query/register-session').observeSessionAccounting(...args)
 	),
 	openSession: jest.fn(),
+	recordLiveSession: jest.fn(),
+	markCountingHere: jest.fn(),
 	startCounting: jest.fn(),
 	backToSelling: jest.fn(),
 	closeSession: jest.fn(),
@@ -111,7 +117,7 @@ let mockCloseTime: string | null = null;
 const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
-	userDB: {},
+	userDB: { getLocal$: () => of(null) } as Pick<UserDatabase, 'getLocal$'>,
 	storeDB: {},
 	site: {
 		uuid: 'site',
@@ -1771,6 +1777,136 @@ it.each(['store', 'register', 'generation'] as const)(
 			view.unmount();
 			mockStoreSession.storeDB = previousStore;
 			mockBinding.registerId = previousRegister;
+		}
+	}
+);
+
+it('records the live session and the counting mark on the device as the session moves', async () => {
+	const row = { ...session, opened_by: 7, expected_float: '90', business_day: '2026-10-28' };
+	jest.mocked(actions.openSession).mockResolvedValue(row as never);
+	jest.mocked(actions.startCounting).mockResolvedValue({ ...row, status: 'counting' } as never);
+	jest.mocked(actions.backToSelling).mockResolvedValue(row as never);
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...row, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockResolvedValue({ id: 'closure' } as never);
+	const result = await settled();
+	await act(() => result.current.actions.openSession({ expectedFloat: '90', countedFloat: '100' }));
+	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
+		mockStoreSession.userDB,
+		'site',
+		'register',
+		{
+			session_id: 'session',
+			status: 'open',
+			opened_at_gmt: session.opened_at_gmt,
+			opened_by: { id: 7, name: 'Pat' },
+			acknowledged: false,
+			expected_float: '90',
+			counted_float: '100',
+			business_day: '2026-10-28',
+		}
+	);
+	await act(() => result.current.actions.startCounting());
+	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
+		mockStoreSession.userDB,
+		'site',
+		'register',
+		expect.objectContaining({
+			status: 'counting',
+			acknowledged: true,
+			opened_by: { id: 7, name: 'Pat' },
+		})
+	);
+	expect(actions.markCountingHere).toHaveBeenLastCalledWith(
+		mockStoreSession.userDB,
+		'site',
+		'register',
+		true
+	);
+	expect(jest.mocked(actions.recordLiveSession).mock.invocationCallOrder.at(-1)).toBeLessThan(
+		jest.mocked(actions.markCountingHere).mock.invocationCallOrder.at(-1)!
+	);
+	await act(() => result.current.actions.backToSelling());
+	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
+		mockStoreSession.userDB,
+		'site',
+		'register',
+		expect.objectContaining({ status: 'open', acknowledged: true })
+	);
+	await act(() => result.current.actions.closeSession({ counted: { cash: '100' } }));
+	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
+		mockStoreSession.userDB,
+		'site',
+		'register',
+		null
+	);
+	expect(jest.mocked(actions.writeClosure).mock.invocationCallOrder.at(-1)).toBeLessThan(
+		jest.mocked(actions.recordLiveSession).mock.invocationCallOrder.at(-1)!
+	);
+});
+
+it.each(['synced', 'pending'])(
+	"refuses to start counting while a seeded session's figures are pending (%s)",
+	async (sync_status) => {
+		addRxPlugin(RxDBLocalDocumentsPlugin);
+		const userDB: UserDatabase = await createRxDatabase({
+			name: `figures${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			localDocuments: true,
+			multiInstance: false,
+		});
+		const previousUserDB = mockStoreSession.userDB;
+		const previousStoreDB = mockStoreSession.storeDB;
+		const storeDB = { name: 'seeded-store' };
+		mockStoreSession.userDB = userDB;
+		mockStoreSession.storeDB = storeDB;
+		try {
+			await remintRegister(userDB);
+			await recordLiveSession(userDB, 'site', 'register', {
+				session_id: 'session',
+				status: 'open',
+				opened_at_gmt: session.opened_at_gmt,
+				opened_by: { id: 7, name: 'Cached Pat' },
+				acknowledged: sync_status === 'synced',
+				expected_float: '100',
+				counted_float: '100',
+				business_day: '2026-10-28',
+			});
+			active = [{ ...active[0], server_expected_at: null, sync_status }];
+			const result = await settled();
+			expect(result.current).toHaveProperty('figuresPending', false);
+			await act(() => markSeededIn(userDB, 'site', 'register', 'another-store'));
+			expect(result.current).toHaveProperty('figuresPending', false);
+			await act(() => markSeededIn(userDB, 'site', 'register', storeDB.name));
+			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', true));
+			await expect(result.current.actions.startCounting()).rejects.toThrow(
+				'register_figures_pending'
+			);
+			expect(actions.startCounting).not.toHaveBeenCalled();
+			await expect(
+				result.current.actions.closeSession({ counted: { cash: '100' } })
+			).rejects.toThrow('register_figures_pending');
+			expect(actions.closeSession).not.toHaveBeenCalled();
+			await act(async () => {
+				active = [{ ...active[0], server_expected_at: session.server_expected_at }];
+				mockSessionChanges.next();
+			});
+			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', false));
+			jest
+				.mocked(actions.startCounting)
+				.mockResolvedValue({ ...session, status: 'counting' } as never);
+			await act(() => result.current.actions.startCounting());
+			expect(actions.startCounting).toHaveBeenCalledWith(storeDB, 'session');
+			await act(async () => {
+				active = [{ ...active[0], server_expected_at: null }];
+				mockSessionChanges.next();
+			});
+			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', true));
+			await act(() => recordLiveSession(userDB, 'site', 'register', null));
+			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', false));
+		} finally {
+			mockStoreSession.userDB = previousUserDB;
+			mockStoreSession.storeDB = previousStoreDB;
+			await userDB.remove();
 		}
 	}
 );

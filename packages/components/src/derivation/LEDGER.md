@@ -17,3 +17,4 @@ Created 2026-10-18 for the POS "Tax based on" panel (board: `~/Projects/wcpos-ha
 5. Never colour alone: a failure is the red bead AND its cross AND a label that names it — evidence: CODING_STANDARDS § Design 5.
 6. Nothing animates on mount or at all; it is read, not watched. A later beat (a class sum settling when the address changes while open) would animate transform/opacity only — evidence: CODING_STANDARDS § Design 6; board §4 "Nothing animates on mount".
 7. The rail is a `list` and each step a `listitem`; it holds no press of its own, so a caller's interactive content (a link under the title) carries its own testID — evidence: CODING_STANDARDS § Design 10; test "draws a muted disc…".
+8. Amends line 4: the detail line is `Text variant="key"` (the ladder's 13 muted rank), not its own `text-sm text-muted-foreground` literal; the look is unchanged — evidence: card 6 of the 2026-10-28 component-library review (W4-F).

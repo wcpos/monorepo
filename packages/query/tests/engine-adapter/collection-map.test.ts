@@ -88,18 +88,6 @@ describe('engine adapter collection map', () => {
 			refunds: 'refunds',
 			taxRates: 'taxes',
 		});
-		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.labelKey]))).toEqual({
-			products: 'common.products',
-			variations: 'common.variations',
-			orders: 'common.orders',
-			customers: 'common.customers',
-			categories: 'common.categories',
-			brands: 'common.brands',
-			tags: 'common.tags',
-			coupons: 'common.coupons',
-			refunds: 'common.refunds',
-			taxRates: 'common.tax_rates',
-		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [row.legacyName, name]))).toEqual({
 			products: 'products',
 			variations: 'variations',

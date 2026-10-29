@@ -120,12 +120,12 @@ it('seats the search beside the title and caps its width; the phone keeps the co
 	expect(screen.getByTestId('bar').firstElementChild).not.toHaveClass('pl-gutter');
 });
 
-// Every bar with a search, the POS products column's included, has one phone grammar: the
-// control row, then the search on a ruled row of its own (ManagementBar used to draw it).
+// A bar whose control row holds a title (the management pages) puts the phone search on a
+// row of its own under it (ManagementBar used to draw it).
 it('puts the phone search on its own ruled row under the control row', () => {
 	render(
 		<DeviceScope phone>
-			<PageBar testID="bar" search={<input data-testid="search" />}>
+			<PageBar testID="bar" title="Orders" search={<input data-testid="search" />}>
 				<button data-testid="control" />
 			</PageBar>
 		</DeviceScope>
@@ -138,6 +138,31 @@ it('puts the phone search on its own ruled row under the control row', () => {
 	expect(searchRow).toHaveClass('h-ctl', 'px-2');
 	// No rule under the search either: the chip row's own spacing separates them (owner, 2026-10-23).
 	expect(searchRow).not.toHaveClass('border-b');
+});
+
+// The POS products column's bar has no title, scope control, crumb or menu: its row is three
+// icons, so the search shares it instead of spending a second row (Paul, 2026-10-28).
+it('keeps the phone search in the row when the row holds only controls', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" search={<input data-testid="search" />}>
+				<button data-testid="control" />
+			</PageBar>
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('bar').children).toHaveLength(1);
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	expect(row).toHaveClass('h-ctl', 'gap-2', 'pr-2', 'pl-4');
+	const slot = screen.getByTestId('bar-search');
+	expect(row.contains(slot)).toBe(true);
+	expect(slot).toContainElement(screen.getByTestId('search'));
+	expect(slot).toHaveClass('flex-1');
+	// The width cap is the wide bar's: a phone row has none to spare.
+	expect(slot).not.toHaveClass('max-w-160');
+	const order = [slot, screen.getByTestId('control')].map((node) =>
+		Array.from(row.querySelectorAll('*')).indexOf(node)
+	);
+	expect(order).toEqual([...order].sort((a, b) => a - b));
 });
 
 it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {

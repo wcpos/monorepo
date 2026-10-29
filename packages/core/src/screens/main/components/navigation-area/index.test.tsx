@@ -260,3 +260,5 @@ describe('NavigationAreaIndex', () => {
 		expect(screen.getByTestId('redirect').textContent).toBe('/settings/general');
 	});
 });
+
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));

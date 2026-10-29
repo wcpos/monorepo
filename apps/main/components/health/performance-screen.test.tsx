@@ -216,9 +216,10 @@ describe('PerformanceScreen · server over time', () => {
 		expect(paceText(renderer)).toBe(
 			'Normal pace — your server reports high load; the till only slows down if its answers do'
 		);
-		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
-			'text-muted-foreground'
-		);
+		// The key rank is muted; only an easing-off pace adds the warning face.
+		const pace = renderer.root.findByProps({ testID: 'server-pace' }).props;
+		expect(pace.variant).toBe('key');
+		expect(pace.className).not.toContain('text-warning-text');
 	});
 
 	it('warns when the till is easing off and names the reason', () => {

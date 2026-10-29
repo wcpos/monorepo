@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -27,7 +28,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 		<VStack space="md" className="mx-auto max-w-md p-4">
 			<Text className="text-lg font-semibold">{t('pos_checkout.cancel_payment_question')}</Text>
 			{flow.liveRows.length === 0 ? (
-				<Text className="text-muted-foreground text-sm">{t('pos_checkout.nothing_taken_yet')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('pos_checkout.nothing_taken_yet')} />
 			) : (
 				<VStack space="xs">
 					<Text className="text-muted-foreground text-sm">

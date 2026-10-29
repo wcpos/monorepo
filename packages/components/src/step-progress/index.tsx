@@ -399,7 +399,7 @@ function StepNode({
 						{label}
 					</Text>
 					{caption ? (
-						<Text className="text-muted-foreground text-center text-xs tabular-nums">
+						<Text variant="help" tabular className="text-center">
 							{caption}
 						</Text>
 					) : null}

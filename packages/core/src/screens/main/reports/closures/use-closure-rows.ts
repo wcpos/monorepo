@@ -137,6 +137,9 @@ export function useClosureRows(requested: ClosureScope) {
 				...server,
 				receipt_snapshot: row.receipt_snapshot,
 				printed_number: row.printed_number,
+				// The print mark is this device's: a server page knows nothing of its reprints.
+				print_count: Math.max(server.print_count ?? 0, row.print_count ?? 0),
+				printed_at: row.printed_at ?? server.printed_at,
 			});
 		}
 	}

@@ -1,22 +1,3 @@
 {
-	"packages/core/src/extensions/actions/present.ts": 1,
-	"packages/core/src/extensions/hotkeys/help-sheet.tsx": 1,
-	"packages/core/src/screens/auth/hooks/use-site-connect.ts": 1,
-	"packages/core/src/screens/main/components/customer/customer-form.tsx": 1,
-	"packages/core/src/screens/main/coupons/cells/discount-type.tsx": 1,
-	"packages/core/src/screens/main/coupons/row.tsx": 1,
-	"packages/core/src/screens/main/health/conflicted-mutations.tsx": 3,
-	"packages/core/src/screens/main/health/database.tsx": 2,
-	"packages/core/src/screens/main/health/rejected-mutations.tsx": 1,
-	"packages/core/src/screens/main/pos/cart/open-register-card.tsx": 1,
-	"packages/core/src/screens/main/pos/checkout/present-tender-refusal.ts": 1,
-	"packages/core/src/screens/main/pos/hooks/stock-guard-hook.ts": 1,
-	"packages/core/src/screens/main/pos/hooks/use-add-coupon.ts": 1,
-	"packages/core/src/screens/main/pos/hooks/use-add-quick-discount.ts": 1,
-	"packages/core/src/screens/main/pos/products/browse/browse-root-footer.tsx": 1,
-	"packages/core/src/screens/main/pos/products/browse/term-grid.tsx": 1,
-	"packages/core/src/screens/main/pos/products/browse/term-table.tsx": 1,
-	"packages/core/src/screens/main/reports/cards/index.tsx": 1,
-	"packages/core/src/screens/main/reports/cards/taxes.tsx": 1,
-	"packages/core/src/screens/main/settings/card-readers/reader-row.tsx": 1
+	"packages/core/src/extensions/actions/present.ts": 1
 }

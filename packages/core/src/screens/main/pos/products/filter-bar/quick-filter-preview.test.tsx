@@ -20,6 +20,12 @@ const liveHandle = { key: 'live' };
 let drawnHandle: object = liveHandle;
 let drawnHits: typeof hits = [];
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) => {
 		const messages: Record<string, string> = {

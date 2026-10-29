@@ -63,7 +63,6 @@ const useRootContext = SelectPrimitive.useRootContext;
 
 /** On the phone sheet no primitive Content is mounted: the parts draw plain Views. */
 const useSheet = () => useOverlayPresentation() === 'bottom';
-const SHEET_LABEL_TEXT = 'text-muted-foreground text-sm font-semibold tracking-wide uppercase';
 function SelectGroup(props: SelectPrimitive.GroupProps) {
 	if (useSheet()) return <View {...props} role="group" />;
 	return <SelectPrimitive.Group {...props} />;
@@ -233,7 +232,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 	if (useSheet())
 		return (
 			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
-				<Text className={SHEET_LABEL_TEXT}>{props.children}</Text>
+				<Text variant="caption">{props.children}</Text>
 			</View>
 		);
 	return (

@@ -45,10 +45,14 @@ test('each ladder combo on a Text is one site; a variant is none', () => {
 	assert.deepEqual(scanSource('<Text variant="help" className="flex-1" />', path), []);
 });
 
-test('follows cn() branches and local constants; ignores other elements and lone classes', () => {
+// A combination is a site only inside ONE string literal or ONE local constant: a control's own
+// label size with a conditional weight in another cn() branch (a chip's `sm`, a segment's
+// selected weight) is the control's design, not the ladder (owner's ruling, 2026-10-28, W4-F).
+test('reads one literal or one constant at a time; ignores other elements and lone classes', () => {
 	const source = `
 		const LABEL = 'text-muted-foreground mb-1 text-xs';
 		<Text className={LABEL} />;
+		<Text className={cn('text-muted-foreground text-sm', className)} />;
 		<Text className={cn('text-sm', active && 'font-medium')} />;
 		<View className="text-muted-foreground text-xs" />;
 		<Text className="text-muted-foreground" />;

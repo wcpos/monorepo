@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { HStack } from '@wcpos/components/hstack';
 import { SavedMark } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
@@ -27,7 +28,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 				<SavedMark name="address" label={t('settings.saved')} />
 			</HStack>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('settings.no_devices_found')} />
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;

@@ -27,7 +27,8 @@ export type PageBarProps = ViewProps & {
 	back?: { label: string; onPress: () => void; testID?: string };
 	/**
 	 * The page's search field: beside the title on wide widths, taking the width up to a cap; on
-	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23).
+	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23), unless the
+	 * control row holds nothing but icons (owner, 2026-10-28).
 	 */
 	search?: React.ReactNode;
 };
@@ -51,6 +52,12 @@ export function PageBar({
 	const phone = useIsPhone();
 	const ground = useGround();
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
+	// A phone's search takes a row of its own only when the control row has a title, a scope
+	// control, a crumb or the menu to share it with. A row of nothing but icons (the POS products
+	// column, whose register bar above carries the place and the menu) keeps it in its middle,
+	// so the search does not spend a second row (Paul, 2026-10-28).
+	const searchRow =
+		phone && (title !== undefined || titleSlot != null || back != null || onMenu != null);
 	return (
 		// The bar touches the top edge; inside a column that pads it already (the POS products
 		// column), there is nothing left to pad.
@@ -67,7 +74,7 @@ export function PageBar({
 			    controls sit the page gutter from the top and the sides, and the row under it
 			    (the chip row, a page body) brings the gutter between them, so search, chips and card
 			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
-			    height because its search has a ruled row of its own. */}
+			    height: its search sits in the row or on a row of its own (`searchRow`). */}
 			<HStack
 				className={cn(
 					'bg-background items-center',
@@ -123,15 +130,16 @@ export function PageBar({
 				    left edge, beside the title, and fills it up to a cap: a field pushed to the
 				    right edge reads as a control, not as the way into the page. */}
 				<View className="min-w-0 flex-1 flex-row">
-					{!phone && search != null && (
-						<View testID={id('search')} className="max-w-160 min-w-0 flex-1">
+					{!searchRow && search != null && (
+						// The cap is for wide widths: a phone's row has no width to spare.
+						<View testID={id('search')} className={cn('min-w-0 flex-1', !phone && 'max-w-160')}>
 							{search}
 						</View>
 					)}
 				</View>
 				<HStack className="items-center gap-1">{children}</HStack>
 			</HStack>
-			{phone && search != null && (
+			{searchRow && search != null && (
 				<View testID={id('search')} className="h-ctl justify-center px-2">
 					{search}
 				</View>

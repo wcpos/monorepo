@@ -13,12 +13,7 @@ import { useStoreDayLabel } from '../../../hooks/use-store-day-label';
 import { useProAccess } from '../contexts/pro-access';
 import { useNumberFormat } from '../hooks/use-number-format';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
-
-const typeLabels: Record<string, string> = {
-	percent: 'coupons.percent_short',
-	fixed_cart: 'coupons.fixed_cart_short',
-	fixed_product: 'coupons.fixed_product_short',
-};
+import { discountTypeLabel } from './discount-type-label';
 
 export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
 	const coupon = useRecordField(record, ({ payload }) => payload);
@@ -60,7 +55,7 @@ export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
 			)}
 			<Text numberOfLines={1} variant="key">
 				{[
-					typeLabels[type] ? t(typeLabels[type]) : type,
+					discountTypeLabel(type, t),
 					format(Number(coupon.amount)),
 					coupon.date_expires_gmt
 						? `${t('coupons.expires')} ${day(coupon.date_expires_gmt)}`

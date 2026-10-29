@@ -1,7 +1,13 @@
 import type { UserDatabase } from '@wcpos/database';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { readRegister } from './register-document';
+import {
+	markSeededIn,
+	readLiveSession,
+	readRegister,
+	recordLiveSession,
+} from './register-document';
+import { seedSessionFromCache } from './seed';
 import { writeClosure } from './session-store';
 import { drainRegisterSessionQueue, type SessionHttp } from './queue';
 import { refreshSessions } from './refresh';
@@ -68,6 +74,13 @@ export async function runRegisterSessionCycle({
 				})
 			);
 	}
+	const live = registerId ? readLiveSession(siteUuid, registerId) : null;
+	if (
+		live &&
+		(await staged('seed', () => seedSessionFromCache(storeDB, live, registerId!, storeId))) ===
+			'seeded'
+	)
+		await markSeededIn(userDB, siteUuid, registerId!, sessions.database.name);
 	if (!online) return;
 	await staged('drain', () =>
 		drainRegisterSessionQueue({
@@ -78,5 +91,36 @@ export async function runRegisterSessionCycle({
 			http,
 		})
 	);
-	if (registerId) await staged('refresh', () => refreshSessions({ registerId, storeDB, http }));
+	if (!registerId) return;
+	await staged('refresh', () => refreshSessions({ registerId, storeDB, http }));
+	const row = await sessions
+		.findOne({
+			selector: {
+				register_id: registerId,
+				status: { $in: ['open', 'counting'] },
+				sync_status: { $ne: 'failed' },
+			},
+		})
+		.exec();
+	if (row && (row.status === 'open' || row.status === 'counting')) {
+		const opener = readLiveSession(siteUuid, registerId)?.opened_by;
+		await recordLiveSession(userDB, siteUuid, registerId, {
+			session_id: row.id,
+			status: row.status,
+			opened_at_gmt: row.opened_at_gmt,
+			opened_by:
+				row.opened_by == null
+					? null
+					: {
+							id: row.opened_by,
+							name: opener?.id === row.opened_by ? opener.name : '',
+						},
+			acknowledged: row.sync_status === 'synced' || row.server_status != null,
+			expected_float: row.expected_float ?? null,
+			counted_float: row.counted_float ?? null,
+			business_day: row.business_day ?? null,
+		});
+	} else if (live && (await sessions.findOne(live.session_id).exec())?.status === 'closed') {
+		await recordLiveSession(userDB, siteUuid, registerId, null);
+	}
 }

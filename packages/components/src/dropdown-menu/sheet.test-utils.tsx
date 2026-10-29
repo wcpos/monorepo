@@ -10,23 +10,23 @@ export const mockRoot = {
 	value: { value: 'b', label: 'B' },
 	onValueChange: jest.fn(),
 };
-const Part = React.forwardRef<HTMLDivElement, PressableProps & { 'data-testid'?: string }>(
-	({ children, className, testID, onPress, disabled, role, ...props }, ref) => (
-		<div
-			ref={ref}
-			className={className}
-			data-testid={props['data-testid'] ?? testID}
-			role={role}
-			aria-checked={props['aria-checked']}
-			aria-selected={props['aria-selected']}
-			onClick={
-				disabled ? undefined : (onPress as unknown as React.MouseEventHandler<HTMLDivElement>)
-			}
-		>
-			{children as React.ReactNode}
-		</div>
-	)
-);
+const Part = React.forwardRef<
+	HTMLDivElement,
+	PressableProps & { 'data-testid'?: string; 'data-variant'?: string }
+>(({ children, className, testID, onPress, disabled, role, ...props }, ref) => (
+	<div
+		ref={ref}
+		className={className}
+		data-testid={props['data-testid'] ?? testID}
+		data-variant={props['data-variant']}
+		role={role}
+		aria-checked={props['aria-checked']}
+		aria-selected={props['aria-selected']}
+		onClick={disabled ? undefined : (onPress as unknown as React.MouseEventHandler<HTMLDivElement>)}
+	>
+		{children as React.ReactNode}
+	</div>
+));
 Part.displayName = 'SheetTestPart';
 // Retain the overlay harness, adding row semantics and native wrapper passthroughs.
 Object.assign(jest.requireMock('react-native'), {
@@ -43,7 +43,16 @@ jest.requireMock('react-native-reanimated').default.View = Part;
 jest.requireMock('../keyboard-controller').KeyboardAvoidingView = Part;
 // The native shell reads the keyboard's state for its bottom sheet; these suites keep it hidden.
 jest.requireMock('../keyboard-controller').useKeyboardState = () => false;
-jest.requireMock('../text').Text = Part;
+// The themed Text is its own part: it carries the ladder rank (`variant`), which react-native's
+// Text ignores, so a rank set on the wrong Text shows up as a missing `data-variant`.
+function ThemedTextPart({
+	variant,
+	...props
+}: React.ComponentProps<typeof Part> & { variant?: string | null }) {
+	return <Part {...props} data-variant={variant ?? undefined} />;
+}
+ThemedTextPart.displayName = 'SheetTestThemedText';
+jest.requireMock('../text').Text = ThemedTextPart;
 function IconMock({ name, className }: { name: string; className?: string }) {
 	return <span data-icon={name} className={className} />;
 }

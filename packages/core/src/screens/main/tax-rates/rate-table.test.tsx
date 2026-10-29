@@ -11,6 +11,12 @@ import type { TaxRateData } from '../contexts/tax-rates';
 
 // The table primitives as plain boxes (the real ones pull in the pulse row's native motion);
 // each head is marked so the column order can be read back.
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
 jest.mock('@wcpos/components/table', () => {
 	const box = (role?: string) => {
 		function Box({

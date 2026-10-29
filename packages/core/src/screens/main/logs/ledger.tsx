@@ -4,6 +4,7 @@ import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns/isToday';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Badge } from '@wcpos/components/badge';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
@@ -415,9 +416,12 @@ export function Ledger({
 				scrollEventThrottle={scrollEventThrottle}
 			>
 				{rows.length === 0 ? (
-					<Text variant="key" className="py-6 text-center">
-						{t('logs.no_logs_found')}
-					</Text>
+					<EmptyState
+						kind="empty"
+						size="inline"
+						title={t('logs.no_logs_found')}
+						className="justify-center py-6"
+					/>
 				) : (
 					rows.map((row) => (
 						<LedgerRow

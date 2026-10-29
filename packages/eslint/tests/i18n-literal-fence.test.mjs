@@ -53,6 +53,13 @@ test('a template, a variable or a ternary key is a site; a literal is none', () 
 		assert.deepEqual(scanSource(`const label = ${call};`, path), []);
 });
 
+test('a catalog key passed to any function but t is a site', () => {
+	assert.deepEqual(scanSource("const a = translate('common.save');", path), [
+		`${path}:1:1:${CONSTRUCT}`,
+	]);
+	assert.deepEqual(scanSource("const a = logger.info('common.not_a_key_here');", path), []);
+});
+
 test('a .ts file parses as TS, so a cast does not hide the site after it', () => {
 	const ts = 'packages/core/src/screens/main/new-file.ts';
 	assert.deepEqual(scanSource('const a = <string>b;\nconst c = t(key);', ts), [

@@ -55,7 +55,7 @@ export const stories = [
 			grid(
 				<Tile variant="dashed" onPress={onPress} className="flex-1" testID="tile-dashed">
 					<Icon name="plus" />
-					<Text className="text-muted-foreground text-sm">Add another</Text>
+					<Text variant="key">Add another</Text>
 				</Tile>
 			),
 	},

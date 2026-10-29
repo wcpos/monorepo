@@ -1,15 +1,18 @@
 export {
 	adoptCounters,
 	bindRegister,
-	getBoundRegisterId,
+	boundRegisterIdOf,
+	getBoundRegister,
 	getCurrentBoundRegisterId,
-	getRegisterSnapshot,
+	markCountingHere,
 	mintUuid,
 	nextSaleCounter,
 	observeRegister$,
 	readBoundRegister,
 	readCounters,
+	readLiveSession,
 	readRegister,
+	recordLiveSession,
 	unbindRegister,
 } from './register-document';
 export type { RegisterCounters, RegisterDocument } from './register-document';

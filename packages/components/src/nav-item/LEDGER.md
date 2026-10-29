@@ -2,7 +2,7 @@
 
 Seeded 2026-10-17 by design-system decision 8 (ruling `ruling-design-system-decisions-2026-10-16`, board `design-system-gallery-2026-10-16.html` §5). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence.
 
-**Job:** One navigation row: an area's page list (Settings, Store health), the front drawer's items and its notifications bell, and the rail's items (an icon-only square with a web tooltip).
+**Job:** One navigation row: an area's page list (Settings, Store health), the front drawer's items (its notifications bell until 2026-10-28), and the rail's items (an icon-only square with a web tooltip).
 
 **Base:** `pressable-surface`, Icon, Text.
 
