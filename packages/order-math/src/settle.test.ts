@@ -878,6 +878,25 @@ describe('VAT-exempt settlement', () => {
 		},
 	];
 	const config = makeConfig({ rates, allRates: rates, vatExempt: true });
+	it('keeps the stored net when settling inclusive-entered shipping', () => {
+		const result = settleAggregate(
+			{
+				shipping_lines: [
+					{
+						method_id: 'flat_rate',
+						total: '10',
+						total_tax: '2',
+						taxes: [{ id: 1, total: '2' }],
+						meta_data: [
+							{ key: '_woocommerce_pos_data', value: { amount: 12, prices_include_tax: true } },
+						],
+					},
+				],
+			},
+			config
+		);
+		expect(result.patch).toMatchObject({ shipping_total: '10', shipping_tax: '0' });
+	});
 	it('aggregates exempt lines with no tax lines', () => {
 		const line = calculateCartLine(
 			{ kind: 'line_item', line: makePosLineItem(1, 100) },

@@ -179,17 +179,30 @@ export function isLineItemOnSale(item: LineItem | null | undefined): boolean {
  * 4. Update line item totals and coupon line discount amounts
  */
 export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
-	const taxRates = input.vatExempt ? [] : input.taxRates;
 	const {
 		lineItems,
 		couponLines,
 		couponConfigs,
+		taxRates,
 		pricesIncludeTax,
 		calcDiscountsSequentially,
 		productCategories,
 		taxRoundAtSubtotal = false,
 		dp = 2,
 	} = input;
+
+	const finish = (result: RecalculateResult): RecalculateResult =>
+		input.vatExempt
+			? {
+					lineItems: result.lineItems.map((item) => ({
+						...item,
+						taxes: [],
+						total_tax: '0',
+						subtotal_tax: '0',
+					})),
+					couponLines: result.couponLines.map((cl) => ({ ...cl, discount_tax: '0' })),
+				}
+			: result;
 
 	// Filter to active coupon lines (code is not null/undefined)
 	const activeCouponLines = couponLines.filter(
@@ -200,11 +213,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	// On the server, WC's recalculate_coupons() does $item->set_total($item->get_subtotal()),
 	// but WCPOS filters get_subtotal() to return the POS price during recalculation.
 	// The raw subtotal holds regular_price * qty; we need pos_data.price * qty instead.
-	const resetItems = lineItems.map((storedItem) => {
-		// Empty rates cannot clear taxes carried by the stored subtotal/no-POS reset.
-		const item = input.vatExempt
-			? { ...storedItem, taxes: [], total_tax: '0', subtotal_tax: '0' }
-			: storedItem;
+	const resetItems = lineItems.map((item) => {
 		const posData = parsePosData(item);
 
 		const parsedPosPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
@@ -276,10 +285,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
-		return {
+		return finish({
 			lineItems: serializeLineItemTaxes(resetItems, getRoundingPrecision(dp)),
 			couponLines,
-		};
+		});
 	}
 
 	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
@@ -470,8 +479,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return updated || cl;
 	});
 
-	return {
+	return finish({
 		lineItems: serializeLineItemTaxes(taxedLineItems, getRoundingPrecision(dp)),
 		couponLines: finalCouponLines,
-	};
+	});
 }

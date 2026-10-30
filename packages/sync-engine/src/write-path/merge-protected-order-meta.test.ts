@@ -6,6 +6,7 @@ it.each([
 	['_wcpos_money_owner_hint', 'server', null, undefined, 8, 'server', 8, 'server'],
 	['_wcpos_money_owner_hint', null, 'server', 8, undefined, 'server', 8, 'server'],
 	['is_vat_exempt', 'yes', 'no', undefined, 10, 'no', 10, 'mutation'],
+	['is_vat_exempt', 'no', 'yes', undefined, 10, 'yes', 10, 'server'],
 	['_pos_user', 'local', 'remote', undefined, 9, 'local', 9, 'server'],
 ] as const)(
 	'merges %s (%s / %s), retaining identity',

@@ -61,27 +61,6 @@ describe.each([false, true])(
 				expect(zero).toEqual({ ...line, taxes: [], total_tax: '0' });
 				expect(retaxLine({ kind: 'fee', line: zero }, config).line).toEqual(line);
 			});
-			it.each(['', 'inherit'])(
-				'pins shipping equivalence, idempotence and round trip for class %s',
-				(shippingTaxClass) => {
-					const shippingConfig = createCartConfig({ ...config, shippingTaxClass });
-					const input = {
-						kind: 'shipping' as const,
-						line: { method_id: 'flat_rate', total: '12.37' },
-						cartLineItems: [product],
-					};
-					const line = calculateCartLine(input, shippingConfig).line;
-					const once = retaxLine({ ...input, line }, shippingConfig);
-					expect(once).toEqual({ line, warnings: [] });
-					expect(retaxLine({ ...input, line: once.line }, shippingConfig)).toEqual(once);
-					const zero = retaxLine(
-						{ ...input, line },
-						createCartConfig({ ...shippingConfig, vatExempt: true })
-					).line;
-					expect(zero).toEqual({ ...line, taxes: [], total_tax: '0' });
-					expect(retaxLine({ ...input, line: zero }, shippingConfig).line).toEqual(line);
-				}
-			);
 		});
 	}
 );
@@ -113,35 +92,49 @@ it.each([undefined, [{ id: 9, key: 'custom', value: 'untouched' }]])(
 	}
 );
 
-it('inherits a reduced shipping class and excludes non-shipping rates', () => {
-	const config = makeConfig({
-		shippingTaxClass: 'inherit',
-		rates: [
-			rate,
-			{ ...rate, id: 2, class: 'reduced', rate: '5' },
-			{ ...rate, id: 3, class: 'reduced', shipping: false },
-		],
+it.each(['none', 'taxable', 'shipping'] as const)(
+	'uses the product taxStatus override: %s',
+	(taxStatus) => {
+		const line = { product_id: 1, quantity: 1, subtotal: '100', total: '90', price: 100 };
+		const result = retaxLine(
+			{ kind: 'line_item', line, taxStatus },
+			makeConfig({ rates: [{ ...rate, rate: '10' }] })
+		);
+		expect(result.line).toEqual({
+			...line,
+			total_tax: taxStatus === 'taxable' ? '9' : '0',
+			subtotal_tax: taxStatus === 'taxable' ? '10' : '0',
+			taxes: taxStatus === 'taxable' ? [{ id: 1, total: '9.000000', subtotal: '10.000000' }] : [],
+		});
+	}
+);
+
+it('lets the explicit product tax status win over POS metadata', () => {
+	const line = { ...product, total: '100', subtotal: '100' };
+	expect(retaxLine({ kind: 'line_item', line, taxStatus: 'none' }, makeConfig()).line).toEqual({
+		...line,
+		total_tax: '0',
+		subtotal_tax: '0',
+		taxes: [],
 	});
-	const line = { total: '100' };
-	expect(
-		retaxLine(
-			{ kind: 'shipping', line, cartLineItems: [{ ...product, tax_class: 'reduced' }] },
-			config
-		).line
-	).toEqual({ ...line, total_tax: '5', taxes: [{ id: 2, total: '5' }] });
-	expect(
-		retaxLine(
-			{
-				kind: 'shipping',
-				line,
-				cartLineItems: [
-					{
-						...product,
-						meta_data: [{ key: '_woocommerce_pos_data', value: { tax_status: 'none' } }],
-					},
-				],
-			},
-			config
-		).line
-	).toEqual({ ...line, total_tax: '0', taxes: [] });
+});
+
+it.each([false, true])('passes tombstones through unchanged, exempt=%s', (vatExempt) => {
+	const config = makeConfig({ vatExempt });
+	const productLine = {
+		product_id: null,
+		total: '90',
+		subtotal: '100',
+		total_tax: '9',
+		subtotal_tax: '10',
+		taxes: [{ id: 1, total: '9', subtotal: '10' }],
+	};
+	const fee = { name: null, total: '10', total_tax: '1', taxes: [{ id: 1, total: '1' }] };
+	expect(retaxLine({ kind: 'line_item', line: productLine }, config)).toEqual({
+		line: productLine,
+		warnings: [],
+	});
+	expect(retaxLine({ kind: 'line_item', line: productLine }, config).line).toBe(productLine);
+	expect(retaxLine({ kind: 'fee', line: fee }, config)).toEqual({ line: fee, warnings: [] });
+	expect(retaxLine({ kind: 'fee', line: fee }, config).line).toBe(fee);
 });

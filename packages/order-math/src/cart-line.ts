@@ -1,9 +1,7 @@
-import find from 'lodash/find';
-import uniq from 'lodash/uniq';
-
 import { POS_META_KEYS } from '@wcpos/sync-core';
 
 import { calculateTaxesForValue } from './internal/lines/calc-taxes-for-value';
+import { consolidateTaxes } from './internal/lines/consolidate-taxes';
 import {
 	extractFeeLineData,
 	extractLineItemData,
@@ -70,8 +68,6 @@ type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines'
 type DbShippingLine = NonNullable<
 	import('@wcpos/database').OrderDocument['shipping_lines']
 >[number];
-
-type Tax = { id: number; total: number };
 
 // ===== public types (SPEC §3) =====
 
@@ -292,39 +288,11 @@ function applyShippingLineChanges(
 
 // ===== compute bodies (ports of the use-calculate-*-tax-and-totals hooks) =====
 
-/**
- * Consolidates unique taxes by combining subtotal and total tax values.
- *
- * Per-rate taxes are ALWAYS emitted unrounded, at the configured rounding precision, whatever
- * `taxRoundAtSubtotal` says — see PER_RATE_TAXES_ARE_UNROUNDED. That setting governs
- * `total_tax`/`subtotal_tax` only, and those are rounded by the caller.
- *
- * Moved from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
- */
-export const consolidateTaxes = (
-	subtotalTaxes: { taxes: Tax[] },
-	totalTaxes: { taxes: Tax[] },
-	noSubtotal: boolean,
-	roundingPrecision: number
-) => {
-	const uniqueTaxIds = uniq([
-		...subtotalTaxes.taxes.map((tax) => tax.id),
-		...totalTaxes.taxes.map((tax) => tax.id),
-	]);
-
-	return uniqueTaxIds.map((id) => {
-		const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
-		const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
-
-		return {
-			id,
-			subtotal: noSubtotal
-				? ''
-				: roundHalfUp(subtotalTax.total, roundingPrecision).toFixed(roundingPrecision),
-			total: roundHalfUp(totalTax.total, roundingPrecision).toFixed(roundingPrecision),
-		};
-	});
-};
+// Exemption changes tax outputs only, after inclusive prices have been decomposed.
+function vatExemptTaxFields(config: CartConfig, product = false) {
+	if (!config.vatExempt) return {};
+	return { taxes: [], total_tax: '0', ...(product && { subtotal_tax: '0' }) };
+}
 
 /**
  * The line-item tax maths. Began as a port of `calculateLineItemTaxesAndTotals`
@@ -429,6 +397,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		total_tax: String(roundedTotalTax),
 		subtotal_tax: String(roundedSubtotalTax),
 		taxes,
+		...vatExemptTaxFields(config, true),
 	};
 }
 
@@ -520,6 +489,7 @@ function computeFeeLine(
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
 		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
+		...vatExemptTaxFields(config),
 	};
 }
 
@@ -603,6 +573,7 @@ function computeShippingLine(
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
 		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
+		...vatExemptTaxFields(config),
 	};
 }
 

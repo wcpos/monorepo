@@ -2098,6 +2098,47 @@ describe('VAT-exempt line calculation', () => {
 		const taxed = calculateCartLine(input, config).line;
 		expect(calculateCartLine(input, exempt).line).toEqual({ ...taxed, total_tax: '0', taxes: [] });
 	});
+	it('preserves the net of an inclusive-entered shipping line on an exclusive store', () => {
+		const input = {
+			kind: 'shipping' as const,
+			cartLineItems: [],
+			line: {
+				total: '10',
+				meta_data: [posDataMeta({ amount: 12, prices_include_tax: true })],
+			},
+		};
+		expect(calculateCartLine(input, exempt).line).toEqual({
+			...calculateCartLine(input, config).line,
+			total: '10',
+			total_tax: '0',
+			taxes: [],
+		});
+	});
+	it('preserves the net of an inclusive-entered fee on an exclusive store', () => {
+		const input = {
+			kind: 'fee' as const,
+			cartLineItems: [],
+			line: {
+				total: '10',
+				meta_data: [posDataMeta({ amount: 12, prices_include_tax: true })],
+			},
+		};
+		expect(calculateCartLine(input, exempt).line).toEqual({
+			...calculateCartLine(input, config).line,
+			total: '10',
+			total_tax: '0',
+			taxes: [],
+		});
+	});
+	it('preserves product net money on an inclusive-price store', () => {
+		const inclusive = createCartConfig({ ...config, pricesIncludeTax: true });
+		const input = { kind: 'line_item' as const, line: lineItem };
+		const taxed = calculateCartLine(input, inclusive).line;
+		expect(taxed.total).toBe('20.616667');
+		expect(
+			calculateCartLine(input, createCartConfig({ ...inclusive, vatExempt: true })).line
+		).toEqual({ ...taxed, total_tax: '0', subtotal_tax: '0', taxes: [] });
+	});
 	it('leaves the disabled-tax and non-taxable paths identical', () => {
 		const disabled = createCartConfig({ ...config, calcTaxes: false });
 		const input = { kind: 'line_item' as const, line: lineItem };
