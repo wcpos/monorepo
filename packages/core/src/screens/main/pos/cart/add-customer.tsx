@@ -24,6 +24,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+import { snapshotCustomerTaxIds } from '../hooks/utils';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
@@ -76,6 +77,9 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 								customer_id: saved?.id,
 								billing: saved?.billing,
 								shipping: saved?.shipping,
+								// The same snapshot the picker takes: without it a customer created at the
+								// till reached the receipt with no tax ID until removed and picked again.
+								tax_ids: snapshotCustomerTaxIds(saved),
 							},
 						});
 						onClose();

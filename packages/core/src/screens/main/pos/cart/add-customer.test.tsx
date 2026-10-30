@@ -101,11 +101,18 @@ describe.each([
 	});
 
 	it('attaches fields from the raw record payload to the current order', async () => {
+		const taxId = {
+			type: 'es_nif',
+			value: 'B12345678',
+			country: 'ES',
+			verified: { status: 'verified', source: 'test' },
+		};
 		const payload = {
 			id: 37,
 			first_name: 'Ada',
 			billing: { city: 'London' },
 			shipping: { city: 'Oxford' },
+			tax_ids: [taxId],
 		};
 		const toJSON = jest.fn(() => ({ payload }));
 		mockCreate.mockResolvedValue({
@@ -127,14 +134,31 @@ describe.each([
 				customer_id: payload.id,
 				billing: payload.billing,
 				shipping: payload.shipping,
+				tax_ids: [taxId],
 			},
 		});
+		// The order owns its copy: the customer's rows are not written by reference.
+		const written = mockLocalPatch.mock.calls[0][0].data.tax_ids;
+		expect(written[0]).not.toBe(taxId);
+		expect(written[0].verified).not.toBe(taxId.verified);
 		expect(mockFormat).toHaveBeenCalledWith(payload);
 		expect(toJSON).not.toHaveBeenCalled();
 		// The form toasts "Saved {name}" itself, so the hook's generic toast stays off.
 		expect(mockUseMutationProps).toHaveBeenCalledWith(
 			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
 		);
+	});
+
+	it('writes an empty tax-ID snapshot for a customer created without one', async () => {
+		const payload = { id: 37, first_name: 'Ada', billing: {}, shipping: {} };
+		mockCreate.mockResolvedValue({ payload, getLatest: () => ({ payload }) });
+
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+
+		expect(mockLocalPatch.mock.calls[0][0].data.tax_ids).toEqual([]);
 	});
 
 	it('says the created customer was not attached, with the customer-specific next step', async () => {

@@ -192,19 +192,27 @@ export const transformCustomerJSONToOrderJSON = (
 			postcode: customer?.shipping?.postcode || '',
 			country: customer?.shipping?.country || '',
 		},
-		// Snapshot the customer's tax IDs onto the order at attach time. The
-		// order owns its own copy so post-sale edits don't leak back to the
-		// customer record (and customer-record edits don't retroactively
-		// change historical orders). Empty array when the customer has none —
-		// this overrides any prior snapshot if the cashier swaps customers.
-		tax_ids: Array.isArray(customer?.tax_ids)
-			? customer.tax_ids.map((taxId) => ({
-					...taxId,
-					verified: taxId.verified ? { ...taxId.verified } : null,
-				}))
-			: [],
+		tax_ids: snapshotCustomerTaxIds(customer),
 	};
 };
+
+/**
+ * The order's own copy of a customer's tax IDs, taken when the customer is attached: by
+ * the picker (through `transformCustomerJSONToOrderJSON`) and by the cart's new-customer
+ * form alike. The order owns the copy so post-sale edits don't leak back to the customer
+ * record (and customer-record edits don't retroactively change historical orders). Empty
+ * array when the customer has none, which overrides any prior snapshot if the cashier
+ * swaps customers.
+ */
+export const snapshotCustomerTaxIds = (
+	customer: Pick<CustomerJSON, 'tax_ids'> | null | undefined
+): NonNullable<CustomerJSON['tax_ids']> =>
+	Array.isArray(customer?.tax_ids)
+		? customer.tax_ids.map((taxId) => ({
+				...taxId,
+				verified: taxId.verified ? { ...taxId.verified } : null,
+			}))
+		: [];
 
 /**
  * Convert a product to the format expected by OrderDocument['line_items']
