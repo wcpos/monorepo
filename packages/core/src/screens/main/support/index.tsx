@@ -44,7 +44,7 @@ export function Support() {
 
 	return (
 		<EdgeSurface testID="screen-support" edges={BOTTOM} className="bg-background flex-1">
-			<ManagementBar title={t('common.support')} testID="support-bar" />
+			<ManagementBar title={t('common.support')} testID="support-bar" controls="phone" />
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 			<View
 				testID="support-frame"

@@ -10,13 +10,6 @@ import { useGround } from '@wcpos/components/lib/ground';
 
 export type AreaPageMode = 'scroll' | 'fill';
 
-/**
- * The heading row's trailing slot, filled by `NavigationAreaLayout` on wide (where the area has no
- * bar) with the bar's controls, so the cashier door is on every page. A context of a node, so this
- * module never imports the cashier entry and its sheet.
- */
-export const AreaHeadingTrailing = React.createContext<React.ReactNode>(null);
-
 const BOTTOM = ['bottom'] as const;
 
 /**
@@ -48,16 +41,13 @@ export function AreaPage({
 	// and the 32 on `md` that preceded it were this page's own numbers, off the scale. The card's
 	// own body keeps its 16 (inside a surface).
 	const padding = useGround().p;
-	const trailing = React.useContext(AreaHeadingTrailing);
+	// The title alone: the heading carries neither the bell nor the avatar (Paul, 2026-10-30).
 	const heading = (
-		<View className="flex-row items-start gap-2 px-4 pt-4 pb-3">
-			<View className="min-w-0 flex-1 gap-0.5">
-				<Text role="heading" aria-level={1} className="text-xl font-semibold">
-					{title}
-				</Text>
-				{!!description && <Text variant="help">{description}</Text>}
-			</View>
-			{trailing}
+		<View className="gap-0.5 px-4 pt-4 pb-3">
+			<Text role="heading" aria-level={1} className="text-xl font-semibold">
+				{title}
+			</Text>
+			{!!description && <Text variant="help">{description}</Text>}
 		</View>
 	);
 	const body = (
