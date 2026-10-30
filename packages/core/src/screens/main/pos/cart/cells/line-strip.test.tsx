@@ -78,9 +78,11 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: {
-			View: (props: React.ComponentProps<typeof actual.View>) => {
+			// react-native-web consumes `className`; the slots' classes are mirrored to `data-classes` so a
+			// test can read what a slot paints (the Edit slot's primary).
+			View: (props: React.ComponentProps<typeof actual.View> & { className?: string }) => {
 				if (props.onLayout && props.testID) mockLayouts[props.testID] = props.onLayout;
-				return <actual.View {...props} />;
+				return <actual.View {...props} dataSet={{ classes: props.className ?? '' }} />;
 			},
 		},
 		useReducedMotion: () => true,
@@ -202,6 +204,12 @@ it('Remove is a solid red block, square and as tall as the row', () => {
 	expect(mockRemoveProps.variant).toBe('destructive');
 	expect(mockRemoveProps.className).toMatch(/\brounded-none\b/);
 	expect(mockRemoveProps.className).toMatch(/\bh-auto\b/);
+});
+it('the Edit slot is the solid primary beside it, not the muted surface grey (Paul 2026-10-30)', () => {
+	renderStrip();
+	const classes = screen.getByTestId('cart-line-edit-slot').getAttribute('data-classes');
+	expect(classes).toMatch(/\bbg-primary\b/);
+	expect(classes).not.toMatch(/\bbg-muted\b/);
 });
 it('fine keeps the hover nudge and takes the held mouse as the pan', () => {
 	mockPointer = 'fine';

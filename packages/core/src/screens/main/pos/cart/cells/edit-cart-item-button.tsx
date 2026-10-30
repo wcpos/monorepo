@@ -24,10 +24,11 @@ function EditCartItemButton({ title, item, form }: Props) {
 	return (
 		<ErrorBoundary>
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
-				{/* A square block the height of the cart row it sits under (the line strip).
-				    The slot under it paints the block's grey (line-strip.tsx). */}
+				{/* A square block the height of the cart row it sits under (the line strip): the solid
+				    primary beside the solid destructive Remove, the one place a `default` Button is not the
+				    screen's primary action (CODING_STANDARDS § Design, the variant table). */}
 				<Button
-					variant="ghost"
+					variant="default"
 					// eslint-disable-next-line no-restricted-syntax
 					className="min-w-tile h-auto flex-1 rounded-none px-5"
 					testID="cart-line-edit"

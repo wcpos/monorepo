@@ -392,8 +392,11 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			>
 				<Animated.View
 					testID="cart-line-edit-slot"
-					// The slot paints the Edit block's grey; the button on it is a plain ghost.
-					className="bg-muted flex-row items-stretch"
+					// The slot paints the Edit block's primary, the swipe grammar's normal action beside the
+					// destructive one (Paul, 2026-10-30, strip board B): both blocks solid, both white words, both
+					// dim on hover. The muted grey it wore was a surface colour and no Button's, and the ghost on
+					// it changed word and surface on hover while Remove only dimmed.
+					className="bg-primary flex-row items-stretch"
 					style={editStyle}
 					onLayout={(e) => setEditWidth(e.nativeEvent.layout.width)}
 					pointerEvents={armed ? 'none' : 'auto'}
@@ -402,7 +405,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					{/* The grey reaches a little under the body: react-native-web reports layout widths
 					    rounded to whole pixels, so the open row can stop a fraction past Edit's edge and
 					    would show a hairline of the strip's red there. */}
-					<View className="bg-muted absolute inset-y-0 right-full w-1" />
+					<View className="bg-primary absolute inset-y-0 right-full w-1" />
 					<EditCartItemButton
 						title={title}
 						item={item}
