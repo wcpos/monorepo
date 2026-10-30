@@ -4,7 +4,15 @@ import { parseISO } from 'date-fns/parseISO';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { POS_META_KEYS } from '@wcpos/sync-core';
-import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
+import {
+	fromMinor,
+	isActiveCouponLine,
+	isActiveFeeLine,
+	isActiveLineItem,
+	isActiveShippingLine,
+	readLedger,
+	toMinor,
+} from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type {
 	CashMovementRow,
@@ -122,11 +130,19 @@ export const backToSelling = (storeDB: RegisterStoreDatabase, id: string) =>
 	// is the server's flag and stays until the server clears it.
 	transition(registerCollections(storeDB).register_sessions, id, 'open', {
 		approved_counted: null,
+		count_note: null,
+		count_denominations: null,
 	});
 export const closeSession = async (
 	storeDB: RegisterStoreDatabase,
 	id: string,
-	input: { counted: Record<string, string>; closedBy?: number; timezone?: string }
+	input: {
+		counted: Record<string, string>;
+		closedBy?: number;
+		timezone?: string;
+		note?: string;
+		denominations?: { value: string; pieces: number }[];
+	}
 ) => {
 	const sessions = registerCollections(storeDB).register_sessions;
 	const session = await sessions.findOne(id).exec();
@@ -142,6 +158,8 @@ export const closeSession = async (
 				{ in: input.timezone && input.timezone !== 'device' ? tz(input.timezone) : undefined }
 			),
 		counted: input.counted,
+		count_note: input.note ?? null,
+		count_denominations: input.denominations ?? null,
 		closed_by: input.closedBy ?? null,
 		closure_id: id,
 	});
@@ -319,6 +337,11 @@ export async function writeClosure({
 				({ key, value }) => key === POS_META_KEYS.session && value === session.id
 			) || readLedger(order.payload.meta_data).some((row) => row.session_id === session.id)
 	);
+	const sold = bound.filter((order) =>
+		readLedger(order.payload.meta_data).some(
+			(row) => row.session_id === session.id && row.status === 'captured'
+		)
+	);
 	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
 	const refunds = attributeRefunds(session.id, ledgerRows, refundRecords);
 	const rows = ledgerRows.filter(
@@ -363,11 +386,21 @@ export async function writeClosure({
 		string,
 		{ rate?: number; name: string; net: string; tax: string; gross: string }
 	> = {};
-	for (const order of bound) {
+	// The tax table reads the same sales the counters do: a stamped but unpaid order has no tax to report.
+	for (const order of sold) {
+		const netByRate: Record<string, number> = {};
+		const lines = [
+			...(order.payload.line_items ?? []).filter(isActiveLineItem),
+			...(order.payload.fee_lines ?? []).filter(isActiveFeeLine),
+			...(order.payload.shipping_lines ?? []).filter(isActiveShippingLine),
+		];
+		for (const line of lines)
+			for (const tax of line.taxes ?? [])
+				netByRate[String(tax.id)] = (netByRate[String(tax.id)] ?? 0) + toMinor(line.total, 4);
 		for (const tax of order.payload.tax_lines ?? []) {
 			const key = String(tax.rate_id);
 			const amount = toMinor(tax.tax_total ?? '0', 4) + toMinor(tax.shipping_tax_total ?? '0', 4);
-			const net = tax.rate_percent ? Math.round((amount * 100) / tax.rate_percent) : 0;
+			const net = netByRate[key] ?? 0;
 			const previous = tax_rates[key];
 			tax_rates[key] = {
 				rate: tax.rate_percent,
@@ -388,11 +421,7 @@ export async function writeClosure({
 		)
 		.filter((value) => value > 0);
 	const period_sales_total = sum(rows.map((row) => row.amount));
-	const transaction_count = bound.filter((order) =>
-		readLedger(order.payload.meta_data).some(
-			(row) => row.session_id === session.id && row.status === 'captured'
-		)
-	).length;
+	const transaction_count = sold.length;
 	const draft: ClosureRow = {
 		id: session.id,
 		session_id: session.id,
@@ -466,17 +495,22 @@ export async function writeClosure({
 			),
 			transaction_count,
 			discounts: {
-				count: bound.reduce((count, order) => count + (order.payload.coupon_lines?.length ?? 0), 0),
+				count: sold.reduce(
+					(count, order) =>
+						count + (order.payload.coupon_lines ?? []).filter(isActiveCouponLine).length,
+					0
+				),
 				amount: sum(
-					bound.flatMap((order) => [order.payload.discount_total, order.payload.discount_tax])
+					sold.flatMap((order) => [order.payload.discount_total, order.payload.discount_tax])
 				),
 			},
-			items_sold: bound.reduce(
-				(total, order) =>
-					total +
-					(order.payload.line_items ?? []).reduce((count, item) => count + (item.quantity ?? 0), 0),
-				0
-			),
+			items_sold: fromMinor(
+				sold
+					.flatMap((order) => order.payload.line_items ?? [])
+					.filter(isActiveLineItem)
+					.reduce((total, item) => total + toMinor(String(item.quantity ?? 0), 4), 0),
+				4
+			).replace(/\.?0+$/, ''),
 			average_sale: fromMinor(
 				transaction_count ? Math.round(toMinor(period_sales_total, 4) / transaction_count) : 0,
 				4
@@ -536,12 +570,17 @@ type ClosureOrder = {
 	payload: Partial<
 		Pick<
 			OrderDocument,
-			'discount_total' | 'discount_tax' | 'payment_method' | 'payment_method_title'
+			| 'discount_total'
+			| 'discount_tax'
+			| 'payment_method'
+			| 'payment_method_title'
+			| 'coupon_lines'
+			| 'line_items'
+			| 'fee_lines'
+			| 'shipping_lines'
 		>
 	> & {
 		meta_data?: Parameters<typeof readLedger>[0];
-		coupon_lines?: readonly unknown[];
-		line_items?: readonly Pick<NonNullable<OrderDocument['line_items']>[number], 'quantity'>[];
 		tax_lines?: readonly Pick<
 			NonNullable<OrderDocument['tax_lines']>[number],
 			'rate_id' | 'rate_percent' | 'tax_total' | 'shipping_tax_total' | 'label'

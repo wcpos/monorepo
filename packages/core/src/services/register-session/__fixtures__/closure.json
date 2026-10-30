@@ -9,7 +9,6 @@
     "has_discounts": true,
     "has_variance_note": true,
     "has_denominations": true,
-
     "store_id": 1,
     "opened_at_gmt": "2026-09-11 08:00:00",
     "closed_at_gmt": "2026-09-11 17:00:00",
@@ -40,7 +39,7 @@
         "amount": "12.5000",
         "amount_display": "$12.50"
       },
-      "items_sold": 47,
+      "items_sold": "47",
       "average_sale": "20.8333",
       "drawer_openings": 2,
       "variance_note": "Two $5 notes found under the drawer",
@@ -122,7 +121,27 @@
           "reason": "Petty cash",
           "voided_by": "sample-void",
           "amount_display": "$5.00",
-          "created_at": {"datetime": "Sep 11, 2026, 12:00", "date": "Sep 11, 2026", "time": "12:00", "datetime_short": "9/11/26, 12:00", "datetime_long": "September 11, 2026 at 12:00 GMT+2", "datetime_full": "Friday, September 11, 2026 at 12:00 Central European Summer Time", "date_short": "9/11/26", "date_long": "September 11, 2026", "date_full": "Friday, September 11, 2026", "date_ymd": "2026-09-11", "date_dmy": "11/09/2026", "date_mdy": "09/11/2026", "weekday_short": "Fri", "weekday_long": "Friday", "day": "11", "month": "09", "month_short": "Sep", "month_long": "September", "year": "2026"},
+          "created_at": {
+            "datetime": "Sep 11, 2026, 12:00",
+            "date": "Sep 11, 2026",
+            "time": "12:00",
+            "datetime_short": "9/11/26, 12:00",
+            "datetime_long": "September 11, 2026 at 12:00 GMT+2",
+            "datetime_full": "Friday, September 11, 2026 at 12:00 Central European Summer Time",
+            "date_short": "9/11/26",
+            "date_long": "September 11, 2026",
+            "date_full": "Friday, September 11, 2026",
+            "date_ymd": "2026-09-11",
+            "date_dmy": "11/09/2026",
+            "date_mdy": "09/11/2026",
+            "weekday_short": "Fri",
+            "weekday_long": "Friday",
+            "day": "11",
+            "month": "09",
+            "month_short": "Sep",
+            "month_long": "September",
+            "year": "2026"
+          },
           "type_label": "Paid out",
           "voided": true
         }
@@ -174,10 +193,52 @@
     "perpetual_sales_total_display": "$5,250.00",
     "perpetual_refunds_total_display": "$250.00",
     "unsynced_total_display": "$12.00",
-    "opened_at": {"datetime": "Sep 11, 2026, 10:00", "date": "Sep 11, 2026", "time": "10:00", "datetime_short": "9/11/26, 10:00", "datetime_long": "September 11, 2026 at 10:00 GMT+2", "datetime_full": "Friday, September 11, 2026 at 10:00 Central European Summer Time", "date_short": "9/11/26", "date_long": "September 11, 2026", "date_full": "Friday, September 11, 2026", "date_ymd": "2026-09-11", "date_dmy": "11/09/2026", "date_mdy": "09/11/2026", "weekday_short": "Fri", "weekday_long": "Friday", "day": "11", "month": "09", "month_short": "Sep", "month_long": "September", "year": "2026"},
-    "closed_at": {"datetime": "Sep 11, 2026, 19:00", "date": "Sep 11, 2026", "time": "19:00", "datetime_short": "9/11/26, 19:00", "datetime_long": "September 11, 2026 at 19:00 GMT+2", "datetime_full": "Friday, September 11, 2026 at 19:00 Central European Summer Time", "date_short": "9/11/26", "date_long": "September 11, 2026", "date_full": "Friday, September 11, 2026", "date_ymd": "2026-09-11", "date_dmy": "11/09/2026", "date_mdy": "09/11/2026", "weekday_short": "Fri", "weekday_long": "Friday", "day": "11", "month": "09", "month_short": "Sep", "month_long": "September", "year": "2026"}
+    "opened_at": {
+      "datetime": "Sep 11, 2026, 10:00",
+      "date": "Sep 11, 2026",
+      "time": "10:00",
+      "datetime_short": "9/11/26, 10:00",
+      "datetime_long": "September 11, 2026 at 10:00 GMT+2",
+      "datetime_full": "Friday, September 11, 2026 at 10:00 Central European Summer Time",
+      "date_short": "9/11/26",
+      "date_long": "September 11, 2026",
+      "date_full": "Friday, September 11, 2026",
+      "date_ymd": "2026-09-11",
+      "date_dmy": "11/09/2026",
+      "date_mdy": "09/11/2026",
+      "weekday_short": "Fri",
+      "weekday_long": "Friday",
+      "day": "11",
+      "month": "09",
+      "month_short": "Sep",
+      "month_long": "September",
+      "year": "2026"
+    },
+    "closed_at": {
+      "datetime": "Sep 11, 2026, 19:00",
+      "date": "Sep 11, 2026",
+      "time": "19:00",
+      "datetime_short": "9/11/26, 19:00",
+      "datetime_long": "September 11, 2026 at 19:00 GMT+2",
+      "datetime_full": "Friday, September 11, 2026 at 19:00 Central European Summer Time",
+      "date_short": "9/11/26",
+      "date_long": "September 11, 2026",
+      "date_full": "Friday, September 11, 2026",
+      "date_ymd": "2026-09-11",
+      "date_dmy": "11/09/2026",
+      "date_mdy": "09/11/2026",
+      "weekday_short": "Fri",
+      "weekday_long": "Friday",
+      "day": "11",
+      "month": "09",
+      "month_short": "Sep",
+      "month_long": "September",
+      "year": "2026"
+    }
   },
-  "order": { "currency": "USD" },
+  "order": {
+    "currency": "USD"
+  },
   "i18n": {
     "x_report": "X-report",
     "closure": "Closure",
@@ -220,7 +281,7 @@
     "no_sale": "No sale",
     "void": "Void",
     "copy": "COPY"
-},
+  },
   "register": {
     "name": "Main register"
   },

@@ -66,6 +66,8 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
 let mockSessionStatus = 'counting';
+let count_note: string | null = null;
+let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let figuresPending = false;
@@ -85,6 +87,8 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			status: mockSessionStatus,
 			approval_required,
 			approved_counted,
+			count_note,
+			count_denominations,
 		},
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
@@ -123,6 +127,8 @@ const enter = (value: string) =>
 beforeEach(() => {
 	mockSessionStatus = 'counting';
 	approved_counted = null;
+	count_note = null;
+	count_denominations = null;
 	unsyncedCount = 3;
 	figuresPending = false;
 	blind = false;
@@ -494,3 +500,16 @@ it.each([false, true])(
 		});
 	}
 );
+
+it('restores the note and denomination tiles when the count pane reopens', () => {
+	count_note = 'Stored note';
+	count_denominations = [
+		{ value: '20', pieces: 2 },
+		{ value: '5', pieces: 1 },
+	];
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	expect((screen.getByTestId('count-note') as HTMLInputElement).value).toBe('Stored note');
+	fireEvent.click(screen.getByTestId('count-denominations'));
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('2');
+	expect(screen.getByTestId('den-tile-5-badge').textContent).toBe('1');
+});

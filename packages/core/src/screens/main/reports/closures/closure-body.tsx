@@ -374,7 +374,7 @@ export function ClosureBody({
 				{breakdowns.items_sold != null && (
 					<View className={STATIC_ROW}>
 						{term(t('closures.items_sold'))}
-						<Text className="tabular-nums">{String(breakdowns.items_sold)}</Text>
+						<Text className="tabular-nums">{breakdowns.items_sold as string}</Text>
 					</View>
 				)}
 				{discounts != null && (

@@ -331,7 +331,7 @@ it.each([false, true])('renders closure counters and note only when present: %s'
 			...row.breakdowns,
 			...(present
 				? {
-						items_sold: 47,
+						items_sold: '47.5',
 						discounts: { count: 3, amount: '12.5000' },
 						average_sale: '20.0000',
 						drawer_openings: 2,
@@ -357,7 +357,7 @@ it.each([false, true])('renders closure counters and note only when present: %s'
 		present ? 'Note · Found notes' : null
 	);
 	if (present) {
-		expect(screen.getByText('47')).toBeTruthy();
+		expect(screen.getByText('47.5')).toBeTruthy();
 		expect(screen.getByText('3 · $12.50')).toBeTruthy();
 		expect(screen.getByText('$20.00')).toBeTruthy();
 		expect(screen.getByText('2')).toBeTruthy();

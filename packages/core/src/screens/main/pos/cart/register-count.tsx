@@ -124,12 +124,16 @@ export function RegisterCount({
 	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
-	const noteForm = useForm({ defaultValues: { note: '' } });
+	const noteForm = useForm({ defaultValues: { note: session?.count_note ?? '' } });
 	const note = useWatch({ control: noteForm.control, name: 'note' });
 	const noteId = React.useId();
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
-	const [pieces, setPieces] = React.useState<Record<string, number>>({});
+	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
+		Object.fromEntries(
+			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
+		)
+	);
 	const [others, setOthers] = React.useState<Record<string, string>>(() =>
 		Object.fromEntries(
 			Object.entries(session?.counted ?? {}).filter(([method]) => method !== 'cash')

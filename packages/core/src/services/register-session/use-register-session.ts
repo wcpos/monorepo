@@ -548,8 +548,8 @@ export function useRegisterSession() {
 					siteUuid: site.uuid!,
 					session: closed,
 					counted: input.counted.cash,
-					note: input.note,
-					denominations: input.denominations,
+					note: input.note ?? closed.count_note ?? '',
+					denominations: input.denominations ?? closed.count_denominations ?? [],
 					otherTenders: Object.fromEntries(
 						Object.entries(input.counted).filter(([method]) => method !== 'cash')
 					),

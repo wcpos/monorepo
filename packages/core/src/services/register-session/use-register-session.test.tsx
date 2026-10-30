@@ -2048,3 +2048,25 @@ it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
 		}
 	}
 );
+
+it('replays a closed session using the stored note and denominations', async () => {
+	active = [];
+	closed = [
+		{
+			...session,
+			getLatest: () => closed[0],
+			closure_id: session.id,
+			sync_status: 'pending',
+			status: 'closed',
+			count_note: 'Stored note',
+			count_denominations: [{ value: '50', pieces: 2 }],
+		},
+	];
+	jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+	const result = await settled();
+	await act(() => result.current.actions.closeSession({ counted: { cash: '100' } }));
+	expect(actions.closeSession).not.toHaveBeenCalled();
+	expect(actions.writeClosure).toHaveBeenCalledWith(
+		expect.objectContaining({ note: 'Stored note', denominations: [{ value: '50', pieces: 2 }] })
+	);
+});

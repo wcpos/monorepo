@@ -344,7 +344,7 @@ it('formats new closure fields without inventing them on old rows', () => {
 				...row.breakdowns,
 				discounts: { count: 3, amount: '12.5000' },
 				average_sale: '20.8333',
-				items_sold: 47,
+				items_sold: '47',
 				drawer_openings: 2,
 				variance_note: 'Found notes',
 				denominations: [{ value: '5', pieces: 2, amount: '10.0000' }],
@@ -359,7 +359,7 @@ it('formats new closure fields without inventing them on old rows', () => {
 		breakdowns: {
 			discounts: { count: 3, amount: '12.5000', amount_display: '$12.50' },
 			average_sale_display: '$20.83',
-			items_sold: 47,
+			items_sold: '47',
 			drawer_openings: 2,
 			denominations: [{ value_display: '$5.00', amount_display: '$10.00', pieces: 2 }],
 		},
@@ -402,7 +402,7 @@ it('counts only live drawer openings on X-reports and excludes close-only fields
 	const breakdowns = {
 		movements: [{ type: 'no_sale' }, { type: 'no_sale', voided_by: 'v' }, { type: 'paid_in' }],
 		discounts: { count: 1, amount: '1' },
-		items_sold: 3,
+		items_sold: '3',
 		average_sale: '10',
 		variance_note: 'Not an X-report note',
 		denominations: [{ value: '5', pieces: 1, amount: '5' }],
