@@ -451,12 +451,13 @@
       --tile-tint-4: oklch(0.90 0.11 90);
       --tile-tint-5: oklch(0.88 0.09 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 8px;
-      --shape-radius-tile: 8px;
-      --shape-radius-media: 8px;
-      --shape-radius-commit: 8px;
-      --shape-radius-field: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: var(--radius);
+      --shape-radius-tile: var(--radius);
+      --shape-radius-media: var(--radius);
+      --shape-radius-commit: var(--radius);
+      --shape-radius-field: var(--radius);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -583,12 +584,13 @@
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 8px;
-      --shape-radius-tile: 8px;
-      --shape-radius-media: 8px;
-      --shape-radius-commit: 8px;
-      --shape-radius-field: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: var(--radius);
+      --shape-radius-tile: var(--radius);
+      --shape-radius-media: var(--radius);
+      --shape-radius-commit: var(--radius);
+      --shape-radius-field: var(--radius);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -713,12 +715,13 @@
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 8px;
-      --shape-radius-tile: 8px;
-      --shape-radius-media: 8px;
-      --shape-radius-commit: 8px;
-      --shape-radius-field: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: var(--radius);
+      --shape-radius-tile: var(--radius);
+      --shape-radius-media: var(--radius);
+      --shape-radius-commit: var(--radius);
+      --shape-radius-field: var(--radius);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -843,12 +846,13 @@
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 8px;
-      --shape-radius-tile: 8px;
-      --shape-radius-media: 8px;
-      --shape-radius-commit: 8px;
-      --shape-radius-field: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: var(--radius);
+      --shape-radius-tile: var(--radius);
+      --shape-radius-media: var(--radius);
+      --shape-radius-commit: var(--radius);
+      --shape-radius-field: var(--radius);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -971,12 +975,13 @@
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 8px;
-      --shape-radius-tile: 8px;
-      --shape-radius-media: 8px;
-      --shape-radius-commit: 8px;
-      --shape-radius-field: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: var(--radius);
+      --shape-radius-tile: var(--radius);
+      --shape-radius-media: var(--radius);
+      --shape-radius-commit: var(--radius);
+      --shape-radius-field: var(--radius);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -1066,13 +1071,14 @@
       --tile-tint-4: oklch(0.90 0.06 40);
       --tile-tint-5: oklch(0.90 0.04 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 4px;
-      --shape-radius-tile: 4px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: calc(var(--radius) * 0.5);
+      --shape-radius-tile: calc(var(--radius) * 0.5);
       --shape-radius-media: 999px;
-      --shape-radius-commit: 4px;
-      --shape-radius-field: 4px;
-      --shape-radius-chip: 4px;
+      --shape-radius-commit: calc(var(--radius) * 0.5);
+      --shape-radius-field: calc(var(--radius) * 0.5);
+      --shape-radius-chip: calc(var(--radius) * 0.5);
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -1161,12 +1167,13 @@
       --tile-tint-4: oklch(0.90 0.09 85);
       --tile-tint-5: oklch(0.88 0.05 200);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 12px;
-      --shape-radius-tile: 12px;
-      --shape-radius-media: 8px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: calc(var(--radius) * 1.5);
+      --shape-radius-tile: calc(var(--radius) * 1.5);
+      --shape-radius-media: var(--radius);
       --shape-radius-commit: 999px;
-      --shape-radius-field: 12px;
+      --shape-radius-field: calc(var(--radius) * 1.5);
       --shape-radius-chip: 999px;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
@@ -1256,10 +1263,11 @@
       --tile-tint-4: oklch(0.94 0.10 123);
       --tile-tint-5: oklch(0.87 0 0);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 18px;
-      --shape-radius-tile: 20px;
-      --shape-radius-media: 14px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: calc(var(--radius) * 2.25);
+      --shape-radius-tile: calc(var(--radius) * 2.5);
+      --shape-radius-media: calc(var(--radius) * 1.75);
       --shape-radius-commit: 999px;
       --shape-radius-field: 999px;
       --shape-radius-chip: 999px;
@@ -1354,10 +1362,11 @@
       --tile-tint-4: oklch(0.90 0.10 34);
       --tile-tint-5: oklch(0.90 0.08 220);
 
-      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
-      --shape-radius-control: 16px;
-      --shape-radius-tile: 16px;
-      --shape-radius-media: 12px;
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
+      --shape-radius-control: calc(var(--radius) * 2);
+      --shape-radius-tile: calc(var(--radius) * 2);
+      --shape-radius-media: calc(var(--radius) * 1.5);
       --shape-radius-commit: 999px;
       --shape-radius-field: 999px;
       --shape-radius-chip: 999px;
