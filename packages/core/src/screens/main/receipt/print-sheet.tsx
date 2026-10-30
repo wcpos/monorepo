@@ -33,6 +33,8 @@ export type PrintSheetProps = {
 	portalHost?: string;
 	testID?: string;
 	close?: DialogFooterProps['close'];
+	/** Nested dialogs (the receipt's email sheet) render inside the content, never beside it. */
+	children?: React.ReactNode;
 	printTestID?: string;
 };
 
@@ -51,6 +53,7 @@ export function PrintSheetContent({
 	testID = 'print-sheet',
 	close = true,
 	printTestID = 'print-sheet-print',
+	children,
 }: PrintSheetProps) {
 	const t = useT();
 	return (
@@ -88,6 +91,7 @@ export function PrintSheetContent({
 					}}
 				/>
 			</DismissIsClose>
+			{children}
 		</DialogContent>
 	);
 }

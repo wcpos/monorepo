@@ -75,8 +75,9 @@ function ReceiptDocument({
 				testID="receipt-dialog"
 				close={{ testID: 'receipt-close-button' }}
 				printTestID="receipt-print-button"
-			/>
-			{dialog}
+			>
+				{dialog}
+			</PrintSheetContent>
 		</Dialog>
 	);
 }
