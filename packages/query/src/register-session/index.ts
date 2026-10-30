@@ -1,6 +1,9 @@
 export {
 	adoptCounters,
 	bindRegister,
+	bindStoreRegister,
+	recordCarriedFrom,
+	readCarriedFrom,
 	boundRegisterIdOf,
 	getBoundRegister,
 	getCurrentBoundRegisterId,
