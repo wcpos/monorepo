@@ -234,7 +234,7 @@ it('keeps blind figures and printing hidden, with a full-height Done', () => {
 	expect(screen.queryByTestId('closure-figure-expected')).toBeNull();
 	expect(screen.queryByTestId('closure-figure-result')).toBeNull();
 	expect(screen.queryByTestId('closure-print')).toBeNull();
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.queryByTestId('z-preview')).toBeNull();
 	expect(screen.getByTestId('closure-done').getAttribute('data-size')).toBe('lg');
 });
