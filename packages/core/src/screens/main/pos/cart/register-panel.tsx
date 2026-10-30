@@ -7,7 +7,6 @@ import { useObservableSuspense } from 'observable-hooks';
 import { Badge } from '@wcpos/components/badge';
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
-import { IconButton } from '@wcpos/components/icon-button';
 import { Derivation, DerivationLine, DerivationStep } from '@wcpos/components/derivation';
 import {
 	Dialog,
@@ -44,6 +43,7 @@ import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
+import { PrintSheet } from '../../receipt/print-sheet';
 import { type ClosureCount, ClosureWritten } from './closure-written';
 
 const STATIC_ROW =
@@ -91,7 +91,8 @@ export function RegisterPanel({
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
 	const [countBusy, setCountBusy] = React.useState(false);
 	const { format } = useCurrencyFormat();
-	const { print } = useSessionReport();
+	const { print, doc } = useSessionReport();
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const t = useT();
 	const movementNames = {
 		paid_in: t('register.paid_in'),
@@ -278,17 +279,6 @@ export function RegisterPanel({
 						</DialogTitle>
 						<DialogDescription testID="register-panel-description">{description}</DialogDescription>
 					</View>
-					{/* The X-report is a glyph beside the figure it prints. `mr-3` clears the panel's own ×,
-					    which sits 4 px past the header's `pr-ctl` reserve, and leaves the 8 between targets. */}
-					{!blind && !!session && (
-						<IconButton
-							name="print"
-							testID="register-panel-print"
-							className="mr-3"
-							accessibilityLabel={t('register.print_x_report')}
-							onPress={() => attempt(print)}
-						/>
-					)}
 				</DialogHeader>
 				{figuresPending && (
 					<Notice
@@ -520,7 +510,7 @@ export function RegisterPanel({
 							)}
 						</View>
 					)}
-					{!!error && (
+					{!!error && !sheetOpen && (
 						<Text variant="key" className="text-bad px-2.5 py-2">
 							{error}
 						</Text>
@@ -528,6 +518,13 @@ export function RegisterPanel({
 				</DialogBody>
 				<DialogFooter
 					size="lg"
+					secondary={{
+						label: t('register.print_x_report'),
+						testID: 'register-panel-print',
+						icon: 'print',
+						disabled: blind || !session,
+						onPress: () => setSheetOpen(true),
+					}}
 					intent={{
 						label: overdue
 							? t('register.close_register_past', { time: closeTime })
@@ -540,6 +537,18 @@ export function RegisterPanel({
 								setPane('count');
 							}),
 					}}
+				/>
+				<PrintSheet
+					open={sheetOpen}
+					onOpenChange={setSheetOpen}
+					doc={doc}
+					title={t('register.x_report')}
+					description={binding.registerName + ' · ' + description}
+					printLabel={t('register.print_x_report')}
+					error={error || doc.documentError?.message || null}
+					onPrint={() => attempt(print)}
+					portalHost="pos"
+					testID="register-panel-print-sheet"
 				/>
 				{movement && (
 					<MovementSheet

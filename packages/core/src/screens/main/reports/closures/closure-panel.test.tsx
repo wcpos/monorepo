@@ -125,7 +125,11 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: jest.requireActual('@radix-ui/react-dialog').Root,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) => {
+		const Root = jest.requireActual('@radix-ui/react-dialog').Root;
+		return <Root open={open}>{open ? children : null}</Root>;
+	},
 	DialogContent: ({
 		children,
 		side,
@@ -144,6 +148,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 			<button data-testid={closeButtonProps?.testID ?? `${testID}-close`} />
 		</div>
 	),
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: jest.requireActual('@radix-ui/react-dialog').Title,
 	DialogDescription: ({ children }: { children: React.ReactNode }) => {
@@ -237,6 +242,8 @@ jest.mock('./recount-sheet', () => ({
 	},
 }));
 const mockDocument = jest.fn((options: { localReport: Record<string, unknown> }) => ({
+	printedTo: null,
+	printHeld: false,
 	print: mockPrint,
 	refetch: mockRefetch,
 	isPrinting: false,
@@ -395,8 +402,13 @@ it('shows settled figures below the server document and retains its baseline/cor
 it('dispatches reprint once and shows a failed print without retry', async () => {
 	mockPrint.mockRejectedValueOnce(new Error('refused'));
 	render(<ClosurePanel row={row} onClose={() => {}} />);
+	expect(screen.queryByTestId('closure-print-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('closure-reprint'));
-	await waitFor(() => expect(screen.getByTestId('closure-action-error')).toBeTruthy());
+	expect(mockPrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('closure-print-sheet')).toBeTruthy();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	await waitFor(() => expect(screen.getByTestId('print-sheet-error')).toBeTruthy());
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 // Revert: do not open recount or reload the corrected document after saving.
@@ -434,7 +446,7 @@ it('pins the tablet footer outside the body, Recount as the record and Reprint b
 	expect(body.contains(footer)).toBe(false);
 	expect(panel.contains(footer)).toBe(true);
 	expect(footer.contains(screen.getByTestId('closure-reprint'))).toBe(true);
-	expect(screen.getByTestId('closure-reprint').textContent).toBe('Print again');
+	expect(screen.getByTestId('closure-reprint').textContent).toBe('Print closure');
 	expect(footer.contains(screen.getByTestId('closure-recount'))).toBe(true);
 });
 
@@ -551,6 +563,9 @@ it.each([true, false])(
 		expect(getComputedStyle(selector.parentElement!).flexDirection).toBe('column');
 		expect(screen.getByTestId('closure-panel-body').contains(selector)).toBe(true);
 		fireEvent.click(screen.getByTestId('closure-reprint'));
+		expect(screen.getByTestId('closure-print-sheet')).toBeTruthy();
+		expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		await waitFor(() =>
 			expect(mockPrint).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'thermal' }))
 		);
@@ -559,6 +574,9 @@ it.each([true, false])(
 		fireEvent.click(systemOption);
 		expect(selector.textContent).toBe('Print Dialog');
 		fireEvent.click(screen.getByTestId('closure-reprint'));
+		expect(screen.getByTestId('closure-print-sheet')).toBeTruthy();
+		expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		await waitFor(() =>
 			expect(mockPrint).toHaveBeenLastCalledWith(
 				expect.objectContaining({ id: 'system', connectionType: 'system' })

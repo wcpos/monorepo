@@ -37,7 +37,23 @@ jest.mock('../../reports/closures/closure-panel', () => ({
 		const [error, setError] = React.useState('');
 		const [printCount, setPrintCount] = React.useState(row.print_count);
 		return {
-			doc: { receiptData: { closure: row }, isOffline: true },
+			doc: {
+				printedTo: null,
+				printHeld: false,
+				isPrinting: false,
+				isSyncing: false,
+				templates: [],
+				selectedTemplateId: null,
+				setSelectedTemplateId: jest.fn(),
+				allPrinters: [],
+				printerSelection: { type: 'auto' },
+				setPrinterSelection: jest.fn(),
+				resolvedPrinter: null,
+				mismatch: null,
+				previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+				receiptData: { closure: row },
+				isOffline: true,
+			},
 			context: mockContext,
 			settled: row,
 			touched: new Set(),
@@ -144,11 +160,13 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: jest.requireActual('react-native').View,
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogHeader: jest.requireActual('react-native').View,
-	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
@@ -162,7 +180,7 @@ it('shows the written heading and the three row figures; Done closes', () => {
 	expect(screen.getByTestId('closure-figure-counted').textContent).toBe('£463.30');
 	expect(screen.getByTestId('closure-figure-expected').textContent).toBe('£480.80');
 	expect(screen.getByTestId('closure-figure-result').textContent).toContain('−£17.50 short');
-	expect(screen.queryByTestId('closure-print-error')).toBeNull();
+	expect(screen.queryByTestId('print-sheet-error')).toBeNull();
 	fireEvent.click(screen.getByTestId('closure-done'));
 	expect(onDone).toHaveBeenCalledTimes(1);
 });
@@ -172,22 +190,32 @@ it('acknowledges an automatic print already recorded on the closure', () => {
 	try {
 		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
 		expect(screen.getByTestId('closure-printed').textContent).toContain('Printed on');
-		expect(screen.getByTestId('closure-print').textContent).toBe('Print again');
+		expect(screen.getByTestId('closure-print').textContent).toBe('Print closure');
 	} finally {
 		mockClosure = previous;
 	}
 });
-it('shows the print error and Print again after a failure, then acknowledges a successful print', async () => {
+it('opens the print sheet, shows a failure there, then acknowledges a successful print', async () => {
 	mockPrint.mockResolvedValueOnce(false);
 	render(<ClosureWritten count={count()} onDone={jest.fn()} />);
+	mockPrint.mockClear();
+	expect(screen.queryByTestId('closure-written-print-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('closure-print'));
+	expect(screen.getByTestId('closure-written-print-sheet')).toBeTruthy();
+	expect(mockPrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	await waitFor(() =>
-		expect(screen.getByTestId('closure-print-error').textContent).toBe('Print failed')
+		expect(screen.getByTestId('print-sheet-error').textContent).toBe('Print failed')
 	);
-	expect(screen.getByTestId('closure-print').textContent).toBe('Print again');
+	expect(screen.getByTestId('closure-print').textContent).toBe('Print closure');
 	fireEvent.click(screen.getByTestId('closure-print'));
+	expect(screen.getByTestId('closure-written-print-sheet')).toBeTruthy();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	await waitFor(() => expect(screen.getByTestId('closure-printed')).toBeTruthy());
-	expect(screen.queryByTestId('closure-print-error')).toBeNull();
+	expect(screen.queryByTestId('print-sheet-error')).toBeNull();
+	expect(mockPrint).toHaveBeenCalledTimes(2);
 });
 it('follows the server number after acknowledgement', () => {
 	const previous = mockClosure;

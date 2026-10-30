@@ -93,12 +93,23 @@ jest.mock('../chart', () => ({
 	},
 }));
 const mockPrintDocument = {
-	print: mockPrint,
+	printedTo: null,
+	printHeld: false,
 	isPrinting: false,
-	templatesReady: true,
+	isSyncing: false,
 	templates: [{ id: 7 }],
-	mismatch: null,
+	selectedTemplateId: null,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	allPrinters: [],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
 	resolvedPrinter: null,
+	mismatch: null,
+	previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+	print: mockPrint,
+	templatesReady: true,
+
 	documentError: null,
 };
 jest.mock('../../receipt/use-receipt-document', () => ({
@@ -285,6 +296,10 @@ it('renders the figure, delta and three companions using the store currency and 
 		expect(screen.getByTestId(`hero-${id}`).textContent).toBe(value);
 	expect(screen.getByTestId('existing-chart')).toBeTruthy();
 	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('hero-print-sheet')).toBeTruthy();
+	expect(mockPrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print summary');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 it('shows a muted dash when the comparison figure is zero', () => {
@@ -525,12 +540,14 @@ it('its clear puts every order back', () => {
 it('disables Print with the shared waiting line until templates are ready', () => {
 	mockPrintDocument.templatesReady = false;
 	setup();
-	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('hero-print-waiting').textContent).toBe('Loading templates');
+	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading templates');
 	fireEvent.click(screen.getByTestId('hero-print'));
 	expect(mockPrint).not.toHaveBeenCalled();
 });
-it('prints a grouped report with the viewed scope and no preview', () => {
+it('builds a grouped report with the viewed scope', () => {
 	setup({ cashier: '7' });
 	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
 	const options = useReceiptDocument.mock.calls.at(-1)[0];
@@ -550,14 +567,17 @@ it('prints a grouped report with the viewed scope and no preview', () => {
 it('shows false and thrown print failures and clears the error on success', async () => {
 	mockPrint.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('printer unavailable'));
 	setup();
+	fireEvent.click(screen.getByTestId('hero-print'));
 	for (let i = 0; i < 2; i++) {
-		fireEvent.click(screen.getByTestId('hero-print'));
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		await waitFor(() =>
-			expect(screen.getByTestId('hero-print-error').textContent).toBe('Could not print. Try again.')
+			expect(screen.getByTestId('print-sheet-error').textContent).toBe(
+				'Could not print. Try again.'
+			)
 		);
 	}
-	fireEvent.click(screen.getByTestId('hero-print'));
-	await waitFor(() => expect(screen.queryByTestId('hero-print-error')).toBeNull());
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	await waitFor(() => expect(screen.queryByTestId('print-sheet-error')).toBeNull());
 });
 
 // Downloading either lane must not print a document labelled as the whole period.
@@ -565,12 +585,31 @@ it.each(['sales', 'refunds'] as const)('waits for the %s lane then enables Print
 	const handle = handleOf(lane === 'sales' ? current : []);
 	handle.set({ laneProgress: { phase: 'fetching', loaded: 1, total: 2 } });
 	setup({ [lane]: handle });
-	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('hero-print-waiting').textContent).toBe(
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
 		lane === 'sales'
 			? 'Still loading orders for this range'
 			: 'Still loading refunds for this range'
 	);
 	act(() => handle.set({ laneProgress: null }));
-	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
 });
+
+jest.mock('../../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="sheet-preview" />,
+}));
+
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
+	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
+}));
