@@ -71,7 +71,8 @@ visual language does not change; every surface is built from components the gall
 - `CODING_STANDARDS.md` § Situation → overlay row "The cashier … `UserSheet` (right panel)" changes
   to: on the POS the products side (`usePanelSide('cart')`), on every other screen the page's
   `right`. Decision 46 (2026-09-17, bell and cashier from the right) is reversed for the cashier on
-  the POS only; the bell stays right. The 2026-09-11 ruling "counting → the count in the cart
+  the POS only; the bell stays right. _(amended 2026-10-30: the cashier sheet has been right on every screen,
+  the POS included, since #3085.)_ The 2026-09-11 ruling "counting → the count in the cart
   column" is reversed by § 4.5.
 - Two small plugin changes on `woocommerce-pos` `next` (§ 4.5, § 4.6) ship as their own PRs before
   the client slices that read them; the client feature-detects both (an older plugin gets the
@@ -241,7 +242,8 @@ till at 17:41 by Demo Cashier`; a sale mid-capture lands on the next session.
 Under 640 every panel is a page and every push is a page push with the back arrow; the avatar sits
 in the bar on both POS tabs and opens one sheet (#3018). Denomination tiles wrap to two rows. With
 products on the right every register-family panel comes from the right beside the bell; one is open
-at a time. The desktop title-bar strip hosts the avatar; no web links on desktop.
+at a time. _(amended 2026-10-30: the register panel and pay in / pay out come from the right wherever
+the products sit (Paul, 2026-10-30).)_ The desktop title-bar strip hosts the avatar; no web links on desktop.
 
 ### 4.9 Two invariants every slice keeps
 

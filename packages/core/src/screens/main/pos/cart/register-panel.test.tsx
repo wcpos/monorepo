@@ -148,7 +148,8 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
-// The cart's side is left here, so a right panel proves it ignores the products' position.
+// Cart panels open on the left here (products on the left), so a right panel proves it ignores
+// the products' position.
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({
@@ -1058,6 +1059,25 @@ it('opens on the count pane while this device is counting, only when opened', as
 		currentSession = previous;
 		mockCountingHere = previousHere;
 	}
+});
+// The real count pane, with the side it is handed recorded: the approval sheet it opens takes that
+// side, and without it would fall back to the cart's (left here).
+const mockCountSide = jest.fn();
+jest.mock('./register-count', () => {
+	const actual = jest.requireActual('./register-count');
+	const { createElement } = jest.requireActual('react');
+	return {
+		...actual,
+		RegisterCount: (props: { side?: 'left' | 'right' }) => {
+			mockCountSide(props.side);
+			return createElement(actual.RegisterCount, props);
+		},
+	};
+});
+it('hands the count pane its own side (right), which the approval sheet takes', async () => {
+	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+	await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
+	expect(mockCountSide).toHaveBeenLastCalledWith('right');
 });
 it('a requested count starts counting before showing the pane', async () => {
 	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
