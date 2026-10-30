@@ -34,6 +34,15 @@ export function buildReportDocument(
 			formatted: formatted[i],
 			align: column.align,
 		}));
+	const rows = (rows: PanelSpec['rows']) =>
+		rows.map((row) => ({
+			key: `row-${row.key}`,
+			label: row.cells[0],
+			cells: cells(row.cells, row.raw),
+		}));
+	const count = spec.groups
+		? spec.groups.reduce((sum, group) => sum + group.rows.length, 0)
+		: spec.rows.length;
 	const from = formatClosureDate(meta.from, context);
 	return {
 		report: {
@@ -53,16 +62,17 @@ export function buildReportDocument(
 			group_by: null,
 			columns,
 			column_count: columns.length,
-			rows: spec.rows.map((row) => ({
-				key: `row-${row.key}`,
-				label: row.cells[0],
-				cells: cells(row.cells, row.raw),
+			rows: spec.groups ? [] : rows(spec.rows),
+			groups: (spec.groups ?? []).map((group) => ({
+				key: `group-${group.key}`,
+				label: group.label,
+				rows: rows(group.rows),
+				subtotal: { cells: cells(group.total, group.totalRaw) },
 			})),
-			groups: [],
 			totals: { cells: cells(spec.total, spec.totalRaw) },
-			count: spec.rows.length,
-			has_groups: false,
-			has_rows: spec.rows.length > 0,
+			count,
+			has_groups: !!spec.groups,
+			has_rows: count > 0,
 			generated_at: formatClosureDate(meta.generatedAt, context),
 			is_partial: false,
 			partial_reason: '',

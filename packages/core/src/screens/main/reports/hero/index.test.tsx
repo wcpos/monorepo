@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { Hero } from './index';
@@ -73,6 +73,11 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	...jest.requireActual('../../../../hooks/use-local-date'),
 	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
 }));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0 }),
+}));
+jest.mock('@wcpos/components/calendar', () => ({ Calendar: () => null }));
+jest.mock('../bar', () => ({ ScopeHint: () => null }));
 jest.mock('../chart', () => ({
 	Chart: ({ comparison = false }: { comparison?: boolean }) => {
 		const { chartView } = useReportsScope();
@@ -87,9 +92,27 @@ jest.mock('../chart', () => ({
 		);
 	},
 }));
-jest.mock('../report/template', () => ({ ZReport: () => null }));
-jest.mock('../report/use-report-print', () => ({
-	useReportPrint: () => ({ print: mockPrint, isPrinting: false, contentRef: { current: null } }),
+const mockPrintDocument = {
+	print: mockPrint,
+	isPrinting: false,
+	templatesReady: true,
+	templates: [{ id: 7 }],
+	mismatch: null,
+	resolvedPrinter: null,
+	documentError: null,
+};
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: jest.fn(() => mockPrintDocument),
+}));
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+	useRegisterNamesReady: () => true,
+}));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'front', registerName: 'Front' }),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: jest.requireActual('react-native').Text,
@@ -99,9 +122,15 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
 jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ testID, onPress }: { testID: string; onPress: () => void }) => (
-		<button data-testid={testID} onClick={onPress} />
-	),
+	IconButton: ({
+		testID,
+		onPress,
+		disabled,
+	}: {
+		testID: string;
+		onPress: () => void;
+		disabled?: boolean;
+	}) => <button data-testid={testID} onClick={onPress} disabled={disabled} />,
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: jest.requireActual('react-native').Text,
@@ -197,6 +226,8 @@ function Probe() {
 }
 function setup({
 	comparison = handleOf(previous),
+	sales = handleOf(current),
+	refunds = handleOf([]),
 	week = false,
 	probe = true,
 	cashier = undefined as string | undefined,
@@ -217,11 +248,7 @@ function setup({
 		>
 			<ReportsScopeProvider>
 				<React.Suspense fallback={null}>
-					<ReportsProvider
-						handle={handleOf(current)}
-						comparisonHandle={comparison}
-						refundsHandle={handleOf([])}
-					>
+					<ReportsProvider handle={sales} comparisonHandle={comparison} refundsHandle={refunds}>
 						<Hero title={<span>Today</span>} />
 						{probe && (
 							<React.Suspense fallback={null}>
@@ -238,7 +265,8 @@ function setup({
 }
 beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
-	mockPrint.mockClear();
+	mockPrint.mockReset().mockResolvedValue(true);
+	mockPrintDocument.templatesReady = true;
 });
 afterEach(() => jest.useRealTimers());
 // Removing calculateTotals or the live-day cutoff changes all the displayed comparisons.
@@ -491,4 +519,58 @@ it('its clear puts every order back', () => {
 	fireEvent.click(screen.getByTestId('hero-chip-left-out-clear'));
 	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	expect(screen.getByTestId('exclusions').textContent).toBe('');
+});
+
+// A missing template must block printing; failures must be visible and recover on the next press.
+it('disables Print with the shared waiting line until templates are ready', () => {
+	mockPrintDocument.templatesReady = false;
+	setup();
+	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('hero-print-waiting').textContent).toBe('Loading templates');
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(mockPrint).not.toHaveBeenCalled();
+});
+it('prints a grouped report with the viewed scope and no preview', () => {
+	setup({ cashier: '7' });
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	const options = useReceiptDocument.mock.calls.at(-1)[0];
+	expect(options).toMatchObject({
+		templateType: 'report',
+		storeId: 9,
+		autoPrintAllowed: false,
+	});
+	expect(options.localReport.report).toMatchObject({
+		key: 'summary',
+		title: 'Sales summary',
+		rows: [],
+		has_groups: true,
+	});
+	expect(options.localReport.report.scope.label).toContain('Priya · Completed & processing');
+});
+it('shows false and thrown print failures and clears the error on success', async () => {
+	mockPrint.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('printer unavailable'));
+	setup();
+	for (let i = 0; i < 2; i++) {
+		fireEvent.click(screen.getByTestId('hero-print'));
+		await waitFor(() =>
+			expect(screen.getByTestId('hero-print-error').textContent).toBe('Could not print. Try again.')
+		);
+	}
+	fireEvent.click(screen.getByTestId('hero-print'));
+	await waitFor(() => expect(screen.queryByTestId('hero-print-error')).toBeNull());
+});
+
+// Downloading either lane must not print a document labelled as the whole period.
+it.each(['sales', 'refunds'] as const)('waits for the %s lane then enables Print', (lane) => {
+	const handle = handleOf(lane === 'sales' ? current : []);
+	handle.set({ laneProgress: { phase: 'fetching', loaded: 1, total: 2 } });
+	setup({ [lane]: handle });
+	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('hero-print-waiting').textContent).toBe(
+		lane === 'sales'
+			? 'Still loading orders for this range'
+			: 'Still loading refunds for this range'
+	);
+	act(() => handle.set({ laneProgress: null }));
+	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(false);
 });
