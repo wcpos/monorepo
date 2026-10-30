@@ -6,11 +6,13 @@ import { Text } from '@wcpos/components/text';
 import {
 	type ContentSize,
 	getReceiptPreviewPaperWidth,
+	MAX_PREVIEW_ZOOM,
+	MIN_PREVIEW_ZOOM,
 	PAPER_DIMENSIONS,
 	pickAutoFitZoom,
 	PREVIEW_ZOOM_STEPS,
 	type PreviewPaperWidth,
-	type PreviewZoom,
+	stepPreviewZoom,
 } from './receipt-preview-viewport-utils';
 
 export { getReceiptPreviewPaperWidth, PAPER_DIMENSIONS, PREVIEW_ZOOM_STEPS };
@@ -38,7 +40,8 @@ export function ReceiptPreviewViewport({
 	const fallback = PAPER_DIMENSIONS[paperWidth];
 	const canvasW = contentSize?.width ?? fallback.width;
 	const canvasH = contentSize?.height ?? fallback.height;
-	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
+	// A whole percent: the width fit is rarely one of the steps the controls walk.
+	const [zoom, setZoom] = React.useState<number>(100);
 	const availSizeRef = React.useRef<{ width: number; height: number } | null>(null);
 	const userPickedRef = React.useRef(false);
 
@@ -47,10 +50,10 @@ export function ReceiptPreviewViewport({
 		const avail = availSizeRef.current;
 		if (!avail) return;
 		const availW = avail.width - CANVAS_PAD_PX * 2;
-		const availH = avail.height - CANVAS_PAD_PX * 2;
-		if (availW <= 0 || availH <= 0) return;
-		setZoom(pickAutoFitZoom(canvasW, canvasH, availW, availH));
-	}, [canvasW, canvasH]);
+		if (availW <= 0) return;
+		// The width is the fit; the ScrollView below carries the height.
+		setZoom(pickAutoFitZoom(canvasW, availW));
+	}, [canvasW]);
 
 	const handleLayout = React.useCallback(
 		(event: LayoutChangeEvent) => {
@@ -60,20 +63,18 @@ export function ReceiptPreviewViewport({
 		[applyAutoFit]
 	);
 
-	// Re-fit when the measured content size changes — the container's onLayout
+	// Re-fit when the measured content width changes — the container's onLayout
 	// only fires for its own layout, not for content-driven canvas changes.
 	React.useEffect(() => {
 		applyAutoFit();
 	}, [applyAutoFit]);
 
 	const scale = zoom / 100;
-	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
-	const canZoomOut = currentIndex > 0;
-	const canZoomIn = currentIndex < PREVIEW_ZOOM_STEPS.length - 1;
-	const stepZoom = (delta: number) => {
-		const next = Math.max(0, Math.min(PREVIEW_ZOOM_STEPS.length - 1, currentIndex + delta));
+	const canZoomOut = zoom > MIN_PREVIEW_ZOOM;
+	const canZoomIn = zoom < MAX_PREVIEW_ZOOM;
+	const stepZoom = (delta: 1 | -1) => {
 		userPickedRef.current = true;
-		setZoom(PREVIEW_ZOOM_STEPS[next]);
+		setZoom(stepPreviewZoom(zoom, delta));
 	};
 
 	return (

@@ -3,11 +3,13 @@ import * as React from 'react';
 import {
 	type ContentSize,
 	getReceiptPreviewPaperWidth,
+	MAX_PREVIEW_ZOOM,
+	MIN_PREVIEW_ZOOM,
 	PAPER_DIMENSIONS,
 	pickAutoFitZoom,
 	PREVIEW_ZOOM_STEPS,
 	type PreviewPaperWidth,
-	type PreviewZoom,
+	stepPreviewZoom,
 } from './receipt-preview-viewport-utils';
 
 export { getReceiptPreviewPaperWidth, PAPER_DIMENSIONS, PREVIEW_ZOOM_STEPS };
@@ -36,13 +38,14 @@ export function ReceiptPreviewViewport({
 	const fallback = PAPER_DIMENSIONS[paperWidth];
 	const canvasW = contentSize?.width ?? fallback.width;
 	const canvasH = contentSize?.height ?? fallback.height;
-	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
+	// A whole percent: the width fit is rarely one of the steps the controls walk.
+	const [zoom, setZoom] = React.useState<number>(100);
 	const userPickedRef = React.useRef(false);
 
-	// Auto-fit the preview to the viewport until the user picks a zoom. Re-runs
-	// when the measured content size changes (so a freshly measured frame gets
-	// fitted) and observes the container so a modal that first lays out at 0×0
-	// is still fitted once it has real dimensions.
+	// Fill the viewport's width until the user picks a zoom; the height scrolls.
+	// Re-runs when the measured content width changes (so a freshly measured frame
+	// gets fitted) and observes the container so a modal that first lays out at
+	// 0×0 is still fitted once it has real dimensions.
 	React.useLayoutEffect(() => {
 		if (userPickedRef.current) return;
 		const el = containerRef.current;
@@ -50,9 +53,8 @@ export function ReceiptPreviewViewport({
 		const applyAutoFit = () => {
 			if (userPickedRef.current) return;
 			const availW = el.clientWidth - CANVAS_PAD_PX * 2;
-			const availH = el.clientHeight - CANVAS_PAD_PX * 2;
-			if (availW <= 0 || availH <= 0) return;
-			setZoom(pickAutoFitZoom(canvasW, canvasH, availW, availH));
+			if (availW <= 0) return;
+			setZoom(pickAutoFitZoom(canvasW, availW));
 		};
 
 		applyAutoFit();
@@ -61,16 +63,14 @@ export function ReceiptPreviewViewport({
 		const resizeObserver = new ResizeObserver(applyAutoFit);
 		resizeObserver.observe(el);
 		return () => resizeObserver.disconnect();
-	}, [canvasW, canvasH]);
+	}, [canvasW]);
 
 	const scale = zoom / 100;
-	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
-	const canZoomOut = currentIndex > 0;
-	const canZoomIn = currentIndex < PREVIEW_ZOOM_STEPS.length - 1;
-	const stepZoom = (delta: number) => {
-		const next = Math.max(0, Math.min(PREVIEW_ZOOM_STEPS.length - 1, currentIndex + delta));
+	const canZoomOut = zoom > MIN_PREVIEW_ZOOM;
+	const canZoomIn = zoom < MAX_PREVIEW_ZOOM;
+	const stepZoom = (delta: 1 | -1) => {
 		userPickedRef.current = true;
-		setZoom(PREVIEW_ZOOM_STEPS[next]);
+		setZoom(stepPreviewZoom(zoom, delta));
 	};
 
 	const buttonClass =
