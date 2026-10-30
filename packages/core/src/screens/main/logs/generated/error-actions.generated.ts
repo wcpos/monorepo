@@ -216,6 +216,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.REGISTER201');
 		case 'REGISTER211':
 			return t('health.logs.error_action.REGISTER211');
+		case 'REGISTER212':
+			return t('health.logs.error_action.REGISTER212');
 		case 'REGISTER221':
 			return t('health.logs.error_action.REGISTER221');
 		case 'REGISTER301':

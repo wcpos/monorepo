@@ -2302,6 +2302,29 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "REGISTER212",
+		"symbol": "REGISTER_CARRY_FAILED",
+		"domain": "REGISTER",
+		"severity": "error",
+		"actionHint": "Check both registers before trying to carry the drawer again.",
+		"retryPolicy": "manual",
+		"dataSafety": "outcome-unknown",
+		"escalation": "store-admin",
+		"summary": "The drawer carry did not complete on this device. The store was not switched.",
+		"docsBody": "The carry closes the source register and opens the target on your store. A refused request changes neither register. If the connection was interrupted, check both registers before trying again: the store may have completed the carry even though this device did not receive its answer.",
+		"troubleshooting": [
+			"Check the source and target registers before moving cash or trying again.",
+			"If the target is already open, switch without carrying and check which drawer belongs to it.",
+			"Ask the store admin for help if the registers do not match the physical drawers."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "Cashier/register map slice 6, spec § 4.6",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"code": "REGISTER221",
 		"symbol": "REGISTER_TAKEN_OVER",
 		"domain": "REGISTER",

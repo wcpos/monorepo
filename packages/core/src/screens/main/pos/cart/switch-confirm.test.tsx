@@ -602,3 +602,5 @@ it('offers Take the drawer back only for the matching carried session', async ()
 	show({ kind: 'store', store });
 	expect(screen.getByTestId('switch-confirm-carry').textContent).toContain('Take the drawer back');
 });
+
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));

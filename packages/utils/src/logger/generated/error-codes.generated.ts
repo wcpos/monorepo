@@ -104,6 +104,7 @@ export type ErrorCode =
 	| 'REGISTER111'
 	| 'REGISTER201'
 	| 'REGISTER211'
+	| 'REGISTER212'
 	| 'REGISTER221'
 	| 'REGISTER301'
 	| 'CLIENT151'
@@ -1123,6 +1124,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'local-only',
 		summary: "Your store refused this register's count, so the session is still open there.",
 	},
+	REGISTER212: {
+		code: 'REGISTER212',
+		symbol: 'REGISTER_CARRY_FAILED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint: 'Check both registers before trying to carry the drawer again.',
+		dataSafety: 'outcome-unknown',
+		summary: 'The drawer carry did not complete on this device. The store was not switched.',
+	},
 	REGISTER221: {
 		code: 'REGISTER221',
 		symbol: 'REGISTER_TAKEN_OVER',
@@ -1298,6 +1308,7 @@ export const ERROR_CODES = {
 	CASH_MOVEMENT_VOID_REFUSED: 'REGISTER111',
 	REGISTER_OPEN_REFUSED: 'REGISTER201',
 	REGISTER_CLOSE_REFUSED: 'REGISTER211',
+	REGISTER_CARRY_FAILED: 'REGISTER212',
 	REGISTER_TAKEN_OVER: 'REGISTER221',
 	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
