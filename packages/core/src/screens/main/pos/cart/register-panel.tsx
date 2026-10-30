@@ -93,6 +93,8 @@ export function RegisterPanel({
 	const { format } = useCurrencyFormat();
 	const { print, doc } = useSessionReport();
 	const [sheetOpen, setSheetOpen] = React.useState(false);
+	// The sheet shows only its own print failure, never a panel action's leftover message.
+	const [printError, setPrintError] = React.useState('');
 	const t = useT();
 	const movementNames = {
 		paid_in: t('register.paid_in'),
@@ -545,8 +547,19 @@ export function RegisterPanel({
 					title={t('register.x_report')}
 					description={binding.registerName + ' · ' + description}
 					printLabel={t('register.print_x_report')}
-					error={error || doc.documentError?.message || null}
-					onPrint={() => attempt(print)}
+					error={printError || doc.documentError?.message || null}
+					onPrint={async () => {
+						setPrintError('');
+						try {
+							await print();
+						} catch (e) {
+							setPrintError(
+								e instanceof Error && e.message === 'reports.reprint_failed'
+									? t('reports.reprint_failed')
+									: String(e)
+							);
+						}
+					}}
 					portalHost="pos"
 					testID="register-panel-print-sheet"
 				/>
