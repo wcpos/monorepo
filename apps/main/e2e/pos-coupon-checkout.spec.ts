@@ -199,12 +199,13 @@ for (const targetStoreId of storeTargets) {
 						await stampRunLabel(page, label);
 						await page.getByTestId('add-cart-item-menu').click();
 						await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
-						const menuItem = page.getByTestId('menu-add-coupon');
+						const menuItem = page.getByTestId('menu-add-discount');
 						couponTest.skip(
 							(await menuItem.count()) === 0,
-							'Pro coupon capability absent (menu-add-coupon)'
+							'Pro coupon capability absent (menu-add-discount)'
 						);
 						await menuItem.click();
+						await page.getByTestId('add-discount-kind-coupon').click();
 						await page.getByTestId('add-coupon-combobox').click();
 						const search = page.getByTestId('add-coupon-search-input');
 						await expect(search).toBeVisible({ timeout: 15_000 });
@@ -339,12 +340,13 @@ for (const targetStoreId of storeTargets) {
 					await stampRunLabel(page, label);
 					await page.getByTestId('add-cart-item-menu').click();
 					await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
-					const menuItem = page.getByTestId('menu-add-coupon');
+					const menuItem = page.getByTestId('menu-add-discount');
 					couponTest.skip(
 						(await menuItem.count()) === 0,
-						'Pro coupon capability absent (menu-add-coupon)'
+						'Pro coupon capability absent (menu-add-discount)'
 					);
 					await menuItem.click();
+					await page.getByTestId('add-discount-kind-coupon').click();
 					await page.getByTestId('add-coupon-combobox').click();
 					const search = page.getByTestId('add-coupon-search-input');
 					await expect(search).toBeVisible({ timeout: 15_000 });

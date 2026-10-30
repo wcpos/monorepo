@@ -31,7 +31,7 @@ import {
  * trip to the Money-oracle doctrine (TEST-PLAN.md) — coupon_lines recorded,
  * discount parity, totals parity, and no divergence banner.
  *
- * Pro-gated (menu-add-coupon requires a Pro license) and writer-gated (probe
+ * Pro-gated (the coupon picker behind menu-add-discount requires a Pro license) and writer-gated (probe
  * coupons need the shared e2e-product-writer identity): both absences are
  * declared-missing environment → skip with reason, per the store-agnostic
  * policy. A configured-but-failing write is a FAILURE, not a skip.
@@ -142,7 +142,7 @@ for (const targetStoreId of storeTargets) {
 				async ({ posPage: page, trackOrder, probeCoupon }, testInfo) => {
 					couponTest.skip(
 						getStoreVariant(testInfo) === 'free',
-						'coupon application is Pro-gated (menu-add-coupon)'
+						'coupon application is Pro-gated (menu-add-discount)'
 					);
 					couponTest.skip(
 						!probeCoupon,
@@ -156,10 +156,11 @@ for (const targetStoreId of storeTargets) {
 
 					// Apply the probe coupon through the UI.
 					await page.getByTestId('add-cart-item-menu').click();
-					const menuItem = page.getByTestId('menu-add-coupon');
+					const menuItem = page.getByTestId('menu-add-discount');
 					await expect(menuItem).toBeVisible({ timeout: 10_000 });
 					await menuItem.click();
 
+					await page.getByTestId('add-discount-kind-coupon').click();
 					await page.getByTestId('add-coupon-combobox').click();
 					const searchInput = page.getByTestId('add-coupon-search-input');
 					await expect(searchInput).toBeVisible({ timeout: 15_000 });

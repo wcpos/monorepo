@@ -5,14 +5,19 @@ import type { CouponPayload, EngineRecord, ReadonlyEngineRecord } from '@wcpos/q
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 
-export function useCouponRecord() {
-	const { create, patchRecord } = useMutation({ collectionName: 'coupons' });
+export function useCouponRecord({
+	showSuccessToast = true,
+	awaitRemoteId = false,
+}: { showSuccessToast?: boolean; awaitRemoteId?: boolean } = {}) {
+	const { create, patchRecord } = useMutation({ collectionName: 'coupons', showSuccessToast });
 	const { localPatch } = useLocalMutation();
 	const createCoupon = React.useCallback(
 		(data: Record<string, unknown>): Promise<EngineRecord<'coupons'> | undefined> =>
 			// The mutation already toasted the failure, including a repeated scope change.
-			create({ data }).catch(() => undefined) as Promise<EngineRecord<'coupons'> | undefined>,
-		[create]
+			create({ data, awaitRemoteId }).catch(() => undefined) as Promise<
+				EngineRecord<'coupons'> | undefined
+			>,
+		[create, awaitRemoteId]
 	);
 	const saveCouponFields = React.useCallback(
 		async (

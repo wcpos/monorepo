@@ -14,9 +14,9 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 
-import { AddCoupon } from './add-coupon';
+import { AddCouponFormDialog } from './add-coupon-form';
 import { AddCustomerDialog } from './add-customer';
-import { AddDiscount } from './add-discount';
+import { AddDiscountSheet } from './add-discount-sheet';
 import { AddFee } from './add-fee';
 import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
@@ -27,7 +27,8 @@ import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { usePanelSide } from '../contexts/overlay-side';
 
-type DialogType = 'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'coupon' | null;
+type DialogType =
+	'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'new-coupon' | null;
 
 export function AddCartItemsMenu() {
 	const side = usePanelSide('cart');
@@ -92,10 +93,6 @@ export function AddCartItemsMenu() {
 						<Icon name="shipping" />
 						<Text>{t('pos_cart.add_shipping')}</Text>
 					</DropdownMenuItem>
-					<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
-						<Icon name="discount" />
-						<Text>{t('pos_cart.add_coupon')}</Text>
-					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 
@@ -124,12 +121,18 @@ export function AddCartItemsMenu() {
 						size="lg"
 						portalHost="pos"
 					>
-						<DialogHeader>
-							<DialogTitle>
-								{openDialog === 'fee' ? t('pos_cart.add_fee') : t('pos_cart.add_discount')}
-							</DialogTitle>
-						</DialogHeader>
-						<ErrorBoundary>{openDialog === 'fee' ? <AddFee /> : <AddDiscount />}</ErrorBoundary>
+						{openDialog === 'discount' ? (
+							<AddDiscountSheet onNewCoupon={() => setOpenDialog('new-coupon')} />
+						) : (
+							<>
+								<DialogHeader>
+									<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
+								</DialogHeader>
+								<ErrorBoundary>
+									<AddFee />
+								</ErrorBoundary>
+							</>
+						)}
 					</DialogContent>
 				</Dialog>
 			)}
@@ -147,17 +150,8 @@ export function AddCartItemsMenu() {
 				</Dialog>
 			)}
 
-			{openDialog === 'coupon' && (
-				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-					<DialogContent side={side} size="lg" portalHost="pos">
-						<DialogHeader>
-							<DialogTitle>{t('pos_cart.add_coupon')}</DialogTitle>
-						</DialogHeader>
-						<ErrorBoundary>
-							<AddCoupon />
-						</ErrorBoundary>
-					</DialogContent>
-				</Dialog>
+			{openDialog === 'new-coupon' && (
+				<AddCouponFormDialog open onOpenChange={(open) => !open && setOpenDialog(null)} />
 			)}
 		</>
 	);
