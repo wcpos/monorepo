@@ -4,7 +4,13 @@ import { Platform as RNPlatform, View } from 'react-native';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
@@ -176,6 +182,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 					<DialogTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</DialogTitle>
 				</DialogHeader>
 				<View className="flex-1">{content}</View>
+				<DialogFooter />
 			</DialogContent>
 		</Dialog>
 	);

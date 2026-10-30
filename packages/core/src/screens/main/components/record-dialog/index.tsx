@@ -1,7 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { DialogBody, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import {
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DismissIsClose,
+} from '@wcpos/components/dialog';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -65,7 +71,7 @@ export function RecordDialog<R>({
 			{record == null ? (
 				<EmptyState kind="empty" title={notFound ?? title} testID="record-dialog-not-found" />
 			) : (
-				<>
+				<DismissIsClose>
 					<View className="min-h-0 flex-1">
 						<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 							<TabsList className="mx-4 flex-row">
@@ -91,7 +97,7 @@ export function RecordDialog<R>({
 						</Tabs>
 					</View>
 					{footer}
-				</>
+				</DismissIsClose>
 			)}
 		</DialogContent>
 	);

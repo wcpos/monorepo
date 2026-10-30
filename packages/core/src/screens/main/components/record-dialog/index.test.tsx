@@ -3,10 +3,13 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DialogFooter } from '@wcpos/components/dialog';
+
 import { RecordDialog } from '.';
 
 type Props = React.PropsWithChildren<Record<string, unknown>>;
 jest.mock('@wcpos/components/dialog', () => ({
+	...jest.requireActual('../../../../../jest/footer.test-utils'),
 	DialogContent: ({ children, side, size, portalHost, testID }: Props) => (
 		<div
 			role="dialog"
@@ -139,3 +142,21 @@ it.each([
 	expect(panel.dataset.host).toBe(host);
 	expect(panel.dataset.size).toBe('xl');
 });
+
+it.each(['footer', 'tab'])(
+	'labels the dismiss Close beside an intent through the record shell %s',
+	(path) => {
+		const footer = <DialogFooter intent={{ label: 'Sync order' }} close />;
+		render(
+			<RecordDialog
+				title="Order"
+				record={record}
+				form={[{ value: 'edit', label: 'Edit', render: () => (path === 'tab' ? footer : null) }]}
+				payload={{}}
+				footer={path === 'footer' ? footer : undefined}
+			/>
+		);
+		expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+	}
+);

@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Toast } from '@wcpos/components/toast';
 import { Text } from '@wcpos/components/text';
@@ -92,15 +91,16 @@ export function ApproveSheet({
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
 				<ApprovalFields {...{ username, password, setUsername, setPassword }} />
 				{!!error && <Text testID="approve-error">{error}</Text>}
-				<Button
-					testID="approve-confirm"
+				<DialogFooter
 					size="lg"
-					loading={busy}
-					disabled={!online || !username.trim() || !password}
-					onPress={confirm}
-				>
-					{t('register.approve')}
-				</Button>
+					intent={{
+						label: t('register.approve'),
+						testID: 'approve-confirm',
+						loading: busy,
+						disabled: !online || !username.trim() || !password,
+						onPress: () => void confirm(),
+					}}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

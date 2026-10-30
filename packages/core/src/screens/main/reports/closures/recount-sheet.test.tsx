@@ -419,7 +419,10 @@ it('explains an over-limit reason beside Save and clears the message after editi
 	fireEvent.change(screen.getByTestId('recount-reason'), { target: { value: 'x'.repeat(501) } });
 	const save = screen.getByTestId('recount-save') as HTMLButtonElement;
 	expect(save.disabled).toBe(true);
-	expect(save.previousElementSibling?.textContent).toBe('Keep the reason to 500 characters');
+	expect(save.previousElementSibling?.textContent).toBe('Cancel');
+	expect(save.previousElementSibling?.previousElementSibling?.textContent).toBe(
+		'Keep the reason to 500 characters'
+	);
 	fireEvent.change(screen.getByTestId('recount-reason'), { target: { value: 'x'.repeat(500) } });
 	expect(save.disabled).toBe(false);
 	expect(screen.queryByTestId('recount-reason-error')).toBeNull();

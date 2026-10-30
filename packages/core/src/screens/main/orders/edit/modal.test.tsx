@@ -55,7 +55,8 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: mockDiv,
 	DialogTitle: mockDiv,
 	DialogBody: mockDiv,
-	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 	useDialog: () => ({ close: mockClose }),
 }));
 jest.mock('@wcpos/components/tabs', () => {
@@ -123,12 +124,16 @@ jest.mock('../view/sections/payment', () => ({ PaymentSection: () => null }));
 jest.mock('../view/sections/customer', () => ({ CustomerSection: () => null }));
 
 const footer = () =>
-	screen.getAllByRole('button').map((button) => button.dataset.testid?.replace('order-modal-', ''));
+	screen
+		.getAllByRole('button')
+		.filter((button) => button.textContent !== 'Close')
+		.map((button) => button.dataset.testid?.replace('order-modal-', ''));
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockTab = undefined;
 	mockReadOnly = false;
 	mockOrder.payload.id = 42;
+	mockOrder.payload.status = 'completed';
 	mockOrder.payload.meta_data = [];
 });
 
@@ -224,3 +229,13 @@ jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 
 // The record dialog's not-found state; the real block loads ESM (uniwind, expo-linking).
 jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: () => null }));
+
+// The record shell makes the dismiss read Close beside Re-open (an open order saves as it is edited).
+it('labels the dismiss Close beside Re-open on an open order', () => {
+	mockOrder.payload.status = 'pos-open';
+	render(<OrderModal resource={{} as never} />);
+	expect(screen.getByRole('button', { name: 'Close' }).parentElement).toBe(
+		screen.getByTestId('order-modal-reopen').parentElement
+	);
+	expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+});

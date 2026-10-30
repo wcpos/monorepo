@@ -13,6 +13,7 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -789,6 +790,7 @@ export function PrinterSetupDialog({
 						</VStack>
 					</Form>
 				</DialogBody>
+				<DialogFooter />
 			</DialogContent>
 		</Dialog>
 	);

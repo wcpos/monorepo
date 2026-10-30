@@ -15,6 +15,7 @@ jest.mock('@wcpos/components/dialog', () => {
 		return <div data-testid={testID}>{children}</div>;
 	}
 	return {
+		...jest.requireActual('../../../jest/footer.test-utils'),
 		Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
 			open ? <>{children}</> : null,
 		DialogBody: Wrapper,

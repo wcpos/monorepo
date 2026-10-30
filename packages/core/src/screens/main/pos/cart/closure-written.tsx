@@ -65,6 +65,8 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 			</ScrollView>
 			<DialogFooter
 				size="lg"
+				// Done is the dismissal (ruled 2026-10-29): the one footer without a separate Close.
+				close={false}
 				intent={{ label: t('register.done'), testID: 'closure-done', onPress: onDone }}
 				secondary={
 					!count.blind && {
