@@ -24,6 +24,7 @@ import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
+import { readCarriedFrom } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -98,6 +99,10 @@ export function RegisterPanel({
 		no_sale: t('register.no_sale'),
 	};
 	const { store, site } = useStoreSession();
+	const source =
+		session?.float_source === 'carried'
+			? readCarriedFrom(site.uuid!, binding.registerId!, session.id)
+			: null;
 	const credentials = useObservableSuspense(credentialsListResource(site));
 	const { registers } = useRegisterBinding();
 	const { heading, time } = useStoreDayLabel(store.id);
@@ -372,7 +377,17 @@ export function RegisterPanel({
 									label={t('register.opened_suffix', { time: openedTime })}
 									title={t('register.float')}
 									trailing={trailing(figuresPending ? '—' : format(Number(terms.float)))}
-									detail={figuresPending ? t('register.figures_after_sync') : undefined}
+									detail={
+										figuresPending ? (
+											t('register.figures_after_sync')
+										) : session?.float_source === 'carried' ? (
+											<Text testID="register-panel-float-source" variant="key">
+												{source
+													? t('register.carried_from', { store: source.store_name })
+													: t('register.carried')}
+											</Text>
+										) : undefined
+									}
 								/>
 								{terms.cashSales.count > 0 && (
 									<DerivationStep

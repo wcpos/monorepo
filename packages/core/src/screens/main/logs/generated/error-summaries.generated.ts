@@ -222,6 +222,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.REGISTER201');
 		case 'REGISTER211':
 			return t('health.logs.error_summary.REGISTER211');
+		case 'REGISTER212':
+			return t('health.logs.error_summary.REGISTER212');
 		case 'REGISTER221':
 			return t('health.logs.error_summary.REGISTER221');
 		case 'REGISTER301':

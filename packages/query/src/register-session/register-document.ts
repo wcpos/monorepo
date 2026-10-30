@@ -24,6 +24,14 @@ export type LiveSession = {
 	at: string;
 };
 
+type CarriedFrom = {
+	session_id: string;
+	closure_id: string;
+	store_id: number;
+	store_name: string;
+	register_id: string;
+};
+
 export interface RegisterDocument {
 	id: string;
 	name: string;
@@ -43,6 +51,7 @@ export interface RegisterDocument {
 				string,
 				Partial<RegisterCounters> & {
 					live?: LiveSession;
+					carried_from?: CarriedFrom;
 					/** The session another till closed while this device held it live; cleared by the next open. */
 					closed_elsewhere?: { session_id: string; at: string };
 					closure_reservation?: { row: DeepReadonly<ClosureRow>; applied: boolean };
@@ -665,6 +674,55 @@ export async function markCountingHere(
 		const live = { ...register.live, counting_here: here };
 		const registers = { ...bucket.registers, [registerId]: { ...register, live } };
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+
+export async function recordCarriedFrom(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	note: CarriedFrom
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const registers = {
+			...bucket.registers,
+			[registerId]: { ...bucket.registers?.[registerId], carried_from: note },
+		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+
+export function readCarriedFrom(
+	siteUuid: string,
+	registerId: string,
+	sessionId: string
+): Omit<CarriedFrom, 'session_id'> | null {
+	const note = currentRegister?.sites[siteUuid]?.registers?.[registerId]?.carried_from;
+	if (note?.session_id !== sessionId) return null;
+	const { session_id: _, ...source } = note;
+	return source;
+}
+
+export async function bindStoreRegister(
+	userDB: UserDatabase,
+	siteUuid: string,
+	storeId: number,
+	register: { id: string; name: string }
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const bindings = {
+			...bucket.bindings,
+			[String(storeId)]: { register_id: register.id, register_name: register.name },
+		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, bindings } } };
 	});
 	currentRegister = updated.toJSON(true).data;
 }

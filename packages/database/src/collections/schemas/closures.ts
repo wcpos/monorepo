@@ -6,7 +6,7 @@ const money = { type: 'string' } as const;
 const tenders = { type: 'object', additionalProperties: money } as const;
 export const closuresLiteral = {
 	title: 'Register closures',
-	version: 1,
+	version: 2,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {
@@ -16,6 +16,8 @@ export const closuresLiteral = {
 		store_id: { type: ['number', 'null'] },
 		business_day: { type: 'string', maxLength: 10 },
 		closed_by: { type: ['number', 'null'] },
+		reason: { type: ['string', 'null'] },
+		carried_to_register_id: { type: ['string', 'null'], maxLength: 36 },
 		receipt_snapshot: { type: 'string', maxLength: CLOSURE_DOCUMENT_LIMIT },
 		corrections_count: { type: 'number' },
 		number: { type: 'number' },

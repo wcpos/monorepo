@@ -186,3 +186,74 @@ it('migrates a v2 session without inventing a counter and accepts the server sta
 		await db.remove();
 	}
 });
+
+// Reverting either carry schema bump/strategy must fail: old drawers remain unchanged.
+it.each([
+	['register_sessions', registerSessionsLiteral, 3, ['float_source', 'carried_from_closure_id']],
+	['closures', closuresLiteral, 1, ['reason', 'carried_to_register_id']],
+] as const)(
+	'migrates pre-carry %s without inventing carry fields',
+	async (collection, schema, version, fields) => {
+		const storage = wrappedValidateAjvStorage({ storage: getRxStorageMemory() });
+		const name = `carrymigration${Math.random().toString(36).slice(2)}`;
+		let db = await createRxDatabase({ name, storage, multiInstance: false });
+		const oldSchema = JSON.parse(JSON.stringify(schema));
+		oldSchema.version = version;
+		for (const field of fields) delete oldSchema.properties[field];
+		const original =
+			collection === 'register_sessions'
+				? {
+						id: 's',
+						register_id: 'r',
+						status: 'open',
+						opened_at_gmt: '2026-10-28T08:00:00Z',
+						sync_status: 'synced',
+						sync_attempts: 0,
+					}
+				: {
+						id: 'c',
+						session_id: 's',
+						register_id: 'r',
+						number: 1,
+						opened_at: '2026-10-28T08:00:00Z',
+						closed_at: '2026-10-28T17:00:00Z',
+						expected: { cash: '100' },
+						till_expected: { cash: '100' },
+						counted: { cash: '100' },
+						variance: { cash: '0' },
+						period_sales_total: '0',
+						period_refunds_total: '0',
+						perpetual_sales_total: '0',
+						perpetual_refunds_total: '0',
+						unsynced_count: 0,
+						unsynced_total: '0',
+						software_version: '',
+						breakdowns: {},
+						order_ids: [],
+						movement_ids: [],
+						sync_status: 'synced',
+						sync_attempts: 0,
+						print_count: 0,
+					};
+		try {
+			await db.addCollections({
+				[collection]: {
+					schema: oldSchema,
+					migrationStrategies: Object.fromEntries(
+						Array.from({ length: version }, (_, i) => [i + 1, (doc: unknown) => doc])
+					),
+				},
+			});
+			const before = (await db.collections[collection].insert(original)).toJSON();
+			await db.close();
+			db = await createRxDatabase({ name, storage, multiInstance: false });
+			await db.addCollections({ [collection]: storeCollections[collection] });
+			expect(schema.version).toBe(version + 1);
+			const row = await db.collections[collection].findOne(original.id).exec();
+			expect(row.toJSON()).toEqual(before);
+			for (const field of fields) expect(row.get(field)).toBeUndefined();
+		} finally {
+			await db.remove();
+		}
+	}
+);

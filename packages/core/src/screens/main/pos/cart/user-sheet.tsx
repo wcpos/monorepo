@@ -6,7 +6,12 @@ import { useRouter, useSegments } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
-import { observeRegister$, readLiveSession } from '@wcpos/query/register-session';
+import {
+	CarryAdoptionError,
+	carryDrawer,
+	observeRegister$,
+	readLiveSession,
+} from '@wcpos/query/register-session';
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
@@ -30,6 +35,7 @@ import {
 } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
@@ -55,6 +61,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RecordAvatar, UserAvatar } from '../../components/user-avatar';
 import { usePanelSide } from '../contexts/overlay-side';
 import { useSwitchStore } from './use-switch-store';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { storeListResource } from '../../hooks/store-list-resource';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
@@ -398,7 +405,8 @@ export function UserSheet({
 	onOpenRegister?: () => void;
 	portalHost?: string | null;
 }) {
-	const { site, store, wpCredentials, logout } = useStoreSession();
+	const { site, store, storeDB, userDB, wpCredentials, logout } = useStoreSession();
+	const http = useRestHttpClient();
 	const { login } = useAppState();
 	const router = useRouter();
 	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
@@ -478,6 +486,32 @@ export function UserSheet({
 				return void act(() => switchUser(request.credential));
 			case 'store':
 				return void act(async () => {
+					if (request.carry) {
+						try {
+							await carryDrawer({
+								http,
+								storeDB,
+								userDB,
+								siteUuid: site.uuid!,
+								sessionId: session!.id,
+								fromRegisterId: binding.registerId!,
+								from: { id: store.id!, name: store.name ?? '' },
+								to: request.carry,
+							});
+						} catch (error) {
+							// The server carried: the drawer is in Y and the next cycle records it; switch.
+							const carried = error instanceof CarryAdoptionError;
+							Toast.show({
+								text1: carried ? t('common.carry_recorded_later') : t('common.carry_failed'),
+								type: carried ? 'warning' : 'error',
+							});
+							log.error('Drawer carry failed', {
+								code: ERROR_CODES.REGISTER_CARRY_FAILED,
+								context: { error, carried },
+							});
+							if (!carried) return;
+						}
+					}
 					if (await handleSwitchStore(request.store)) onOpenChange(false);
 				});
 			case 'register':
@@ -507,7 +541,7 @@ export function UserSheet({
 			<Dialog
 				open={open}
 				onOpenChange={(next) => {
-					if (!next && isSwitching) return;
+					if (!next && busy) return;
 					onOpenChange(next);
 				}}
 			>

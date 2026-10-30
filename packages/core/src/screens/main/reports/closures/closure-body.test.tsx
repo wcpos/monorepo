@@ -301,3 +301,19 @@ it.each([true, false])(
 		else expect(tender.textContent).toContain('−$2.00 short');
 	}
 );
+
+// Omitting the reason check labels ordinary closes as carries; missing labels must not show undefined.
+it.each([
+	['Market', 'Carried to Market'],
+	[undefined, 'Carried'],
+])('names a carried destination in the heading: %s', (destination, label) => {
+	const carried = {
+		...row,
+		reason: 'store_switch',
+		breakdowns: { labels: { carried_to_store_name: destination } },
+	};
+	const view = render(<ClosureHeading row={carried} {...deriveSettled(carried, [])} blind />);
+	expect(screen.getByTestId('closure-carried-badge').textContent).toBe(label);
+	view.rerender(<ClosureHeading row={row} {...deriveSettled(row, [])} blind />);
+	expect(screen.queryByTestId('closure-carried-badge')).toBeNull();
+});

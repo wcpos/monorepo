@@ -39,6 +39,7 @@ jest.mock('react-native-reanimated', () => {
 		__esModule: true,
 		default: { View: mockView },
 		Easing: { bezier: () => 'ease' },
+		ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
 		...Object.fromEntries(
 			[
 				'FadeIn',

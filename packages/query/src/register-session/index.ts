@@ -1,6 +1,7 @@
 export {
 	adoptCounters,
 	bindRegister,
+	readCarriedFrom,
 	boundRegisterIdOf,
 	getBoundRegister,
 	getCurrentBoundRegisterId,
@@ -56,3 +57,5 @@ export {
 	observeSessionAccounting,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
+
+export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';

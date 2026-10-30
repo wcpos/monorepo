@@ -273,3 +273,5 @@ jest.mock('observable-hooks', () => ({
 			? []
 			: jest.requireActual('observable-hooks').useObservableSuspense(resource),
 }));
+
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
+import { CarryAdoptionError } from '@wcpos/query/register-session';
 import type { UserDatabase } from '@wcpos/database';
 import {
 	readRegister,
@@ -24,6 +25,15 @@ jest.mock('@wcpos/query/user-db', () => ({
 	observeCredentialStores: () => of(PENDING_USER_DB_READ, mockOtherStores),
 }));
 
+const mockCarry = jest.fn();
+const mockHttp = { post: jest.fn(), get: jest.fn() };
+const mockStoreDB = {};
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	carryDrawer: (...args: unknown[]) => mockCarry(...args),
+}));
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+let mockTargetKnown = false;
 let mockPaying = false;
 let mockOnline = true;
 jest.mock('../checkout/payments/payment-in-flight', () => ({
@@ -32,6 +42,53 @@ jest.mock('../checkout/payments/payment-in-flight', () => ({
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
 }));
+
+jest.mock('@wcpos/components/radio-group', () => {
+	const ReactMock = jest.requireActual('react') as typeof React;
+	const Ctx = ReactMock.createContext({ value: '', select: (_value: string) => {} });
+	return {
+		RadioGroup: ({
+			children,
+			value,
+			onValueChange,
+			testID,
+		}: React.PropsWithChildren<{
+			value: string;
+			onValueChange: (value: string) => void;
+			testID: string;
+		}>) => (
+			<Ctx.Provider value={{ value, select: onValueChange }}>
+				<div data-testid={testID}>{children}</div>
+			</Ctx.Provider>
+		),
+		RadioGroupOption: ({
+			value,
+			label,
+			description,
+			disabled,
+			testID,
+		}: {
+			value: string;
+			label: string;
+			description?: string;
+			disabled?: boolean;
+			testID: string;
+		}) => {
+			const group = ReactMock.useContext(Ctx);
+			return (
+				<button
+					data-testid={testID}
+					aria-checked={group.value === value}
+					disabled={disabled}
+					onClick={() => group.select(value)}
+				>
+					{label}
+					{description}
+				</button>
+			);
+		},
+	};
+});
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({
@@ -109,7 +166,7 @@ jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: (resource: unknown) =>
 		resource === 'stores'
-			? mockStores.map((localID) => ({ localID, name: localID }))
+			? mockStores.map((localID, index) => ({ localID, name: localID, id: index + 2 }))
 			: mockCredentials,
 }));
 
@@ -150,6 +207,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
 	useStoreSession: () => ({
 		userDB: mockUserDB,
+		storeDB: mockStoreDB,
 		wpCredentials: {
 			id: 7,
 			uuid: 'current',
@@ -201,7 +259,10 @@ const mockDirectory = [
 let mockRegisters = mockDirectory;
 let mockBindingStatus = 'bound';
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterDirectory: () => ({ registers: [], registerId: null }),
+	useRegisterDirectory: () => ({
+		registers: mockTargetKnown ? [{ id: 'B', name: 'Market till' }] : [],
+		registerId: null,
+	}),
 	useRegisterBinding: () => ({
 		registers: mockRegisters,
 		registerName: 'Front counter',
@@ -697,7 +758,13 @@ describe('side and header', () => {
 });
 
 let mockDrawer = {
-	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7, status: 'open' } as {
+	session: {
+		id: 'source',
+		opened_at_gmt: '2026-10-28T09:02:00Z',
+		opened_by: 7,
+		status: 'open',
+	} as {
+		id: string;
 		opened_at_gmt: string;
 		opened_by: number;
 		status: string;
@@ -707,7 +774,7 @@ let mockDrawer = {
 	blind: false,
 	salesCount: 3,
 	lastClosure: null as { number: number; server_number?: number | null } | null,
-	binding: { status: 'bound', registerName: 'Front counter' },
+	binding: { status: 'bound', registerName: 'Front counter', registerId: 'A' },
 	countingHere: false,
 	countingBy: null as { id: number; name: string | null; at: string | null } | null,
 	loaded: true,
@@ -1116,4 +1183,129 @@ it('the Register band names the current counter only when the plugin supplies on
 		mockT = previousT;
 		mockCart = previousCart;
 	}
+});
+
+// Removing carry-before-switch, failure return or the shared busy hold moves the wrong drawer.
+describe('carrying the drawer before a store switch', () => {
+	const onOpenChange = jest.fn();
+	beforeEach(() => {
+		mockStores = ['store-a', 'store-b'];
+		mockTargetKnown = true;
+		mockDrawer.session = {
+			id: 'source',
+			status: 'open',
+			opened_at_gmt: '2026-10-28T09:02:00Z',
+			opened_by: 7,
+		};
+		mockDrawer.binding.status = 'bound';
+		mockDrawer.figuresPending = false;
+		mockT = createTestT();
+		mockCarry.mockReset().mockResolvedValue({ closureId: 'c', sessionId: 'target' });
+		mockSwitch.mockReset().mockResolvedValue(undefined);
+		mockLogError.mockClear();
+		jest.mocked(Toast.show).mockClear();
+		onOpenChange.mockClear();
+	});
+	afterEach(() => {
+		mockTargetKnown = false;
+		mockStores = ['store-a'];
+	});
+	const confirm = async () => {
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+	};
+	it('carries once, holds the rows until the switch resolves, then closes the sheet', async () => {
+		let carried!: () => void;
+		let switched!: () => void;
+		mockCarry.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					carried = resolve;
+				})
+		);
+		mockSwitch.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					switched = resolve;
+				})
+		);
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await confirm();
+		expect(mockCarry).toHaveBeenCalledWith({
+			http: mockHttp,
+			storeDB: mockStoreDB,
+			userDB: mockUserDB,
+			siteUuid: 'site',
+			sessionId: 'source',
+			fromRegisterId: 'A',
+			from: { id: mockStoreId, name: 'UK Store' },
+			to: { store: { id: 3, name: 'store-b' }, register: { id: 'B', name: 'Market till' } },
+		});
+		expect(mockSwitch).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('dismiss'));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet-store-store-b').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		await act(async () => carried());
+		expect(mockSwitch).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByTestId('user-sheet-store-store-b'));
+		expect(screen.queryByTestId('switch-confirm')).toBeNull();
+		expect(mockCarry).toHaveBeenCalledTimes(1);
+		await act(async () => switched());
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+	it('does not switch on a refused carry; closes the confirm and re-enables rows', async () => {
+		mockCarry.mockRejectedValueOnce(new Error('wcpos_session_already_open'));
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await confirm();
+		expect(mockSwitch).not.toHaveBeenCalled();
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(screen.queryByTestId('switch-confirm')).toBeNull();
+		expect(screen.getByTestId('user-sheet-store-store-b').getAttribute('aria-disabled')).not.toBe(
+			'true'
+		);
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'error',
+			text1: 'The drawer carry did not complete. Check both registers before trying again.',
+		});
+		expect(mockLogError).toHaveBeenCalledWith(
+			'Drawer carry failed',
+			expect.objectContaining({ code: expect.stringMatching(/^REGISTER/) })
+		);
+	});
+	it('a carry the server committed but this device could not record still switches, with a warning', async () => {
+		mockCarry.mockRejectedValueOnce(
+			new CarryAdoptionError({ closureId: 'c', sessionId: 't' }, new Error('write'))
+		);
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await confirm();
+		await waitFor(() => expect(mockSwitch).toHaveBeenCalled());
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'warning',
+			text1: 'The drawer was carried. This device records it at the next sync.',
+		});
+	});
+	it('leaving the drawer switches without a carry', async () => {
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		fireEvent.click(screen.getByTestId('user-sheet-store-store-b'));
+		fireEvent.click(screen.getByTestId('switch-confirm-carry-leave'));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+		expect(mockCarry).not.toHaveBeenCalled();
+		expect(mockSwitch).toHaveBeenCalledTimes(1);
+	});
+	it('keeps a successful carry when switching fails, without carrying again on the next confirm', async () => {
+		mockCarry.mockImplementationOnce(async () => {
+			mockDrawer.session = null;
+		});
+		mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await confirm();
+		expect(mockCarry).toHaveBeenCalledTimes(1);
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+		await confirm();
+		expect(mockCarry).toHaveBeenCalledTimes(1);
+		expect(mockSwitch).toHaveBeenCalledTimes(2);
+	});
 });

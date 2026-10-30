@@ -9,6 +9,7 @@ import {
 	adoptCounters,
 	advancePerpetual,
 	bindRegister,
+	bindStoreRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
 	getRegisterSnapshot,
@@ -18,10 +19,12 @@ import {
 	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
+	readCarriedFrom,
 	readClosedElsewhere,
 	readCounters,
 	readLiveSession,
 	readRegister,
+	recordCarriedFrom,
 	recordLiveSession,
 	remintRegister,
 	settleRegister,
@@ -649,3 +652,54 @@ it.each([false, true])(
 		expect(readLiveSession('site', 'A')?.session_id).toBe('s2');
 	}
 );
+
+// Reverting session-scoped metadata would label a later, unrelated float as carried.
+it('remembers a carried source only for its session, across live record writes and clearing', async () => {
+	await remintRegister(db);
+	const note = {
+		session_id: 'carried',
+		closure_id: 'closure',
+		store_id: 1,
+		store_name: 'UK Store',
+		register_id: 'A',
+	};
+	expect(readCarriedFrom('site', 'B', 'carried')).toBeNull();
+	await recordCarriedFrom(db, 'site', 'B', note);
+	const live = {
+		session_id: 'carried',
+		status: 'open' as const,
+		opened_at_gmt: '2026-10-28T13:05:00Z',
+		opened_by: null,
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+	};
+	await recordLiveSession(db, 'site', 'B', live);
+	const { session_id: _, ...source } = note;
+	expect(readCarriedFrom('site', 'B', 'carried')).toEqual(source);
+	expect(readCarriedFrom('site', 'B', 'later')).toBeNull();
+	await recordLiveSession(db, 'site', 'B', null);
+	expect(readCarriedFrom('site', 'B', 'carried')).toEqual(source);
+	expect((await readRegister(db))?.sites.site.registers?.B.carried_from).toEqual(note);
+});
+
+// A target binding must not move the current register before the store switch succeeds.
+it('binds a target store without moving the current register or its counters', async () => {
+	await remintRegister(db);
+	await bindRegister(db, 'site', { id: 'A', name: 'Front' }, 1);
+	await nextSaleCounter(db, 'site');
+	await bindStoreRegister(db, 'site', 2, { id: 'B', name: 'Back' });
+	expect(getCurrentBoundRegisterId()).toBe('A');
+	expect(getBoundRegisterId('site', 2)).toBe('B');
+	expect((await readRegister(db))?.sites.site).toMatchObject({
+		register_id: 'A',
+		register_name: 'Front',
+		register_store_id: 1,
+		sale_counter: 1,
+		bindings: {
+			'1': { register_id: 'A', register_name: 'Front' },
+			'2': { register_id: 'B', register_name: 'Back' },
+		},
+	});
+});

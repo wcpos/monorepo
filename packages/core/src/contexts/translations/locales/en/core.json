@@ -2561,6 +2561,7 @@
 	"health.logs.error_summary.REGISTER111": "Your store would not reverse a cash movement, so the original one still counts.",
 	"health.logs.error_summary.REGISTER201": "Your store refused to open this register session, so nothing is being counted against it.",
 	"health.logs.error_summary.REGISTER211": "Your store refused this register's count, so the session is still open there.",
+	"health.logs.error_summary.REGISTER212": "The drawer carry did not complete on this device. The store was not switched.",
 	"health.logs.error_summary.REGISTER221": "Another device already had this register open, so this till joined that session instead of starting its own.",
 	"health.logs.error_summary.REGISTER301": "Your store would not accept the manager approval for this count, so the register is still open.",
 	"health.logs.error_summary.CLIENT151": "Part of the screen failed to load and was replaced by an error message.",
@@ -2671,6 +2672,7 @@
 	"health.logs.error_action.REGISTER111": "The original movement still stands in your store — check it before recording anything else.",
 	"health.logs.error_action.REGISTER201": "Sales are still safe, but they are not attached to a till session — reopen the register.",
 	"health.logs.error_action.REGISTER211": "Write the counted figures down before reopening — the till does not keep them.",
+	"health.logs.error_action.REGISTER212": "Check both registers before trying to carry the drawer again.",
 	"health.logs.error_action.REGISTER221": "Another device holds this register — check which drawer you are actually counting.",
 	"health.logs.error_action.REGISTER301": "Ask a different manager to approve the count, then close again.",
 	"health.logs.error_action.CLIENT151": "Close the error message to retry; if it comes back, reload the app.",
@@ -3098,5 +3100,15 @@
 	"register.session_sales": "Session sales",
 	"register.term_count": "{term} · {count}",
 	"register.taken": "Taken",
-	"register.close_register_past": "Close register · it's past {time}"
+	"register.close_register_past": "Close register · it's past {time}",
+	"register.take_drawer": "Take the drawer with you",
+	"register.take_drawer_hint": "Closes {register} at expected and opens {target} with it as the float",
+	"register.take_drawer_back": "Take the drawer back",
+	"register.leave_drawer": "Leave it open here",
+	"register.send_sales_first": "Send {count} sales first",
+	"register.carried_to": "Carried to {store}",
+	"register.carried": "Carried",
+	"register.carried_from": "carried from {store}",
+	"common.carry_failed": "The drawer carry did not complete. Check both registers before trying again.",
+	"common.carry_recorded_later": "The drawer was carried. This device records it at the next sync."
 }

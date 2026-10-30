@@ -21,6 +21,7 @@ import {
 } from '../../src/register-session/session-store';
 import { remintRegister } from '../../src/register-session/register-document';
 import {
+	adoptSessionRow,
 	drainRegisterSessionQueue,
 	type ServerMovementRow,
 } from '../../src/register-session/queue';
@@ -351,6 +352,37 @@ it('keeps a cashier transition that lands while the list row is being adopted', 
 		pending_status: 'counting',
 		sync_status: 'pending',
 	});
+});
+it('never reopens a closed session that has its closure from a stale list snapshot', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	const stale = serverListRow(row.getLatest().toJSON());
+	await row.getLatest().incrementalPatch({
+		status: 'closed',
+		server_status: 'closed',
+		closure_id: 'closure',
+		closed_at_gmt: '2026-10-18T09:05:00.000Z',
+	});
+	http.get.mockResolvedValue({ data: [stale] });
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(row.getLatest().toJSON()).toMatchObject({ status: 'closed', closure_id: 'closure' });
+});
+it('a refused close is recovered from the server row: the session reopens at counting', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	await row.getLatest().incrementalPatch({
+		status: 'closed',
+		closure_id: row.id,
+		sync_status: 'failed',
+		sync_error: 'wcpos_session_transition_refused',
+	});
+	http.get.mockResolvedValue({
+		data: [serverListRow({ ...row.getLatest().toJSON(), status: 'counting' })],
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(row.getLatest().toJSON()).toMatchObject({ status: 'counting' });
 });
 /** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
 const serverMovementRow = (
@@ -1488,4 +1520,20 @@ it('merges counting_by from the server after the local count starts', async () =
 	http.post.mockResolvedValueOnce({ data: { ...counting.toJSON(), counting_by: 8 } });
 	await drain();
 	expect(row.getLatest().counting_by).toBe(8);
+});
+
+// Removing the carry schema properties would silently prune the server's source note.
+it('adopts the carried float source fields from a server session', async () => {
+	const source = await open();
+	await adoptSessionRow(db.register_sessions, {
+		...source.toJSON(),
+		id: 'carried',
+		float_source: 'carried',
+		carried_from_closure_id: 'closure',
+	});
+	expect((await db.register_sessions.findOne('carried').exec())?.toJSON()).toMatchObject({
+		float_source: 'carried',
+		carried_from_closure_id: 'closure',
+		sync_status: 'synced',
+	});
 });

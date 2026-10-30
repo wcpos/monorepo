@@ -8,6 +8,7 @@ import type { UserDatabase } from '@wcpos/database';
 import { readRegister, type RegisterDocument } from '@wcpos/query/register-session';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 
+import { recordCarriedFrom } from '../../../../../../query/src/register-session/register-document';
 import { createTestT } from '../../../../../jest/translate';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 jest.mock('@wcpos/query/user-db', () => ({
@@ -16,12 +17,60 @@ jest.mock('@wcpos/query/user-db', () => ({
 	observeCredentialStores: () => of(PENDING_USER_DB_READ, mockOtherStores),
 }));
 
+let mockOnline = true;
 jest.mock('@wcpos/hooks/use-online-status', () => ({
-	useOnlineStatus: () => ({ status: 'online-website-available' }),
+	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
 }));
 jest.mock('../checkout/payments/payment-in-flight', () => ({
 	usePaymentInFlight: () => false,
 }));
+
+jest.mock('@wcpos/components/radio-group', () => {
+	const ReactMock = jest.requireActual('react') as typeof React;
+	const Ctx = ReactMock.createContext({ value: '', select: (_value: string) => {} });
+	return {
+		RadioGroup: ({
+			children,
+			value,
+			onValueChange,
+			testID,
+		}: React.PropsWithChildren<{
+			value: string;
+			onValueChange: (value: string) => void;
+			testID: string;
+		}>) => (
+			<Ctx.Provider value={{ value, select: onValueChange }}>
+				<div data-testid={testID}>{children}</div>
+			</Ctx.Provider>
+		),
+		RadioGroupOption: ({
+			value,
+			label,
+			description,
+			disabled,
+			testID,
+		}: {
+			value: string;
+			label: string;
+			description?: string;
+			disabled?: boolean;
+			testID: string;
+		}) => {
+			const group = ReactMock.useContext(Ctx);
+			return (
+				<button
+					data-testid={testID}
+					aria-checked={group.value === value}
+					disabled={disabled}
+					onClick={() => group.select(value)}
+				>
+					{label}
+					{description}
+				</button>
+			);
+		},
+	};
+});
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -260,7 +309,9 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('@wcpos/components/text', () => ({
 	...jest.requireActual('@wcpos/components/text'),
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -268,7 +319,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 
 let mockDirectoryY: {
 	registerId: string | null;
-	registers: { id: string; session?: { opened_at_gmt: string } | null }[];
+	registers: { id: string; name?: string; session?: { opened_at_gmt: string } | null }[];
 	loaded?: boolean;
 };
 // The open-orders handle as the confirm reads it: one stable handle, a snapshot swapped whole
@@ -278,7 +329,8 @@ jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: jest.fn(() => mockOpenOrdersHandle),
 }));
 let mockDrawer = {
-	session: { opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
+	session: { id: 'source', status: 'open', opened_at_gmt: '2026-10-28T09:02:00Z', opened_by: 7 },
+	unsyncedCount: 0,
 	expected: { cash: 345.03 },
 	figuresPending: false,
 	blind: false,
@@ -311,6 +363,8 @@ beforeEach(() => {
 	mockOpenOrdersHandle.value = { count: 0 };
 	mockAwaitingStore = 0;
 	mockDrawer.figuresPending = false;
+	mockDrawer.unsyncedCount = 0;
+	mockOnline = true;
 	mockDrawer.blind = false;
 	mockDirectoryY = { registerId: null, registers: [], loaded: true };
 	onOpenChange.mockClear();
@@ -369,7 +423,7 @@ it.each([
 	expect(useRegisterDirectory).toHaveBeenLastCalledWith(store.id, { fresh: true });
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(description);
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
-		"Front counter's drawer stays open here."
+		session ? "Front counter's drawer stays open here." : 'Take the drawer with you'
 	);
 });
 it('store: unknown register when the target has several and none bound', () => {
@@ -451,3 +505,99 @@ it('sign out for a blind cashier names no amount', () => {
 	);
 	expect(screen.getByTestId('switch-confirm').textContent).not.toContain('345.03');
 });
+
+const closedTarget = { id: 'target', name: 'Market till', session: null };
+// Revert the carry body/selection/guards and the server act disappears or moves unknown cash.
+it('defaults to taking the drawer to a known closed target; leaving sends no carry', () => {
+	mockDirectoryY = { registerId: 'target', registers: [closedTarget] };
+	show({ kind: 'store', store });
+	expect(screen.getByTestId('switch-confirm-carry')).toBeTruthy();
+	expect(screen.getByTestId('switch-confirm-carry-take').getAttribute('aria-checked')).toBe('true');
+	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
+	expect(onConfirm).toHaveBeenLastCalledWith({
+		kind: 'store',
+		store,
+		carry: {
+			store: { id: 2, name: 'Other store' },
+			register: { id: 'target', name: 'Market till' },
+		},
+	});
+	fireEvent.click(screen.getByTestId('switch-confirm-carry-leave'));
+	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
+	expect(onConfirm).toHaveBeenLastCalledWith({ kind: 'store', store });
+});
+it.each(['pending', 'unsent'])(
+	'disables take with its reason when %s, then enables after sync',
+	(reason) => {
+		mockDirectoryY = { registerId: 'target', registers: [closedTarget] };
+		mockDrawer.figuresPending = reason === 'pending';
+		mockDrawer.unsyncedCount = reason === 'unsent' ? 2 : 0;
+		const request = { kind: 'store' as const, store };
+		const view = show(request);
+		expect(screen.getByTestId('switch-confirm-carry-take').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('switch-confirm-carry-leave').getAttribute('aria-checked')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('switch-confirm-carry-reason').textContent).toBe(
+			reason === 'pending' ? 'Figures arrive with the next sync.' : 'Send 2 sales first'
+		);
+		fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
+		expect(onConfirm).toHaveBeenLastCalledWith(request);
+		mockDrawer.figuresPending = false;
+		mockDrawer.unsyncedCount = 0;
+		view.rerender(
+			<SwitchConfirm
+				request={request}
+				onConfirm={onConfirm}
+				onOpenChange={onOpenChange}
+				onSignOutAnyway={onSignOutAnyway}
+			/>
+		);
+		expect(screen.getByTestId('switch-confirm-carry-take').hasAttribute('disabled')).toBe(false);
+		fireEvent.click(screen.getByTestId('switch-confirm-carry-take'));
+		fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
+		expect(onConfirm.mock.calls.at(-1)?.[0].carry).toBeTruthy();
+	}
+);
+it.each(['offline', 'open target', 'unknown target', 'closed source', 'counting source'])(
+	'omits the carry for %s',
+	(reason) => {
+		mockDirectoryY = {
+			registerId: 'target',
+			registers:
+				reason === 'unknown target'
+					? []
+					: [
+							{
+								...closedTarget,
+								session:
+									reason === 'open target' ? { opened_at_gmt: '2026-10-28T09:02:00Z' } : null,
+							},
+						],
+		};
+		mockOnline = reason !== 'offline';
+		const status = mockDrawer.session.status;
+		try {
+			if (reason === 'closed source') mockDrawer.session.status = 'closed';
+			if (reason === 'counting source') mockDrawer.session.status = 'counting';
+			show({ kind: 'store', store });
+			expect(screen.queryByTestId('switch-confirm-carry')).toBeNull();
+		} finally {
+			mockDrawer.session.status = status;
+		}
+	}
+);
+it('offers Take the drawer back only for the matching carried session', async () => {
+	mockDirectoryY = { registerId: 'target', registers: [closedTarget] };
+	await recordCarriedFrom(mockUserDB, 'site', 'front', {
+		session_id: 'source',
+		closure_id: 'c',
+		store_id: 2,
+		store_name: 'Other store',
+		register_id: 'target',
+	});
+	show({ kind: 'store', store });
+	expect(screen.getByTestId('switch-confirm-carry').textContent).toContain('Take the drawer back');
+});
+
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
