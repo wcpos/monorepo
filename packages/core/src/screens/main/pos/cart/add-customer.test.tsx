@@ -142,7 +142,13 @@ describe.each([
 	});
 
 	// #1523: a born-local customer (no Woo id yet, as offline) is attached at once.
-	it('attaches a new customer immediately, as a guest with its addresses, without waiting on the network', async () => {
+	it('attaches a new customer immediately, as a guest with its addresses and tax IDs, without waiting on the network', async () => {
+		const taxId = {
+			type: 'es_nif',
+			value: 'B12345678',
+			country: 'ES',
+			verified: { status: 'verified', source: 'test' },
+		};
 		const payload = {
 			first_name: 'Ada',
 			billing: {
@@ -152,6 +158,7 @@ describe.each([
 				city: 'London',
 			},
 			shipping: { city: 'Oxford' },
+			tax_ids: [taxId],
 		};
 		const toJSON = jest.fn(() => ({ payload }));
 		mockCreate.mockResolvedValue({
@@ -182,8 +189,13 @@ describe.each([
 				customer_id: 0,
 				billing: payload.billing,
 				shipping: payload.shipping,
+				tax_ids: [taxId],
 			}),
 		});
+		// The order owns its copy: the customer's rows are not written by reference.
+		const written = mockLocalPatch.mock.calls[0][0].data.tax_ids;
+		expect(written[0]).not.toBe(taxId);
+		expect(written[0].verified).not.toBe(taxId.verified);
 		expect(mockRecordCustomerLink).toHaveBeenCalledWith(mockStoreDB, 'order-1', {
 			customerUuid: 'customer-1',
 			scopeId: 'scope-1',
@@ -255,6 +267,8 @@ describe.each([
 		});
 		const { data } = mockLocalPatch.mock.calls[0][0];
 		expect(data).toMatchObject({ customer_id: 0, billing: payload.billing, shipping: undefined });
+		// No tax IDs on the new customer is still a snapshot: the order's prior one is replaced.
+		expect(data.tax_ids).toEqual([]);
 	});
 
 	it('keeps the form open and records no link when the create could not be queued', async () => {
