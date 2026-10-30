@@ -1785,6 +1785,8 @@
 	"settings.tax_calculation": "Calculation",
 	"settings.tax_display": "Display",
 	"settings.template_type_thermal": "Thermal",
+	"settings.report_templates": "Report templates",
+	"settings.closure_templates": "Closure templates",
 	"settings.templates_description": "Choose which printer each template prints to.",
 	"settings.test_print": "Test Print",
 	"settings.test_print_done": "Printed on %s",
