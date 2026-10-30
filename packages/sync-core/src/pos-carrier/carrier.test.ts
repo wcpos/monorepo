@@ -4,6 +4,7 @@ import {
 	identityColumns,
 	POS_META_KEYS,
 	type PosCarrier,
+	PROTECTED_ORDER_META_KEYS,
 	wooMetaCarrier,
 } from './carrier';
 
@@ -242,5 +243,52 @@ it('projects identity columns and filters without conflating absent and no-store
 	expect(identityColumnFilter({ cashierId: '7', storeId: '2' })).toEqual({
 		posUserId: '7',
 		posStoreId: '2',
+	});
+});
+
+describe('VAT exemption metadata', () => {
+	it.each([
+		['yes', true],
+		['no', false],
+		[true, false],
+		[1, false],
+		['YES', false],
+	])('reads %s strictly', (value, expected) => {
+		expect(wooMetaCarrier.vatExempt([{ key: 'is_vat_exempt', value }])).toBe(expected);
+	});
+	it('defaults absent metadata to false and protects the key', () => {
+		expect(wooMetaCarrier.vatExempt(undefined)).toBe(false);
+		expect(wooMetaCarrier.vatExempt([])).toBe(false);
+		expect(wooMetaCarrier.vatExempt([{ key: 'other', value: 'yes' }])).toBe(false);
+		expect(POS_META_KEYS.vatExempt).toBe('is_vat_exempt');
+		expect(PROTECTED_ORDER_META_KEYS).toContain('is_vat_exempt');
+	});
+	it.each([true, false])('replaces in place, preserving id and deduplicating: %s', (exempt) => {
+		const input = [
+			{ key: 'before', value: 'keep' },
+			{ id: 42, key: 'is_vat_exempt', value: 'old' },
+			{ key: 'after', value: 'keep' },
+			{ id: 43, key: 'is_vat_exempt', value: 'duplicate' },
+		];
+		const original = structuredClone(input);
+		const result = wooMetaCarrier.stampVatExempt(input, exempt);
+		expect(result).toEqual([
+			input[0],
+			{ id: 42, key: 'is_vat_exempt', value: exempt ? 'yes' : 'no' },
+			input[2],
+		]);
+		expect(result).not.toBe(input);
+		expect(input).toEqual(original);
+	});
+	it('appends when absent without mutating', () => {
+		const input = [{ key: 'other', value: 'keep' }];
+		expect(wooMetaCarrier.stampVatExempt(input, true)).toEqual([
+			...input,
+			{ key: 'is_vat_exempt', value: 'yes' },
+		]);
+		expect(input).toEqual([{ key: 'other', value: 'keep' }]);
+		expect(wooMetaCarrier.stampVatExempt(undefined, false)).toEqual([
+			{ key: 'is_vat_exempt', value: 'no' },
+		]);
 	});
 });

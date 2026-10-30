@@ -49,6 +49,8 @@ export function calculateTaxesForValue(
 		};
 	}
 
+	if (config.vatExempt) return { total: 0, taxes: [] };
+
 	return calculateTaxes({
 		amount: args.amount,
 		rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],

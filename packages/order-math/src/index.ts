@@ -27,6 +27,7 @@ export type {
 } from './settle';
 
 export { calculateCartLine } from './cart-line';
+export { retaxLine } from './retax-line';
 export type {
 	CartLineInput,
 	LineItemChanges,

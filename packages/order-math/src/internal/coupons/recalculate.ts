@@ -19,6 +19,7 @@ import { normalizeTaxClass } from '../tax-class';
 import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
 
 export interface RecalculateInput {
+	vatExempt?: boolean;
 	lineItems: LineItem[];
 	couponLines: CouponLine[];
 	/** Map of coupon code (lowercase) -> coupon config from RxDB */
@@ -178,13 +179,13 @@ export function isLineItemOnSale(item: LineItem | null | undefined): boolean {
  * 4. Update line item totals and coupon line discount amounts
  */
 export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
+	const taxRates = input.vatExempt ? [] : input.taxRates;
 	const {
 		lineItems,
 		couponLines,
 		couponConfigs,
 		pricesIncludeTax,
 		calcDiscountsSequentially,
-		taxRates,
 		productCategories,
 		taxRoundAtSubtotal = false,
 		dp = 2,
@@ -199,7 +200,11 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	// On the server, WC's recalculate_coupons() does $item->set_total($item->get_subtotal()),
 	// but WCPOS filters get_subtotal() to return the POS price during recalculation.
 	// The raw subtotal holds regular_price * qty; we need pos_data.price * qty instead.
-	const resetItems = lineItems.map((item) => {
+	const resetItems = lineItems.map((storedItem) => {
+		// Empty rates cannot clear taxes carried by the stored subtotal/no-POS reset.
+		const item = input.vatExempt
+			? { ...storedItem, taxes: [], total_tax: '0', subtotal_tax: '0' }
+			: storedItem;
 		const posData = parsePosData(item);
 
 		const parsedPosPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;

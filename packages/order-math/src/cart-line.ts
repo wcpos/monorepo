@@ -301,7 +301,7 @@ function applyShippingLineChanges(
  *
  * Moved from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
  */
-const consolidateTaxes = (
+export const consolidateTaxes = (
 	subtotalTaxes: { taxes: Tax[] },
 	totalTaxes: { taxes: Tax[] },
 	noSubtotal: boolean,

@@ -2071,3 +2071,43 @@ describe('order-line per-rate tax is rounded ONCE at 6dp, as WC_Tax::round does 
 		expect(mismatches).toEqual([]);
 	});
 });
+
+describe('VAT-exempt line calculation', () => {
+	const lineItem = {
+		quantity: 2,
+		meta_data: [posDataMeta({ price: 12.37, tax_status: 'taxable' })],
+	};
+	const config = createCartConfig({ ...baseConfig, rates: [rate20] });
+	const exempt = createCartConfig({ ...config, vatExempt: true });
+	it('clears product taxes without changing exclusive money', () => {
+		const taxed = calculateCartLine({ kind: 'line_item', line: lineItem }, config).line;
+		expect(calculateCartLine({ kind: 'line_item', line: lineItem }, exempt).line).toEqual({
+			...taxed,
+			total_tax: '0',
+			subtotal_tax: '0',
+			taxes: [],
+		});
+	});
+	it('clears fee taxes without changing exclusive money', () => {
+		const input = { kind: 'fee' as const, line: { total: '12.37' }, cartLineItems: [] };
+		const taxed = calculateCartLine(input, config).line;
+		expect(calculateCartLine(input, exempt).line).toEqual({ ...taxed, total_tax: '0', taxes: [] });
+	});
+	it('clears shipping taxes without changing exclusive money', () => {
+		const input = { kind: 'shipping' as const, line: { total: '12.37' }, cartLineItems: [] };
+		const taxed = calculateCartLine(input, config).line;
+		expect(calculateCartLine(input, exempt).line).toEqual({ ...taxed, total_tax: '0', taxes: [] });
+	});
+	it('leaves the disabled-tax and non-taxable paths identical', () => {
+		const disabled = createCartConfig({ ...config, calcTaxes: false });
+		const input = { kind: 'line_item' as const, line: lineItem };
+		expect(calculateCartLine(input, createCartConfig({ ...disabled, vatExempt: true }))).toEqual(
+			calculateCartLine(input, disabled)
+		);
+		const none = {
+			kind: 'line_item' as const,
+			line: { quantity: 2, meta_data: [posDataMeta({ price: 12.37, tax_status: 'none' })] },
+		};
+		expect(calculateCartLine(none, exempt)).toEqual(calculateCartLine(none, config));
+	});
+});

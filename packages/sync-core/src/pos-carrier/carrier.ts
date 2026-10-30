@@ -50,6 +50,7 @@ export const POS_META_KEYS = {
 	reducedStock: '_reduced_stock',
 	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
+	vatExempt: 'is_vat_exempt',
 	lineUuid: RECORD_UUID_META_KEY,
 	posData: '_woocommerce_pos_data',
 } as const;
@@ -61,6 +62,7 @@ export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
 	POS_META_KEYS.store,
 	POS_META_KEYS.register,
 	POS_META_KEYS.till,
+	POS_META_KEYS.vatExempt,
 	RECORD_UUID_META_KEY,
 	'_wcpos_money_owner_hint',
 ];
@@ -120,7 +122,30 @@ export function identityColumnFilter(identity: { cashierId?: string; storeId?: s
 	};
 }
 
-export const wooMetaCarrier: PosCarrier = {
+export const wooMetaCarrier: PosCarrier & {
+	vatExempt(meta: MetaDataEntry[] | undefined): boolean;
+	stampVatExempt(meta: MetaDataEntry[] | undefined, exempt: boolean): MetaDataEntry[];
+} = {
+	vatExempt(meta) {
+		return (
+			meta?.some((entry) => entry.key === POS_META_KEYS.vatExempt && entry.value === 'yes') ?? false
+		);
+	},
+	stampVatExempt(meta, exempt) {
+		const stamped: MetaDataEntry[] = [];
+		let replaced = false;
+		const value = exempt ? 'yes' : 'no';
+		for (const entry of meta ?? []) {
+			if (entry.key !== POS_META_KEYS.vatExempt) {
+				stamped.push(entry);
+			} else if (!replaced) {
+				stamped.push({ ...entry, value });
+				replaced = true;
+			}
+		}
+		if (!replaced) stamped.push({ key: POS_META_KEYS.vatExempt, value });
+		return stamped;
+	},
 	readIdentity(meta) {
 		return {
 			cashierId: scalarMetaValue(meta, POS_META_KEYS.user),

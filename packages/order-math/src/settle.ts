@@ -363,6 +363,7 @@ export function settleCart(
 			couponLines,
 			couponConfigs: replayContext.couponConfigs,
 			pricesIncludeTax: config.pricesIncludeTax,
+			vatExempt: config.vatExempt,
 			calcDiscountsSequentially: config.calcDiscountsSequentially,
 			// QUIRK(parity): replay taxes are recomputed from config.rates UNGATED by
 			// calcTaxes (SPEC §8.4) — pinned by the migrated recalculate tests.
