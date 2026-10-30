@@ -33,23 +33,24 @@ import type { ClosurePrintMarker, ReceiptMode } from './use-receipt-data';
 const RECEIPT_SETTLE_DEADLINE_MS = 8000;
 
 // Mirrors the plugin report-default.html: figures remain readable before templates arrive.
-const FALLBACK_REPORT_TEMPLATE = `<article style="font-family: sans-serif; color: #111827; padding: 24px; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
+// Paper, not UI: named colours keep it out of the app's hex ratchet; black rules print as rules.
+const FALLBACK_REPORT_TEMPLATE = `<article style="font-family: sans-serif; padding: 24px; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
 {{#fiscal.is_report_document}}
   <h1>{{report.title}}</h1>
   {{#report.subtitle}}<h2>{{report.subtitle}}</h2>{{/report.subtitle}}
   <p>{{store.name}} · {{report.scope.label}}</p>
   {{#report.is_partial}}<p role="alert"><strong>{{report.partial_reason}}</strong></p>{{/report.is_partial}}
   <table style="width: 100%; border-collapse: collapse;">
-    <thead><tr>{{#report.columns}}<th style="text-align: {{align}}; border-bottom: 1px solid #111827; padding: 8px;">{{label}}</th>{{/report.columns}}</tr></thead>
+    <thead><tr>{{#report.columns}}<th style="text-align: {{align}}; border-bottom: 1px solid black; padding: 8px;">{{label}}</th>{{/report.columns}}</tr></thead>
     <tbody>
       {{#report.has_groups}}{{#report.groups}}
       <tr><th colspan="{{report.column_count}}" style="text-align: left; padding: 8px;">{{label}}</th></tr>
       {{#rows}}<tr>{{#cells}}<td style="padding: 8px; text-align: {{align}};">{{formatted}}</td>{{/cells}}</tr>{{/rows}}
-      <tr>{{#subtotal.cells}}<td style="padding: 8px; border-top: 1px solid #d1d5db; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/subtotal.cells}}</tr>
+      <tr>{{#subtotal.cells}}<td style="padding: 8px; border-top: 1px solid gainsboro; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/subtotal.cells}}</tr>
       {{/report.groups}}{{/report.has_groups}}
       {{^report.has_groups}}{{#report.rows}}<tr>{{#cells}}<td style="padding: 8px; text-align: {{align}};">{{formatted}}</td>{{/cells}}</tr>{{/report.rows}}{{/report.has_groups}}
     </tbody>
-    <tfoot><tr>{{#report.totals.cells}}<td style="padding: 8px; border-top: 2px solid #111827; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/report.totals.cells}}</tr></tfoot>
+    <tfoot><tr>{{#report.totals.cells}}<td style="padding: 8px; border-top: 2px solid black; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/report.totals.cells}}</tr></tfoot>
   </table>
   <p>{{report.generated_at.datetime}}</p>
   <footer>{{software.name}} {{software.plugin_version}}</footer>
