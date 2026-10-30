@@ -37,7 +37,6 @@ it('offers Sync only for unsaved sales and gates Email until saved', () => {
 	expect(result.current.choices.map((action) => action.testID)).toEqual([
 		'receipt-email-button',
 		'receipt-download-pdf-button',
-		'receipt-print-button',
 	]);
 	expect(
 		result.current.choices.find((action) => action.testID === 'receipt-email-button')?.disabled
@@ -55,7 +54,6 @@ it('offers Sync only for unsaved sales and gates Email until saved', () => {
 	expect(result.current.sync).toBeUndefined();
 	expect(result.current.choices.map((action) => action.testID)).toEqual([
 		'receipt-download-pdf-button',
-		'receipt-print-button',
 	]);
 });
 
@@ -86,4 +84,31 @@ it('returns focus to Email after closing its dialog', async () => {
 	fireEvent.click(close);
 	await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 	await waitFor(() => expect(document.activeElement).toBe(email));
+});
+
+// Putting Print among alternatives loses the sheet's single primary action.
+it('returns Print separately with the document hold and loading states', () => {
+	const printAndReport = jest.fn();
+	const doc = {
+		printAndReport,
+		printHeld: true,
+		isPrinting: false,
+		isSyncing: true,
+	} as unknown as Parameters<typeof useReceiptActions>[0];
+	const { result, rerender } = renderHook(() =>
+		useReceiptActions(doc, {} as Parameters<typeof useReceiptActions>[1])
+	);
+	expect(result.current.print.disabled).toBe(true);
+	expect(result.current.print.loading).toBe(true);
+	act(() => result.current.print.onPress());
+	expect(printAndReport).toHaveBeenCalledTimes(1);
+	doc.printHeld = false;
+	doc.isSyncing = false;
+	doc.isPrinting = true;
+	rerender();
+	expect(result.current.print.disabled).toBe(false);
+	expect(result.current.print.loading).toBe(true);
+	doc.isPrinting = false;
+	rerender();
+	expect(result.current.print.loading).toBe(false);
 });

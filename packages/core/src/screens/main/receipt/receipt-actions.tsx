@@ -85,14 +85,16 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 			disabled: !doc.canDownloadPdf,
 			loading: doc.isDownloadingPdf,
 		},
-		{
-			label: doc.printedTo ? t('receipt.print_again') : t('receipt.print_receipt'),
-			testID: 'receipt-print-button',
+	];
+	return {
+		sync,
+		choices,
+		dialog,
+		print: {
 			// One coded row and a toast on failure (a closed print dialog is a cancel).
 			onPress: () => void doc.printAndReport(),
 			disabled: doc.printHeld,
 			loading: doc.isPrinting || doc.isSyncing,
 		},
-	];
-	return { sync, choices, dialog };
+	};
 }

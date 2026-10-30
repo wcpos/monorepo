@@ -8,6 +8,9 @@ import { ReceiptBody } from './receipt-body';
 import type { useReceiptDocument } from './use-receipt-document';
 
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -50,12 +53,14 @@ afterAll(() => {
 // Revert: narrow the iframe without scaling its paper-sized canvas (the Counted column clips).
 it('scales A4 content to the panel inner width and re-fits on resize', async () => {
 	const doc = {
+		templates: [],
+		allPrinters: [],
 		previewProps: {
 			renderedHtml: '<b>Closure</b>',
 			previewPaperWidth: 'a4',
 			contentSize: { width: 800, height: 1200 },
 		},
-	} as ReturnType<typeof useReceiptDocument>;
+	} as unknown as ReturnType<typeof useReceiptDocument>;
 	const view = render(<ReceiptBody doc={doc} hideSelects fullWidth />);
 	const frame = screen.getByTestId('receipt-flow-preview');
 	Object.defineProperty(frame, 'offsetWidth', { configurable: true, value: 448 });
@@ -116,8 +121,10 @@ it('scales A4 content to the panel inner width and re-fits on resize', async () 
 
 it('retains the paper viewport for the existing receipt presentation', () => {
 	const doc = {
+		templates: [],
+		allPrinters: [],
 		previewProps: { renderedHtml: '<b>Receipt</b>', previewPaperWidth: 'a4' },
-	} as ReturnType<typeof useReceiptDocument>;
+	} as unknown as ReturnType<typeof useReceiptDocument>;
 	render(<ReceiptBody doc={doc} />);
 	expect(screen.getByTestId('paper-viewport')).toBeTruthy();
 });
@@ -125,6 +132,8 @@ it('retains the paper viewport for the existing receipt presentation', () => {
 // Revert: mount the frame on a URL while the page is still being read (it reloads once it lands).
 it('shows no frame while the receipt page is still being read', () => {
 	const doc = {
+		templates: [],
+		allPrinters: [],
 		previewProps: {
 			renderedHtml: null,
 			receiptUrl: null,
@@ -141,6 +150,8 @@ it('shows no frame while the receipt page is still being read', () => {
 // Revert: show the fetched page as bare srcDoc, so its relative links lose the store as their base.
 it('shows a fetched page with the URL it was read from as its base', () => {
 	const doc = {
+		templates: [],
+		allPrinters: [],
 		previewProps: {
 			renderedHtml: '<p>Server receipt</p>',
 			pageBase: 'https://shop.test/r?key=k&mode=live&template=7',
@@ -151,4 +162,18 @@ it('shows a fetched page with the URL it was read from as its base', () => {
 	const frame = screen.getByTestId('receipt-preview-frame');
 	expect(frame.getAttribute('srcdoc')).toBe('<p>Server receipt</p>');
 	expect(frame.getAttribute('data-src')).toBe('https://shop.test/r?key=k&mode=live&template=7');
+});
+
+// Hiding the single template or the system-dialog printer leaves the cashier guessing.
+it('keeps read-only document properties visible without selectable alternatives', () => {
+	const doc = {
+		templates: [{ id: 7, title: 'Standard receipt' }],
+		allPrinters: [],
+		previewProps: { renderedHtml: '<b>Receipt</b>', previewPaperWidth: 'a4' },
+	} as unknown as ReturnType<typeof useReceiptDocument>;
+	render(<ReceiptBody doc={doc} />);
+	expect(screen.getByTestId('print-sheet-template').textContent).toContain('Standard receipt');
+	expect(screen.getByTestId('print-sheet-printer').textContent).toContain(
+		'print_sheet.browser_dialog'
+	);
 });

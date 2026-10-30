@@ -11,6 +11,7 @@ import Animated, {
 
 import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
+import type { FooterButton } from '@wcpos/components/dialog';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -165,8 +166,7 @@ function ReceiptStageDocument({
 	compact: boolean;
 }) {
 	const doc = useReceiptDocument({ order, autoPrintAllowed: true });
-	const { sync, choices, dialog } = useReceiptActions(doc, order);
-	const actions = sync ? [sync, ...choices] : choices;
+	const { sync, choices, dialog, print } = useReceiptActions(doc, order);
 	const leg = useTerminalLeg(order.uuid);
 	const { uiSettings } = useUISettings('pos-cart');
 	const payload = useRecordField(order, (record) => record.payload);
@@ -176,6 +176,13 @@ function ReceiptStageDocument({
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const t = useT();
+	// Checkout keeps Print beside Email and PDF: New sale alone is the filled intent here.
+	const printChoice: FooterButton = {
+		...print,
+		label: doc.printedTo ? t('receipt.print_again') : t('receipt.print_receipt'),
+		testID: 'receipt-print-button',
+	};
+	const actions = sync ? [sync, ...choices, printChoice] : [...choices, printChoice];
 	const rows = readLedger(payload.meta_data);
 	const derived = derive(payload.total, rows, methods, { dp });
 	// A split sale names every method that took money, in ledger order; `derive` only
@@ -270,7 +277,7 @@ function ReceiptStageDocument({
 				) : null}
 			</PaidMoment>
 			<View className="min-h-0 flex-1 p-3">
-				<ReceiptBody doc={doc} selectsInline={!compact} />
+				<ReceiptBody doc={doc} />
 			</View>
 			<HStack className="border-border flex-wrap items-center gap-2 border-t p-3">
 				{/* The footer's one intent: rightmost on a wide pane, first (full width) on a phone. */}

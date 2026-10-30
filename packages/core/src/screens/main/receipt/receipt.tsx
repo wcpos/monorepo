@@ -2,19 +2,12 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import {
-	Dialog,
-	DialogBody,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
-import { ReceiptBody } from './receipt-body';
+import { PrintSheetContent } from './print-sheet';
 import { useReceiptActions } from './receipt-actions';
 import { useReceiptDocument } from './use-receipt-document';
 import { useT } from '../../../contexts/translations';
@@ -68,25 +61,23 @@ function ReceiptDocument({
 }) {
 	const t = useT();
 	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
-	const { sync, choices, dialog } = useReceiptActions(doc, order);
+	const { sync, choices, print, dialog } = useReceiptActions(doc, order);
 	return (
 		<Dialog route>
-			<DialogContent side={side} size="xl">
-				<DialogHeader>
-					<DialogTitle>
-						<Text>{document ? t('receipt.refund_receipt') : t('common.receipt')}</Text>
-					</DialogTitle>
-				</DialogHeader>
-				<DialogBody contentContainerStyle={{ height: '100%' }}>
-					<ReceiptBody doc={doc} />
-				</DialogBody>
-				<DialogFooter
-					close={{ testID: 'receipt-close-button' }}
-					record={sync}
-					secondary={choices}
-				/>
+			<PrintSheetContent
+				doc={doc}
+				title={document ? t('receipt.refund_receipt') : t('common.receipt')}
+				printLabel={t('receipt.print_receipt')}
+				record={sync}
+				secondary={choices}
+				onPrint={print.onPress}
+				side={side}
+				testID="receipt-dialog"
+				close={{ testID: 'receipt-close-button' }}
+				printTestID="receipt-print-button"
+			>
 				{dialog}
-			</DialogContent>
+			</PrintSheetContent>
 		</Dialog>
 	);
 }

@@ -56,7 +56,8 @@ jest.mock('../../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
 jest.mock('../../../receipt/receipt-actions', () => ({
 	useReceiptActions: () => ({
 		sync: undefined,
-		choices: [{ label: 'Print', testID: 'receipt-print-button', onPress: () => undefined }],
+		choices: [],
+		print: { onPress: () => undefined, disabled: false, loading: false },
 		dialog: null,
 	}),
 }));
