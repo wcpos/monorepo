@@ -150,8 +150,12 @@ export function Bar({
 									variant="ghost"
 									className="min-w-0 shrink flex-row items-center gap-1 px-1"
 								>
-									{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label. */}
+									{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label.
+									    Store · Register: the larger container first, as every line that names both reads. */}
 									<Text numberOfLines={1} className="text-foreground min-w-0 shrink font-semibold">
+										{stores.length > 1
+											? `${stores.find((row) => row.id === scope.storeId)?.name ?? store.name} · `
+											: ''}
 										{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 											(scope.registerId && binding.registerId
 												? binding.registerName
@@ -159,28 +163,13 @@ export function Bar({
 													? // Free with no bound register sees nothing until one is chosen; say so.
 														t('common.select_register')
 													: t('reports.all_registers'))}
-										{stores.length > 1
-											? ` · ${stores.find((row) => row.id === scope.storeId)?.name ?? store.name}`
-											: ''}
 									</Text>
 									{!license?.isPro && <Icon name="lock" className="text-muted-foreground" />}
 									<Icon name="chevronDown" className="text-muted-foreground" />
 								</Button>
 							</PopoverTrigger>
 							<PopoverContent testID="reports-scope-menu">
-								<MenuRowGroup accessibilityLabel={t('common.register')}>
-									{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map(
-										(row) =>
-											option(
-												`reports-register-${row.id || 'all'}`,
-												row.name,
-												{ registerId: row.id },
-												!!row.id && row.id === binding.registerId,
-												t('reports.other_registers'),
-												row.id === scope.registerId
-											)
-									)}
-								</MenuRowGroup>
+								{/* Store group above the Register group, in the title's order; one store needs no store group and no labels. */}
 								{stores.length > 1 && (
 									<Text className="text-muted-foreground p-2">{t('common.store')}</Text>
 								)}
@@ -209,6 +198,22 @@ export function Bar({
 										)}
 									</MenuRowGroup>
 								)}
+								{stores.length > 1 && (
+									<Text className="text-muted-foreground p-2">{t('common.register')}</Text>
+								)}
+								<MenuRowGroup accessibilityLabel={t('common.register')}>
+									{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map(
+										(row) =>
+											option(
+												`reports-register-${row.id || 'all'}`,
+												row.name,
+												{ registerId: row.id },
+												!!row.id && row.id === binding.registerId,
+												t('reports.other_registers'),
+												row.id === scope.registerId
+											)
+									)}
+								</MenuRowGroup>
 								<ScopeHint locked={license?.isPro ? '' : locked} />
 							</PopoverContent>
 						</Popover>
