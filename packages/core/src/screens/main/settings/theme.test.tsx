@@ -78,16 +78,7 @@ jest.mock('@wcpos/components/radio-group', () => {
 
 const mockLocalPatch = jest.fn().mockResolvedValue({});
 const store: { theme: string; scale?: string; icons?: string } = { theme: 'light' };
-const mockIconSets = [
-	'fontawesome',
-	'tabler',
-	'tabler-2',
-	'hugeicons',
-	'lucide',
-	'phosphor',
-	'iconoir',
-	'solar',
-];
+const mockIconSets = ['tabler', 'hugeicons', 'phosphor'];
 
 let mockTheme = 'light';
 let mockAdaptive = false;
@@ -231,9 +222,9 @@ describe('the Icons section', () => {
 	it('persists the pressed set through localPatch and marks it saved', async () => {
 		const { getByTestId } = render(<ThemeSettings />);
 
-		await act(async () => fireEvent.click(getByTestId('settings-icons-lucide')));
+		await act(async () => fireEvent.click(getByTestId('settings-icons-hugeicons')));
 
-		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'lucide' } });
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'hugeicons' } });
 		expect(getByTestId('saved-icons').textContent).toBe('settings.saved');
 	});
 });

@@ -58,7 +58,7 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 | Path                                                       | Package                   | Description                                                 |
 | ---------------------------------------------------------- | ------------------------- | ----------------------------------------------------------- |
 | [`packages/core`](./packages/core)                         | `@wcpos/core`             | Core POS screens and navigation.                            |
-| [`packages/components`](./packages/components)             | `@wcpos/components`       | Shared UI components (Tailwind/uniwind, FontAwesome icons). |
+| [`packages/components`](./packages/components)             | `@wcpos/components`       | Shared UI components (Tailwind/uniwind, switchable icon sets). |
 | [`packages/database`](./packages/database)                 | `@wcpos/database`         | Local-first data layer built on RxDB.                       |
 | [`packages/query`](./packages/query)                       | `@wcpos/query`            | Querying and WooCommerce sync/replication.                  |
 | [`packages/hooks`](./packages/hooks)                       | `@wcpos/hooks`            | Shared React hooks.                                         |
