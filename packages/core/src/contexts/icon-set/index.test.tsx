@@ -7,21 +7,12 @@ import { BehaviorSubject } from 'rxjs';
 const store: { icons?: string; $?: BehaviorSubject<{ icons: string }> } = { icons: undefined };
 const appState: { store: { icons?: string } | null } = { store };
 
-// The set context as `@wcpos/components/icon` exports it, without the eight glyph maps.
+// The set context as `@wcpos/components/icon` exports it, without the three glyph maps.
 jest.mock('@wcpos/components/icon', () => {
 	const { createContext, createElement, useContext } = jest.requireActual('react');
 	const IconSet = createContext('tabler');
 	return {
-		ICON_SET_IDS: [
-			'fontawesome',
-			'tabler',
-			'tabler-2',
-			'hugeicons',
-			'lucide',
-			'phosphor',
-			'iconoir',
-			'solar',
-		],
+		ICON_SET_IDS: ['tabler', 'hugeicons', 'phosphor'],
 		DEFAULT_ICON_SET: 'tabler',
 		IconSetProvider: ({ set, children }: React.PropsWithChildren<{ set: string }>) =>
 			createElement(IconSet.Provider, { value: set }, children),
@@ -65,8 +56,8 @@ describe('IconSetSettingProvider', () => {
 	});
 
 	it("draws the store's chosen set", () => {
-		store.icons = 'lucide';
-		expect(renderedSet().textContent).toBe('lucide');
+		store.icons = 'hugeicons';
+		expect(renderedSet().textContent).toBe('hugeicons');
 	});
 
 	it('falls back to the default for a value that is not a set', () => {
@@ -75,10 +66,10 @@ describe('IconSetSettingProvider', () => {
 	});
 
 	it('follows a new emission on the same store', () => {
-		store.icons = 'lucide';
-		store.$ = new BehaviorSubject({ icons: 'lucide' });
+		store.icons = 'hugeicons';
+		store.$ = new BehaviorSubject({ icons: 'hugeicons' });
 		const set = renderedSet();
-		expect(set.textContent).toBe('lucide');
+		expect(set.textContent).toBe('hugeicons');
 
 		act(() => store.$!.next({ icons: 'phosphor' }));
 
