@@ -26,6 +26,7 @@ import { VariationType } from './cells/type';
 import { SKU } from './cells/sku';
 import { COGS } from './cells/cogs';
 import { PosVariationImage } from './cells/variation-image';
+import { VariationParentNameContext } from './cells/variation-name';
 
 import type { SnapshotFields } from '../../../../query';
 
@@ -116,6 +117,8 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 		matchesStockStatusFilter(hit.record.payload, stockStatus)
 	);
 	const parentCount = useDocField(parent, (value) => value.payload.variations?.length);
+	// Each row names its product above its chips; the inline table's rows do not (see the cell).
+	const parentName = useDocField(parent, (value) => value.payload.name);
 	const t = useT();
 	// The footer's numbers are the pane's own (footer.tsx): the shown rows, and the parent as
 	// the denominator, floored at the resident count — as a value, so it lands in the same commit
@@ -134,34 +137,36 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 	);
 	return (
 		<OwnFooterContext.Provider value={footer}>
-			<DataTable<{ record: EngineRecord<'variations'> }>
-				id="pos-products"
-				persistSort={false}
-				columnLabels={{ name: t('pos_products.option') }}
-				collectionName="variations"
-				handle={handle}
-				tableConfig={{ data: hits }}
-				sort={state.sort}
-				actions={actions}
-				cells={{
-					name: VariationName,
-					price: Price,
-					stock_quantity: VariationStock,
-					sku: SKU,
-					type: VariationType,
-					cost_of_goods_sold: COGS,
-					image: PosVariationImage,
-					actions: () => null,
-				}}
-				// The rows travel with their pane; none of them animates on its own.
-				renderItem={({ item }) => (
-					<VirtualizedList.Item>
-						<VariationRow item={item} parent={parent} />
-					</VirtualizedList.Item>
-				)}
-				ListFooterComponent={NoListFooter}
-				TableFooterComponent={ProductsFooter}
-			/>
+			<VariationParentNameContext.Provider value={parentName}>
+				<DataTable<{ record: EngineRecord<'variations'> }>
+					id="pos-products"
+					persistSort={false}
+					columnLabels={{ name: t('pos_products.option') }}
+					collectionName="variations"
+					handle={handle}
+					tableConfig={{ data: hits }}
+					sort={state.sort}
+					actions={actions}
+					cells={{
+						name: VariationName,
+						price: Price,
+						stock_quantity: VariationStock,
+						sku: SKU,
+						type: VariationType,
+						cost_of_goods_sold: COGS,
+						image: PosVariationImage,
+						actions: () => null,
+					}}
+					// The rows travel with their pane; none of them animates on its own.
+					renderItem={({ item }) => (
+						<VirtualizedList.Item>
+							<VariationRow item={item} parent={parent} />
+						</VirtualizedList.Item>
+					)}
+					ListFooterComponent={NoListFooter}
+					TableFooterComponent={ProductsFooter}
+				/>
+			</VariationParentNameContext.Provider>
 		</OwnFooterContext.Provider>
 	);
 }
