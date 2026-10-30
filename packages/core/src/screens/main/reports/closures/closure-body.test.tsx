@@ -46,8 +46,14 @@ jest.mock('../../../../services/register-session/use-closure-document-context', 
 	useClosureDocumentContext: () => context,
 }));
 jest.mock('@wcpos/components/dialog', () => ({
+	// The pane's Print closure door mounts a closed PrintSheet: a controlled Dialog that renders nothing while shut.
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open?: boolean }>) =>
+		open ? children : null,
+	DialogContent: jest.requireActual('react-native').View,
+	DialogBody: jest.requireActual('react-native').View,
 	DialogHeader: jest.requireActual('react-native').View,
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 	DialogTitle: jest.requireActual('react-native').Text,
 	DialogDescription: jest.requireActual('react-native').Text,
 }));

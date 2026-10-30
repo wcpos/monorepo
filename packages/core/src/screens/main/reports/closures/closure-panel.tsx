@@ -17,7 +17,10 @@ import { log } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { buildClosureDocument } from '../../../../services/register-session/closure-document';
+import {
+	buildClosureDocument,
+	formatClosureDate,
+} from '../../../../services/register-session/closure-document';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import {
 	type Correction,
@@ -29,6 +32,8 @@ import { ClosureBody, ClosureHeading } from './closure-body';
 import { RecountSheet } from './recount-sheet';
 import { ReportPanel } from '../report-panel';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { PrintSheet } from '../../receipt/print-sheet';
+import { useRegisterNames } from '../../../../services/register/use-register-names';
 
 /** One closure's document, figures and print state; the history panel reprints, the written moment prints first. */
 export function useClosureView(
@@ -125,6 +130,8 @@ export function ClosurePanel({
 }) {
 	const t = useT();
 	const http = useRestHttpClient();
+	const [sheetOpen, setSheetOpen] = React.useState(false);
+	const names = useRegisterNames(row.store_id ?? undefined);
 	const [recounting, setRecounting] = React.useState(false);
 	const phone = useIsPhone();
 	const {
@@ -141,6 +148,19 @@ export function ClosurePanel({
 	} = useClosureView(row);
 	const remote = doc.serverReceiptData;
 	const documentError = doc.documentError && !doc.isOffline;
+	const opened = formatClosureDate(row.opened_at, context);
+	const closed = formatClosureDate(row.closed_at, context);
+	const span =
+		opened.date_ymd === closed.date_ymd
+			? `${opened.weekday_short} ${Number(opened.day)} ${opened.month_short} ${opened.time}–${closed.time}`
+			: `${opened.date} ${opened.time} → ${closed.date} ${closed.time}`;
+	const description = [
+		context.store.name,
+		row.breakdowns?.register_name || names[row.register_id],
+		span,
+	]
+		.filter(Boolean)
+		.join(' · ');
 	const content = (
 		<>
 			<DialogHeader className="flex-row items-center gap-3">
@@ -182,11 +202,7 @@ export function ClosurePanel({
 					{doc.isOffline ? t('reports.recount_offline') : t('reports.recount_pending')}
 				</Text>
 			)}
-			{!!error && (
-				<Text testID="closure-action-error" className="px-4">
-					{error}
-				</Text>
-			)}
+
 			<DialogFooter
 				testID="closure-panel-footer"
 				close={onBack ? false : undefined}
@@ -197,11 +213,22 @@ export function ClosurePanel({
 					onPress: () => setRecounting(true),
 				}}
 				secondary={{
-					label: t('register.print_again'),
+					label: t('register.print_closure'),
 					testID: 'closure-reprint',
 					loading: doc.isPrinting,
-					onPress: () => void reprint(),
+					onPress: () => setSheetOpen(true),
 				}}
+			/>
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				doc={doc}
+				title={t('reports.document.closure')}
+				description={description}
+				printLabel={t('register.print_closure')}
+				error={error || doc.documentError?.message || null}
+				onPrint={reprint}
+				testID="closure-print-sheet"
 			/>
 			{recounting && (
 				<RecountSheet

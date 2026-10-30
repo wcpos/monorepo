@@ -12,7 +12,7 @@ import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { IconButton } from '@wcpos/components/icon-button';
+import { Button } from '@wcpos/components/button';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Skeleton } from '@wcpos/components/skeleton';
@@ -48,6 +48,7 @@ import {
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
 
 type Choice = { value: string; label: string; hint?: string };
@@ -326,6 +327,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const directory = useObservableState(source);
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
 			totals,
@@ -400,24 +402,26 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	};
 	return (
 		<View className="items-end gap-2">
-			<IconButton
+			<Button
 				testID="hero-print"
-				name="print"
-				accessibilityLabel={t('reports.print_summary')}
-				onPress={() => void print()}
-				loading={doc.isPrinting}
-				disabled={!!waiting}
+				variant="outline"
+				leftIcon="print"
+				onPress={() => setSheetOpen(true)}
+			>
+				{t('reports.print_summary')}
+			</Button>
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				doc={doc}
+				title={t('reports.summary_title')}
+				description={t('reports.panel_scope', { period, register })}
+				printLabel={t('reports.print_summary')}
+				waiting={waiting ? label : null}
+				error={printError || doc.documentError?.message || null}
+				onPrint={print}
+				testID="hero-print-sheet"
 			/>
-			{waiting && (
-				<Text testID="hero-print-waiting" variant="key">
-					{label}
-				</Text>
-			)}
-			{!!(printError || doc.documentError) && (
-				<Text testID="hero-print-error" variant="key" className="text-bad">
-					{printError || doc.documentError?.message}
-				</Text>
-			)}
 		</View>
 	);
 }
@@ -550,7 +554,11 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				<View className="flex-row items-center gap-2">
 					{!phone && toggle}
 					<React.Suspense
-						fallback={<IconButton name="print" accessibilityLabel={t('reports.print')} disabled />}
+						fallback={
+							<Button variant="outline" leftIcon="print" disabled>
+								{t('reports.print_summary')}
+							</Button>
+						}
 					>
 						<HeroPrint storeId={storeId} />
 					</React.Suspense>

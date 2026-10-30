@@ -110,8 +110,27 @@ let data = initialData();
 jest.mock('../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => data,
 }));
+const mockDoc = {
+	printedTo: null,
+	printHeld: false,
+	isPrinting: false,
+	isSyncing: false,
+	templates: [],
+	selectedTemplateId: null,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	allPrinters: [],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
+	resolvedPrinter: null,
+	mismatch: null,
+	previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+};
 const print = jest.fn();
-const report = jest.fn((_closure?: unknown, _reprint?: boolean, _known?: unknown) => ({ print }));
+const report = jest.fn((_closure?: unknown, _reprint?: boolean, _known?: unknown) => ({
+	print,
+	doc: mockDoc,
+}));
 jest.mock('../../../services/register-session/use-session-report', () => ({
 	useSessionReport: (closure?: unknown, reprint?: boolean, known?: unknown) =>
 		report(closure, reprint, known),
@@ -121,7 +140,7 @@ const http = { get };
 let online = false;
 const remotePrint = jest.fn();
 jest.mock('../receipt/use-receipt-document', () => ({
-	useReceiptDocument: () => ({ print: remotePrint }),
+	useReceiptDocument: jest.fn(() => ({ ...mockDoc, print: remotePrint })),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	...jest.requireActual('../../../hooks/use-local-date'),
@@ -185,8 +204,13 @@ it('shows closed Expected · Counted = short result and dispatches the local rep
 	expect(screen.getByTestId('till-result').textContent).toContain('£10.00 short');
 	expect(screen.getByTestId('till-result-amount').className).toContain('text-bad');
 	expect(screen.getByTestId('till-since').textContent).toBe('Closed 12:30 · Pat');
-	expect(screen.getByTestId('till-reprint').textContent).toBe('Print again');
+	expect(screen.getByTestId('till-reprint').textContent).toBe('Print closure');
 	fireEvent.click(screen.getByTestId('till-reprint'));
+	expect(screen.getByTestId('till-print-sheet')).toBeTruthy();
+	expect(print).not.toHaveBeenCalled();
+	expect(remotePrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print closure');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
 	expect(report).toHaveBeenLastCalledWith(data.lastClosure, true, undefined);
 	expect(get).not.toHaveBeenCalled();
@@ -242,9 +266,14 @@ it('keeps X-report busy and reports dispatch errors', async () => {
 	);
 	render(<TillStrip onOpenClosures={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('till-xreport'));
+	expect(screen.getByTestId('till-print-sheet')).toBeTruthy();
+	expect(print).not.toHaveBeenCalled();
+	expect(remotePrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print X-report');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	expect((screen.getByTestId('till-xreport') as HTMLButtonElement).disabled).toBe(true);
 	await act(async () => reject(new Error('reports.reprint_failed')));
-	expect(screen.getByTestId('till-print-error').textContent).toBe('Printing failed. Try again.');
+	expect(screen.getByTestId('print-sheet-error').textContent).toBe('Printing failed. Try again.');
 	expect((screen.getByTestId('till-xreport') as HTMLButtonElement).disabled).toBe(false);
 });
 // Allowing a stale local closure to print online violates the authoritative lookup rule.
@@ -307,7 +336,19 @@ it('shows a session opened on another device as open with the server expected an
 	expect(screen.getByTestId('till-since').textContent).toBe('since 13:00 · Dylan');
 	expect(screen.getByTestId('till-expected').textContent).toContain('£150.00');
 	expect(screen.queryByTestId('till-term-float')).toBeNull();
+	const { useReceiptDocument } = jest.requireMock('../receipt/use-receipt-document');
+	expect(useReceiptDocument).toHaveBeenLastCalledWith(
+		expect.objectContaining({ previewEnabled: false })
+	);
 	fireEvent.click(screen.getByTestId('till-xreport'));
+	expect(useReceiptDocument).toHaveBeenLastCalledWith(
+		expect.objectContaining({ document: 'xreport:r1', previewEnabled: true })
+	);
+	expect(screen.getByTestId('till-print-sheet')).toBeTruthy();
+	expect(print).not.toHaveBeenCalled();
+	expect(remotePrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print X-report');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	await waitFor(() => expect(remotePrint).toHaveBeenCalledTimes(1));
 	expect(print).not.toHaveBeenCalled();
 });
@@ -575,3 +616,21 @@ it.each([false, true])('opens the shown closure (authoritative: %s)', async (rem
 		remote ? expect.objectContaining({ id: 'B', server_number: 413 }) : data.lastClosure
 	);
 });
+
+jest.mock('../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="sheet-preview" />,
+}));
+
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
+	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../jest/footer.test-utils').DismissIsClose,
+}));
