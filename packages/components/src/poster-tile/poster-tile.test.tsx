@@ -293,6 +293,7 @@ it('puts a band of the card under the square: card colour over a picture, the ti
 	expect(classes('poster-band')).toMatch(/^h-\[calc\(var\(--text-base\)/);
 	expect(classes('poster-card')).toContain('bg-card');
 	expect(classes('poster-card')).toContain('border-border');
+	expect(classes('poster-card')).toContain('rounded-media');
 	expect(classes('tile-12')).not.toContain('border');
 	rerender(tile({ picture: { kind: 'tint', tint: 3 }, title: 'Tea' }));
 	expect(classes('poster-card')).toContain('bg-tile-tint-3');

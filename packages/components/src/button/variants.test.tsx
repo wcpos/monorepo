@@ -59,7 +59,15 @@ describe('Button variants', () => {
 		expect(buttonVariants({ size: 'default' })).not.toContain('h-10');
 		expect(buttonVariants({ size: 'sm' })).toContain('h-9');
 		expect(buttonVariants({ size: 'lg' })).toContain('h-14');
-		expect(buttonVariants({})).toContain('rounded-lg');
+		for (const token of [
+			'rounded-commit',
+			'shadow-commit',
+			'active:shadow-commit-press',
+			'active:translate-y-[var(--shape-commit-press-y)]',
+		]) {
+			expect(buttonVariants({ size: 'lg' })).toContain(token);
+		}
+		expect(buttonVariants({})).toContain('rounded-control');
 	});
 
 	// A small pill is a Chip (ruled 2026-10-16, decision 10): the `xs` size and the tinted
@@ -97,8 +105,8 @@ describe('Button variants', () => {
 		expect(label({ pressed: true })).not.toContain('text-muted-foreground');
 	});
 
-	it('sets the sale button label large and semibold', () => {
+	it('sets the sale button label large with the theme commit weight', () => {
 		expect(buttonTextVariants({ size: 'lg' })).toContain('text-lg');
-		expect(buttonTextVariants({ size: 'lg' })).toContain('font-semibold');
+		expect(buttonTextVariants({ size: 'lg' })).toContain('font-commit');
 	});
 });

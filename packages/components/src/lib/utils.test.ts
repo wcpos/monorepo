@@ -8,6 +8,19 @@ jest.mock('@rn-primitives/hooks', () => ({
 
 describe('lib/utils', () => {
 	describe('cn', () => {
+		it.each([
+			['rounded-field', 'rounded-control'],
+			['rounded-control', 'rounded-lg'],
+			['rounded-l-chip', 'rounded-l-none'],
+			['font-ui', 'font-normal'],
+			['font-semibold', 'font-strong'],
+			['font-strong', 'font-commit'],
+			['shadow-commit', 'shadow-none'],
+			['active:shadow-commit-press', 'active:shadow-none'],
+		])('merges theme utility %s with %s', (first, last) => {
+			expect(cn(first, last)).toBe(last);
+		});
+
 		it('should merge class names', () => {
 			const result = cn('class1', 'class2');
 			expect(result).toContain('class1');

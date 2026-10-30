@@ -62,7 +62,7 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// itself, and on web the box pads 4 more around it. The box grows with the
 				// number to 56 (the keypad's 48 cell plus its padding: five characters at the
 				// regular step) and the number truncates beyond, never pushing into the name.
-				className="web:px-1 web:max-w-14 min-w-9 items-center justify-center"
+				className="web:px-1 web:max-w-14 rounded-control min-w-9 items-center justify-center border-[length:var(--shape-ctl-border)]"
 				textClassName="px-1 text-center font-semibold"
 				tone={overStock ? 'attention' : undefined}
 				value={item.quantity}

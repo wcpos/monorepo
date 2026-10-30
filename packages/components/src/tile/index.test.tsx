@@ -22,9 +22,9 @@ beforeEach(() => {
 	mockPointer = 'fine';
 });
 
-it('is a card with a hairline border and the 8 pt radius on the accent-wash surface', () => {
+it('is a card with a hairline border and the theme radius on the accent-wash surface', () => {
 	render(<Tile testID="tile" onPress={() => {}} />);
-	for (const token of ['bg-card', 'rounded-lg', 'border', 'border-border', 'active:bg-accent'])
+	for (const token of ['bg-card', 'rounded-tile', 'border', 'border-border', 'active:bg-accent'])
 		expect(classes('tile').split(' ')).toContain(token);
 });
 

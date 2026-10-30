@@ -28,7 +28,7 @@ function ButtonText(props: React.ComponentProps<typeof Text>) {
 }
 
 const buttonVariants = cva(
-	'web:transition-colors flex max-w-full shrink items-center justify-center rounded-lg',
+	'web:transition-colors flex max-w-full shrink items-center justify-center',
 	{
 		variants: {
 			variant: {
@@ -41,9 +41,10 @@ const buttonVariants = cva(
 				/**
 				 * Outline buttons
 				 */
-				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
+				outline:
+					'border-border bg-card web:hover:bg-accent active:bg-accent border-[length:var(--shape-ctl-border)]',
 				'outline-destructive':
-					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
+					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border-[length:var(--shape-ctl-border)]',
 
 				/**
 				 * Ghost buttons. Plain `ghost` is the quiet button: no surface at rest,
@@ -70,9 +71,9 @@ const buttonVariants = cva(
 			 * `Chip size="sm"`, never a Button.
 			 */
 			size: {
-				default: 'h-ctl px-4 py-2',
-				sm: 'h-9 px-3',
-				lg: 'h-14 px-6',
+				default: 'h-ctl rounded-control px-4 py-2',
+				sm: 'rounded-control h-9 px-3',
+				lg: 'rounded-commit shadow-commit active:shadow-commit-press h-14 px-6 active:translate-y-[var(--shape-commit-press-y)]',
 			},
 		},
 		defaultVariants: {
@@ -83,7 +84,7 @@ const buttonVariants = cva(
 	}
 );
 
-const buttonTextVariants = cva('text-foreground web:transition-colors text-base font-medium', {
+const buttonTextVariants = cva('text-foreground web:transition-colors font-ui text-base', {
 	variants: {
 		pressed: { true: '', false: '' },
 		hovered: { true: '', false: '' },
@@ -91,7 +92,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			/**
 			 * Solid buttons
 			 */
-			default: 'text-primary-foreground font-semibold',
+			default: 'text-primary-foreground font-strong',
 			destructive: 'text-destructive-foreground',
 
 			/**
@@ -112,7 +113,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		size: {
 			default: '',
 			sm: 'text-sm',
-			lg: 'text-lg font-semibold',
+			lg: 'font-commit text-lg',
 		},
 	},
 	compoundVariants: [

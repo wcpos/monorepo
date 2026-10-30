@@ -264,7 +264,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						</Animated.View>
 					)}
 					<View
-						className={`overflow-hidden rounded-lg border ${
+						className={`rounded-media overflow-hidden border ${
 							filled
 								? 'bg-primary border-transparent'
 								: tint === null

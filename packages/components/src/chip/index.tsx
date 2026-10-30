@@ -116,7 +116,7 @@ export function Chip({
 				{label}
 			</Text>
 			{count !== undefined && (
-				<View className="bg-background min-w-5 items-center rounded-full px-1">
+				<View className="bg-background rounded-chip min-w-5 items-center px-1">
 					<Text testID={id('count')} className="text-xs font-bold">
 						{count}
 					</Text>
@@ -142,13 +142,13 @@ export function Chip({
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
 				// drawn chip is inline-flex.
-				'bg-card max-w-full flex-row items-center gap-1.5 self-start rounded-full border',
+				'bg-chip rounded-chip max-w-full flex-row items-center gap-1.5 self-start border-[length:var(--shape-ctl-border)]',
 				sm ? 'h-8 px-2.5' : 'h-ctl px-3',
 				// With an action each cell fills on its own (the strip rule, 2026-10-09), so the
 				// label half carries the padding and the pill neither fills nor pads.
 				action ? 'gap-0 px-0' : 'active:bg-accent web:hover:bg-accent',
 				on && 'active:bg-selected web:hover:bg-selected',
-				on ? 'bg-selected border-selected' : 'border-border',
+				on ? 'bg-selected border-selected' : 'border-chip-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',
 				className
@@ -169,7 +169,7 @@ export function Chip({
 								!action
 									? 'active:opacity-70'
 									: cn(
-											'active:bg-accent web:hover:bg-accent rounded-l-full',
+											'active:bg-accent web:hover:bg-accent rounded-l-chip',
 											on && 'active:bg-selected web:hover:bg-selected',
 											sm ? 'px-2.5' : 'px-3'
 										)
@@ -197,7 +197,7 @@ export function Chip({
 								// margin cancels the chip's end padding (an action chip has none).
 								action
 									? cn(
-											'border-border active:bg-accent web:hover:bg-accent rounded-r-full border-l',
+											'border-chip-border active:bg-accent web:hover:bg-accent rounded-r-chip border-l-[length:var(--shape-ctl-border)]',
 											on && 'active:bg-selected web:hover:bg-selected',
 											sm ? 'min-w-8' : 'min-w-ctl'
 										)

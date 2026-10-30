@@ -71,7 +71,7 @@ it('one ink: every glyph, the label and the count of an on chip carry the select
 });
 
 it.each([
-	[{}, 'border-border', 'text-foreground'],
+	[{}, 'border-chip-border', 'text-foreground'],
 	[{ on: true }, 'bg-selected border-selected', 'text-selected-foreground'],
 	[{ dimmed: true }, 'opacity-45', 'text-foreground'],
 	[{ add: true }, 'border-dashed', 'text-muted-foreground'],
@@ -103,7 +103,7 @@ it.each([
 	expect(root).toEqual(
 		expect.arrayContaining([
 			height,
-			'rounded-full',
+			'rounded-chip',
 			'bg-selected',
 			'border-selected',
 			'active:bg-selected',
@@ -227,7 +227,7 @@ it('keeps the split wrapper out of the tree, floors the clear target and forward
 	// The clear control is as wide as the chip is tall, at both sizes.
 	expect(source).toContain("sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3'");
 	// The pill's own class line, found by a class only it carries.
-	const root = source.match(/'([^']*rounded-full border[^']*)'/)?.[1]?.split(' ') ?? [];
+	const root = source.match(/'([^']*bg-chip[^']*)'/)?.[1]?.split(' ') ?? [];
 	expect(root).toContain('self-start');
 });
 
@@ -287,7 +287,7 @@ describe('action', () => {
 		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 		expect(source).toContain("action ? 'gap-0 px-0' : 'active:bg-accent web:hover:bg-accent'");
 		expect(source).toContain(
-			"'border-border active:bg-accent web:hover:bg-accent rounded-r-full border-l'"
+			"'border-chip-border active:bg-accent web:hover:bg-accent rounded-r-chip border-l-[length:var(--shape-ctl-border)]'"
 		);
 	});
 });

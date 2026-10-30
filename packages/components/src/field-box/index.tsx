@@ -14,21 +14,24 @@ const FIELD_TEXT = 'text-foreground placeholder:text-muted-foreground text-base'
  * A TextInput cannot be wrapped, so this class string is the interface; `FieldBox` draws the
  * same box as a View. One ring while the control is open or focused, one dim when disabled.
  */
-const fieldBoxVariants = cva(`border-border bg-card rounded-lg border ${FIELD_TEXT}`, {
-	variants: {
-		state: {
-			rest: '',
-			open: 'border-ring web:ring-1 web:ring-ring',
-			disabled: 'web:cursor-not-allowed opacity-45',
-			invalid: 'border-bad',
-			/** Its number needs a look (a cart line over stock). */
-			attention: 'border-attention bg-attention/15',
+const fieldBoxVariants = cva(
+	`border-chip-border bg-card rounded-field border-[length:var(--shape-ctl-border)] ${FIELD_TEXT}`,
+	{
+		variants: {
+			state: {
+				rest: '',
+				open: 'border-ring web:ring-1 web:ring-ring',
+				disabled: 'web:cursor-not-allowed opacity-45',
+				invalid: 'border-bad',
+				/** Its number needs a look (a cart line over stock). */
+				attention: 'border-attention bg-attention/15',
+			},
+			/** A Textarea grows from one control's height. */
+			multiline: { false: 'h-ctl', true: 'min-h-ctl' },
 		},
-		/** A Textarea grows from one control's height. */
-		multiline: { false: 'h-ctl', true: 'min-h-ctl' },
-	},
-	defaultVariants: { state: 'rest', multiline: false },
-});
+		defaultVariants: { state: 'rest', multiline: false },
+	}
+);
 
 /** Merged, so a state's border replaces the resting one rather than racing it in the CSS. */
 function fieldBox(props?: VariantProps<typeof fieldBoxVariants>) {

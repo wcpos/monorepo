@@ -84,6 +84,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-chip: var(--chip);
+  --color-chip-border: var(--chip-border);
+  --color-primary-shadow: var(--primary-shadow);
 
   /* Poster tile tints: a tile with no picture (index = tintOf(key), spec 2026-10-12) */
   --color-tile-tint-0: var(--tile-tint-0);
@@ -198,6 +201,18 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+
+  --radius-control: var(--shape-radius-control);
+  --radius-tile: var(--shape-radius-tile);
+  --radius-media: var(--shape-radius-media);
+  --radius-commit: var(--shape-radius-commit);
+  --radius-field: var(--shape-radius-field);
+  --radius-chip: var(--shape-radius-chip);
+  --shadow-commit: var(--shape-commit-shadow);
+  --shadow-commit-press: var(--shape-commit-shadow-press);
+  --font-weight-ui: var(--type-w-ui);
+  --font-weight-strong: var(--type-w-strong);
+  --font-weight-commit: var(--type-w-commit);
 }
 
 /* Web-only animation keyframes */
@@ -435,6 +450,24 @@
       --tile-tint-3: oklch(0.86 0.09 310);
       --tile-tint-4: oklch(0.90 0.11 90);
       --tile-tint-5: oklch(0.88 0.09 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 8px;
+      --shape-radius-tile: 8px;
+      --shape-radius-media: 6px;
+      --shape-radius-commit: 8px;
+      --shape-radius-field: 8px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -549,6 +582,24 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 8px;
+      --shape-radius-tile: 8px;
+      --shape-radius-media: 6px;
+      --shape-radius-commit: 8px;
+      --shape-radius-field: 8px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -661,6 +712,24 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 8px;
+      --shape-radius-tile: 8px;
+      --shape-radius-media: 6px;
+      --shape-radius-commit: 8px;
+      --shape-radius-field: 8px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -773,6 +842,24 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 8px;
+      --shape-radius-tile: 8px;
+      --shape-radius-media: 6px;
+      --shape-radius-commit: 8px;
+      --shape-radius-field: 8px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -883,6 +970,24 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 8px;
+      --shape-radius-tile: 8px;
+      --shape-radius-media: 6px;
+      --shape-radius-commit: 8px;
+      --shape-radius-field: 8px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -960,6 +1065,24 @@
       --tile-tint-3: oklch(0.89 0.04 300);
       --tile-tint-4: oklch(0.90 0.06 40);
       --tile-tint-5: oklch(0.90 0.04 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 4px;
+      --shape-radius-tile: 4px;
+      --shape-radius-media: 999px;
+      --shape-radius-commit: 4px;
+      --shape-radius-field: 4px;
+      --shape-radius-chip: 4px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 500;
+      --chip: var(--card);
+      --chip-border: var(--foreground);
     }
 
     /* ========================================
@@ -1037,6 +1160,24 @@
       --tile-tint-3: oklch(0.87 0.06 330);
       --tile-tint-4: oklch(0.90 0.09 85);
       --tile-tint-5: oklch(0.88 0.05 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 12px;
+      --shape-radius-tile: 12px;
+      --shape-radius-media: 8px;
+      --shape-radius-commit: 999px;
+      --shape-radius-field: 12px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -1114,6 +1255,24 @@
       --tile-tint-3: oklch(0.90 0 0);
       --tile-tint-4: oklch(0.94 0.10 123);
       --tile-tint-5: oklch(0.87 0 0);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 18px;
+      --shape-radius-tile: 20px;
+      --shape-radius-media: 14px;
+      --shape-radius-commit: 999px;
+      --shape-radius-field: 999px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 0px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 700;
+      --type-w-commit: 700;
+      --chip: var(--muted);
+      --chip-border: transparent;
     }
 
     /* ========================================
@@ -1194,6 +1353,24 @@
       --tile-tint-3: oklch(0.89 0.09 301);
       --tile-tint-4: oklch(0.90 0.10 34);
       --tile-tint-5: oklch(0.90 0.08 220);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
+      --shape-radius-control: 16px;
+      --shape-radius-tile: 16px;
+      --shape-radius-media: 12px;
+      --shape-radius-commit: 999px;
+      --shape-radius-field: 999px;
+      --shape-radius-chip: 999px;
+      --shape-ctl-border: 2px;
+      --shape-commit-shadow: 0 4px 0 var(--primary-shadow);
+      --shape-commit-shadow-press: 0 1px 0 var(--primary-shadow);
+      --shape-commit-press-y: 3px;
+      --primary-shadow: oklch(0.46 0.19 34);
+      --type-w-ui: 600;
+      --type-w-strong: 800;
+      --type-w-commit: 800;
+      --chip: var(--card);
+      --chip-border: var(--foreground);
     }
   }
 }

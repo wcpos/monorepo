@@ -14,17 +14,17 @@ const classes = (props: Parameters<typeof textVariants>[0]) => textVariants(prop
 
 // rank → classes its rank adds on top of the base, and classes it must not carry.
 const ladder: [NonNullable<Parameters<typeof textVariants>[0]>['variant'], string[], string[]][] = [
-	['area', ['text-xl', 'font-semibold'], ['text-muted-foreground', 'uppercase']],
-	['dialog', ['text-lg', 'font-semibold'], ['text-muted-foreground', 'uppercase']],
-	['section', ['text-base', 'font-semibold'], ['text-muted-foreground', 'font-medium']],
-	['subheading', ['text-base', 'font-medium'], ['text-muted-foreground', 'font-semibold']],
-	['body', ['text-base'], ['text-muted-foreground', 'font-semibold', 'font-medium']],
-	['key', ['text-sm', 'text-muted-foreground'], ['font-semibold', 'uppercase']],
-	['help', ['text-xs', 'text-muted-foreground'], ['font-semibold', 'font-medium', 'uppercase']],
+	['area', ['text-xl', 'font-strong'], ['text-muted-foreground', 'uppercase']],
+	['dialog', ['text-lg', 'font-strong'], ['text-muted-foreground', 'uppercase']],
+	['section', ['text-base', 'font-strong'], ['text-muted-foreground', 'font-ui']],
+	['subheading', ['text-base', 'font-ui'], ['text-muted-foreground', 'font-strong']],
+	['body', ['text-base'], ['text-muted-foreground', 'font-strong', 'font-ui']],
+	['key', ['text-sm', 'text-muted-foreground'], ['font-strong', 'uppercase']],
+	['help', ['text-xs', 'text-muted-foreground'], ['font-strong', 'font-ui', 'uppercase']],
 	[
 		'caption',
-		['text-xs', 'text-muted-foreground', 'font-medium', 'tracking-wide', 'uppercase'],
-		['font-semibold'],
+		['text-xs', 'text-muted-foreground', 'font-ui', 'tracking-wide', 'uppercase'],
+		['font-strong'],
 	],
 ];
 
