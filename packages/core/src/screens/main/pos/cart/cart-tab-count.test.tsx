@@ -9,7 +9,7 @@ type Order = {
 	uuid: string;
 	isNew?: boolean;
 	payload: {
-		line_items?: { quantity?: number }[];
+		line_items?: { quantity?: number; product_id?: number | null }[];
 		fee_lines?: { total: string }[];
 		shipping_lines?: { total: string }[];
 	};
@@ -67,6 +67,27 @@ it('counts the quantities across the lines, not the lines', () => {
 	mockOrder = order('a', 2, 3);
 	render(<CartTabCount />);
 	expect(shown()).toBe('5');
+});
+
+it('does not count a removed line left as a tombstone: the cart hides it too', () => {
+	// A synced line is retired by nulling product_id and keeps its quantity (useRemoveLineItem).
+	mockOrder = {
+		uuid: 'a',
+		payload: {
+			line_items: [
+				{ product_id: 12, quantity: 3 },
+				{ product_id: null, quantity: 4 },
+			],
+		},
+	};
+	render(<CartTabCount />);
+	expect(shown()).toBe('3');
+});
+
+it('reads "New" when every line is a tombstone', () => {
+	mockOrder = { uuid: 'a', payload: { line_items: [{ product_id: null, quantity: 2 }] } };
+	render(<CartTabCount />);
+	expect(shown()).toBe('pos_cart.new_cart_tab');
 });
 
 it('does not count a fee or shipping line: they are not products', () => {

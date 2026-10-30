@@ -10,14 +10,17 @@ import { useCurrentOrder } from '../contexts/current-order';
  * How many products the current cart holds: quantities summed across its lines, the number the
  * products panel's in-cart badge reads per product (`useProductCount`). Fee and shipping lines are
  * not products, so they are not counted.
+ *
+ * A line removed after the server gave it an id stays in the payload as a tombstone until the
+ * next push: `product_id: null`, quantity intact (useRemoveLineItem). The cart hides those
+ * (useCartLines); so must this count, or a cart showing 3 badges 7.
  */
 export function useCartItemCount() {
 	const { currentOrderRecord } = useCurrentOrder();
 	return useDocField(currentOrderRecord, (value) =>
-		(value.payload.line_items ?? []).reduce(
-			(sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1),
-			0
-		)
+		(value.payload.line_items ?? [])
+			.filter((line: { product_id?: number | null }) => line.product_id !== null)
+			.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
 	) as number;
 }
 
