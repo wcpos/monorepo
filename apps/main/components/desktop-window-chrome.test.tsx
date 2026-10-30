@@ -161,7 +161,7 @@ describe('windowColorScheme', () => {
 		for (const light of ['light', 'paper', 'warm']) {
 			expect(windowColorScheme(light)).toBe('light');
 		}
-		for (const dark of ['dark', 'ocean', 'sunset', 'monochrome']) {
+		for (const dark of ['dark', 'ocean', 'sunset', 'monochrome', 'bold', 'market']) {
 			expect(windowColorScheme(dark)).toBe('dark');
 		}
 	});

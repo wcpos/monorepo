@@ -123,7 +123,7 @@ describe('the tone map', () => {
 		expect(files.filter((file) => !ACTION_FILES.includes(file))).toEqual([]);
 	});
 
-	it('reads seven themes and no retired warn token in any of them', () => {
+	it('reads nine themes and no retired warn token in any of them', () => {
 		expect(themes.map((theme) => theme.name)).toEqual([
 			'light',
 			'dark',
@@ -132,6 +132,8 @@ describe('the tone map', () => {
 			'monochrome',
 			'paper',
 			'warm',
+			'bold',
+			'market',
 		]);
 		expect(css).not.toMatch(/--(?:color-)?warn(?:-text|-bg)?\s*:/);
 	});

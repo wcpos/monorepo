@@ -1038,6 +1038,163 @@
       --tile-tint-4: oklch(0.90 0.09 85);
       --tile-tint-5: oklch(0.88 0.05 200);
     }
+
+    /* ========================================
+     * BOLD THEME — Black, white and lime.
+     * Surface lightness: rail 0.145 < page 0.985 < card 1.
+     * ======================================== */
+    @variant bold {
+      --hairline-width: 1px;
+      --background: oklch(0.985 0 0);
+      --foreground: oklch(0.145 0 0);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.145 0 0);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.145 0 0);
+      --primary-foreground: oklch(1 0 0);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.958 0 0);
+      --muted-foreground: oklch(0.45 0 0);
+      --accent: oklch(0.97 0.07 123);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.22 11);
+      --destructive-foreground: oklch(0.99 0.01 11);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.925 0 0);
+      --input: var(--card);
+      --ring: oklch(0.145 0 0);
+      --selected: oklch(0.95 0.12 123);
+      --selected-foreground: oklch(0.145 0 0);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.145 0 0);
+      --rail-selected: oklch(0.908 0.201 123);
+      --rail-selected-foreground: oklch(0.145 0 0);
+      --rail-accent: oklch(0.25 0 0);
+      --rail-foreground: oklch(0.836 0 0);
+      --rail-border: oklch(0.252 0 0);
+      --ok: oklch(0.52 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.97 0.02 11);
+      --neutral: oklch(0.62 0 0);
+      --scrim: oklch(0 0 0 / .35);
+      --c1: oklch(0.145 0 0);
+      --c2: oklch(0.82 0.18 123);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0 0);
+      --tile-tint-0: oklch(0.92 0.14 123);
+      --tile-tint-1: oklch(0.93 0 0);
+      --tile-tint-2: oklch(0.90 0.12 123);
+      --tile-tint-3: oklch(0.90 0 0);
+      --tile-tint-4: oklch(0.94 0.10 123);
+      --tile-tint-5: oklch(0.87 0 0);
+    }
+
+    /* ========================================
+     * MARKET THEME — Coral, ink and pastel tiles.
+     * Surface lightness: rail 0.232 < page 0.991 < card 1.
+     * ======================================== */
+    @variant market {
+      --hairline-width: 1px;
+      --background: oklch(0.991 0.010 87);
+      --foreground: oklch(0.232 0.038 290);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.232 0.038 290);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      /* The prototype's coral (0.686) is a fill colour; as `text-primary` ink it read 3.1:1 on card
+         (Codex, #3124). L 0.52 keeps the hue and passes the 4.5:1 text floor both as ink and under
+         near-white words, so the button words are white again as the prototype drew them. */
+      --primary: oklch(0.52 0.20 34);
+      --primary-foreground: oklch(0.99 0.01 34);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.959 0.016 86);
+      --muted-foreground: oklch(0.47 0.034 296);
+      --accent: oklch(0.96 0.035 34);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.21 5);
+      --destructive-foreground: oklch(0.99 0.01 5);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.926 0.017 85);
+      --input: var(--card);
+      --ring: oklch(0.232 0.038 290);
+      --selected: oklch(0.93 0.06 34);
+      --selected-foreground: oklch(0.50 0.17 34);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.232 0.038 290);
+      --rail-selected: oklch(0.686 0.205 34);
+      --rail-selected-foreground: oklch(0.232 0.038 290);
+      --rail-accent: oklch(0.30 0.045 290);
+      --rail-foreground: oklch(0.881 0.023 297);
+      --rail-border: oklch(0.298 0.040 290);
+      --ok: oklch(0.52 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.97 0.02 5);
+      --neutral: oklch(0.62 0.02 290);
+      --scrim: oklch(0.23 0.04 290 / .35);
+      --c1: oklch(0.52 0.20 34);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.80 0.15 98);
+      --c4: oklch(0.58 0.16 300);
+      --c5: oklch(0.70 0.02 290);
+      --tile-tint-0: oklch(0.90 0.09 61);
+      --tile-tint-1: oklch(0.93 0.12 98);
+      --tile-tint-2: oklch(0.90 0.09 151);
+      --tile-tint-3: oklch(0.89 0.09 301);
+      --tile-tint-4: oklch(0.90 0.10 34);
+      --tile-tint-5: oklch(0.90 0.08 220);
+    }
   }
 }
 

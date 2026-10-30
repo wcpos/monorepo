@@ -249,10 +249,21 @@ describe('the Icons section', () => {
 });
 
 describe('theme tiles', () => {
-	it('marks only the selected tile with a check and preserves the eight options', () => {
+	it('marks only the selected tile with a check and preserves the ten options', () => {
 		const { getByTestId, getAllByTestId, rerender } = render(<ThemeSettings />);
-		const options = ['system', 'light', 'dark', 'ocean', 'sunset', 'monochrome', 'paper', 'warm'];
-		expect(getAllByTestId(/^theme-option-/)).toHaveLength(8);
+		const options = [
+			'system',
+			'light',
+			'dark',
+			'ocean',
+			'sunset',
+			'monochrome',
+			'paper',
+			'warm',
+			'bold',
+			'market',
+		];
+		expect(getAllByTestId(/^theme-option-/)).toHaveLength(10);
 		for (const name of options) {
 			mockTheme = name;
 			mockAdaptive = name === 'system';
