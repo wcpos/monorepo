@@ -79,5 +79,6 @@ it('renders only cart-setting labels the table resolves', () => {
 	expect(container.textContent).not.toContain('common.label_not_found');
 	expect(screen.getByText('common.automatically_print_receipt_after_checkout')).toBeTruthy();
 	expect(screen.getByText('common.quick_discounts')).toBeTruthy();
+	expect(screen.getByText('common.panel_position')).toBeTruthy();
 	expect(container.textContent).not.toMatch(/output_type|open_cash_drawer/);
 });

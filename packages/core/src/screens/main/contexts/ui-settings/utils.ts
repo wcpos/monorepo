@@ -29,9 +29,13 @@ export type UISettingState<T extends UISettingID> = StoreState<UISettingSchema<T
  * authored default. Add an entry when a new enum setting lands.
  */
 const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly string[]>>> = {
-	'pos-products': { position: ['left', 'right'], browseBy: BROWSE_BY },
-	'pos-cart': { openOrdersPosition: ['top', 'bottom'] },
+	'pos-products': { browseBy: BROWSE_BY },
+	'pos-cart': { position: ['left', 'right'], openOrdersPosition: ['top', 'bottom'] },
 };
+
+// A 1.11 profile stored the PRODUCTS side; the cart sits opposite.
+export const cartPositionFromProductsPosition = (value: unknown): 'left' | 'right' | undefined =>
+	value === 'right' ? 'left' : value === 'left' ? 'right' : undefined;
 
 /**
  * @TODO - this handles the first depth of the schema, but not nested values
@@ -39,7 +43,9 @@ const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly str
  */
 export const mergeWithInitalValues = async (
 	id: UISettingID,
-	state: UISettingState<UISettingID>
+	state: UISettingState<UISettingID>,
+	// Seeds missing keys for the products→cart move of position (2026-10-30).
+	seed?: Partial<Record<string, unknown>>
 ) => {
 	const initial = initialSettings[id];
 	const current = state.get();
@@ -53,9 +59,11 @@ export const mergeWithInitalValues = async (
 		if (currentValue === undefined) {
 			const legacy = (current as Record<string, unknown>).quickFilters;
 			const value =
-				id === 'pos-products' && key === 'filterBar' && Array.isArray(legacy)
-					? [...DEFAULT_FILTER_BAR, ...migrateLegacyQuickFilters(legacy)]
-					: initial[typedKey];
+				seed?.[key] !== undefined
+					? seed[key]
+					: id === 'pos-products' && key === 'filterBar' && Array.isArray(legacy)
+						? [...DEFAULT_FILTER_BAR, ...migrateLegacyQuickFilters(legacy)]
+						: initial[typedKey];
 			await state.set(typedKey, () => value as UISettingSchema<typeof id>[typeof typedKey]);
 			continue;
 		}

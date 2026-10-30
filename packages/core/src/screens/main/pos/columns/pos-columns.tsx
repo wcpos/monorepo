@@ -53,8 +53,8 @@ export function POSColumns() {
 		(stage === 'receipt' && cartSettings.autoShowReceipt ? currentOrderRecord.uuid : null);
 	const showTender = stage === 'checkout' || stage === 'receipt';
 	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const position = useDocField(uiSettings, (value) => value.position);
-	const productsOnRight = position === 'right';
+	const position = useDocField(cartSettings, (value) => value.position);
+	const productsOnRight = position === 'left';
 
 	const panels = (
 		<Slot
