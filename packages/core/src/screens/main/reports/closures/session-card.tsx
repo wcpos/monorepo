@@ -156,7 +156,7 @@ function SessionCardContent({
 							disabled={busy || unavailable || !!unavailableReason}
 							onPress={dispatch}
 						>
-							{t('register.x_report')}
+							{t('register.print_x_report')}
 						</Button>
 					</>
 				}

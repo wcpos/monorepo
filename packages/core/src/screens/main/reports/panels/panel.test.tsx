@@ -23,6 +23,7 @@ beforeEach(() => {
 	mockRefundsHandle.set({ ready: true, laneProgress: null });
 	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
 	mockPrintDocument.templatesReady = true;
+	mockPrintDocument.allPrinters = [];
 	mockPrintDocument.documentError = null;
 	mockPrintDocument.print.mockReset().mockResolvedValue(true);
 	mockCredentials.next([]);
@@ -61,6 +62,28 @@ it('opens the payments panel with its title, scope line and footer count', async
 	);
 	fireEvent.click(screen.getByTestId('detail-panel-close'));
 	expect(screen.queryByTestId('detail-panel')).toBeNull();
+});
+// Moving a select back into the header or losing either labelled property breaks this contract.
+it.each(['lg', 'sm'])('labels the document properties above the body on %s', (size) => {
+	mockState.screenSize = size;
+	mockPrintDocument.allPrinters = [{ id: 'front', name: 'Front printer' }];
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	const template = screen.getByTestId('detail-panel-template');
+	const printer = screen.getByTestId('detail-panel-printer');
+	expect(within(template).getByText('Template')).toBeTruthy();
+	expect(within(template).getByTestId('receipt-template-select')).toBeTruthy();
+	expect(within(printer).getByText('Printer')).toBeTruthy();
+	expect(within(printer).getByTestId('receipt-printer-select')).toBeTruthy();
+	const header = screen.getByTestId('detail-panel-scope').parentElement!;
+	expect(within(header).queryByTestId('receipt-template-select')).toBeNull();
+	expect(within(header).queryByTestId('receipt-printer-select')).toBeNull();
+	// The rows sit in their own gutter wrapper between the header and the body.
+	const rows = screen.getByTestId('detail-panel-print-rows');
+	expect(rows.contains(template)).toBe(true);
+	expect(header.nextElementSibling).toBe(rows);
+	expect(rows.nextElementSibling).toBe(screen.getByTestId('detail-panel-body'));
+	expect(screen.getByTestId('detail-panel-print').textContent).toBe('Print report');
 });
 it('the phone page shows the crumb and returns on back', () => {
 	mockState.screenSize = 'sm';

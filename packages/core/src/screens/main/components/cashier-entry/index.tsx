@@ -8,9 +8,16 @@ import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { takeRedirectReturn } from '../../../../hooks/use-wcpos-auth/redirect-result';
+import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { UserAvatar } from '../user-avatar';
-import { consumeCashierSheetRequest, useCashierSheetRequested } from './cashier-sheet-request';
+import {
+	consumeCashierSheetRequest,
+	requestCashierSheet,
+	tillEntryFocused,
+	useCashierSheetRequested,
+	useTillEntry,
+} from './cashier-sheet-request';
 
 /**
  * The cashier entry: the avatar that opens the one cashier surface (`UserSheet`, CODING_STANDARDS
@@ -22,11 +29,14 @@ export function CashierEntry({
 	testID,
 	portalHost,
 	onOpenRegister,
+	headless = false,
 }: {
 	testID: string;
 	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
 	portalHost: string | null;
 	onOpenRegister?: () => void;
+	/** The sheet's host alone, no avatar: a till bar's while the desktop title bar carries the avatar. */
+	headless?: boolean;
 }) {
 	const { site, wpCredentials } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
@@ -34,12 +44,15 @@ export function CashierEntry({
 	const [open, setOpen] = React.useState(false);
 	const focused = useIsFocused();
 	const requested = useCashierSheetRequested();
+	const inTill = useCurrentOrderOptional() !== undefined;
+	useTillEntry(focused && inTill);
 	React.useEffect(() => {
-		if (focused && requested && consumeCashierSheetRequest()) {
+		// Outside the till, an entry leaves the request to a focused till entry, which has the order.
+		if (focused && requested && (inTill || !tillEntryFocused()) && consumeCashierSheetRequest()) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- claim the external request at commit, never in a discarded render.
 			setOpen(true);
 		}
-	}, [focused, requested]);
+	}, [focused, requested, inTill]);
 	// The redirect-return claim: after a full-page OAuth return for this site the sheet opens, so
 	// its Add user consumer mounts to claim the one-shot result, as Connect does. Taken once per
 	// page load, by the first entry to COMMIT: an effect, so a render React discards (a Suspense
@@ -50,6 +63,15 @@ export function CashierEntry({
 	}, [loginUrl]);
 	// One cell: a closed sheet still mounts an empty root, which in a bar's gap row would be a
 	// cell of its own pushing the controls out of line (Paul, 2026-10-09).
+	const sheet = (
+		<UserSheet
+			open={open}
+			onOpenChange={setOpen}
+			portalHost={portalHost}
+			onOpenRegister={onOpenRegister}
+		/>
+	);
+	if (headless) return sheet;
 	return (
 		<View>
 			<PressableSurface
@@ -59,16 +81,11 @@ export function CashierEntry({
 				// A bar's control: the control-height square with the muted wash (as `IconButton`).
 				wash="muted"
 				className="size-ctl items-center justify-center rounded-lg"
-				onPress={() => setOpen(true)}
+				onPress={() => (!inTill && tillEntryFocused() ? requestCashierSheet() : setOpen(true))}
 			>
 				<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
 			</PressableSurface>
-			<UserSheet
-				open={open}
-				onOpenChange={setOpen}
-				portalHost={portalHost}
-				onOpenRegister={onOpenRegister}
-			/>
+			{sheet}
 		</View>
 	);
 }

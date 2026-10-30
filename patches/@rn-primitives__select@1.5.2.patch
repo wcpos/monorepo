@@ -1,0 +1,40 @@
+diff --git a/dist/select.web.js b/dist/select.web.js
+index 26ad4b8b31b566d4bac75822a524c8adc0557d80..6f34f572509ab63edf1829f4bb8e8b98f4ab2db7 100644
+--- a/dist/select.web.js
++++ b/dist/select.web.js
+@@ -183,6 +183,7 @@ var Content2 = ({
+   sideOffset = 0,
+   alignOffset = 0,
+   avoidCollisions = true,
++  insets,
+   disablePositioningStyle: _disablePositioningStyle,
+   onCloseAutoFocus,
+   onEscapeKeyDown,
+@@ -201,6 +202,7 @@ var Content2 = ({
+     sideOffset={sideOffset}
+     alignOffset={alignOffset}
+     avoidCollisions={avoidCollisions}
++    collisionPadding={insets}
+     position={position}
+   >
+       <Component ref={ref} {...props} />
+diff --git a/dist/select.web.mjs b/dist/select.web.mjs
+index f69737f42dcf8a6c4da0122a30c45be24427f3e3..e02a38fccbfbb973207a2352399e073aca6b34f1 100644
+--- a/dist/select.web.mjs
++++ b/dist/select.web.mjs
+@@ -139,6 +139,7 @@ var Content2 = ({
+   sideOffset = 0,
+   alignOffset = 0,
+   avoidCollisions = true,
++  insets,
+   disablePositioningStyle: _disablePositioningStyle,
+   onCloseAutoFocus,
+   onEscapeKeyDown,
+@@ -157,6 +158,7 @@ var Content2 = ({
+     sideOffset={sideOffset}
+     alignOffset={alignOffset}
+     avoidCollisions={avoidCollisions}
++    collisionPadding={insets}
+     position={position}
+   >
+       <Component ref={ref} {...props} />

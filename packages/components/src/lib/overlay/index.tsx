@@ -25,7 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useEdgeInsets } from '../../edge-surface';
+import { useEdgeInsets, useTitleBarStrip } from '../../edge-surface';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
 import { TextClassContext } from '../../text';
 import { useIsPhone } from '../device';
@@ -97,6 +97,8 @@ export type OverlayShellProps = {
 	 */
 	blocking?: boolean;
 	pinned?: boolean;
+	/** Rendered where its caller is (a route dialog), not portalled: laid out under the caller's surfaces. */
+	inline?: boolean;
 	/**
 	 * Native: a full-size panel IS the screen. The scrim takes the card colour so the inset
 	 * bands read as the card, and the keyboard and motion wrappers fill the shell. Web ignores it.
@@ -284,6 +286,7 @@ export function OverlaySheetPanel({
 	);
 }
 const TOP = ['top'] as const;
+const STRIP = ['strip'] as const;
 
 const align: Record<OverlayPresentation, string> = {
 	anchored: '',
@@ -321,6 +324,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		blocking,
 		pinned,
 		fill = false,
+		inline = false,
 		testID,
 		children,
 	} = props;
@@ -328,6 +332,12 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	// The top through the edge surfaces: a modal that is a screen's root view under the POS
 	// upgrade notice, which pads the status bar itself, pads none again.
 	const { paddingTop = 0 } = useEdgeInsets(TOP);
+	// The desktop title bar stays a thing apart, above every overlay: the scrim starts under it. A
+	// portalled shell is laid out from the window's top; an inline one (a route dialog inside the POS
+	// ground) from its caller's, so only the strip its surfaces still owe.
+	const { height: stripHeight } = useTitleBarStrip();
+	const { paddingTop: owedStrip = 0 } = useEdgeInsets(STRIP);
+	const stripTop = inline ? owedStrip : stripHeight;
 	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -513,6 +523,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
+			style={stripTop > 0 ? { top: stripTop } : undefined}
 			onPress={onDismiss ? onScrimPress : undefined}
 			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
@@ -606,6 +617,8 @@ export type OverlayAnchor = {
 	Scrim: OverlayScrimComponent;
 	Content: React.ComponentType<any>;
 };
+/** The primitives' collision padding: how far a positioned panel stays from each window edge. */
+type Insets = { top?: number; right?: number; bottom?: number; left?: number };
 export type AnchoredContent = {
 	className?: string;
 	testID?: string;
@@ -642,8 +655,16 @@ export function AnchoredOverlay({
 	list,
 	outsidePress,
 }: AnchoredOverlayProps) {
-	const { className, testID, inline, portalHost, children, ...position } = content;
+	const { className, testID, inline, portalHost, children, insets, ...position } = content;
 	const phone = useIsPhone();
+	const { height: stripHeight } = useTitleBarStrip();
+	// The primitives' name for Radix's collisionPadding: a menu never slides over the title bar,
+	// whatever else its caller keeps it clear of.
+	const collision = React.useMemo(() => {
+		const own = insets as Insets | undefined;
+		if (stripHeight <= 0) return own;
+		return { ...own, top: Math.max(stripHeight, own?.top ?? 0) };
+	}, [insets, stripHeight]);
 	const close = () => onOpenChange(false);
 	const shell = (
 		<OverlayShell
@@ -652,6 +673,7 @@ export function AnchoredOverlay({
 			Scrim={anchor.Scrim}
 			onDismiss={phone ? close : undefined}
 			onOutsidePress={!phone && outsidePress ? close : undefined}
+			inline={inline}
 			testID={testID}
 		>
 			<TextClassContext.Provider value="text-foreground">
@@ -669,6 +691,7 @@ export function AnchoredOverlay({
 					</OverlaySheetPanel>
 				) : (
 					<anchor.Content
+						{...(collision ? { insets: collision } : null)}
 						{...position}
 						testID={testID}
 						className={cn(

@@ -10,6 +10,7 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -48,11 +49,13 @@ import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
+import { usePrintWaiting } from './use-print-waiting';
 import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
+import { PrinterSwitcher } from '../../receipt/printer-switcher';
 
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
@@ -207,34 +210,14 @@ export function DetailPanel() {
 	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
 	const laneProgress = sales.ready ? sales.laneProgress : null;
 	const refundLaneProgress = refunds.ready ? refunds.laneProgress : null;
-	const waiting:
-		'store' | 'data' | 'orders' | 'refunds' | 'templates' | 'no-template' | 'printer' | null =
-		!formats.store
-			? 'store'
-			: !ready
-				? 'data'
-				: laneProgress
-					? 'orders'
-					: (detail === 'refunds' || grouped) && refundLaneProgress
-						? 'refunds'
-						: !doc.templatesReady
-							? 'templates'
-							: doc.templates.length === 0
-								? 'no-template'
-								: // Only a saved printer that mis-prints the template blocks; no printer
-									// means the print dialog, which prints the preview as before.
-									doc.mismatch && doc.resolvedPrinter
-									? 'printer'
-									: null;
-	const waitingLabels = {
-		store: t('reports.print_waiting_store'),
-		data: t('reports.print_waiting_data'),
-		orders: t('reports.print_waiting_orders'),
-		refunds: t('reports.print_waiting_refunds'),
-		templates: t('reports.print_waiting_templates'),
-		'no-template': t('reports.print_no_local_template'),
-		printer: t('reports.print_printer_mismatch'),
-	};
+	const { waiting, label: waitingLabel } = usePrintWaiting({
+		doc,
+		storeReady: !!formats.store,
+		dataReady: !!ready,
+		salesLane: !!laneProgress,
+		refundsLane: !!refundLaneProgress,
+		needsRefunds: detail === 'refunds' || grouped,
+	});
 	if (!detail) return null;
 	const counted = {
 		n: formats.quantity(selectedOrders.length),
@@ -283,16 +266,31 @@ export function DetailPanel() {
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
 				</Text>
-				<View testID="detail-panel-template">
-					<TemplateSwitcher
-						templates={doc.templates}
-						selectedId={doc.selectedTemplateId}
-						onSelect={doc.setSelectedTemplateId}
-						isOffline={doc.isOffline}
-						alwaysVisible
-					/>
-				</View>
 			</DialogHeader>
+			{/* The rows share the header's and the body's 16-point gutter (CODING_STANDARDS § Gutters). */}
+			<View testID="detail-panel-print-rows" className="px-4">
+				<PropertyList>
+					{/* The selects are the rows' VALUES, in the value column: the `control` slot sits
+				    absolute beside the key on a phone and is for a switch (Codex, #3077). */}
+					<PropertyRow label={t('reports.template')} testID="detail-panel-template">
+						<TemplateSwitcher
+							templates={doc.templates}
+							selectedId={doc.selectedTemplateId}
+							onSelect={doc.setSelectedTemplateId}
+							isOffline={doc.isOffline}
+							alwaysVisible
+						/>
+					</PropertyRow>
+					<PropertyRow label={t('reports.printer')} testID="detail-panel-printer">
+						<PrinterSwitcher
+							printers={doc.allPrinters}
+							printerSelection={doc.printerSelection}
+							resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+							onSelect={doc.setPrinterSelection}
+						/>
+					</PropertyRow>
+				</PropertyList>
+			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
 					detail === 'orders' ? (
@@ -306,7 +304,7 @@ export function DetailPanel() {
 			</View>
 			{waiting && (
 				<Text testID="detail-panel-print-waiting" variant="key" className="px-4">
-					{waitingLabels[waiting]}
+					{waitingLabel}
 				</Text>
 			)}
 			{!!(printError || doc.documentError) && (
@@ -340,7 +338,7 @@ export function DetailPanel() {
 						onPress: () => void exportCsv(),
 					},
 					{
-						label: t('reports.print'),
+						label: t('reports.print_report'),
 						testID: 'detail-panel-print',
 						disabled: !!waiting,
 						loading: doc.isPrinting,

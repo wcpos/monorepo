@@ -20,6 +20,13 @@ import type { calculateTotals } from '../report/utils';
 import type { useReportFormats } from '../use-report-formats';
 
 export type PanelSpec = {
+	groups?: {
+		key: string;
+		label: string;
+		rows: PanelSpec['rows'];
+		total: string[];
+		totalRaw: (string | number)[];
+	}[];
 	missing?: { n: number; m: number };
 	head: string[];
 	rows: { key: string | number; cells: string[]; raw: (string | number)[] }[];

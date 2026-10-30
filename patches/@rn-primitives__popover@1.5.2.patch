@@ -1,0 +1,42 @@
+diff --git a/dist/popover.web.js b/dist/popover.web.js
+index e6a39362ee08fa830ede86105d7af87f3fe50c74..e5606816bb56d3e32881610de5819a8029c20510 100644
+--- a/dist/popover.web.js
++++ b/dist/popover.web.js
+@@ -132,7 +132,7 @@ var Content2 = ({
+   sideOffset = 0,
+   alignOffset = 0,
+   avoidCollisions = true,
+-  insets: _insets,
++  insets,
+   disablePositioningStyle: _disablePositioningStyle,
+   onCloseAutoFocus,
+   onEscapeKeyDown,
+@@ -154,6 +154,7 @@ var Content2 = ({
+     sideOffset={sideOffset}
+     alignOffset={alignOffset}
+     avoidCollisions={avoidCollisions}
++    collisionPadding={insets}
+     onOpenAutoFocus={onOpenAutoFocus}
+   >
+       <Component ref={ref} {...props} />
+diff --git a/dist/popover.web.mjs b/dist/popover.web.mjs
+index dc00db41639e1f4296bf626364b02714fc0db0e5..c436f3a46e8d69bcde41850f63c33756d5dde950 100644
+--- a/dist/popover.web.mjs
++++ b/dist/popover.web.mjs
+@@ -93,7 +93,7 @@ var Content2 = ({
+   sideOffset = 0,
+   alignOffset = 0,
+   avoidCollisions = true,
+-  insets: _insets,
++  insets,
+   disablePositioningStyle: _disablePositioningStyle,
+   onCloseAutoFocus,
+   onEscapeKeyDown,
+@@ -115,6 +115,7 @@ var Content2 = ({
+     sideOffset={sideOffset}
+     alignOffset={alignOffset}
+     avoidCollisions={avoidCollisions}
++    collisionPadding={insets}
+     onOpenAutoFocus={onOpenAutoFocus}
+   >
+       <Component ref={ref} {...props} />

@@ -136,6 +136,7 @@ it.each([
 	print.mockRejectedValueOnce(new Error(message));
 	render(<SessionCard />);
 	expect(screen.getByTestId('session-expected').textContent).toContain('£155.00');
+	expect(screen.getByTestId('reports-session-print').textContent).toBe('Print X-report');
 	fireEvent.click(screen.getByTestId('reports-session-print'));
 	await waitFor(() => expect(screen.getByTestId('session-print-error').textContent).toBe(expected));
 });

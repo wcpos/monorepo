@@ -119,6 +119,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 			presentation={presentation}
 			open={open}
 			pinned={route}
+			inline={renderInline}
 			fill={props.size === 'full' && presentation === 'center'}
 			testID={testID}
 		>

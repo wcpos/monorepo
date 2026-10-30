@@ -221,6 +221,11 @@ patchedDependencies:
   # the same registry monitor as writes (d0afac0a6); 58.0.22 still reads the mutable map
   # without that lock in these three paths. Drop when all three use the writers' monitor.
   expo-modules-core@58.0.22: patches/expo-modules-core@58.0.22.patch
+  # The web Content of popover and select drops `insets`, the primitives' name for Radix's
+  # collisionPadding (dropdown-menu forwards it). AnchoredOverlay passes the desktop title bar's
+  # height there, so a menu never slides over the title bar. Drop when upstream forwards it.
+  "@rn-primitives/popover@1.5.2": "patches/@rn-primitives__popover@1.5.2.patch"
+  "@rn-primitives/select@1.5.2": "patches/@rn-primitives__select@1.5.2.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The SQLite query-translation fix for it lives in

@@ -101,6 +101,26 @@ describe('DesktopWindowChrome (electron)', () => {
 		expect(screen.getByTestId('insets').props.children).toBe('60/34');
 	});
 
+	// The title bar is its own chrome (Paul, 2026-10-29): a band in the rail's surface with a rule
+	// under it, behind the strip, only while the OS band has height; and the strip's controls are
+	// its own height (the control token, scoped to the strip).
+	it('paints the title-bar band only while the OS band has height', async () => {
+		overlay.visible = true;
+		overlay.height = 28;
+		const screen = await renderChrome();
+		const byDataTestId = (id: string) =>
+			screen.container.queryAll((node) => node.props['data-testid'] === id);
+		expect(byDataTestId('title-bar-band')).toHaveLength(1);
+		expect(byDataTestId('title-bar-band')[0].props.style).toMatchObject({
+			height: 28,
+			background: 'var(--rail)',
+		});
+		expect(byDataTestId('title-bar-strip')[0].props.style['--spacing-ctl']).toBe('28px');
+		await act(async () => overlay.change(false, 0));
+		expect(byDataTestId('title-bar-band')).toHaveLength(0);
+		await act(async () => overlay.change(true, 40));
+	});
+
 	it('reserves nothing without a Window Controls Overlay (a browser tab)', async () => {
 		Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
 		const screen = await renderChrome();

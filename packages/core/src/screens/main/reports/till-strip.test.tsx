@@ -172,6 +172,7 @@ it('shows closed Expected · Counted = short result and dispatches the local rep
 	expect(screen.getByTestId('till-counted').textContent).toContain('£412.00');
 	expect(screen.getByTestId('till-result').textContent).toContain('£10.00 short');
 	expect(screen.getByTestId('till-since').textContent).toBe('Closed 12:30 · Pat');
+	expect(screen.getByTestId('till-reprint').textContent).toBe('Print again');
 	fireEvent.click(screen.getByTestId('till-reprint'));
 	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
 	expect(report).toHaveBeenLastCalledWith(data.lastClosure, true, undefined);
@@ -185,7 +186,7 @@ it.each(['open', 'counting'])(
 		render(<TillStrip onOpenClosures={jest.fn()} />);
 		expect(screen.queryByTestId('till-equation')).toBeNull();
 		expect(screen.queryByTestId('till-expected')).toBeNull();
-		expect(screen.getByTestId('till-xreport')).toBeTruthy();
+		expect(screen.getByTestId('till-xreport').textContent).toBe('Print X-report');
 		expect(screen.getByTestId('till-closures')).toBeTruthy();
 	}
 );

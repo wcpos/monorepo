@@ -63,7 +63,9 @@ export function PrintingSettings() {
 		() => new PrinterService({ cloudEnqueueFactory }),
 		[cloudEnqueueFactory]
 	);
-	const templates = useActiveTemplates();
+	const receiptTemplates = useActiveTemplates('receipt');
+	const reportTemplates = useActiveTemplates('report');
+	const closureTemplates = useActiveTemplates('closure');
 	const { printers, isLoading } = useAvailablePrinterProfiles();
 
 	useEnsureSystemPrinter(storeDB);
@@ -188,6 +190,60 @@ export function PrintingSettings() {
 		setDialogOpen(true);
 	}, []);
 
+	const renderTemplateSection = (
+		type: 'receipt' | 'report' | 'closure',
+		templates: ActiveTemplate[]
+	) => (
+		<SettingsSection
+			title={
+				{
+					receipt: t('receipt.receipt_templates'),
+					report: t('settings.report_templates'),
+					closure: t('settings.closure_templates'),
+				}[type]
+			}
+			description={t('settings.templates_description')}
+		>
+			{templates.length === 0 ? (
+				<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
+			) : (
+				<DeviceList>
+					{templates.map((tmpl) => {
+						const tmplId = String(tmpl.id);
+						const currentOverride = overrides.get(tmplId);
+						const autoLabel = autoMatchLabel(tmpl);
+						const selectedPrinter = currentOverride
+							? printers.find((p) => p.id === currentOverride)
+							: null;
+						const isUnavailableOverride = Boolean(currentOverride && !selectedPrinter);
+						const currentValue =
+							currentOverride && (selectedPrinter || isUnavailableOverride)
+								? currentOverride
+								: AUTO_VALUE;
+						const selectedLabel = selectedPrinter
+							? selectedPrinter.name
+							: isUnavailableOverride
+								? t('settings.printer_unavailable')
+								: autoLabel;
+
+						return (
+							<TemplateRow
+								key={tmplId}
+								template={tmpl}
+								currentValue={currentValue}
+								selectedLabel={selectedLabel}
+								autoLabel={autoLabel}
+								printers={printers}
+								unavailablePrinterId={isUnavailableOverride ? currentOverride : undefined}
+								onRoutingChange={handleRoutingChange}
+							/>
+						);
+					})}
+				</DeviceList>
+			)}
+		</SettingsSection>
+	);
+
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
 	// A Windows winspool queue is also `connectionType: 'system'`; only the Print Dialog is invisible.
 	const hasVisiblePrinterTargets = printers.some((p) => !usesSystemPrintDialog(p));
@@ -246,49 +302,9 @@ export function PrintingSettings() {
 				</DocsLink>
 			</SettingsSection>
 
-			{/* Receipt Templates section */}
-			<SettingsSection
-				title={t('receipt.receipt_templates')}
-				description={t('settings.templates_description')}
-			>
-				{templates.length === 0 ? (
-					<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
-				) : (
-					<DeviceList>
-						{templates.map((tmpl) => {
-							const tmplId = String(tmpl.id);
-							const currentOverride = overrides.get(tmplId);
-							const autoLabel = autoMatchLabel(tmpl);
-							const selectedPrinter = currentOverride
-								? printers.find((p) => p.id === currentOverride)
-								: null;
-							const isUnavailableOverride = Boolean(currentOverride && !selectedPrinter);
-							const currentValue =
-								currentOverride && (selectedPrinter || isUnavailableOverride)
-									? currentOverride
-									: AUTO_VALUE;
-							const selectedLabel = selectedPrinter
-								? selectedPrinter.name
-								: isUnavailableOverride
-									? t('settings.printer_unavailable')
-									: autoLabel;
-
-							return (
-								<TemplateRow
-									key={tmplId}
-									template={tmpl}
-									currentValue={currentValue}
-									selectedLabel={selectedLabel}
-									autoLabel={autoLabel}
-									printers={printers}
-									unavailablePrinterId={isUnavailableOverride ? currentOverride : undefined}
-									onRoutingChange={handleRoutingChange}
-								/>
-							);
-						})}
-					</DeviceList>
-				)}
-			</SettingsSection>
+			{renderTemplateSection('receipt', receiptTemplates)}
+			{renderTemplateSection('report', reportTemplates)}
+			{renderTemplateSection('closure', closureTemplates)}
 
 			<Alert.AlertDialog
 				open={!!pendingDelete}
