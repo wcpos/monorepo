@@ -11,17 +11,17 @@ import { useGround } from '@wcpos/components/lib/ground';
 
 import { useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
-import { Hero } from './hero';
+import { Hero, SalesScope } from './hero';
 import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
 
 const BOTTOM = ['bottom'] as const;
 
 export function Reports({
-	title,
+	date,
 	header,
 }: {
-	title: React.ReactNode;
+	date: React.ReactNode;
 	/** The till strip: the page's first row, scrolling with it (owner, 2026-10-18). */
 	header?: React.ReactNode;
 }) {
@@ -60,8 +60,9 @@ export function Reports({
 						{/* The strip stays outside the report's boundary: it is the only way into
 						    Closures, so a failed hero or card must not take it down (Codex, #2720). */}
 						{header}
+						<SalesScope date={date} settled />
 						<ErrorBoundary>
-							<Hero title={title} />
+							<Hero />
 							<PeriodSection />
 						</ErrorBoundary>
 					</ScrollView>

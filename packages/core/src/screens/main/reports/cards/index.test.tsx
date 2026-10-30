@@ -5,7 +5,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { mockState, setOrders } from './test-utils';
 import { PeriodSection } from './index';
-import { DateButton } from '../date-button';
 
 beforeEach(() => {
 	setOrders([]);
@@ -33,32 +32,6 @@ it('renders Orders, Payments, Where sold, Top products, Categories, Cashiers, Ta
 		'card-refunds',
 	]);
 });
-it("the heading reads the date button's label", () => {
-	const tree = () => (
-		<>
-			<DateButton
-				scope={{ from: mockState.from, to: mockState.to, registerId: '' }}
-				onScopeChange={() => {}}
-				lockedScopeName=""
-			/>
-			<PeriodSection />
-		</>
-	);
-	const view = render(tree());
-	for (const [from, to, expected] of [
-		['2026-07-15', '2026-07-15', 'Today'],
-		['2026-07-14', '2026-07-14', 'Yesterday'],
-		['2026-07-02', '2026-07-09', '2–9 Jul'],
-	]) {
-		mockState.from = from;
-		mockState.to = to;
-		view.rerender(tree());
-		expect(screen.getByTestId('reports-period-title').textContent).toBe(
-			screen.getByTestId('reports-period').textContent
-		);
-		expect(screen.getByTestId('reports-period-title').textContent).toContain(expected);
-	}
-});
 it('three columns on lg, two on md, one on sm', () => {
 	const view = render(<PeriodSection />);
 	for (const [size, columns] of [
@@ -70,7 +43,7 @@ it('three columns on lg, two on md, one on sm', () => {
 		view.rerender(<PeriodSection />);
 		const row = screen.getByTestId('card-orders').parentElement!.parentElement!;
 		expect(row.children.length).toBe(columns);
-		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(8 / columns));
+		expect(row.parentElement!.children.length).toBe(Math.ceil(8 / columns));
 		expect(row.children[0].contains(screen.getByTestId('card-orders'))).toBe(true);
 	}
 });
@@ -87,7 +60,7 @@ it('shows skeletons while the viewed store is unknown', () => {
 	mockState.store = undefined;
 	try {
 		render(<PeriodSection />);
-		expect(screen.getByTestId('reports-period-title').textContent).toContain('Today');
+		expect(screen.queryByTestId('reports-period-title')).toBeNull();
 		for (const id of ['orders', 'where-sold', 'products', 'taxes', 'refunds']) {
 			expect(screen.getByTestId(`card-${id}-loading`).querySelectorAll('[aria-busy]')).toHaveLength(
 				2

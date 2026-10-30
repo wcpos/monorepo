@@ -1,19 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { format } from 'date-fns/format';
-
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
 
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
-import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useReportsData, useReportsPeriod } from '../context';
-import { periodLabel } from '../date-button';
+import { useReportsData } from '../context';
 import { cogsEnabled } from '../margin';
 import { LocalProductsContext, useLocalProducts } from './use-local-products';
 import { BrandsCard } from './brands';
@@ -53,15 +47,7 @@ export function PeriodSection() {
 	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled);
 	const t = useT(),
 		{ roomy } = useTheme(),
-		phone = useIsPhone(),
-		{ dateRange, storeId, timezone } = useReportsPeriod();
-	const { presets } = useStoreDay(storeId),
-		{ formatDate } = useLocalDate();
-	const scope = {
-		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
-		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
-	};
-	const { text } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
+		phone = useIsPhone();
 	// Columns follow the measured width, not the breakpoint: the app calls a 1024-point tablet
 	// `lg`, where three cards cramp their stat grids. Until the first layout, the breakpoint.
 	const [width, setWidth] = React.useState<number | null>(null);
@@ -84,9 +70,6 @@ export function PeriodSection() {
 				className="gap-4"
 				onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
 			>
-				<Text testID="reports-period-title" role="heading" className="text-lg font-semibold">
-					{text}
-				</Text>
 				{Array.from({ length: Math.ceil(visibleCards.length / columns) }, (_, row) => (
 					<View key={row} className="flex-row gap-4">
 						{Array.from({ length: columns }, (_, cell) => {

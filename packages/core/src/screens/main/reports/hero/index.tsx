@@ -13,6 +13,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
+import { IconButton } from '@wcpos/components/icon-button';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Skeleton } from '@wcpos/components/skeleton';
@@ -50,6 +51,7 @@ import { useClosureDocumentContext } from '../../../../services/register-session
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
+import { ScopeRow } from '../scope-row';
 
 type Choice = { value: string; label: string; hint?: string };
 function MenuChip({
@@ -280,14 +282,10 @@ function Figures({
 		</View>
 	);
 }
-/** The card while the orders load: the same title row, so the date button is never lost to a
- * slow or stuck all-results request (it is the only way to a smaller range). */
-export function HeroShell({ title }: { title: React.ReactNode }) {
+/** The card while the orders load; the scope stays available above it. */
+export function HeroShell() {
 	return (
 		<Card testID="reports-hero-loading" padding="body" className="gap-5">
-			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
-				{title}
-			</View>
 			<Skeleton shape="line" className="h-12 w-64" />
 			<Skeleton shape="line" className="h-10 w-48" />
 			<Skeleton shape="line" className="h-56" />
@@ -297,6 +295,7 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
 /** Printing has its own boundary so a loading directory never blanks the sales figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
 	const { dateRange, timezone } = useReportsPeriod();
 	const { statusMode } = useReportsScope();
@@ -402,14 +401,23 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	};
 	return (
 		<View className="items-end gap-2">
-			<Button
-				testID="hero-print"
-				variant="outline"
-				leftIcon="print"
-				onPress={() => setSheetOpen(true)}
-			>
-				{t('reports.print_summary')}
-			</Button>
+			{phone ? (
+				<IconButton
+					name="print"
+					testID="hero-print"
+					accessibilityLabel={t('reports.print_summary')}
+					onPress={() => setSheetOpen(true)}
+				/>
+			) : (
+				<Button
+					testID="hero-print"
+					variant="outline"
+					leftIcon="print"
+					onPress={() => setSheetOpen(true)}
+				>
+					{t('reports.print_summary')}
+				</Button>
+			)}
 			<PrintSheet
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
@@ -425,33 +433,35 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		</View>
 	);
 }
-export function Hero({ title }: { title: React.ReactNode }) {
+function LeftOutChip() {
 	const t = useT();
-	const phone = useIsPhone();
-	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView, setDetail } =
-		useReportsScope();
-	const { comparisonHandle } = useReportsHandles();
-	const { period, timezone, storeId, dateRange } = useReportsPeriod();
-	const { store, money, number, quantity, percent } = useReportFormats(storeId);
-	const { formatDate } = useLocalDate();
-	const { allOrders, selectedOrders, totals } = useReportsData();
+	const { storeId } = useReportsPeriod();
+	const { quantity } = useReportFormats(storeId);
+	const { setDetail } = useReportsScope();
+	const { allOrders } = useReportsData();
 	const included = useIncludedStatus();
 	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
 	const leftOut = allOrders.filter(
 		(order) => included(order) && unselectedRowIds[order.uuid]
 	).length;
-	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
-	const comparisons = [
-		{ value: 'yesterday', label: t('reports.vs_yesterday') },
-		{ value: 'lastweek', label: t('reports.vs_last_weekday', { weekday }) },
-	];
-	const label =
-		period === 'day'
-			? comparisons.find((row) => row.value === cmp)!.label
-			: period === 'week'
-				? t('reports.vs_week_before')
-				: t('reports.vs_month_before');
-	const chips = (
+	return leftOut > 0 ? (
+		<Chip
+			testID="hero-chip-left-out"
+			icon="cart"
+			on
+			label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
+			onClear={() => setUnselectedRowIds({})}
+			clearTestID="hero-chip-left-out-clear"
+			clearLabel={t('reports.put_them_back')}
+			onPress={() => setDetail('orders')}
+		/>
+	) : null;
+}
+export function SalesScopeChips({ settled }: { settled: boolean }) {
+	const t = useT();
+	const phone = useIsPhone();
+	const { statusMode, setStatusMode } = useReportsScope();
+	return (
 		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
 			<React.Suspense
 				fallback={<View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />}
@@ -469,33 +479,73 @@ export function Hero({ title }: { title: React.ReactNode }) {
 					{ value: 'all', label: t('reports.every_status'), hint: t('reports.every_status_hint') },
 				]}
 			/>
-			{period === 'day' ? (
-				<MenuChip
-					name="compare"
-					icon="swap"
-					value={cmp}
-					defaultValue="yesterday"
-					onChange={(next) => setCmp(next as typeof cmp)}
-					choices={comparisons}
-					hint={t('reports.compare_live_hint')}
-				/>
-			) : (
-				<Chip testID="hero-chip-compare" icon="swap" label={label} disabled dimmed />
-			)}
-			{leftOut > 0 && (
-				<Chip
-					testID="hero-chip-left-out"
-					icon="cart"
-					on
-					label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
-					onClear={() => setUnselectedRowIds({})}
-					clearTestID="hero-chip-left-out-clear"
-					clearLabel={t('reports.put_them_back')}
-					onPress={() => setDetail('orders')}
-				/>
-			)}
+			{settled && <LeftOutChip />}
 		</View>
 	);
+}
+export function SalesScope({ date, settled }: { date: React.ReactNode; settled: boolean }) {
+	const t = useT();
+	const phone = useIsPhone();
+	const { storeId } = useReportsPeriod();
+	const disabledPrint = phone ? (
+		<IconButton name="print" accessibilityLabel={t('reports.print_summary')} disabled />
+	) : (
+		<Button variant="outline" leftIcon="print" disabled>
+			{t('reports.print_summary')}
+		</Button>
+	);
+	return (
+		<ScopeRow
+			testID="reports-scope-strip"
+			date={date}
+			inset
+			chips={<SalesScopeChips settled={settled} />}
+			actions={
+				settled ? (
+					<React.Suspense fallback={disabledPrint}>
+						<HeroPrint storeId={storeId} />
+					</React.Suspense>
+				) : (
+					disabledPrint
+				)
+			}
+		/>
+	);
+}
+export function Hero() {
+	const t = useT();
+	const phone = useIsPhone();
+	const { cmp, setCmp, statusMode, chartView, setChartView } = useReportsScope();
+	const { comparisonHandle } = useReportsHandles();
+	const { period, timezone, storeId, dateRange } = useReportsPeriod();
+	const { store, money, number, quantity, percent } = useReportFormats(storeId);
+	const { formatDate } = useLocalDate();
+	const { selectedOrders, totals } = useReportsData();
+	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
+	const comparisons = [
+		{ value: 'yesterday', label: t('reports.vs_yesterday') },
+		{ value: 'lastweek', label: t('reports.vs_last_weekday', { weekday }) },
+	];
+	const label =
+		period === 'day'
+			? comparisons.find((row) => row.value === cmp)!.label
+			: period === 'week'
+				? t('reports.vs_week_before')
+				: t('reports.vs_month_before');
+	const compareChip =
+		period === 'day' ? (
+			<MenuChip
+				name="compare"
+				icon="swap"
+				value={cmp}
+				defaultValue="yesterday"
+				onChange={(next) => setCmp(next as typeof cmp)}
+				choices={comparisons}
+				hint={t('reports.compare_live_hint')}
+			/>
+		) : (
+			<Chip testID="hero-chip-compare" icon="swap" label={label} disabled dimmed />
+		);
 	const toggle = (
 		<SegmentedControl
 			testID="hero-chart-toggle"
@@ -546,32 +596,9 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	};
 	// Another store's figures wait for its document: money in the till's currency and precision
 	// would be wrong money.
-	if (!store) return <HeroShell title={title} />;
+	if (!store) return <HeroShell />;
 	return (
 		<Card testID="reports-hero" padding="body" className="gap-5">
-			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
-				{title}
-				<View className="flex-row items-center gap-2">
-					{!phone && toggle}
-					<React.Suspense
-						fallback={
-							<Button variant="outline" leftIcon="print" disabled>
-								{t('reports.print_summary')}
-							</Button>
-						}
-					>
-						<HeroPrint storeId={storeId} />
-					</React.Suspense>
-				</View>
-			</View>
-			{phone && toggle}
-			{phone ? (
-				<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-					{chips}
-				</ScrollView>
-			) : (
-				chips
-			)}
 			{/* One comparison read for the four difference lines. Its loading and its failure are
 			    the differences' alone: the figure and companions stay (ledger 22). */}
 			<ErrorBoundary
@@ -588,6 +615,17 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				</React.Suspense>
 			</ErrorBoundary>
 			<ReportsSyncProgress lane="comparison" />
+			{phone ? (
+				<>
+					<View className="self-start">{compareChip}</View>
+					{toggle}
+				</>
+			) : (
+				<View className="flex-row items-center justify-between gap-2">
+					{compareChip}
+					{toggle}
+				</View>
+			)}
 			<View testID="hero-chart" className="h-56 w-full">
 				<ErrorBoundary
 					FallbackComponent={() => <Chart />}
