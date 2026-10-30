@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
+import { usePointer } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import type * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -194,11 +194,11 @@ export function ListColumn<TParams>({
 	 */
 	rows?: React.ReactNode;
 } & (ListProps<TParams> | { handle?: never; children: React.ReactNode })) {
-	const phone = useIsPhone();
 	const ground = useGround();
-	// The row above the card brings the gutter over it; with no such row, the body brings it.
-	// The phone's list runs edge to edge under the search row.
-	const bodyGutter = !phone && chips == null && rows == null;
+	// The row above the card brings the gutter over it; with no such row, the body brings it, on a
+	// phone too: its edge-to-edge list sits the gutter under the search, as under a chip row
+	// (Paul, 2026-10-30: Customers' header rule sat on the search field).
+	const bodyGutter = chips == null && rows == null;
 	return (
 		<View testID={testID} className="min-h-0 flex-1">
 			{chips != null && (
@@ -210,7 +210,7 @@ export function ListColumn<TParams>({
 			)}
 			{rows != null && (
 				// The phone's screen edge keeps 16, as its chip row does (`useGround`).
-				<View className={cn(ground.gap, ground.px, (chips != null || phone) && ground.negMt)}>
+				<View className={cn(ground.gap, ground.px, chips != null && ground.negMt)}>
 					<View />
 					{rows}
 					<View />
@@ -218,7 +218,7 @@ export function ListColumn<TParams>({
 			)}
 			{/* `min-h-0`: a body whose root is `h-full` (the table skeleton) stays inside the
 			    column beside the chips instead of overflowing it (Codex). */}
-			<View className={cn('min-h-0 flex-1', bodyGutter && 'pt-gutter')}>
+			<View className={cn('min-h-0 flex-1', bodyGutter && ground.pt)}>
 				{body.handle ? (
 					<ErrorBoundary onReset={() => body.handle.retry()} resetKeys={[body.handle]}>
 						<Suspense fallback={body.skeleton}>

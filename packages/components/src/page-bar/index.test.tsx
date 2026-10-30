@@ -121,6 +121,23 @@ it('seats the search beside the title and caps its width; the phone keeps the co
 	expect(screen.getByTestId('bar').firstElementChild).not.toHaveClass('pl-gutter');
 });
 
+// Under the desktop title bar no status inset softens the top: the phone row sits the phone
+// ground's gutter (16) under the bar's top, outside its control height, after the inset the bar
+// pads; the search's own row sits directly under it (Paul, 2026-10-30).
+it('sits the phone control row the gutter under the top, and the own-row search adds none', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Orders" search={<input data-testid="search" />} />
+		</DeviceScope>
+	);
+	const bar = screen.getByTestId('bar');
+	const [row, searchRow] = Array.from(bar.children);
+	expect(row).toHaveClass('mt-4', 'h-ctl');
+	expect(row).not.toHaveClass('pt-4', 'pt-gutter');
+	expect(bar).toHaveStyle({ paddingTop: '24px' });
+	expect(searchRow.className.split(' ').filter((name) => /^(p|m)(t|y)-/.test(name))).toEqual([]);
+});
+
 // A bar whose control row holds a title (the management pages) puts the phone search on a
 // row of its own under it (ManagementBar used to draw it).
 it('puts the phone search on its own ruled row under the control row', () => {
@@ -190,6 +207,10 @@ it.each([
 		expect(row.contains(screen.getByTestId('bar-menu'))).toBe(true);
 		expect(row.contains(screen.getByTestId('search'))).toBe(inRow);
 		expect(screen.getByTestId('bar').children).toHaveLength(inRow ? 1 : 2);
+		// Inline or not, the row sits the phone gutter under the strip, after the inset the bar
+		// pads (status 24 plus the strip), and keeps the control height (Paul, 2026-10-30).
+		expect(row).toHaveClass('mt-4', 'h-ctl');
+		expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: `${24 + height}px` });
 	}
 );
 

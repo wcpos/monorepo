@@ -402,10 +402,10 @@ function ReportsShell({
 							<Closures
 								renderScopeRow={({ actions }) => (
 									<View
-										// The row under the wide bar brings the page gutter between the bar's
-										// controls and its own; the Closures body's `p-gutter` brings the gutter
-										// below. The phone keeps its 8 under its control-height bar.
-										className={cn(ground.px, phone ? 'py-2' : ground.pt)}
+										// The row under the bar brings the page gutter between the bar's
+										// controls and its own, at every width; the Closures body's `p-gutter`
+										// brings the gutter below.
+										className={cn(ground.px, ground.pt)}
 									>
 										<ScopeRow
 											testID="reports-scope-row"
