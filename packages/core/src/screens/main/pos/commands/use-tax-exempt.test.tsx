@@ -198,6 +198,17 @@ it('resolves tax statuses by Woo product/variation ids rather than object identi
 		variationIds: [11, undefined, undefined, undefined, 12, 13],
 	});
 });
+it('waits for the engine before reading the catalog', async () => {
+	let opened = false;
+	const engine = { ready: Promise.resolve().then(() => void (opened = true)) } as RxdbSyncEngine;
+	jest.mocked(observeCatalogByWooIds).mockImplementationOnce(() => {
+		expect(opened).toBe(true);
+		return of({ available: true, products: [], variations: [] }) as never;
+	});
+	const read = await readCatalogTaxStatuses(engine, [{ product_id: 1 }]);
+	expect(opened).toBe(true);
+	expect(read({ product_id: 1 })).toBeUndefined();
+});
 it('returns undefined when catalog is unavailable', async () => {
 	jest
 		.mocked(observeCatalogByWooIds)

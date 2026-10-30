@@ -19,6 +19,8 @@ export async function readCatalogTaxStatuses(
 	engine: QueryRuntime['engine'],
 	lines: readonly LineItemInput[]
 ): Promise<(line: LineItemInput) => TaxStatus | undefined> {
+	// Before the first scope opens the database observable emits null; a one-shot read waits for it.
+	await engine.ready;
 	const { products, variations, available } = await firstValueFrom(
 		observeCatalogByWooIds(engine, {
 			productIds: lines.map((line) => line.product_id),
