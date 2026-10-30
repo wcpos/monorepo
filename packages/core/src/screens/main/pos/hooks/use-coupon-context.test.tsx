@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
 import { useQueryRuntime } from '@wcpos/query';
@@ -12,6 +13,12 @@ const engine = { active: jest.fn() };
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useQueryRuntime: () => ({ engine }),
+	observeCatalogByWooIds: () =>
+		of({
+			available: true,
+			products: [{ remoteId: '82', payload: { tax_status: 'none' } }],
+			variations: [],
+		}),
 }));
 
 const engineRecord = (remoteId: string, payload: Record<string, unknown>) => ({
@@ -128,3 +135,9 @@ it.each([0, null])(
 		expect(productFind).not.toHaveBeenCalled();
 	}
 );
+
+it('provides catalog tax status on the coupon context', async () => {
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext([{ product_id: 82 }]);
+	expect(context.taxStatusFor?.({ product_id: 82 })).toBe('none');
+});

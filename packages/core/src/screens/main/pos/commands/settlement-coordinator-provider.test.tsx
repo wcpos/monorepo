@@ -217,6 +217,7 @@ it.each(['0.30', '0.40'])('commits a partial order crossing net paid %s', async 
 
 const references = new BehaviorSubject({ ready: false, generation: '0:0' });
 const context = {
+	taxStatusFor: () => 'none' as const,
 	coupons: new Map([['summer', { code: 'summer', discount_type: 'percent', amount: '10' }]]),
 	productCategories: new Map(),
 	categoryParents: new Map(),
@@ -877,5 +878,36 @@ it('keeps both in-flight boundary binding readers current across a render', asyn
 		view.unmount();
 		hook.unmount();
 		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+	}
+});
+
+it('passes the context lookup to replay', async () => {
+	references.next({ ready: true, generation: 'lookup' });
+	context.coupons = new Map([
+		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+	]);
+	orders.next({
+		ready: true,
+		hits: [
+			{
+				record: record({
+					line_items: [{ product_id: 1, quantity: 1, subtotal: '10', total: '10' }],
+					coupon_lines: [{ code: 'summer' }],
+				}),
+			},
+		],
+	});
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		expect(orderMath.settleCart).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			expect.objectContaining({
+				coupons: expect.objectContaining({ taxStatusFor: context.taxStatusFor }),
+			})
+		);
+	} finally {
+		view.unmount();
 	}
 });

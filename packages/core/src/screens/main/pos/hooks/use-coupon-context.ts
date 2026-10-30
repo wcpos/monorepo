@@ -1,12 +1,47 @@
 import * as React from 'react';
 
-import { type EngineRecord, readCouponCatalog, useQueryRuntime } from '@wcpos/query';
+import { firstValueFrom } from 'rxjs';
+
+import {
+	type EngineRecord,
+	observeCatalogByWooIds,
+	readCouponCatalog,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
-import type { CouponContext, CouponInput } from '@wcpos/order-math';
+import type { CouponContext, CouponInput, LineItemInput, TaxStatus } from '@wcpos/order-math';
 
 import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
 type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 type CouponLine = import('@wcpos/query').OrderCouponLine;
+
+export async function readCatalogTaxStatuses(
+	engine: QueryRuntime['engine'],
+	lines: readonly LineItemInput[]
+): Promise<(line: LineItemInput) => TaxStatus | undefined> {
+	const { products, variations, available } = await firstValueFrom(
+		observeCatalogByWooIds(engine, {
+			productIds: lines.map((line) => line.product_id),
+			variationIds: lines.map((line) => line.variation_id),
+		})
+	);
+	const key = (line: LineItemInput) =>
+		JSON.stringify([line.product_id ?? 0, line.variation_id ?? 0]);
+	const statuses = new Map<string, TaxStatus | undefined>();
+	const status = (
+		records: readonly (EngineRecord<'products'> | EngineRecord<'variations'>)[],
+		id: number | null | undefined
+	): TaxStatus | undefined =>
+		(records.find((record) => record.remoteId !== null && wooIdOf(record.remoteId) === id)?.payload
+			.tax_status as TaxStatus | '' | undefined) || undefined;
+	if (available)
+		for (const line of lines) {
+			// A variation inherits its parent's status when it has none or is not resident yet.
+			const own = (line.variation_id ?? 0) > 0 ? status(variations, line.variation_id) : undefined;
+			statuses.set(key(line), own ?? status(products, line.product_id));
+		}
+	return (line) => statuses.get(key(line));
+}
 
 function isDiscountType(value: unknown): value is CouponInput['discount_type'] {
 	return value === 'percent' || value === 'fixed_cart' || value === 'fixed_product';
@@ -32,7 +67,7 @@ export async function readCouponContext(
 		lineItems,
 		couponLines,
 	}: {
-		lineItems: readonly { product_id?: number | null }[];
+		lineItems: readonly LineItemInput[];
 		couponLines: readonly CouponLine[];
 	}
 ): Promise<CouponContext> {
@@ -76,16 +111,19 @@ export async function readCouponContext(
 
 	const categoryParents = buildCategoryParents(categoryRecords);
 
-	return { coupons, productCategories, categoryParents };
+	return {
+		coupons,
+		productCategories,
+		categoryParents,
+		taxStatusFor: await readCatalogTaxStatuses(runtime.engine, lineItems),
+	};
 }
 
 export const useCouponContext = () => {
 	const runtime = useQueryRuntime();
 	const getCouponContext = React.useCallback(
-		(
-			lineItems: readonly { product_id?: number | null }[],
-			couponLines: readonly CouponLine[] = []
-		) => readCouponContext(runtime, { lineItems, couponLines }),
+		(lineItems: readonly LineItemInput[], couponLines: readonly CouponLine[] = []) =>
+			readCouponContext(runtime, { lineItems, couponLines }),
 		[runtime]
 	);
 	return { getCouponContext };
