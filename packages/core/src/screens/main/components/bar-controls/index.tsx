@@ -86,11 +86,16 @@ export function BarControls({
 	}
 	return (
 		<>
-			<NotificationBell testID={`${testID}-bell`} portalHost={portalHost ?? undefined} />
+			<NotificationBell
+				testID={`${testID}-bell`}
+				portalHost={portalHost ?? undefined}
+				bare={inTitleBar}
+			/>
 			<CashierEntry
 				testID={`${testID}-avatar`}
 				portalHost={entryHost}
 				onOpenRegister={onOpenRegister}
+				bare={inTitleBar}
 			/>
 		</>
 	);

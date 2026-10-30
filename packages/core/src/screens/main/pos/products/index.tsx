@@ -13,6 +13,7 @@ import { skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Notice } from '@wcpos/components/notice';
 import { PageBar } from '@wcpos/components/page-bar';
+import { useTitleBarStrip } from '@wcpos/components/edge-surface/title-bar-strip';
 import { PaneStack } from '@wcpos/components/pane-stack';
 import { Suspense } from '@wcpos/components/suspense';
 import type { EngineRecord } from '@wcpos/query';
@@ -34,6 +35,7 @@ import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
+import { useBarMenu } from '../../components/bar-controls';
 import { ListColumn, ListPage } from '../../components/list-frame';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
@@ -193,6 +195,9 @@ function POSProductsContent({
 	initialFilters: Record<string, unknown>;
 }) {
 	const { session, sessionsOn } = useRegisterSession();
+	// Under the desktop title bar the register bar is hidden, so its menu rides here (Paul, 2026-10-30).
+	const menu = useBarMenu();
+	const stripMenu = useTitleBarStrip().height > 0 ? menu : undefined;
 	// `pos.search.focus` focuses this input while the screen is mounted (roadmap#428). On a phone
 	// both tabs stay mounted, so an unfocused Products tab is brought forward first and the input
 	// takes focus once the tab is.
@@ -553,6 +558,7 @@ function POSProductsContent({
 				bar={
 					<ErrorBoundary>
 						<PageBar
+							onMenu={stripMenu}
 							search={
 								<ErrorBoundary>
 									<QuerySearchInput

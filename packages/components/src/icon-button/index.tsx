@@ -19,6 +19,8 @@ const buttonVariants = cva('items-center justify-center rounded-lg', {
 			destructive: 'web:hover:bg-destructive/15 active:bg-destructive/15',
 			secondary: 'web:hover:bg-secondary/15 active:bg-secondary/15',
 			ok: 'web:hover:bg-ok/15 active:bg-ok/15',
+			// A title-bar item (Paul, 2026-10-30): no surface on hover or press; the glyph lifts instead.
+			bare: '',
 		},
 		size: {
 			default: 'size-ctl',
@@ -70,19 +72,30 @@ function IconButton({
 			className={buttonVariants({ variant, size, className })}
 			{...props}
 		>
-			<Icon
-				name={name}
-				variant={variant === 'outline' ? 'default' : variant === 'destructive' ? 'bad' : variant}
-				size={size}
-				loading={loading}
-				spin={spin}
-				className={cn(
-					(!variant || variant === 'default') && 'text-muted-foreground',
-					on && 'text-primary',
-					iconClassName
-				)}
-				pointerEvents="none"
-			/>
+			{({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => (
+				<Icon
+					name={name}
+					variant={
+						variant === 'outline' || variant === 'bare'
+							? 'default'
+							: variant === 'destructive'
+								? 'bad'
+								: variant
+					}
+					size={size}
+					loading={loading}
+					spin={spin}
+					className={cn(
+						(!variant || variant === 'default') && 'text-muted-foreground',
+						// Muted at rest, the foreground under the pointer or the finger, as a macOS title bar.
+						variant === 'bare' &&
+							(hovered || pressed ? 'text-foreground' : 'text-muted-foreground'),
+						on && 'text-primary',
+						iconClassName
+					)}
+					pointerEvents="none"
+				/>
+			)}
 		</PressableSurface>
 	);
 }

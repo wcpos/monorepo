@@ -6,6 +6,7 @@ import type { TextProps, ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { EdgeSurface } from '../edge-surface';
+import { TitleBarStripProvider } from '../edge-surface/title-bar-strip';
 import { DeviceScope } from '../lib/device';
 import { PageBar } from './index';
 
@@ -164,6 +165,33 @@ it('keeps the phone search in the row when the row holds only controls', () => {
 	);
 	expect(order).toEqual([...order].sort((a, b) => a - b));
 });
+
+// Under the desktop title bar the menu sits beside the search (Paul, 2026-10-30: "the menu icon
+// should go next to the search field"); off the strip a menu still claims the row's place, so
+// the search keeps its own row (owner, 2026-10-23).
+it.each([
+	[28, true],
+	[0, false],
+])(
+	'a phone row with only a menu and search under a strip of %s keeps the search in the row: %s',
+	(height, inRow) => {
+		render(
+			<TitleBarStripProvider value={{ node: null, height }}>
+				<DeviceScope phone>
+					<PageBar
+						testID="bar"
+						onMenu={{ label: 'Menu', onPress: jest.fn() }}
+						search={<input data-testid="search" />}
+					/>
+				</DeviceScope>
+			</TitleBarStripProvider>
+		);
+		const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+		expect(row.contains(screen.getByTestId('bar-menu'))).toBe(true);
+		expect(row.contains(screen.getByTestId('search'))).toBe(inRow);
+		expect(screen.getByTestId('bar').children).toHaveLength(inRow ? 1 : 2);
+	}
+);
 
 it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {
 	render(

@@ -1,11 +1,17 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+
+import { TitleBarStripProvider } from '@wcpos/components/edge-surface/title-bar-strip';
 
 import { consumeRegisterPanelRequest, requestRegisterPanel } from './register-panel-request';
-import { consumeCashierSheetRequest } from '../../components/cashier-entry/cashier-sheet-request';
+import {
+	consumeCashierSheetRequest,
+	requestCashierSheet,
+} from '../../components/cashier-entry/cashier-sheet-request';
 import { RegisterBar } from './register-bar';
+import { CurrentOrderContext } from '../contexts/current-order/context';
 
 jest.mock('expo-haptics', () => ({}));
 // The bar carries the notifications bell (language decision 42); its Popover primitive ships
@@ -83,7 +89,11 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+		<div data-testid="register-bar-row" className={className}>
+			{children}
+		</div>
+	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({
@@ -198,3 +208,29 @@ it('the cashier sheet Close register door opens the count pane through the bar',
 	expect(screen.getByTestId('requested-pane').textContent).toBe('count');
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
 });
+
+// The desktop title bar carries the place and the pill (Paul, 2026-10-30): under it the till's
+// bar draws nothing at any width, while the panel and the avatarless entry stay mounted; the
+// entry still opens the sheet the title bar asks for. The products bar takes the phone's menu.
+it.each([false, true])(
+	'with a strip hides the row at phone width too (phone: %s), keeps the panel and the headless entry',
+	(phone) => {
+		mockIsPhone = phone;
+		const till = { currentOrderRecord: {} } as unknown as React.ContextType<
+			typeof CurrentOrderContext
+		>;
+		render(
+			<TitleBarStripProvider value={{ node: null, height: 28 }}>
+				<CurrentOrderContext.Provider value={till}>
+					<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />
+				</CurrentOrderContext.Provider>
+			</TitleBarStripProvider>
+		);
+		expect(screen.getByTestId('register-bar-row').className.split(' ')).toContain('hidden');
+		expect(screen.getByTestId('requested-pane')).toBeTruthy();
+		expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
+		expect(screen.queryByTestId('register-bar-bell')).toBeNull();
+		act(() => requestCashierSheet());
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	}
+);

@@ -193,6 +193,8 @@ jest.mock('./use-barcode', () => ({
 	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
 		mockUseBarcode(setSearch, clearSearch),
 }));
+// The bar's menu reads the drawer; its module brings the bell and the online status (NetInfo).
+jest.mock('../../components/bar-controls', () => ({ useBarMenu: () => undefined }));
 jest.mock('../components/storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
 jest.mock('./camera-scan-button', () => ({ CameraScanButton: () => null }));
 jest.mock('./camera-scanner-panel', () => ({ CameraScannerPanel: () => null }));
