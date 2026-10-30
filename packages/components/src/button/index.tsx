@@ -59,6 +59,8 @@ const buttonVariants = cva(
 				 * ghost's hover surface would be too much furniture.
 				 */
 				link: 'bg-transparent',
+				/** A title-bar item (Paul, 2026-10-30): no surface on hover or press; the label lifts. */
+				bare: '',
 			},
 			/**
 			 * Three sizes, by role (ruled 2026-10-16): `sm` (36) in rows and toolbars,
@@ -104,6 +106,8 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			ghost: 'text-muted-foreground',
 			'ghost-destructive': 'text-destructive',
 			link: 'text-primary web:hover:underline',
+			// The key rank (13), muted at rest, as a macOS title bar's text.
+			bare: 'text-muted-foreground text-sm font-normal',
 		},
 		size: {
 			default: '',
@@ -116,6 +120,8 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		{ variant: 'outline', hovered: true, class: 'text-foreground' },
 		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
 		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
+		{ variant: 'bare', pressed: true, class: 'text-foreground' },
+		{ variant: 'bare', hovered: true, class: 'text-foreground' },
 		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
 		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },
