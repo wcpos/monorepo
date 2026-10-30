@@ -142,3 +142,16 @@ describe('the numbers face from a class', () => {
 		expect(screen.getByText('2.00')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
 	});
 });
+
+// A caller's own family class outranks the theme's face (CodeRabbit on #3138): a CodeChip's
+// `font-mono` must stay monospace under Paper till.
+it('steps back from the theme face when the caller names a family class', () => {
+	render(
+		<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+			<Text className="font-mono tabular-nums">E42</Text>
+			<Text className="font-sans">Plain</Text>
+		</ThemeTraitsContext.Provider>
+	);
+	expect(screen.getByText('E42').style.fontFamily).toBe('');
+	expect(screen.getByText('Plain').style.fontFamily).toBe('');
+});

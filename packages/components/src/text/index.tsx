@@ -34,7 +34,14 @@ function Text({
 	// inherited context: 93 amounts ask through the class today (Codex, #3138), and a theme whose body
 	// face has proportional digits (DM Sans) would otherwise draw them unaligned.
 	const numeric = tabular || hasTabularClass(className) || hasTabularClass(textClass);
-	const family = numeric ? (type.num ?? type.body) : type.body;
+	// A caller's own family class (`font-mono` on a CodeChip) outranks the theme's face: an inline
+	// style would beat the class on web, so the theme steps back when one is present (CodeRabbit, #3138).
+	const family =
+		hasFamilyClass(className) || hasFamilyClass(textClass)
+			? undefined
+			: numeric
+				? (type.num ?? type.body)
+				: type.body;
 	const Component = asChild ? Slot : RNText;
 
 	const processedChildren =
@@ -60,6 +67,10 @@ function Text({
 }
 
 const TABULAR_CLASS = /(^|\s)tabular-nums(\s|$)/;
+const FAMILY_CLASS = /(^|\s)font-(mono|sans|serif)(\s|$)/;
+function hasFamilyClass(classes: string | undefined) {
+	return classes !== undefined && FAMILY_CLASS.test(classes);
+}
 function hasTabularClass(classes: string | undefined) {
 	return classes !== undefined && TABULAR_CLASS.test(classes);
 }
