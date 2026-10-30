@@ -329,9 +329,16 @@ export function EditOrderMetaForm({
 			if (pending.leaves) setCurrentOrderID('');
 		} catch (error) {
 			if (patched) {
+				// The identity is restored by value: a protected row the send added (a register the
+				// order never had) survives a plain restore, so it is cleared explicitly.
 				const reverted = await writeOrderFields(order, () => ({
 					...(statusChanged ? { status: previous.status } : {}),
-					meta_data: previous.meta_data ?? [],
+					meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
+						userId: identity.cashierId ?? '',
+						storeId: identity.storeId ?? NO_STORE,
+						registerId: identity.registerId ?? null,
+						tillId: identity.tillId,
+					}),
 				}));
 				// The failed send may still land: a timed-out outcome is unknown and a queued
 				// mutation is retried. Open orders only reach the server on an explicit push,
@@ -444,6 +451,8 @@ export function EditOrderMetaForm({
 													tone={tone('store')}
 													{...field}
 													onChange={(next: string) => {
+														// The phone sheet reports a re-pick of the same store: keep the register.
+														if (next === field.value) return;
 														field.onChange(next);
 														// Registers belong to a store: back home, the order's own returns.
 														handOverForm.setValue(

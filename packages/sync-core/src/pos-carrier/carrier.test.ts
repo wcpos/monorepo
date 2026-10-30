@@ -208,7 +208,7 @@ it('stamps and reads the register without losing existing metadata', () => {
 });
 
 // A hand-over to a store with no registers: the order's register must not travel with it.
-it('a null register clears the row to an empty value that reads as none, and adds none', () => {
+it('a null register clears the row to an empty value that reads as none, adding one if missing', () => {
 	const meta = [
 		{ key: 'custom', value: 'keep' },
 		{ id: 8, key: '_wcpos_register', value: 'old' },
@@ -219,11 +219,9 @@ it('a null register clears the row to an empty value that reads as none, and add
 	expect(
 		wooMetaCarrier.stampIdentity(meta, { userId: 1, storeId: 2 }).find(({ id }) => id === 8)
 	).toEqual(meta[1]);
-	expect(
-		wooMetaCarrier
-			.stampIdentity([], { userId: 1, storeId: 2, registerId: null })
-			.some(({ key }) => key === '_wcpos_register')
-	).toBe(false);
+	const added = wooMetaCarrier.stampIdentity([], { userId: 1, storeId: 2, registerId: null });
+	expect(added).toContainEqual({ key: '_wcpos_register', value: '' });
+	expect(wooMetaCarrier.readIdentity(added).registerId).toBeUndefined();
 });
 
 it('stamps and reads distinct till and bound register identities', () => {

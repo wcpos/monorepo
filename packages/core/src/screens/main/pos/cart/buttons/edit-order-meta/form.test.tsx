@@ -832,4 +832,49 @@ describe('the hand-over box', () => {
 		expect(box().dataset.tone).toBe('warning');
 		expect(send().disabled).toBe(true);
 	});
+
+	it('a re-pick of the same store (the phone sheet reports it) keeps the chosen register', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+		];
+		mockDirectories = {
+			...mockDirectories,
+			'5': [
+				{ id: 'r5a', name: 'A' },
+				{ id: 'r5b', name: 'B' },
+			],
+		};
+		renderBox();
+		await choose('order-meta-store-select', '5');
+		await choose('order-meta-register-select', 'r5b');
+		await choose('order-meta-store-select', '5');
+		expect(selectProps('order-meta-register-select')!.value).toBe('r5b');
+		expect(send().disabled).toBe(false);
+	});
+
+	it('a failed hand-over clears a register the order never had and restores its store', async () => {
+		mockPush.mockRejectedValueOnce(new Error('offline'));
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		const unregistered = meta.filter((entry) => entry.key !== '_wcpos_register');
+		const resident = { ...order, payload: { ...payload, meta_data: unregistered } };
+		resident.getLatest = () => resident;
+		render(
+			<EditOrderMetaForm
+				order={resident as never}
+				{...formProps({ ...payload, cashier_id: '7', meta_data: unregistered })}
+			/>
+		);
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		await confirm();
+		const stored = resident.payload.meta_data as { key: string; value: string }[];
+		expect(stored.find((entry) => entry.key === '_wcpos_register')?.value ?? '').toBe('');
+		expect(stored.find((entry) => entry.key === '_pos_store')?.value).toBe('2');
+		expect(mockMove).not.toHaveBeenCalled();
+	});
 });
