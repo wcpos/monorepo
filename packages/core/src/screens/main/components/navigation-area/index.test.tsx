@@ -135,7 +135,7 @@ describe('NavigationAreaLayout', () => {
 	});
 
 	// The bar's other jobs outlive it on `lg`: the upgrade notice and a held session still show
-	// above the rail (a redirect login is the page heading's cashier entry's to claim).
+	// above the rail (the area pages carry no cashier entry; a redirect login is a bar's to claim).
 	it('keeps the notice and the held-session banner on lg', () => {
 		mockHeld = true;
 		render(
@@ -165,12 +165,12 @@ describe('NavigationAreaLayout', () => {
 		expect(rows.indexOf(area)).toBe(2);
 	});
 
-	// The rail lost the avatar (2026-10-29), so on wide the page heading's trailing slot carries the
-	// bar's controls: the cashier door is on every area page. A phone's bar carries them, once.
+	// The area pages carry neither the bell nor the avatar on wide (Paul, 2026-10-30): the page
+	// heading is the title alone. A phone's bar carries them, once.
 	it.each([
-		['lg', 'the page heading'],
-		['sm', 'the bar'],
-	] as const)('on %s, %s carries the avatar and the bell, once', (size, _where) => {
+		['lg', 0],
+		['sm', 1],
+	] as const)('on %s the bar alone carries the avatar and the bell, %i time(s)', (size, count) => {
 		mockScreenSize = size;
 		render(
 			<NavigationAreaLayout
@@ -186,12 +186,12 @@ describe('NavigationAreaLayout', () => {
 				</AreaPage>
 			</NavigationAreaLayout>
 		);
-		const host =
-			size === 'lg' ? screen.getByTestId('settings-tax') : screen.getByTestId('settings-bar');
-		expect(screen.getAllByTestId('settings-bar-avatar')).toHaveLength(1);
-		expect(screen.getAllByTestId('settings-bar-bell')).toHaveLength(1);
-		expect(host.contains(screen.getByTestId('settings-bar-avatar'))).toBe(true);
-		expect(host.contains(screen.getByTestId('settings-bar-bell'))).toBe(true);
+		expect(screen.queryAllByTestId('settings-bar-avatar')).toHaveLength(count);
+		expect(screen.queryAllByTestId('settings-bar-bell')).toHaveLength(count);
+		expect(screen.queryByTestId('settings-bar-status')).toBeNull();
+		for (const node of screen.queryAllByTestId(/^settings-bar-(avatar|bell)$/)) {
+			expect(screen.getByTestId('settings-bar').contains(node)).toBe(true);
+		}
 	});
 
 	it('shows no bar title and a single bar crumb to navigate a phone deep link to the index', () => {
