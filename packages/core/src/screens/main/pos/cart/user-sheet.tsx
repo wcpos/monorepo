@@ -17,6 +17,9 @@ import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyList, PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { Loader } from '@wcpos/components/loader';
@@ -107,25 +110,7 @@ export function SalesTile({ sub }: { sub?: string }) {
 	);
 }
 
-function Figures({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
-	const t = useT();
-	return (
-		<View className="flex-row gap-2">
-			<SalesTile />
-			<DrawerTile label={t('register.in_the_drawer_tile')} onOpen={onOpen} busy={busy} />
-		</View>
-	);
-}
-
-export function DrawerTile({
-	label,
-	onOpen,
-	busy,
-}: {
-	label: string;
-	onOpen?: () => void;
-	busy?: boolean;
-}) {
+function useDrawerFigure(registerName?: string | null) {
 	const { format } = useCurrencyFormat();
 	const { session, expected, lastClosure, blind, salesCount, binding, figuresPending } =
 		useRegisterSession();
@@ -134,63 +119,99 @@ export function DrawerTile({
 	const opener = credentials.find((row) => row.id === session?.opened_by);
 	const { timezone } = useStoreDay();
 	const t = useT();
+	const amount = figuresPending
+		? '—'
+		: blind
+			? t('register.sales_count', { count: salesCount })
+			: format(Number(expected.cash ?? 0));
+	const closedLine = t('register.register_closed_last_closure', {
+		// Prefer the store's acknowledged number over the provisional offline number.
+		n: lastClosure?.server_number ?? lastClosure?.number ?? '—',
+	});
+	const openerLine =
+		session &&
+		(figuresPending ? (
+			<Text variant="key">{t('register.figures_after_sync')}</Text>
+		) : (
+			<View className="flex-row items-center gap-1">
+				<Text variant="key">
+					{registerName ? `${registerName} · ` : ''}
+					{t('register.opened_at_by', {
+						time: formatDate(
+							convertUTCStringToLocalDate(session.opened_at_gmt),
+							'HH:mm',
+							zoneOptions(timezone)
+						),
+					})}
+				</Text>
+				<Avatar
+					size="sm"
+					source={opener?.avatar_url ? { uri: opener.avatar_url } : undefined}
+					fallback={getInitials(opener?.display_name ?? t('register.unknown_cashier'))}
+				/>
+			</View>
+		));
+	return {
+		visible: binding.status === 'bound' && !!(session || lastClosure),
+		figure: session ? <AmountFigure size="tile">{amount}</AmountFigure> : <Text>{closedLine}</Text>,
+		openerLine,
+	};
+}
+
+export function DrawerTile({ label }: { label: string }) {
+	const { visible, figure, openerLine } = useDrawerFigure();
+	if (!visible) return null;
 	return (
-		<>
-			{binding.status === 'bound' && (session || lastClosure) && (
-				<PressableSurface
-					testID="user-sheet-drawer"
-					onPress={onOpen}
-					disabled={busy}
-					// The one door to the register panel (Paul, 2026-10-29): the row's chevron and wash. In
-					// the confirm the tile only shows: no chevron, no wash, so it does not read as a door.
-					wash={onOpen ? 'accent' : 'none'}
-					className="border-border flex-1 rounded-lg border px-3 py-2.5"
-				>
-					<View className="flex-row items-center justify-between gap-1">
-						<Text variant="key">{label}</Text>
-						{onOpen && <Icon name="chevronRight" className="text-muted-foreground" />}
-					</View>
-					{session ? (
-						<>
-							<AmountFigure size="tile">
-								{figuresPending
-									? '—'
-									: blind
-										? t('register.sales_count', { count: salesCount })
-										: format(Number(expected.cash ?? 0))}
-							</AmountFigure>
-							{figuresPending ? (
-								<Text variant="key">{t('register.figures_after_sync')}</Text>
-							) : (
-								<View className="flex-row items-center gap-1">
-									<Text variant="key">
-										{t('register.opened_at_by', {
-											time: formatDate(
-												convertUTCStringToLocalDate(session.opened_at_gmt),
-												'HH:mm',
-												zoneOptions(timezone)
-											),
-										})}
-									</Text>
-									<Avatar
-										size="sm"
-										source={opener?.avatar_url ? { uri: opener.avatar_url } : undefined}
-										fallback={getInitials(opener?.display_name ?? t('register.unknown_cashier'))}
-									/>
-								</View>
-							)}
-						</>
-					) : (
-						<Text>
-							{t('register.register_closed_last_closure', {
-								// A closure numbered offline takes the store's number on acknowledgement; the panel shows the same.
-								n: lastClosure?.server_number ?? lastClosure?.number ?? '—',
-							})}
-						</Text>
-					)}
-				</PressableSurface>
-			)}
-		</>
+		<View testID="user-sheet-drawer" className="border-border flex-1 rounded-lg border px-3 py-2.5">
+			<Text variant="key">{label}</Text>
+			{figure}
+			{openerLine}
+		</View>
+	);
+}
+
+function DrawerDoor({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
+	const { registers, registerName } = useRegisterBinding();
+	const { visible, figure, openerLine } = useDrawerFigure(
+		registers.length > 1 ? registerName : undefined
+	);
+	const { session, countingHere, countingBy } = useRegisterSession();
+	const { timezone } = useStoreDay();
+	const t = useT();
+	if (!visible) return null;
+	const verbs = countingHere
+		? t('register.drawer_counting_back', {
+				time: countingBy?.at
+					? formatDate(convertUTCStringToLocalDate(countingBy.at), 'HH:mm', zoneOptions(timezone))
+					: '—',
+			})
+		: session
+			? t('register.drawer_verbs')
+			: t('register.drawer_closed_verbs');
+	return (
+		<PressableSurface
+			testID="user-sheet-drawer"
+			onPress={onOpen}
+			disabled={busy}
+			wash="accent"
+			className="border-border rounded-lg border"
+		>
+			<View className="flex-row items-center gap-3 px-3 py-2.5">
+				<ToneDisc tone="muted" icon="register" size="sm" />
+				<View className="min-w-0 flex-1">
+					<Text variant="key">{t('register.in_the_drawer_tile')}</Text>
+					{openerLine}
+				</View>
+				{figure}
+			</View>
+			<View
+				testID="user-sheet-drawer-verbs"
+				className="border-border flex-row items-center justify-between border-t px-3 py-2"
+			>
+				<Text variant="link">{verbs}</Text>
+				<Icon name="chevronRight" className="text-primary" />
+			</View>
+		</PressableSurface>
 	);
 }
 
@@ -226,48 +247,34 @@ function UserRows({
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
-	const t = useT();
 	const credentials = useObservableSuspense(credentialsListResource(site));
 
 	return (
 		<>
-			{credentials.map((credential) => (
-				<MenuRow
-					key={credential.uuid}
-					testID={
-						credential.uuid === wpCredentials.uuid
-							? 'user-sheet-cashier-current'
-							: `user-sheet-user-${credential.uuid}`
-					}
-					choice
-					selected={credential.uuid === wpCredentials.uuid}
-					disabled={busy || hold || counting}
-					description={
-						!hold && counting && credential.uuid !== wpCredentials.uuid
-							? t('register.finish_count_first')
-							: undefined
-					}
-					onPress={
-						credential.uuid === wpCredentials.uuid || busy || hold || counting
-							? undefined
-							: () => onChoose({ kind: 'cashier', credential })
-					}
-					leading={
-						<RecordAvatar
-							record={credential}
-							avatarUrl={credential.avatar_url}
-							name={credential.display_name}
-							size="md"
-						/>
-					}
-					label={credential.display_name}
-				/>
-			))}
+			{credentials
+				.filter((credential) => credential.uuid !== wpCredentials.uuid)
+				.map((credential) => (
+					<MenuRow
+						key={credential.uuid}
+						testID={`user-sheet-user-${credential.uuid}`}
+						disabled={busy || hold || counting}
+						onPress={() => onChoose({ kind: 'cashier', credential })}
+						leading={
+							<RecordAvatar
+								record={credential}
+								avatarUrl={credential.avatar_url}
+								name={credential.display_name}
+								size="md"
+							/>
+						}
+						label={credential.display_name}
+					/>
+				))}
 		</>
 	);
 }
 
-function StoreBand({
+function StoreRows({
 	busy,
 	hold,
 	online,
@@ -284,17 +291,18 @@ function StoreBand({
 	if (stores.length <= 1) return null;
 	return (
 		<View testID="user-sheet-store-band">
-			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
-				<Text variant="caption">{t('register.store')}</Text>
-			</View>
 			{stores.map((row) => (
 				<MenuRow
 					key={row.localID}
 					testID={`user-sheet-store-${row.localID}`}
 					choice
 					selected={row.localID === store.localID}
-					disabled={busy || hold || !online}
-					description={!hold && !online ? t('register.needs_store_to_switch') : undefined}
+					disabled={row.localID === store.localID || busy || hold || !online}
+					description={
+						row.localID !== store.localID && !hold && !online
+							? t('register.needs_store_to_switch')
+							: undefined
+					}
 					onPress={
 						row.localID === store.localID || busy || hold || !online
 							? undefined
@@ -307,7 +315,7 @@ function StoreBand({
 	);
 }
 
-function RegisterBand({
+function RegisterRows({
 	attributed,
 	reason,
 	busy,
@@ -334,9 +342,6 @@ function RegisterBand({
 	const t = useT();
 	return (
 		<View testID="user-sheet-register-band">
-			<View className="h-band border-border mt-2 justify-center border-b px-2.5">
-				<Text variant="caption">{t('register.register')}</Text>
-			</View>
 			{registers.map((row) => {
 				const cached = device?.sites[site.uuid!]?.registers?.[row.id];
 				const live = cached ? cached.live : (readLiveSession(site.uuid!, row.id) ?? row.session);
@@ -374,7 +379,7 @@ function RegisterBand({
 						selected={row.id === registerId}
 						label={row.name}
 						description={attributed && !hold ? reason : description}
-						disabled={attributed || busy || hold}
+						disabled={row.id === registerId || attributed || busy || hold}
 						onPress={
 							row.id === registerId || attributed || busy || hold
 								? undefined
@@ -385,6 +390,48 @@ function RegisterBand({
 				);
 			})}
 		</View>
+	);
+}
+
+/** The Store fact row: the current store, and Switch only when the login has more than one. */
+function StoreRow({
+	busy,
+	paying,
+	online,
+	storeName,
+	onSwitch,
+}: {
+	busy: boolean;
+	paying: boolean;
+	online: boolean;
+	storeName?: string;
+	onSwitch: () => void;
+}) {
+	const { wpCredentials } = useStoreSession();
+	// Suspends until the list answers, inside its own boundary so the sheet never blanks (#3045's rule).
+	const stores = useObservableSuspense(storeListResource(wpCredentials));
+	const t = useT();
+	return (
+		<PropertyRow
+			id="store"
+			label={t('register.store')}
+			help={
+				stores.length > 1 && !online && !paying ? t('register.needs_store_to_switch') : undefined
+			}
+			verb={
+				stores.length > 1 && (
+					<PropertyVerb
+						testID="user-sheet-store-switch"
+						disabled={busy || paying || !online}
+						onPress={onSwitch}
+					>
+						{t('common.switch')}
+					</PropertyVerb>
+				)
+			}
+		>
+			<Text>{storeName}</Text>
+		</PropertyRow>
 	);
 }
 
@@ -408,6 +455,9 @@ export function UserSheet({
 	const { login } = useAppState();
 	const router = useRouter();
 	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
+	const [pane, setPane] = React.useState<'sheet' | 'store' | 'register'>('sheet');
+	const { total } = useSalesToday();
+	const { format } = useCurrencyFormat();
 	const paying = usePaymentInFlight();
 	const { countingHere, session, loaded, actions, binding } = useRegisterSession();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -424,6 +474,7 @@ export function UserSheet({
 			await work();
 		} finally {
 			setActing(false);
+			setPane('sheet');
 		}
 	};
 	// The cashier sheet comes from the right on every screen, the POS included (Paul, 2026-10-30:
@@ -440,6 +491,9 @@ export function UserSheet({
 	// A page bar is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
+	const reason = currentOrder
+		? t('register.switch_register_blocked_cart')
+		: t('register.switch_register_unavailable_here');
 	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
 		try {
 			// Switching is a one-shot read of the first non-pending database answer.
@@ -469,6 +523,7 @@ export function UserSheet({
 	};
 	const openRegister = (pane: 'register' | 'count' = 'register') => {
 		onOpenRegister?.(pane);
+		setPane('sheet');
 		onOpenChange(false);
 	};
 	const run = (request: SwitchRequest) => {
@@ -533,6 +588,7 @@ export function UserSheet({
 				open={open}
 				onOpenChange={(next) => {
 					if (!next && busy) return;
+					if (!next) setPane('sheet');
 					onOpenChange(next);
 				}}
 			>
@@ -542,28 +598,52 @@ export function UserSheet({
 					portalHost={portalHost ?? undefined}
 					testID="user-sheet"
 				>
-					<DialogHeader className="flex-row items-center gap-3">
-						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-						<View className="min-w-0 flex-1">
-							<DialogTitle numberOfLines={1}>{displayName}</DialogTitle>
-							<DialogDescription testID="user-sheet-description">
-								{[
-									storeName,
-									registers.length > 1 && registerName,
-									signedIn &&
-										t('register.on_the_till_since', {
-											time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
-										}),
-								]
-									.filter(Boolean)
-									.join(' · ')}
-							</DialogDescription>
-						</View>
-					</DialogHeader>
-					{open && (
+					{pane !== 'sheet' ? (
+						<DialogHeader className="flex-row items-center gap-3">
+							<IconButton
+								name="chevronLeft"
+								testID="user-sheet-pane-back"
+								accessibilityLabel={t('common.back')}
+								onPress={() => setPane('sheet')}
+							/>
+							<DialogTitle>
+								{pane === 'store' ? t('register.switch_store') : t('register.switch_register')}
+							</DialogTitle>
+						</DialogHeader>
+					) : (
+						<DialogHeader className="flex-row items-center gap-3">
+							<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
+							<View className="min-w-0 flex-1">
+								<DialogTitle numberOfLines={1}>{displayName}</DialogTitle>
+								<DialogDescription testID="user-sheet-description">
+									{[
+										storeName,
+										registers.length > 1 && registerName,
+										signedIn &&
+											t('register.on_the_till_since', {
+												time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
+											}),
+									]
+										.filter(Boolean)
+										.join(' · ')}
+								</DialogDescription>
+							</View>
+						</DialogHeader>
+					)}
+					{open && pane === 'sheet' && (
 						<DialogBody className="gap-0">
 							<Suspense>
-								<Figures busy={busy} onOpen={() => openRegister()} />
+								<View
+									testID="user-sheet-sales-today"
+									className="flex-row items-center justify-between px-3 py-2.5"
+								>
+									<Text variant="key">{t('register.your_sales_today')}</Text>
+									<AmountFigure size="tile">{format(total)}</AmountFigure>
+								</View>
+								<DrawerDoor
+									busy={busy}
+									onOpen={() => openRegister(countingHere ? 'count' : 'register')}
+								/>
 							</Suspense>
 							<AwaitingStore />
 							{paying && (
@@ -574,8 +654,11 @@ export function UserSheet({
 								/>
 							)}
 							<View testID="user-sheet-switch-user">
-								<View className="h-band border-border mt-2 justify-center border-b px-2.5">
-									<Text variant="caption">{t('register.cashier')}</Text>
+								<View className="h-band border-border mt-2 flex-row items-center justify-between border-b px-2.5">
+									<Text variant="caption">{t('register.hand_the_till_to')}</Text>
+									{countingHere && !paying && (
+										<Text variant="key">{t('register.finish_count_first')}</Text>
+									)}
 								</View>
 								<Suspense>
 									<UserRows
@@ -592,59 +675,102 @@ export function UserSheet({
 									<AddUserButton site={site} hasExistingUsers compact />
 								)}
 							</View>
-							<Suspense>
-								<StoreBand busy={busy} hold={paying} online={online} onChoose={setRequest} />
-							</Suspense>
-							{status === 'bound' && registers.length > 1 && (
-								<RegisterBand
-									attributed={attributed}
-									busy={busy}
-									hold={paying}
-									onChoose={setRequest}
-									reason={
-										currentOrder
-											? t('register.switch_register_blocked_cart')
-											: t('register.switch_register_unavailable_here')
-									}
-								/>
-							)}
-							{/* A browser is where these two go: the desktop app has no admin tab to open, and
-							    already is the desktop app. */}
-							{Platform.isWeb && (
-								<View testID="user-sheet-foot" className="border-border mt-auto border-t">
-									<MenuRow
-										testID="user-sheet-wp-admin"
-										onPress={() => openExternalURL(`${site.url}/wp-admin`)}
-										leading={<Icon name="wordpress" className="text-muted-foreground" />}
-										label={t('common.wordpress_admin')}
-										trailing={externalGlyph}
-									/>
-									<MenuRow
-										testID="user-sheet-desktop-app"
-										onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
-										leading={<Icon name="desktop" className="text-muted-foreground" />}
-										label={t('common.desktop_app')}
-										trailing={externalGlyph}
-									/>
-								</View>
-							)}
+							<View className="mt-2">
+								<PropertyList prefix="user-sheet">
+									<Suspense>
+										<StoreRow
+											busy={busy}
+											paying={paying}
+											online={online}
+											storeName={storeName}
+											onSwitch={() => setPane('store')}
+										/>
+									</Suspense>
+									{status === 'bound' && registers.length > 1 && (
+										<PropertyRow
+											id="register"
+											label={t('register.register')}
+											help={attributed && !paying ? reason : undefined}
+											verb={
+												<PropertyVerb
+													testID="user-sheet-register-switch"
+													disabled={attributed || busy || paying}
+													onPress={() => setPane('register')}
+												>
+													{t('common.switch')}
+												</PropertyVerb>
+											}
+										>
+											<Text>{registerName}</Text>
+										</PropertyRow>
+									)}
+								</PropertyList>
+							</View>
 						</DialogBody>
 					)}
+					{open && pane !== 'sheet' && (
+						<DialogBody>
+							<Suspense>
+								{pane === 'store' ? (
+									<StoreRows busy={busy} hold={paying} online={online} onChoose={setRequest} />
+								) : (
+									<RegisterRows
+										attributed={attributed}
+										reason={reason}
+										busy={busy}
+										hold={paying}
+										onChoose={setRequest}
+									/>
+								)}
+							</Suspense>
+						</DialogBody>
+					)}
+					{open && pane === 'sheet' && Platform.isWeb && (
+						<View
+							testID="user-sheet-foot"
+							className="border-border flex-row items-center gap-4 border-t px-4 py-2"
+						>
+							<PressableSurface
+								testID="user-sheet-wp-admin"
+								minTarget
+								wash="none"
+								className="flex-row items-center gap-1"
+								onPress={() => openExternalURL(`${site.url}/wp-admin`)}
+							>
+								{externalGlyph}
+								<Text variant="key">{t('common.wordpress_admin')}</Text>
+							</PressableSurface>
+							<PressableSurface
+								testID="user-sheet-desktop-app"
+								minTarget
+								wash="none"
+								className="flex-row items-center gap-1"
+								onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
+							>
+								{externalGlyph}
+								<Text variant="key">{t('common.desktop_app')}</Text>
+							</PressableSurface>
+						</View>
+					)}
 					<DialogFooter
-						destructive={{
-							label: t('register.sign_out'),
-							testID: 'user-sheet-sign-out',
-							// A bound register whose session has not loaded is not closed; Sign out waits for
-							// the answer rather than skipping the question (Codex, #3056).
-							disabled: busy || paying || (binding.status === 'bound' && !loaded),
-							// Only a session that is still open or being counted is one to close first: the hook
-							// also returns a closed session whose closure write was interrupted, and Close
-							// register would reopen it (Codex, #3056).
-							onPress: () =>
-								binding.status === 'bound' && session && session.status !== 'closed'
-									? setRequest({ kind: 'sign-out' })
-									: void act(() => logout()),
-						}}
+						destructive={
+							pane !== 'sheet'
+								? undefined
+								: {
+										label: t('register.sign_out'),
+										testID: 'user-sheet-sign-out',
+										// A bound register whose session has not loaded is not closed; Sign out waits for
+										// the answer rather than skipping the question (Codex, #3056).
+										disabled: busy || paying || (binding.status === 'bound' && !loaded),
+										// Only a session that is still open or being counted is one to close first: the hook
+										// also returns a closed session whose closure write was interrupted, and Close
+										// register would reopen it (Codex, #3056).
+										onPress: () =>
+											binding.status === 'bound' && session && session.status !== 'closed'
+												? setRequest({ kind: 'sign-out' })
+												: void act(() => logout()),
+									}
+						}
 					/>
 				</DialogContent>
 				<SwitchConfirm

@@ -17,7 +17,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, Observable, startWith } from 'rxjs';
 
 import type { StoreDocument } from '@wcpos/database';
@@ -122,7 +122,20 @@ jest.mock('@wcpos/components/avatar', () => ({
 	getInitials: (name?: string) => (name ?? '').slice(0, 1),
 }));
 jest.mock('@wcpos/components/button', () => ({
-	Button: passthrough,
+	// The Store row's Switch verb is a Button; the test presses it to reach the pane.
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<div data-testid={testID} onClick={onPress}>
+			{children}
+		</div>
+	),
 	ButtonText: ({ children }: { children?: React.ReactNode }) => (
 		<span data-testid="trigger-label">{children}</span>
 	),
@@ -165,10 +178,14 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+// PropertyRow imports Switch, whose uniwind import is ESM and cannot load here.
+jest.mock('@wcpos/components/switch', () => ({ Switch: () => null }));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: passthrough },
 	FadeIn: { duration: () => ({}) },
+	// The sheet's PropertyRow reaches the components' motion module, which builds its eases on load.
+	Easing: { bezier: () => 'ease', linear: 'linear' },
 }));
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
@@ -222,8 +239,10 @@ describe('user menu store switcher', () => {
 		renderMenu();
 		await settle();
 
-		// The submenu renders one item per store; 'Two' can only be on screen if the resource
-		// resolved and StoreRows committed.
+		// The Store row draws its Switch verb only once the resource has resolved with more than
+		// one store; the pane it pushes lists one row per store, so 'Two' can only be on screen
+		// if the resource resolved and StoreRows committed.
+		fireEvent.click(await screen.findByTestId('user-sheet-store-switch'));
 		expect(await screen.findByText('Two')).toBeTruthy();
 		expect(populateCalls).toBe(1);
 	});
@@ -251,7 +270,8 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterDirectory: () => ({ registerId: null, registers: [] }),
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ binding: { status: 'unbound' } }),
+	// The real hook always returns `expected` (an empty object with no drawer); the door's figure reads it.
+	useRegisterSession: () => ({ binding: { status: 'unbound' }, expected: {} }),
 }));
 jest.mock('../contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => undefined,
