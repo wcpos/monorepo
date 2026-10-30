@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 
 import { DialogLabelsProvider } from '@wcpos/components/dialog';
 import type { ClosureRow } from '@wcpos/database';
+import type { FooterButton } from '@wcpos/components/dialog';
 
 import { useReceiptActions } from './receipt/receipt-actions';
 import { Version } from './components/drawer-content/version';
@@ -297,8 +298,14 @@ it.each([false, true])(
 		} as unknown as Args[0];
 		function ReceiptActionsHost() {
 			const order = {} as Args[1];
-			const { sync, choices, dialog } = useReceiptActions(doc, order);
-			const actions = sync ? [sync, ...choices] : choices;
+			const { sync, choices, dialog, print } = useReceiptActions(doc, order);
+			// Print comes back on its own now (the sheet's intent); the host lists it last as checkout does.
+			const printChoice: FooterButton = {
+				...print,
+				label: 'Print receipt',
+				testID: 'receipt-print-button',
+			};
+			const actions = sync ? [sync, ...choices, printChoice] : [...choices, printChoice];
 			return (
 				<>
 					{actions.map(({ label, icon: _icon, ref: _ref, ...action }) => (
