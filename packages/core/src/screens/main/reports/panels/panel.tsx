@@ -49,6 +49,7 @@ import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
+import { usePrintWaiting } from './use-print-waiting';
 import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
@@ -209,34 +210,14 @@ export function DetailPanel() {
 	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
 	const laneProgress = sales.ready ? sales.laneProgress : null;
 	const refundLaneProgress = refunds.ready ? refunds.laneProgress : null;
-	const waiting:
-		'store' | 'data' | 'orders' | 'refunds' | 'templates' | 'no-template' | 'printer' | null =
-		!formats.store
-			? 'store'
-			: !ready
-				? 'data'
-				: laneProgress
-					? 'orders'
-					: (detail === 'refunds' || grouped) && refundLaneProgress
-						? 'refunds'
-						: !doc.templatesReady
-							? 'templates'
-							: doc.templates.length === 0
-								? 'no-template'
-								: // Only a saved printer that mis-prints the template blocks; no printer
-									// means the print dialog, which prints the preview as before.
-									doc.mismatch && doc.resolvedPrinter
-									? 'printer'
-									: null;
-	const waitingLabels = {
-		store: t('reports.print_waiting_store'),
-		data: t('reports.print_waiting_data'),
-		orders: t('reports.print_waiting_orders'),
-		refunds: t('reports.print_waiting_refunds'),
-		templates: t('reports.print_waiting_templates'),
-		'no-template': t('reports.print_no_local_template'),
-		printer: t('reports.print_printer_mismatch'),
-	};
+	const { waiting, label: waitingLabel } = usePrintWaiting({
+		doc,
+		storeReady: !!formats.store,
+		dataReady: !!ready,
+		salesLane: !!laneProgress,
+		refundsLane: !!refundLaneProgress,
+		needsRefunds: detail === 'refunds' || grouped,
+	});
 	if (!detail) return null;
 	const counted = {
 		n: formats.quantity(selectedOrders.length),
@@ -323,7 +304,7 @@ export function DetailPanel() {
 			</View>
 			{waiting && (
 				<Text testID="detail-panel-print-waiting" variant="key" className="px-4">
-					{waitingLabels[waiting]}
+					{waitingLabel}
 				</Text>
 			)}
 			{!!(printError || doc.documentError) && (
