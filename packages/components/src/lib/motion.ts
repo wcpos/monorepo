@@ -1,4 +1,4 @@
-import { Easing } from 'react-native-reanimated';
+import { Easing, Keyframe } from 'react-native-reanimated';
 
 // Durations already used across the package, centralised.
 export const PRESS = 80;
@@ -34,6 +34,26 @@ export const EASE_EXIT_POINTS = [0.4, 0, 1, 1] as const;
 export const EASE_EXIT = Easing.bezier(...EASE_EXIT_POINTS);
 export const EASE_EXIT_CSS = `cubic-bezier(${EASE_EXIT_POINTS.join(', ')})`;
 
+export const TEAR_OFF_DURATION = 420;
+export const ROLL_IN_DURATION = 480;
+// Keep pixel and percentage travel separate: timing cannot interpolate between different units.
+export const TEAR_OFF = new Keyframe({
+	0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
+	25: {
+		transform: [{ translateY: 6 }, { translateY: '0%' }, { rotate: '0.6deg' }],
+		easing: EASE_EXIT,
+	},
+	100: {
+		opacity: 0.9,
+		transform: [{ translateY: 0 }, { translateY: '110%' }, { rotate: '2deg' }],
+		easing: EASE_EXIT,
+	},
+}).duration(TEAR_OFF_DURATION);
+export const ROLL_IN = new Keyframe({
+	0: { opacity: 0, transform: [{ translateY: -14 }] },
+	100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
+}).duration(ROLL_IN_DURATION);
+
 type Beat = {
 	name: string;
 	duration: number;
@@ -48,6 +68,20 @@ type Beat = {
 // MOTION-RESEARCH.md Table 1: targets for rebuilds, NOT current component timings.
 // The four decorative effects are deliberately outside the adopted contract.
 export const BEATS = {
+	tearOff: {
+		name: 'Receipt tears off',
+		duration: TEAR_OFF_DURATION,
+		easing: EASE_EXIT,
+		class: 'beat',
+		waitingPath: false,
+	},
+	rollIn: {
+		name: 'Receipt rolls in',
+		duration: ROLL_IN_DURATION,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: false,
+	},
 	// Decision 29: one settle, never counting up.
 	totalSettles: {
 		name: 'Total settles',

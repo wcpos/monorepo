@@ -14,6 +14,7 @@ jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
 	ReduceMotion: { System: 'system' },
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => 'ease' },
 	useAnimatedStyle: () => ({}),
 	useSharedValue: (value: number) => ({ value }),

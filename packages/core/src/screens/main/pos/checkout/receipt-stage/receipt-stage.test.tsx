@@ -117,6 +117,11 @@ jest.mock('react-native-reanimated', () => ({
 	withDelay: jest.fn((_delay: number, value: number) => value),
 	cancelAnimation: jest.fn(),
 	Easing: { bezier: jest.fn() },
+	Keyframe: class {
+		duration() {
+			return this;
+		}
+	},
 }));
 jest.mock('react-native-svg', () => ({
 	__esModule: true,
@@ -596,3 +601,13 @@ it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green
 	expect(screen.getByTestId('checkout-paid-headline')).toBe(headline);
 	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
 });
+
+it.each([false, true])(
+	'lets the column surface show through only when embedded: compact=%s',
+	(compact) => {
+		render(<ReceiptStage orderUuid="paid" compact={compact} />);
+		expect(screen.getByTestId('checkout-receipt-stage').className.includes('bg-card')).toBe(
+			compact
+		);
+	}
+);

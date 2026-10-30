@@ -91,6 +91,7 @@ jest.mock('react-native-reanimated', () => ({
 	default: { View: jest.requireActual('react-native').View },
 	ZoomIn: { duration: () => ({ easing: () => ({ reduceMotion: () => undefined }) }) },
 	ReduceMotion: { System: 'system' },
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: jest.fn(), linear: jest.fn() },
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));

@@ -39,6 +39,7 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: { View: mockView },
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => 'ease' },
 		ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
 		...Object.fromEntries(

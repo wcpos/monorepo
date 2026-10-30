@@ -102,6 +102,7 @@ jest.mock('react-native-reanimated', () => {
 			},
 		},
 		// A curve is its points, so a test can tell the motion library's easings apart.
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: (...points: number[]) => points.join(',') },
 		ReduceMotion: { System: 'system' },
 		cancelAnimation: (shared: { value: number }) => {

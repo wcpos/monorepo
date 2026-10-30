@@ -187,6 +187,7 @@ jest.mock('react-native-reanimated', () => ({
 	FadeOut: { duration: () => ({ reduceMotion: () => 'fade-out' }) },
 	ReduceMotion: { System: 'system' },
 	useReducedMotion: () => mockReducedMotion,
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => 'ease', linear: 'linear' },
 	Extrapolation: { CLAMP: 'clamp' },
 	interpolate: (value: number) => value,

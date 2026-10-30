@@ -118,6 +118,7 @@ jest.mock('@wcpos/components/status-badge', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
+	useReducedMotion: () => false,
 	useSharedValue: (value: number) => React.useRef({ value }).current,
 	useAnimatedStyle: (style: () => object) => style(),
 	withTiming: (value: number) => value,
@@ -127,6 +128,7 @@ jest.mock('react-native-reanimated', () => ({
 	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
 	ReduceMotion: { System: 'system' },
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: {
 		bezier: jest.fn(),
 		linear: (value: number) => value,

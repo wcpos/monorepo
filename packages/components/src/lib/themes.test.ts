@@ -90,3 +90,8 @@ it('gives paper and market a tear and bold blank media with a price chip', () =>
 	expect(traitsForTheme('market').tear).toBe(true);
 	expect(traitsForTheme('bold')).toMatchObject({ priceChip: true, media: 'blank' });
 });
+
+it.each(THEMES)('defines the moments for %s', (theme) => {
+	expect(THEME_TRAITS[theme].settle).toBe(true);
+	expect(THEME_TRAITS[theme].paidFlash).toBe(theme === 'bold');
+});

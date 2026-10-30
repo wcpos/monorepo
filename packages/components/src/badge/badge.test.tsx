@@ -15,6 +15,7 @@ jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: (props: any) => jest.requireActual('react').createElement('div', props) },
 	ReduceMotion: { System: 'system' },
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => 'ease', linear: 'linear' },
 	Extrapolation: { CLAMP: 'clamp' },
 	interpolate: (value: number) => value,

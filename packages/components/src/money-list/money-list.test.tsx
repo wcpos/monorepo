@@ -5,6 +5,14 @@ import { render, screen } from '@testing-library/react';
 import { MoneyList } from './index';
 import { Text } from '../text';
 
+jest.mock('../settle', () => ({
+	Settle: ({ value, children }: { value: string; children: React.ReactNode }) => (
+		<div data-testid="settle" data-value={value}>
+			{children}
+		</div>
+	),
+}));
+
 // Expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
@@ -117,4 +125,16 @@ it('one ink: an element label, beside and amount all inherit the refund tone', (
 	const nodes = container.querySelectorAll('span[data-classes]');
 	expect(nodes).toHaveLength(3);
 	for (const node of nodes) expect(node.getAttribute('data-classes')).toContain('text-bad');
+});
+
+it('settles only the total amount, not its label or ordinary rows', () => {
+	render(
+		<>
+			<MoneyList.Total label="Total" amount="$10" />
+			<MoneyList.Row label="Tax" amount="$1" />
+		</>
+	);
+	expect(screen.getAllByTestId('settle')).toHaveLength(1);
+	expect(screen.getByTestId('settle').textContent).toBe('$10');
+	expect(screen.getByTestId('settle').dataset.value).toBe('$10');
 });

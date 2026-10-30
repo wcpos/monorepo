@@ -58,6 +58,7 @@ jest.mock('react-native-reanimated', () => ({
 	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
 	ReduceMotion: { System: 'system' },
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: {
 		bezier: jest.fn(),
 		linear: (value: number) => value,

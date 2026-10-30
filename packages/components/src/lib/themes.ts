@@ -48,15 +48,17 @@ export const THEME_TYPE: Record<ThemeName, ThemeType> = {
 };
 
 export const THEME_TRAITS: Record<ThemeName, Omit<ThemeTraits, 'type'>> = {
-	light: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
-	dark: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
-	ocean: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
-	sunset: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
-	monochrome: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
-	paper: { media: 'initial', wordsAlign: 'center', priceChip: false, tear: true },
-	bold: { media: 'blank', wordsAlign: 'start', priceChip: true, tear: false },
-	warm: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
-	market: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: true },
+	// DEFAULT_TRAITS is the bare tint, the crossfade and the settle; a personality theme opts into
+	// the initial, the centred words, the price chip, the torn edge and the paid flash.
+	light: DEFAULT_TRAITS,
+	dark: DEFAULT_TRAITS,
+	ocean: DEFAULT_TRAITS,
+	sunset: DEFAULT_TRAITS,
+	monochrome: DEFAULT_TRAITS,
+	paper: { ...DEFAULT_TRAITS, media: 'initial', wordsAlign: 'center', tear: true },
+	bold: { ...DEFAULT_TRAITS, priceChip: true, paidFlash: true },
+	warm: { ...DEFAULT_TRAITS, media: 'initial' },
+	market: { ...DEFAULT_TRAITS, media: 'initial', tear: true },
 };
 
 export function traitsForTheme(theme: string | undefined): ThemeTraits {

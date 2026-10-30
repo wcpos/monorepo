@@ -29,6 +29,7 @@ jest.mock('react-native-reanimated', () => ({
 			return <div>{props.children as React.ReactNode}</div>;
 		},
 	},
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => (value: number) => value },
 	useSharedValue: (value: number) => ({ value }),
 	useDerivedValue: (callback: () => number) => ({ value: callback() }),

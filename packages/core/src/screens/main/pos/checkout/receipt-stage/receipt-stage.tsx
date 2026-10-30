@@ -243,7 +243,7 @@ function ReceiptStageDocument({
 		</Button>
 	);
 	return (
-		<View testID="checkout-receipt-stage" className="bg-card flex-1">
+		<View testID="checkout-receipt-stage" className={compact ? 'bg-card flex-1' : 'flex-1'}>
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
 				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
 			) : null}

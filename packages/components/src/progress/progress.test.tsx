@@ -51,6 +51,7 @@ jest.mock('react-native-reanimated', () => ({
 			</div>
 		),
 	},
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => 'standard-easing' },
 	ReduceMotion: { Never: 'never' },
 	useAnimatedReaction: jest.fn(),

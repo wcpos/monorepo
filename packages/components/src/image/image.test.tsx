@@ -5,7 +5,10 @@ import { Image } from './index';
 
 jest.mock('expo-image', () => ({ Image: jest.fn(() => null) }));
 jest.mock('uniwind', () => ({ withUniwind: (component: unknown) => component }));
-jest.mock('react-native-reanimated', () => ({ Easing: { bezier: () => () => 0 } }));
+jest.mock('react-native-reanimated', () => ({
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
+	Easing: { bezier: () => () => 0 },
+}));
 
 beforeEach(() => jest.clearAllMocks());
 
