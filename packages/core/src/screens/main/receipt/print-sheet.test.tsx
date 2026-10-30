@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DialogBody } from '@wcpos/components/dialog';
+
 import { PrintSheet, PrintSheetContent } from './print-sheet';
 
 import type { PrintSheetProps } from './print-sheet';
@@ -19,7 +21,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
 	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
 	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogBody: jest.fn(({ children }: React.PropsWithChildren) => <div>{children}</div>),
 	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 	DismissIsClose: jest.requireActual('../../../../jest/footer.test-utils').DismissIsClose,
 }));
@@ -141,4 +143,30 @@ it('renders the controlled sheet only while open', () => {
 	expect(screen.queryByTestId('print-sheet')).toBeNull();
 	view.rerender(<PrintSheet {...content} open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('print-sheet')).toBeTruthy();
+});
+
+// Fixing the flow content height clips the last rows on native; bounded previews still fill the viewport.
+it.each([true, false])('sizes the scroll content for fullWidth=%s', (fullWidth) => {
+	render(<PrintSheetContent {...props()} fullWidth={fullWidth} />);
+	expect(jest.mocked(DialogBody).mock.lastCall?.[0].contentContainerStyle).toEqual(
+		fullWidth ? { minHeight: '100%' } : { height: '100%' }
+	);
+});
+
+it('renders error nodes as separate lines without a shared print-error wrapper', () => {
+	render(
+		<PrintSheetContent
+			{...props()}
+			error={
+				<>
+					<p data-testid="export-error">Export failed</p>
+					<p data-testid="print-sheet-error">Print failed</p>
+				</>
+			}
+		/>
+	);
+	expect(screen.getByTestId('print-sheet-error').textContent).toBe('Print failed');
+	expect(screen.getByTestId('export-error').parentElement).toBe(
+		screen.getByTestId('print-sheet-error').parentElement
+	);
 });

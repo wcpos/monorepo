@@ -241,6 +241,7 @@ export function DetailPanel() {
 		}
 	};
 	const print = async () => {
+		setError('');
 		setPrintError('');
 		try {
 			const ok = await doc.print();
@@ -271,6 +272,7 @@ export function DetailPanel() {
 			{error}
 		</Text>
 	);
+	const documentError = printError || doc.documentError?.message;
 	const aside = (
 		<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
 			{detail === 'orders'
@@ -298,7 +300,16 @@ export function DetailPanel() {
 					description={scopeLine}
 					printLabel={t('reports.print_report')}
 					waiting={waiting ? waitingLabel : null}
-					error={error ? exportError : printError || doc.documentError?.message || null}
+					error={
+						<>
+							{exportError}
+							{documentError ? (
+								<Text variant="key" className="text-bad px-4" testID="print-sheet-error">
+									{documentError}
+								</Text>
+							) : null}
+						</>
+					}
 					onPrint={print}
 					printTestID="detail-panel-print"
 					footerTestID="detail-panel-footer"

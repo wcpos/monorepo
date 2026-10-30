@@ -81,7 +81,7 @@ export function PrintSheetInner({
 					{description ? <DialogDescription>{description}</DialogDescription> : null}
 				</DialogHeader>
 			)}
-			<DialogBody contentContainerStyle={{ height: '100%' }}>
+			<DialogBody contentContainerStyle={fullWidth ? { minHeight: '100%' } : { height: '100%' }}>
 				<ReceiptBody doc={doc} fullWidth={fullWidth} />
 			</DialogBody>
 			{waiting ? (
@@ -90,9 +90,13 @@ export function PrintSheetInner({
 				</Text>
 			) : null}
 			{error ? (
-				<Text variant="key" className="text-bad px-4" testID="print-sheet-error">
-					{error}
-				</Text>
+				typeof error === 'string' ? (
+					<Text variant="key" className="text-bad px-4" testID="print-sheet-error">
+						{error}
+					</Text>
+				) : (
+					error
+				)
 			) : null}
 			{/* A document being looked at is a record shell: the dismiss reads Close beside Print. */}
 			<DismissIsClose>

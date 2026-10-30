@@ -309,3 +309,47 @@ it('the Registers panel waits for the register names before Export and Print', (
 	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
 	mockState.namesReady = true;
 });
+
+// Concurrent failures belong to separate actions; neither may mask the other.
+it('shows an export failure followed by a print failure as independent lines', async () => {
+	let failPrint!: (error: Error) => void;
+	mockPrintDocument.print.mockImplementationOnce(
+		() =>
+			new Promise<boolean>((_resolve, reject) => {
+				failPrint = reject;
+			})
+	);
+	jest.mocked(saveOrShareCsv).mockRejectedValueOnce(new Error('disk full'));
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	fireEvent.click(screen.getByTestId('detail-panel-export'));
+	await waitFor(() =>
+		expect(screen.getByTestId('detail-panel-export-error').textContent).toBe(
+			'Export failed. Try again.'
+		)
+	);
+	expect(screen.queryByTestId('print-sheet-error')).toBeNull();
+	await act(async () => failPrint(new Error('printer unavailable')));
+	expect(screen.getByTestId('detail-panel-export-error').textContent).toBe(
+		'Export failed. Try again.'
+	);
+	expect(screen.getByTestId('print-sheet-error').textContent).toBe('Could not print. Try again.');
+	expect(screen.getByTestId('detail-panel-export-error').parentElement).toBe(
+		screen.getByTestId('print-sheet-error').parentElement
+	);
+});
+
+it('clears an old export error when a new print attempt starts', async () => {
+	jest.mocked(saveOrShareCsv).mockRejectedValueOnce(new Error('disk full'));
+	mockPrintDocument.print.mockResolvedValueOnce(false);
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	fireEvent.click(screen.getByTestId('detail-panel-export'));
+	await waitFor(() => expect(screen.getByTestId('detail-panel-export-error')).toBeTruthy());
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.queryByTestId('detail-panel-export-error')).toBeNull();
+	await waitFor(() =>
+		expect(screen.getByTestId('print-sheet-error').textContent).toBe('Could not print. Try again.')
+	);
+});
