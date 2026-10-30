@@ -31,6 +31,7 @@ import { ManagementBar } from '../components/management-bar';
 import { UpgradeNotice } from '../components/upgrade-notice';
 import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
+import { MenuChip } from './menu-chip';
 
 type ScopeProps = { scope: ClosureScope; onScopeChange: (scope: ClosureScope) => void };
 
@@ -225,7 +226,7 @@ export function Bar({
 	);
 }
 
-export function CashierButton({ scope, onScopeChange }: ScopeProps) {
+export function ClosuresCashierChip({ scope, onScopeChange }: ScopeProps) {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -233,31 +234,26 @@ export function CashierButton({ scope, onScopeChange }: ScopeProps) {
 		[site]
 	);
 	const cashiers = useObservableState(source, []);
-	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	return (
-		<Popover>
-			<PopoverTrigger ref={trigger} asChild>
-				<Button testID="reports-cashier" variant="outline">
-					{cashiers.find((row) => row.id === scope.cashier)?.display_name ?? t('common.cashier')}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent>
-				<MenuRowGroup accessibilityLabel={t('common.cashier')}>
-					{[{ id: undefined, display_name: t('reports.all_cashiers') }, ...cashiers].map((row) => (
-						<MenuRow
-							key={row.id ?? 'all'}
-							testID={`reports-cashier-${row.id ?? 'all'}`}
-							choice
-							selected={row.id === scope.cashier}
-							label={row.display_name ?? ''}
-							onPress={() => {
-								onScopeChange({ ...scope, cashier: row.id });
-								trigger.current?.close();
-							}}
-						/>
-					))}
-				</MenuRowGroup>
-			</PopoverContent>
-		</Popover>
+		<MenuChip
+			name="cashier"
+			icon="cashier"
+			scroll
+			value={scope.cashier === undefined ? 'all' : String(scope.cashier)}
+			defaultValue="all"
+			onChange={(next) =>
+				onScopeChange({ ...scope, cashier: next === 'all' ? undefined : Number(next) })
+			}
+			choices={[
+				{ value: 'all', label: t('reports.all_cashiers') },
+				...cashiers.map((row) => ({ value: String(row.id), label: row.display_name ?? '' })),
+			]}
+			ids={{
+				trigger: 'reports-cashier',
+				menu: 'reports-cashier-menu',
+				row: (v) => `reports-cashier-${v}`,
+				clear: 'reports-cashier-clear',
+			}}
+		/>
 	);
 }

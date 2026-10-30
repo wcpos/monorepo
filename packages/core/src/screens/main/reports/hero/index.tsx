@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
@@ -14,8 +14,6 @@ import { Chip } from '@wcpos/components/chip';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
-import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
@@ -52,72 +50,8 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
+import { MenuChip } from '../menu-chip';
 
-type Choice = { value: string; label: string; hint?: string };
-function MenuChip({
-	name,
-	icon,
-	value,
-	defaultValue,
-	choices,
-	onChange,
-	hint,
-	scroll = false,
-}: {
-	name: string;
-	icon: React.ComponentProps<typeof Chip>['icon'];
-	value: string;
-	defaultValue: string;
-	choices: Choice[];
-	onChange: (value: string) => void;
-	hint?: string;
-	/** A variable-length list (the cashiers) scrolls inside a bounded height; short menus do not. */
-	scroll?: boolean;
-}) {
-	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
-	const t = useT();
-	const choose = (next: string) => {
-		if (next !== value) onChange(next);
-		trigger.current?.close();
-	};
-	return (
-		<Popover>
-			<PopoverTrigger ref={trigger} asChild>
-				<Chip
-					testID={`hero-chip-${name}`}
-					icon={icon}
-					label={choices.find((row) => row.value === value)?.label ?? value}
-					on={value !== defaultValue}
-					onClear={value !== defaultValue ? () => choose(defaultValue) : undefined}
-					clearTestID={`hero-chip-${name}-clear`}
-					clearLabel={t('common.clear')}
-				/>
-			</PopoverTrigger>
-			<PopoverContent testID={`hero-${name}-menu`}>
-				<ScrollView className={scroll ? 'max-h-96' : undefined} scrollEnabled={scroll}>
-					<MenuRowGroup>
-						{choices.map((row) => (
-							<MenuRow
-								key={row.value}
-								testID={`hero-${name}-${row.value}`}
-								choice
-								selected={row.value === value}
-								label={row.label}
-								description={row.hint}
-								onPress={() => choose(row.value)}
-							/>
-						))}
-					</MenuRowGroup>
-				</ScrollView>
-				{hint && (
-					<Text variant="key" className="p-3">
-						{hint}
-					</Text>
-				)}
-			</PopoverContent>
-		</Popover>
-	);
-}
 function CashierChip() {
 	const t = useT();
 	const { site } = useStoreSession();

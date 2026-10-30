@@ -107,7 +107,7 @@ jest.mock('./hero', () => ({
 	),
 }));
 jest.mock('./bar', () => ({
-	CashierButton: () => null,
+	ClosuresCashierChip: () => null,
 	ScopeHint: () => null,
 	Bar: ({
 		onBack,

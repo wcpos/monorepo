@@ -8,7 +8,7 @@ import { of } from 'rxjs';
 
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
-import { Bar, CashierButton } from './bar';
+import { Bar, ClosuresCashierChip } from './bar';
 import { DateButton } from './date-button';
 import { ReportsScreen } from './index';
 
@@ -330,7 +330,7 @@ function Controls({
 				onScopeChange={onScopeChange}
 				lockedScopeName="Earlier closures"
 			/>
-			<CashierButton scope={currentScope} onScopeChange={onScopeChange} />
+			<ClosuresCashierChip scope={currentScope} onScopeChange={onScopeChange} />
 		</>
 	);
 }
