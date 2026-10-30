@@ -11,6 +11,7 @@ import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-templat
 beforeAll(() => loadBarcodeLibrary());
 
 const mockUseReceiptData = jest.fn();
+let mockTemplatesSynced = true;
 const mockUseActiveTemplates = jest.fn((..._args: unknown[]) => []);
 const createStore = (dp = 2) => ({
 	name: 'Test Store',
@@ -45,7 +46,7 @@ jest.mock('./use-receipt-data', () => ({
 jest.mock('./use-active-templates', () => ({
 	useActiveTemplatesState: (...args: unknown[]) => ({
 		templates: mockUseActiveTemplates(...args),
-		synced: true,
+		synced: mockTemplatesSynced,
 	}),
 }));
 
@@ -99,11 +100,89 @@ const defaultOptions = {
 describe('useTemplateRenderer', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockTemplatesSynced = true;
 		mockUseReceiptData.mockReturnValue({ data: null, isLoading: false });
 		mockUseActiveTemplates.mockReturnValue([]);
 		mockUseAppState.mockReturnValue({ store: createStore() });
 		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
 	});
+
+	// Receipt-only fallback fields lose every report figure, before sync and without a usable template.
+	it.each(['loading', 'empty', 'legacy', 'missing-content', 'broken'])(
+		'renders report figures without a usable template: %s',
+		async (state) => {
+			mockTemplatesSynced = state !== 'loading';
+			mockUseActiveTemplates.mockReturnValue(
+				state === 'legacy'
+					? ([{ id: 1, offline_capable: false, engine: 'legacy-php' }] as never)
+					: state === 'missing-content'
+						? ([{ id: 1, offline_capable: true, engine: 'logicless', content: '' }] as never)
+						: state === 'broken'
+							? ([
+									{ id: 1, offline_capable: true, engine: 'logicless', content: '{{#report}}' },
+								] as never)
+							: []
+			);
+			const rows = [{ cells: [{ formatted: '£12.34', align: 'right' }] }];
+			const localReport = {
+				report: {
+					title: 'Sales by payment method',
+					subtitle: 'Completed sales',
+					scope: { label: 'Today · Front' },
+					columns: [{ label: 'Amount', align: 'right' }],
+					column_count: 1,
+					rows,
+					has_groups: false,
+					groups: [
+						{ label: 'Cash', rows, subtotal: { cells: [{ formatted: '£24.68', align: 'right' }] } },
+					],
+					totals: { cells: [{ formatted: '£37.02', align: 'right' }] },
+					is_partial: true,
+					partial_reason: 'Incomplete range',
+					generated_at: { datetime: '30 Oct 2026, 12:00' },
+				},
+				store: { name: 'Test Store' },
+				software: { name: 'WCPOS', plugin_version: 'test' },
+				fiscal: { document_type: 'report', is_report_document: true },
+			};
+			const { result, rerender } = renderHook(
+				({ hasGroups }) =>
+					useTemplateRenderer({
+						...defaultOptions,
+						order: undefined,
+						orderId: undefined,
+						templateType: 'report',
+						localReport: {
+							...localReport,
+							report: { ...localReport.report, has_groups: hasGroups },
+						},
+					}),
+				{ initialProps: { hasGroups: false } }
+			);
+			for (const text of [
+				'Sales by payment method',
+				'Completed sales',
+				'Test Store · Today · Front',
+				'Amount',
+				'£12.34',
+				'£37.02',
+				'Incomplete range',
+				'30 Oct 2026, 12:00',
+				'WCPOS test',
+			]) {
+				expect(result.current.renderedHtml).toContain(text);
+			}
+			expect(result.current.renderedHtml).not.toContain('undefined');
+			expect(result.current.renderedHtml).not.toContain('£24.68');
+			rerender({ hasGroups: true });
+			expect(result.current.renderedHtml).toContain('Cash');
+			expect(result.current.renderedHtml).toContain('£24.68');
+			expect(result.current.renderedHtml?.match(/£12.34/g)).toHaveLength(1);
+			expect(result.current.selectedTemplateEngine).toBe('logicless');
+			const printed = await result.current.preparePrintContent(jest.fn());
+			expect(printed.html).toBe(result.current.renderedHtml);
+		}
+	);
 
 	it('keeps the chosen template when Sync assigns a server id to the same record', () => {
 		mockUseActiveTemplates.mockReturnValue([{ id: 1 }, { id: 2 }] as never);

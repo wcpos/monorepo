@@ -32,6 +32,31 @@ import type { ClosurePrintMarker, ReceiptMode } from './use-receipt-data';
 // a hung fetch must never leave the cashier unable to print.
 const RECEIPT_SETTLE_DEADLINE_MS = 8000;
 
+// Mirrors the plugin report-default.html: figures remain readable before templates arrive.
+// Paper, not UI: named colours keep it out of the app's hex ratchet; black rules print as rules.
+const FALLBACK_REPORT_TEMPLATE = `<article style="font-family: sans-serif; padding: 24px; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
+{{#fiscal.is_report_document}}
+  <h1>{{report.title}}</h1>
+  {{#report.subtitle}}<h2>{{report.subtitle}}</h2>{{/report.subtitle}}
+  <p>{{store.name}} · {{report.scope.label}}</p>
+  {{#report.is_partial}}<p role="alert"><strong>{{report.partial_reason}}</strong></p>{{/report.is_partial}}
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead><tr>{{#report.columns}}<th style="text-align: {{align}}; border-bottom: 1px solid black; padding: 8px;">{{label}}</th>{{/report.columns}}</tr></thead>
+    <tbody>
+      {{#report.has_groups}}{{#report.groups}}
+      <tr><th colspan="{{report.column_count}}" style="text-align: left; padding: 8px;">{{label}}</th></tr>
+      {{#rows}}<tr>{{#cells}}<td style="padding: 8px; text-align: {{align}};">{{formatted}}</td>{{/cells}}</tr>{{/rows}}
+      <tr>{{#subtotal.cells}}<td style="padding: 8px; border-top: 1px solid gainsboro; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/subtotal.cells}}</tr>
+      {{/report.groups}}{{/report.has_groups}}
+      {{^report.has_groups}}{{#report.rows}}<tr>{{#cells}}<td style="padding: 8px; text-align: {{align}};">{{formatted}}</td>{{/cells}}</tr>{{/report.rows}}{{/report.has_groups}}
+    </tbody>
+    <tfoot><tr>{{#report.totals.cells}}<td style="padding: 8px; border-top: 2px solid black; text-align: {{align}};"><strong>{{formatted}}</strong></td>{{/report.totals.cells}}</tr></tfoot>
+  </table>
+  <p>{{report.generated_at.datetime}}</p>
+  <footer>{{software.name}} {{software.plugin_version}}</footer>
+{{/fiscal.is_report_document}}
+</article>`;
+
 function resolvePreviewEngine(engine: string | null | undefined): PreviewTemplateEngine {
 	if (engine == null || engine === 'logicless') {
 		return 'logicless';
@@ -306,11 +331,22 @@ export function useTemplateRenderer({
 		return cache;
 	}, [templates, receiptData, barcodesReady, renderTemplate]);
 
+	const reportContent =
+		templateType === 'report'
+			? FALLBACK_REPORT_TEMPLATE
+			: localReport && templateType !== 'closure'
+				? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
+				: undefined;
+	const useReportFallback =
+		templateType === 'report' && (!selectedTemplate || !preRenderedCache.get(selectedTemplate.id));
+
 	// Determine output
 	let renderedHtml: string | null = null;
 	let receiptUrl: string | null = null;
 
-	if (selectedTemplate?.offline_capable && selectedTemplate.content) {
+	if (useReportFallback && receiptData) {
+		renderedHtml = Mustache.render(FALLBACK_REPORT_TEMPLATE, receiptData);
+	} else if (selectedTemplate?.offline_capable && selectedTemplate.content) {
 		const cached = preRenderedCache.get(selectedTemplate.id);
 		if (cached) {
 			renderedHtml = cached;
@@ -346,10 +382,6 @@ export function useTemplateRenderer({
 		}
 	}
 
-	const reportContent =
-		localReport && templateType !== 'closure'
-			? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
-			: undefined;
 	if (!renderedHtml && reportContent && receiptData)
 		renderedHtml = Mustache.render(reportContent, receiptData);
 	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
@@ -417,7 +449,7 @@ export function useTemplateRenderer({
 				? { commit: commitPrint }
 				: {}),
 			html:
-				selectedTemplate?.offline_capable && selectedTemplate.content
+				!useReportFallback && selectedTemplate?.offline_capable && selectedTemplate.content
 					? renderTemplate(
 							{ engine: selectedTemplate.engine, content: selectedTemplate.content },
 							data as Record<string, unknown>
@@ -441,16 +473,20 @@ export function useTemplateRenderer({
 		renderedHtml,
 		receiptUrl,
 		receiptData,
-		selectedTemplateEngine: selectedTemplate?.offline_capable
-			? (selectedTemplate.engine ?? null)
-			: reportContent
-				? 'thermal'
-				: (selectedTemplate?.engine ?? null),
-		selectedTemplateContent: selectedTemplate?.offline_capable
-			? (selectedTemplate.content ?? null)
-			: reportContent
-				? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
-				: (selectedTemplate?.content ?? null),
+		selectedTemplateEngine: useReportFallback
+			? 'logicless'
+			: selectedTemplate?.offline_capable
+				? (selectedTemplate.engine ?? null)
+				: reportContent
+					? 'thermal'
+					: (selectedTemplate?.engine ?? null),
+		selectedTemplateContent: useReportFallback
+			? FALLBACK_REPORT_TEMPLATE
+			: selectedTemplate?.offline_capable
+				? (selectedTemplate.content ?? null)
+				: reportContent
+					? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
+					: (selectedTemplate?.content ?? null),
 		isOffline,
 		isSyncing,
 		hasFinalData,

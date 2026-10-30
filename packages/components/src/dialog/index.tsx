@@ -248,7 +248,7 @@ export function DialogDescription(allProps: DialogPrimitive.DescriptionProps): R
 	return <DialogPrimitive.Description className={cn(TEXT_LADDER.key, className)} {...props} />;
 }
 export function DialogBody({ className, ...props }: ScrollViewProps): React.JSX.Element {
-	const { presentation } = useOverlay();
+	const presentation = useOverlayPresentation();
 	return (
 		<ScrollView
 			horizontal={false}

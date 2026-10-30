@@ -227,7 +227,6 @@ jest.mock('./reports/use-report-formats', () => ({
 	useReportFormats: () => ({ quantity: String, money: String }),
 }));
 jest.mock('./reports/panels/export-csv', () => ({ panelCsv: () => null }));
-jest.mock('./reports/panels/report-rows', () => ({ ReportRows: () => null }));
 jest.mock('./reports/panels/orders-panel', () => ({ OrdersPanel: () => null }));
 jest.mock('./reports/panels/document', () => ({ buildReportDocument: () => null }));
 jest.mock('./reports/panels/specs', () => ({
@@ -343,4 +342,12 @@ it('reports panels name their close buttons in the store language', () => {
 	);
 	expect(screen.getByTestId('closure-panel-close')).toHaveAttribute('aria-label', 'common.close');
 	expect(screen.getByTestId('detail-panel-close')).toHaveAttribute('aria-label', 'common.close');
+});
+
+// The phone report is an inline page, not an overlay; its real body must render without a shell.
+it('renders the report paper body on the phone page without an overlay', () => {
+	mockPhone = true;
+	render(<DetailPanel />);
+	expect(screen.getByTestId('detail-panel')).toBeInTheDocument();
+	expect(screen.getByTestId('detail-panel-footer')).toBeInTheDocument();
 });

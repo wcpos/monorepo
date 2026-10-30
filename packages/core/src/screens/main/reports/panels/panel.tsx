@@ -46,14 +46,13 @@ import { periodLabel } from '../date-button';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
-import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
 import { usePrintWaiting } from './use-print-waiting';
 import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
-import { PrintSheet } from '../../receipt/print-sheet';
+import { PrintSheet, PrintSheetInner } from '../../receipt/print-sheet';
 
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
@@ -242,6 +241,7 @@ export function DetailPanel() {
 		}
 	};
 	const print = async () => {
+		setError('');
 		setPrintError('');
 		try {
 			const ok = await doc.print();
@@ -250,59 +250,91 @@ export function DetailPanel() {
 			setPrintError(t('reports.print_failed'));
 		}
 	};
+	const header = (
+		<DialogHeader>
+			{phone ? (
+				<Breadcrumb
+					testID="detail-panel-crumb"
+					parents={[{ label: t('reports.sales'), onPress: close, testID: 'detail-panel-back' }]}
+					here={title}
+					autoFocus
+				/>
+			) : (
+				<DialogTitle>{title}</DialogTitle>
+			)}
+			<Text testID="detail-panel-scope" className="text-muted-foreground">
+				{scopeLine}
+			</Text>
+		</DialogHeader>
+	);
+	const exportError = !!error && (
+		<Text testID="detail-panel-export-error" className="text-bad px-4">
+			{error}
+		</Text>
+	);
+	const documentError = printError || doc.documentError?.message;
+	const aside = (
+		<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
+			{detail === 'orders'
+				? leftOut
+					? t('reports.orders_counted_left_out', counted)
+					: t('reports.orders_counted', counted)
+				: spec.missing
+					? t('reports.cost_missing_status', status)
+					: t('reports.panel_status', status)}
+		</Text>
+	);
+	const secondary = !!ready && {
+		label: t('reports.export_csv'),
+		testID: 'detail-panel-export',
+		loading: busy,
+		onPress: () => void exportCsv(),
+	};
+	if (detail !== 'orders')
+		return (
+			<ReportPanel testID="detail-panel" wide onClose={close}>
+				<PrintSheetInner
+					header={header}
+					doc={doc}
+					title={title}
+					description={scopeLine}
+					printLabel={t('reports.print_report')}
+					waiting={waiting ? waitingLabel : null}
+					error={
+						<>
+							{exportError}
+							{documentError ? (
+								<Text variant="key" className="text-bad px-4" testID="print-sheet-error">
+									{documentError}
+								</Text>
+							) : null}
+						</>
+					}
+					onPrint={print}
+					printTestID="detail-panel-print"
+					footerTestID="detail-panel-footer"
+					aside={aside}
+					secondary={secondary}
+					fullWidth={phone}
+				/>
+			</ReportPanel>
+		);
 	return (
 		<ReportPanel testID="detail-panel" wide={spec.head.length > 4} onClose={close}>
-			<DialogHeader>
-				{phone ? (
-					<Breadcrumb
-						testID="detail-panel-crumb"
-						parents={[{ label: t('reports.sales'), onPress: close, testID: 'detail-panel-back' }]}
-						here={title}
-						autoFocus
-					/>
-				) : (
-					<DialogTitle>{title}</DialogTitle>
-				)}
-				<Text testID="detail-panel-scope" className="text-muted-foreground">
-					{scopeLine}
-				</Text>
-			</DialogHeader>
+			{header}
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
-					detail === 'orders' ? (
-						<OrdersPanel spec={spec} quantity={formats.quantity} />
-					) : (
-						<ReportRows spec={spec} testID={`detail-${detail}`} />
-					)
+					<OrdersPanel spec={spec} quantity={formats.quantity} />
 				) : (
 					<Text>{t('common.loading')}</Text>
 				)}
 			</View>
-			{!!error && (
-				<Text testID="detail-panel-export-error" className="text-bad px-4">
-					{error}
-				</Text>
-			)}
+			{exportError}
 			<DialogFooter
 				testID="detail-panel-footer"
-				aside={
-					<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
-						{detail === 'orders'
-							? leftOut
-								? t('reports.orders_counted_left_out', counted)
-								: t('reports.orders_counted', counted)
-							: spec.missing
-								? t('reports.cost_missing_status', status)
-								: t('reports.panel_status', status)}
-					</Text>
-				}
+				aside={aside}
 				secondary={[
-					!!ready && {
-						label: t('reports.export_csv'),
-						testID: 'detail-panel-export',
-						loading: busy,
-						onPress: () => void exportCsv(),
-					},
+					secondary,
 					{
 						label: t('reports.print_report'),
 						testID: 'detail-panel-print',
