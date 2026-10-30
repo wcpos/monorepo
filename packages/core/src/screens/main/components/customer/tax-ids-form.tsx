@@ -21,15 +21,27 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/comp
 import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import { OptionSelect } from '@wcpos/components/select';
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectSeparator,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {
 	isValidTaxIdFormat,
+	splitTaxIdTypesForCountry,
+	suggestTaxIdTypes,
 	TAX_ID_DEFAULT_COUNTRIES,
 	TAX_ID_LABEL_KEYS,
 	TAX_ID_PLACEHOLDERS,
@@ -42,48 +54,68 @@ interface TaxIdsFormProps {
 	name?: string;
 }
 
-/**
- * Default value for a freshly-appended row. EU VAT covers the most common case;
- * users can immediately switch type via the select.
- */
-const DEFAULT_ROW = {
-	type: 'eu_vat' as TaxIdType,
-	value: '',
-	country: '',
-	label: null as string | null,
-	verified: null as null,
-};
+/** Default value for a freshly-appended row, using the resolved customer/store country. */
+function newTaxIdRow(country: string) {
+	const [type = 'other'] = suggestTaxIdTypes(country);
+	return {
+		type: type as TaxIdType,
+		value: '',
+		country: TAX_ID_DEFAULT_COUNTRIES[type] ?? country,
+		label: null as string | null,
+		verified: null as null,
+	};
+}
+
+const TaxIdTypeOptionsContext = React.createContext<{ suggested: TaxIdType[]; rest: TaxIdType[] }>({
+	suggested: [],
+	rest: [...TAX_ID_TYPES],
+});
 
 /**
  * Inner Select bound to the FormSelect's `customComponent` slot. Renders the
- * TAX_ID_TYPES catalogue with translated labels.
+ * TAX_ID_TYPES catalogue with translated labels, suggested types first.
  */
 function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
-	const options = React.useMemo(
-		() =>
-			TAX_ID_TYPES.map((type) => ({
-				value: type,
-				label: t(TAX_ID_LABEL_KEYS[type], { _: type }),
-			})),
-		[t]
+	const { suggested, rest } = React.useContext(TaxIdTypeOptionsContext);
+	const type = value?.value as TaxIdType;
+	const selected = value
+		? {
+				...value,
+				label: TAX_ID_LABEL_KEYS[type]
+					? t(TAX_ID_LABEL_KEYS[type], { _: type })
+					: (value.label ?? value.value),
+			}
+		: value;
+	const renderItem = (type: TaxIdType) => (
+		<SelectItem key={type} value={type} label={t(TAX_ID_LABEL_KEYS[type], { _: type })} />
 	);
 	return (
-		<OptionSelect
-			options={options}
-			value={value?.value}
-			onChange={(_nextValue, option) => onValueChange?.(option)}
-			placeholder={t('tax_id.type_label', { _: 'Type' })}
-			fallbackLabel={value?.label ?? value?.value ?? ''}
-			matchWidth
-			{...props}
-		/>
+		<Select value={selected} onValueChange={onValueChange} {...props}>
+			<SelectTrigger>
+				<SelectValue placeholder={t('tax_id.type_label', { _: 'Type' })} />
+			</SelectTrigger>
+			<SelectContent matchWidth>
+				{suggested.length > 0 && (
+					<>
+						<SelectGroup>{suggested.map(renderItem)}</SelectGroup>
+						<SelectSeparator />
+					</>
+				)}
+				<SelectGroup>{rest.map(renderItem)}</SelectGroup>
+			</SelectContent>
+		</Select>
 	);
 }
 
 export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
+	const billingCountry = useWatch({ name: 'billing.country', control }) as string | undefined;
+	const { store } = useAppState();
+	const storeCountry = useDocField(store, (value) => value.store_country) as string | undefined;
+	const country = (billingCountry || storeCountry || '').trim().toUpperCase();
+	const options = React.useMemo(() => splitTaxIdTypesForCountry(country), [country]);
 	const { fields, append, remove } = useFieldArray({ control, name });
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;
@@ -94,12 +126,12 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 		(index: number, nextType: TaxIdType) => {
 			setValue(`${name}.${index}.type`, nextType, { shouldDirty: true });
 			const defaultCountry = TAX_ID_DEFAULT_COUNTRIES[nextType];
-			setValue(`${name}.${index}.country`, defaultCountry ?? '', { shouldDirty: true });
+			setValue(`${name}.${index}.country`, defaultCountry ?? country, { shouldDirty: true });
 		},
-		[name, setValue]
+		[name, setValue, country]
 	);
 
-	return (
+	const content = (
 		<Collapsible>
 			<CollapsibleTrigger>
 				<Text>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
@@ -182,13 +214,16 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 						);
 					})}
 					<HStack>
-						<Button variant="outline" onPress={() => append({ ...DEFAULT_ROW })}>
+						<Button variant="outline" onPress={() => append(newTaxIdRow(country))}>
 							<ButtonText>{t('tax_id.add', { _: 'Add tax ID' })}</ButtonText>
 						</Button>
 					</HStack>
 				</VStack>
 			</CollapsibleContent>
 		</Collapsible>
+	);
+	return (
+		<TaxIdTypeOptionsContext.Provider value={options}>{content}</TaxIdTypeOptionsContext.Provider>
 	);
 }
 
