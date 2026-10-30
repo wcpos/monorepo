@@ -28,7 +28,7 @@ import type {
 import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
-import { attributeRefunds, deriveExpected } from './expected';
+import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 
 import type { ReadonlyClosureDocument } from './reads';
 
@@ -386,18 +386,17 @@ export async function writeClosure({
 		string,
 		{ rate?: number; name: string; net: string; tax: string; gross: string }
 	> = {};
-	// The tax table reads the same sales the counters do: a stamped but unpaid order has no tax to report.
-	for (const order of sold) {
+	const addTaxRates = (document: ClosureOrder['payload'] | RefundDocumentType) => {
 		const netByRate: Record<string, number> = {};
 		const lines = [
-			...(order.payload.line_items ?? []).filter(isActiveLineItem),
-			...(order.payload.fee_lines ?? []).filter(isActiveFeeLine),
-			...(order.payload.shipping_lines ?? []).filter(isActiveShippingLine),
+			...(document.line_items ?? []).filter(isActiveLineItem),
+			...(document.fee_lines ?? []).filter(isActiveFeeLine),
+			...(document.shipping_lines ?? []).filter(isActiveShippingLine),
 		];
 		for (const line of lines)
 			for (const tax of line.taxes ?? [])
 				netByRate[String(tax.id)] = (netByRate[String(tax.id)] ?? 0) + toMinor(line.total, 4);
-		for (const tax of order.payload.tax_lines ?? []) {
+		for (const tax of document.tax_lines ?? []) {
 			const key = String(tax.rate_id);
 			const amount = toMinor(tax.tax_total ?? '0', 4) + toMinor(tax.shipping_tax_total ?? '0', 4);
 			const net = netByRate[key] ?? 0;
@@ -411,6 +410,11 @@ export async function writeClosure({
 				gross: sum([previous?.gross ?? '0', fromMinor(net + amount, 4)]),
 			};
 		}
+	};
+	// Unpaid orders have no tax to report; session refunds reduce the same tax bases.
+	for (const order of sold) addTaxRates(order.payload);
+	for (const refund of refundRecords) {
+		if (refundSessionId(refund) === session.id) addTaxRates(refund);
 	}
 	const dirtyOrders = bound.filter(hasPendingLocalWork);
 	const dirtyMovements = entries.filter((row) => row.sync_status === 'pending');

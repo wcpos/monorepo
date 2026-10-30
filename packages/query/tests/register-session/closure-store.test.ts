@@ -590,6 +590,80 @@ it('adds active product, fee and shipping bases to every named rate', async () =
 		'2': { net: '15.0000', tax: '3.0000', gross: '18.0000' },
 	});
 });
+// Omitting session refunds leaves a fully refunded sale positive and a refund-only session empty.
+it.each([
+	{
+		sameSession: true,
+		amount: '120',
+		net: '-100',
+		tax: '-20',
+		expected: ['0.0000', '0.0000', '0.0000'],
+	},
+	{
+		sameSession: false,
+		amount: '60',
+		net: '-50',
+		tax: '-10',
+		expected: ['-50.0000', '-10.0000', '-60.0000'],
+	},
+])(
+	'nets tax rows against refunds (same-session sale: $sameSession)',
+	async ({ sameSession, amount, net, tax, expected }) => {
+		const input = await seed();
+		const saleSession = sameSession ? input.session.id : 'earlier-session';
+		const refund = {
+			id: 20,
+			parent_id: 1,
+			date_created_gmt: '2026-09-16T10:00:00',
+			amount,
+			meta_data: [{ key: '_wcpos_session', value: input.session.id }],
+			line_items: [{ total: net, taxes: [{ id: 1, total: tax }] }],
+			tax_lines: [{ rate_id: 1, rate_percent: 20, tax_total: tax }],
+		};
+		const closure = await writeClosure({
+			...input,
+			movements: [],
+			orders: [
+				{
+					uuid: 'sale',
+					payload: {
+						meta_data: [
+							{ key: '_wcpos_session', value: saleSession },
+							{
+								key: '_wcpos_payments',
+								value: {
+									schema: 1,
+									payments: [
+										{
+											id: 'cash',
+											session_id: saleSession,
+											kind: 'cash',
+											method_id: 'cash',
+											status: 'captured',
+											amount: '120',
+											refunded_amount: amount,
+											refunds: [{ id: 20, amount, status: 'succeeded' }],
+										},
+									],
+								},
+							},
+						],
+						line_items: [{ total: '100', taxes: [{ id: 1, total: '20' }] }],
+						tax_lines: [{ rate_id: 1, rate_percent: 20, tax_total: '20' }],
+					},
+				},
+			],
+			refundRecords: [
+				refund,
+				{ ...refund, id: 21, meta_data: [{ key: '_wcpos_session', value: 'another-session' }] },
+				{ ...refund, id: 22, meta_data: [] },
+			],
+		});
+		expect(closure.breakdowns.tax_rates).toEqual({
+			'1': { rate: 20, name: ' 20%', net: expected[0], tax: expected[1], gross: expected[2] },
+		});
+	}
+);
 it('persists count details on close and clears them on back to selling', async () => {
 	const { session } = await seed();
 	await closeSession(db, session.id, {
