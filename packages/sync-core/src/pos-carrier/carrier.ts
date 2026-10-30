@@ -16,7 +16,8 @@ export interface PosCarrier {
 		identity: {
 			userId: string | number;
 			storeId: string | number;
-			registerId?: string;
+			/** A string replaces the register; `undefined` (or '') leaves it; `null` clears it. */
+			registerId?: string | null;
 			tillId?: string;
 		}
 	): MetaDataEntry[];
@@ -137,6 +138,10 @@ export const wooMetaCarrier: PosCarrier = {
 		]);
 		if (typeof identity.registerId === 'string' && identity.registerId)
 			values.set(POS_META_KEYS.register, identity.registerId);
+		// Cleared as a value, never dropped: a missing row or a null tombstone cannot erase a
+		// protected identity row on the local write (`mergeProtectedOrderMeta`), so the row stays
+		// (with its id) holding '' and reads as no register. With no row there is nothing to clear.
+		if (identity.registerId === null) values.set(POS_META_KEYS.register, '');
 		if (identity.tillId) values.set(POS_META_KEYS.till, identity.tillId);
 		const stamped: MetaDataEntry[] = [];
 		const replaced = new Set<string>();
@@ -150,7 +155,7 @@ export const wooMetaCarrier: PosCarrier = {
 			}
 		}
 		for (const [key, value] of values) {
-			if (!replaced.has(key)) stamped.push({ key, value });
+			if (!replaced.has(key) && value !== '') stamped.push({ key, value });
 		}
 		return stamped;
 	},

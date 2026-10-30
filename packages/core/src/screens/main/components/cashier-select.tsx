@@ -17,14 +17,15 @@ import { useSearchSelect } from '../../../query';
 export function CashierSelect({
 	portalHost,
 	disabled,
+	tone,
 	...props
-}: ComboboxRootProps & { portalHost?: string }) {
+}: ComboboxRootProps & { portalHost?: string; tone?: 'attention' }) {
 	const t = useT();
 	const select = useSearchSelect('cashier');
 	return (
 		<Combobox {...props}>
 			<ComboboxTrigger testID="cashier-select-trigger" disabled={disabled}>
-				<ComboboxValue placeholder={t('common.select_cashier')} />
+				<ComboboxValue placeholder={t('common.select_cashier')} tone={tone} />
 			</ComboboxTrigger>
 			<ComboboxContent portalHost={portalHost}>
 				<ComboboxInput

@@ -24,6 +24,11 @@ type NoticeProps = ViewProps & {
 	/** Lines under the description, each with its own actions in the band's action styling. */
 	items?: readonly NoticeItem[];
 	docs?: { label: string; href: string; testID?: string };
+	/**
+	 * A live region (the default) announces every change inside the band. `false` makes it a plain
+	 * group, for a band that holds controls: each pick would otherwise be re-announced.
+	 */
+	live?: boolean;
 };
 
 export function Notice({
@@ -35,13 +40,14 @@ export function Notice({
 	actions,
 	items,
 	docs,
+	live = true,
 	testID,
 	className,
 	...props
 }: NoticeProps) {
 	// iOS has no live region (`aria-live` maps to Android's accessibilityLiveRegion), so a
 	// mounted outage is spoken explicitly there; the live region covers Android and web.
-	const spoken = React.useRef(tone === 'bad' ? title : undefined);
+	const spoken = React.useRef(live && tone === 'bad' ? title : undefined);
 	React.useEffect(() => {
 		if (spoken.current && Platform.OS === 'ios')
 			AccessibilityInfo.announceForAccessibility(spoken.current);
@@ -51,8 +57,8 @@ export function Notice({
 		<View
 			{...props}
 			testID={testID}
-			role={tone === 'bad' ? 'alert' : 'status'}
-			aria-live={tone === 'bad' ? 'assertive' : 'polite'}
+			role={!live ? 'group' : tone === 'bad' ? 'alert' : 'status'}
+			aria-live={!live ? undefined : tone === 'bad' ? 'assertive' : 'polite'}
 			className={cn(
 				'flex-row flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5',
 				TONE[tone].band,

@@ -114,6 +114,7 @@ function ComboboxValue({
 	placeholder,
 	className,
 	maxDisplayLength = 24,
+	tone,
 	...props
 }: ComboboxValueProps) {
 	const { multiple, value, decodeLabels } = useComboboxRootContext();
@@ -134,7 +135,7 @@ function ComboboxValue({
 
 	return (
 		<FieldBox
-			state={open ? 'open' : 'rest'}
+			state={open ? 'open' : (tone ?? 'rest')}
 			empty={!hasValue}
 			className={cn('w-full px-3', className)}
 		>

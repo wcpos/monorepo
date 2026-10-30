@@ -40,6 +40,12 @@ it.each([
 	expect(screen.getByTestId('notice')).toHaveAttribute('aria-live', live);
 	expect(container.querySelector('[data-icon]')).toHaveAttribute('data-icon', TONE[tone].glyph);
 });
+// A band holding controls (the order's hand-over pickers) must not re-announce every pick.
+it('live={false} is a plain group with no live region', () => {
+	render(<Notice tone="warning" title="Title" testID="notice" live={false} />);
+	expect(screen.getByTestId('notice')).toHaveAttribute('role', 'group');
+	expect(screen.getByTestId('notice')).not.toHaveAttribute('aria-live');
+});
 it('renders two ordered actions and fires their own callbacks', () => {
 	const first = jest.fn();
 	const second = jest.fn();

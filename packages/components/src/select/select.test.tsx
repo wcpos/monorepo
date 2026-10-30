@@ -7,6 +7,17 @@ import * as C from './index';
 jest.mock('@rn-primitives/select', () =>
 	jest.requireActual('../dropdown-menu/sheet.test-utils').mockPrimitive(true)
 );
+const mockFieldBox = jest.fn();
+jest.mock('../field-box', () => {
+	const actual = jest.requireActual('../field-box');
+	return {
+		...actual,
+		fieldBox: (props: { state?: string }) => {
+			mockFieldBox(props?.state);
+			return actual.fieldBox(props);
+		},
+	};
+});
 beforeEach(() => {
 	mockPhone.current = true;
 	mockRoot.open = true;
@@ -128,3 +139,23 @@ it('gives an OptionSelect trigger and each option a stable testID', () => {
 	expect(screen.getByTestId('class-select-option-standard')).toBeTruthy();
 	expect(screen.getByTestId('class-select-option-reduced-rate')).toBeTruthy();
 });
+
+it.each([
+	[false, false, 'attention'],
+	[true, false, 'open'],
+	[false, true, 'disabled'],
+] as const)(
+	"a tone='attention' trigger (open %s, disabled %s) draws the %s box",
+	(open, disabled, state) => {
+		mockRoot.open = open;
+		render(
+			<C.OptionSelect
+				tone="attention"
+				disabled={disabled}
+				placeholder="Status"
+				options={[{ value: 'a', label: 'A' }]}
+			/>
+		);
+		expect(mockFieldBox).toHaveBeenLastCalledWith(state);
+	}
+);

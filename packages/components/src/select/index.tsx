@@ -104,12 +104,19 @@ function SelectValue({
 /** The closed face's layout inside the field box: the value, then the chevron at the end. */
 const SELECT_FACE = 'flex-row items-center justify-between gap-2 px-3 py-2 [&>span]:line-clamp-1';
 
+/**
+ * `tone="attention"` draws a changed value's box (a staged hand-over); open and disabled still win.
+ * A multi-select trigger ignores it.
+ */
+type SelectTriggerProps = SelectPrimitive.TriggerProps & { tone?: 'attention' };
+
 function SelectTrigger({
 	className,
 	children,
 	onLayout: onLayoutProp,
+	tone,
 	...props
-}: SelectPrimitive.TriggerProps) {
+}: SelectTriggerProps) {
 	const isMulti = React.useContext(MultiModeContext);
 	const layoutHandler = React.useContext(SelectLayoutContext);
 
@@ -123,7 +130,12 @@ function SelectTrigger({
 
 	const Trigger = isMulti ? SelectMultiTrigger : SingleSelectTrigger;
 	return (
-		<Trigger className={cn(SELECT_FACE, className)} onLayout={handleLayout} {...(props as any)}>
+		<Trigger
+			className={cn(SELECT_FACE, className)}
+			onLayout={handleLayout}
+			{...(isMulti ? {} : { tone })}
+			{...(props as any)}
+		>
 			<>{children}</>
 			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
 		</Trigger>
@@ -131,9 +143,9 @@ function SelectTrigger({
 }
 
 /** The single select's field box, lit while its list is open. */
-function SingleSelectTrigger({ className, ...props }: SelectPrimitive.TriggerProps) {
+function SingleSelectTrigger({ className, tone, ...props }: SelectTriggerProps) {
 	const { open } = SelectPrimitive.useRootContext();
-	const state = props.disabled ? 'disabled' : open ? 'open' : 'rest';
+	const state = props.disabled ? 'disabled' : open ? 'open' : (tone ?? 'rest');
 	return <SelectPrimitiveTrigger className={cn(fieldBox({ state }), className)} {...props} />;
 }
 
@@ -371,6 +383,8 @@ type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange
 	fallbackLabel?: string;
 	matchWidth?: boolean;
 	triggerClassName?: string;
+	/** The trigger's `tone` (see `SelectTrigger`). */
+	tone?: 'attention';
 	valueClassName?: string;
 	/** The trigger's testID; each option takes `${triggerTestID}-option-${value}`. */
 	triggerTestID?: string;
@@ -387,6 +401,7 @@ function OptionSelect({
 	fallbackLabel,
 	matchWidth,
 	triggerClassName,
+	tone,
 	valueClassName,
 	triggerTestID,
 	'aria-labelledby': labelledBy,
@@ -410,6 +425,7 @@ function OptionSelect({
 			<SelectTrigger
 				testID={triggerTestID}
 				className={triggerClassName}
+				tone={tone}
 				disabled={props.disabled}
 				aria-labelledby={labelledBy}
 			>

@@ -95,8 +95,9 @@ jest.mock('@rn-primitives/popover', () => ({
 			{children}
 		</div>
 	),
-	useRootContext: () => ({ open: true, onOpenChange: jest.fn() }),
+	useRootContext: () => mockPopoverRoot,
 }));
+const mockPopoverRoot = { open: true, onOpenChange: () => undefined };
 
 jest.mock('../input', () => ({
 	Input: ({ value, onChangeText, placeholder, ...props }: any) => (
@@ -294,6 +295,26 @@ describe('ComboboxValue', () => {
 
 		expect(screen.getByText('shipping&copy;')).not.toBeNull();
 		expect(screen.queryByText('shipping©')).toBeNull();
+	});
+
+	it.each([
+		[false, 'border-attention'],
+		[true, 'border-ring'],
+	])("tone='attention' draws the changed box at rest, open still wins (open %s)", (open, mark) => {
+		mockPopoverRoot.open = open;
+		mockViews.length = 0;
+		render(
+			<Combobox value={{ value: '7', label: 'Sam' }}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a cashier" tone="attention" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+		mockPopoverRoot.open = true;
+		const classes = mockViews.map((view) => String((view as { className?: string }).className));
+		const box = classes.find((className) => className.includes('rounded-lg border'));
+		expect(box).toContain(mark);
+		if (open) expect(box).not.toContain('border-attention');
 	});
 
 	it('still renders the placeholder when nothing is selected', () => {
