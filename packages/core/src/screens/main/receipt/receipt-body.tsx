@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -23,12 +23,10 @@ const MIN_FLOW_PREVIEW_HEIGHT = 384;
 
 export function ReceiptBody({
 	doc,
-	selectsInline,
 	hideSelects,
 	fullWidth = false,
 }: {
 	doc: ReturnType<typeof useReceiptDocument>;
-	selectsInline?: boolean;
 	hideSelects?: boolean;
 	fullWidth?: boolean;
 }) {
@@ -79,36 +77,38 @@ export function ReceiptBody({
 			className="h-full w-full"
 		/>
 	);
-	const templateSwitcher = (
-		<TemplateSwitcher
-			templates={templates}
-			selectedId={selectedTemplateId}
-			onSelect={setSelectedTemplateId}
-			isOffline={isOffline}
-		/>
-	);
-	const printerSwitcher = (
-		<PrinterSwitcher
-			printers={allPrinters}
-			printerSelection={printerSelection}
-			resolvedPrinterId={resolvedPrinter?.id ?? null}
-			onSelect={setPrinterSelection}
-		/>
-	);
 	return (
 		<ErrorBoundary>
 			<VStack className={fullWidth ? 'w-full gap-2' : 'min-h-0 flex-1 gap-2'}>
 				<SyncingBadge isSyncing={isSyncing} />
-				{hideSelects ? null : selectsInline ? (
-					<HStack className="gap-2">
-						<VStack className="flex-1">{templateSwitcher}</VStack>
-						<VStack className="flex-1">{printerSwitcher}</VStack>
-					</HStack>
-				) : (
-					<>
-						{templateSwitcher}
-						{printerSwitcher}
-					</>
+				{!hideSelects && (
+					<PropertyList>
+						<PropertyRow label={t('print_sheet.template')} testID="print-sheet-template">
+							{templates.length > 1 ? (
+								<TemplateSwitcher
+									templates={templates}
+									selectedId={selectedTemplateId}
+									onSelect={setSelectedTemplateId}
+									isOffline={isOffline}
+									alwaysVisible
+								/>
+							) : templates[0] ? (
+								<Text>{templates[0].title}</Text>
+							) : null}
+						</PropertyRow>
+						<PropertyRow label={t('print_sheet.printer')} testID="print-sheet-printer">
+							{allPrinters.length > 0 ? (
+								<PrinterSwitcher
+									printers={allPrinters}
+									printerSelection={printerSelection}
+									resolvedPrinterId={resolvedPrinter?.id ?? null}
+									onSelect={setPrinterSelection}
+								/>
+							) : (
+								<Text>{t('print_sheet.browser_dialog')}</Text>
+							)}
+						</PropertyRow>
+					</PropertyList>
 				)}
 				<MismatchBadge mismatch={mismatch} />
 				{pending ? (

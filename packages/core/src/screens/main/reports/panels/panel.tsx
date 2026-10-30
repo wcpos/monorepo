@@ -10,7 +10,6 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
-import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -54,8 +53,7 @@ import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
-import { TemplateSwitcher } from '../../receipt/template-switcher';
-import { PrinterSwitcher } from '../../receipt/printer-switcher';
+import { PrintSheet } from '../../receipt/print-sheet';
 
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
@@ -110,6 +108,7 @@ export function DetailPanel() {
 	const [error, setError] = React.useState('');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const [busy, setBusy] = React.useState(false);
 
 	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
@@ -174,6 +173,7 @@ export function DetailPanel() {
 		registers: t('reports.panel_registers'),
 	};
 	const title = titles[detail ?? 'orders'];
+	const scopeLine = t('reports.panel_scope', { period, register });
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
 		spec,
@@ -186,7 +186,7 @@ export function DetailPanel() {
 		{
 			key: detail ?? 'orders',
 			title,
-			label: t('reports.panel_scope', { period, register }),
+			label: scopeLine,
 			storeId: storeId ?? 0,
 			registerId: registerId ?? '',
 			registerName: register,
@@ -264,33 +264,9 @@ export function DetailPanel() {
 					<DialogTitle>{title}</DialogTitle>
 				)}
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
-					{t('reports.panel_scope', { period, register })}
+					{scopeLine}
 				</Text>
 			</DialogHeader>
-			{/* The rows share the header's and the body's 16-point gutter (CODING_STANDARDS § Gutters). */}
-			<View testID="detail-panel-print-rows" className="px-4">
-				<PropertyList>
-					{/* The selects are the rows' VALUES, in the value column: the `control` slot sits
-				    absolute beside the key on a phone and is for a switch (Codex, #3077). */}
-					<PropertyRow label={t('reports.template')} testID="detail-panel-template">
-						<TemplateSwitcher
-							templates={doc.templates}
-							selectedId={doc.selectedTemplateId}
-							onSelect={doc.setSelectedTemplateId}
-							isOffline={doc.isOffline}
-							alwaysVisible
-						/>
-					</PropertyRow>
-					<PropertyRow label={t('reports.printer')} testID="detail-panel-printer">
-						<PrinterSwitcher
-							printers={doc.allPrinters}
-							printerSelection={doc.printerSelection}
-							resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
-							onSelect={doc.setPrinterSelection}
-						/>
-					</PropertyRow>
-				</PropertyList>
-			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
 					detail === 'orders' ? (
@@ -302,16 +278,6 @@ export function DetailPanel() {
 					<Text>{t('common.loading')}</Text>
 				)}
 			</View>
-			{waiting && (
-				<Text testID="detail-panel-print-waiting" variant="key" className="px-4">
-					{waitingLabel}
-				</Text>
-			)}
-			{!!(printError || doc.documentError) && (
-				<Text testID="detail-panel-print-error" className="text-bad px-4">
-					{printError || doc.documentError?.message}
-				</Text>
-			)}
 			{!!error && (
 				<Text testID="detail-panel-export-error" className="text-bad px-4">
 					{error}
@@ -340,11 +306,22 @@ export function DetailPanel() {
 					{
 						label: t('reports.print_report'),
 						testID: 'detail-panel-print',
-						disabled: !!waiting,
 						loading: doc.isPrinting,
-						onPress: () => void print(),
+						onPress: () => setSheetOpen(true),
 					},
 				]}
+			/>
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				doc={doc}
+				title={title}
+				description={scopeLine}
+				printLabel={t('reports.print_report')}
+				waiting={waiting ? waitingLabel : null}
+				error={printError || doc.documentError?.message || null}
+				onPrint={print}
+				testID="detail-panel-print-sheet"
 			/>
 		</ReportPanel>
 	);

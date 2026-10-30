@@ -19,8 +19,9 @@ jest.mock('@wcpos/components/dialog', () => {
 		Dialog: ({
 			children,
 			onOpenChange,
-		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => (
-			<Close.Provider value={() => onOpenChange(false)}>{children}</Close.Provider>
+			open = true,
+		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void; open?: boolean }>) => (
+			<Close.Provider value={() => onOpenChange(false)}>{open ? children : null}</Close.Provider>
 		),
 		DialogContent: ({
 			children,
@@ -37,8 +38,11 @@ jest.mock('@wcpos/components/dialog', () => {
 				<button data-testid={`${testID}-close`} onClick={React.useContext(Close)} />
 			</div>
 		),
+		DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+		DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 		DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 		DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+		DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 	};
 });
 jest.mock('@wcpos/components/table', () => {
@@ -178,9 +182,21 @@ export const mockPrintDocument = {
 	setSelectedTemplateId: jest.fn(),
 	isOffline: false,
 	isPrinting: false,
+	isSyncing: false,
+	printedTo: null,
+	printHeld: false,
+	previewProps: { renderedHtml: '<b>Report</b>', previewPaperWidth: 'a4' },
 	documentError: null as Error | null,
 	print: jest.fn<Promise<boolean>, []>().mockResolvedValue(true),
 };
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: jest.fn(() => mockPrintDocument),
 }));
+
+jest.mock('@wcpos/components/webview', () => ({
+	WebView: () => <iframe title="Report preview" />,
+}));
+jest.mock('../../receipt/components/receipt-preview-viewport', () => ({
+	ReceiptPreviewViewport: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('../../receipt/mismatch-badge', () => ({ MismatchBadge: () => null }));

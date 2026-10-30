@@ -63,27 +63,36 @@ it('opens the payments panel with its title, scope line and footer count', async
 	fireEvent.click(screen.getByTestId('detail-panel-close'));
 	expect(screen.queryByTestId('detail-panel')).toBeNull();
 });
-// Moving a select back into the header or losing either labelled property breaks this contract.
-it.each(['lg', 'sm'])('labels the document properties above the body on %s', (size) => {
+// Printing immediately, or leaving properties on the report, bypasses the common sheet.
+it.each(['lg', 'sm'])('opens the print sheet instead of printing on %s', (size) => {
 	mockState.screenSize = size;
+	mockPrintDocument.templates.push({ id: 8, title: 'Thermal sales', offline_capable: true });
 	mockPrintDocument.allPrinters = [{ id: 'front', name: 'Front printer' }];
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	const template = screen.getByTestId('detail-panel-template');
-	const printer = screen.getByTestId('detail-panel-printer');
-	expect(within(template).getByText('Template')).toBeTruthy();
-	expect(within(template).getByTestId('receipt-template-select')).toBeTruthy();
-	expect(within(printer).getByText('Printer')).toBeTruthy();
-	expect(within(printer).getByTestId('receipt-printer-select')).toBeTruthy();
-	const header = screen.getByTestId('detail-panel-scope').parentElement!;
-	expect(within(header).queryByTestId('receipt-template-select')).toBeNull();
-	expect(within(header).queryByTestId('receipt-printer-select')).toBeNull();
-	// The rows sit in their own gutter wrapper between the header and the body.
-	const rows = screen.getByTestId('detail-panel-print-rows');
-	expect(rows.contains(template)).toBe(true);
-	expect(header.nextElementSibling).toBe(rows);
-	expect(rows.nextElementSibling).toBe(screen.getByTestId('detail-panel-body'));
-	expect(screen.getByTestId('detail-panel-print').textContent).toBe('Print report');
+	expect(screen.queryByTestId('detail-panel-print-rows')).toBeNull();
+	expect(screen.queryByTestId('print-sheet-template')).toBeNull();
+	expect(screen.queryByTestId('receipt-printer-select')).toBeNull();
+	expect(screen.queryByTestId('detail-panel-print-sheet')).toBeNull();
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(mockPrintDocument.print).not.toHaveBeenCalled();
+	const sheet = screen.getByTestId('detail-panel-print-sheet');
+	expect(within(sheet).getByRole('heading').textContent).toBe('Sales by payment method');
+	expect(
+		within(sheet).getByText(screen.getByTestId('detail-panel-scope').textContent!)
+	).toBeTruthy();
+	expect(within(sheet).getByTestId('print-sheet-print').textContent).toBe('Print report');
+	expect(within(screen.getByTestId('print-sheet-template')).getByText('Template')).toBeTruthy();
+	expect(
+		within(screen.getByTestId('print-sheet-template')).getByTestId('receipt-template-select')
+	).toBeTruthy();
+	expect(within(screen.getByTestId('print-sheet-printer')).getByText('Printer')).toBeTruthy();
+	expect(
+		within(screen.getByTestId('print-sheet-printer')).getByTestId('receipt-printer-select')
+	).toBeTruthy();
+	fireEvent.click(screen.getByTestId('detail-panel-print-sheet-close'));
+	expect(screen.queryByTestId('detail-panel-print-sheet')).toBeNull();
+	expect(screen.getByTestId('detail-panel-body')).toBeTruthy();
 });
 it('the phone page shows the crumb and returns on back', () => {
 	mockState.screenSize = 'sm';
@@ -130,9 +139,11 @@ it('Print waits for the templates with a reason', () => {
 	mockPrintDocument.templatesReady = false;
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading templates');
+	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(false);
 	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect((screen.getByTestId('print-sheet-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading templates');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
 	expect(mockPrintDocument.print).not.toHaveBeenCalled();
 });
 
@@ -146,14 +157,15 @@ it.each(['categories', 'cashiers', 'orders'])(
 			mockCredentials.next(undefined);
 			fireEvent.click(open);
 		});
-		expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
-		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		expect((screen.getByTestId('print-sheet-print') as HTMLButtonElement).disabled).toBe(true);
+		expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
 		await act(async () => {
 			mockProducts.next([]);
 			mockCredentials.next([]);
 		});
 		await waitFor(() =>
-			expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(false)
+			expect((screen.getByTestId('print-sheet-print') as HTMLButtonElement).disabled).toBe(false)
 		);
 	}
 );
@@ -161,8 +173,9 @@ it('no local template is said, not silently disabled', () => {
 	mockPrintDocument.templates = [];
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect((screen.getByTestId('print-sheet-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
 		'No template can print offline · manage templates in WP Admin'
 	);
 });
@@ -172,30 +185,33 @@ it('a print that resolves false or rejects shows the message', async () => {
 		.mockRejectedValueOnce(new Error('printer unavailable'));
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
 	for (let attempt = 0; attempt < 2; attempt++) {
-		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		await waitFor(() =>
-			expect(screen.getByTestId('detail-panel-print-error').textContent).toBe(
+			expect(screen.getByTestId('print-sheet-error').textContent).toBe(
 				'Could not print. Try again.'
 			)
 		);
 	}
-	fireEvent.click(screen.getByTestId('detail-panel-print'));
-	await waitFor(() => expect(screen.queryByTestId('detail-panel-print-error')).toBeNull());
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	await waitFor(() => expect(screen.queryByTestId('print-sheet-error')).toBeNull());
 });
-it('shows a document error under the footer', () => {
+it('shows a document error in the print sheet', () => {
 	mockPrintDocument.documentError = new Error('document unavailable');
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect(screen.getByTestId('detail-panel-print-error').textContent).toBe('document unavailable');
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-error').textContent).toBe('document unavailable');
 });
 
 it('Print waits while the orders lane is still downloading, and for a printer that can print the template', () => {
 	mockSalesHandle.set({ laneProgress: { downloaded: 40, total: 100 } });
 	room();
 	fireEvent.click(screen.getByTestId('card-taxes-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
 		'Still loading orders for this range'
 	);
 	act(() => mockSalesHandle.set({ laneProgress: null }));
@@ -203,7 +219,8 @@ it('Print waits while the orders lane is still downloading, and for a printer th
 	mockPrintDocument.resolvedPrinter = { id: 'raw-printer' };
 	fireEvent.click(screen.getByTestId('detail-panel-close'));
 	fireEvent.click(screen.getByTestId('card-taxes-open'));
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
 		'The saved printer cannot print this template'
 	);
 	mockPrintDocument.mismatch = null;
@@ -256,15 +273,16 @@ it.each(['refunds', 'products', 'categories', 'brands'])(
 		] as Context.ReportOrder[]);
 		room();
 		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
-		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
 			'Still loading refunds for this range'
 		);
-		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		expect(mockPrintDocument.print).not.toHaveBeenCalled();
 		await act(async () => mockRefundsHandle.set({ laneProgress: null }));
-		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
-		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
 		await waitFor(() => expect(mockPrintDocument.print).toHaveBeenCalledTimes(1));
 	}
 );
@@ -281,8 +299,9 @@ it.each(['products', 'categories', 'brands'])(
 		mockState.data.periodRefunds = undefined;
 		room();
 		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
-		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
 	}
 );
 it('a panel that does not net refunds prints without the refunds read', () => {
@@ -290,14 +309,16 @@ it('a panel that does not net refunds prints without the refunds read', () => {
 	mockState.data.periodRefunds = undefined;
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect(screen.queryByTestId('detail-panel-print-waiting')).toBeNull();
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.queryByTestId('print-sheet-waiting')).toBeNull();
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
 });
 it('does not wait for refund downloads when printing payments', () => {
 	mockRefundsHandle.set({ laneProgress: { downloaded: 40, total: null } });
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
 });
 it('the Registers panel waits for the register names before Export and Print', () => {
 	mockState.register = undefined;
@@ -322,8 +343,9 @@ it('the Registers panel waits for the register names before Export and Print', (
 	room();
 	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-registers'));
 	fireEvent.click(screen.getByTestId('card-where-sold-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
 	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
 	mockState.namesReady = true;
 });

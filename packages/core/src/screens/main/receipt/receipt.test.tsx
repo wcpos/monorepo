@@ -73,10 +73,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</div>
 	),
 	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../jest/footer.test-utils').DismissIsClose,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
 }));
 
+jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -484,7 +488,8 @@ it('shows the refund title without email and keeps sale actions unchanged', () =
 		const { rerender } = render(<Receipt resource={{} as never} document="refund:12" />);
 		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Refund receipt');
 		expect(screen.queryByTestId('receipt-email-button')).toBeNull();
-		expect(screen.getByTestId('receipt-print-button')).toBeTruthy();
+		expect(screen.getByTestId('receipt-print-button').dataset.variant).toBe('default');
+		expect(screen.getByTestId('receipt-print-button').textContent).toBe('Print receipt');
 		fireEvent.click(screen.getByTestId('receipt-download-pdf-button'));
 		expect(mockDownload).toHaveBeenLastCalledWith({
 			orderId: 42,
