@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { Hero } from './index';
+import { Hero, SalesScope } from './index';
 import {
 	ReportsComparison,
 	ReportsProvider,
@@ -23,6 +23,7 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 
 const mockPrint = jest.fn();
 let mockCashiersPending = false;
+let mockPhone = true;
 const mockPendingCashiers = new Promise(() => {});
 const mockCashiers = of([{ id: 7, display_name: 'Priya' }]);
 const mockStore = {
@@ -64,7 +65,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
-	useIsPhone: () => true,
+	useIsPhone: () => mockPhone,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
@@ -137,11 +138,23 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		testID,
 		onPress,
 		disabled,
+		accessibilityLabel,
+		name,
 	}: {
+		accessibilityLabel?: string;
+		name: string;
 		testID: string;
 		onPress: () => void;
 		disabled?: boolean;
-	}) => <button data-testid={testID} onClick={onPress} disabled={disabled} />,
+	}) => (
+		<button
+			data-testid={testID}
+			data-icon={name}
+			aria-label={accessibilityLabel}
+			onClick={onPress}
+			disabled={disabled}
+		/>
+	),
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: jest.requireActual('react-native').Text,
@@ -149,12 +162,14 @@ jest.mock('@wcpos/components/button', () => ({
 		testID,
 		onPress,
 		children,
+		disabled,
 	}: {
+		disabled?: boolean;
 		testID: string;
 		onPress: () => void;
 		children: React.ReactNode;
 	}) => (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
 			{children}
 		</button>
 	),
@@ -241,6 +256,7 @@ function setup({
 	refunds = handleOf([]),
 	week = false,
 	probe = true,
+	settled = true,
 	cashier = undefined as string | undefined,
 } = {}) {
 	return render(
@@ -258,23 +274,29 @@ function setup({
 			}}
 		>
 			<ReportsScopeProvider>
-				<React.Suspense fallback={null}>
-					<ReportsProvider handle={sales} comparisonHandle={comparison} refundsHandle={refunds}>
-						<Hero title={<span>Today</span>} />
-						{probe && (
-							<React.Suspense fallback={null}>
-								<ReportsComparison>
-									<Probe />
-								</ReportsComparison>
-							</React.Suspense>
-						)}
-					</ReportsProvider>
-				</React.Suspense>
+				{!settled ? (
+					<SalesScope date={<span>Today</span>} settled={false} />
+				) : (
+					<React.Suspense fallback={null}>
+						<ReportsProvider handle={sales} comparisonHandle={comparison} refundsHandle={refunds}>
+							<SalesScope date={<span>Today</span>} settled />
+							<Hero />
+							{probe && (
+								<React.Suspense fallback={null}>
+									<ReportsComparison>
+										<Probe />
+									</ReportsComparison>
+								</React.Suspense>
+							)}
+						</ReportsProvider>
+					</React.Suspense>
+				)}
 			</ReportsScopeProvider>
 		</QueryStateProvider>
 	);
 }
 beforeEach(() => {
+	mockPhone = true;
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockPrintDocument.templatesReady = true;
@@ -613,3 +635,24 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 }));
+
+it('on phone prints from an icon button and puts comparison above the chart toggle', () => {
+	setup();
+	const print = screen.getByTestId('hero-print');
+	expect(print.getAttribute('data-icon')).toBe('print');
+	expect(print.getAttribute('aria-label')).toBe('Print summary');
+	const strip = screen.getByTestId('reports-scope-strip');
+	expect(strip.contains(print)).toBe(true);
+	expect(strip.contains(screen.getByTestId('hero-chips'))).toBe(true);
+	const compare = screen.getByTestId('hero-chip-compare');
+	expect(screen.getByTestId('reports-hero').contains(compare)).toBe(true);
+	expect(compare.parentElement!.nextElementSibling).toBe(screen.getByTestId('hero-chart-toggle'));
+});
+it.each([true, false])('renders unsettled scope without report data (phone: %s)', (phone) => {
+	mockPhone = phone;
+	setup({ settled: false });
+	expect(screen.getByTestId('hero-chip-cashier').textContent).toBe('Everyone');
+	expect(screen.getByTestId('hero-chip-status').textContent).toBe('Completed & processing');
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	expect(screen.getByRole('button', { name: 'Print summary' }).hasAttribute('disabled')).toBe(true);
+});

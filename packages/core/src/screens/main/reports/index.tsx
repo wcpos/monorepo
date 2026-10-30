@@ -38,7 +38,7 @@ import { TillStrip } from './till-strip';
 import { Closures } from './closures';
 import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
-import { HeroShell } from './hero';
+import { HeroShell, SalesScope } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
@@ -185,7 +185,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};
-	const title = (
+	const date = (
 		<DateButton
 			scope={scope}
 			onScopeChange={select}
@@ -212,7 +212,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
 			<View className="min-h-0 flex-1">
 				{/* The date button stays available while the first orders load: it is the only way out
-				    of a slow or stuck range, so the loading shell carries the same title row. A later
+				    of a slow or stuck range, so the loading shell carries the same scope row. A later
 				    query keeps the previous figures until it answers (the provider's drawn handle).
 				    The till strip scrolls with the page as its first row (owner, 2026-10-18), outside
 				    the date: it always shows the till now, and is the way into Closures. */}
@@ -224,7 +224,8 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 							<View ref={registerContainer} className="min-h-0 flex-1">
 								<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 									{strip}
-									<HeroShell title={title} />
+									<SalesScope date={date} settled={false} />
+									<HeroShell />
 								</ScrollView>
 								<PortalHost name="reports" />
 							</View>
@@ -236,15 +237,15 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 							refundsHandle={refundsHandle}
 						>
 							<ErrorBoundary
-								FallbackComponent={() => <Reports title={title} header={strip} />}
+								FallbackComponent={() => <Reports date={date} header={strip} />}
 								resetKeys={[refundsHandle, handle]}
 								// A new sales query can leave the failed refunds handle in place: the
 								// reset asks the engine again rather than rethrowing the old failure.
 								onReset={() => refundsHandle.retry()}
 							>
-								<React.Suspense fallback={<Reports title={title} header={strip} />}>
+								<React.Suspense fallback={<Reports date={date} header={strip} />}>
 									<ReportsRefunds>
-										<Reports title={title} header={strip} />
+										<Reports date={date} header={strip} />
 									</ReportsRefunds>
 								</React.Suspense>
 							</ErrorBoundary>
