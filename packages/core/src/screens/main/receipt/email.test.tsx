@@ -169,6 +169,7 @@ describe('EmailForm', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	// ADR 0040 Decided 1 rule 1: the store has not heard the sale, so the email queues as offline.
@@ -178,6 +179,7 @@ describe('EmailForm', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('posts straight away when online and reports success', async () => {
