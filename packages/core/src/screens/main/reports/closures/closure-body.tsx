@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 
 import { AmountFigure } from '@wcpos/components/amount-figure';
+import { Badge } from '@wcpos/components/badge';
 import { Button } from '@wcpos/components/button';
 import { DialogDescription, DialogTitle } from '@wcpos/components/dialog';
 import { Icon } from '@wcpos/components/icon';
@@ -54,6 +55,7 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 	const t = useT();
 	const store = useViewedStore(row.store_id ?? 0);
 	const storeName = useDocField(store, (value) => value.name);
+	const destination = get(row.breakdowns, 'labels.carried_to_store_name');
 	// The viewed store's registers, never the bound store's: a remote closure names its own till.
 	const names = useRegisterNames(row.store_id ?? undefined);
 	const context = useClosureDocumentContext(row.store_id ?? 0);
@@ -69,10 +71,21 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 			{leading}
 			<ToneDisc size="sm" tone={blind ? 'muted' : variance < 0 ? 'bad' : 'ok'} />
 			<View testID={testID} className="min-w-0 flex-1 gap-1">
-				<DialogTitle>
-					{title ??
-						t('reports.closure_n', { n: row.printed_number ?? row.server_number ?? row.number })}
-				</DialogTitle>
+				<View className="flex-row items-center gap-2">
+					<DialogTitle>
+						{title ??
+							t('reports.closure_n', { n: row.printed_number ?? row.server_number ?? row.number })}
+					</DialogTitle>
+					{row.reason === 'store_switch' && (
+						<Badge tinted variant="info" size="sm" testID="closure-carried-badge">
+							<Text>
+								{destination
+									? t('register.carried_to', { store: String(destination) })
+									: t('register.carried')}
+							</Text>
+						</Badge>
+					)}
+				</View>
 				<DialogDescription>
 					{/* place · register · when · closer; a missing place or register leaves no empty slot. */}
 					{[storeName, String(row.breakdowns?.register_name || names[row.register_id] || ''), span]

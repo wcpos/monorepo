@@ -73,7 +73,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
 		session: currentSession,
-		binding: { registerName: 'Front' },
+		binding: { registerName: 'Front', registerId: 'front' },
 		expected,
 		terms,
 		salesCount: 2,
@@ -109,6 +109,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	}),
 }));
 const mockSite = {
+	uuid: 'site',
 	populateResource: () => null,
 	populate$: () => of([{ id: 7, display_name: 'Alex' }]),
 };
@@ -1052,5 +1053,38 @@ it.each([true, false])(
 		expect(screen.queryByTestId('register-panel-ledger')).toBeNull();
 		expect(startCounting).not.toHaveBeenCalled();
 		expect(mockBackToSelling).not.toHaveBeenCalled();
+	}
+);
+
+const mockReadCarriedFrom = jest.fn();
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readCarriedFrom: (...args: unknown[]) => mockReadCarriedFrom(...args),
+}));
+// The Float detail must identify its source without exposing money to blind cashiers.
+it.each([false, true])(
+	'names the carried float source without changing blind visibility: %s',
+	(hidden) => {
+		blind = hidden;
+		currentSession = { ...currentSession, float_source: 'carried' };
+		mockReadCarriedFrom.mockReturnValue({ store_name: 'UK Store' });
+		const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(mockReadCarriedFrom).toHaveBeenCalledWith('site', 'front', 'session');
+		expect(screen.getByTestId('register-panel-float-source').textContent).toBe(
+			'register.carried_from UK Store'
+		);
+		expect(screen.getByTestId('register-panel-float').textContent?.includes('£100.00')).toBe(
+			!hidden
+		);
+		mockReadCarriedFrom.mockReturnValue(null);
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-float-source').textContent).toBe('register.carried');
+		currentFiguresPending = true;
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-float-source')).toBeNull();
+		expect(screen.getByTestId('register-panel-float').textContent).toContain(
+			'register.figures_after_sync'
+		);
+		expect(screen.getByTestId('register-panel-float').textContent).not.toContain('£100.00');
 	}
 );

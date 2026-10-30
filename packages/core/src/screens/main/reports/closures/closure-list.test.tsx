@@ -469,3 +469,26 @@ it('sums cash at stored precision and omits zero result counts', () => {
 	expect(screen.getByTestId('closure-stat-discrepancy').className).toContain('text-bad');
 	expect(screen.getByText('2 short')).toBeTruthy();
 });
+
+// Carried wins over Corrected, but never hides outstanding accounting.
+it('badges carried closures by destination, after Unsynced and before Corrected', () => {
+	render(
+		<ClosureList
+			rows={[
+				row('1', { reason: 'store_switch', corrections_count: 1, synced_rows_at: null }),
+				row('2', {
+					reason: 'store_switch',
+					corrections_count: 1,
+					synced_rows_at: 'now',
+					breakdowns: { labels: { carried_to_store_name: 'Market' } },
+				}),
+				row('3', { reason: 'store_switch', synced_rows_at: 'now' }),
+				row('4', { reason: 'end_of_day', synced_rows_at: 'now' }),
+			]}
+		/>
+	);
+	expect(screen.getByTestId('closure-badge-1').textContent).toBe('Unsynced');
+	expect(screen.getByTestId('closure-badge-2').textContent).toBe('Carried to Market');
+	expect(screen.getByTestId('closure-badge-3').textContent).toBe('Carried');
+	expect(screen.queryByTestId('closure-badge-4')).toBeNull();
+});

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns/format';
+import get from 'lodash/get';
 
 import { useDocField } from '@wcpos/query';
 import { Icon } from '@wcpos/components/icon';
@@ -146,11 +147,16 @@ export function ClosureList({
 
 			{visibleRows.map((row, index) => {
 				const variance = Number(row.variance.cash ?? 0);
+				const destination = get(row.breakdowns, 'labels.carried_to_store_name');
 				const badge = !row.synced_rows_at
 					? t('register.unsynced')
-					: row.corrections_count
-						? t('reports.corrected')
-						: null;
+					: row.reason === 'store_switch'
+						? destination
+							? t('register.carried_to', { store: String(destination) })
+							: t('register.carried')
+						: row.corrections_count
+							? t('reports.corrected')
+							: null;
 				return (
 					<React.Fragment key={row.id}>
 						{row.business_day !== today &&
