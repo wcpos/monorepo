@@ -23,6 +23,12 @@ import { BehaviorSubject, Observable, startWith } from 'rxjs';
 import type { StoreDocument } from '@wcpos/database';
 
 import { UserSheet } from './user-sheet';
+// The hand-over door imports the print sheet and the session report; neither renders here, and the
+// real sheet drags the receipt encoder (ImageData) into jsdom.
+jest.mock('../../receipt/print-sheet', () => ({ PrintSheet: () => null }));
+jest.mock('../../../../services/register-session/use-session-report', () => ({
+	useSessionReport: () => ({ print: jest.fn(), doc: { documentError: null } }),
+}));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: {
