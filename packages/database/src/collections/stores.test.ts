@@ -51,24 +51,45 @@ describe('stores migration strategy', () => {
 		expect(storesLiteral.version).toBeGreaterThanOrEqual(18);
 	});
 
-	// The per-store `icons` family lands in the unreleased v18 beside `scale`
-	// rather than behind a v19: main ships v15, so no install holds v18 and a
-	// corrective migration would migrate nobody. Same pass-through: an absent
-	// value reads as the default set, which the provider falls back to.
-	it('adds icons to the unreleased v18 schema without a bump or a migration', async () => {
+	// Two v18 schemas were published to `@next` (#2796's eight icon families, then
+	// #3099's three). RxDB pins the schema hash per version, so every dev-next
+	// database that had opened the first refused the second with DB6. v19 migrates
+	// either v18: a family #3099 dropped becomes the default set, a kept one stays.
+	it.each(['fontawesome', 'tabler-2', 'lucide', 'iconoir', 'solar'])(
+		'migration 19 reads the dropped family %s as the default set',
+		async (dropped) => {
+			const { userCollections } = await import('./index');
+			const { storesLiteral } = await import('./schemas/stores');
+			const migrate = userCollections.stores.migrationStrategies?.[19];
+			if (!migrate) throw new Error('stores migration 19 missing');
+
+			const migrated = migrate({ localID: 'store-1', icons: dropped } as never, undefined as never);
+
+			expect((migrated as { icons?: string }).icons).toBe(storesLiteral.properties.icons.default);
+			expect(storesLiteral.version).toBe(19);
+		}
+	);
+
+	it.each(['tabler', 'hugeicons', 'phosphor'])('migration 19 keeps the family %s', async (kept) => {
 		const { userCollections } = await import('./index');
-		const { storesLiteral } = await import('./schemas/stores');
-		const migrate = userCollections.stores.migrationStrategies?.[18];
-		if (!migrate) throw new Error('stores migration 18 missing');
+		const migrate = userCollections.stores.migrationStrategies?.[19];
+		if (!migrate) throw new Error('stores migration 19 missing');
+
+		const migrated = migrate({ localID: 'store-1', icons: kept } as never, undefined as never);
+
+		expect((migrated as { icons?: string }).icons).toBe(kept);
+	});
+
+	it('migration 19 writes the default set on a store that never chose a family', async () => {
+		const { userCollections } = await import('./index');
+		const migrate = userCollections.stores.migrationStrategies?.[19];
+		if (!migrate) throw new Error('stores migration 19 missing');
 		const oldStore = { localID: 'store-1', theme: 'dark' };
 
 		const migrated = migrate(oldStore as never, undefined as never);
 
 		expect(migrated).toBe(oldStore);
-		expect((migrated as { icons?: string }).icons).toBeUndefined();
-		expect(storesLiteral.properties.icons.default).toBe('tabler');
-		expect(storesLiteral.version).toBe(18);
-		expect(userCollections.stores.migrationStrategies?.[19]).toBeUndefined();
+		expect((migrated as { icons?: string }).icons).toBe('tabler');
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier
