@@ -160,6 +160,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('../../components/currency-select', () => ({ CurrencySelect: () => null }));
 jest.mock('../../components/customer-select', () => ({ CustomerSelect: () => null }));
 jest.mock('../../components/customer/tax-ids-form', () => ({
+	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
 	TaxIdsForm: () => null,
 	taxIdsFormSchema: {},
 }));

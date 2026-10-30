@@ -145,6 +145,9 @@ jest.mock('@wcpos/components/form', () => ({}));
 jest.mock('../components/country-state-select/country-combobox', () => ({}));
 jest.mock('../components/country-state-select/state-forminput', () => ({}));
 jest.mock('../components/meta-data-form', () => ({ metaDataSchema: {} }));
-jest.mock('../components/customer/tax-ids-form', () => ({ taxIdsFormSchema: {} }));
+jest.mock('../components/customer/tax-ids-form', () => ({
+	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
+	taxIdsFormSchema: {},
+}));
 // The form's address rows read the store country; its app-state chain loads ESM uuid.
 jest.mock('../hooks/use-base-tax-location', () => ({ useBaseTaxLocation: () => ({}) }));

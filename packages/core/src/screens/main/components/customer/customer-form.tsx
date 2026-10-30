@@ -23,7 +23,7 @@ import {
 	useAddressFacts,
 } from './address-rows';
 import { billingAddressSchema, shippingAddressSchema } from './address';
-import { TAX_ID_DEFAULT_ROW, TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
+import { TaxIdsForm, taxIdsFormSchema, useNewTaxIdRow } from './tax-ids-form';
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../form-errors';
@@ -80,8 +80,8 @@ interface CustomerFormProps {
 const OFFERED = [...ADDRESS_FACTS, { name: 'password' }] as const;
 /** The lists (rows + add): the add button appends one empty row. */
 const LISTS = [
-	['tax_ids', 'tax_id.tax_id', TAX_ID_DEFAULT_ROW],
-	['meta_data', 'common.custom_field', META_DATA_DEFAULT_ROW],
+	['tax_ids', 'tax_id.tax_id'],
+	['meta_data', 'common.custom_field'],
 ] as const;
 type RowOptions = { marks?: string[]; verb?: React.ReactNode; locked?: { where: string } };
 
@@ -91,6 +91,7 @@ type RowOptions = { marks?: string[]; verb?: React.ReactNode; locked?: { where: 
  */
 export function CustomerForm(props: CustomerFormProps) {
 	const { form, footer, renderLayout, onShippingLink } = props;
+	const newTaxIdRow = useNewTaxIdRow(form.control);
 	const t = useT();
 	const editing = !!(form.getValues() as Record<string, unknown>).id;
 	const { focus, ...address } = useAddressFacts(form, 'customer');
@@ -187,12 +188,14 @@ export function CustomerForm(props: CustomerFormProps) {
 									}}
 								/>
 							))}
-							{LISTS.map(([name, label, row]) => (
+							{LISTS.map(([name, label]) => (
 								<PropertyAdd
 									key={name}
 									testID={`customer-add-${name === 'tax_ids' ? 'tax_id' : name}`}
 									label={label === 'tax_id.tax_id' ? t('tax_id.tax_id') : t('common.custom_field')}
-									onPress={() => append(name, row)}
+									onPress={() =>
+										append(name, name === 'tax_ids' ? newTaxIdRow() : META_DATA_DEFAULT_ROW)
+									}
 								/>
 							))}
 						</PropertyAddRow>

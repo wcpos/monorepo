@@ -26,7 +26,11 @@ jest.mock('./_section', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => mockT }));
 // A value import of lib/tax-id drags @wcpos/database (ESM uuid) into the suite; the labels are not under test.
-jest.mock('../../../../../lib/tax-id', () => ({ useTaxIdLabels: () => ({}) }));
+jest.mock('../../../../../lib/tax-id', () => ({
+	suggestTaxIdTypes: () => [],
+	splitTaxIdTypesForCountry: () => ({ suggested: [], rest: [] }),
+	useTaxIdLabels: () => ({}),
+}));
 jest.mock('../../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Ada Lovelace' }),
 }));

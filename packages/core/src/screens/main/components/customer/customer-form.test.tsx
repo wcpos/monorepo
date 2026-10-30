@@ -89,8 +89,8 @@ jest.mock('../meta-data-form', () => ({
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').any()).optional(),
 }));
 jest.mock('./tax-ids-form', () => ({
+	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
 	TaxIdsForm: () => null,
-	TAX_ID_DEFAULT_ROW: { type: 'eu_vat', value: '' },
 	taxIdsFormSchema: jest.requireActual('zod').array(jest.requireActual('zod').any()).optional(),
 }));
 

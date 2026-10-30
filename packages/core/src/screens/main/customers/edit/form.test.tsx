@@ -434,6 +434,7 @@ jest.mock('../../components/customer/address', () => ({
 		.shippingAddressSchema,
 }));
 jest.mock('../../components/customer/tax-ids-form', () => ({
+	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
 	TaxIdsForm: () => null,
 	taxIdsFormSchema: {},
 }));
