@@ -17,6 +17,7 @@ import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { IconSetSettingProvider } from '@wcpos/core/contexts/icon-set';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { ScaleProvider } from '@wcpos/core/contexts/scale';
+import { ThemeTraitsSettingProvider } from '@wcpos/core/contexts/theme-traits';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
 import { setToast } from '@wcpos/utils/logger';
@@ -166,10 +167,12 @@ function MerchantRootLayout() {
 									{/* Inside the scale scope for the same reason: it reads the store's
 									    icon family, and the toaster and every PortalHost draw icons too. */}
 									<IconSetSettingProvider>
-										<RootStack />
-										<ErrorBoundary>
-											<ThemedToaster />
-										</ErrorBoundary>
+										<ThemeTraitsSettingProvider>
+											<RootStack />
+											<ErrorBoundary>
+												<ThemedToaster />
+											</ErrorBoundary>
+										</ThemeTraitsSettingProvider>
 									</IconSetSettingProvider>
 								</ScaleProvider>
 							</HydrationProviders>

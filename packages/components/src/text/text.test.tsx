@@ -2,8 +2,11 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { Text } from './index';
+import { Text, TextClassContext } from './index';
 import { MAX_FONT_SCALE } from '../lib/scale';
+import { ThemeTraitsContext } from '../lib/theme-traits';
+
+jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false } }));
 
 // Mock rn-primitives slot to provide a generic Slot
 jest.mock('@rn-primitives/slot', () => ({
@@ -17,7 +20,11 @@ jest.mock('@rn-primitives/slot', () => ({
 
 // Mock react-native with createElement instead of JSX
 jest.mock('react-native', () => ({
-	Text: (props: any) => React.createElement('span', props),
+	Text: ({ style, ...props }: import('react-native').TextProps) =>
+		React.createElement('span', {
+			...props,
+			style: jest.requireActual('react-native').StyleSheet.flatten(style),
+		}),
 	StyleSheet: { create: (styles: any) => styles },
 }));
 
@@ -71,6 +78,26 @@ describe('Text component', () => {
 	});
 });
 
+describe('Text theme type', () => {
+	it('leaves the font family unset without a provider', () => {
+		render(<Text>System</Text>);
+		expect(screen.getByText('System').style.fontFamily).toBe('');
+	});
+
+	it('uses the body and number families and lets a caller override them', () => {
+		render(
+			<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+				<Text>Body</Text>
+				<Text tabular>123</Text>
+				<Text style={{ fontFamily: 'X' }}>Override</Text>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('Body')).toHaveStyle({ fontFamily: 'Manrope' });
+		expect(screen.getByText('123')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
+		expect(screen.getByText('Override')).toHaveStyle({ fontFamily: 'X' });
+	});
+});
+
 /**
  * The OS text-size cap. `react-native` is mocked to a `span` here, so the prop
  * arrives as a DOM attribute — which is exactly what makes it observable.
@@ -90,4 +117,41 @@ describe('Text OS text-size cap', () => {
 
 		expect(screen.getByText('Raised')).toHaveAttribute('maxfontsizemultiplier', '2');
 	});
+});
+
+// 93 amounts ask for tabular numerals through the class rather than the prop (Codex on #3138): the
+// numbers face must answer both, and an inherited `tabular-nums` context too.
+describe('the numbers face from a class', () => {
+	const traits = { type: { body: 'Manrope' as const, num: 'JetBrains Mono' as const } };
+	it('draws the numbers face for a tabular-nums class', () => {
+		render(
+			<ThemeTraitsContext.Provider value={traits}>
+				<Text className="text-right tabular-nums">1.00</Text>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('1.00')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
+	});
+	it('draws the numbers face under an inherited tabular-nums context', () => {
+		render(
+			<ThemeTraitsContext.Provider value={traits}>
+				<TextClassContext.Provider value="tabular-nums">
+					<Text>2.00</Text>
+				</TextClassContext.Provider>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('2.00')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
+	});
+});
+
+// A caller's own family class outranks the theme's face (CodeRabbit on #3138): a CodeChip's
+// `font-mono` must stay monospace under Paper till.
+it('steps back from the theme face when the caller names a family class', () => {
+	render(
+		<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+			<Text className="font-mono tabular-nums">E42</Text>
+			<Text className="font-sans">Plain</Text>
+		</ThemeTraitsContext.Provider>
+	);
+	expect(screen.getByText('E42').style.fontFamily).toBe('');
+	expect(screen.getByText('Plain').style.fontFamily).toBe('');
 });
