@@ -33,6 +33,7 @@ import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 import { usePanelSide } from '../contexts/overlay-side';
+import { snapshotCustomerTaxIds } from '../hooks/utils';
 import { customerLinkIdentity } from './new-customer-link';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
@@ -95,7 +96,9 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 							customerId: GUEST_CUSTOMER_ID,
 							billing: saved?.billing,
 							shipping: saved?.shipping,
-							taxIds: null,
+							// The same snapshot the picker takes: without it a customer created at the
+							// till reached the receipt with no tax ID until removed and picked again.
+							taxIds: snapshotCustomerTaxIds(saved),
 						});
 						// After the attach, never before: a link whose order does not yet
 						// carry the copied identity would be dropped as "cashier moved on".
