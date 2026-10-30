@@ -134,7 +134,7 @@ function Probe() {
 	return <View testID="probe" {...{ dataSet: { defer: String(deferAutoFocus) } }} />;
 }
 
-it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
+it.each(['center', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 	'%s configures native insets, accessibility, keyboard and panel motion',
 	(presentation) => {
 		const { container } = render(
@@ -167,7 +167,7 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 			paddingLeft: '12px',
 			paddingRight: '12px',
 		});
-		const fullHeight = ['left', 'right', 'page'].includes(presentation);
+		const fullHeight = ['right', 'page'].includes(presentation);
 		const bottom = presentation === 'bottom';
 		// A bottom sheet sits on the screen edge: the keyboard wrapper is off (with the keyboard
 		// hidden it still padded the sheet ~9 dp up) and carries the sheet's height cap.

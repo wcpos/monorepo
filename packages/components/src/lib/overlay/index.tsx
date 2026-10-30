@@ -17,10 +17,8 @@ import Animated, {
 	FadeIn,
 	FadeOut,
 	SlideInDown,
-	SlideInLeft,
 	SlideInRight,
 	SlideOutDown,
-	SlideOutLeft,
 	SlideOutRight,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +50,7 @@ export const isWeb = Platform.OS === 'web';
 export const OVERLAY_EXIT_MOUNTED = isWeb;
 // Only the native shell has a keyboard wrapper; web never reads the keyboard's state.
 const useKeyboardVisible = isWeb ? () => false : () => useKeyboardState((state) => state.isVisible);
-export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
+export type OverlayPresentation = 'center' | 'right' | 'bottom' | 'page' | 'anchored';
 export type OverlayScrimProps = {
 	ref?: React.Ref<never>;
 	children?: React.ReactNode;
@@ -162,7 +160,6 @@ const WRAPPER_FILLS_WITH_PANEL =
 export const SCRIM_WRAPPER: Record<OverlayPresentation, string> = {
 	anchored: '',
 	center: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
-	left: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
 	right: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
 	page: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full [&>[role=dialog]:not([data-sheet])]:w-full ${WRAPPER_FILLS_WITH_PANEL}`,
 	bottom: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-[92%] [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
@@ -203,12 +200,6 @@ export const OVERLAY_MOTION: Record<
 		exit: 'web:animate-dialog-out',
 		entering: FadeIn.duration(OVERLAY_FADE).easing(EASE),
 		exiting: FadeOut.duration(OVERLAY_FADE).easing(EASE),
-	},
-	left: {
-		enter: 'web:animate-panel-in-left',
-		exit: 'web:animate-panel-out-left',
-		entering: SlideInLeft.duration(PANEL_SLIDE).easing(EASE),
-		exiting: SlideOutLeft.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 	right: {
 		enter: 'web:animate-panel-in-right',
@@ -292,7 +283,6 @@ const align: Record<OverlayPresentation, string> = {
 	anchored: '',
 	center: 'items-center justify-center p-2',
 	right: 'flex-row justify-end items-stretch p-0',
-	left: 'flex-row justify-start items-stretch p-0',
 	bottom: 'flex-col justify-end items-stretch p-0',
 	page: 'flex-row items-stretch justify-start p-0',
 };
@@ -340,7 +330,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	const stripTop = inline ? owedStrip : stripHeight;
 	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
-	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
+	const fullHeight = presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
 	const ownsDismiss = Boolean(onDismiss);
 	const onDismissRef = React.useRef(onDismiss);

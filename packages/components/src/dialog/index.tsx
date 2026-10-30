@@ -39,7 +39,7 @@ import type { OverlayPresentation } from '../lib/overlay';
 import type { SlottableTextProps } from '@rn-primitives/types';
 export { DialogLabelsProvider, DismissIsClose, type DialogLabels } from './labels';
 
-export type DialogSide = 'center' | 'left' | 'right' | 'bottom';
+export type DialogSide = 'center' | 'right' | 'bottom';
 export type DialogSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 export type DialogProps = DialogPrimitive.RootProps & { route?: boolean; onClose?: () => void };
 export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' | 'asChild'> & {
@@ -57,7 +57,6 @@ type DialogPresentation = Exclude<OverlayPresentation, 'anchored'>;
 const RouteContext = React.createContext({ route: false });
 const byPresentation: Record<DialogPresentation, string> = {
 	center: 'rounded-lg border',
-	left: 'h-full rounded-none border-r',
 	right: 'h-full rounded-none border-l',
 	page: 'h-full w-full rounded-none border-0',
 	// The cap sits on the wrappers and the panel fills them: on web the Radix wrapper
@@ -107,8 +106,7 @@ export function useDialog(): { open: boolean; close: () => void } {
 export function DialogContent(allProps: DialogContentProps): React.JSX.Element | null {
 	const { side = 'center', portalHost, inline, testID, ...props } = allProps;
 	const phone = useIsPhone();
-	const presentation: DialogPresentation =
-		phone && (side === 'left' || side === 'right') ? 'page' : side;
+	const presentation: DialogPresentation = phone && side === 'right' ? 'page' : side;
 	const { route } = React.useContext(RouteContext);
 	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
@@ -162,10 +160,7 @@ function DialogPanel(allProps: DialogContentProps) {
 	const { open } = DialogPrimitive.useRootContext();
 	// The bottom sheet paints its own inset; 16 keeps the `py-4` the class gives.
 	const inset = useSheetInset(16);
-	const sizeClass =
-		presentation === 'center' || presentation === 'left' || presentation === 'right'
-			? sizes[size]
-			: undefined;
+	const sizeClass = presentation === 'center' || presentation === 'right' ? sizes[size] : undefined;
 	return (
 		<DialogPrimitive.Content
 			ref={composedRef}

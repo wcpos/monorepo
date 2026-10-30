@@ -96,7 +96,6 @@ beforeEach(() => {
 it.each([
 	['center', 'items-center justify-center p-2', false],
 	['right', 'flex-row justify-end items-stretch p-0', true],
-	['left', 'flex-row justify-start items-stretch p-0', true],
 	['bottom', 'flex-col justify-end items-stretch p-0', false],
 	['page', 'flex-row items-stretch justify-start p-0', true],
 ] as const)('aligns %s and supplies its focus policy', (presentation, alignment, deferred) => {

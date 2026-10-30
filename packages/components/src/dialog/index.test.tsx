@@ -432,7 +432,6 @@ it('4. trigger mode resolves a named portal host to its container', () => {
 it.each([
 	['center', 'rounded-lg', 'w-160'],
 	['right', 'border-l', 'h-full'],
-	['left', 'border-r', 'h-full'],
 	// The wrappers carry the sheet's cap (web: the Radix wrapper; native: the shell's); the panel fills it.
 	['bottom', 'rounded-t-2xl', 'max-h-full'],
 ] as const)(
@@ -451,7 +450,7 @@ it.each([
 	}
 );
 
-it.each(['right', 'left'] as const)(
+it.each(['right'] as const)(
 	'6. phone %s becomes a full page and keeps the close control',
 	(side) => {
 		render(

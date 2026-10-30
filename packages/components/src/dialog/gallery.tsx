@@ -111,28 +111,6 @@ export const stories = [
 		),
 	},
 	{
-		id: 'left',
-		render: () => (
-			<View className="border-border bg-background relative h-96 w-full overflow-hidden rounded-lg border">
-				<Dialog open onOpenChange={noop}>
-					<DialogContent inline testID="gallery-dialog-left" side="left" size="lg">
-						<DialogHeader>
-							<DialogTitle>Order</DialogTitle>
-						</DialogHeader>
-						<DialogBody>
-							<Text>2 items</Text>
-						</DialogBody>
-						<DialogFooter
-							destructive={{ label: 'Void', testID: 'left-void' }}
-							secondary={{ label: 'Print bill', testID: 'left-print' }}
-							intent={{ label: 'Save', testID: 'left-save' }}
-						/>
-					</DialogContent>
-				</Dialog>
-			</View>
-		),
-	},
-	{
 		id: 'sheet',
 		render: () => (
 			<View className="border-border bg-background relative h-96 w-full overflow-hidden rounded-lg border">
