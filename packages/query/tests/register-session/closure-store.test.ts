@@ -80,6 +80,7 @@ async function seed() {
 			payload: {
 				meta_data: [
 					{ key: '_wcpos_session', value: session.id },
+					{ key: '_wcpos_completions', value: [{ session: session.id }] },
 					{ key: '_wcpos_sale_counter', value: '8' },
 					{ key: '_pos_user', value: '7' },
 					{
@@ -173,6 +174,91 @@ it('freezes the count figures and breakdowns; retries reuse one number and one p
 		perpetual_refunds_total: '10.0000',
 	});
 });
+// Using every captured-leg order for sale facts double-counts them across sessions.
+it.each(['latest completion', 'latest captured timestamp', 'last untimestamped capture'])(
+	'attributes split-sale facts once using the %s, while keeping money per leg',
+	async (attribution) => {
+		const input = await seed();
+		const sessionA = input.session;
+		const opened = await openSession(db, {
+			registerId: 'register',
+			expectedFloat: '0',
+			countedFloat: '0',
+			openedBy: 7,
+			businessDay: { year: 2026, month: 9, day: 17 },
+		});
+		const sessionB = await closeSession(db, opened.id, { counted: { cash: '60' } });
+		const captured = (id: string, session_id: string, created_at_gmt?: string) => ({
+			id,
+			session_id,
+			created_at_gmt,
+			kind: 'cash',
+			method_id: 'cash',
+			status: 'captured',
+			amount: '60',
+			refunded_amount: '0',
+		});
+		const payments =
+			attribution === 'last untimestamped capture'
+				? [captured('a', sessionA.id), captured('b', sessionB.id)]
+				: [
+						captured('b', sessionB.id, '2026-09-17T10:00:00Z'),
+						captured(
+							'a',
+							sessionA.id,
+							attribution === 'latest completion' ? '2026-09-18T10:00:00Z' : '2026-09-16T10:00:00Z'
+						),
+					];
+		const orders = [
+			{
+				uuid: 'split-sale',
+				payload: {
+					meta_data: [
+						{ key: '_wcpos_session', value: sessionA.id },
+						{
+							key: '_wcpos_completions',
+							value:
+								attribution === 'latest completion'
+									? [{ session: sessionA.id }, { session: sessionB.id }]
+									: [],
+						},
+						{
+							key: '_wcpos_payments',
+							value: {
+								schema: 1,
+								payments: [
+									...payments,
+									{ ...captured('failed', sessionA.id, '2026-09-19T10:00:00Z'), status: 'failed' },
+								],
+							},
+						},
+					],
+					discount_total: '5',
+					discount_tax: '1',
+					coupon_lines: [{ code: 'SAVE' }],
+					line_items: [{ quantity: 2, total: '100', taxes: [{ id: 1, total: '20' }] }],
+					tax_lines: [{ rate_id: 1, label: 'VAT', rate_percent: 20, tax_total: '20' }],
+				},
+			},
+		];
+		const closureA = await writeClosure({ ...input, orders, movements: [] });
+		const closureB = await writeClosure({ ...input, session: sessionB, orders, movements: [] });
+		for (const closure of [closureA, closureB]) {
+			expect(closure.period_sales_total).toBe('60.0000');
+			expect(closure.breakdowns.transaction_count).toBe(1);
+			expect(closure.breakdowns.payment_methods).toMatchObject({ cash: { sales: '60.0000' } });
+		}
+		expect(closureA.breakdowns.tax_rates).toEqual({});
+		expect(closureA.breakdowns.discounts).toEqual({ count: 0, amount: '0.0000' });
+		expect(closureA.breakdowns.items_sold).toBe('0');
+		expect(closureB.breakdowns.tax_rates).toEqual({
+			'1': { rate: 20, name: 'VAT 20%', net: '100.0000', tax: '20.0000', gross: '120.0000' },
+		});
+		expect(closureB.breakdowns.discounts).toEqual({ count: 1, amount: '6.0000' });
+		expect(closureB.breakdowns.items_sold).toBe('2');
+	}
+);
+
 it('resumes after the insert or perpetual write was interrupted without minting or adding twice', async () => {
 	const input = await seed();
 	const insert = jest.spyOn(db.closures, 'insert').mockRejectedValueOnce(new Error('disk write'));

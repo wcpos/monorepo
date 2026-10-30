@@ -10,6 +10,7 @@ import {
 	isActiveFeeLine,
 	isActiveLineItem,
 	isActiveShippingLine,
+	readCompletions,
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
@@ -342,6 +343,16 @@ export async function writeClosure({
 			(row) => row.session_id === session.id && row.status === 'captured'
 		)
 	);
+	// Money belongs to each captured leg; sale facts belong only to the completing session.
+	const completedHere = sold.filter((order) => {
+		const completions = readCompletions(order.payload.meta_data);
+		if (completions.length) return completions[completions.length - 1].session === session.id;
+		const captured = readLedger(order.payload.meta_data).filter((row) => row.status === 'captured');
+		const latest = captured.reduce((last, row) =>
+			(row.created_at_gmt ?? '') >= (last.created_at_gmt ?? '') ? row : last
+		);
+		return latest.session_id === session.id;
+	});
 	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
 	const refunds = attributeRefunds(session.id, ledgerRows, refundRecords);
 	const rows = ledgerRows.filter(
@@ -412,7 +423,7 @@ export async function writeClosure({
 		}
 	};
 	// Unpaid orders have no tax to report; session refunds reduce the same tax bases.
-	for (const order of sold) addTaxRates(order.payload);
+	for (const order of completedHere) addTaxRates(order.payload);
 	for (const refund of refundRecords) {
 		if (refundSessionId(refund) === session.id) addTaxRates(refund);
 	}
@@ -499,17 +510,20 @@ export async function writeClosure({
 			),
 			transaction_count,
 			discounts: {
-				count: sold.reduce(
+				count: completedHere.reduce(
 					(count, order) =>
 						count + (order.payload.coupon_lines ?? []).filter(isActiveCouponLine).length,
 					0
 				),
 				amount: sum(
-					sold.flatMap((order) => [order.payload.discount_total, order.payload.discount_tax])
+					completedHere.flatMap((order) => [
+						order.payload.discount_total,
+						order.payload.discount_tax,
+					])
 				),
 			},
 			items_sold: fromMinor(
-				sold
+				completedHere
 					.flatMap((order) => order.payload.line_items ?? [])
 					.filter(isActiveLineItem)
 					.reduce((total, item) => total + toMinor(String(item.quantity ?? 0), 4), 0),
