@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -60,6 +60,13 @@ export function EmailForm({ order }: Props) {
 	// network but the store cannot be reached, which fails exactly the same way.
 	const isOffline = status !== 'online-website-available';
 	const queue = queueCollection as unknown as ReceiptEmailQueuePort | undefined;
+	const { onOpenChange } = useRootContext();
+	/**
+	 * Sent or queued is the dialog's job done; it closes itself (a merchant on 1.11.6
+	 * found it open after every Send). A failure keeps it open, with the address
+	 * still in the field, so the cashier can correct it and try again.
+	 */
+	const closeDialog = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	/**
 	 * Persist the send so it survives an app restart, and tell the cashier what
@@ -121,7 +128,7 @@ export function EmailForm({ order }: Props) {
 				// not try (and report) it a second time.
 				let queueFailed = false;
 				if (isOffline) {
-					if (await queueEmail(email, saveEmail, 'offline')) return;
+					if (await queueEmail(email, saveEmail, 'offline')) return closeDialog();
 					queueFailed = true;
 				}
 
@@ -138,7 +145,7 @@ export function EmailForm({ order }: Props) {
 								email,
 							},
 						});
-						return;
+						return closeDialog();
 					}
 					// A 200 that did not send is a refusal, not a transport failure.
 					throw new Error(data?.message || t('receipt.email_not_sent'));
@@ -149,7 +156,7 @@ export function EmailForm({ order }: Props) {
 						!queueFailed &&
 						(await queueEmail(email, saveEmail, 'send-failed', failure))
 					) {
-						return;
+						return closeDialog();
 					}
 					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 					httpLogger[logLevel]('Failed to send receipt email', {
@@ -170,7 +177,7 @@ export function EmailForm({ order }: Props) {
 				setLoading(false);
 			}
 		},
-		[http, isOffline, orderID, queueEmail, t]
+		[closeDialog, http, isOffline, orderID, queueEmail, t]
 	);
 
 	/**
