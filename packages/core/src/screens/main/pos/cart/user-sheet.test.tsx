@@ -718,19 +718,14 @@ describe('side and header', () => {
 		mockSegments = ['(app)', '(drawer)', '(pos)'];
 		mockStoreTimezone = undefined;
 	});
-	it('comes from the products side on the POS, whichever host portals it, and from the right elsewhere', () => {
+	it('comes from the right on every screen, whichever host portals it and wherever the cart sits', () => {
 		mockCartSide = 'left';
 		let r = render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
-		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
+		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 		r.unmount();
-		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
-		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('left');
-		r.unmount();
-		mockCartSide = 'right';
 		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 		r.unmount();
-		mockCartSide = 'left';
 		mockSegments = ['(app)', '(drawer)', 'orders'];
 		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');

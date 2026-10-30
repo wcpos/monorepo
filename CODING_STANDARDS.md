@@ -375,17 +375,17 @@ One shell (`lib/overlay`) and one answer per situation (decisions 5 and 6[^board
 anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
 becomes a page.
 
-| Situation                                                           | Overlay                                                                              | Notes                                                                                            |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`                                                     | `right` on a page; on the POS `usePanelSide` puts it over the other column                       |
-| Confirm a loss                                                      | `AlertDialog`                                                                        | no ×, the scrim does not dismiss, the confirm is solid `destructive`                             |
-| Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮                                                  | destructive last and red, after a separator                                                      |
-| Display or column settings                                          | side panel (`UISettingsDialog`)                                                      | on every screen, never a popover                                                                 |
-| Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem`                                                  | never a popover full of buttons                                                                  |
-| A small non-modal choice (the bell, a date range, the quantity box) | `Popover`                                                                            | a list, a picker or a keypad with at most a Done; never a settings form                          |
-| The cashier (switch user, register, store; sign out)                | `UserSheet` (products side on the POS via `usePanelSide('cart')`, `right` elsewhere) | the one cashier surface on every screen; the stores and registers are its bands                  |
-| A switch needs a yes (hand over, store, register)                   | `SwitchConfirm` (one centred `AlertDialog` over the cashier sheet)                   | the verb carries its object (_Hand over to Amy_, _Switch to Front counter_); never `destructive` |
-| A multi-step task (checkout)                                        | full screen                                                                          | never a centred modal that grew                                                                  |
+| Situation                                                           | Overlay                                                            | Notes                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`                                   | `right` on a page; on the POS `usePanelSide` puts it over the other column                       |
+| Confirm a loss                                                      | `AlertDialog`                                                      | no ×, the scrim does not dismiss, the confirm is solid `destructive`                             |
+| Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮                                | destructive last and red, after a separator                                                      |
+| Display or column settings                                          | side panel (`UISettingsDialog`)                                    | on every screen, never a popover                                                                 |
+| Pick one of a few                                                   | `Select` or `DropdownMenuRadioItem`                                | never a popover full of buttons                                                                  |
+| A small non-modal choice (the bell, a date range, the quantity box) | `Popover`                                                          | a list, a picker or a keypad with at most a Done; never a settings form                          |
+| The cashier (switch user, register, store; sign out)                | `UserSheet` (`right` on every screen, the POS included)            | the one cashier surface on every screen; the stores and registers are its bands                  |
+| A switch needs a yes (hand over, store, register)                   | `SwitchConfirm` (one centred `AlertDialog` over the cashier sheet) | the verb carries its object (_Hand over to Amy_, _Switch to Front counter_); never `destructive` |
+| A multi-step task (checkout)                                        | full screen                                                        | never a centred modal that grew                                                                  |
 
 #### Chips, badges and switches
 

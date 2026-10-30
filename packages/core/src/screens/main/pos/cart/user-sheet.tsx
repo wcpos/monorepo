@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns/format';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
@@ -59,7 +59,6 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RecordAvatar, UserAvatar } from '../../components/user-avatar';
-import { usePanelSide } from '../contexts/overlay-side';
 import { useSwitchStore } from './use-switch-store';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { storeListResource } from '../../hooks/store-list-resource';
@@ -428,12 +427,9 @@ export function UserSheet({
 			setActing(false);
 		}
 	};
-	// `string[]` as every other reader does: apps/main's typed routes make the tuple's members
-	// a union the literal is not assignable to.
-	const segments: string[] = useSegments();
-	const onPOS = segments.includes('(pos)');
-	const cartSide = usePanelSide('cart');
-	const side = onPOS ? cartSide : 'right';
+	// The cashier sheet comes from the right on every screen, the POS included (Paul, 2026-10-30:
+	// one door, one side; this reverses the 10-28 map's products-side rule for the sheet only).
+	const side = 'right';
 	const { registers, registerName, status, bind } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
 	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
