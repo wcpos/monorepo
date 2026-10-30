@@ -401,6 +401,10 @@ for (const name of themeNames) {
 for (const name of themeNames) {
 	for (const [text, ground] of [
 		['selected-foreground', 'selected'],
+		// `text-primary` is ink on links and the Split action, not only a fill (Codex on #3124).
+		['primary', 'card'],
+		['primary', 'background'],
+		['primary-foreground', 'primary'],
 		['warning-text', 'card'],
 		['warning-text', 'background'],
 		['destructive', 'card'],
