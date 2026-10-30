@@ -107,7 +107,10 @@ export function Chip({
 				// One line: a long label (a customer's full name) truncates inside the pill
 				// instead of pushing the pill over the controls beside it.
 				numberOfLines={1}
-				className={cn('shrink font-medium', sm ? 'text-sm' : 'text-base', on && 'font-semibold')}
+				// One weight in both states: the tinted block and its ink carry `on` (line 19), and
+				// a heavier face is wider, so a lit pill grew a pixel and every pill after it in the
+				// row jumped with each toggle (owner's video, 2026-10-30).
+				className={cn('shrink font-medium', sm ? 'text-sm' : 'text-base')}
 			>
 				{label}
 			</Text>
