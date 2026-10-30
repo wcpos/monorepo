@@ -106,6 +106,7 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 	return compact ? (
 		<MenuRow
 			testID="user-sheet-another-account"
+			leading={<Icon name="plus" className="text-muted-foreground" />}
 			disabled={disabled}
 			onPress={handlePress}
 			label={label}

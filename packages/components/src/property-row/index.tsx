@@ -186,7 +186,7 @@ function Key(props: { nativeID: string; children: string }) {
 	);
 }
 
-type ActionProps = { onPress: () => void; testID?: string };
+type ActionProps = { onPress: () => void; testID?: string; disabled?: boolean };
 
 /**
  * The row's verb (Edit, Remove, Use a different address): a link Button, never a chevron.

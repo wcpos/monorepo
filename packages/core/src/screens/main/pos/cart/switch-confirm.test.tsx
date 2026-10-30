@@ -72,6 +72,8 @@ jest.mock('@wcpos/components/radio-group', () => {
 	};
 });
 
+// PropertyRow imports Switch, but this sheet never renders that native control.
+jest.mock('@wcpos/components/switch', () => ({ Switch: () => null }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
