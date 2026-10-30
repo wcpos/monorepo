@@ -1700,6 +1700,7 @@
 	"settings.print_receipts_as_image_help": "For scripts the printer cannot render (Arabic, Hebrew, Thai). Slower and larger than text.",
 	"settings.general": "General",
 	"settings.icons": "Icons",
+	"settings.icons.auto": "Match theme",
 	"settings.icons.description": "Every candidate family, while the design settles.",
 	"settings.icons.hugeicons": "Hugeicons",
 	"settings.icons.phosphor": "Phosphor",

@@ -5,11 +5,13 @@ import { Uniwind, useUniwind } from 'uniwind';
 import {
 	Icon,
 	ICON_SET_IDS,
+	ICON_SETTING_AUTO,
 	IconName,
 	type IconSetId,
 	IconSetProvider,
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { iconSetForTheme } from '@wcpos/components/lib/themes';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
@@ -22,7 +24,6 @@ import { PropertyRow } from '@wcpos/components/property-row';
 
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
-import { resolveIconSet } from '../../../contexts/icon-set';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -180,6 +181,8 @@ const ICON_SAMPLES: IconName[] = [
 	'confirmed',
 ];
 
+const ICON_OPTIONS = [ICON_SETTING_AUTO, ...ICON_SET_IDS] as const;
+
 /**
  * The Icons section: one row per candidate family, its samples drawn in that
  * family. The choice reaches the screens through `IconSetSettingProvider`.
@@ -187,15 +190,17 @@ const ICON_SAMPLES: IconName[] = [
 function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
-	const labels: Record<IconSetId, string> = {
+	const icons = useDocField(store, (latest) => latest.icons) ?? ICON_SETTING_AUTO;
+	const theme = useDocField(store, (latest) => latest.theme);
+	const labels: Record<IconSetId | typeof ICON_SETTING_AUTO, string> = {
+		auto: t('settings.icons.auto'),
 		tabler: t('settings.icons.tabler'),
 		hugeicons: t('settings.icons.hugeicons'),
 		phosphor: t('settings.icons.phosphor'),
 	};
 
 	const handleIconsChange = React.useCallback(
-		async (value: IconSetId) => {
+		async (value: IconSetId | typeof ICON_SETTING_AUTO) => {
 			try {
 				const result = await patchStoreSettings(store, { icons: value }, t);
 				if (result) markSaved(['icons']);
@@ -215,12 +220,12 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 			<RadioGroup
 				value={icons}
 				onValueChange={(value) => {
-					void handleIconsChange(value as IconSetId);
+					void handleIconsChange(value as IconSetId | typeof ICON_SETTING_AUTO);
 				}}
 				aria-label={t('settings.icons')}
 				className="gap-0 pt-2"
 			>
-				{ICON_SET_IDS.map((id) => (
+				{ICON_OPTIONS.map((id) => (
 					<RadioGroupOption
 						key={id}
 						value={id}
@@ -230,7 +235,7 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 						labelClassName="text-sm font-medium"
 						// One line at every width: radio, label and a 160 px strip fit a phone.
 						right={
-							<IconSetProvider set={id}>
+							<IconSetProvider set={id === ICON_SETTING_AUTO ? iconSetForTheme(theme) : id}>
 								<HStack className="ml-auto gap-2" testID={`settings-icons-${id}-samples`}>
 									{ICON_SAMPLES.map((name) => (
 										<Icon key={name} name={name} size="lg" className="text-foreground" />

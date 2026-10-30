@@ -91,11 +91,9 @@ jest.mock('@wcpos/components/icon', () => ({
 	IconSetProvider: ({ set, children }: React.PropsWithChildren<{ set: string }>) => (
 		<span data-set={set}>{children}</span>
 	),
-	// A getter: the factory is hoisted above the list it hands out.
-	get ICON_SET_IDS() {
-		return mockIconSets;
-	},
+	ICON_SET_IDS: ['tabler', 'hugeicons', 'phosphor'],
 	DEFAULT_ICON_SET: 'tabler',
+	ICON_SETTING_AUTO: 'auto',
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(document: T, selector: (value: T) => unknown) => selector(document),
@@ -114,6 +112,7 @@ jest.mock('./components/settings-section', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	store.theme = 'light';
 	store.scale = undefined;
 	store.icons = undefined;
 	mockTheme = 'light';
@@ -176,23 +175,43 @@ describe('the Scale section', () => {
 });
 
 describe('the Icons section', () => {
-	it('offers the eight sets in order, Tabler 1.5 selected by default', () => {
+	it('offers Match theme first and selected by default, followed by the three sets', () => {
 		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
 		expect(
 			getAllByTestId(/^settings-icons-(?!.*-samples$)/).map((row) =>
 				row.getAttribute('data-testid')
 			)
-		).toEqual(mockIconSets.map((id) => `settings-icons-${id}`));
+		).toEqual(['auto', ...mockIconSets].map((id) => `settings-icons-${id}`));
 		expect(
 			getByRole('radiogroup', { name: 'settings.icons' }).querySelectorAll('[role="radio"]')
-		).toHaveLength(mockIconSets.length);
-		mockIconSets.forEach((id) => {
+		).toHaveLength(mockIconSets.length + 1);
+		['auto', ...mockIconSets].forEach((id) => {
 			const row = getByTestId(`settings-icons-${id}`);
 			expect(row.getAttribute('role')).toBe('radio');
-			expect(row.getAttribute('aria-checked')).toBe(String(id === 'tabler'));
+			expect(row.getAttribute('aria-checked')).toBe(String(id === 'auto'));
 			expect(row.textContent).toBe(`settings.icons.${id}`);
 		});
+	});
+
+	it('draws Match theme samples in the stored theme family', () => {
+		store.theme = 'ocean';
+		store.icons = 'hugeicons';
+		const { getByTestId } = render(<ThemeSettings />);
+		const strip = getByTestId('settings-icons-auto-samples').closest('[data-set]')!;
+
+		expect(strip.getAttribute('data-set')).toBe('phosphor');
+		expect(strip.querySelectorAll('[data-icon]')).toHaveLength(6);
+	});
+
+	it('persists Match theme as auto rather than the resolved family', async () => {
+		store.theme = 'ocean';
+		store.icons = 'hugeicons';
+		const { getByTestId } = render(<ThemeSettings />);
+
+		await act(async () => fireEvent.click(getByTestId('settings-icons-auto')));
+
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'auto' } });
 	});
 
 	// Each row draws its strip in its own family, whatever the app draws.

@@ -65,8 +65,9 @@ describe('stores migration strategy', () => {
 
 			const migrated = migrate({ localID: 'store-1', icons: dropped } as never, undefined as never);
 
-			expect((migrated as { icons?: string }).icons).toBe(storesLiteral.properties.icons.default);
-			expect(storesLiteral.version).toBe(19);
+			// The literal family v19 wrote, not the schema default: v20 moved that to `auto`.
+			expect((migrated as { icons?: string }).icons).toBe('tabler');
+			expect(storesLiteral.version).toBeGreaterThanOrEqual(19);
 		}
 	);
 
@@ -90,6 +91,45 @@ describe('stores migration strategy', () => {
 
 		expect(migrated).toBe(oldStore);
 		expect((migrated as { icons?: string }).icons).toBe('tabler');
+	});
+
+	// v20: `auto` joins the enum and becomes the default (the family follows the theme,
+	// decision 45). Nothing stored becomes invalid, so the migration is a pass-through;
+	// the bump exists because the schema hash moved, which is what took dev-next down
+	// at v18 (#3099 → #3109).
+	it.each(['auto', 'tabler', 'hugeicons', 'phosphor'])(
+		'migration 20 passes the family %s through unchanged',
+		async (family) => {
+			const { userCollections } = await import('./index');
+			const migrate = userCollections.stores.migrationStrategies?.[20];
+			if (!migrate) throw new Error('stores migration 20 missing');
+			const oldStore = { localID: 'store-1', icons: family };
+
+			const migrated = migrate(oldStore as never, undefined as never);
+
+			expect(migrated).toBe(oldStore);
+			expect((migrated as { icons?: string }).icons).toBe(family);
+		}
+	);
+
+	it('v20 reads an unset family as auto and is the current version', async () => {
+		const { userCollections } = await import('./index');
+		const { storesLiteral } = await import('./schemas/stores');
+		const migrate = userCollections.stores.migrationStrategies?.[20];
+		if (!migrate) throw new Error('stores migration 20 missing');
+
+		const migrated = migrate({ localID: 'store-1', theme: 'dark' } as never, undefined as never);
+
+		expect((migrated as { icons?: string }).icons).toBeUndefined();
+		expect(storesLiteral.properties.icons.enum).toEqual([
+			'auto',
+			'tabler',
+			'hugeicons',
+			'phosphor',
+		]);
+		expect(storesLiteral.properties.icons.default).toBe('auto');
+		expect(storesLiteral.version).toBe(20);
+		expect(userCollections.stores.migrationStrategies?.[21]).toBeUndefined();
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier
