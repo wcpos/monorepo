@@ -187,7 +187,11 @@ jest.mock('../../services/register-session/settled-figures', () => ({
 	deriveSettled: () => ({ settled: { counted: {}, expected: {} }, touched: new Set() }),
 }));
 jest.mock('../../services/register-session/use-closure-document-context', () => ({
-	useClosureDocumentContext: () => ({ formatMoney: (value: string) => value, i18n: {} }),
+	useClosureDocumentContext: () => ({
+		formatMoney: (value: string) => value,
+		i18n: {},
+		store: { name: 'Store' },
+	}),
 }));
 jest.mock('./hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
 jest.mock('./receipt/use-receipt-document', () => ({

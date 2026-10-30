@@ -116,7 +116,7 @@
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"@widgetbot/react-embed": "^1.11.3",
-		"barcode-detector": "^3.2.2",
+		"barcode-detector": "^3.2.3",
 		"date-fns": "^4.4.0",
 		"html-entities": "2.6.0",
 		"i18next": "^26.4.4",
@@ -132,7 +132,7 @@
 		"use-deep-compare-effect": "^1.8.1",
 		"uuid": "14.0.3",
 		"zod": "^4.6.6",
-		"zxing-wasm": "3.1.5"
+		"zxing-wasm": "3.1.6"
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "^7.0.1",

@@ -11,6 +11,8 @@ import { useT } from '../../../../contexts/translations';
 import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { ClosureBody, ClosureHeading } from '../../reports/closures/closure-body';
 import { useClosureView } from '../../reports/closures/closure-panel';
+import { PrintSheet } from '../../receipt/print-sheet';
+import { useRegisterNames } from '../../../../services/register/use-register-names';
 
 export type ClosureCount = {
 	closure: ReadonlyClosureDocument;
@@ -19,12 +21,22 @@ export type ClosureCount = {
 	blind: boolean;
 };
 
-export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone: () => void }) {
+export function ClosureWritten({
+	count,
+	onDone,
+	portalHost = 'pos',
+}: {
+	count: ClosureCount;
+	onDone: () => void;
+	portalHost?: string | null;
+}) {
 	const row = useDocField(count.closure, (value) => value)!;
 	// A closure printed at the close reprints from here; one never printed prints first.
 	const view = useClosureView(row, { isReprint: (row.print_count ?? 0) > 0 });
 	const { doc, context, settled, touched, corrections, printCount, reprint, error } = view;
 	const t = useT();
+	const [sheetOpen, setSheetOpen] = React.useState(false);
+	const names = useRegisterNames(row.store_id ?? undefined);
 	const printed = !!row.printed_at || printCount > 0;
 	return (
 		<>
@@ -57,11 +69,6 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 						})}
 					</Text>
 				)}
-				{!!error && (
-					<Text testID="closure-print-error" className="text-bad">
-						{error}
-					</Text>
-				)}
 			</ScrollView>
 			<DialogFooter
 				size="lg"
@@ -70,13 +77,30 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 				intent={{ label: t('register.done'), testID: 'closure-done', onPress: onDone }}
 				secondary={
 					!count.blind && {
-						label: printed || error ? t('register.print_again') : t('register.print_z_report'),
+						label: t('register.print_closure'),
 						testID: 'closure-print',
 						icon: 'print',
 						loading: doc.isPrinting,
-						onPress: () => void reprint(),
+						onPress: () => setSheetOpen(true),
 					}
 				}
+			/>
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				doc={doc}
+				title={t('reports.document.closure')}
+				description={[
+					row.breakdowns?.register_name || names[row.register_id],
+					formatClosureDate(row.closed_at, context).datetime,
+				]
+					.filter(Boolean)
+					.join(' · ')}
+				printLabel={t('register.print_closure')}
+				error={error || doc.documentError?.message || null}
+				onPrint={() => void reprint()}
+				portalHost={portalHost ?? undefined}
+				testID="closure-written-print-sheet"
 			/>
 		</>
 	);

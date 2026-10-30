@@ -28,6 +28,7 @@ import { useRegisterSession } from '../../../services/register-session/use-regis
 import { useSessionReport } from '../../../services/register-session/use-session-report';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
 import { useReceiptDocument } from '../receipt/use-receipt-document';
+import { PrintSheet } from '../receipt/print-sheet';
 import { normalizeClosureRow } from './closures/use-closure-rows';
 import { useLastClosure } from './closures/use-last-closure';
 
@@ -72,7 +73,8 @@ export function TillStrip({
 			: (lastClosure ?? remoteClosure);
 	const unavailable =
 		!open && (remote.online ? remote.unavailable : !lastClosure ? remote.unavailable : undefined);
-	const { print } = useSessionReport(
+	const [sheetOpen, setSheetOpen] = React.useState(false);
+	const { print, doc } = useSessionReport(
 		active || authoritative || !lastClosure ? undefined : lastClosure,
 		!active,
 		!active && authoritative ? (remoteClosure ?? undefined) : undefined
@@ -91,7 +93,7 @@ export function TillStrip({
 	const remoteReport = useReceiptDocument({
 		document: remoteSession ? `xreport:${remoteSession.id}` : undefined,
 		documentReady: !!remoteSession,
-		previewEnabled: false,
+		previewEnabled: sheetOpen,
 		templateType: 'closure',
 		storeId: store.id,
 		autoPrintAllowed: false,
@@ -240,14 +242,26 @@ export function TillStrip({
 			setBusy(false);
 		}
 	};
+	const registerName = binding.registerName || String(closure?.breakdowns.register_name ?? '');
+	const since =
+		open && liveSession
+			? t('reports.since_by', {
+					time: date(liveSession.opened_at_gmt, 'HH:mm'),
+					name:
+						cashiers.find((row) => row.id === liveSession.opened_by)?.display_name ??
+						t('register.unknown_cashier'),
+				})
+			: closure
+				? t('reports.closed_at_by', {
+						time: date(closure!.closed_at, 'HH:mm'),
+						name: String(closure!.breakdowns.closed_by_name || t('register.unknown_cashier')),
+					})
+				: '';
+	const printDoc = remoteSession ? remoteReport : doc;
 	const title = (
 		<View testID="till-title" className="min-w-0 flex-1 gap-1">
 			<View className="flex-row flex-wrap items-center gap-2">
-				<Text className="font-semibold">
-					{bound
-						? binding.registerName || String(closure?.breakdowns.register_name ?? '')
-						: t('reports.no_register')}
-				</Text>
+				<Text className="font-semibold">{bound ? registerName : t('reports.no_register')}</Text>
 				{/* Only a status the strip knows: online, the server's answer; offline, the device's own session. */}
 				{bound && (open || !remote.online || authoritative) && (
 					<Text testID="till-status" className={open ? 'text-success' : 'text-muted-foreground'}>
@@ -256,17 +270,7 @@ export function TillStrip({
 				)}
 				{bound && (open || closure) && (
 					<Text testID="till-since" className="text-muted-foreground">
-						{open && liveSession
-							? t('reports.since_by', {
-									time: date(liveSession.opened_at_gmt, 'HH:mm'),
-									name:
-										cashiers.find((row) => row.id === liveSession.opened_by)?.display_name ??
-										t('register.unknown_cashier'),
-								})
-							: t('reports.closed_at_by', {
-									time: date(closure!.closed_at, 'HH:mm'),
-									name: String(closure!.breakdowns.closed_by_name || t('register.unknown_cashier')),
-								})}
+						{since}
 					</Text>
 				)}
 			</View>
@@ -352,10 +356,12 @@ export function TillStrip({
 					variant="outline"
 					className="flex-row items-center gap-1"
 					disabled={busy || !!unavailable}
-					onPress={dispatch}
+					onPress={() => setSheetOpen(true)}
 				>
 					<Icon name="print" />
-					<ButtonText>{open ? t('register.print_x_report') : t('register.print_again')}</ButtonText>
+					<ButtonText>
+						{open ? t('register.print_x_report') : t('register.print_closure')}
+					</ButtonText>
 				</Button>
 			)}
 			{onOpenClosures && (
@@ -388,11 +394,17 @@ export function TillStrip({
 					{unavailable}
 				</Text>
 			)}
-			{!!error && (
-				<Text testID="till-print-error" className="text-bad">
-					{error}
-				</Text>
-			)}
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={setSheetOpen}
+				doc={printDoc}
+				title={open ? t('register.x_report') : t('reports.document.closure')}
+				description={[registerName, since].filter(Boolean).join(' · ')}
+				printLabel={open ? t('register.print_x_report') : t('register.print_closure')}
+				error={error || printDoc.documentError?.message || null}
+				onPrint={dispatch}
+				testID="till-print-sheet"
+			/>
 			{phone && actions}
 		</Card>
 	);

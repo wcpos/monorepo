@@ -85,6 +85,24 @@ jest.mock('./hooks/use-resolved-printer', () => ({
 jest.mock('./hooks/use-download-receipt-pdf', () => ({
 	useDownloadReceiptPdf: () => ({ download: jest.fn() }),
 }));
+// The session card's print door opens a PrintSheet whose dialog primitive reaches expo-router. The stub
+// keeps the door → sheet → Print path: it renders the sheet's Print while open and nothing while shut.
+jest.mock('./print-sheet', () => ({
+	PrintSheet: ({
+		open,
+		onPrint,
+		testID,
+	}: {
+		open: boolean;
+		onPrint: () => void;
+		testID: string;
+	}) =>
+		open ? (
+			<button data-testid={`${testID}-print`} onClick={() => void onPrint()}>
+				Print
+			</button>
+		) : null,
+}));
 jest.mock('./components/receipt-preview-viewport', () => ({
 	getReceiptPreviewPaperWidth: () => 80,
 }));
@@ -699,7 +717,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 	);
 
 	// Revert: eagerly fetch hidden card documents or disable fetchForPrint with the preview.
-	it('mounts multiple hidden receipt cards without fetching and fetches once on Print', async () => {
+	it('mounts multiple hidden receipt cards without fetching and reads only once the sheet opens', async () => {
 		const session = {
 			id: 'bound',
 			register_id: 'front',
@@ -759,9 +777,14 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockGet).not.toHaveBeenCalled();
 		// Card `a` is a closed register and draws no row since #3048; [1] is the open session `b`.
 		fireEvent.click(screen.getAllByTestId('reports-session-print')[1]);
+		// The door opens the sheet, whose preview reads the document once; Print reuses that read.
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		fireEvent.click(screen.getByTestId('reports-session-print-sheet-print'));
 		await waitFor(() => expect(mockThermalPrint).toHaveBeenCalledTimes(1));
-		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
+		// Two plain reads, as the receipt dialog does today: the preview's and Print's own. Neither
+		// carries intent=print, so the server counts no print for either.
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(mockGet).toHaveBeenLastCalledWith('/receipts/0', {
 			params: { document: 'xreport:b', mode: 'fiscal' },
 		});
 	});

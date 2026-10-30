@@ -19,6 +19,7 @@ import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { PrintSheet } from '../../receipt/print-sheet';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useLastClosure } from './use-last-closure';
 
@@ -38,11 +39,12 @@ export function SessionCard(batch: BatchProps) {
 	const { store } = useStoreSession();
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
-	const { print } = useSessionReport(
+	const [sheetOpen, setSheetOpen] = React.useState(false);
+	const { print, doc } = useSessionReport(
 		active ? undefined : data.lastClosure,
 		!active,
 		undefined,
-		!batch.summary
+		sheetOpen || !batch.summary
 	);
 	// Publish the local session already resolved by the register hook; closed registers use the remote result.
 	React.useEffect(() => {
@@ -63,6 +65,9 @@ export function SessionCard(batch: BatchProps) {
 								<SessionCardContent
 									{...data}
 									print={print}
+									doc={doc}
+									sheetOpen={sheetOpen}
+									onOpenChange={setSheetOpen}
 									cashier={batch.cashier}
 									unavailableReason={reason}
 								/>
@@ -72,7 +77,16 @@ export function SessionCard(batch: BatchProps) {
 			/>
 		);
 	}
-	return <SessionCardContent {...data} print={print} cashier={batch.cashier} />;
+	return (
+		<SessionCardContent
+			{...data}
+			print={print}
+			doc={doc}
+			sheetOpen={sheetOpen}
+			onOpenChange={setSheetOpen}
+			cashier={batch.cashier}
+		/>
+	);
 }
 function SessionCardContent({
 	session,
@@ -80,6 +94,9 @@ function SessionCardContent({
 	expected,
 	salesCount,
 	blind,
+	doc,
+	sheetOpen,
+	onOpenChange,
 	print,
 	unavailable = false,
 	unavailableReason,
@@ -92,6 +109,9 @@ function SessionCardContent({
 	salesCount?: number;
 	blind: boolean;
 	print: () => Promise<unknown>;
+	doc: ReturnType<typeof useReceiptDocument>;
+	sheetOpen: boolean;
+	onOpenChange: (open: boolean) => void;
 	unavailable?: boolean;
 	unavailableReason?: string;
 	storeId?: number;
@@ -154,7 +174,7 @@ function SessionCardContent({
 							size="sm"
 							leftIcon="print"
 							disabled={busy || unavailable || !!unavailableReason}
-							onPress={dispatch}
+							onPress={() => onOpenChange(true)}
 						>
 							{t('register.print_x_report')}
 						</Button>
@@ -183,11 +203,17 @@ function SessionCardContent({
 					{unavailableReason ?? t('reports.unavailable_offline')}
 				</Text>
 			)}
-			{!!error && (
-				<Text testID="session-print-error" className="text-bad">
-					{error}
-				</Text>
-			)}
+			<PrintSheet
+				open={sheetOpen}
+				onOpenChange={onOpenChange}
+				doc={doc}
+				title={active ? t('register.x_report') : t('reports.document.closure')}
+				description={binding.registerName ?? ''}
+				printLabel={active ? t('register.print_x_report') : t('register.print_closure')}
+				error={error || doc.documentError?.message || null}
+				onPrint={dispatch}
+				testID="reports-session-print-sheet"
+			/>
 		</>
 	);
 }
@@ -225,10 +251,11 @@ export function RemoteSessionCard({
 		: data.closure
 			? `closure:${closureId}`
 			: undefined;
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const report = useReceiptDocument({
 		document,
 		getLocalClosure,
-		previewEnabled: !summary,
+		previewEnabled: sheetOpen || !summary,
 		documentReady: !!document && online,
 		templateType: 'closure',
 		storeId,
@@ -242,6 +269,9 @@ export function RemoteSessionCard({
 			) : data.status === 'ready' ? (
 				<SessionCardContent
 					storeId={storeId}
+					doc={report}
+					sheetOpen={sheetOpen}
+					onOpenChange={setSheetOpen}
 					cashier={cashier}
 					session={data.session}
 					binding={{ registerName: register.name }}

@@ -144,7 +144,23 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
-	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
+	useReceiptDocument: () => ({
+		printedTo: null,
+		printHeld: false,
+		isPrinting: false,
+		isSyncing: false,
+		templates: [],
+		selectedTemplateId: null,
+		setSelectedTemplateId: jest.fn(),
+		isOffline: false,
+		allPrinters: [],
+		printerSelection: { type: 'auto' },
+		setPrinterSelection: jest.fn(),
+		mismatch: null,
+		previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+		print,
+		resolvedPrinter: { autoOpenDrawer: true },
+	}),
 }));
 jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print }),
@@ -285,6 +301,7 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: { Provider: ({ children }: { children: React.ReactNode }) => <>{children}</> },
 }));
 jest.mock('@wcpos/components/dialog', () => ({
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
 	Dialog: ({
 		children,
 		open,
@@ -311,7 +328,12 @@ jest.mock('@wcpos/components/dialog', () => ({
 		side?: 'left' | 'right';
 		portalHost?: string | null;
 	}) => (
-		<div data-testid={testID} data-side={side} data-portal={String(portalHost)}>
+		<div
+			data-testid={testID}
+			data-side={side}
+			data-portal={String(portalHost)}
+			data-host={portalHost ?? undefined}
+		>
 			{children}
 		</div>
 	),
@@ -385,13 +407,20 @@ it('hides every amount and the X report for blind cashiers', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
 	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
-	expect(screen.queryByTestId('register-panel-print')).toBeNull();
+	expect((screen.getByTestId('register-panel-print') as HTMLButtonElement).disabled).toBe(true);
 });
 // Revert: stringify the session-report failure instead of translating it in this caller too.
 it('translates a failed X-report dispatch in the register panel', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-print'));
-	await waitFor(() => expect(screen.getByText('reports.reprint_failed')).toBeTruthy());
+	expect(screen.getByTestId('register-panel-print-sheet').getAttribute('data-host')).toBe('pos');
+	expect(print).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('register.print_x_report');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	expect(print).toHaveBeenCalledTimes(1);
+	await waitFor(() =>
+		expect(screen.getByTestId('print-sheet-error').textContent).toBe('reports.reprint_failed')
+	);
 });
 it('records paid out and Undo inserts a void', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
@@ -928,7 +957,7 @@ it('closed with a last closure: closed time, the closure row only, Close registe
 		expect(screen.queryByTestId('register-panel-session-sales')).toBeNull();
 		expect(screen.queryByTestId('register-panel-paid-in')).toBeNull();
 		expect(screen.queryByTestId('register-panel-ledger')).toBeNull();
-		expect(screen.queryByTestId('register-panel-print')).toBeNull();
+		expect((screen.getByTestId('register-panel-print') as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByTestId('register-panel-close-register').hasAttribute('disabled')).toBe(true);
 		fireEvent.click(screen.getByTestId('register-panel-close-register'));
 		expect(startCounting).not.toHaveBeenCalled();
@@ -1125,6 +1154,10 @@ it.each([false, true])(
 	}
 );
 
+jest.mock('../../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="sheet-preview" />,
+}));
+
 it("takes the side and portal host it is given; defaults to the cart's side and the POS host", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
@@ -1133,6 +1166,14 @@ it("takes the side and portal host it is given; defaults to the cart's side and 
 	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost={null} />);
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('left');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
+});
+
+it('keeps the X-report print sheet on the panel side and host', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost="scene" />);
+	fireEvent.click(screen.getByTestId('register-panel-print'));
+	const sheet = screen.getByTestId('register-panel-print-sheet');
+	expect(sheet.getAttribute('data-side')).toBe('left');
+	expect(sheet.getAttribute('data-host')).toBe('scene');
 });
 
 it.each([

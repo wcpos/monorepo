@@ -20,6 +20,13 @@ import { Asset } from 'expo-asset';
  * expo-camera's web scan loop), the detector is constructed and used directly
  * by scanner-viewfinder.web.tsx — no global mutation, no detector-cache
  * ordering hazard, and decode errors stay observable at the call site.
+ *
+ * The binary below is served from core's own `zxing-wasm`, but the glue that
+ * instantiates it is the `zxing-wasm` that `barcode-detector` pins. Emscripten
+ * renames the exports every build, so the two must be the same release or
+ * `_malloc` binds the wrong export and every frame fails with "Failed to
+ * allocate … bytes in WASM memory". camera-decoder.web.pairing.test.ts pins it;
+ * bump both packages together.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports

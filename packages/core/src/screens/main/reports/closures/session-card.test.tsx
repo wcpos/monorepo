@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { RemoteSessionCard, SessionCard } from './session-card';
+import { RemoteSessionCard, SessionCard, type SessionCardData } from './session-card';
 import { Closures } from './index';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
@@ -73,6 +73,22 @@ jest.mock('../../../../contexts/app-state', () => ({
 let session: { opened_at_gmt: string; opened_by: number; status: string } | null;
 let blind = false;
 let lastClosure: { id: string } | null = { id: 'c' };
+const mockDoc = {
+	printedTo: null,
+	printHeld: false,
+	isPrinting: false,
+	isSyncing: false,
+	templates: [],
+	selectedTemplateId: null,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	allPrinters: [],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
+	resolvedPrinter: null,
+	mismatch: null,
+	previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+};
 const print = jest.fn(async () => true);
 const localReportHook = jest.fn();
 const reprint = jest.fn(async () => true);
@@ -89,7 +105,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 jest.mock('../../../../services/register-session/use-session-report', () => ({
 	useSessionReport: (closure?: unknown, isReprint?: boolean, known?: unknown) => {
 		localReportHook(closure, isReprint);
-		return { print: closure || known ? reprint : print };
+		return { doc: mockDoc, print: closure || known ? reprint : print };
 	},
 }));
 beforeEach(() => {
@@ -138,13 +154,18 @@ it.each([
 	expect(screen.getByTestId('session-expected').textContent).toContain('£155.00');
 	expect(screen.getByTestId('reports-session-print').textContent).toBe('Print X-report');
 	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(screen.getByTestId('session-print-error').textContent).toBe(expected));
+	expect(screen.getByTestId('reports-session-print-sheet')).toBeTruthy();
+	expect(print).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print X-report');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	expect(print).toHaveBeenCalledTimes(1);
+	await waitFor(() => expect(screen.getByTestId('print-sheet-error').textContent).toBe(expected));
 });
 
 const get = jest.fn();
 const http = { get };
 let online = true;
-const documentHook = jest.fn((_args: unknown) => ({ print }));
+const documentHook = jest.fn((_args: unknown) => ({ ...mockDoc, print }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => http }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: online ? 'online-website-available' : 'offline' }),
@@ -531,4 +552,53 @@ it('reports resolved local and remote open sessions upward without extra reads',
 		])
 	);
 	expect(get).toHaveBeenCalledTimes(3);
+});
+
+jest.mock('../../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="sheet-preview" />,
+}));
+
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
+	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
+}));
+
+// Reverting either preview gate or the sheet dispatch bypasses the remote document.
+it('opens a summary-mode remote card preview only with the sheet and dispatches its print', async () => {
+	const summary = {
+		closure: null,
+		status: 'ready',
+		session: {
+			id: 'remote',
+			register_id: 'back',
+			sync_status: 'synced',
+			sync_attempts: 0,
+			status: 'open',
+			opened_at_gmt: '2026-09-17T09:00:00Z',
+			opened_by: 7,
+		},
+	} satisfies SessionCardData;
+	render(
+		<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} summary={summary} />
+	);
+	expect(documentHook).toHaveBeenLastCalledWith(expect.objectContaining({ previewEnabled: false }));
+	expect(screen.queryByTestId('reports-session-print-sheet')).toBeNull();
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	expect(screen.getByTestId('reports-session-print-sheet').textContent).toContain('Back');
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({ document: 'xreport:remote', previewEnabled: true })
+	);
+	expect(print).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print X-report');
+	await act(async () => fireEvent.click(screen.getByTestId('print-sheet-print')));
+	expect(print).toHaveBeenCalledTimes(1);
 });
