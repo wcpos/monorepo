@@ -1,7 +1,17 @@
 import type { IconSetId } from '../icon/sets';
 
 /** The names global.css draws (`@variant <name>`); `system` is a Settings choice, not a theme. */
-export const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome', 'paper', 'warm'] as const;
+export const THEMES = [
+	'light',
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'paper',
+	'warm',
+	'bold',
+	'market',
+] as const;
 export type ThemeName = (typeof THEMES)[number];
 
 /** Decision 45: the icon set is a rule of the theme. */
@@ -13,6 +23,8 @@ export const THEME_ICON_SET: Record<ThemeName, IconSetId> = {
 	sunset: 'phosphor',
 	paper: 'phosphor',
 	warm: 'hugeicons',
+	bold: 'phosphor',
+	market: 'hugeicons',
 };
 
 /**
@@ -24,11 +36,18 @@ export function iconSetForTheme(theme: string | undefined): IconSetId {
 }
 
 /** Themes whose PAGE is light: toasts and the status bar read this. */
-export const LIGHT_THEMES: readonly ThemeName[] = ['light', 'paper', 'warm'];
+export const LIGHT_THEMES: readonly ThemeName[] = ['light', 'paper', 'warm', 'bold', 'market'];
 export const isLightTheme = (theme: string | undefined) =>
 	LIGHT_THEMES.includes(theme as ThemeName);
 
 /** Themes whose RAIL is dark: the desktop window controls are drawn over the rail and read this. */
-export const DARK_RAIL_THEMES: readonly ThemeName[] = ['dark', 'ocean', 'sunset', 'monochrome'];
+export const DARK_RAIL_THEMES: readonly ThemeName[] = [
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'bold',
+	'market',
+];
 export const hasDarkRail = (theme: string | undefined) =>
 	DARK_RAIL_THEMES.includes(theme as ThemeName);

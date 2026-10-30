@@ -42,7 +42,17 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 		assert.doesNotMatch(themeBody, declaration, `${token} must not be in plain @theme`);
 	}
 });
-const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome', 'paper', 'warm'];
+const themeNames = [
+	'light',
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'paper',
+	'warm',
+	'bold',
+	'market',
+];
 
 test('the contract covers every variant in the theme layer, in sheet order', () => {
 	const layer = css.match(/@layer\s+theme\s*\{([\s\S]*?)^\}/m)?.[1];

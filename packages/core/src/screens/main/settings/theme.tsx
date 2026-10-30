@@ -102,7 +102,7 @@ function ThemeGrid({
 					: t('settings.current_theme', { theme: activeThemeLabel })
 			}
 		>
-			{/* System, Light, Dark; then Ocean, Sunset, Monochrome; then Paper till, Warm shop. */}
+			{/* System, Light, Dark; then Ocean, Sunset, Monochrome; then Paper till, Warm shop, Bold money; then Market stall. */}
 			<TileGrid columns={3} className="pt-2">
 				{themeOptions.map((option) => (
 					<ThemeOptionButton
@@ -323,6 +323,18 @@ function ThemeSettingsContent() {
 				label: t('settings.theme.warm'),
 				icon: 'store',
 				description: t('settings.theme.warm_description'),
+			},
+			{
+				name: 'bold',
+				label: t('settings.theme.bold'),
+				icon: 'cash',
+				description: t('settings.theme.bold_description'),
+			},
+			{
+				name: 'market',
+				label: t('settings.theme.market'),
+				icon: 'basket',
+				description: t('settings.theme.market_description'),
 			},
 		],
 		[t]

@@ -18,6 +18,8 @@ it.each([
 	['sunset', 'phosphor'],
 	['paper', 'phosphor'],
 	['warm', 'hugeicons'],
+	['bold', 'phosphor'],
+	['market', 'hugeicons'],
 ])('draws %s in %s', (theme, set) => {
 	expect(iconSetForTheme(theme)).toBe(set);
 });
@@ -29,6 +31,11 @@ it.each(['system', undefined, 'nope', 'toString'])('draws the default family for
 it.each(['light', 'paper', 'warm'])('%s has a light page and rail', (theme) => {
 	expect(isLightTheme(theme)).toBe(true);
 	expect(hasDarkRail(theme)).toBe(false);
+});
+
+it.each(['bold', 'market'])('%s has a light page and a dark rail', (theme) => {
+	expect(isLightTheme(theme)).toBe(true);
+	expect(hasDarkRail(theme)).toBe(true);
 });
 
 it.each(['dark', 'ocean', 'sunset', 'monochrome'])('%s has a dark page and rail', (theme) => {
