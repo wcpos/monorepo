@@ -123,12 +123,22 @@ it.each([
 	expect(screen.getByText(shown)).toBeTruthy();
 });
 
-it.each([undefined, 'pos'] as const)('opens on the right at the one size (host %s)', (host) => {
+it.each([
+	[undefined, 'right', undefined],
+	['left', 'left', 'pos'],
+] as const)('opens on the %s side at the one size', (side, shown, host) => {
 	render(
-		<RecordDialog portalHost={host} title="t" record={record} form={() => null} payload={{}} />
+		<RecordDialog
+			side={side}
+			portalHost={host}
+			title="t"
+			record={record}
+			form={() => null}
+			payload={{}}
+		/>
 	);
 	const panel = screen.getByRole('dialog');
-	expect(panel.dataset.side).toBe('right');
+	expect(panel.dataset.side).toBe(shown);
 	expect(panel.dataset.host).toBe(host);
 	expect(panel.dataset.size).toBe('xl');
 });

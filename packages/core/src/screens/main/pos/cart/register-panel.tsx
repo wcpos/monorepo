@@ -122,6 +122,10 @@ export function RegisterPanel({
 	};
 	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
 	const reportsDenied = blind;
+	// The register panel opens from the right on every screen, as the cashier sheet does; what it
+	// opens (count, approval, movements, print sheet) follows its side (Paul 2026-10-30: "Cashier
+	// and Register modal come from the right, but not every modal").
+	const side = 'right';
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
 	const close = (next: boolean) =>
@@ -238,7 +242,7 @@ export function RegisterPanel({
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side="right" size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<ClosureWritten count={written} onDone={() => close(false)} portalHost={portalHost} />
 				</DialogContent>
 			</Dialog>
@@ -246,8 +250,9 @@ export function RegisterPanel({
 	if (pane === 'count' && session)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side="right" size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<RegisterCount
+						side={side}
 						portalHost={portalHost}
 						description={description}
 						onBusyChange={setCountBusy}
@@ -263,7 +268,7 @@ export function RegisterPanel({
 	if (pane === 'closure' && lastClosure)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side="right" size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<ClosurePanel
 						row={lastClosure}
 						onBack={() => setPane('register')}
@@ -275,7 +280,7 @@ export function RegisterPanel({
 
 	return (
 		<Dialog open={open} onOpenChange={close}>
-			<DialogContent side="right" size="lg" portalHost={portalHost} testID="register-panel">
+			<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 				<DialogHeader className="flex-row items-center gap-3">
 					<ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc" />
 					<View className="min-w-0 flex-1">
@@ -563,11 +568,13 @@ export function RegisterPanel({
 							);
 						}
 					}}
+					side={side}
 					portalHost={portalHost ?? undefined}
 					testID="register-panel-print-sheet"
 				/>
 				{movement && (
 					<MovementSheet
+						side={side}
 						portalHost={portalHost}
 						type={movement}
 						onOpenChange={(value) => {

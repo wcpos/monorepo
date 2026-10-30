@@ -25,6 +25,7 @@ jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => params,
 	useRouter: () => ({ back }),
 }));
+jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ testID, onPress }: { testID: string; onPress: () => void }) => (
 		<button data-testid={testID} onClick={onPress} />

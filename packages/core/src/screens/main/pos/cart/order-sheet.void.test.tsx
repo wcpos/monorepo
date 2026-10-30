@@ -980,6 +980,7 @@ it('registers no void surface: the cart column owns it (roadmap#428, PR 1b)', as
 
 // Exercise the real sheet and void hook; the form and unrelated sync action are outside these assertions.
 jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../hooks/use-sync-order', () => ({ useSyncOrder: () => ({ sync: jest.fn() }) }));
 jest.mock('@wcpos/components/dialog', () => {
 	function Pass({ children }: React.PropsWithChildren) {

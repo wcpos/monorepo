@@ -85,6 +85,9 @@ jest.mock('@wcpos/components/menu-row', () => ({
 	),
 	MenuRowSeparator: () => null,
 }));
+jest.mock('../../screens/main/pos/contexts/overlay-side', () => ({
+	usePanelSide: () => 'right',
+}));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 const chord = (code: string, key: string) => ({ code, key, altKey: true });

@@ -115,6 +115,7 @@ jest.mock('@wcpos/printer', () => ({ usePrint: () => ({ print }) }));
 jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
 	useResolvedPrinter: () => ({ resolvedPrinter: null }),
 }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 
 beforeEach(() => {
 	hasClosure = true;

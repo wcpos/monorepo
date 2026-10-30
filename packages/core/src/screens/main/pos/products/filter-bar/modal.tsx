@@ -26,6 +26,7 @@ import {
 	quickFilterSortSchema,
 } from './filter-bar-layout';
 import { createQuickFilterId } from './quick-filter-id';
+import { usePanelSide } from '../../contexts/overlay-side';
 import { QuickFilterEditor } from './quick-filter-editor';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -45,6 +46,7 @@ export function FilterBarModal() {
 	const { changeQuickFilter, addQuickFilter } = useFilterBarCommands();
 	const router = useRouter();
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const side = usePanelSide('products');
 	const params = useLocalSearchParams<{ edit?: string; capture?: string }>();
 	const [editing, setEditing] = React.useState<Editing>(() => {
 		if (params.capture) {
@@ -76,7 +78,7 @@ export function FilterBarModal() {
 
 	return (
 		<Dialog route>
-			<DialogContent side="right" size="lg">
+			<DialogContent side={side} size="lg">
 				<DialogHeader>
 					<HStack className="items-center">
 						{editing && (

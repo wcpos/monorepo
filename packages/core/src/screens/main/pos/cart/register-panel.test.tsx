@@ -148,6 +148,8 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
+// The cart's side is left here, so a right panel proves it ignores the products' position.
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({
 		printedTo: null,
@@ -1163,7 +1165,7 @@ jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: () => <div data-testid="sheet-preview" />,
 }));
 
-it('opens from the right on any host; takes the portal host it is given, the POS by default', () => {
+it("opens from the right whatever the products' position; takes the portal host it is given, the POS by default", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('pos');
@@ -1173,7 +1175,7 @@ it('opens from the right on any host; takes the portal host it is given, the POS
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
 });
 
-it('keeps the X-report print sheet on the right and on the panel host', () => {
+it('keeps the X-report print sheet on the panel side (right) and host', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} portalHost="scene" />);
 	fireEvent.click(screen.getByTestId('register-panel-print'));
 	const sheet = screen.getByTestId('register-panel-print-sheet');
@@ -1182,7 +1184,7 @@ it('keeps the X-report print sheet on the right and on the panel host', () => {
 });
 
 it.each(['scene', null] as const)(
-	'keeps movement dialogs on the right and on the panel host %s',
+	'keeps movement dialogs on the panel side (right) and host %s',
 	(portalHost) => {
 		render(<RegisterPanel open onOpenChange={jest.fn()} portalHost={portalHost} />);
 		fireEvent.click(screen.getByTestId('register-panel-paid-out'));

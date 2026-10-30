@@ -473,6 +473,7 @@ describe('checkout failure report', () => {
 
 // The sheet now owns both buttons; keep the real storage guard and captured handlers above.
 jest.mock('./edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('@wcpos/components/dialog', () => {
 	function Pass({ children }: React.PropsWithChildren) {
 		return <>{children}</>;

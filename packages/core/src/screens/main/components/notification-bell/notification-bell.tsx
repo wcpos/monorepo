@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@wcpos/components/dialog';
 import { useNovuNotificationsSummary } from '../../../../contexts/novu';
 import { NotificationPanelContent } from './notification-panel';
 import { useT } from '../../../../contexts/translations';
+import { usePanelSide } from '../../pos/contexts/overlay-side';
 
 /**
  * NotificationBell component displays a bell icon with an unread count badge.
@@ -25,6 +26,7 @@ export function NotificationBell({
 	bare?: boolean;
 }) {
 	const t = useT();
+	const side = usePanelSide('shell');
 	const { unreadCount, markAllAsSeen } = useNovuNotificationsSummary();
 	const [isOpen, setIsOpen] = React.useState(false);
 
@@ -51,7 +53,7 @@ export function NotificationBell({
 					<Badge count={unreadCount} max={99} variant="bad" size="sm" />
 				</View>
 			</View>
-			<DialogContent side="right" size="lg" portalHost={portalHost} testID="notifications-sheet">
+			<DialogContent side={side} size="lg" portalHost={portalHost} testID="notifications-sheet">
 				{isOpen && <NotificationPanelContent />}
 			</DialogContent>
 		</Dialog>

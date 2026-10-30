@@ -17,6 +17,7 @@ import { useT } from '../../../../contexts/translations';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
+import { usePanelSide } from '../contexts/overlay-side';
 import { useAddCustomer } from '../hooks/use-add-customer';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -78,6 +79,7 @@ function StilledCartHeader() {
 
 function LiveCartHeader() {
 	const { addCustomer } = useAddCustomer();
+	const side = usePanelSide('cart');
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
 	const triggerRef = React.useRef<{ open: () => void } | null>(null);
@@ -148,6 +150,7 @@ function LiveCartHeader() {
 			</HStack>
 			<AddCartItemsMenu />
 			<UISettingsDialog
+				side={side}
 				portalHost="pos"
 				title={t('pos_cart.cart_settings')}
 				triggerTestID="cart-settings-button"

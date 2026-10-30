@@ -15,19 +15,20 @@ import { useT } from '../../../contexts/translations';
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
 	document?: string;
+	side?: 'left' | 'right';
 }
 
 /**
  *
  */
-export function Receipt({ resource, document }: Props) {
+export function Receipt({ resource, document, side = 'right' }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 
 	if (!order) {
 		return (
 			<Dialog route>
-				<DialogContent side="right" size="xl">
+				<DialogContent side={side} size="xl">
 					<DialogHeader>
 						<DialogTitle>
 							<Text>{t('common.receipt')}</Text>
@@ -40,16 +41,23 @@ export function Receipt({ resource, document }: Props) {
 	}
 
 	return (
-		<ReceiptDocument key={`${order.uuid}:${document ?? ''}`} order={order} document={document} />
+		<ReceiptDocument
+			key={`${order.uuid}:${document ?? ''}`}
+			order={order}
+			document={document}
+			side={side}
+		/>
 	);
 }
 
 function ReceiptDocument({
 	order,
 	document,
+	side = 'right',
 }: {
 	order: EngineRecord<'orders'>;
 	document?: string;
+	side?: 'left' | 'right';
 }) {
 	const t = useT();
 	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
@@ -63,6 +71,7 @@ function ReceiptDocument({
 				record={sync}
 				secondary={choices}
 				onPrint={print.onPress}
+				side={side}
 				testID="receipt-dialog"
 				close={{ testID: 'receipt-close-button' }}
 				printTestID="receipt-print-button"
