@@ -31,7 +31,6 @@ import {
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useExclusive } from '../../hooks/use-exclusive';
-import { usePanelSide } from '../contexts/overlay-side';
 
 /** The figure typed in place: the amount figure's hero step on the input itself. */
 const HERO = amountFigure({ size: 'hero' });
@@ -120,13 +119,11 @@ const REASONS: Record<MovementType, string[]> = {
 const AFTER_MARK = '\u0001';
 
 export function MovementSheet({
-	side: sideProp,
 	portalHost = 'pos',
 	type,
 	onDone,
 	onOpenChange,
 }: {
-	side?: 'left' | 'right';
 	portalHost?: string | null;
 	type: MovementType | null;
 	onDone: (id: string, type: MovementType, amount: string) => void;
@@ -158,8 +155,6 @@ export function MovementSheet({
 		drawer_check: t('register.reason_drawer_check'),
 		other: t('register.reason_other'),
 	};
-	const cartSide = usePanelSide('cart');
-	const side = sideProp ?? cartSide;
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
 	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';
@@ -209,7 +204,7 @@ export function MovementSheet({
 	const confirm = () => exclusive('confirm', runConfirm);
 	return (
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost={portalHost}>
+			<DialogContent side="right" size="lg" portalHost={portalHost}>
 				<DialogHeader>
 					<DialogTitle>{type ? words[type] : ''}</DialogTitle>
 				</DialogHeader>

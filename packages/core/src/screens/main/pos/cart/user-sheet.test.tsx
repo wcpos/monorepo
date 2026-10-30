@@ -171,7 +171,6 @@ jest.mock('observable-hooks', () => ({
 
 const mockPush = jest.fn();
 let mockSegments = ['(app)', '(drawer)', '(pos)'];
-let mockCartSide = 'left';
 let mockLastAccess = '2026-10-28T13:05:00Z';
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, push: mockPush }),
@@ -291,7 +290,6 @@ beforeEach(async () => {
 	mockBind.mockClear();
 	mockRefresh.mockClear();
 });
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
@@ -718,7 +716,6 @@ describe('side and header', () => {
 		mockStoreTimezone = undefined;
 	});
 	it('comes from the right on every screen, whichever host portals it and wherever the cart sits', () => {
-		mockCartSide = 'left';
 		let r = render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 		r.unmount();

@@ -1,1 +1,1 @@
-export { POSReceiptScreen as default } from '@wcpos/core/screens/main/receipt';
+export { ReceiptScreen as default } from '@wcpos/core/screens/main/receipt';

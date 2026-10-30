@@ -9,7 +9,6 @@ import { useT } from '../../../../contexts/translations';
 import { CustomerAvatar } from '../../components/user-avatar/customer-avatar';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
-import { usePanelSide } from '../contexts/overlay-side';
 
 /**
  *
@@ -19,7 +18,6 @@ export function Customer({
 }: {
 	onShowCustomerSelect: (show: boolean) => void;
 }) {
-	const side = usePanelSide('cart');
 	const { currentOrderRecord } = useCurrentOrder();
 	const billing = useRecordField(currentOrderRecord, (order) => order.payload.billing);
 	const shipping = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
@@ -52,7 +50,7 @@ export function Customer({
 					muted: !(billing?.address_1 || billing?.city || billing?.postcode),
 				}}
 			/>
-			<DialogContent side={side} testID="customer-address-dialog" size="lg" portalHost="pos">
+			<DialogContent side="right" testID="customer-address-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>

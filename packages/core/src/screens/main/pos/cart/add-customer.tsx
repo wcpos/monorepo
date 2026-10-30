@@ -32,7 +32,6 @@ import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
-import { usePanelSide } from '../contexts/overlay-side';
 import { snapshotCustomerTaxIds } from '../hooks/utils';
 import { customerLinkIdentity } from './new-customer-link';
 
@@ -184,7 +183,6 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
  *
  */
 export function AddNewCustomer() {
-	const side = usePanelSide('cart');
 	const t = useT();
 	const [open, setOpen] = React.useState(false);
 	const close = React.useCallback(() => setOpen(false), []);
@@ -204,7 +202,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side} testID="add-new-customer-dialog" size="lg" portalHost="pos">
+				<DialogContent side="right" testID="add-new-customer-dialog" size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
@@ -225,13 +223,12 @@ interface AddCustomerDialogProps {
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
-	const side = usePanelSide('cart');
 	const t = useT();
 	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} testID="add-customer-dialog" size="lg" portalHost="pos">
+			<DialogContent side="right" testID="add-customer-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>

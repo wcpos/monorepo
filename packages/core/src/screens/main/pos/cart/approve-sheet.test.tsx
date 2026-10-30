@@ -28,7 +28,6 @@ jest.mock('../../../../services/register-session/audit', () => ({
 	...jest.requireActual('../../../../services/register-session/audit'),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -127,13 +126,13 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	online = 'online-website-available';
 });
-it("takes the side and host it is given; defaults to the cart's side and the POS host", () => {
+it('opens from the right on any host; takes the host it is given, the POS by default', () => {
 	const view = render(<ApproveSheet {...props} />);
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('pos');
 	view.unmount();
-	render(<ApproveSheet {...props} side="left" portalHost={null} />);
-	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('left');
+	render(<ApproveSheet {...props} portalHost={null} />);
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('null');
 });
 it('refused credentials/capability show an error without closing', async () => {

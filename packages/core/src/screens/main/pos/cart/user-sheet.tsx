@@ -426,9 +426,6 @@ export function UserSheet({
 			setActing(false);
 		}
 	};
-	// The cashier sheet comes from the right on every screen, the POS included (Paul, 2026-10-30:
-	// one door, one side; this reverses the 10-28 map's products-side rule for the sheet only).
-	const side = 'right';
 	const { registers, registerName, status, bind } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
 	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
@@ -537,7 +534,7 @@ export function UserSheet({
 				}}
 			>
 				<DialogContent
-					side={side}
+					side="right"
 					size="lg"
 					portalHost={portalHost ?? undefined}
 					testID="user-sheet"

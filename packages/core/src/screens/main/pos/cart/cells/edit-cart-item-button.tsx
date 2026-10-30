@@ -6,7 +6,6 @@ import { Button } from '@wcpos/components/button';
 
 import { useT } from '../../../../../contexts/translations';
 import { RecordDialog } from '../../../components/record-dialog';
-import { usePanelSide } from '../../contexts/overlay-side';
 
 interface Props {
 	title: string;
@@ -18,7 +17,6 @@ interface Props {
 /** The line strip's Edit block and the record dialog it opens on the line. */
 function EditCartItemButton({ title, item, form }: Props) {
 	const t = useT();
-	const side = usePanelSide('cart');
 	const [openDialog, setOpenDialog] = React.useState(false);
 
 	return (
@@ -37,7 +35,6 @@ function EditCartItemButton({ title, item, form }: Props) {
 					{t('pos_cart.edit_line')}
 				</Button>
 				<RecordDialog
-					side={side}
 					portalHost="pos"
 					title={title}
 					record={item}

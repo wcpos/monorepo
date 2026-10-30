@@ -51,7 +51,6 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: {} }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 
 it('opens the picker from the name and the address editor from the pin', () => {
 	const onShowCustomerSelect = jest.fn();

@@ -36,7 +36,7 @@ Chrome and Edge; Firefox is not verified, so the help sheet carries one line say
 sheet's opener as the `help` surface. The sheet lists every registered command in the map's order
 with its keycaps, dims the rows whose `when` answers false (the host Button's disabled state,
 `aria-disabled`), and a row press closes the sheet and then runs the command with source `ui`.
-It opens from the cart's side like the cart's own sheets, and as a page on a phone.
+It opens from the right like every side panel, and as a page on a phone.
 
 ## How to write a module like this one
 
