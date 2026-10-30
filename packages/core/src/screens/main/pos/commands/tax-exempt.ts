@@ -22,9 +22,13 @@ import type { OrderPayload } from './cart-config-for-order';
 
 // Below this the server leaves exempt coupon_lines[].discount_tax non-zero (woocommerce/woocommerce#69441).
 const COUPON_EXEMPT_MIN_WC_VERSION = '11.3.0';
-const missing = { deny: { reasonKey: 'tax_exempt_references_unavailable' } };
-const locked = { deny: { reasonKey: 'tax_exempt_locked' } };
-const unsupported = { deny: { reasonKey: 'tax_exempt_wc_version' } };
+export function exemptCouponsSupported(wcVersion: string): boolean {
+	const version = semver.coerce(wcVersion);
+	return !!version && semver.gte(version, COUPON_EXEMPT_MIN_WC_VERSION);
+}
+const missing = { deny: { reasonKey: 'pos_cart.tax_exempt_references_unavailable' } };
+const locked = { deny: { reasonKey: 'pos_cart.tax_exempt_locked' } };
+const unsupported = { deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } };
 const couponed = (payload: OrderPayload) => payload.coupon_lines?.some((line) => line.code != null);
 export interface TaxExemptDeps extends OrderLockReaders, Deps<unknown> {
 	ctx: ActionContext;
@@ -58,9 +62,8 @@ export async function setTaxExempt(
 	const payload = order.getLatest().payload;
 	const readInputs = referenceInputs(payload);
 	let context: CouponContext | undefined;
-	const version = semver.coerce(deps.wcVersion());
-	const supported = version && semver.gte(version, COUPON_EXEMPT_MIN_WC_VERSION);
-	if (input.exempt && couponed(payload) && !supported) return unsupported;
+	if (input.exempt && couponed(payload) && !exemptCouponsSupported(deps.wcVersion()))
+		return unsupported;
 	if (needsReferences({ payload })) {
 		if (!(await deps.references())) return missing;
 		context = await deps.readCoupons(payload);
@@ -94,8 +97,9 @@ export async function setTaxExempt(
 				if (orderLocked(currentPayload, target, deps, dp, options)) return locked;
 				// Inclusive stores are a separate spec (epic §3).
 				if (input.exempt && pricesIncludeTax)
-					return { deny: { reasonKey: 'tax_exempt_inclusive_store' } };
-				if (input.exempt && couponed(currentPayload) && !supported) return unsupported;
+					return { deny: { reasonKey: 'pos_cart.tax_exempt_inclusive_store' } };
+				if (input.exempt && couponed(currentPayload) && !exemptCouponsSupported(deps.wcVersion()))
+					return unsupported;
 				if (
 					needsReferences({ payload: currentPayload }) &&
 					(!context || !isEqual(readInputs, referenceInputs(currentPayload)))
@@ -131,7 +135,10 @@ export async function setTaxExempt(
 					},
 				},
 				bottom: async () => {
-					const result = await settleCartWrite({ document: target, queue, coupons, data }, deps);
+					const result = await settleCartWrite(
+						{ document: target, queue, coupons: { ...coupons, taxStatusFor }, data },
+						deps
+					);
 					deps.reportEngineWarnings(warnings, { orderId: target.uuid, site: 'setTaxExempt' });
 					return result;
 				},

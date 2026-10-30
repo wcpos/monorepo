@@ -25,6 +25,7 @@ import {
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
+import { useWcVersion } from '../commands/use-tax-exempt';
 import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrder } from '../contexts/current-order';
 import { refusalText } from '../../../../extensions/actions/present';
@@ -33,6 +34,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 export const useAddQuickDiscount = () => {
 	const { localPatch } = useCartWrite();
+	const wcVersion = useWcVersion();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { recalculate } = useRecalculateCoupons();
 	const { ctx, actor } = useActionContext();
@@ -112,7 +114,7 @@ export const useAddQuickDiscount = () => {
 				);
 				// The writer compares the cart when its slot starts and after its recalculation.
 				const outcome = await applyCouponLine(
-					{ ctx, actor, recalculate, localPatch },
+					{ ctx, actor, recalculate, localPatch, wcVersion },
 					currentOrderRecord,
 					newLine,
 					validated
@@ -155,6 +157,7 @@ export const useAddQuickDiscount = () => {
 			orderLogger,
 			ctx,
 			actor,
+			wcVersion,
 		]
 	);
 	return { addQuickDiscount };

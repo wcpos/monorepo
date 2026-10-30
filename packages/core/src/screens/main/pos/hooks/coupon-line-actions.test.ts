@@ -26,7 +26,8 @@ const ctx = createActionContext({
 const actor = { userId: 7, registerId: 'till', sessionId: null };
 const recalculate = jest.fn();
 const localPatch = jest.fn();
-const writer = { ctx, actor, recalculate, localPatch } as never;
+const wcVersion = jest.fn(() => '11.3.0');
+const writer = { ctx, actor, recalculate, localPatch, wcVersion } as never;
 
 const lineItems = [{ product_id: 1, quantity: 1, total: '100' }];
 let couponLines: Record<string, unknown>[] = [];
@@ -218,4 +219,31 @@ it('remove: lands on the saved order the queue remembers for this order', async 
 	});
 	await removeCouponLine(writer, order, 'save10');
 	expect(localPatch).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
+});
+
+it.each([
+	[true, '11.2.1', false],
+	[true, '11.3.0', true],
+	[false, '11.2.1', true],
+])('coupon gate: exempt=%s WC=%s allowed=%s', async (exempt, version, allowed) => {
+	wcVersion.mockReturnValue(version);
+	const payload = {
+		...cart(),
+		meta_data: [{ key: 'is_vat_exempt', value: exempt ? 'yes' : 'no' }],
+	};
+	const target = { uuid: 'exempt', getLatest: () => ({ payload }) } as never;
+	const dispatched = jest.fn();
+	registerActionHook(
+		'cart.coupon.apply',
+		async (_ctx, e, next) => {
+			dispatched();
+			return next(e);
+		},
+		{ id: 'test.gate', tier: 'extension' }
+	);
+	const result = await applyCouponLine(writer, target, saved, cartSnapshotOf(payload));
+	if (!allowed) expect(result).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } });
+	expect(dispatched).toHaveBeenCalledTimes(allowed ? 1 : 0);
+	expect(recalculate).toHaveBeenCalledTimes(allowed ? 1 : 0);
+	expect(localPatch).toHaveBeenCalledTimes(allowed ? 1 : 0);
 });

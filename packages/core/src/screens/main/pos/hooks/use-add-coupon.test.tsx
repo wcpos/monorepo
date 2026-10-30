@@ -11,6 +11,9 @@ import { useAddCoupon } from './use-add-coupon';
 
 jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
 
+const mockWcVersion = jest.fn(() => '11.3.0');
+jest.mock('../commands/use-tax-exempt', () => ({ useWcVersion: () => mockWcVersion }));
+
 const engine = { active: jest.fn() };
 const localPatch = jest.fn();
 const recalculate = jest.fn();
@@ -84,6 +87,7 @@ jest.mock('../../hooks/use-current-order-currency-format', () => ({
 }));
 
 const baseOrderSnapshot = {
+	meta_data: [] as { key: string; value: string }[],
 	uuid: 'order-uuid',
 	id: 99,
 	number: '99',
@@ -205,6 +209,7 @@ function mockEngineData(
 
 describe('useAddCoupon engine reads', () => {
 	beforeEach(() => {
+		mockWcVersion.mockReturnValue('11.3.0');
 		localPatch.mockReset();
 		recalculate.mockReset();
 		orderSnapshot = { ...baseOrderSnapshot };
@@ -222,6 +227,21 @@ describe('useAddCoupon engine reads', () => {
 				payload: couponPayload('solo', true),
 			}),
 		]);
+	});
+
+	it('shows the exempt coupon version refusal inline without writing', async () => {
+		mockWcVersion.mockReturnValue('11.2.1');
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [],
+			meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
+		};
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'pos_cart.tax_exempt_wc_version',
+		});
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('returns the closed-order refusal instead of coupon success', async () => {
@@ -410,6 +430,7 @@ describe('useAddCoupon per-user usage limits', () => {
 	const GUEST_EMAIL = 'shopper@example.com';
 
 	beforeEach(() => {
+		mockWcVersion.mockReturnValue('11.3.0');
 		localPatch.mockReset();
 		recalculate.mockReset();
 		mockEngineData([

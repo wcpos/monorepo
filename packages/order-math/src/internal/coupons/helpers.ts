@@ -6,6 +6,8 @@ import { getLineItemTaxStatus } from '../lines/pos-data';
 import { normalizeTaxClass } from '../tax-class';
 
 import type { PerItemDiscount } from './discount';
+import type { LineItemInput } from '../../types';
+import type { TaxStatus } from '../../retax-line';
 
 export interface CouponLineItem {
 	product_id: number;
@@ -328,11 +330,7 @@ export function computeDiscountedLineItems<
  */
 export function calculateCouponDiscountTaxSplit(
 	perItemDiscounts: PerItemDiscount[],
-	lineItems: {
-		product_id?: number | null;
-		tax_class?: string | null;
-		tax_status?: string | null;
-	}[],
+	lineItems: LineItemInput[],
 	taxRates: {
 		id: number;
 		rate: string;
@@ -342,6 +340,7 @@ export function calculateCouponDiscountTaxSplit(
 		priority?: number;
 	}[],
 	options?: {
+		statusOf?: (line: LineItemInput) => TaxStatus;
 		pricesIncludeTax?: boolean;
 		taxRoundAtSubtotal?: boolean;
 		dp?: number;
@@ -365,7 +364,8 @@ export function calculateCouponDiscountTaxSplit(
 		// WC: skip non-taxable items (tax_status !== 'taxable'). For product line
 		// items tax_status lives in _woocommerce_pos_data, so read it from there
 		// rather than a (non-existent) top-level field.
-		const taxStatus = getLineItemTaxStatus(lineItem);
+		const taxStatus =
+			lineItem && options?.statusOf ? options.statusOf(lineItem) : getLineItemTaxStatus(lineItem);
 		if (taxStatus !== 'taxable') {
 			totalDiscount += entry.discount;
 			continue;

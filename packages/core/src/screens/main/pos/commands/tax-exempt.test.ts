@@ -131,7 +131,7 @@ function setup(overrides: OrderPayload = {}) {
 const toggle = (h: ReturnType<typeof setup>, exempt = true, source: 'user' | 'repair' = 'user') =>
 	setTaxExempt(h.deps, h.order, { exempt, source });
 const expectLocked = async (h: ReturnType<typeof setup>) => {
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_locked' } });
+	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
 	expect(h.patches).toEqual([{}]);
 	expect(h.log).not.toHaveBeenCalled();
 };
@@ -255,14 +255,16 @@ it('reads coupon references before the context, outside the order slot', async (
 it('refuses unavailable references before any patch or coupon read', async () => {
 	const h = setup({ coupon_lines: [{ code: 'ten' }] });
 	h.deps.references = async () => false;
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_references_unavailable' } });
+	expect(await toggle(h)).toEqual({
+		deny: { reasonKey: 'pos_cart.tax_exempt_references_unavailable' },
+	});
 	expect(h.localPatch).not.toHaveBeenCalled();
 	expect(h.deps.readCoupons).not.toHaveBeenCalled();
 });
 it.each(['11.2.1', '', 'unparsable'])('refuses coupon carts on Woo %s', async (version) => {
 	const h = setup({ coupon_lines: [{ code: 'ten' }] });
 	h.deps.wcVersion = () => version;
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_wc_version' } });
+	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } });
 	expect(h.localPatch).not.toHaveBeenCalled();
 });
 it.each(['11.3.0', '11.10.0', '11.3.0-rc.1'])('accepts coupon carts on Woo %s', async (version) => {
@@ -281,7 +283,9 @@ it('refuses coupons arriving after the pre-slot read', async () => {
 		},
 		{ id: 'coupon-arrival', tier: 'extension' }
 	);
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_references_unavailable' } });
+	expect(await toggle(h)).toEqual({
+		deny: { reasonKey: 'pos_cart.tax_exempt_references_unavailable' },
+	});
 	expect(h.patches).toEqual([{}]);
 	expect(h.log).not.toHaveBeenCalled();
 });
@@ -353,7 +357,7 @@ it('refuses old WooCommerce before waiting for offline references', async () => 
 	const h = setup({ coupon_lines: [{ code: 'ten' }] });
 	h.deps.wcVersion = () => '11.2.1';
 	h.deps.references = jest.fn(async () => false);
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_wc_version' } });
+	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } });
 	expect(h.deps.references).not.toHaveBeenCalled();
 });
 it('writes a quick-discount-only order offline without reading references or coupons', async () => {
@@ -405,7 +409,7 @@ it.each([false, true])(
 		);
 		const result = await toggle(h, false);
 		if (couponed) {
-			expect(result).toEqual({ deny: { reasonKey: 'tax_exempt_references_unavailable' } });
+			expect(result).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_references_unavailable' } });
 			expect(h.patches).toEqual([{}]);
 		} else {
 			expect(h.order.payload.line_items?.map((line) => line.total_tax)).toEqual(['0', '1']);
@@ -431,7 +435,7 @@ it('refuses a quick discount arriving in the resolver on old WooCommerce', async
 		},
 		{ id: 'quick-discount-arrival', tier: 'extension' }
 	);
-	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'tax_exempt_wc_version' } });
+	expect(await toggle(h)).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } });
 	expect(h.patches).toEqual([{}]);
 	expect(wooMetaCarrier.vatExempt(h.order.payload.meta_data)).toBe(false);
 });
@@ -443,7 +447,7 @@ it.each([true, false])(
 		const before = JSON.stringify(h.order.payload);
 		const result = await toggle(h, exempt);
 		if (exempt) {
-			expect(result).toEqual({ deny: { reasonKey: 'tax_exempt_inclusive_store' } });
+			expect(result).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_inclusive_store' } });
 			expect(JSON.stringify(h.order.payload)).toBe(before);
 			expect(h.patches).toEqual([{}]);
 		} else {
@@ -469,3 +473,16 @@ it.each([false, true])(
 		});
 	}
 );
+
+it('un-exempting a couponed catalog-none web line does not reintroduce tax in replay', async () => {
+	const h = setup({
+		meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
+		line_items: [{ ...product, meta_data: [], total_tax: '0', subtotal_tax: '0', taxes: [] }],
+		fee_lines: [],
+		coupon_lines: [{ code: 'ten' }],
+	});
+	h.deps.readTaxStatuses = async () => () => 'none';
+	await toggle(h, false);
+	expect(h.order.payload.line_items?.[0].total_tax).toBe('0');
+	expect(h.order.payload.discount_tax).toBe('0');
+});

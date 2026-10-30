@@ -33,7 +33,7 @@ import {
 } from '@wcpos/query/query-state';
 
 /** How long the coupon replay waits for its reference pull before giving up on it. */
-const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
+export const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
 
 /**
  * How long the OFF-CRITICAL-PATH continuation keeps waiting after the foreground barrier

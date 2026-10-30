@@ -5,6 +5,7 @@ import { readCoverageGeneration } from '@wcpos/query';
 
 import {
 	acquireReferenceDemandHandle,
+	COUPON_REFERENCE_SETTLE_TIMEOUT_MS,
 	whenReferencesSettled,
 } from '../../../../query/coupon-reference-demand';
 
@@ -26,6 +27,34 @@ export function replayContentKey(order: {
 	]);
 }
 
+function retainCouponReferences(engine: RxdbSyncEngine) {
+	const coupons = acquireReferenceDemandHandle(
+		engine,
+		'coupons',
+		readCoverageGeneration(engine, 'coupons')
+	);
+	const categories = acquireReferenceDemandHandle(
+		engine,
+		'products/categories',
+		readCoverageGeneration(engine, 'categories')
+	);
+	const releases = [coupons.retain(), categories.retain()];
+	return { coupons, categories, release: () => releases.forEach((release) => release()) };
+}
+
+/** A tap waits the foreground deadline, not the helper's background one; false past it. */
+export async function waitForCouponReferences(engine: RxdbSyncEngine): Promise<boolean> {
+	const { coupons, categories, release } = retainCouponReferences(engine);
+	const abort = new AbortController();
+	const deadline = setTimeout(() => abort.abort(), COUPON_REFERENCE_SETTLE_TIMEOUT_MS);
+	try {
+		return await whenReferencesSettled(coupons, categories, abort.signal);
+	} finally {
+		clearTimeout(deadline);
+		release();
+	}
+}
+
 /** Subscription ownership belongs to the coordinator, not a cart component. */
 export function couponReferences(engine: RxdbSyncEngine): Observable<CouponReferences> {
 	return new Observable<string>((subscriber) => {
@@ -45,14 +74,7 @@ export function couponReferences(engine: RxdbSyncEngine): Observable<CouponRefer
 		switchMap(
 			(generation) =>
 				new Observable<CouponReferences>((subscriber) => {
-					const [couponGeneration, categoryGeneration] = generation.split(':').map(Number);
-					const coupons = acquireReferenceDemandHandle(engine, 'coupons', couponGeneration);
-					const categories = acquireReferenceDemandHandle(
-						engine,
-						'products/categories',
-						categoryGeneration
-					);
-					const releases = [coupons.retain(), categories.retain()];
+					const { coupons, categories, release } = retainCouponReferences(engine);
 					const abort = new AbortController();
 					subscriber.next({ ready: false, generation });
 					const wait = async () => {
@@ -64,7 +86,7 @@ export function couponReferences(engine: RxdbSyncEngine): Observable<CouponRefer
 					void wait().catch((error) => subscriber.error(error));
 					return () => {
 						abort.abort();
-						releases.forEach((release) => release());
+						release();
 					};
 				})
 		)

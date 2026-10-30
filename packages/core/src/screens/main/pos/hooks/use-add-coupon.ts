@@ -19,6 +19,7 @@ import {
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
+import { useWcVersion } from '../commands/use-tax-exempt';
 import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrder } from '../contexts/current-order';
 import { refusalText } from '../../../../extensions/actions/present';
@@ -34,6 +35,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  */
 export const useAddCoupon = () => {
 	const { localPatch } = useCartWrite();
+	const wcVersion = useWcVersion();
 	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { getCouponContext } = useCouponContext();
@@ -119,7 +121,7 @@ export const useAddCoupon = () => {
 				// The cart the coupon was validated against must be the cart it is applied to: the
 				// writer compares when its queue slot starts and again after its recalculation.
 				const outcome = await applyCouponLine(
-					{ ctx, actor, recalculate, localPatch },
+					{ ctx, actor, recalculate, localPatch, wcVersion },
 					currentOrderRecord,
 					newCouponLine,
 					validated
@@ -175,6 +177,7 @@ export const useAddCoupon = () => {
 			couponRejectionMessage,
 			ctx,
 			actor,
+			wcVersion,
 		]
 	);
 

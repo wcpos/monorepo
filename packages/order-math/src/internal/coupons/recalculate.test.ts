@@ -1378,3 +1378,19 @@ describe('VAT-exempt coupon replay', () => {
 		}
 	);
 });
+
+it.each([false, true])('catalog tax status applies only without POS data (POS=%s)', (pos) => {
+	const line = makePosLineItem(1, 10, 10);
+	if (!pos) line.meta_data = [];
+	const result = recalculateCoupons(
+		makeInput({
+			lineItems: [line],
+			couponLines: [makeCouponLine('ten')],
+			couponConfigs: new Map([['ten', makeConfig()]]),
+			taxRates: [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }],
+			taxStatusFor: () => 'none',
+		})
+	);
+	expect(Number(result.lineItems[0].total_tax)).toBe(pos ? 0.9 : 0);
+	expect(Number(result.couponLines[0].discount_tax)).toBe(pos ? 0.1 : 0);
+});
