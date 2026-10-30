@@ -7,6 +7,7 @@
  * with recalculateCoupons, percent fees on the post-replay basis, idempotence
  * + `changed`, the tombstone law, and the validate option.
  */
+import { calculateCartLine } from './cart-line';
 import { createCartConfig } from './config';
 import { calculateOrderTotals } from './internal/order-totals';
 import { recalculateCoupons } from './internal/coupons/recalculate';
@@ -861,5 +862,69 @@ describe('settleAggregate', () => {
 
 		const settled: CartSnapshot = { ...snapshot, ...first.patch };
 		expect(settleAggregate(settled, makeConfig()).changed).toBe(false);
+	});
+});
+
+describe('VAT-exempt settlement', () => {
+	const rates = [
+		{
+			id: 1,
+			name: 'Tax',
+			rate: '20',
+			compound: false,
+			order: 1,
+			class: 'standard',
+			shipping: true,
+		},
+	];
+	const config = makeConfig({ rates, allRates: rates, vatExempt: true });
+	it('keeps the stored net when settling inclusive-entered shipping', () => {
+		const result = settleAggregate(
+			{
+				shipping_lines: [
+					{
+						method_id: 'flat_rate',
+						total: '10',
+						total_tax: '2',
+						taxes: [{ id: 1, total: '2' }],
+						meta_data: [
+							{ key: '_woocommerce_pos_data', value: { amount: 12, prices_include_tax: true } },
+						],
+					},
+				],
+			},
+			config
+		);
+		expect(result.patch).toMatchObject({ shipping_total: '10', shipping_tax: '0' });
+	});
+	it('aggregates exempt lines with no tax lines', () => {
+		const line = calculateCartLine(
+			{ kind: 'line_item', line: makePosLineItem(1, 100) },
+			config
+		).line;
+		const result = settleAggregate(
+			{ line_items: [line], shipping_lines: [{ total: '12.37' }], fee_lines: [makePercentFee(5)] },
+			config
+		);
+		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0' });
+	});
+	it('replays coupons without restoring line or discount taxes', () => {
+		const snapshot = {
+			line_items: [
+				{
+					...makePosLineItem(1, 100),
+					subtotal_tax: '20',
+					total_tax: '20',
+					taxes: [{ id: 1, total: '20', subtotal: '20' }],
+				},
+			],
+			coupon_lines: [makeCouponLine('ten')],
+		};
+		const result = settleCart(snapshot, config, {
+			coupons: makeCouponContext([makeCouponInput({ code: 'ten' })]),
+		});
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error('settlement failed');
+		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0', discount_tax: '0' });
 	});
 });

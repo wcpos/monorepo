@@ -42,3 +42,12 @@ test('throws when a field is missing', () => {
 	const { calcTaxes: _omit, ...partial } = valid;
 	expect(() => createCartConfig(partial as never)).toThrow(TypeError);
 });
+
+test('VAT exemption defaults false and accepts only booleans', () => {
+	expect(createCartConfig(valid).vatExempt).toBe(false);
+	expect(createCartConfig({ ...valid, vatExempt: true }).vatExempt).toBe(true);
+	expect(createCartConfig({ ...valid, vatExempt: false }).vatExempt).toBe(false);
+	expect(() => createCartConfig({ ...valid, vatExempt: 'yes' } as never)).toThrow(
+		new TypeError('createCartConfig: vatExempt must be boolean')
+	);
+});

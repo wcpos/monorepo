@@ -6,6 +6,7 @@ export interface CartConfigInput {
 	rates: readonly TaxRateInput[];
 	allRates: readonly TaxRateInput[];
 	calcTaxes: boolean;
+	vatExempt?: boolean;
 	pricesIncludeTax: boolean;
 	taxRoundAtSubtotal: boolean;
 	dp: number;
@@ -21,6 +22,7 @@ export interface CartConfigInput {
 }
 export interface CartConfig extends Readonly<CartConfigInput> {
 	readonly [CART_CONFIG]: true;
+	readonly vatExempt: boolean;
 }
 
 const BOOLEANS = [
@@ -42,6 +44,8 @@ export function createCartConfig(input: CartConfigInput): CartConfig {
 		if (typeof input[key] !== 'boolean')
 			throw new TypeError(`createCartConfig: ${key} must be boolean`);
 	}
+	if (input.vatExempt !== undefined && typeof input.vatExempt !== 'boolean')
+		throw new TypeError('createCartConfig: vatExempt must be boolean');
 	if (!Number.isInteger(input.dp) || input.dp < 0)
 		throw new TypeError('createCartConfig: dp must be a non-negative integer');
 	if (typeof input.shippingTaxClass !== 'string')
@@ -50,6 +54,7 @@ export function createCartConfig(input: CartConfigInput): CartConfig {
 		throw new TypeError('createCartConfig: taxClassSlugs must be an array');
 	return Object.freeze({
 		...input,
+		vatExempt: input.vatExempt === true,
 		rates: freezeRates(input.rates),
 		allRates: freezeRates(input.allRates),
 		taxClassSlugs: Object.freeze([...input.taxClassSlugs]),

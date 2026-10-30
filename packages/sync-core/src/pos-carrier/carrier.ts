@@ -21,6 +21,8 @@ export interface PosCarrier {
 		}
 	): MetaDataEntry[];
 	taxBasedOnOverride(meta: MetaDataEntry[] | undefined): string | null;
+	vatExempt(meta: MetaDataEntry[] | undefined): boolean;
+	stampVatExempt(meta: MetaDataEntry[] | undefined, exempt: boolean): MetaDataEntry[];
 	lineUuid(line: { meta_data?: MetaDataEntry[] }): string | null;
 	ensureLineUuid<L extends { meta_data?: MetaDataEntry[] }>(line: L, mintUuid: () => string): L;
 	identityFilter(identity: {
@@ -50,6 +52,7 @@ export const POS_META_KEYS = {
 	reducedStock: '_reduced_stock',
 	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
+	vatExempt: 'is_vat_exempt',
 	lineUuid: RECORD_UUID_META_KEY,
 	posData: '_woocommerce_pos_data',
 } as const;
@@ -61,6 +64,7 @@ export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
 	POS_META_KEYS.store,
 	POS_META_KEYS.register,
 	POS_META_KEYS.till,
+	POS_META_KEYS.vatExempt,
 	RECORD_UUID_META_KEY,
 	'_wcpos_money_owner_hint',
 ];
@@ -121,6 +125,27 @@ export function identityColumnFilter(identity: { cashierId?: string; storeId?: s
 }
 
 export const wooMetaCarrier: PosCarrier = {
+	vatExempt(meta) {
+		return (
+			Array.isArray(meta) &&
+			meta.find((entry) => entry?.key === POS_META_KEYS.vatExempt)?.value === 'yes'
+		);
+	},
+	stampVatExempt(meta, exempt) {
+		const stamped: MetaDataEntry[] = [];
+		let replaced = false;
+		const value = exempt ? 'yes' : 'no';
+		for (const entry of Array.isArray(meta) ? meta : []) {
+			if (entry?.key !== POS_META_KEYS.vatExempt) {
+				stamped.push(entry);
+			} else if (!replaced) {
+				stamped.push({ ...entry, value });
+				replaced = true;
+			}
+		}
+		if (!replaced) stamped.push({ key: POS_META_KEYS.vatExempt, value });
+		return stamped;
+	},
 	readIdentity(meta) {
 		return {
 			cashierId: scalarMetaValue(meta, POS_META_KEYS.user),

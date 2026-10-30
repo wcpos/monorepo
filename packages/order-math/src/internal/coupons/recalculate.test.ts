@@ -1330,3 +1330,51 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 		});
 	});
 });
+
+describe('VAT-exempt coupon replay', () => {
+	it.each(['percent', 'fixed_cart', 'stacked', 'none'] as const)(
+		'clears stored taxes for %s coupons, with or without POS metadata',
+		(kind) => {
+			const codes = kind === 'none' ? [] : kind === 'stacked' ? ['first', 'second'] : ['first'];
+			for (const hasPosData of [true, false]) {
+				const item = {
+					...makePosLineItem(1, 100, 100),
+					subtotal_tax: '20',
+					total_tax: '20',
+					taxes: [{ id: 1, total: '20', subtotal: '20' }],
+					...(!hasPosData && { meta_data: [] }),
+				};
+				const input = makeInput({
+					lineItems: [item],
+					couponLines: codes.map(makeCouponLine),
+					couponConfigs: new Map(
+						codes.map((code) => [
+							code,
+							makeConfig({ discount_type: kind === 'fixed_cart' ? 'fixed_cart' : 'percent' }),
+						])
+					),
+					taxRates: [{ id: 1, rate: '20', compound: false, order: 1, class: 'standard' }],
+				});
+				const result = recalculateCoupons({ ...input, vatExempt: true });
+				expect(result.lineItems[0]).toMatchObject({
+					total: kind === 'none' ? '100' : kind === 'stacked' ? '80' : '90',
+					total_tax: '0',
+					subtotal_tax: '0',
+					taxes: [],
+				});
+				expect(result.couponLines).toEqual(
+					codes.map((code) => ({ ...makeCouponLine(code), discount: '10', discount_tax: '0' }))
+				);
+				const taxable = recalculateCoupons(input);
+				expect(taxable.lineItems[0]).toMatchObject({
+					total: kind === 'none' ? '100' : kind === 'stacked' ? '80' : '90',
+					total_tax: kind === 'none' ? '20' : kind === 'stacked' ? '16' : '18',
+					subtotal_tax: '20',
+				});
+				expect(taxable.couponLines).toEqual(
+					codes.map((code) => ({ ...makeCouponLine(code), discount: '10', discount_tax: '2' }))
+				);
+			}
+		}
+	);
+});

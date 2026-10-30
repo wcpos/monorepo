@@ -19,6 +19,7 @@ import { normalizeTaxClass } from '../tax-class';
 import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
 
 export interface RecalculateInput {
+	vatExempt?: boolean;
 	lineItems: LineItem[];
 	couponLines: CouponLine[];
 	/** Map of coupon code (lowercase) -> coupon config from RxDB */
@@ -182,13 +183,26 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		lineItems,
 		couponLines,
 		couponConfigs,
+		taxRates,
 		pricesIncludeTax,
 		calcDiscountsSequentially,
-		taxRates,
 		productCategories,
 		taxRoundAtSubtotal = false,
 		dp = 2,
 	} = input;
+
+	const finish = (result: RecalculateResult): RecalculateResult =>
+		input.vatExempt
+			? {
+					lineItems: result.lineItems.map((item) => ({
+						...item,
+						taxes: [],
+						total_tax: '0',
+						subtotal_tax: '0',
+					})),
+					couponLines: result.couponLines.map((cl) => ({ ...cl, discount_tax: '0' })),
+				}
+			: result;
 
 	// Filter to active coupon lines (code is not null/undefined)
 	const activeCouponLines = couponLines.filter(
@@ -271,10 +285,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
-		return {
+		return finish({
 			lineItems: serializeLineItemTaxes(resetItems, getRoundingPrecision(dp)),
 			couponLines,
-		};
+		});
 	}
 
 	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
@@ -465,8 +479,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return updated || cl;
 	});
 
-	return {
+	return finish({
 		lineItems: serializeLineItemTaxes(taxedLineItems, getRoundingPrecision(dp)),
 		couponLines: finalCouponLines,
-	};
+	});
 }
