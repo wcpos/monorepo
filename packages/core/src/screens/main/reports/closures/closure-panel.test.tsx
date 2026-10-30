@@ -434,6 +434,7 @@ it('pins the tablet footer outside the body, Recount as the record and Reprint b
 	expect(body.contains(footer)).toBe(false);
 	expect(panel.contains(footer)).toBe(true);
 	expect(footer.contains(screen.getByTestId('closure-reprint'))).toBe(true);
+	expect(screen.getByTestId('closure-reprint').textContent).toBe('Print again');
 	expect(footer.contains(screen.getByTestId('closure-recount'))).toBe(true);
 });
 

@@ -197,7 +197,7 @@ export function ClosurePanel({
 					onPress: () => setRecounting(true),
 				}}
 				secondary={{
-					label: t('reports.reprint'),
+					label: t('register.print_again'),
 					testID: 'closure-reprint',
 					loading: doc.isPrinting,
 					onPress: () => void reprint(),

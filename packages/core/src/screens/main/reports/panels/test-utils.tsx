@@ -8,6 +8,8 @@ import { calculateTotals } from '../report/utils';
 
 import type * as Context from '../context';
 
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+
 // Native portal/animation primitives are not transformed by this Jest preset; keep shell state real.
 jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
 jest.mock('@wcpos/components/dialog', () => {
@@ -99,7 +101,9 @@ jest.mock('@wcpos/components/select', () => ({
 	Select: ({ children }: React.PropsWithChildren) => children,
 	SelectContent: ({ children }: React.PropsWithChildren) => children,
 	SelectGroup: ({ children }: React.PropsWithChildren) => children,
-	SelectTrigger: ({ children }: React.PropsWithChildren) => children,
+	SelectTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<button data-testid={testID}>{children}</button>
+	),
 	SelectValue: () => null,
 	SelectItem: ({ label, testID }: { label: string; testID: string }) => (
 		<span data-testid={testID}>{label}</span>
@@ -167,6 +171,9 @@ export const mockPrintDocument = {
 	templatesReady: true,
 	mismatch: null as string | null,
 	resolvedPrinter: null as { id: string } | null,
+	allPrinters: [] as { id: string; name: string }[],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
 	selectedTemplateId: 7,
 	setSelectedTemplateId: jest.fn(),
 	isOffline: false,

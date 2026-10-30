@@ -365,7 +365,7 @@ export function TillStrip({
 					onPress={dispatch}
 				>
 					<Icon name="print" />
-					<ButtonText>{open ? t('register.print_x_report') : t('reports.reprint')}</ButtonText>
+					<ButtonText>{open ? t('register.print_x_report') : t('register.print_again')}</ButtonText>
 				</Button>
 			)}
 			{onOpenClosures && (

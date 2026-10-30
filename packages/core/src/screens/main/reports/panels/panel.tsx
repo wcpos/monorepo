@@ -10,6 +10,7 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -53,6 +54,7 @@ import { OrdersPanel } from './orders-panel';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
+import { PrinterSwitcher } from '../../receipt/printer-switcher';
 
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
@@ -283,16 +285,34 @@ export function DetailPanel() {
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
 				</Text>
-				<View testID="detail-panel-template">
-					<TemplateSwitcher
-						templates={doc.templates}
-						selectedId={doc.selectedTemplateId}
-						onSelect={doc.setSelectedTemplateId}
-						isOffline={doc.isOffline}
-						alwaysVisible
-					/>
-				</View>
 			</DialogHeader>
+			<PropertyList>
+				<PropertyRow
+					label={t('reports.template')}
+					testID="detail-panel-template"
+					control={
+						<TemplateSwitcher
+							templates={doc.templates}
+							selectedId={doc.selectedTemplateId}
+							onSelect={doc.setSelectedTemplateId}
+							isOffline={doc.isOffline}
+							alwaysVisible
+						/>
+					}
+				/>
+				<PropertyRow
+					label={t('reports.printer')}
+					testID="detail-panel-printer"
+					control={
+						<PrinterSwitcher
+							printers={doc.allPrinters}
+							printerSelection={doc.printerSelection}
+							resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+							onSelect={doc.setPrinterSelection}
+						/>
+					}
+				/>
+			</PropertyList>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
 					detail === 'orders' ? (
@@ -340,7 +360,7 @@ export function DetailPanel() {
 						onPress: () => void exportCsv(),
 					},
 					{
-						label: t('reports.print'),
+						label: t('reports.print_report'),
 						testID: 'detail-panel-print',
 						disabled: !!waiting,
 						loading: doc.isPrinting,
