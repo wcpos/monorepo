@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import isEqual from 'lodash/isEqual';
 
-import { Chip } from '@wcpos/components/chip';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
@@ -12,7 +11,6 @@ import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 import { ChipRow } from '@wcpos/components/chip-row';
 
 import { useT } from '../../../contexts/translations';
-import { useStoreDay } from '../../../hooks/use-store-day';
 import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useStoreSession } from '../../../contexts/app-state';
 import { type FiltersOf, useQueryState, useQueryStateActions } from '../../../query';
@@ -30,9 +28,6 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 	const { filters } = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const t = useT();
-	const { presets, rangeToFilter } = useStoreDay();
-	const today = rangeToFilter(presets().today);
-	const todayOn = isEqual(filters.dateRange, today);
 	// Clear all counts only what the cashier set: the provider's own cashier and store scope
 	// is the resting state, and Clear all returns to it.
 	const set = (value: unknown) => (value === undefined || value === '' ? null : value);
@@ -56,8 +51,6 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 	const cashierResource = useEngineRecordByWooId('customers', cashierID ?? 0);
 	const { wpCredentials } = useStoreSession();
 	const runtime = useQueryRuntime();
-	const mine = String(wpCredentials.id);
-	const mineOn = String(filters.cashier) === mine;
 
 	const refreshCustomer = React.useCallback(() => {
 		if (customerID === undefined || isGuestCustomer(customerID)) return;
@@ -74,26 +67,6 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 
 	return (
 		<ChipRow>
-			<Chip
-				testID="order-filter-today"
-				label={t('orders.filter_today')}
-				on={todayOn}
-				aria-pressed={todayOn}
-				icon={todayOn ? 'check' : undefined}
-				onPress={() =>
-					todayOn ? actions.clearFilter('dateRange') : actions.setFilter('dateRange', today)
-				}
-			/>
-			<Chip
-				testID="order-filter-mine"
-				label={t('orders.filter_my_sales')}
-				on={mineOn}
-				aria-pressed={mineOn}
-				icon={mineOn ? 'check' : undefined}
-				onPress={() =>
-					mineOn ? actions.clearFilter('cashier') : actions.setFilter('cashier', mine)
-				}
-			/>
 			<StatusPill />
 			<PaymentMethodPill />
 			{/* A pill that reads a record answers after the row has drawn: it holds a chip's

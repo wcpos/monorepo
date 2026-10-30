@@ -1063,8 +1063,6 @@
 	"orders.no_local_refund_summary": "No local refund summaries are available.",
 	"orders.no_reason_provided": "No reason provided",
 	"orders.order_not_found": "Order not found",
-	"orders.filter_today": "Today",
-	"orders.filter_my_sales": "My sales",
 	"orders.clear_all": "Clear all",
 	"orders.no_orders_yet": "No orders yet",
 	"orders.no_orders_yet_description": "Sales you take will appear here.",

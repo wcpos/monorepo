@@ -138,7 +138,9 @@ for (const [device, viewport] of Object.entries({
 						await expect(root.getByTestId('order-filter-status-remove')).toBeVisible();
 					});
 					await state('clear-all-visible', async () => {
-						await root.getByTestId('order-filter-today').click();
+						// The date popover opens on Today; Done applies it as the second filter group.
+						await root.getByTestId('order-filter-date').click();
+						await page.getByTestId('order-filter-date-done').click();
 						await expect(root.getByTestId('orders-filter-clear-all')).toBeVisible();
 					});
 					await root.getByTestId('orders-filter-clear-all').click();
