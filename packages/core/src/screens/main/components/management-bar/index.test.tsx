@@ -119,6 +119,16 @@ it.each([false, true])('omits the empty search slot (phone: %s)', (phone) => {
 	// The bell, then the avatar, on every size.
 	expect(screen.getByTestId('settings-bar-bell').parentElement?.children).toHaveLength(2);
 });
+// Support draws the pair on a phone alone (Paul, 2026-10-30): on wide its bar is the title.
+it.each([
+	[false, 0],
+	[true, 1],
+])('draws phone-only controls on a phone alone (phone: %s)', (phone, count) => {
+	mockPhone = phone;
+	render(<ManagementBar title="Support" testID="support-bar" controls="phone" />);
+	expect(screen.queryAllByTestId('support-bar-bell')).toHaveLength(count);
+	expect(screen.queryAllByTestId('support-bar-avatar')).toHaveLength(count);
+});
 it('passes the phone back crumb through with its label, selector and action', () => {
 	mockPhone = true;
 	const onBack = jest.fn();

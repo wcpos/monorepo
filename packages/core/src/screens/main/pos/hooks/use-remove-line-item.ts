@@ -1,12 +1,15 @@
 import * as React from 'react';
 
+import { retaxLine } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
-import { wooMetaCarrier } from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { reportStaleCartLine } from './cart-failure';
 import { enqueueCartAction } from './enqueue-cart-action';
 // Undo re-enters through cart.line.add; the guard must be registered whoever imported first.
 import './stock-guard-hook';
+import { useCartConfigReader } from './use-cart-config';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useActionContext } from './use-action-context';
 import { useT } from '../../../../contexts/translations';
 import { dispatchAction } from '../../../../extensions/actions';
@@ -30,6 +33,8 @@ type LineItem =
 export const useRemoveLineItem = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useCartWrite();
+	const configForOrder = useCartConfigReader();
+	const report = useReportEngineWarnings();
 	const { ctx, actor } = useActionContext();
 	const t = useT();
 
@@ -63,7 +68,20 @@ export const useRemoveLineItem = () => {
 						},
 					},
 					bottom: async (e) => {
-						const line = e.payload.line as LineItem;
+						const payload = order.getLatest().payload;
+						const items = (payload[type] ?? []) as LineItem[];
+						const restored = e.payload.line as LineItem;
+						const config = configForOrder(payload);
+						// Taxed web lines keep stored tax: their catalog tax status is unknown here.
+						const { line, warnings } =
+							type === 'line_items' &&
+							(config.vatExempt ||
+								restored.meta_data?.some(({ key }) => key === POS_META_KEYS.posData))
+								? retaxLine({ kind: 'line_item', line: restored }, config)
+								: type === 'fee_lines'
+									? retaxLine({ kind: 'fee', line: restored }, config)
+									: { line: restored, warnings: [] };
+						report(warnings, { orderId: order.uuid, site: 'undoRemove' });
 						const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
 						const updatedLines = [...items];
 						// Replace the line if a later write brought it back, else append the restore.
@@ -75,7 +93,7 @@ export const useRemoveLineItem = () => {
 			};
 			await enqueueCartAction(currentOrderRecord, run, { ctx, context: orderContext });
 		},
-		[currentOrderRecord, localPatch, ctx, actor]
+		[currentOrderRecord, localPatch, ctx, actor, configForOrder, report]
 	);
 
 	/**

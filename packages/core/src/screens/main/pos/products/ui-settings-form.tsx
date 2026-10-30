@@ -57,7 +57,6 @@ export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
 	variationsStyle: z.enum(['drill', 'inline']).optional(),
 	browseBy: z.enum(['all', 'categories', 'tags', 'brands', 'shortcuts']).optional(),
-	position: z.enum(['left', 'right']),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
 	sortDirection: z.enum(['asc', 'desc']),
@@ -111,11 +110,6 @@ export function UISettingsForm() {
 				<VStack>
 					<FormField
 						control={form.control}
-						name="showOutOfStock"
-						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
-					/>
-					<FormField
-						control={form.control}
 						name="viewMode"
 						render={({ field }) => (
 							<FormSegmentedControl
@@ -129,30 +123,27 @@ export function UISettingsForm() {
 							/>
 						)}
 					/>
-					<FormField
-						control={form.control}
-						name="variationsStyle"
-						render={({ field }) => (
-							<FormSegmentedControl
-								{...field}
-								label={t('pos_products.variations_style')}
-								testID="products-variations-style"
-								value={field.value ?? 'drill'}
-								segments={[
-									{ value: 'drill', label: t('pos_products.variations_open_in_place') },
-									{
-										value: 'inline',
-										// What the inline style does in the view the form is set to: a popover on
-										// a tile, expanded rows under a table row.
-										label:
-											viewMode === 'grid'
-												? t('pos_products.variations_popover')
-												: t('pos_products.variations_expanded_rows'),
-									},
-								]}
-							/>
-						)}
-					/>
+					{viewMode === 'grid' ? (
+						<FormField
+							control={form.control}
+							name="gridColumns"
+							render={({ field }) => (
+								<FormItem>
+									<HStack className="items-center justify-between">
+										<FormLabel>{getUILabel('gridColumns')}</FormLabel>
+										<Text className="text-muted-foreground">{field.value}</Text>
+									</HStack>
+									<Slider
+										value={field.value}
+										onValueChange={field.onChange}
+										min={2}
+										max={8}
+										step={1}
+									/>
+								</FormItem>
+							)}
+						/>
+					) : null}
 					<FormField
 						control={form.control}
 						name="browseBy"
@@ -162,18 +153,8 @@ export function UISettingsForm() {
 					/>
 					<FormField
 						control={form.control}
-						name="position"
-						render={({ field }) => (
-							<FormSegmentedControl
-								{...field}
-								label={getUILabel('position')}
-								testID="panel-position"
-								segments={[
-									{ value: 'left', label: t('pos_products.products_left') },
-									{ value: 'right', label: t('pos_products.products_right') },
-								]}
-							/>
-						)}
+						name="showOutOfStock"
+						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
 					/>
 					<HStack className="items-end px-1">
 						<FormField
@@ -221,51 +202,54 @@ export function UISettingsForm() {
 							)}
 						/>
 					</HStack>
-					{viewMode === 'grid' ? (
-						<VStack>
-							<FormField
-								control={form.control}
-								name="gridColumns"
-								render={({ field }) => (
-									<FormItem>
-										<HStack className="items-center justify-between">
-											<FormLabel>{getUILabel('gridColumns')}</FormLabel>
-											<Text className="text-muted-foreground">{field.value}</Text>
-										</HStack>
-										<Slider
-											value={field.value}
-											onValueChange={field.onChange}
-											min={2}
-											max={8}
-											step={1}
-										/>
-									</FormItem>
-								)}
+					<FormField
+						control={form.control}
+						name="variationsStyle"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={t('pos_products.variations_style')}
+								testID="products-variations-style"
+								value={field.value ?? 'drill'}
+								segments={[
+									{ value: 'drill', label: t('pos_products.variations_open_in_place') },
+									{
+										value: 'inline',
+										// What the inline style does in the view the form is set to: a popover on
+										// a tile, expanded rows under a table row.
+										label:
+											viewMode === 'grid'
+												? t('pos_products.variations_popover')
+												: t('pos_products.variations_expanded_rows'),
+									},
+								]}
 							/>
-							<View className="gap-2 px-1 pt-2">
-								<SectionHeading title={t('common.tile_fields')} />
-								{(
-									[
-										'name',
-										'price',
-										'tax',
-										'on_sale',
-										'category',
-										'sku',
-										'barcode',
-										'stock_quantity',
-										'cost_of_goods_sold',
-									] as const
-								).map((fieldKey) => (
-									<FormField
-										key={fieldKey}
-										control={form.control}
-										name={`gridFields.${fieldKey}`}
-										render={({ field }) => <FormSwitch label={getUILabel(fieldKey)} {...field} />}
-									/>
-								))}
-							</View>
-						</VStack>
+						)}
+					/>
+					{viewMode === 'grid' ? (
+						<View className="gap-2 px-1 pt-2">
+							<SectionHeading title={t('common.tile_fields')} />
+							{(
+								[
+									'name',
+									'price',
+									'tax',
+									'on_sale',
+									'category',
+									'sku',
+									'barcode',
+									'stock_quantity',
+									'cost_of_goods_sold',
+								] as const
+							).map((fieldKey) => (
+								<FormField
+									key={fieldKey}
+									control={form.control}
+									name={`gridFields.${fieldKey}`}
+									render={({ field }) => <FormSwitch label={getUILabel(fieldKey)} {...field} />}
+								/>
+							))}
+						</View>
 					) : (
 						<UISettingsColumnsForm getUILabel={getUILabel} />
 					)}

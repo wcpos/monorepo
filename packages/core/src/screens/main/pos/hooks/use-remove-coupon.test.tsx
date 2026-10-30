@@ -139,7 +139,10 @@ describe('useRemoveCoupon', () => {
 			localPatch.mockResolvedValue({ uuid: 'order-uuid' });
 			const { result } = renderHook(() => useRemoveCoupon());
 			await result.current.removeCoupon('pos-discount');
-			expect(recalculate).toHaveBeenCalledWith(lineItems, remaining);
+			expect(recalculate).toHaveBeenCalledWith(
+				expect.objectContaining({ line_items: lineItems }),
+				remaining
+			);
 			expect(localPatch).toHaveBeenCalledWith({
 				document: currentOrderRecord,
 				data: expect.objectContaining({ coupon_lines: remaining, line_items: lineItems }),
@@ -172,7 +175,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 12, code: null, discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
 	});
@@ -185,7 +188,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 12, code: null, discount: '1.80', discount_tax: '0', meta_data: [] },
 			{ id: 13, code: 'other', discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
@@ -199,7 +202,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 13, code: 'other', discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
 	});

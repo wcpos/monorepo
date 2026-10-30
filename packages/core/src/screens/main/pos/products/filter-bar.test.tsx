@@ -71,8 +71,9 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		onPress,
 		testID,
-	}: React.PropsWithChildren<{ onPress: () => void; testID: string }>) => (
-		<button data-testid={testID} onClick={onPress}>
+		variant,
+	}: React.PropsWithChildren<{ onPress: () => void; testID: string; variant?: string }>) => (
+		<button data-testid={testID} data-variant={variant} onClick={onPress}>
 			{children}
 		</button>
 	),
@@ -172,6 +173,18 @@ it('offers Clear all after two groups and resets groups and search', () => {
 	expect(state.filters.featured).toBeUndefined();
 	expect(state.filters.on_sale).toBeUndefined();
 	expect(screen.queryByTestId('filter-bar-clear-all')).toBeNull();
+});
+// The two bar-level actions are a word and a glyph, never boxes: the chips are the only boxes in
+// the row (Paul, 2026-10-30, board frame B). Two ghost buttons read as two more pills.
+it('draws Clear all as a link and Save as button as the bare bookmark, at every width', () => {
+	mount();
+	press('filter-pill-featured');
+	press('filter-pill-on_sale');
+	expect(screen.getByTestId('filter-bar-clear-all').getAttribute('data-variant')).toBe('link');
+	const save = screen.getByTestId('filter-bar-save-as-button');
+	expect(save.getAttribute('aria-label')).toBe('pos_products.save_as_button');
+	expect(save.textContent).toBe('');
+	expect(screen.getByRole('tooltip').textContent).toBe('pos_products.save_as_button');
 });
 it('does not count the hidden in-stock baseline as a group', () => {
 	const initialFilters = {

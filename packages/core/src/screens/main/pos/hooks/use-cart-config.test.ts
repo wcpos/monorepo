@@ -1,12 +1,15 @@
 /**
  * @jest-environment jsdom
  */
+import * as React from 'react';
+
 import { renderHook } from '@testing-library/react';
 
-import { useCartConfig } from './use-cart-config';
+import { CartConfigProvider, useCartConfig, useCartConfigReader } from './use-cart-config';
 import { cartConfigForOrder, orderTaxLocation } from '../commands/cart-config-for-order';
 let mockOrder: { payload: Record<string, unknown> } | undefined;
 let mockTaxBasedOn = 'billing';
+let mockLocationVatExempt = false;
 jest.mock('../contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => mockOrder,
 }));
@@ -61,7 +64,11 @@ jest.mock('../../contexts/tax-rates', () => {
 				location,
 				orderTaxLocation({ country: 'AU' }, mockTaxBasedOn, mockOrder?.payload).location
 			);
-			return { location, hasOrder: Boolean(mockOrder) };
+			return {
+				location,
+				hasOrder: Boolean(mockOrder),
+				vatExempt: mockLocationVatExempt,
+			};
 		},
 		useTaxSettings: () => ({
 			allRates,
@@ -155,3 +162,19 @@ it.each(['billing', 'shipping', 'base', 'override', 'fallback'])(
 		);
 	}
 );
+
+it('the session reader uses the target order latest exemption, not the displayed order', () => {
+	mockOrder = { payload: { meta_data: [{ key: 'is_vat_exempt', value: 'no' }] } };
+	const { result } = renderHook(() => useCartConfigReader(), {
+		wrapper: ({ children }) => React.createElement(CartConfigProvider, null, children),
+	});
+	const payload = { meta_data: [{ key: 'is_vat_exempt', value: 'no' }] };
+	expect(result.current(payload).vatExempt).toBe(false);
+	payload.meta_data[0].value = 'yes';
+	expect(result.current(payload).vatExempt).toBe(true);
+});
+
+it('render-time config agrees with the location context exemption', () => {
+	mockLocationVatExempt = true;
+	expect(renderHook(() => useCartConfig()).result.current.vatExempt).toBe(true);
+});

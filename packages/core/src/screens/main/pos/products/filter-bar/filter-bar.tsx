@@ -12,7 +12,6 @@ import {
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { IconButton } from '@wcpos/components/icon-button';
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
 import { Chip } from '@wcpos/components/chip';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -476,7 +475,6 @@ export function POSFilterBar({
 	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 	const router = useRouter();
-	const isPhone = useIsPhone();
 	const settingsSort = useDocField(uiSettings, (value) =>
 		getPOSProductSort(value.sortBy, value.sortDirection)
 	);
@@ -520,9 +518,16 @@ export function POSFilterBar({
 					/>
 				);
 			})}
+			{/*
+			 * The two bar-level actions are a word and a glyph, never boxes: the chips are the only
+			 * boxes in the row (Paul, 2026-10-30, board frame B). Clear all is a link, as Polaris,
+			 * Carbon and Spectrum draw it; Save as button is the bare bookmark the phone always had,
+			 * as Linear keeps "save view" out of its chip row. Two ghost buttons here read as two
+			 * more pills and cost the row twice the width.
+			 */}
 			{active >= 2 && (
 				<Button
-					variant="ghost"
+					variant="link"
 					size="sm"
 					testID="filter-bar-clear-all"
 					onPress={() => clearConditions(actions, state.filters, place)}
@@ -530,25 +535,22 @@ export function POSFilterBar({
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>
 			)}
-			{active >= 1 &&
-				(isPhone ? (
-					<IconButton
-						name="bookmark"
-						accessibilityLabel={t('pos_products.save_as_button')}
-						testID="filter-bar-save-as-button"
-						onPress={capture}
-					/>
-				) : (
-					<Button
-						variant="ghost"
-						size="sm"
-						leftIcon="bookmark"
-						testID="filter-bar-save-as-button"
-						onPress={capture}
-					>
-						<ButtonText>{t('pos_products.save_as_button')}</ButtonText>
-					</Button>
-				))}
+			{active >= 1 && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<IconButton
+							name="bookmark"
+							size="sm"
+							accessibilityLabel={t('pos_products.save_as_button')}
+							testID="filter-bar-save-as-button"
+							onPress={capture}
+						/>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('pos_products.save_as_button')}</Text>
+					</TooltipContent>
+				</Tooltip>
+			)}
 			<DeleteQuickFilterDialog
 				quickFilter={deleting}
 				onClose={() => setDeleting(null)}

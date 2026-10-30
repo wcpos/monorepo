@@ -14,6 +14,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import type { FooterButton } from '@wcpos/components/dialog';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { activeAwaitingCustomer, derive, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
@@ -46,11 +47,14 @@ function PaidMoment({
 	children,
 	sent = false,
 	awaiting,
+	corner,
 }: {
 	children: React.ReactNode;
 	sent?: boolean;
 	/** null: the journal has not answered yet; the moment waits, unseen, for its tone. */
 	awaiting: boolean | null;
+	/** The pane's dismiss, in the top-right corner of the moment (below any notice above it). */
+	corner?: React.ReactNode;
 }) {
 	// The tone the moment first showed: the disc pops again only when it changes (the answer).
 	const [firstTone, setFirstTone] = React.useState<boolean | null>(null);
@@ -58,6 +62,7 @@ function PaidMoment({
 	const ready = awaiting !== null;
 	return (
 		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
+			{corner}
 			{/* The till's paid moment, never the store's later answer (ADR 0040 Decided 1 rule 3). */}
 			{Platform.isNative && !sent && ready ? <PaidHaptic /> : null}
 			{/* Unseen until the tone is known, then ONE pop (never green, then amber); the answer
@@ -242,7 +247,25 @@ function ReceiptStageDocument({
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
 				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
 			) : null}
-			<PaidMoment sent={sent !== null} awaiting={awaiting}>
+			<PaidMoment
+				sent={sent !== null}
+				awaiting={awaiting}
+				corner={
+					// The columns pane has no dialog chrome, so it draws the checkout column's X in the
+					// same corner, and it finishes the sale exactly as New sale does (same guard). The
+					// modal host already has one: DialogContent's X, routed through its onClose.
+					compact ? null : (
+						<IconButton
+							name="close"
+							accessibilityLabel={t('common.close')}
+							testID="receipt-close"
+							className="absolute top-2 right-2 z-10"
+							disabled={doc.autoPrintPending}
+							onPress={finishSale}
+						/>
+					)
+				}
+			>
 				<View testID={sent ? 'checkout-sent-headline' : 'checkout-paid-headline'}>
 					<AmountFigure testID={change > 0 ? 'receipt-change-due' : undefined} center>
 						{sent

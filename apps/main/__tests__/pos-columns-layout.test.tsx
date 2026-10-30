@@ -14,7 +14,7 @@ const mockPanels: PanelRecord[] = [];
 const mockChildOrder: string[] = [];
 let mockLayoutHandler:
 	((layout: number[], meta: { isUserInteraction: boolean }) => void) | undefined;
-let mockPosition: 'left' | 'right' = 'left';
+let mockPosition: 'left' | 'right' = 'right';
 const mockPatchUI = jest.fn();
 let mockScreenSize = 'lg';
 let mockSegments: string[] = [];
@@ -29,6 +29,8 @@ const mockMarkInteractive = jest.fn();
  */
 const mockUISettings = {
 	width: 60,
+	// `position` is the CART's side (`pos-cart`, #3117): `right` is the default products-first
+	// layout. One container stands in for both settings docs here.
 	// A getter, because the real RxState container is stable and its FIELDS change under it.
 	// An object literal rebuilt per call would freeze whatever `useDocField` captured.
 	get position() {
@@ -272,7 +274,7 @@ afterEach(() => {
 
 describe('POS columns layout as a pos.columns.panel slot', () => {
 	it('renders the registered panels products-first by default, with a handle between them', () => {
-		renderColumns('left');
+		renderColumns('right');
 
 		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
 		expect(mockPanels).toEqual([
@@ -281,8 +283,8 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 		]);
 	});
 
-	it('reverses the panels when the products panel is set to the right', () => {
-		renderColumns('right');
+	it('reverses the panels when the cart is set to the left', () => {
+		renderColumns('left');
 
 		expect(mockChildOrder).toEqual(['cart', 'pos-resize-handle', 'products']);
 		// Both sides stay sized whichever order they render in (#1620).
@@ -293,21 +295,21 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 	});
 
 	it('reorders a MOUNTED route when the position setting changes', () => {
-		renderColumns('left');
+		renderColumns('right');
 		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
 
-		setPositionSetting('right');
+		setPositionSetting('left');
 		expect(mockChildOrder).toEqual(['cart', 'pos-resize-handle', 'products']);
 
-		setPositionSetting('left');
+		setPositionSetting('right');
 		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
 	});
 
 	it.each([
-		['left', [70, 30], 70],
-		['right', [30, 70], 70],
+		['right', [70, 30], 70],
+		['left', [30, 70], 70],
 	] as const)(
-		'writes the products panel width from position %s whichever index it sits at',
+		'writes the products panel width with the cart at %s whichever index it sits at',
 		(position, layout, expected) => {
 			renderColumns(position);
 
@@ -317,7 +319,7 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 	);
 
 	it('ignores layout changes that were not driven by the user', () => {
-		renderColumns('left');
+		renderColumns('right');
 
 		act(() => mockLayoutHandler?.([70, 30], { isUserInteraction: false }));
 		expect(mockPatchUI).not.toHaveBeenCalled();
@@ -329,7 +331,7 @@ describe('phone Products pane (#2363)', () => {
 	it('keeps the register bar in the small columns Products pane after landing on /cart', () => {
 		mockScreenSize = 'sm';
 		mockSegments = ['cart'];
-		renderColumns('left');
+		renderColumns('right');
 
 		const panes = view!.root
 			.findAllByProps({ testID: 'pos-products-tab' })
@@ -345,7 +347,7 @@ describe('phone Products pane (#2363)', () => {
 	it('keeps the register bar in the small columns Products pane at the root route', () => {
 		mockScreenSize = 'sm';
 		mockSegments = [];
-		renderColumns('left');
+		renderColumns('right');
 
 		const panes = view!.root
 			.findAllByProps({ testID: 'pos-products-tab' })
@@ -360,7 +362,7 @@ describe('phone Products pane (#2363)', () => {
 
 	it('does not render the phone Products pane or its register bar in wide columns', () => {
 		mockScreenSize = 'lg';
-		renderColumns('left');
+		renderColumns('right');
 
 		expect(view!.root.findAllByProps({ testID: 'pos-products-tab' })).toHaveLength(0);
 		expect(view!.root.findAllByProps({ testID: 'register-bar-stub' })).toHaveLength(0);
@@ -393,7 +395,7 @@ describe('phone columns tab across a drawer round trip (#2363)', () => {
 	it('keeps Products active after leaving POS through the drawer and returning', () => {
 		mockScreenSize = 'sm';
 		mockSegments = cartSegments;
-		renderColumns('left');
+		renderColumns('right');
 		expect(paneDisplays()).toEqual(['none', 'flex']);
 		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
 		expect(paneDisplays()).toEqual(['flex', 'none']);
@@ -408,7 +410,7 @@ describe('phone columns tab across a drawer round trip (#2363)', () => {
 	it('still switches to Cart on an in-POS move onto /cart', () => {
 		mockScreenSize = 'sm';
 		mockSegments = cartSegments;
-		renderColumns('left');
+		renderColumns('right');
 		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
 		expect(paneDisplays()).toEqual(['flex', 'none']);
 
@@ -422,7 +424,7 @@ describe('phone columns tab across a drawer round trip (#2363)', () => {
 
 	it('labels the phone tabs through translation keys, not English literals', () => {
 		mockScreenSize = 'sm';
-		renderColumns('left');
+		renderColumns('right');
 		const tabText = (testID: string) =>
 			view!.root
 				.findByProps({ testID })
@@ -472,7 +474,7 @@ describe('safe-area insets belong to the surfaces at the edges', () => {
 
 	it('pads each wide column, never the screen-pos root', () => {
 		mockScreenSize = 'lg';
-		renderColumns('left');
+		renderColumns('right');
 
 		const root = hostStyle('screen-pos');
 		expect(root.paddingTop).toBeUndefined();
@@ -484,7 +486,7 @@ describe('safe-area insets belong to the surfaces at the edges', () => {
 
 	it('on the phone fallback, pads the status bar on the container and the home indicator in the tab bar', () => {
 		mockScreenSize = 'sm';
-		renderColumns('left');
+		renderColumns('right');
 
 		const root = hostStyle('screen-pos');
 		expect(root.paddingTop).toBe(24);

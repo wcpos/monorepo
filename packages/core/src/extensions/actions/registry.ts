@@ -12,6 +12,7 @@ export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	'cart.coupon.apply': 1500,
 	'cart.coupon.remove': 1500,
 	'cart.customer.set': 1500,
+	'cart.tax_exempt.set': 1500,
 	[ORDER_VOID_EVENT]: 1500, // the gate reads counts the dispatcher already took
 	'checkout.tender.commit': 5_000, // a card leg already waits longer
 };

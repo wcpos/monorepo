@@ -928,3 +928,32 @@ describe('VAT-exempt settlement', () => {
 		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0', discount_tax: '0' });
 	});
 });
+
+it.each(['', undefined])(
+	'ignores absent money and key order in tax lines: subtotal=%s',
+	(subtotal) => {
+		const config = makeConfig();
+		const snapshot = {
+			line_items: [
+				{
+					...makePosLineItem(1, 10),
+					total_tax: '1',
+					subtotal_tax: '1',
+					taxes: [{ id: 1, total: '1', subtotal: '1' }],
+				},
+			],
+		};
+		const first = settleAggregate(snapshot, config);
+		expect(first.patch.tax_lines).toHaveLength(1);
+		const applied = {
+			...snapshot,
+			...first.patch,
+			tax_lines: first.patch.tax_lines?.map((line) => ({
+				...Object.fromEntries(Object.entries(line).reverse()),
+				subtotal,
+			})),
+		};
+		expect(settleAggregate(applied, config).changed).toBe(false);
+		expect(settleAggregate({ ...applied, total: undefined }, config).changed).toBe(true);
+	}
+);

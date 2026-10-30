@@ -42,7 +42,24 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 		assert.doesNotMatch(themeBody, declaration, `${token} must not be in plain @theme`);
 	}
 });
-const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
+const themeNames = [
+	'light',
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'paper',
+	'warm',
+	'bold',
+	'market',
+];
+
+test('the contract covers every variant in the theme layer, in sheet order', () => {
+	const layer = css.match(/@layer\s+theme\s*\{([\s\S]*?)^\}/m)?.[1];
+	assert.ok(layer, 'Missing theme layer');
+	const variants = [...layer.matchAll(/@variant\s+([\w-]+)\s*\{/g)].map(([, name]) => name);
+	assert.deepEqual(themeNames, variants);
+});
 const newColors = [
 	'selected',
 	'selected-foreground',
@@ -384,6 +401,10 @@ for (const name of themeNames) {
 for (const name of themeNames) {
 	for (const [text, ground] of [
 		['selected-foreground', 'selected'],
+		// `text-primary` is ink on links and the Split action, not only a fill (Codex on #3124).
+		['primary', 'card'],
+		['primary', 'background'],
+		['primary-foreground', 'primary'],
 		['warning-text', 'card'],
 		['warning-text', 'background'],
 		['destructive', 'card'],

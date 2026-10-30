@@ -252,6 +252,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			}
 			return oldDoc;
 		},
+		20(oldDoc: StoreDocumentType) {
+			// v20: `icons` gains `auto` (follow the theme, decision 45) and it becomes the
+			// schema default. Every stored value stays valid, so nothing is rewritten; the
+			// bump exists because the schema hash moved (the v19 lesson above).
+			return oldDoc;
+		},
 	},
 };
 

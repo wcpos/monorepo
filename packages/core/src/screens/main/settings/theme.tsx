@@ -1,15 +1,19 @@
 import * as React from 'react';
+import { type LayoutChangeEvent, View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
 import {
 	Icon,
 	ICON_SET_IDS,
+	ICON_SETTING_AUTO,
 	IconName,
 	type IconSetId,
 	IconSetProvider,
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { iconSetForTheme } from '@wcpos/components/lib/themes';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
@@ -22,7 +26,6 @@ import { PropertyRow } from '@wcpos/components/property-row';
 
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
-import { resolveIconSet } from '../../../contexts/icon-set';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -33,40 +36,46 @@ type ThemeOption = {
 };
 
 /**
- * Single theme button. Isolated so the parent doesn't need `useUniwind()`.
+ * A theme tile narrower than this cuts its name and description: rendered 2026-10-30, 78 wide
+ * at a 768 window broke "Monochrome" mid-word, 130 wide at 1024 fit every line.
+ */
+const MIN_TILE_WIDTH = 128;
+/** The grid's gutter, `TileGrid`'s `gap-2`. */
+const TILE_GAP = 8;
+/** Two tiles even on a phone, never more than the tender pane's five. */
+const MIN_COLUMNS = 2;
+const MAX_COLUMNS = 5;
+
+/** As many columns as the grid's width gives tiles of `MIN_TILE_WIDTH`, two to five. */
+export function themeColumns(width: number): number {
+	const fit = Math.floor((width + TILE_GAP) / (MIN_TILE_WIDTH + TILE_GAP));
+	return Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, fit));
+}
+
+/**
+ * One theme tile, as the tender pane and the register panel draw theirs: the tile's own
+ * surface and ink carry the selected state. Isolated so the parent doesn't need `useUniwind()`.
  */
 function ThemeOptionButton({
 	option,
 	activeTheme,
 	onPress,
-	t,
 }: {
 	option: ThemeOption;
 	activeTheme: string;
 	onPress: (name: string) => Promise<void> | void;
-	t: ReturnType<typeof useT>;
 }) {
-	const isActive = activeTheme === option.name;
 	return (
 		<Tile
 			testID={`theme-option-${option.name}`}
 			onPress={() => {
 				void onPress(option.name);
 			}}
-			selected={isActive}
-			// min-h-40 clears the tallest possible card — icon + 2-line label cap
-			// + 2-line description cap (≈9.4rem) — so all six tiles match across
-			// rows, locales, and widths, not just within a stretched row.
-			className="min-h-40 gap-2 p-3"
+			selected={activeTheme === option.name}
 			title={option.label}
 			sub={option.description}
 		>
-			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
-			<Icon
-				name={option.icon}
-				size="xl"
-				className={isActive ? 'text-primary' : 'text-muted-foreground'}
-			/>
+			<Icon name={option.icon} />
 		</Tile>
 	);
 }
@@ -87,33 +96,44 @@ function ThemeGrid({
 	t: ReturnType<typeof useT>;
 }) {
 	const { theme, hasAdaptiveThemes } = useUniwind();
+	const phone = useIsPhone();
+	const [width, setWidth] = React.useState(0);
+	const onLayout = React.useCallback(
+		(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width),
+		[]
+	);
+	// Before the first layout the device decides, as the tender pane's grid does.
+	const columns = width > 0 ? themeColumns(width) : phone ? MIN_COLUMNS : MAX_COLUMNS;
 	const activeTheme = hasAdaptiveThemes ? 'system' : theme;
 	const activeThemeLabel = themeOptions.find((o) => o.name === activeTheme)?.label ?? activeTheme;
 
-	// The status line keys the grid, and the grid's Saved mark sits on that line.
+	// The status line keys the grid and carries its Saved mark; the grid sits under the row, not
+	// in its 320 value column, so the tiles take the section's width as the Icons list does.
 	return (
-		<PropertyRow
-			stacked
-			name="theme"
-			label={
-				hasAdaptiveThemes
-					? t('settings.following_system_theme')
-					: t('settings.current_theme', { theme: activeThemeLabel })
-			}
-		>
-			{/* System, Light, Dark; then Ocean, Sunset, Monochrome. */}
-			<TileGrid columns={3} className="pt-2">
-				{themeOptions.map((option) => (
-					<ThemeOptionButton
-						key={option.name}
-						option={option}
-						activeTheme={activeTheme as string}
-						onPress={onThemeChange}
-						t={t}
-					/>
-				))}
-			</TileGrid>
-		</PropertyRow>
+		<>
+			<PropertyRow
+				stacked
+				name="theme"
+				label={
+					hasAdaptiveThemes
+						? t('settings.following_system_theme')
+						: t('settings.current_theme', { theme: activeThemeLabel })
+				}
+			/>
+			{/* The measured width picks the columns: five on a desktop, three on an iPad in portrait, two on a phone. */}
+			<View onLayout={onLayout} className="pt-2">
+				<TileGrid columns={columns}>
+					{themeOptions.map((option) => (
+						<ThemeOptionButton
+							key={option.name}
+							option={option}
+							activeTheme={activeTheme as string}
+							onPress={onThemeChange}
+						/>
+					))}
+				</TileGrid>
+			</View>
+		</>
 	);
 }
 
@@ -180,6 +200,8 @@ const ICON_SAMPLES: IconName[] = [
 	'confirmed',
 ];
 
+const ICON_OPTIONS = [ICON_SETTING_AUTO, ...ICON_SET_IDS] as const;
+
 /**
  * The Icons section: one row per candidate family, its samples drawn in that
  * family. The choice reaches the screens through `IconSetSettingProvider`.
@@ -187,15 +209,17 @@ const ICON_SAMPLES: IconName[] = [
 function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
-	const labels: Record<IconSetId, string> = {
+	const icons = useDocField(store, (latest) => latest.icons) ?? ICON_SETTING_AUTO;
+	const theme = useDocField(store, (latest) => latest.theme);
+	const labels: Record<IconSetId | typeof ICON_SETTING_AUTO, string> = {
+		auto: t('settings.icons.auto'),
 		tabler: t('settings.icons.tabler'),
 		hugeicons: t('settings.icons.hugeicons'),
 		phosphor: t('settings.icons.phosphor'),
 	};
 
 	const handleIconsChange = React.useCallback(
-		async (value: IconSetId) => {
+		async (value: IconSetId | typeof ICON_SETTING_AUTO) => {
 			try {
 				const result = await patchStoreSettings(store, { icons: value }, t);
 				if (result) markSaved(['icons']);
@@ -215,12 +239,12 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 			<RadioGroup
 				value={icons}
 				onValueChange={(value) => {
-					void handleIconsChange(value as IconSetId);
+					void handleIconsChange(value as IconSetId | typeof ICON_SETTING_AUTO);
 				}}
 				aria-label={t('settings.icons')}
 				className="gap-0 pt-2"
 			>
-				{ICON_SET_IDS.map((id) => (
+				{ICON_OPTIONS.map((id) => (
 					<RadioGroupOption
 						key={id}
 						value={id}
@@ -230,7 +254,7 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 						labelClassName="text-sm font-medium"
 						// One line at every width: radio, label and a 160 px strip fit a phone.
 						right={
-							<IconSetProvider set={id}>
+							<IconSetProvider set={id === ICON_SETTING_AUTO ? iconSetForTheme(theme) : id}>
 								<HStack className="ml-auto gap-2" testID={`settings-icons-${id}-samples`}>
 									{ICON_SAMPLES.map((name) => (
 										<Icon key={name} name={name} size="lg" className="text-foreground" />
@@ -306,6 +330,30 @@ function ThemeSettingsContent() {
 				label: t('settings.theme.monochrome'),
 				icon: 'contrast',
 				description: t('settings.theme.monochrome_description'),
+			},
+			{
+				name: 'paper',
+				label: t('settings.theme.paper'),
+				icon: 'receipt',
+				description: t('settings.theme.paper_description'),
+			},
+			{
+				name: 'warm',
+				label: t('settings.theme.warm'),
+				icon: 'store',
+				description: t('settings.theme.warm_description'),
+			},
+			{
+				name: 'bold',
+				label: t('settings.theme.bold'),
+				icon: 'cash',
+				description: t('settings.theme.bold_description'),
+			},
+			{
+				name: 'market',
+				label: t('settings.theme.market'),
+				icon: 'basket',
+				description: t('settings.theme.market_description'),
 			},
 		],
 		[t]

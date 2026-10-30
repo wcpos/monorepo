@@ -19,12 +19,18 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 let mockLines: object[] = [];
+let mockVatExempt = false;
 const mockOrderLists: Partial<Record<'fee_lines' | 'shipping_lines' | 'coupon_lines', object[]>> =
 	{};
 const mockOrder = {
 	uuid: 'order-uuid',
 	get payload() {
-		return { id: 17, line_items: mockLines, ...mockOrderLists };
+		return {
+			id: 17,
+			line_items: mockLines,
+			meta_data: [{ key: 'is_vat_exempt', value: mockVatExempt ? 'yes' : 'no' }],
+			...mockOrderLists,
+		};
 	},
 	getLatest: () => mockOrder,
 };
@@ -96,14 +102,98 @@ describe('useRemoveLineItem', () => {
 		resetActionRegistry();
 		mockLocalPatch.mockResolvedValue(true);
 		mockLines = [];
+		mockVatExempt = false;
 	});
 	const coffee = {
 		id: 11,
 		name: 'Coffee',
 		product_id: 82,
+		quantity: 1,
+		subtotal: '10',
+		total: '10',
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
 	};
 
+	it('undo recomputes the saved line using the latest exemption', async () => {
+		mockLines = [
+			{
+				...coffee,
+				quantity: 1,
+				total: '10',
+				subtotal: '10',
+				total_tax: '1',
+				subtotal_tax: '1',
+				taxes: [{ id: 1, total: '1', subtotal: '1' }],
+				meta_data: [
+					...coffee.meta_data,
+					{ key: '_woocommerce_pos_data', value: { price: 10, tax_status: 'taxable' } },
+				],
+			},
+		];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => {
+			await result.current.removeLineItem('line-1', 'line_items');
+		});
+		mockVatExempt = true;
+		mockLines = [];
+		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+		expect(mockLocalPatch.mock.calls.at(-1)[0].data.line_items).toEqual([
+			expect.objectContaining({ total: '10', total_tax: '0', taxes: [] }),
+		]);
+	});
+	it.each([false, true])(
+		'undo preserves web money and only zeroes tax when exempt=%s',
+		async (exempt) => {
+			const { id: _id, ...local } = coffee;
+			const web = {
+				...local,
+				subtotal: '10',
+				total: '9',
+				total_tax: '0.9',
+				subtotal_tax: '1',
+				taxes: [{ id: 1, total: '0.9', subtotal: '1' }],
+			};
+			mockLines = [web];
+			const { result } = renderHook(() => useRemoveLineItem());
+			await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+			mockVatExempt = exempt;
+			mockLines = [];
+			await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+			expect(mockLocalPatch.mock.calls.at(-1)[0].data.line_items).toEqual([
+				exempt ? { ...web, taxes: [], total_tax: '0', subtotal_tax: '0' } : web,
+			]);
+		}
+	);
+	it('undo restores POS taxes after un-exempting without rebuilding discounted money', async () => {
+		const { id: _id, ...local } = coffee;
+		const line = {
+			...local,
+			subtotal: '10',
+			total: '9',
+			total_tax: '0',
+			subtotal_tax: '0',
+			taxes: [],
+			meta_data: [
+				...local.meta_data,
+				{ key: '_woocommerce_pos_data', value: { price: 10, tax_status: 'taxable' } },
+			],
+		};
+		mockVatExempt = true;
+		mockLines = [line];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		mockVatExempt = false;
+		mockLines = [];
+		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+		expect(mockLocalPatch.mock.calls.at(-1)[0].data.line_items).toEqual([
+			{
+				...line,
+				total_tax: '0.9',
+				subtotal_tax: '1',
+				taxes: [{ id: 1, total: '0.900000', subtotal: '1.000000' }],
+			},
+		]);
+	});
 	it('dispatches cart.line.remove with the leaving line, then writes', async () => {
 		mockLines = [coffee];
 		const seen: ActionEventInput<'cart.line.remove'>[] = [];
@@ -287,12 +377,7 @@ describe('useRemoveLineItem', () => {
 	it.each([true, false])(
 		'Undo after deletion confirmed=%s restores only valid identity',
 		async (confirmed) => {
-			const original = {
-				id: 11,
-				product_id: 82,
-				name: 'Coffee',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
-			};
+			const original = { ...coffee };
 			mockLines = [original];
 			const { result } = renderHook(() => useRemoveLineItem());
 			await act(async () => result.current.removeLineItem('line-1', 'line_items'));
@@ -300,7 +385,10 @@ describe('useRemoveLineItem', () => {
 			await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
 			const restored = mockLocalPatch.mock.calls.at(-1)[0].data.line_items;
 			const { id, ...content } = original;
-			expect(restored).toEqual([confirmed ? content : original]);
+			expect(restored).toEqual([expect.objectContaining(confirmed ? content : original)]);
+			if (confirmed) expect(restored[0]).not.toHaveProperty('id');
+			expect(restored[0]).toMatchObject({ total: '10' });
+			expect(restored[0]).not.toHaveProperty('total_tax');
 			expect(original.id).toBe(id);
 		}
 	);
@@ -327,7 +415,15 @@ describe('useRemoveLineItem', () => {
 
 afterEach(() => expectSettledWrites(mockLocalPatch));
 
-jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+jest.mock('./use-cart-config', () => ({
+	useCartConfigReader: () => (payload: import('@wcpos/query').OrderPayload) =>
+		jest.requireActual('@wcpos/order-math').createCartConfig({
+			...jest.requireActual('../../../../../jest/cart-write').config,
+			calcTaxes: true,
+			rates: [{ id: 1, rate: '10', class: 'standard' }],
+			vatExempt: jest.requireActual('@wcpos/sync-core').wooMetaCarrier.vatExempt(payload.meta_data),
+		}),
+}));
 
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),

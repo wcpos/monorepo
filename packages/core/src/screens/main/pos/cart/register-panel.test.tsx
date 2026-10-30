@@ -148,7 +148,9 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
+// Cart panels open on the left here (products on the left), so a right panel proves it ignores
+// the products' position.
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({
 		printedTo: null,
@@ -1058,6 +1060,25 @@ it('opens on the count pane while this device is counting, only when opened', as
 		mockCountingHere = previousHere;
 	}
 });
+// The real count pane, with the side it is handed recorded: the approval sheet it opens takes that
+// side, and without it would fall back to the cart's (left here).
+const mockCountSide = jest.fn();
+jest.mock('./register-count', () => {
+	const actual = jest.requireActual('./register-count');
+	const { createElement } = jest.requireActual('react');
+	return {
+		...actual,
+		RegisterCount: (props: { side?: 'left' | 'right' }) => {
+			mockCountSide(props.side);
+			return createElement(actual.RegisterCount, props);
+		},
+	};
+});
+it('hands the count pane its own side (right), which the approval sheet takes', async () => {
+	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+	await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
+	expect(mockCountSide).toHaveBeenLastCalledWith('right');
+});
 it('a requested count starts counting before showing the pane', async () => {
 	render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
 	await waitFor(() => expect(screen.getByTestId('count-back')).toBeTruthy());
@@ -1164,31 +1185,31 @@ jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: () => <div data-testid="sheet-preview" />,
 }));
 
-it("takes the side and portal host it is given; defaults to the cart's side and the POS host", () => {
+it("opens from the right whatever the products' position; takes the portal host it is given, the POS by default", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('pos');
 	view.unmount();
-	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost={null} />);
-	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('left');
+	render(<RegisterPanel open onOpenChange={jest.fn()} portalHost={null} />);
+	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
 });
 
-it('keeps the X-report print sheet on the panel side and host', () => {
-	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost="scene" />);
+it('keeps the X-report print sheet on the panel side (right) and host', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} portalHost="scene" />);
 	fireEvent.click(screen.getByTestId('register-panel-print'));
 	const sheet = screen.getByTestId('register-panel-print-sheet');
-	expect(sheet.getAttribute('data-side')).toBe('left');
+	expect(sheet.getAttribute('data-side')).toBe('right');
 	expect(sheet.getAttribute('data-host')).toBe('scene');
 });
 
-it.each([
-	['right', 'scene'],
-	['left', null],
-] as const)('keeps movement dialogs on the panel side %s and host %s', (side, portalHost) => {
-	render(<RegisterPanel open onOpenChange={jest.fn()} side={side} portalHost={portalHost} />);
-	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
-	const movement = screen.getByTestId('movement-after').closest('[data-portal]');
-	expect(movement?.getAttribute('data-side')).toBe(side);
-	expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
-});
+it.each(['scene', null] as const)(
+	'keeps movement dialogs on the panel side (right) and host %s',
+	(portalHost) => {
+		render(<RegisterPanel open onOpenChange={jest.fn()} portalHost={portalHost} />);
+		fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+		const movement = screen.getByTestId('movement-after').closest('[data-portal]');
+		expect(movement?.getAttribute('data-side')).toBe('right');
+		expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
+	}
+);

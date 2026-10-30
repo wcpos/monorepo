@@ -7,10 +7,10 @@ import {
 	type RecalculateInput,
 	type RecalculateResult,
 } from './coupon-recalculate';
-import { useCartConfig } from './use-cart-config';
+import { useCartConfigReader } from './use-cart-config';
 import { useCouponContext } from './use-coupon-context';
 
-type LineItem = import('@wcpos/query').OrderLineItem;
+type OrderPayload = import('@wcpos/query').OrderPayload;
 type CouponLine = import('@wcpos/query').OrderCouponLine;
 
 /**
@@ -21,11 +21,13 @@ type CouponLine = import('@wcpos/query').OrderCouponLine;
  * necessary context, and returns the recalculated result.
  */
 export const useRecalculateCoupons = () => {
-	const config = useCartConfig();
+	const configForOrder = useCartConfigReader();
 	const { getCouponContext } = useCouponContext();
 
 	const recalculate = React.useCallback(
-		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult> => {
+		async (order: OrderPayload, couponLines: CouponLine[]): Promise<RecalculateResult> => {
+			const lineItems = order.line_items ?? [];
+			const config = configForOrder(order);
 			// Filter to active coupon codes
 			const activeCodes = couponLines
 				.filter((cl): cl is CouponLine & { code: string } => cl.code != null)
@@ -51,7 +53,7 @@ export const useRecalculateCoupons = () => {
 				dp: config.dp,
 			});
 		},
-		[config, getCouponContext]
+		[configForOrder, getCouponContext]
 	);
 
 	return { recalculate };

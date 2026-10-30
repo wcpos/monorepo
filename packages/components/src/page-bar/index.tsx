@@ -3,6 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { Breadcrumb } from '../breadcrumb';
 import { EdgeSurface } from '../edge-surface';
+import { useTitleBarStrip } from '../edge-surface/title-bar-strip';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
@@ -54,10 +55,10 @@ export function PageBar({
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	// A phone's search takes a row of its own only when the control row has a title, a scope
 	// control, a crumb or the menu to share it with. A row of nothing but icons (the POS products
-	// column, whose register bar above carries the place and the menu) keeps it in its middle,
+	// column; the menu too, under the desktop title bar, Paul 2026-10-30) keeps it in its middle,
 	// so the search does not spend a second row (Paul, 2026-10-28).
-	const searchRow =
-		phone && (title !== undefined || titleSlot != null || back != null || onMenu != null);
+	const menuRow = !useTitleBarStrip().height && onMenu != null;
+	const searchRow = phone && (title !== undefined || titleSlot != null || back != null || menuRow);
 	return (
 		// The bar touches the top edge; inside a column that pads it already (the POS products
 		// column), there is nothing left to pad.
@@ -73,13 +74,16 @@ export function PageBar({
 			    On wide widths the bar is the page's first row, not a box of its own height: its
 			    controls sit the page gutter from the top and the sides, and the row under it
 			    (the chip row, a page body) brings the gutter between them, so search, chips and card
-			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
-			    height: its search sits in the row or on a row of its own (`searchRow`). */}
+			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone follows the same rule
+			    (Paul, 2026-10-30: under the desktop title bar no status inset softens the top): its
+			    control row sits the ground's gutter under the bar's top edge, after any inset the
+			    surface pads, and keeps the control height, so the gutter is a margin outside it; its
+			    search sits in the row or directly under it on a row of its own (`searchRow`). */}
 			<HStack
 				className={cn(
 					'bg-background items-center',
 					// The ground's gutter, so a pane's edge that faces another keeps none (`useGround`).
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : cn(ground.px, ground.pt, 'gap-4')
+					phone ? cn(ground.mt, 'h-ctl gap-2 pr-2 pl-4') : cn(ground.px, ground.pt, 'gap-4')
 				)}
 			>
 				{(phone || onMenu) &&

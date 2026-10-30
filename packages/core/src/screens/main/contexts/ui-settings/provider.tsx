@@ -10,6 +10,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useUILabel } from './use-ui-label';
 import {
+	cartPositionFromProductsPosition,
 	mergeWithInitalValues,
 	modifyState,
 	patchState,
@@ -138,7 +139,20 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			const observable$ = from(addStatePromise.finally(() => clearTimeout(timeoutId))).pipe(
 				switchMap(async (state) => {
 					try {
-						await mergeWithInitalValues(id, state as UISettingState<UISettingID>);
+						// The panel side moved from the products doc to the cart doc (2026-10-30): a profile
+						// that chose a products side before the move keeps its layout.
+						let seed: { position: 'left' | 'right' | undefined } | undefined;
+						if (
+							id === 'pos-cart' &&
+							(state.get() as { position?: unknown }).position === undefined
+						) {
+							const products = await openStoreState<{ position?: unknown }>(
+								storeDB,
+								'pos-products_v2'
+							);
+							seed = { position: cartPositionFromProductsPosition(products.get().position) };
+						}
+						await mergeWithInitalValues(id, state as UISettingState<UISettingID>, seed);
 						return state as UISettingState<T>;
 					} catch (error) {
 						uiLogger.error(`Failed to merge initial values for ${id}`, {

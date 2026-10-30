@@ -101,6 +101,7 @@ it("builds a document the plugin's validator accepts: column_count equals the co
 			for (const cell of row.cells) expect(typeof cell.value).toBe('string');
 			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('is_first', i === 0));
 			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('label', report.columns[i].label));
+			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('is_label', i === 0));
 		}
 	}
 	expect(document('payments').report.rows[0].cells[2]).toMatchObject({

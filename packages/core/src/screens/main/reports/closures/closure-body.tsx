@@ -399,11 +399,11 @@ export function ClosureBody({
 					</View>
 				)}
 				<MenuRow
-					testID="closure-zreport"
+					testID="closure-paper"
 					disabled={blind}
 					className={ACTION_ROW}
 					onPress={() => setPreview(!preview)}
-					label={t('register.z_report')}
+					label={t('register.closure_paper')}
 					trailing={
 						<>
 							<Text variant="key" className="px-2.5 py-1">

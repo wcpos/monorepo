@@ -228,19 +228,46 @@ it('renders the body bare without a handle', () => {
 	}
 });
 
-// Customers' rule: the row above the card brings the gutter; with none, the body does, and the
-// phone's list runs edge to edge under the search row.
+// Customers' rule: the row above the card brings the gutter; with none, the body does, at every
+// width: the phone's edge-to-edge list sits its ground's 16 under the search (Paul, 2026-10-30).
 it.each([
-	[false, 'min-h-0 flex-1 pt-gutter'],
-	[true, 'min-h-0 flex-1'],
-])('gives the body the top gutter when there is no chip row (phone: %s)', (phone, classes) => {
-	mockPhone = phone;
+	[false, false, 'min-h-0 flex-1 pt-gutter'],
+	[true, false, 'min-h-0 flex-1 pt-4'],
+	[false, true, 'min-h-0 flex-1'],
+	[true, true, 'min-h-0 flex-1'],
+])(
+	'gives the body the top gutter only with no chip row (phone: %s, chips: %s)',
+	(phone, chips, classes) => {
+		mockPhone = phone;
+		render(
+			<ListColumn {...list} chips={chips ? <div data-testid="chips" /> : undefined} skeleton={null}>
+				{listBody}
+			</ListColumn>
+		);
+		expect(classOf(screen.getByTestId('list').parentElement?.parentElement)).toBe(classes);
+	}
+);
+
+// Rows with no chip row above them are the bar's next row on a phone too: the stack's own gap
+// brings the gutter under the bar; under a chip row it takes the chip row's back.
+it.each([
+	[false, false],
+	[true, true],
+])('takes back the gutter over the rows only under a chip row (chips: %s)', (chips, takesBack) => {
+	mockPhone = true;
 	render(
-		<ListColumn {...list} skeleton={null}>
+		<ListColumn
+			{...list}
+			chips={chips ? <div data-testid="chips" /> : undefined}
+			rows={<div data-testid="row" />}
+			skeleton={null}
+		>
 			{listBody}
 		</ListColumn>
 	);
-	expect(classOf(screen.getByTestId('list').parentElement?.parentElement)).toBe(classes);
+	const classes = classOf(screen.getByTestId('row').parentElement)?.split(' ');
+	expect(classes?.includes('-mt-4')).toBe(takesBack);
+	expect(classes).toEqual(expect.arrayContaining(['gap-4', 'px-4']));
 });
 
 // On Free the overlay must leave the bar's menu, bell and cashier reachable.

@@ -98,10 +98,10 @@ export const useCartConfigInputs = () => {
 /** The location provider dedupes cart writes before they reach product tiles. */
 export const useCartConfig = (): CartConfig => {
 	const { settings, rates } = useCartConfigInputs();
-	const { location } = useTaxLocation();
+	const { location, vatExempt } = useTaxLocation();
 	return React.useMemo(
-		() => cartConfigFromLocation(settings, rates, location),
-		[settings, rates, location]
+		() => cartConfigFromLocation(settings, rates, location, vatExempt),
+		[settings, rates, location, vatExempt]
 	);
 };
 

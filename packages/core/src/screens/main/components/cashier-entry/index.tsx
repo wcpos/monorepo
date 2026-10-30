@@ -32,6 +32,7 @@ export function CashierEntry({
 	portalHost,
 	onOpenRegister,
 	headless = false,
+	bare = false,
 }: {
 	testID: string;
 	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
@@ -39,6 +40,8 @@ export function CashierEntry({
 	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The sheet's host alone, no avatar: a till bar's while the desktop title bar carries the avatar. */
 	headless?: boolean;
+	/** The title bar's: no surface on hover or press (as `IconButton` `bare`). */
+	bare?: boolean;
 }) {
 	const { site, wpCredentials } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
@@ -86,7 +89,6 @@ export function CashierEntry({
 					open={panel.open}
 					initialPane={panel.pane}
 					onOpenChange={(open) => setPanel((p) => ({ ...p, open }))}
-					side="right"
 					portalHost={portalHost}
 				/>
 			)}
@@ -100,7 +102,7 @@ export function CashierEntry({
 				testID={testID}
 				accessibilityLabel={displayName}
 				// A bar's control: the control-height square with the accent wash (as `IconButton`).
-				wash="accent"
+				wash={bare ? 'none' : 'accent'}
 				className="size-ctl items-center justify-center rounded-lg"
 				onPress={() => (!inTill && tillEntryFocused() ? requestCashierSheet() : setOpen(true))}
 			>

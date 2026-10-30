@@ -83,6 +83,20 @@ describe('Button variants', () => {
 		expect(label({ pressed: true })).not.toContain('text-muted-foreground');
 	});
 
+	// A title-bar item (Paul, 2026-10-30): no surface on hover or press; the key-rank label lifts
+	// from muted to the foreground instead.
+	it('gives bare no surface and a muted key-rank label that lifts on hover and press', () => {
+		const { cn } = jest.requireActual<typeof import('../lib/utils')>('../lib/utils');
+		expect(buttonVariants({ variant: 'bare' })).not.toMatch(/\bbg-|hover:bg|active:bg/);
+		const label = (state: { hovered?: boolean; pressed?: boolean }) =>
+			cn(buttonTextVariants({ variant: 'bare', ...state }));
+		expect(label({})).toContain('text-muted-foreground');
+		expect(label({})).toContain('text-sm');
+		expect(label({ hovered: true })).not.toContain('text-muted-foreground');
+		expect(label({ pressed: true })).toContain('text-foreground');
+		expect(label({ pressed: true })).not.toContain('text-muted-foreground');
+	});
+
 	it('sets the sale button label large and semibold', () => {
 		expect(buttonTextVariants({ size: 'lg' })).toContain('text-lg');
 		expect(buttonTextVariants({ size: 'lg' })).toContain('font-semibold');

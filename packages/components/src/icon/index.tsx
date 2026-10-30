@@ -18,7 +18,7 @@ import type { IconName } from './names';
 
 export type { IconName } from './names';
 export type { IconSetId } from './sets';
-export { ICON_SET_IDS, DEFAULT_ICON_SET } from './sets';
+export { ICON_SET_IDS, DEFAULT_ICON_SET, ICON_SETTING_AUTO } from './sets';
 export { IconSetProvider, useIconSet } from './set-context';
 
 /**

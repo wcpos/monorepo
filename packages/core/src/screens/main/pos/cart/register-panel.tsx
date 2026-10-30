@@ -32,7 +32,6 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
-import { usePanelSide } from '../contexts/overlay-side';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
@@ -54,12 +53,10 @@ export function RegisterPanel({
 	open,
 	onOpenChange,
 	initialPane = 'register',
-	side: sideProp,
 	portalHost = 'pos',
 }: {
 	open: boolean;
 	initialPane?: 'register' | 'count';
-	side?: 'left' | 'right';
 	portalHost?: string | null;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -125,8 +122,10 @@ export function RegisterPanel({
 	};
 	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
 	const reportsDenied = blind;
-	const cartSide = usePanelSide('cart');
-	const side = sideProp ?? cartSide;
+	// The register panel opens from the right on every screen, as the cashier sheet does; what it
+	// opens (count, approval, movements, print sheet) follows its side (Paul 2026-10-30: "Cashier
+	// and Register modal come from the right, but not every modal").
+	const side = 'right';
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
 	const close = (next: boolean) =>

@@ -4,7 +4,6 @@
     "sortDirection": "asc",
     "width": 60,
     "showOutOfStock": false,
-    "position": "left",
     "filterBar": [
       {
         "id": "stock_status",
@@ -150,6 +149,7 @@
   },
   "pos-cart": {
     "sortLines": "newest_top",
+    "position": "right",
     "openOrdersPosition": "bottom",
     "sortBy": "id",
     "sortDirection": "asc",

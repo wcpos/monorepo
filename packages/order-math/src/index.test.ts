@@ -46,6 +46,8 @@ test('public value surface is exactly the spec', () => {
 		// rows and the deduction were computed differently and could disagree on
 		// screen. One exported function is the smallest fix; see net-payment.test.ts.
 		'refundValue',
+		// #3093: retaxing encodes line ownership: settlement owns percent fees and shipping.
+		'retaxCartLines',
 		// #3092: re-tax stored money without rebuilding a discounted line's price basis.
 		'retaxLine',
 		// Added 2026-10-12 (#66, #84): cash rounding, previewed by the tender pane and applied by

@@ -31,7 +31,6 @@ import {
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useExclusive } from '../../hooks/use-exclusive';
-import { usePanelSide } from '../contexts/overlay-side';
 
 /** The figure typed in place: the amount figure's hero step on the input itself. */
 const HERO = amountFigure({ size: 'hero' });
@@ -158,8 +157,8 @@ export function MovementSheet({
 		drawer_check: t('register.reason_drawer_check'),
 		other: t('register.reason_other'),
 	};
-	const cartSide = usePanelSide('cart');
-	const side = sideProp ?? cartSide;
+	// Pay in / pay out open from the right unless their opener says otherwise (Paul 2026-10-30).
+	const side = sideProp ?? 'right';
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
 	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';

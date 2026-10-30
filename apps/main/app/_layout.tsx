@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { Uniwind, useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
 import { GalleryRootLayout, IS_GALLERY_BUILD } from '@wcpos/main/components/gallery/registry';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
@@ -67,8 +68,7 @@ function useThemeRestorer() {
  */
 function useToastTheme(): 'light' | 'dark' {
 	const { theme } = useUniwind();
-	// Light theme is the only "light" theme, all others are dark
-	return theme === 'light' ? 'light' : 'dark';
+	return isLightTheme(theme) ? 'light' : 'dark';
 }
 
 function RootStack() {

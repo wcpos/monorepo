@@ -12,3 +12,4 @@ export const ICON_SETS = {
 export type IconSetId = keyof typeof ICON_SETS;
 export const ICON_SET_IDS = Object.keys(ICON_SETS) as IconSetId[];
 export const DEFAULT_ICON_SET: IconSetId = 'tabler';
+export const ICON_SETTING_AUTO = 'auto';

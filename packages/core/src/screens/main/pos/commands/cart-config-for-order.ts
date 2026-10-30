@@ -66,14 +66,21 @@ export function cartConfigForOrder({
 	order,
 }: CartConfigInputs & { order?: OrderPayload }) {
 	const { location } = orderTaxLocation(baseLocation, settings.taxBasedOn, order);
-	return cartConfigFromLocation(settings, rates, location);
+	return cartConfigFromLocation(
+		settings,
+		rates,
+		location,
+		!settings.pricesIncludeTax && wooMetaCarrier.vatExempt(order?.meta_data)
+	);
 }
 export function cartConfigFromLocation(
 	settings: CartConfigInputs['settings'],
 	rates: TaxRateData[],
-	location: TaxLocation
+	location: TaxLocation,
+	vatExempt = false
 ) {
 	return createCartConfig({
+		vatExempt,
 		rates: filterTaxRates(
 			rates,
 			location.country,

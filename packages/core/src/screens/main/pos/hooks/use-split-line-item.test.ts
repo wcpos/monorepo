@@ -34,6 +34,7 @@ const mockLoggerSuccess = jest.fn();
 let mockUuidCount = 0;
 let mockLineItemQuantity = 1;
 let mockReducedStock: unknown;
+let mockVatExempt = false;
 
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = {
@@ -154,8 +155,17 @@ jest.mock('../contexts/current-order', () => ({
 						return this;
 					},
 					uuid: 'order-uuid',
-					payload: { id: 17, line_items: lineItems },
-					toMutableJSON: () => ({ payload: { line_items: lineItems } }),
+					payload: {
+						id: 17,
+						line_items: lineItems,
+						meta_data: [{ key: 'is_vat_exempt', value: mockVatExempt ? 'yes' : 'no' }],
+					},
+					toMutableJSON: () => ({
+						payload: {
+							line_items: lineItems,
+							meta_data: [{ key: 'is_vat_exempt', value: mockVatExempt ? 'yes' : 'no' }],
+						},
+					}),
 				};
 			},
 		},
@@ -188,7 +198,16 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
+	return {
+		useCartConfig: () => config,
+		useCartConfigReader: () => (payload: import('@wcpos/query').OrderPayload) =>
+			createCartConfig({
+				...config,
+				vatExempt: jest
+					.requireActual('@wcpos/sync-core')
+					.wooMetaCarrier.vatExempt(payload.meta_data),
+			}),
+	};
 });
 
 const stockHooks = (['cart.line.add', 'cart.line.update', 'cart.line.split'] as const).map(
@@ -200,6 +219,7 @@ describe('useSplitLineItem', () => {
 		resetOrderMutationQueues();
 		resetActionRegistry();
 		mockUuidCount = 0;
+		mockVatExempt = false;
 		for (const [event, hooks] of stockHooks) {
 			for (const { hook, ...registration } of hooks) registerActionHook(event, hook, registration);
 		}
@@ -219,6 +239,18 @@ describe('useSplitLineItem', () => {
 
 	afterEach(() => resetActionRegistry());
 
+	it('splits with the exemption changed since render', async () => {
+		mockLineItemQuantity = 2;
+		const { result } = renderHook(() => useSplitLineItem());
+		mockVatExempt = true;
+		await act(async () => {
+			await result.current.splitLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3');
+		});
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items.slice(1, -1)).toEqual([
+			expect.objectContaining({ total: '10', total_tax: '0', taxes: [] }),
+			expect.objectContaining({ total: '10', total_tax: '0', taxes: [] }),
+		]);
+	});
 	it('splits the latest line items after an earlier queued mutation completes', async () => {
 		mockLineItemQuantity = 2;
 		let resolveFirstPatch: (() => void) | undefined;

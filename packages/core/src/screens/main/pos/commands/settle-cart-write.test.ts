@@ -173,3 +173,82 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 		expect(commitAtBoundary).not.toHaveBeenCalled();
 	}
 });
+
+it('resolves data against each resident payload and propagates a resolver refusal', async () => {
+	const order = record();
+	const refusal = { deny: { reasonKey: 'caller_locked' } };
+	const data = jest.fn((current) =>
+		current.status === 'completed' ? refusal : { total: current.total }
+	);
+	const localPatch = jest.fn(({ changes }) => {
+		expect(changes(order.payload)).toMatchObject({ total: '8' });
+		expect(changes({ ...order.payload, status: 'completed' })).toEqual({});
+		return Promise.resolve(order);
+	});
+	const commitAtBoundary = jest.fn();
+	expect(
+		await settleCartWrite(
+			{ document: order, data, queue: {} as never },
+			{
+				localPatch,
+				commitAtBoundary,
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+			}
+		)
+	).toEqual(refusal);
+	expect(data).toHaveBeenCalledTimes(2);
+	expect(commitAtBoundary).not.toHaveBeenCalled();
+});
+
+it.each([true, false])(
+	'settles supplied coupons atomically or refuses a missing coupon, available=%s',
+	async (available) => {
+		const order = record();
+		order.payload.coupon_lines = [{ code: 'ten' }];
+		const coupons = {
+			coupons: new Map(
+				available ? [['ten', { code: 'ten', discount_type: 'percent' as const, amount: '10' }]] : []
+			),
+			productCategories: new Map(),
+		};
+		const writes: object[] = [];
+		const result = await settleCartWrite(
+			{
+				document: order,
+				data: () => ({ billing: { country: 'NZ' } }),
+				coupons: {
+					context: coupons,
+					missing: { deny: { reasonKey: 'caller_missing' } },
+					boundary: { deny: { reasonKey: 'caller_locked' } },
+				},
+				queue: {} as never,
+			},
+			{
+				localPatch: ({ changes }) => {
+					writes.push(changes(order.payload));
+					return Promise.resolve(order);
+				},
+				commitAtBoundary: jest.fn(),
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+			}
+		);
+		if (available) {
+			expect(writes).toEqual([
+				expect.objectContaining({
+					billing: { country: 'NZ' },
+					total: '9',
+					discount_total: '1',
+					coupon_lines: [
+						expect.objectContaining({ code: 'ten', discount: '1', discount_tax: '0' }),
+					],
+				}),
+			]);
+			expect(result).toBe(order);
+		} else {
+			expect(writes).toEqual([{}]);
+			expect(result).toEqual({ deny: { reasonKey: 'caller_missing' } });
+		}
+	}
+);

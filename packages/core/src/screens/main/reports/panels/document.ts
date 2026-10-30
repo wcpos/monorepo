@@ -27,10 +27,14 @@ export function buildReportDocument(
 	meta: Meta,
 	context: ClosureContext
 ) {
-	const cells = (formatted: string[], raw: (string | number)[]) =>
+	// `is_label`: the first cell merely repeats the heading a narrow template prints above the row
+	// (a row's label is its first cell; a subtotal or total's first column is text), so that
+	// template may omit it. Same flag the server puts on its reports.
+	const cells = (formatted: string[], raw: (string | number)[], summary = false) =>
 		columns.map((column, i) => ({
 			key: column.key,
 			is_first: i === 0,
+			is_label: i === 0 && (summary ? column.type === 'text' : true),
 			label: column.label,
 			value: String(raw[i]),
 			formatted: formatted[i],
@@ -69,9 +73,9 @@ export function buildReportDocument(
 				key: `group-${group.key}`,
 				label: group.label,
 				rows: rows(group.rows),
-				subtotal: { cells: cells(group.total, group.totalRaw) },
+				subtotal: { cells: cells(group.total, group.totalRaw, true) },
 			})),
-			totals: { cells: cells(spec.total, spec.totalRaw) },
+			totals: { cells: cells(spec.total, spec.totalRaw, true) },
 			count,
 			has_groups: !!spec.groups,
 			has_rows: count > 0,

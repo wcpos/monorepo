@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
@@ -60,6 +61,7 @@ export interface TaxSettingsContextProps {
  * filtered to it. Only consumers that actually need the resolved location subscribe here.
  */
 export interface TaxLocationContextProps {
+	vatExempt: boolean;
 	rates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
@@ -223,7 +225,7 @@ function TaxSettingsFromRates({
  * is deduped, so consumers only re-render when the tax basis or address actually moved.
  */
 function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderProps) {
-	const { allRates } = useTaxSettings();
+	const { allRates, pricesIncludeTax } = useTaxSettings();
 	const { store } = useStoreSession();
 	const baseLocation = useBaseTaxLocation();
 
@@ -246,6 +248,7 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	const currentOrderRecord = useCurrentOrderOptional();
 	const order = orderProp ?? currentOrderRecord;
 	const meta = useRecordField(order, (record) => record.payload.meta_data);
+	const vatExempt = !pricesIncludeTax && wooMetaCarrier.vatExempt(meta);
 	const billing = useRecordField(order, (record) => record.payload.billing);
 	const shipping = useRecordField(order, (record) => record.payload.shipping);
 
@@ -278,8 +281,15 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	}, [allRates, location]);
 
 	const value = React.useMemo<TaxLocationContextProps>(
-		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location, addressUsed, hasOrder }),
-		[rates, taxBasedOn, location, addressUsed, hasOrder]
+		() => ({
+			rates,
+			taxBasedOn: taxBasedOn as TaxBasedOn,
+			location,
+			addressUsed,
+			hasOrder,
+			vatExempt,
+		}),
+		[rates, taxBasedOn, location, addressUsed, hasOrder, vatExempt]
 	);
 
 	return <TaxLocationContext.Provider value={value}>{children}</TaxLocationContext.Provider>;

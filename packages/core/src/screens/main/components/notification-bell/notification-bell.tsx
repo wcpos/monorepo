@@ -15,7 +15,16 @@ import { usePanelSide } from '../../pos/contexts/overlay-side';
  * Clicking the bell opens a notification side panel. It lives in the bars only (`BarControls`):
  * the front drawer's labelled row went on 2026-10-28, when every bar already carried the bell.
  */
-export function NotificationBell({ testID, portalHost }: { testID: string; portalHost?: string }) {
+export function NotificationBell({
+	testID,
+	portalHost,
+	bare = false,
+}: {
+	testID: string;
+	portalHost?: string;
+	/** The title bar's (`IconButton` `bare`): no surface on hover or press. */
+	bare?: boolean;
+}) {
 	const t = useT();
 	const side = usePanelSide('shell');
 	const { unreadCount, markAllAsSeen } = useNovuNotificationsSummary();
@@ -34,6 +43,7 @@ export function NotificationBell({ testID, portalHost }: { testID: string; porta
 				<DialogTrigger asChild>
 					<IconButton
 						name="notifications"
+						variant={bare ? 'bare' : undefined}
 						testID={testID}
 						accessibilityLabel={t('common.notifications')}
 					/>
