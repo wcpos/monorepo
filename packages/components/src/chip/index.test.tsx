@@ -113,9 +113,10 @@ it.each([
 	const label = screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? [];
 	expect(label).toEqual(expect.arrayContaining([text, 'text-selected-foreground']));
 });
-it('keeps the label at one weight in both states, so a lit pill is no wider than an unlit one', () => {
+it('keeps the label at one weight, regular, in both states, so a lit pill is no wider than an unlit one', () => {
 	// A heavier face is wider: `font-semibold` on the on-state grew the pill a pixel and every
 	// pill after it in the row jumped with each toggle (owner's video, 2026-10-30; ledger line 21).
+	// Regular, one step below a Button's medium, as Polaris, Carbon, Spectrum and Fluent draw tags.
 	const { rerender } = render(<Chip label="Menu" testID="chip" />);
 	const weights = () =>
 		(screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? []).filter((c) =>
@@ -124,7 +125,7 @@ it('keeps the label at one weight in both states, so a lit pill is no wider than
 	const off = weights();
 	rerender(<Chip label="Menu" testID="chip" on />);
 	expect(weights()).toEqual(off);
-	expect(off).toEqual(['font-medium']);
+	expect(off).toEqual(['font-normal']);
 });
 it('announces the on-state on the press target, with or without a clear control', () => {
 	// Web: a button's toggle state is aria-pressed (aria-selected is not allowed on role=button).
