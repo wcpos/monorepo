@@ -10,6 +10,7 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 import { readClosure, readRegister } from '@wcpos/query/register-session';
 
 import {
+	backToSelling,
 	closeSession,
 	openSession,
 	recordMovement,
@@ -117,6 +118,8 @@ async function seed() {
 						},
 					},
 				],
+				line_items: [{ total: '50', taxes: [{ id: 1, total: '10' }] }],
+				shipping_lines: [{ total: '10', taxes: [{ id: 1, total: '2' }] }],
 				tax_lines: [{ rate_id: 1, rate_percent: 20, tax_total: '10', shipping_tax_total: '2' }],
 			},
 		},
@@ -357,5 +360,326 @@ it('patches only the receipt snapshot and corrections count, including server id
 	});
 	await expect(refreshClosureRow(null, 'remote', 3)).rejects.toMatchObject({
 		name: 'StoreDatabaseUnavailableError',
+	});
+});
+
+// Omitting close-time fields or counting voided/foreign movements loses the stored document contract.
+it('stores closure counters, tender/tax labels and integer denomination amounts', async () => {
+	const input = await seed();
+	const first = input.orders[0];
+	const orders = [
+		{
+			...first,
+			payload: {
+				...first.payload,
+				payment_method: 'cash',
+				payment_method_title: 'Cash drawer',
+				discount_total: '1.0001',
+				discount_tax: '0.2000',
+				coupon_lines: [{ code: 'SAVE' }],
+				line_items: [{ quantity: 2 }, { quantity: 1.5 }],
+				tax_lines: [{ rate_id: 1, label: 'VAT', rate_percent: 20, tax_total: '10' }],
+			},
+		},
+		{
+			uuid: 'second',
+			payload: {
+				payment_method: 'card',
+				payment_method_title: 'Card',
+				line_items: [{ quantity: 3 }],
+				meta_data: [
+					{ key: '_wcpos_session', value: input.session.id },
+					{
+						key: '_wcpos_payments',
+						value: {
+							schema: 1,
+							payments: [
+								{
+									id: 'second-card',
+									session_id: input.session.id,
+									kind: 'card',
+									method_id: 'card',
+									status: 'captured',
+									amount: '10.0001',
+								},
+							],
+						},
+					},
+				],
+				tax_lines: [{ rate_id: 2, label: 'Local tax', tax_total: '1' }],
+			},
+		},
+	];
+	const movement = {
+		...input.movements[0].toJSON(),
+		type: 'no_sale' as const,
+		amount: '0',
+		voided_by: null,
+		voids: null,
+	};
+	const closure = await writeClosure({
+		...input,
+		orders,
+		note: 'Found coins',
+		denominations: [
+			{ value: '0.1001', pieces: 3 },
+			{ value: '50', pieces: 2 },
+			{ value: '20', pieces: 0 },
+		],
+		movements: [
+			movement,
+			{ ...movement, id: 'voided', voided_by: 'v' },
+			{ ...movement, id: 'foreign', session_id: 'other' },
+		],
+	});
+	expect(closure.breakdowns).toMatchObject({
+		discounts: { count: 1, amount: '1.2001' },
+		items_sold: '6.5',
+		average_sale: '45.0001',
+		drawer_openings: 1,
+		variance_note: 'Found coins',
+		denominations: [
+			{ value: '0.1001', pieces: 3, amount: '0.3003' },
+			{ value: '50', pieces: 2, amount: '100.0000' },
+		],
+		payment_methods: {
+			cash: { method: 'cash', name: 'Cash drawer' },
+			card: { method: 'card', name: 'Card' },
+		},
+		tax_rates: { '1': { rate: 20, name: 'VAT 20%' }, '2': { name: 'Local tax' } },
+	});
+});
+it('stores empty defaults for a session with no orders or count details', async () => {
+	const input = await seed();
+	const closure = await writeClosure({ ...input, orders: [], movements: [] });
+	expect(closure.breakdowns).toMatchObject({
+		discounts: { count: 0, amount: '0.0000' },
+		items_sold: '0',
+		average_sale: '0.0000',
+		drawer_openings: 0,
+		variance_note: '',
+		denominations: [],
+	});
+});
+it('keeps the first payment title and uses empty names for unknown methods', async () => {
+	const input = await seed();
+	const orders = ['First', 'Second'].map((name, i) => ({
+		...input.orders[0],
+		uuid: String(i),
+		payload: { ...input.orders[0].payload, payment_method: 'card', payment_method_title: name },
+	}));
+	const closure = await writeClosure({ ...input, orders });
+	expect(closure.breakdowns.payment_methods).toMatchObject({
+		cash: { method: 'cash', name: '' },
+		card: { method: 'card', name: 'First' },
+	});
+});
+
+// Provenance alone is not a sale; deleted lines and binary float drift cannot inflate counters.
+it('counts only captured sales and active product and coupon lines', async () => {
+	const input = await seed();
+	const sold = {
+		...input.orders[0],
+		payload: {
+			...input.orders[0].payload,
+			discount_total: '2',
+			discount_tax: '0.4',
+			coupon_lines: [{ code: 'SAVE' }, { code: null }, {}],
+			line_items: [
+				{ product_id: 0, quantity: 0.1 },
+				{ product_id: 1, quantity: 0.2 },
+				{ product_id: null, quantity: 50 },
+			],
+		},
+	};
+	const abandoned = {
+		uuid: 'abandoned',
+		payload: {
+			meta_data: [{ key: '_wcpos_session', value: input.session.id }],
+			discount_total: '100',
+			discount_tax: '20',
+			coupon_lines: [{ code: 'NOT-SOLD' }],
+			line_items: [{ product_id: 1, quantity: 100 }],
+		},
+	};
+	const closure = await writeClosure({ ...input, orders: [sold, abandoned] });
+	expect(closure.breakdowns).toMatchObject({
+		transaction_count: 1,
+		items_sold: '0.3',
+		discounts: { count: 1, amount: '2.4000' },
+	});
+	expect(closure.period_sales_total).toBe('80.0000');
+});
+it.each([
+	[0.5, '0.5'],
+	[1.5, '1.5'],
+	[47, '47'],
+	[47.5, '47.5'],
+])('keeps quantity %s as trimmed decimal text', async (quantity, expected) => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		orders: [
+			{ ...input.orders[0], payload: { ...input.orders[0].payload, line_items: [{ quantity }] } },
+		],
+	});
+	expect(closure.breakdowns.items_sold).toBe(expected);
+});
+it('keeps the zero-rated sales base alongside a twenty-percent sale', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		orders: [
+			{
+				...input.orders[0],
+				payload: {
+					...input.orders[0].payload,
+					shipping_lines: [],
+					line_items: [
+						{ total: '10', taxes: [{ id: 0, total: '' }] },
+						{ total: '20', taxes: [{ id: 1, total: '4' }] },
+					],
+					tax_lines: [
+						{ rate_id: 0, rate_percent: 0, tax_total: '0' },
+						{ rate_id: 1, rate_percent: 20, tax_total: '4' },
+					],
+				},
+			},
+		],
+	});
+	expect(closure.breakdowns.tax_rates).toMatchObject({
+		'0': { net: '10.0000', tax: '0.0000', gross: '10.0000' },
+		'1': { net: '20.0000', tax: '4.0000', gross: '24.0000' },
+	});
+});
+it('adds active product, fee and shipping bases to every named rate', async () => {
+	const input = await seed();
+	const taxes = [
+		{ id: 1, total: '0' },
+		{ id: 2, total: '' },
+	];
+	const closure = await writeClosure({
+		...input,
+		orders: [
+			{
+				...input.orders[0],
+				payload: {
+					...input.orders[0].payload,
+					line_items: [
+						{ product_id: 0, total: '10', taxes },
+						{ product_id: null, total: '100', taxes },
+					],
+					fee_lines: [
+						{ name: 'Fee', total: '2', taxes },
+						{ name: null, total: '100', taxes },
+					],
+					shipping_lines: [
+						{ method_id: 'flat_rate', total: '3', taxes },
+						{ method_id: null, total: '100', taxes },
+					],
+					tax_lines: [
+						{ rate_id: 1, rate_percent: 0, tax_total: '0' },
+						{ rate_id: 2, rate_percent: 20, tax_total: '2.4', shipping_tax_total: '0.6' },
+					],
+				},
+			},
+		],
+	});
+	expect(closure.breakdowns.tax_rates).toMatchObject({
+		'1': { net: '15.0000', tax: '0.0000', gross: '15.0000' },
+		'2': { net: '15.0000', tax: '3.0000', gross: '18.0000' },
+	});
+});
+// Omitting session refunds leaves a fully refunded sale positive and a refund-only session empty.
+it.each([
+	{
+		sameSession: true,
+		amount: '120',
+		net: '-100',
+		tax: '-20',
+		expected: ['0.0000', '0.0000', '0.0000'],
+	},
+	{
+		sameSession: false,
+		amount: '60',
+		net: '-50',
+		tax: '-10',
+		expected: ['-50.0000', '-10.0000', '-60.0000'],
+	},
+])(
+	'nets tax rows against refunds (same-session sale: $sameSession)',
+	async ({ sameSession, amount, net, tax, expected }) => {
+		const input = await seed();
+		const saleSession = sameSession ? input.session.id : 'earlier-session';
+		const refund = {
+			id: 20,
+			parent_id: 1,
+			date_created_gmt: '2026-09-16T10:00:00',
+			amount,
+			meta_data: [{ key: '_wcpos_session', value: input.session.id }],
+			line_items: [{ total: net, taxes: [{ id: 1, total: tax }] }],
+			tax_lines: [{ rate_id: 1, rate_percent: 20, tax_total: tax }],
+		};
+		const closure = await writeClosure({
+			...input,
+			movements: [],
+			orders: [
+				{
+					uuid: 'sale',
+					payload: {
+						meta_data: [
+							{ key: '_wcpos_session', value: saleSession },
+							{
+								key: '_wcpos_payments',
+								value: {
+									schema: 1,
+									payments: [
+										{
+											id: 'cash',
+											session_id: saleSession,
+											kind: 'cash',
+											method_id: 'cash',
+											status: 'captured',
+											amount: '120',
+											refunded_amount: amount,
+											refunds: [{ id: 20, amount, status: 'succeeded' }],
+										},
+									],
+								},
+							},
+						],
+						line_items: [{ total: '100', taxes: [{ id: 1, total: '20' }] }],
+						tax_lines: [{ rate_id: 1, rate_percent: 20, tax_total: '20' }],
+					},
+				},
+			],
+			refundRecords: [
+				refund,
+				{ ...refund, id: 21, meta_data: [{ key: '_wcpos_session', value: 'another-session' }] },
+				{ ...refund, id: 22, meta_data: [] },
+			],
+		});
+		expect(closure.breakdowns.tax_rates).toEqual({
+			'1': { rate: 20, name: ' 20%', net: expected[0], tax: expected[1], gross: expected[2] },
+		});
+	}
+);
+it('persists count details on close and clears them on back to selling', async () => {
+	const { session } = await seed();
+	await closeSession(db, session.id, {
+		counted: { cash: '150' },
+		note: 'Found coins',
+		denominations: [{ value: '50', pieces: 3 }],
+	});
+	const stored = await db.register_sessions.findOne(session.id).exec();
+	expect(stored.toJSON()).toMatchObject({
+		count_note: 'Found coins',
+		count_denominations: [{ value: '50', pieces: 3 }],
+	});
+	await backToSelling(db, session.id);
+	expect(stored.getLatest().toJSON()).toMatchObject({
+		count_note: null,
+		count_denominations: null,
+		approved_counted: null,
 	});
 });

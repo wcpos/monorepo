@@ -8,6 +8,12 @@ import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/regi
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
+// Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
+jest.mock('@rn-primitives/label', () => ({
+	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<span id={nativeID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
@@ -40,26 +46,6 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
-		value,
-		onChangeText,
-		testID,
-		secureTextEntry,
-	}: {
-		value: string;
-		onChangeText: (v: string) => void;
-		testID: string;
-		secureTextEntry?: boolean;
-	}) => (
-		<input
-			type={secureTextEntry ? 'password' : 'text'}
-			data-testid={testID}
-			value={value}
-			onChange={(e) => onChangeText(e.target.value)}
-		/>
-	),
-}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
@@ -80,6 +66,8 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
 let mockSessionStatus = 'counting';
+let count_note: string | null = null;
+let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let figuresPending = false;
@@ -99,6 +87,8 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			status: mockSessionStatus,
 			approval_required,
 			approved_counted,
+			count_note,
+			count_denominations,
 		},
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
@@ -137,6 +127,8 @@ const enter = (value: string) =>
 beforeEach(() => {
 	mockSessionStatus = 'counting';
 	approved_counted = null;
+	count_note = null;
+	count_denominations = null;
 	unsyncedCount = 3;
 	figuresPending = false;
 	blind = false;
@@ -298,7 +290,11 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 			blind: false,
 		})
 	);
-	expect(closeSession).toHaveBeenCalledWith({ counted: { cash: '480.80', card: '22' } });
+	expect(closeSession).toHaveBeenCalledWith({
+		counted: { cash: '480.80', card: '22' },
+		note: '',
+		denominations: [],
+	});
 });
 
 it('a seeded counting session says the figures are still to come and cannot close', () => {
@@ -481,4 +477,39 @@ it('backs out of a closed session without returning it to selling', async () => 
 	await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
 	expect(backToSelling).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+	'passes the note and two counted faces in blind mode %s',
+	async (isBlind) => {
+		blind = isBlind;
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		fireEvent.change(screen.getByTestId('count-note'), { target: { value: 'Found notes' } });
+		fireEvent.click(screen.getByTestId('count-denominations'));
+		fireEvent.click(screen.getByTestId('den-tile-20'));
+		fireEvent.click(screen.getByTestId('den-tile-5'));
+		fireEvent.click(screen.getByTestId('den-tile-5'));
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(closeSession).toHaveBeenCalledWith({
+			counted: { cash: '30.00' },
+			note: 'Found notes',
+			denominations: [
+				{ value: '20', pieces: 1 },
+				{ value: '5', pieces: 2 },
+			],
+		});
+	}
+);
+
+it('restores the note and denomination tiles when the count pane reopens', () => {
+	count_note = 'Stored note';
+	count_denominations = [
+		{ value: '20', pieces: 2 },
+		{ value: '5', pieces: 1 },
+	];
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	expect((screen.getByTestId('count-note') as HTMLInputElement).value).toBe('Stored note');
+	fireEvent.click(screen.getByTestId('count-denominations'));
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('2');
+	expect(screen.getByTestId('den-tile-5-badge').textContent).toBe('1');
 });

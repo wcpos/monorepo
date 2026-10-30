@@ -600,11 +600,18 @@ it('observes old held parents and later allocations without importing their sale
 	jest
 		.mocked(actions.writeClosure)
 		.mockResolvedValue({ id: 'closure', counted: {}, variance: {} } as never);
-	await result.current.actions.closeSession({ counted: { cash: '100' } });
+	const closeInput = {
+		counted: { cash: '100' },
+		note: 'Found notes',
+		denominations: [{ value: '50', pieces: 2 }],
+	};
+	await result.current.actions.closeSession(closeInput);
 	// The closure writer must receive the same old parent and refund that drove the drawer.
 	expect(actions.writeClosure).toHaveBeenCalledWith(
 		expect.objectContaining({
 			orders: [parentHit().record],
+			note: 'Found notes',
+			denominations: [{ value: '50', pieces: 2 }],
 			refundRecords: [refundHit().record.payload],
 		})
 	);
@@ -2041,3 +2048,25 @@ it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
 		}
 	}
 );
+
+it('replays a closed session using the stored note and denominations', async () => {
+	active = [];
+	closed = [
+		{
+			...session,
+			getLatest: () => closed[0],
+			closure_id: session.id,
+			sync_status: 'pending',
+			status: 'closed',
+			count_note: 'Stored note',
+			count_denominations: [{ value: '50', pieces: 2 }],
+		},
+	];
+	jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+	const result = await settled();
+	await act(() => result.current.actions.closeSession({ counted: { cash: '100' } }));
+	expect(actions.closeSession).not.toHaveBeenCalled();
+	expect(actions.writeClosure).toHaveBeenCalledWith(
+		expect.objectContaining({ note: 'Stored note', denominations: [{ value: '50', pieces: 2 }] })
+	);
+});

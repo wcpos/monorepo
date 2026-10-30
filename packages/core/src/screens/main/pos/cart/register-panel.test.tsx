@@ -6,6 +6,12 @@ import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+// Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
+jest.mock('@rn-primitives/label', () => ({
+	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<span id={nativeID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'text-muted-foreground' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

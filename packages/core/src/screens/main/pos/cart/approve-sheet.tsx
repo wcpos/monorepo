@@ -17,6 +17,8 @@ import { isSameCount } from '../../../../services/register-session/same-count';
 
 export function ApproveSheet({
 	counted,
+	note,
+	denominations,
 	onClosed,
 	onOpenChange,
 	side: sideProp,
@@ -25,6 +27,8 @@ export function ApproveSheet({
 	side?: 'left' | 'right';
 	portalHost?: string | null;
 	counted: Record<string, string>;
+	note?: string;
+	denominations?: { value: string; pieces: number }[];
 	onClosed: (
 		closure: Awaited<ReturnType<ReturnType<typeof useRegisterSession>['actions']['closeSession']>>
 	) => void;
@@ -69,7 +73,7 @@ export function ApproveSheet({
 				approvedBy: response.data.approved_by,
 				approvedCounted: response.data.approved_counted,
 			});
-			onClosed(await actions.closeSession({ counted }));
+			onClosed(await actions.closeSession({ counted, note, denominations }));
 			onOpenChange(false);
 		} catch (e) {
 			const refused =

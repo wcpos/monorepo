@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 
+import { FormProvider, useForm, useWatch } from 'react-hook-form';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	DialogDescription,
@@ -8,6 +10,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { FormItem, FormLabel } from '@wcpos/components/form/common';
+import { FormFieldContext } from '@wcpos/components/form/context';
+import { Input } from '@wcpos/components/input';
 import { IconButton } from '@wcpos/components/icon-button';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
@@ -119,8 +124,16 @@ export function RegisterCount({
 	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
+	const noteForm = useForm({ defaultValues: { note: session?.count_note ?? '' } });
+	const note = useWatch({ control: noteForm.control, name: 'note' });
+	const noteId = React.useId();
+	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
-	const [pieces, setPieces] = React.useState<Record<string, number>>({});
+	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
+		Object.fromEntries(
+			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
+		)
+	);
 	const [others, setOthers] = React.useState<Record<string, string>>(() =>
 		Object.fromEntries(
 			Object.entries(session?.counted ?? {}).filter(([method]) => method !== 'cash')
@@ -141,6 +154,9 @@ export function RegisterCount({
 		cash: amount,
 		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
 	};
+	const countedDenominations = faces
+		.filter((value) => (pieces[value] ?? 0) > 0)
+		.map((value) => ({ value, pieces: pieces[value] }));
 	// A manager who already approved exactly this count is not asked again (a failed close or
 	// a restart keeps the approval); a changed count or an unapproved over-threshold variance is.
 	const approvedThisCount =
@@ -201,6 +217,25 @@ export function RegisterCount({
 					</View>
 				</View>
 			)}
+			<FormProvider {...noteForm}>
+				<FormFieldContext.Provider value={{ name: 'note' }}>
+					<FormItem className="gap-2" nativeID={noteId}>
+						<FormLabel onPress={() => noteRef.current?.focus()}>
+							{t('register.count_note')}
+						</FormLabel>
+						<Input.Root className="h-tile">
+							<Input.InputField
+								ref={noteRef}
+								aria-labelledby={`${noteId}-form-item`}
+								testID="count-note"
+								value={note}
+								onChangeText={(value) => noteForm.setValue('note', value)}
+								placeholder={t('register.count_note_placeholder')}
+							/>
+						</Input.Root>
+					</FormItem>
+				</FormFieldContext.Provider>
+			</FormProvider>
 			{figuresPending && (
 				<Notice
 					tone="info"
@@ -316,6 +351,8 @@ export function RegisterCount({
 					side={side}
 					portalHost={portalHost}
 					counted={counted}
+					note={note}
+					denominations={countedDenominations}
 					onClosed={completed}
 					onOpenChange={setApproving}
 				/>
@@ -370,7 +407,9 @@ export function RegisterCount({
 						if (needsManager) setApproving(true);
 						else
 							void attempt(async () => {
-								completed(await actions.closeSession({ counted }));
+								completed(
+									await actions.closeSession({ counted, note, denominations: countedDenominations })
+								);
 							});
 					},
 				}}

@@ -323,3 +323,43 @@ it.each([
 	view.rerender(<ClosureHeading row={row} {...deriveSettled(row, [])} blind />);
 	expect(screen.queryByTestId('closure-carried-badge')).toBeNull();
 });
+
+it.each([false, true])('renders closure counters and note only when present: %s', (present) => {
+	const enriched = {
+		...row,
+		breakdowns: {
+			...row.breakdowns,
+			...(present
+				? {
+						items_sold: '47.5',
+						discounts: { count: 3, amount: '12.5000' },
+						average_sale: '20.0000',
+						drawer_openings: 2,
+						variance_note: 'Found notes',
+					}
+				: {}),
+		},
+	};
+	render(
+		<ClosureBody
+			row={enriched}
+			settled={deriveSettled(enriched, []).settled}
+			doc={doc}
+			touched={new Set()}
+			corrections={[]}
+			blind={false}
+			context={context}
+		/>
+	);
+	for (const label of ['Items sold', 'Discounts', 'Average sale', 'Drawer openings'])
+		expect(!!screen.queryByText(label)).toBe(present);
+	expect(screen.queryByTestId('closure-variance-note')?.textContent ?? null).toBe(
+		present ? 'Note · Found notes' : null
+	);
+	if (present) {
+		expect(screen.getByText('47.5')).toBeTruthy();
+		expect(screen.getByText('3 · $12.50')).toBeTruthy();
+		expect(screen.getByText('$20.00')).toBeTruthy();
+		expect(screen.getByText('2')).toBeTruthy();
+	}
+});

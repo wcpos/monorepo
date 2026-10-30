@@ -70,6 +70,8 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 			)
 		) as T & Record<`${K}_display`, string>;
 	const breakdowns = row.breakdowns ?? {};
+	const discounts = breakdowns.discounts as { count: number; amount: string } | undefined;
+	const denominations = breakdowns.denominations as Values[] | undefined;
 	const labels: Values = {
 		opened_by_name: '',
 		closed_by_name: '',
@@ -78,9 +80,13 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 		...(breakdowns.labels as Values),
 	};
 	const rows = (key: string, fields: string[]) =>
-		Object.entries((breakdowns[key] ?? {}) as Record<string, Values>).map(([key, value]) =>
-			money({ ...value, name: value.name ?? value.method ?? value.rate ?? key }, fields)
-		);
+		Object.entries((breakdowns[key] ?? {}) as Record<string, Values>).map(([key, value]) => {
+			const fallback = String(value.method ?? value.rate ?? key);
+			return money(
+				{ ...value, name: value.name || fallback.charAt(0).toUpperCase() + fallback.slice(1) },
+				fields
+			);
+		});
 	const methods = (breakdowns.payment_methods ?? {}) as Record<string, Values>;
 	const tenders = [
 		...new Set([...Object.keys(row.counted ?? {}), ...Object.keys(row.expected ?? {})]),
@@ -108,6 +114,9 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 	});
 	return {
 		closure: {
+			has_discounts: !!discounts && (discounts.count > 0 || toMinor(discounts.amount, 4) !== 0),
+			has_variance_note: !!String(breakdowns.variance_note ?? '').trim(),
+			has_denominations: !!denominations?.length,
 			has_sales:
 				row.period_sales_total != null ||
 				row.period_refunds_total != null ||
@@ -126,6 +135,18 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 				'perpetual_refunds_total',
 				'unsynced_total',
 			]),
+			// Sales minus refunds: the "net" line every ECR Z report prints between gross and tax.
+			...(row.period_sales_total != null
+				? money(
+						{
+							net_sales: fromMinor(
+								toMinor(row.period_sales_total, 4) - toMinor(row.period_refunds_total ?? '0', 4),
+								4
+							),
+						},
+						['net_sales']
+					)
+				: {}),
 			opened_at_gmt: row.opened_at,
 			opened_by: breakdowns.opened_by ?? null,
 			closed_by: row.closed_by ?? null,
@@ -136,6 +157,13 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 			tenders,
 			breakdowns: {
 				...breakdowns,
+				...(discounts ? { discounts: money(discounts, ['amount']) } : {}),
+				...(breakdowns.average_sale != null
+					? { average_sale_display: context.formatMoney(String(breakdowns.average_sale)) }
+					: {}),
+				...(denominations
+					? { denominations: denominations.map((d) => money(d, ['value', 'amount'])) }
+					: {}),
 				labels,
 				payment_methods: rows('payment_methods', ['sales', 'refunds']),
 				tax_rates: rows('tax_rates', ['net', 'tax', 'gross']),
@@ -194,6 +222,12 @@ export function buildClosureDocument(row: ClosureRow, context: ClosureContext) {
 export function buildXReportDocument(session: RegisterSessionRow, context: ClosureContext) {
 	const expected = context.expected ?? session.server_expected ?? {};
 	const counted = session.counted ?? {};
+	const breakdowns = Object.fromEntries(
+		Object.entries(context.breakdowns ?? {}).filter(
+			([key]) =>
+				!['discounts', 'items_sold', 'average_sale', 'variance_note', 'denominations'].includes(key)
+		)
+	);
 	return envelope(
 		{
 			id: session.id,
@@ -209,7 +243,12 @@ export function buildXReportDocument(session: RegisterSessionRow, context: Closu
 				])
 			),
 			breakdowns: {
-				...context.breakdowns,
+				...breakdowns,
+				drawer_openings:
+					breakdowns.drawer_openings ??
+					((breakdowns.movements ?? []) as Values[]).filter(
+						(m) => m.type === 'no_sale' && !m.voided_by
+					).length,
 				opening_float: {
 					expected: session.expected_float,
 					counted: session.counted_float,

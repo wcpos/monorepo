@@ -248,12 +248,58 @@ it.each([
 			await db.close();
 			db = await createRxDatabase({ name, storage, multiInstance: false });
 			await db.addCollections({ [collection]: storeCollections[collection] });
-			expect(schema.version).toBe(version + 1);
+			expect(schema.version).toBeGreaterThan(version);
 			const row = await db.collections[collection].findOne(original.id).exec();
-			expect(row.toJSON()).toEqual(before);
+			expect(row.toJSON()).toMatchObject(before);
 			for (const field of fields) expect(row.get(field)).toBeUndefined();
 		} finally {
 			await db.remove();
 		}
 	}
 );
+
+it('migrates a v4 session with null count details and accepts a persisted count', async () => {
+	const storage = wrappedValidateAjvStorage({ storage: getRxStorageMemory() });
+	const name = `countmigration${Math.random().toString(36).slice(2)}`;
+	let db = await createRxDatabase({ name, storage, multiInstance: false });
+	const oldSchema = JSON.parse(JSON.stringify(registerSessionsLiteral));
+	oldSchema.version = 4;
+	delete oldSchema.properties.count_note;
+	delete oldSchema.properties.count_denominations;
+	const original = {
+		id: 's',
+		register_id: 'r',
+		status: 'closed',
+		opened_at_gmt: '2026-10-28T08:00:00Z',
+		counted: { cash: '100' },
+		sync_status: 'pending',
+		sync_attempts: 0,
+	};
+	try {
+		await db.addCollections({
+			register_sessions: {
+				schema: oldSchema,
+				migrationStrategies: Object.fromEntries(
+					[1, 2, 3, 4].map((version) => [version, (doc: unknown) => doc])
+				),
+			},
+		});
+		await db.register_sessions.insert(original);
+		await db.close();
+		db = await createRxDatabase({ name, storage, multiInstance: false });
+		await db.addCollections({ register_sessions: storeCollections.register_sessions });
+		const row = await db.register_sessions.findOne('s').exec();
+		expect(row.toJSON()).toMatchObject({
+			...original,
+			count_note: null,
+			count_denominations: null,
+		});
+		await row.incrementalPatch({
+			count_note: 'Found notes',
+			count_denominations: [{ value: '50', pieces: 2 }],
+		});
+		expect(row.getLatest().count_denominations).toEqual([{ value: '50', pieces: 2 }]);
+	} finally {
+		await db.remove();
+	}
+});

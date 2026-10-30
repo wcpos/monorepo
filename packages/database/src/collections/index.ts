@@ -644,6 +644,8 @@ const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
 		2: (oldDoc) => oldDoc,
 		3: (oldDoc) => oldDoc,
 		4: (oldDoc) => oldDoc,
+		// Count details arrived with the closure fields; a v4 row has none of either.
+		5: (oldDoc) => ({ ...oldDoc, count_note: null, count_denominations: null }),
 	},
 };
 export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;

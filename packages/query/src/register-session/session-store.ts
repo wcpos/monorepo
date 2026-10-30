@@ -4,12 +4,21 @@ import { parseISO } from 'date-fns/parseISO';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { POS_META_KEYS } from '@wcpos/sync-core';
-import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
+import {
+	fromMinor,
+	isActiveCouponLine,
+	isActiveFeeLine,
+	isActiveLineItem,
+	isActiveShippingLine,
+	readLedger,
+	toMinor,
+} from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type {
 	CashMovementRow,
 	ClosureDocument,
 	ClosureRow,
+	OrderDocument,
 	RefundDocumentType,
 	RegisterSessionCollection,
 	RegisterSessionRow,
@@ -19,7 +28,7 @@ import type {
 import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
-import { attributeRefunds, deriveExpected } from './expected';
+import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 
 import type { ReadonlyClosureDocument } from './reads';
 
@@ -121,11 +130,19 @@ export const backToSelling = (storeDB: RegisterStoreDatabase, id: string) =>
 	// is the server's flag and stays until the server clears it.
 	transition(registerCollections(storeDB).register_sessions, id, 'open', {
 		approved_counted: null,
+		count_note: null,
+		count_denominations: null,
 	});
 export const closeSession = async (
 	storeDB: RegisterStoreDatabase,
 	id: string,
-	input: { counted: Record<string, string>; closedBy?: number; timezone?: string }
+	input: {
+		counted: Record<string, string>;
+		closedBy?: number;
+		timezone?: string;
+		note?: string;
+		denominations?: { value: string; pieces: number }[];
+	}
 ) => {
 	const sessions = registerCollections(storeDB).register_sessions;
 	const session = await sessions.findOne(id).exec();
@@ -141,6 +158,8 @@ export const closeSession = async (
 				{ in: input.timezone && input.timezone !== 'device' ? tz(input.timezone) : undefined }
 			),
 		counted: input.counted,
+		count_note: input.note ?? null,
+		count_denominations: input.denominations ?? null,
 		closed_by: input.closedBy ?? null,
 		closure_id: id,
 	});
@@ -261,6 +280,8 @@ export async function writeClosure({
 	labels,
 	resolveCashierName,
 	timezone = 'device',
+	note = '',
+	denominations = [],
 }: {
 	timezone?: string;
 	storeDB: RegisterStoreDatabase;
@@ -285,6 +306,8 @@ export async function writeClosure({
 		>
 	>;
 	counted: string;
+	note?: string;
+	denominations?: { value: string; pieces: number }[];
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];
 	orders: readonly ClosureOrder[];
@@ -314,6 +337,11 @@ export async function writeClosure({
 				({ key, value }) => key === POS_META_KEYS.session && value === session.id
 			) || readLedger(order.payload.meta_data).some((row) => row.session_id === session.id)
 	);
+	const sold = bound.filter((order) =>
+		readLedger(order.payload.meta_data).some(
+			(row) => row.session_id === session.id && row.status === 'captured'
+		)
+	);
 	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
 	const refunds = attributeRefunds(session.id, ledgerRows, refundRecords);
 	const rows = ledgerRows.filter(
@@ -329,34 +357,64 @@ export async function writeClosure({
 			values.reduce((total, value) => total + toMinor(value, 4), 0),
 			4
 		);
-	const payment_methods: Record<string, { sales: string; refunds: string }> = {};
+	const methodName = (method: string) =>
+		bound.find((order) => order.payload.payment_method === method)?.payload.payment_method_title ??
+		'';
+	const payment_methods: Record<
+		string,
+		{ method: string; name: string; sales: string; refunds: string }
+	> = {};
 	for (const row of rows) {
 		const method = row.kind === 'cash' ? 'cash' : row.method_id;
 		const previous = payment_methods[method];
 		payment_methods[method] = {
+			method,
+			name: methodName(method),
 			sales: sum([previous?.sales ?? '0', row.amount]),
 			refunds: '0.0000',
 		};
 	}
 	for (const [method, amount] of Object.entries(refunds.byMethod)) {
 		payment_methods[method] = {
+			method,
+			name: methodName(method),
 			sales: payment_methods[method]?.sales ?? '0',
 			refunds: fromMinor(amount, 4),
 		};
 	}
-	const tax_rates: Record<string, { net: string; tax: string; gross: string }> = {};
-	for (const order of bound) {
-		for (const tax of order.payload.tax_lines ?? []) {
+	const tax_rates: Record<
+		string,
+		{ rate?: number; name: string; net: string; tax: string; gross: string }
+	> = {};
+	const addTaxRates = (document: ClosureOrder['payload'] | RefundDocumentType) => {
+		const netByRate: Record<string, number> = {};
+		const lines = [
+			...(document.line_items ?? []).filter(isActiveLineItem),
+			...(document.fee_lines ?? []).filter(isActiveFeeLine),
+			...(document.shipping_lines ?? []).filter(isActiveShippingLine),
+		];
+		for (const line of lines)
+			for (const tax of line.taxes ?? [])
+				netByRate[String(tax.id)] = (netByRate[String(tax.id)] ?? 0) + toMinor(line.total, 4);
+		for (const tax of document.tax_lines ?? []) {
 			const key = String(tax.rate_id);
 			const amount = toMinor(tax.tax_total ?? '0', 4) + toMinor(tax.shipping_tax_total ?? '0', 4);
-			const net = tax.rate_percent ? Math.round((amount * 100) / tax.rate_percent) : 0;
+			const net = netByRate[key] ?? 0;
 			const previous = tax_rates[key];
 			tax_rates[key] = {
+				rate: tax.rate_percent,
+				name:
+					tax.rate_percent == null ? (tax.label ?? '') : `${tax.label ?? ''} ${tax.rate_percent}%`,
 				net: sum([previous?.net ?? '0', fromMinor(net, 4)]),
 				tax: sum([previous?.tax ?? '0', fromMinor(amount, 4)]),
 				gross: sum([previous?.gross ?? '0', fromMinor(net + amount, 4)]),
 			};
 		}
+	};
+	// Unpaid orders have no tax to report; session refunds reduce the same tax bases.
+	for (const order of sold) addTaxRates(order.payload);
+	for (const refund of refundRecords) {
+		if (refundSessionId(refund) === session.id) addTaxRates(refund);
 	}
 	const dirtyOrders = bound.filter(hasPendingLocalWork);
 	const dirtyMovements = entries.filter((row) => row.sync_status === 'pending');
@@ -366,6 +424,8 @@ export async function writeClosure({
 			Number(order.payload.meta_data?.find(({ key }) => key === '_wcpos_sale_counter')?.value)
 		)
 		.filter((value) => value > 0);
+	const period_sales_total = sum(rows.map((row) => row.amount));
+	const transaction_count = sold.length;
 	const draft: ClosureRow = {
 		id: session.id,
 		session_id: session.id,
@@ -393,7 +453,7 @@ export async function writeClosure({
 				fromMinor(toMinor(value, 4) - toMinor(till_expected[method] ?? '0', 4), 4),
 			])
 		),
-		period_sales_total: sum(rows.map((row) => row.amount)),
+		period_sales_total,
 		period_refunds_total: fromMinor(
 			Object.values(refunds.byMethod).reduce((total, amount) => total + amount, 0),
 			4
@@ -437,11 +497,37 @@ export async function writeClosure({
 					voided_by: voided_by ?? null,
 				})
 			),
-			transaction_count: bound.filter((order) =>
-				readLedger(order.payload.meta_data).some(
-					(row) => row.session_id === session.id && row.status === 'captured'
-				)
-			).length,
+			transaction_count,
+			discounts: {
+				count: sold.reduce(
+					(count, order) =>
+						count + (order.payload.coupon_lines ?? []).filter(isActiveCouponLine).length,
+					0
+				),
+				amount: sum(
+					sold.flatMap((order) => [order.payload.discount_total, order.payload.discount_tax])
+				),
+			},
+			items_sold: fromMinor(
+				sold
+					.flatMap((order) => order.payload.line_items ?? [])
+					.filter(isActiveLineItem)
+					.reduce((total, item) => total + toMinor(String(item.quantity ?? 0), 4), 0),
+				4
+			).replace(/\.?0+$/, ''),
+			average_sale: fromMinor(
+				transaction_count ? Math.round(toMinor(period_sales_total, 4) / transaction_count) : 0,
+				4
+			),
+			drawer_openings: entries.filter((row) => row.type === 'no_sale' && !row.voided_by).length,
+			variance_note: note,
+			denominations: denominations
+				.filter(({ pieces }) => pieces > 0)
+				.map(({ value, pieces }) => ({
+					value,
+					pieces,
+					amount: fromMinor(toMinor(value, 4) * pieces, 4),
+				})),
 			refund_count: refunds.count,
 			cashiers: [
 				...new Set(
@@ -485,14 +571,24 @@ export async function writeClosure({
 type ClosureOrder = {
 	uuid: string;
 	local?: { dirty: boolean };
-	payload: {
+	payload: Partial<
+		Pick<
+			OrderDocument,
+			| 'discount_total'
+			| 'discount_tax'
+			| 'payment_method'
+			| 'payment_method_title'
+			| 'coupon_lines'
+			| 'line_items'
+			| 'fee_lines'
+			| 'shipping_lines'
+		>
+	> & {
 		meta_data?: Parameters<typeof readLedger>[0];
-		tax_lines?: readonly {
-			rate_id?: number;
-			rate_percent?: number;
-			tax_total?: string;
-			shipping_tax_total?: string;
-		}[];
+		tax_lines?: readonly Pick<
+			NonNullable<OrderDocument['tax_lines']>[number],
+			'rate_id' | 'rate_percent' | 'tax_total' | 'shipping_tax_total' | 'label'
+		>[];
 	};
 };
 

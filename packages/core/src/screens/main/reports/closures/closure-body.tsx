@@ -130,6 +130,7 @@ export function ClosureBody({
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures;
 	// A row read back always carries breakdowns; a bare fixture may not.
 	const breakdowns = row.breakdowns ?? {};
+	const discounts = breakdowns.discounts as { count: number; amount: string } | undefined;
 	const opening = breakdowns.opening_float as
 		{ counted?: string | null; expected?: string } | undefined;
 	const methods = (breakdowns.payment_methods ?? {}) as Record<
@@ -214,6 +215,11 @@ export function ClosureBody({
 					</View>
 				))}
 			</View>
+			{!!String(breakdowns.variance_note ?? '').trim() && (
+				<Text testID="closure-variance-note" className={MUTED}>
+					{t('closures.note')} · {String(breakdowns.variance_note)}
+				</Text>
+			)}
 			{/* The notice names the recorded result, which is money: never for a blind cashier. */}
 			{touched.size > 0 && !blind && (
 				<Notice
@@ -363,6 +369,33 @@ export function ClosureBody({
 							{String(breakdowns.transaction_count)}
 							{!blind && ` · ${context.formatMoney(settled.period_sales_total)}`}
 						</Text>
+					</View>
+				)}
+				{breakdowns.items_sold != null && (
+					<View className={STATIC_ROW}>
+						{term(t('closures.items_sold'))}
+						<Text className="tabular-nums">{breakdowns.items_sold as string}</Text>
+					</View>
+				)}
+				{discounts != null && (
+					<View className={STATIC_ROW}>
+						{term(t('closures.discounts'))}
+						<Text className="tabular-nums">
+							{discounts.count}
+							{!blind && ` · ${context.formatMoney(discounts.amount)}`}
+						</Text>
+					</View>
+				)}
+				{breakdowns.average_sale != null && (
+					<View className={STATIC_ROW}>
+						{term(t('closures.average_sale'))}
+						{amount(context.formatMoney(String(breakdowns.average_sale)))}
+					</View>
+				)}
+				{breakdowns.drawer_openings != null && (
+					<View className={STATIC_ROW}>
+						{term(t('closures.drawer_openings'))}
+						<Text className="tabular-nums">{String(breakdowns.drawer_openings)}</Text>
 					</View>
 				)}
 				<MenuRow

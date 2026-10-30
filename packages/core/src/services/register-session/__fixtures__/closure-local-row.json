@@ -37,6 +37,36 @@
   "sync_status": "synced",
   "sync_attempts": 0,
   "breakdowns": {
+    "discounts": {
+      "count": 3,
+      "amount": "12.5000"
+    },
+    "items_sold": "47",
+    "average_sale": "20.8333",
+    "drawer_openings": 2,
+    "variance_note": "Two $5 notes found under the drawer",
+    "denominations": [
+      {
+        "value": "50",
+        "pieces": 3,
+        "amount": "150.0000"
+      },
+      {
+        "value": "20",
+        "pieces": 1,
+        "amount": "20.0000"
+      },
+      {
+        "value": "5",
+        "pieces": 1,
+        "amount": "5.0000"
+      },
+      {
+        "value": "1",
+        "pieces": 3,
+        "amount": "3.0000"
+      }
+    ],
     "currency": "USD",
     "transaction_count": 12,
     "refund_count": 2,
@@ -70,6 +100,7 @@
     },
     "tax_rates": {
       "vat": {
+        "rate": 20,
         "name": "VAT 20%",
         "net": "166.6667",
         "tax": "33.3333",

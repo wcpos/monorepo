@@ -36,6 +36,11 @@ type ServerTerms = {
 	no_sales?: number;
 	voids?: number;
 };
+export function refundSessionId(refund: RefundDocumentType): string | undefined {
+	const stamp = refund.meta_data?.find(({ key }) => key === POS_META_KEYS.session)?.value;
+	return typeof stamp === 'string' && stamp ? stamp : undefined;
+}
+
 /** Shared drawer/closure debits, in four-decimal minor units. */
 export function attributeRefunds(
 	sessionId: string,
@@ -44,10 +49,8 @@ export function attributeRefunds(
 ) {
 	const stamped = new Map(
 		refundRecords.flatMap((refund) => {
-			const stamp = refund.meta_data?.find(({ key }) => key === POS_META_KEYS.session)?.value;
-			return typeof stamp === 'string' && stamp
-				? [[refund.id, { refund, sessionId: stamp }] as const]
-				: [];
+			const stamp = refundSessionId(refund);
+			return stamp ? [[refund.id, { refund, sessionId: stamp }] as const] : [];
 		})
 	);
 	const byMethod: Record<string, number> = {};
