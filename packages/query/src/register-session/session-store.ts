@@ -10,6 +10,7 @@ import type {
 	CashMovementRow,
 	ClosureDocument,
 	ClosureRow,
+	OrderDocument,
 	RefundDocumentType,
 	RegisterSessionCollection,
 	RegisterSessionRow,
@@ -261,6 +262,8 @@ export async function writeClosure({
 	labels,
 	resolveCashierName,
 	timezone = 'device',
+	note = '',
+	denominations = [],
 }: {
 	timezone?: string;
 	storeDB: RegisterStoreDatabase;
@@ -285,6 +288,8 @@ export async function writeClosure({
 		>
 	>;
 	counted: string;
+	note?: string;
+	denominations?: { value: string; pieces: number }[];
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];
 	orders: readonly ClosureOrder[];
@@ -329,22 +334,35 @@ export async function writeClosure({
 			values.reduce((total, value) => total + toMinor(value, 4), 0),
 			4
 		);
-	const payment_methods: Record<string, { sales: string; refunds: string }> = {};
+	const methodName = (method: string) =>
+		bound.find((order) => order.payload.payment_method === method)?.payload.payment_method_title ??
+		'';
+	const payment_methods: Record<
+		string,
+		{ method: string; name: string; sales: string; refunds: string }
+	> = {};
 	for (const row of rows) {
 		const method = row.kind === 'cash' ? 'cash' : row.method_id;
 		const previous = payment_methods[method];
 		payment_methods[method] = {
+			method,
+			name: methodName(method),
 			sales: sum([previous?.sales ?? '0', row.amount]),
 			refunds: '0.0000',
 		};
 	}
 	for (const [method, amount] of Object.entries(refunds.byMethod)) {
 		payment_methods[method] = {
+			method,
+			name: methodName(method),
 			sales: payment_methods[method]?.sales ?? '0',
 			refunds: fromMinor(amount, 4),
 		};
 	}
-	const tax_rates: Record<string, { net: string; tax: string; gross: string }> = {};
+	const tax_rates: Record<
+		string,
+		{ rate?: number; name: string; net: string; tax: string; gross: string }
+	> = {};
 	for (const order of bound) {
 		for (const tax of order.payload.tax_lines ?? []) {
 			const key = String(tax.rate_id);
@@ -352,6 +370,9 @@ export async function writeClosure({
 			const net = tax.rate_percent ? Math.round((amount * 100) / tax.rate_percent) : 0;
 			const previous = tax_rates[key];
 			tax_rates[key] = {
+				rate: tax.rate_percent,
+				name:
+					tax.rate_percent == null ? (tax.label ?? '') : `${tax.label ?? ''} ${tax.rate_percent}%`,
 				net: sum([previous?.net ?? '0', fromMinor(net, 4)]),
 				tax: sum([previous?.tax ?? '0', fromMinor(amount, 4)]),
 				gross: sum([previous?.gross ?? '0', fromMinor(net + amount, 4)]),
@@ -366,6 +387,12 @@ export async function writeClosure({
 			Number(order.payload.meta_data?.find(({ key }) => key === '_wcpos_sale_counter')?.value)
 		)
 		.filter((value) => value > 0);
+	const period_sales_total = sum(rows.map((row) => row.amount));
+	const transaction_count = bound.filter((order) =>
+		readLedger(order.payload.meta_data).some(
+			(row) => row.session_id === session.id && row.status === 'captured'
+		)
+	).length;
 	const draft: ClosureRow = {
 		id: session.id,
 		session_id: session.id,
@@ -393,7 +420,7 @@ export async function writeClosure({
 				fromMinor(toMinor(value, 4) - toMinor(till_expected[method] ?? '0', 4), 4),
 			])
 		),
-		period_sales_total: sum(rows.map((row) => row.amount)),
+		period_sales_total,
 		period_refunds_total: fromMinor(
 			Object.values(refunds.byMethod).reduce((total, amount) => total + amount, 0),
 			4
@@ -437,11 +464,32 @@ export async function writeClosure({
 					voided_by: voided_by ?? null,
 				})
 			),
-			transaction_count: bound.filter((order) =>
-				readLedger(order.payload.meta_data).some(
-					(row) => row.session_id === session.id && row.status === 'captured'
-				)
-			).length,
+			transaction_count,
+			discounts: {
+				count: bound.reduce((count, order) => count + (order.payload.coupon_lines?.length ?? 0), 0),
+				amount: sum(
+					bound.flatMap((order) => [order.payload.discount_total, order.payload.discount_tax])
+				),
+			},
+			items_sold: bound.reduce(
+				(total, order) =>
+					total +
+					(order.payload.line_items ?? []).reduce((count, item) => count + (item.quantity ?? 0), 0),
+				0
+			),
+			average_sale: fromMinor(
+				transaction_count ? Math.round(toMinor(period_sales_total, 4) / transaction_count) : 0,
+				4
+			),
+			drawer_openings: entries.filter((row) => row.type === 'no_sale' && !row.voided_by).length,
+			variance_note: note,
+			denominations: denominations
+				.filter(({ pieces }) => pieces > 0)
+				.map(({ value, pieces }) => ({
+					value,
+					pieces,
+					amount: fromMinor(toMinor(value, 4) * pieces, 4),
+				})),
 			refund_count: refunds.count,
 			cashiers: [
 				...new Set(
@@ -485,14 +533,19 @@ export async function writeClosure({
 type ClosureOrder = {
 	uuid: string;
 	local?: { dirty: boolean };
-	payload: {
+	payload: Partial<
+		Pick<
+			OrderDocument,
+			'discount_total' | 'discount_tax' | 'payment_method' | 'payment_method_title'
+		>
+	> & {
 		meta_data?: Parameters<typeof readLedger>[0];
-		tax_lines?: readonly {
-			rate_id?: number;
-			rate_percent?: number;
-			tax_total?: string;
-			shipping_tax_total?: string;
-		}[];
+		coupon_lines?: readonly unknown[];
+		line_items?: readonly Pick<NonNullable<OrderDocument['line_items']>[number], 'quantity'>[];
+		tax_lines?: readonly Pick<
+			NonNullable<OrderDocument['tax_lines']>[number],
+			'rate_id' | 'rate_percent' | 'tax_total' | 'shipping_tax_total' | 'label'
+		>[];
 	};
 };
 

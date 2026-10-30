@@ -6,6 +6,9 @@
     "has_tax_rates": true,
     "has_perpetual": true,
     "has_movements": true,
+    "has_discounts": true,
+    "has_variance_note": true,
+    "has_denominations": true,
 
     "store_id": 1,
     "opened_at_gmt": "2026-09-11 08:00:00",
@@ -32,6 +35,46 @@
     "unsynced_count": 2,
     "unsynced_total": "12.0000",
     "breakdowns": {
+      "discounts": {
+        "count": 3,
+        "amount": "12.5000",
+        "amount_display": "$12.50"
+      },
+      "items_sold": 47,
+      "average_sale": "20.8333",
+      "drawer_openings": 2,
+      "variance_note": "Two $5 notes found under the drawer",
+      "denominations": [
+        {
+          "value": "50",
+          "pieces": 3,
+          "amount": "150.0000",
+          "value_display": "$50.00",
+          "amount_display": "$150.00"
+        },
+        {
+          "value": "20",
+          "pieces": 1,
+          "amount": "20.0000",
+          "value_display": "$20.00",
+          "amount_display": "$20.00"
+        },
+        {
+          "value": "5",
+          "pieces": 1,
+          "amount": "5.0000",
+          "value_display": "$5.00",
+          "amount_display": "$5.00"
+        },
+        {
+          "value": "1",
+          "pieces": 3,
+          "amount": "3.0000",
+          "value_display": "$1.00",
+          "amount_display": "$3.00"
+        }
+      ],
+      "average_sale_display": "$20.83",
       "currency": "USD",
       "payment_methods": [
         {
@@ -53,6 +96,7 @@
       ],
       "tax_rates": [
         {
+          "rate": 20,
           "name": "VAT 20%",
           "net": "166.6667",
           "tax": "33.3333",

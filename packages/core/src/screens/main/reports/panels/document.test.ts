@@ -94,10 +94,13 @@ it("builds a document the plugin's validator accepts: column_count equals the co
 			is_closure_document: false,
 		});
 		expect(report.column_count).toBe(report.columns.length);
+		report.columns.forEach((column, i) => expect(column).toHaveProperty('is_first', i === 0));
 		expect(report.group_by).toBeNull();
 		for (const row of [...report.rows, report.totals]) {
 			expect(row.cells.map((cell) => cell.key)).toEqual(report.columns.map((col) => col.key));
 			for (const cell of row.cells) expect(typeof cell.value).toBe('string');
+			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('is_first', i === 0));
+			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('label', report.columns[i].label));
 		}
 	}
 	expect(document('payments').report.rows[0].cells[2]).toMatchObject({
@@ -165,6 +168,7 @@ it('pins grouped rows and subtotals against the report fixture', () => {
 		for (const row of [...group.rows, group.subtotal]) {
 			expect(row.cells.map((cell) => cell.key)).toEqual(spec.keys);
 			for (const cell of row.cells) expect(typeof cell.value).toBe('string');
+			row.cells.forEach((cell, i) => expect(cell).toHaveProperty('is_first', i === 0));
 		}
 	}
 	expect(report.groups[0].rows[0].key).toMatch(/^[^_]/);

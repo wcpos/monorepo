@@ -30,6 +30,8 @@ export function buildReportDocument(
 	const cells = (formatted: string[], raw: (string | number)[]) =>
 		columns.map((column, i) => ({
 			key: column.key,
+			is_first: i === 0,
+			label: column.label,
 			value: String(raw[i]),
 			formatted: formatted[i],
 			align: column.align,
@@ -60,7 +62,7 @@ export function buildReportDocument(
 				to: formatClosureDate(meta.to, context),
 			},
 			group_by: null,
-			columns,
+			columns: columns.map((column, i) => ({ ...column, is_first: i === 0 })),
 			column_count: columns.length,
 			rows: spec.groups ? [] : rows(spec.rows),
 			groups: (spec.groups ?? []).map((group) => ({

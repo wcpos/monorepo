@@ -8,6 +8,12 @@ import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/regi
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
+// Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
+jest.mock('@rn-primitives/label', () => ({
+	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<span id={nativeID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
@@ -38,26 +44,6 @@ jest.mock('@wcpos/components/button', () => ({
 		<button data-testid={testID} disabled={disabled || loading} onClick={onPress}>
 			{children}
 		</button>
-	),
-}));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
-		value,
-		onChangeText,
-		testID,
-		secureTextEntry,
-	}: {
-		value: string;
-		onChangeText: (v: string) => void;
-		testID: string;
-		secureTextEntry?: boolean;
-	}) => (
-		<input
-			type={secureTextEntry ? 'password' : 'text'}
-			data-testid={testID}
-			value={value}
-			onChange={(e) => onChangeText(e.target.value)}
-		/>
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
@@ -298,7 +284,11 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 			blind: false,
 		})
 	);
-	expect(closeSession).toHaveBeenCalledWith({ counted: { cash: '480.80', card: '22' } });
+	expect(closeSession).toHaveBeenCalledWith({
+		counted: { cash: '480.80', card: '22' },
+		note: '',
+		denominations: [],
+	});
 });
 
 it('a seeded counting session says the figures are still to come and cannot close', () => {
@@ -482,3 +472,25 @@ it('backs out of a closed session without returning it to selling', async () => 
 	expect(backToSelling).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+	'passes the note and two counted faces in blind mode %s',
+	async (isBlind) => {
+		blind = isBlind;
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		fireEvent.change(screen.getByTestId('count-note'), { target: { value: 'Found notes' } });
+		fireEvent.click(screen.getByTestId('count-denominations'));
+		fireEvent.click(screen.getByTestId('den-tile-20'));
+		fireEvent.click(screen.getByTestId('den-tile-5'));
+		fireEvent.click(screen.getByTestId('den-tile-5'));
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(closeSession).toHaveBeenCalledWith({
+			counted: { cash: '30.00' },
+			note: 'Found notes',
+			denominations: [
+				{ value: '20', pieces: 1 },
+				{ value: '5', pieces: 2 },
+			],
+		});
+	}
+);

@@ -447,7 +447,11 @@ export function useRegisterSession() {
 				});
 				return row;
 			},
-			closeSession: async (input: { counted: Record<string, string> }) => {
+			closeSession: async (input: {
+				counted: Record<string, string>;
+				note?: string;
+				denominations?: { value: string; pieces: number }[];
+			}) => {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register_figures_pending');
@@ -544,6 +548,8 @@ export function useRegisterSession() {
 					siteUuid: site.uuid!,
 					session: closed,
 					counted: input.counted.cash,
+					note: input.note,
+					denominations: input.denominations,
 					otherTenders: Object.fromEntries(
 						Object.entries(input.counted).filter(([method]) => method !== 'cash')
 					),

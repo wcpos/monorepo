@@ -111,7 +111,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		actions: { closeSession },
 	}),
 }));
-const props = { counted: { cash: '463.30' }, onClosed: jest.fn(), onOpenChange: jest.fn() };
+const props = {
+	note: 'Found notes',
+	denominations: [{ value: '5', pieces: 2 }],
+	counted: { cash: '463.30' },
+	onClosed: jest.fn(),
+	onOpenChange: jest.fn(),
+};
 function fill() {
 	fireEvent.change(screen.getByTestId('approve-username'), { target: { value: 'manager' } });
 	fireEvent.change(screen.getByTestId('approve-password'), { target: { value: 'secret' } });
@@ -163,7 +169,11 @@ it('approves on the server, persists the approved count, then closes without a t
 		approval_required: false,
 		sync_error: null,
 	});
-	expect(closeSession).toHaveBeenCalledWith({ counted: props.counted });
+	expect(closeSession).toHaveBeenCalledWith({
+		counted: props.counted,
+		note: props.note,
+		denominations: props.denominations,
+	});
 	expect(recordFact).toHaveBeenCalledWith({
 		actor: { id: '7', name: 'Pat' },
 		...{

@@ -600,11 +600,18 @@ it('observes old held parents and later allocations without importing their sale
 	jest
 		.mocked(actions.writeClosure)
 		.mockResolvedValue({ id: 'closure', counted: {}, variance: {} } as never);
-	await result.current.actions.closeSession({ counted: { cash: '100' } });
+	const closeInput = {
+		counted: { cash: '100' },
+		note: 'Found notes',
+		denominations: [{ value: '50', pieces: 2 }],
+	};
+	await result.current.actions.closeSession(closeInput);
 	// The closure writer must receive the same old parent and refund that drove the drawer.
 	expect(actions.writeClosure).toHaveBeenCalledWith(
 		expect.objectContaining({
 			orders: [parentHit().record],
+			note: 'Found notes',
+			denominations: [{ value: '50', pieces: 2 }],
 			refundRecords: [refundHit().record.payload],
 		})
 	);

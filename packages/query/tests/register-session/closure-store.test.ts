@@ -359,3 +359,115 @@ it('patches only the receipt snapshot and corrections count, including server id
 		name: 'StoreDatabaseUnavailableError',
 	});
 });
+
+// Omitting close-time fields or counting voided/foreign movements loses the stored document contract.
+it('stores closure counters, tender/tax labels and integer denomination amounts', async () => {
+	const input = await seed();
+	const first = input.orders[0];
+	const orders = [
+		{
+			...first,
+			payload: {
+				...first.payload,
+				payment_method: 'cash',
+				payment_method_title: 'Cash drawer',
+				discount_total: '1.0001',
+				discount_tax: '0.2000',
+				coupon_lines: [{}],
+				line_items: [{ quantity: 2 }, { quantity: 1.5 }],
+				tax_lines: [{ rate_id: 1, label: 'VAT', rate_percent: 20, tax_total: '10' }],
+			},
+		},
+		{
+			uuid: 'second',
+			payload: {
+				payment_method: 'card',
+				payment_method_title: 'Card',
+				line_items: [{ quantity: 3 }],
+				meta_data: [
+					{ key: '_wcpos_session', value: input.session.id },
+					{
+						key: '_wcpos_payments',
+						value: {
+							schema: 1,
+							payments: [
+								{
+									id: 'second-card',
+									session_id: input.session.id,
+									kind: 'card',
+									method_id: 'card',
+									status: 'captured',
+									amount: '10.0001',
+								},
+							],
+						},
+					},
+				],
+				tax_lines: [{ rate_id: 2, label: 'Local tax', tax_total: '1' }],
+			},
+		},
+	];
+	const movement = {
+		...input.movements[0].toJSON(),
+		type: 'no_sale' as const,
+		amount: '0',
+		voided_by: null,
+		voids: null,
+	};
+	const closure = await writeClosure({
+		...input,
+		orders,
+		note: 'Found coins',
+		denominations: [
+			{ value: '0.1001', pieces: 3 },
+			{ value: '50', pieces: 2 },
+			{ value: '20', pieces: 0 },
+		],
+		movements: [
+			movement,
+			{ ...movement, id: 'voided', voided_by: 'v' },
+			{ ...movement, id: 'foreign', session_id: 'other' },
+		],
+	});
+	expect(closure.breakdowns).toMatchObject({
+		discounts: { count: 1, amount: '1.2001' },
+		items_sold: 6.5,
+		average_sale: '45.0001',
+		drawer_openings: 1,
+		variance_note: 'Found coins',
+		denominations: [
+			{ value: '0.1001', pieces: 3, amount: '0.3003' },
+			{ value: '50', pieces: 2, amount: '100.0000' },
+		],
+		payment_methods: {
+			cash: { method: 'cash', name: 'Cash drawer' },
+			card: { method: 'card', name: 'Card' },
+		},
+		tax_rates: { '1': { rate: 20, name: 'VAT 20%' }, '2': { name: 'Local tax' } },
+	});
+});
+it('stores empty defaults for a session with no orders or count details', async () => {
+	const input = await seed();
+	const closure = await writeClosure({ ...input, orders: [], movements: [] });
+	expect(closure.breakdowns).toMatchObject({
+		discounts: { count: 0, amount: '0.0000' },
+		items_sold: 0,
+		average_sale: '0.0000',
+		drawer_openings: 0,
+		variance_note: '',
+		denominations: [],
+	});
+});
+it('keeps the first payment title and uses empty names for unknown methods', async () => {
+	const input = await seed();
+	const orders = ['First', 'Second'].map((name, i) => ({
+		...input.orders[0],
+		uuid: String(i),
+		payload: { ...input.orders[0].payload, payment_method: 'card', payment_method_title: name },
+	}));
+	const closure = await writeClosure({ ...input, orders });
+	expect(closure.breakdowns.payment_methods).toMatchObject({
+		cash: { method: 'cash', name: '' },
+		card: { method: 'card', name: 'First' },
+	});
+});

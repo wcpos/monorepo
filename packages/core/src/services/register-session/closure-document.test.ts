@@ -335,3 +335,98 @@ it.each([0, 3])(
 		}
 	}
 );
+
+it('formats new closure fields without inventing them on old rows', () => {
+	const doc = buildClosureDocument(
+		{
+			...row,
+			breakdowns: {
+				...row.breakdowns,
+				discounts: { count: 3, amount: '12.5000' },
+				average_sale: '20.8333',
+				items_sold: 47,
+				drawer_openings: 2,
+				variance_note: 'Found notes',
+				denominations: [{ value: '5', pieces: 2, amount: '10.0000' }],
+			},
+		},
+		context
+	);
+	expect(doc.closure).toMatchObject({
+		has_discounts: true,
+		has_variance_note: true,
+		has_denominations: true,
+		breakdowns: {
+			discounts: { count: 3, amount: '12.5000', amount_display: '$12.50' },
+			average_sale_display: '$20.83',
+			items_sold: 47,
+			drawer_openings: 2,
+			denominations: [{ value_display: '$5.00', amount_display: '$10.00', pieces: 2 }],
+		},
+	});
+	// Net sales is sales minus refunds, formatted like the period totals.
+	expect(doc.closure.net_sales_display).toBe(
+		context.formatMoney(
+			String(Number(row.period_sales_total) - Number(row.period_refunds_total ?? '0'))
+		)
+	);
+	const old = buildClosureDocument(row, context).closure;
+	expect(old).toMatchObject({
+		has_discounts: false,
+		has_variance_note: false,
+		has_denominations: false,
+	});
+	expect(old.breakdowns).not.toHaveProperty('discounts');
+	expect(old.breakdowns).not.toHaveProperty('average_sale_display');
+});
+it.each([
+	[0, '0.0000', false],
+	[1, '0.0000', true],
+	[0, '0.0001', true],
+])('flags discounts for count %s and amount %s', (count, amount, expected) => {
+	const doc = buildClosureDocument(
+		{
+			...row,
+			breakdowns: { discounts: { count, amount }, variance_note: '  ', denominations: [] },
+		},
+		context
+	);
+	expect(doc.closure).toMatchObject({
+		has_discounts: expected,
+		has_variance_note: false,
+		has_denominations: false,
+	});
+});
+it('counts only live drawer openings on X-reports and excludes close-only fields', () => {
+	const { session } = require('./__fixtures__/x-report.json');
+	const breakdowns = {
+		movements: [{ type: 'no_sale' }, { type: 'no_sale', voided_by: 'v' }, { type: 'paid_in' }],
+		discounts: { count: 1, amount: '1' },
+		items_sold: 3,
+		average_sale: '10',
+		variance_note: 'Not an X-report note',
+		denominations: [{ value: '5', pieces: 1, amount: '5' }],
+	};
+	const doc = buildXReportDocument(session, { ...context, breakdowns });
+	expect(doc.closure.breakdowns).toHaveProperty('drawer_openings', 1);
+	for (const key of ['discounts', 'items_sold', 'average_sale', 'variance_note', 'denominations'])
+		expect(doc.closure.breakdowns).not.toHaveProperty(key);
+	expect(
+		buildXReportDocument(session, { ...context, breakdowns: { ...breakdowns, drawer_openings: 0 } })
+			.closure.breakdowns
+	).toHaveProperty('drawer_openings', 0);
+});
+
+it('falls back to capitalised tender keys when stored titles are unknown', () => {
+	const doc = buildClosureDocument(
+		{
+			...row,
+			breakdowns: {
+				payment_methods: { cash: { method: 'cash', name: '', sales: '10', refunds: '0' } },
+			},
+		},
+		context
+	);
+	expect(doc.closure.breakdowns.payment_methods[0]).toMatchObject({ method: 'cash', name: 'Cash' });
+	expect(doc.closure.tenders[0].label).toBe('Cash');
+});
