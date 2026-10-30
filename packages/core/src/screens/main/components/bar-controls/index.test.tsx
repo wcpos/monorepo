@@ -3,7 +3,9 @@ import * as React from 'react';
 
 import { render, renderHook, screen } from '@testing-library/react';
 
-import { BarControls, useBarMenu, useOnlineBadge } from './index';
+import { TitleBarStripProvider } from '@wcpos/components/edge-surface/title-bar-strip';
+
+import { BarControls, useBarMenu, useBarStatus, useOnlineBadge } from './index';
 
 let mockSize: 'sm' | 'lg' = 'sm';
 let mockStatus = 'online-website-available';
@@ -76,4 +78,25 @@ it.each([
 	mockStatus = status;
 	const { result } = renderHook(() => useOnlineBadge());
 	expect(result.current).toEqual(badge);
+});
+
+// No doubles (Paul, 2026-10-29): while the desktop title bar shows it is the one home of Offline,
+// the bell and the avatar, so every other bar draws none; full screen (0) gives them back.
+it.each([
+	[28, false],
+	[0, true],
+])('with a title-bar strip of %s a bar carries its controls: %s', (height, carried) => {
+	mockStatus = 'offline';
+	const strip = ({ children }: React.PropsWithChildren) => (
+		<TitleBarStripProvider value={{ node: null, height }}>{children}</TitleBarStripProvider>
+	);
+	render(<BarControls testID="orders-bar" />, { wrapper: strip });
+	expect(screen.queryByTestId('orders-bar-bell') !== null).toBe(carried);
+	expect(screen.queryByTestId('orders-bar-avatar') !== null).toBe(carried);
+	expect(renderHook(() => useBarStatus(), { wrapper: strip }).result.current !== undefined).toBe(
+		carried
+	);
+	render(<BarControls testID="title-bar" inTitleBar />, { wrapper: strip });
+	expect(screen.getByTestId('title-bar-bell')).toBeTruthy();
+	expect(screen.getByTestId('title-bar-avatar')).toBeTruthy();
 });
