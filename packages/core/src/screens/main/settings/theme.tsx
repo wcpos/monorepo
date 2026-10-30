@@ -56,7 +56,7 @@ function ThemeOptionButton({
 			}}
 			selected={isActive}
 			// min-h-40 clears the tallest possible card — icon + 2-line label cap
-			// + 2-line description cap (≈9.4rem) — so all six tiles match across
+			// + 2-line description cap (≈9.4rem) — so all eight tiles match across
 			// rows, locales, and widths, not just within a stretched row.
 			className="min-h-40 gap-2 p-3"
 			title={option.label}
@@ -102,7 +102,7 @@ function ThemeGrid({
 					: t('settings.current_theme', { theme: activeThemeLabel })
 			}
 		>
-			{/* System, Light, Dark; then Ocean, Sunset, Monochrome. */}
+			{/* System, Light, Dark; then Ocean, Sunset, Monochrome; then Paper till, Warm shop. */}
 			<TileGrid columns={3} className="pt-2">
 				{themeOptions.map((option) => (
 					<ThemeOptionButton
@@ -311,6 +311,18 @@ function ThemeSettingsContent() {
 				label: t('settings.theme.monochrome'),
 				icon: 'contrast',
 				description: t('settings.theme.monochrome_description'),
+			},
+			{
+				name: 'paper',
+				label: t('settings.theme.paper'),
+				icon: 'receipt',
+				description: t('settings.theme.paper_description'),
+			},
+			{
+				name: 'warm',
+				label: t('settings.theme.warm'),
+				icon: 'store',
+				description: t('settings.theme.warm_description'),
 			},
 		],
 		[t]

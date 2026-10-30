@@ -42,7 +42,14 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 		assert.doesNotMatch(themeBody, declaration, `${token} must not be in plain @theme`);
 	}
 });
-const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
+const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome', 'paper', 'warm'];
+
+test('the contract covers every variant in the theme layer, in sheet order', () => {
+	const layer = css.match(/@layer\s+theme\s*\{([\s\S]*?)^\}/m)?.[1];
+	assert.ok(layer, 'Missing theme layer');
+	const variants = [...layer.matchAll(/@variant\s+([\w-]+)\s*\{/g)].map(([, name]) => name);
+	assert.deepEqual(themeNames, variants);
+});
 const newColors = [
 	'selected',
 	'selected-foreground',

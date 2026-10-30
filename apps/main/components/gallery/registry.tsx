@@ -121,7 +121,7 @@ const registry: Record<string, Story[]> = {
 	'v2-dialog': dialogV2,
 };
 
-/** Every theme the app ships (`metro.config.js` `extraThemes` plus light and dark); the shoot covers all five. */
+// The gallery shoots the five original themes; the personality themes are not baselined (Paul decides after his pass, 2026-10-30).
 const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome'] as const;
 type Theme = (typeof THEMES)[number];
 const isTheme = (theme: string | undefined): theme is Theme =>
