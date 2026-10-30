@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -16,6 +17,8 @@ import {
 import { Button } from '@wcpos/components/button';
 import { DialogBody, useDialog } from '@wcpos/components/dialog';
 import { Form, FormCombobox, FormField, FormSelect, FormTextarea } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Notice } from '@wcpos/components/notice';
 import {
 	PropertyAdd,
 	PropertyAddRow,
@@ -35,6 +38,10 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
+import {
+	useRegisterBinding,
+	useRegisterDirectory,
+} from '../../../../../../services/register/use-register-binding';
 import { CurrencySelect } from '../../../../components/currency-select';
 import { CashierSelect } from '../../../../components/cashier-select';
 import { useCurrencyRow } from '../../../../components/order/order-rows';
@@ -42,6 +49,8 @@ import { OrderStatusSelect } from '../../../../components/order/order-status-sel
 import { pushFailureCode } from '../../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../../contexts/use-push-document';
 import { useCashierLabel } from '../../../../hooks/use-cashier-label';
+import { useOrderStatusLabel } from '../../../../hooks/use-order-status-label';
+import { storeListResource } from '../../../../hooks/store-list-resource';
 import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
 import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
@@ -66,7 +75,23 @@ const formSchema = z.object({
 	meta_data: metaDataSchema,
 });
 
-const handOverSchema = z.object({ status: z.string(), cashier_id: z.string() });
+/** The cart's open-orders scope: open status, cashier, store and register (`openOrdersSelector`). */
+const handOverSchema = z.object({
+	status: z.string(),
+	cashier_id: z.string(),
+	store_id: z.string(),
+	register_id: z.string(),
+});
+type HandOverField = 'status' | 'cashier' | 'store' | 'register';
+/** One staged field: its ids (`from`, `to`) and display names (`before`, `after`). */
+type HandOverChange = {
+	field: HandOverField;
+	label: string;
+	from: string;
+	to: string;
+	before: string;
+	after: string;
+};
 
 type HandOverValues = z.infer<typeof handOverSchema>;
 
@@ -96,10 +121,26 @@ export function EditOrderMetaForm({
 	const { store, wpCredentials } = useStoreSession();
 	const storeID = useDocField(store, (value) => value.id);
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
-	// The staged hand-off, with whether the cashier changed the status (judged when staged).
-	const [pending, setPending] = React.useState<(HandOverValues & { statusEdit: boolean }) | null>(
-		null
-	);
+	const { registerId: boundRegisterId } = useRegisterBinding();
+	// The order as the cart's scope reads it: a missing store or register is this till's, which is
+	// what a send stamps. Built from the live payload (`handOverData`), never a render-time
+	// `order.getLatest()`, which the React Compiler would cache per order.
+	const base: HandOverValues = {
+		...handOverData,
+		store_id: handOverData.store_id || String(storeID ?? NO_STORE),
+		register_id: handOverData.register_id || (boundRegisterId ?? ''),
+	};
+	/** Out of this cart's scope on any of its four conditions (`openOrdersSelector`). */
+	const leavesCart = (values: HandOverValues) =>
+		!(OPEN_ORDER_STATUSES as readonly string[]).includes(values.status) ||
+		values.cashier_id !== String(cashierID) ||
+		(storeID !== undefined && storeID !== NO_STORE && values.store_id !== String(storeID)) ||
+		(!!boundRegisterId && values.register_id !== boundRegisterId);
+	// The staged hand-off, with whether the cashier changed the status and whether it leaves this
+	// cart (both judged when staged).
+	const [pending, setPending] = React.useState<
+		(HandOverValues & { statusEdit: boolean; leaves: boolean }) | null
+	>(null);
 	const [loading, setLoading] = React.useState(false);
 
 	/**
@@ -117,7 +158,7 @@ export function EditOrderMetaForm({
 	// The hand-over is read, never written, until Send: reactive values are right here.
 	const handOverForm = useForm<HandOverValues>({
 		resolver: zodResolver(handOverSchema),
-		values: handOverData,
+		values: base,
 	});
 	// Resolves whether the record holds the edit: flush() hands that to Sync order and Send.
 	const { flush } = useRecordAutosave({
@@ -136,23 +177,114 @@ export function EditOrderMetaForm({
 			flushRef.current = null;
 		};
 	}, [flush, flushRef]);
-	const [status, cashierId] = useWatch({
+	const [status, cashierId, storeId, registerId] = useWatch({
 		control: handOverForm.control,
-		name: ['status', 'cashier_id'],
+		name: ['status', 'cashier_id', 'store_id', 'register_id'],
 	});
-	const payload = order.getLatest().payload;
-	const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
 	const statusPushable = isPushableOrderStatus(handOverData.status);
 	const allowedStatuses = statusPushable
 		? PUSHABLE_ORDER_STATUSES
 		: [...PUSHABLE_ORDER_STATUSES, handOverData.status];
 	const { label: cashierLabel } = useCashierLabel(cashierId);
+	const { label: cashierBefore } = useCashierLabel(base.cashier_id);
+	const { getLabel: statusLabel } = useOrderStatusLabel();
+	const stores = useObservableSuspense(storeListResource(wpCredentials));
+	const storeOptions = React.useMemo(
+		() => stores.map((row) => ({ value: String(row.id), label: row.name ?? '' })),
+		[stores]
+	);
+	const target = useRegisterDirectory(Number(storeId) || NO_STORE);
+	const { registers: registersBefore } = useRegisterDirectory(Number(base.store_id) || NO_STORE);
+	// An empty list means "no registers" only once the store has answered (as `switch-confirm`).
+	const targetLoaded = target.loaded || target.registers.length > 0;
+	const storeChanged = storeId !== base.store_id;
+	const storeName = (id: string) => stores.find((row) => String(row.id) === id)?.name || id;
+	const registerName = (id: string) =>
+		[...registersBefore, ...target.registers].find((row) => row.id === id)?.name || id;
+	const staged: HandOverChange[] = [
+		{
+			field: 'status',
+			label: t('common.status'),
+			from: base.status,
+			to: status,
+			before: statusLabel(base.status),
+			after: statusLabel(status),
+		},
+		{
+			field: 'cashier',
+			label: t('common.cashier'),
+			from: base.cashier_id,
+			to: cashierId,
+			before: cashierBefore,
+			after: cashierLabel,
+		},
+		{
+			field: 'store',
+			label: t('common.store'),
+			from: base.store_id,
+			to: storeId,
+			before: storeName(base.store_id),
+			after: storeName(storeId),
+		},
+		{
+			field: 'register',
+			label: t('register.register'),
+			from: base.register_id,
+			to: registerId,
+			before: registerName(base.register_id),
+			after: registerName(registerId),
+		},
+	];
+	const changes = staged.filter((change) => change.from !== change.to);
+	const changed = (field: HandOverField) => changes.some((change) => change.field === field);
+	const tone = (field: HandOverField) => (changed(field) ? ('attention' as const) : undefined);
+	const leaves = leavesCart({
+		status,
+		cashier_id: cashierId,
+		store_id: storeId,
+		register_id: registerId,
+	});
+	// The register_id the store's one register means, written once its directory answers.
+	const onlyRegister =
+		storeChanged && targetLoaded && target.registers.length === 1 ? target.registers[0].id : '';
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- The store's directory answers asynchronously, after the pick.
+		if (onlyRegister) handOverForm.setValue('register_id', onlyRegister);
+	}, [onlyRegister, handOverForm]);
+	const blocked =
+		// Another store: wait for its registers; with some, one is chosen before the order can go.
+		(storeChanged && (!targetLoaded || (target.registers.length > 0 && !registerId))) ||
+		// The confirm names the new cashier: never "Hand this order to ?".
+		(changed('cashier') && !cashierLabel);
+	// The confirm names where the order goes: a cashier, else the place, else just the store.
+	const placeName = (field: HandOverField) =>
+		changes.find((change) => change.field === field && change.to)?.after;
+	const place = [placeName('store'), placeName('register')].filter(Boolean).join(' · ');
+	const confirmCopy = changed('cashier')
+		? {
+				title: t('pos_cart.hand_order_to_question', { name: cashierLabel }),
+				description: place
+					? t('pos_cart.hand_order_to_place_description', { name: cashierLabel, place })
+					: t('pos_cart.hand_order_to_description', { name: cashierLabel }),
+				confirm: t('pos_cart.send_to', { name: cashierLabel }),
+			}
+		: place
+			? {
+					title: t('pos_cart.send_order_to_question', { name: place }),
+					description: t('pos_cart.send_order_to_description', { name: place }),
+					confirm: t('pos_cart.send_to', { name: place }),
+				}
+			: {
+					title: t('pos_cart.send_order_title'),
+					description: t('pos_cart.send_order_description'),
+					confirm: t('common.send'),
+				};
 	// Only the hand-over's own values are staged: the edit form's fields are already on the order
 	// (or refused by the gate), so the send never carries them.
 	const onSend = handOverForm.handleSubmit((data) => {
 		const statusEdit = data.status !== order.getLatest().payload.status;
-		setPending({ ...data, statusEdit });
+		setPending({ ...data, statusEdit, leaves });
 	});
 
 	async function handleSend() {
@@ -171,7 +303,7 @@ export function EditOrderMetaForm({
 		}
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
-		const { cashier_id, status, statusEdit: statusChanged } = pending;
+		const { cashier_id, status, store_id, register_id, statusEdit: statusChanged } = pending;
 		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
 		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
 		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till
@@ -181,8 +313,9 @@ export function EditOrderMetaForm({
 			...(statusChanged ? { status } : {}),
 			meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
 				userId: cashier_id,
-				storeId: identity.storeId ?? storeID ?? NO_STORE,
-				registerId: identity.registerId,
+				storeId: Number(store_id) || NO_STORE,
+				// None chosen keeps the order's own, unless it moved to a store without registers.
+				registerId: register_id || (store_id !== base.store_id ? null : undefined),
 				tillId: identity.tillId,
 			}),
 		});
@@ -193,17 +326,19 @@ export function EditOrderMetaForm({
 			await pushDocument(order);
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
 			closeDialog();
-			if (
-				!(OPEN_ORDER_STATUSES as readonly string[]).includes(status) ||
-				cashier_id !== String(cashierID)
-			) {
-				setCurrentOrderID('');
-			}
+			if (pending.leaves) setCurrentOrderID('');
 		} catch (error) {
 			if (patched) {
+				// The identity is restored by value: a protected row the send added (a register the
+				// order never had) survives a plain restore, so it is cleared explicitly.
 				const reverted = await writeOrderFields(order, () => ({
 					...(statusChanged ? { status: previous.status } : {}),
-					meta_data: previous.meta_data ?? [],
+					meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
+						userId: identity.cashierId ?? '',
+						storeId: identity.storeId ?? NO_STORE,
+						registerId: identity.registerId ?? null,
+						tillId: identity.tillId,
+					}),
 				}));
 				// The failed send may still land: a timed-out outcome is unknown and a queued
 				// mutation is retried. Open orders only reach the server on an explicit push,
@@ -255,61 +390,123 @@ export function EditOrderMetaForm({
 						/>
 					</PropertyRow>
 					<Form {...handOverForm}>
-						<PropertyRow id="status" label={t('common.status')}>
-							<FormField
-								control={handOverForm.control}
-								name="status"
-								render={({ field }) => (
-									<View testID="order-meta-status">
-										<FormSelect
-											customComponent={OrderStatusSelect}
-											allowed={allowedStatuses}
-											disabled={!statusPushable}
-											{...field}
-										/>
-									</View>
-								)}
-							/>
-						</PropertyRow>
-						<PropertyRow id="cashier" label={t('common.cashier')}>
-							<FormField
-								control={handOverForm.control}
-								name="cashier_id"
-								render={({ field }) => (
-									<View testID="order-meta-cashier">
-										<FormCombobox
-											customComponent={CashierSelect}
-											portalHost="pos"
-											{...field}
-											// An order with no cashier names the choice, not an empty box.
-											value={{
-												value: field.value,
-												label: cashierLabel || t('common.select_cashier'),
-											}}
-										/>
-									</View>
-								)}
-							/>
-						</PropertyRow>
-						{/* An intent keeps its verb button (property rows rule 12). */}
-						<PropertyRow
-							testID="order-meta-row-hand_over"
-							label={t('pos_cart.hand_over')}
-							verb={
+						{/* One group: the cart's scope. The band turns amber once anything is staged; each
+						    changed picker takes the field's amber. Not a live region: it holds pickers. */}
+						<Notice
+							testID="order-meta-hand-over"
+							live={false}
+							tone={changes.length > 0 ? 'warning' : 'info'}
+							title={t('pos_cart.hand_over')}
+							description={t('pos_cart.hand_over_hint')}
+						>
+							<PropertyRow id="status" label={t('common.status')}>
+								<FormField
+									control={handOverForm.control}
+									name="status"
+									render={({ field }) => (
+										<View testID="order-meta-status">
+											<FormSelect
+												customComponent={OrderStatusSelect}
+												allowed={allowedStatuses}
+												disabled={!statusPushable}
+												tone={tone('status')}
+												{...field}
+											/>
+										</View>
+									)}
+								/>
+							</PropertyRow>
+							<PropertyRow id="cashier" label={t('common.cashier')}>
+								<FormField
+									control={handOverForm.control}
+									name="cashier_id"
+									render={({ field }) => (
+										<View testID="order-meta-cashier">
+											<FormCombobox
+												customComponent={CashierSelect}
+												portalHost="pos"
+												tone={tone('cashier')}
+												{...field}
+												// An order with no cashier names the choice, not an empty box.
+												value={{
+													value: field.value,
+													label: cashierLabel || t('common.select_cashier'),
+												}}
+											/>
+										</View>
+									)}
+								/>
+							</PropertyRow>
+							{stores.length > 1 && (
+								<PropertyRow id="store" label={t('common.store')}>
+									<FormField
+										control={handOverForm.control}
+										name="store_id"
+										render={({ field }) => (
+											<View testID="order-meta-store">
+												<FormSelect
+													options={storeOptions}
+													placeholder={t('common.store')}
+													triggerTestID="order-meta-store-select"
+													tone={tone('store')}
+													{...field}
+													onChange={(next: string) => {
+														// The phone sheet reports a re-pick of the same store: keep the register.
+														if (next === field.value) return;
+														field.onChange(next);
+														// Registers belong to a store: back home, the order's own returns.
+														handOverForm.setValue(
+															'register_id',
+															next === base.store_id ? base.register_id : ''
+														);
+													}}
+												/>
+											</View>
+										)}
+									/>
+								</PropertyRow>
+							)}
+							{/* Name only: a select row carries no description for the live state. */}
+							{target.registers.length > 0 && (
+								<PropertyRow id="register" label={t('register.register')}>
+									<FormField
+										control={handOverForm.control}
+										name="register_id"
+										render={({ field }) => (
+											<View testID="order-meta-register">
+												<FormSelect
+													options={target.registers.map((row) => ({
+														value: row.id,
+														label: row.name,
+													}))}
+													placeholder={t('common.select_register')}
+													triggerTestID="order-meta-register-select"
+													tone={tone('register')}
+													{...field}
+												/>
+											</View>
+										)}
+									/>
+								</PropertyRow>
+							)}
+							<HStack className="items-center justify-between gap-3 pt-2">
+								<View testID="order-meta-hand-over-summary" className="min-w-0 flex-1 gap-0.5">
+									<Text variant="key">
+										{leaves ? t('pos_cart.leaves_this_cart') : t('pos_cart.stays_in_this_cart')}
+									</Text>
+									<ChangeRows changes={changes} />
+								</View>
+								{/* An intent keeps its verb button (property rows rule 12). */}
 								<Button
 									variant="outline"
 									testID="order-meta-send"
-									disabled={
-										loading || (status === payload.status && cashierId === currentCashierId)
-									}
+									disabled={loading || changes.length === 0 || blocked}
 									onPress={() => void onSend()}
 								>
 									{t('common.send')}
 								</Button>
-							}
-						>
-							<Text variant="key">{t('pos_cart.hand_over_hint')}</Text>
-						</PropertyRow>
+							</HStack>
+						</Notice>
 					</Form>
 					{currencyRow.shown && (
 						<PropertyRow id="currency" label={t('common.currency')}>
@@ -356,9 +553,14 @@ export function EditOrderMetaForm({
 			>
 				<AlertDialogContent portalHost="pos">
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('pos_cart.send_order_title')}</AlertDialogTitle>
-						<AlertDialogDescription>{t('pos_cart.send_order_description')}</AlertDialogDescription>
+						<AlertDialogTitle>{confirmCopy.title}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{leaves ? confirmCopy.description : t('pos_cart.send_order_stays_description')}
+						</AlertDialogDescription>
 					</AlertDialogHeader>
+					<View testID="order-meta-send-changes" className="gap-1 px-4">
+						<ChangeRows changes={changes} labelled />
+					</View>
 					<AlertDialogFooter
 						cancel={{
 							testID: 'order-meta-send-cancel',
@@ -366,7 +568,7 @@ export function EditOrderMetaForm({
 							onPress: () => setPending(null),
 						}}
 						confirm={{
-							label: t('common.send'),
+							label: confirmCopy.confirm,
 							testID: 'order-meta-send-confirm',
 							loading,
 							disabled: loading,
@@ -377,4 +579,26 @@ export function EditOrderMetaForm({
 			</AlertDialog>
 		</Form>
 	);
+}
+
+/** The staged fields, before → after as the totals banner writes it; the confirm names each key. */
+function ChangeRows({
+	changes,
+	labelled = false,
+}: {
+	changes: readonly HandOverChange[];
+	labelled?: boolean;
+}) {
+	const t = useT();
+	return changes.map((change) => (
+		<HStack key={change.field} className="flex-wrap items-baseline gap-2">
+			{labelled && <Text variant="key">{change.label}</Text>}
+			<Text variant="subheading">
+				{t('pos_cart.totals_disagree_change', {
+					before: change.before || '—',
+					after: change.after || '—',
+				})}
+			</Text>
+		</HStack>
+	));
 }

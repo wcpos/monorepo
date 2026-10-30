@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WriteDeferredError } from '@wcpos/query';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -16,7 +16,9 @@ const mockPatch = jest.fn(),
 	mockMove = jest.fn(),
 	mockClose = jest.fn(),
 	mockGuard = jest.fn(),
-	mockSelectProps = jest.fn();
+	mockSelectProps = jest.fn(),
+	mockComboboxProps = jest.fn(),
+	mockT = jest.fn((key: string) => key);
 function mockStatusSelect() {
 	return null;
 }
@@ -80,11 +82,13 @@ jest.mock('@wcpos/components/form', () => ({
 		mockSelectProps(props);
 		return mockInput(props);
 	},
-	FormCombobox: (props: Record<string, unknown> & { value: string | { value: string } }) =>
-		mockInput({
+	FormCombobox: (props: Record<string, unknown> & { value: string | { value: string } }) => {
+		mockComboboxProps(props);
+		return mockInput({
 			...props,
 			value: typeof props.value === 'object' ? props.value.value : props.value,
-		}),
+		});
+	},
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
@@ -102,7 +106,9 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: mockWrap,
 	AlertDialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils')
 		.AlertDialogFooter,
-	AlertDialogTitle: mockWrap,
+	AlertDialogTitle: ({ children }: React.PropsWithChildren) => (
+		<span data-testid="order-meta-send-title">{children}</span>
+	),
 	AlertDialogDescription: mockWrap,
 	AlertDialogAction: mockButton,
 	AlertDialogCancel: mockButton,
@@ -126,7 +132,51 @@ jest.mock('@wcpos/components/icon-button', () => ({ IconButton: mockButton }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: mockWrap }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('@wcpos/components/text', () => ({ Text: mockWrap }));
-jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/notice', () => ({
+	Notice: ({
+		tone,
+		title,
+		description,
+		children,
+		testID,
+	}: React.PropsWithChildren<{
+		tone: string;
+		title: string;
+		description: string;
+		testID: string;
+	}>) => (
+		<div data-testid={testID} data-tone={tone}>
+			{title}
+			{description}
+			{children}
+		</div>
+	),
+}));
+let mockStores = [{ id: 2, name: 'Main' }];
+let mockDirectories: Record<string, { id: string; name: string }[]> = {};
+jest.mock('observable-hooks', () => {
+	const actual = jest.requireActual('observable-hooks');
+	return {
+		...actual,
+		useObservableSuspense: (resource: { mockStores?: unknown }) =>
+			resource.mockStores ?? actual.useObservableSuspense(resource),
+	};
+});
+jest.mock('../../../../hooks/store-list-resource', () => ({
+	storeListResource: () => ({ mockStores }),
+}));
+jest.mock('../../../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'register' }),
+	// A store missing from the map has not answered yet.
+	useRegisterDirectory: (id: number) => ({
+		registers: mockDirectories[String(id)] ?? [],
+		loaded: String(id) in mockDirectories,
+	}),
+}));
+jest.mock('../../../../hooks/use-order-status-label', () => ({
+	useOrderStatusLabel: () => ({ getLabel: (status: string) => status }),
+}));
+jest.mock('../../../../../../contexts/translations', () => ({ useT: () => mockT }));
 jest.mock('../../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { id: 2 }, wpCredentials: { id: 7 } }),
 }));
@@ -173,7 +223,8 @@ jest.mock('../../../../components/meta-data-form', () => ({
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),
 }));
 jest.mock('../../../../hooks/use-cashier-label', () => ({
-	useCashierLabel: () => ({ label: 'Cashier' }),
+	// Cashier 10 is still resolving.
+	useCashierLabel: (id: string) => ({ label: id === '10' ? '' : 'Cashier' }),
 }));
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
@@ -204,13 +255,28 @@ function formProps(
 	const { status, cashier_id, transaction_id: _transaction, ...formData } = data;
 	return {
 		formData: formData as React.ComponentProps<typeof EditOrderMetaForm>['formData'],
-		handOverData: { status, cashier_id },
+		handOverData: { status, cashier_id, store_id: '2', register_id: 'register' },
 	};
 }
 const order = { uuid: 'order-1', payload, getLatest: () => order };
-async function save(status = 'pos-open') {
-	const formData = { ...payload, status, cashier_id: '7', customer_note: 'Keep note' };
+/** Stages a hand-over the way the cashier does: through the pickers, against the order's own. */
+async function stage({ status, cashier_id }: { status?: string; cashier_id?: string }) {
+	if (status) {
+		const picker = mockSelectProps.mock.calls
+			.map(([props]) => props as Record<string, unknown>)
+			.filter((props) => props.customComponent === mockStatusSelect)
+			.at(-1)!;
+		await act(async () => (picker.onChange as (value: string) => void)(status));
+	}
+	if (cashier_id)
+		fireEvent.change(screen.getByTestId('order-meta-cashier').querySelector('input')!, {
+			target: { value: cashier_id },
+		});
+}
+async function save(status: string) {
+	const formData = { ...payload, cashier_id: '7', customer_note: 'Keep note' };
 	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await stage({ status });
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 }
 async function confirm() {
@@ -219,6 +285,8 @@ async function confirm() {
 beforeEach(() => {
 	jest.clearAllMocks();
 	order.payload = payload;
+	mockStores = [{ id: 2, name: 'Main' }];
+	mockDirectories = { '2': [{ id: 'register', name: 'Till' }] };
 	mockPatch.mockImplementation((input) => {
 		mockBeforePatch();
 		const resident = input.document.getLatest();
@@ -327,7 +395,6 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	const custom = { key: 'custom', value: 'edited' };
 	const formData = {
 		...payload,
-		status,
 		cashier_id: '7',
 		meta_data: [...protectedMeta, { ...custom, value: 'before' }],
 	};
@@ -337,6 +404,7 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
 	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 	if (status === 'completed') {
+		await stage({ status });
 		await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 		await confirm();
 	}
@@ -356,7 +424,6 @@ it.each(['pos-open', 'completed'])(
 		});
 		const formData = {
 			...payload,
-			status,
 			cashier_id: '7',
 			meta_data: [...meta, { ...custom, value: 'before' }],
 		};
@@ -364,6 +431,7 @@ it.each(['pos-open', 'completed'])(
 		fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
 		await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 		if (status === 'completed') {
+			await stage({ status });
 			await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 			await confirm();
 		}
@@ -385,8 +453,9 @@ it('keeps a hint queued during a failed send when rolling back', async () => {
 		});
 		return Promise.reject(new Error('offline'));
 	});
-	const formData = { ...payload, status: 'completed', cashier_id: '9' };
+	const formData = { ...payload, cashier_id: '7' };
 	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	await stage({ status: 'completed', cashier_id: '9' });
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(sentCashiers).toEqual(['9']);
@@ -407,8 +476,9 @@ it('rolls back the cashier after a failed hand-off without losing concurrent own
 		resident.payload = { ...resident.payload, meta_data: [...resident.payload.meta_data, hint] };
 		return Promise.reject(new Error('offline'));
 	});
-	const formData = { ...payload, cashier_id: '9' };
+	const formData = { ...payload, cashier_id: '7' };
 	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
+	await stage({ cashier_id: '9' });
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(sentCashiers).toEqual(['9']);
@@ -459,8 +529,9 @@ it('the status picker offers pushable statuses and shows a paid status read-only
 // rollback restores the cashier alone.
 it('a cashier-only hand-off writes and rolls back no status', async () => {
 	mockPush.mockRejectedValueOnce(new Error('offline'));
-	const formData = { ...payload, cashier_id: '9' };
+	const formData = { ...payload, cashier_id: '7' };
 	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await stage({ cashier_id: '9' });
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	await confirm();
 	expect(mockPatch).toHaveBeenCalledTimes(2);
@@ -474,8 +545,9 @@ it('a cashier-only hand-off writes and rolls back no status', async () => {
 // till's completion while it awaits confirmation is never read as one, so confirming sends no
 // status and cannot reopen the paid sale.
 it('a completion adopted while the hand-off awaits confirmation is not sent as a status edit', async () => {
-	const formData = { ...payload, cashier_id: '9' };
+	const formData = { ...payload, cashier_id: '7' };
 	render(<EditOrderMetaForm order={order as never} {...formProps(formData)} />);
+	await stage({ cashier_id: '9' });
 	await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
 	order.payload = { ...payload, status: 'completed' }; // another till completed it; a pull adopted
 	await confirm();
@@ -521,18 +593,17 @@ it('a meta row that arrived from the store while the sheet was open is never tom
 	);
 });
 
-it('is property rows: Customer note, Status, Cashier and the Hand over row with its Send; no More', () => {
+it('is property rows: Customer note, then the Hand over box holding Status, Cashier and its Send; no More', () => {
 	render(
 		<EditOrderMetaForm order={order as never} {...formProps({ ...payload, cashier_id: '7' })} />
 	);
-	const rows = ['customer_note', 'status', 'cashier', 'hand_over'];
+	const rows = ['customer_note', 'status', 'cashier'];
 	for (const id of rows) expect(screen.getByTestId(`order-meta-row-${id}`)).toBeTruthy();
-	expect(screen.getByTestId('order-meta-row-hand_over').textContent).toContain(
-		'pos_cart.hand_over_hint'
-	);
-	expect(
-		screen.getByTestId('order-meta-row-hand_over').contains(screen.getByTestId('order-meta-send'))
-	).toBe(true);
+	const box = screen.getByTestId('order-meta-hand-over');
+	expect(box.textContent).toContain('pos_cart.hand_over_hint');
+	for (const id of ['status', 'cashier'])
+		expect(box.contains(screen.getByTestId(`order-meta-row-${id}`))).toBe(true);
+	expect(box.contains(screen.getByTestId('order-meta-send'))).toBe(true);
 	expect(screen.queryByText('common.more')).toBeNull();
 	expect(screen.queryByTestId('order-meta-row-currency')).toBeNull();
 });
@@ -546,4 +617,264 @@ it('the add row offers Currency and Custom field; an added Currency is a row wit
 	fireEvent.click(screen.getByTestId('order-meta-add-currency'));
 	expect(screen.getByTestId('order-meta-row-currency').querySelector('button')).toBeNull();
 	expect(offered()).toEqual(['common.custom_field']);
+});
+
+describe('the hand-over box', () => {
+	const selectProps = (testID: string) =>
+		mockSelectProps.mock.calls
+			.map(([props]) => props as Record<string, unknown>)
+			.filter((props) => props.triggerTestID === testID)
+			.at(-1);
+	const choose = (testID: string, value: string) =>
+		act(async () => {
+			await (selectProps(testID)!.onChange as (value: string) => unknown)(value);
+		});
+	const statusProps = () =>
+		mockSelectProps.mock.calls
+			.map(([props]) => props as Record<string, unknown>)
+			.filter((props) => props.customComponent === mockStatusSelect)
+			.at(-1)!;
+	const box = () => screen.getByTestId('order-meta-hand-over');
+	const send = () => screen.getByTestId('order-meta-send') as HTMLButtonElement;
+	const stamped = (key: string) =>
+		(mockPatch.mock.calls[0][0].data.meta_data as { key: string; value: string }[]).find(
+			(entry) => entry.key === key
+		)?.value;
+	function renderBox() {
+		render(
+			<EditOrderMetaForm order={order as never} {...formProps({ ...payload, cashier_id: '7' })} />
+		);
+	}
+
+	it('rests info: the footer says it stays in this cart and Send is disabled', () => {
+		renderBox();
+		expect(box().dataset.tone).toBe('info');
+		expect(screen.getByTestId('order-meta-hand-over-summary').textContent).toBe(
+			'pos_cart.stays_in_this_cart'
+		);
+		expect(send().disabled).toBe(true);
+	});
+
+	it('a changed cashier turns the box amber, lists the change and confirms the hand-over', async () => {
+		renderBox();
+		await stage({ cashier_id: '9' });
+		expect(box().dataset.tone).toBe('warning');
+		expect(screen.getByTestId('order-meta-hand-over-summary').textContent).toBe(
+			'pos_cart.leaves_this_cartpos_cart.totals_disagree_change'
+		);
+		expect(send().disabled).toBe(false);
+		expect(mockComboboxProps.mock.calls.at(-1)![0].tone).toBe('attention');
+		expect(statusProps().tone).toBeUndefined();
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.hand_order_to_question'
+		);
+		expect(screen.getByTestId('order-meta-send-confirm').textContent).toBe('pos_cart.send_to');
+	});
+
+	it('shows the Store row only when the credential holds more than one store', () => {
+		renderBox();
+		expect(screen.queryByTestId('order-meta-row-store')).toBeNull();
+		cleanup();
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+		];
+		renderBox();
+		expect(screen.getByTestId('order-meta-row-store')).toBeTruthy();
+		expect(selectProps('order-meta-store-select')!.options).toEqual([
+			{ value: '2', label: 'Main' },
+			{ value: '5', label: 'Annex' },
+		]);
+	});
+
+	it('changing the store resets the register, or picks the only one the store has', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = {
+			...mockDirectories,
+			'5': [
+				{ id: 'r5a', name: 'A' },
+				{ id: 'r5b', name: 'B' },
+			],
+			'6': [{ id: 'r6', name: 'Kiosk till' }],
+		};
+		renderBox();
+		await choose('order-meta-store-select', '5');
+		expect(selectProps('order-meta-register-select')!.value).toBe('');
+		// A store with registers needs one chosen before the order can go.
+		expect(send().disabled).toBe(true);
+		expect(selectProps('order-meta-store-select')!.tone).toBe('attention');
+		await choose('order-meta-store-select', '6');
+		expect(selectProps('order-meta-register-select')!.value).toBe('r6');
+		expect(send().disabled).toBe(false);
+	});
+
+	it('a store-only send stamps the new store and register, names the place and leaves the cart', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		renderBox();
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.send_order_to_question'
+		);
+		expect(screen.getByTestId('order-meta-send-changes').textContent).toContain('common.store');
+		await confirm();
+		expect(stamped('_pos_store')).toBe('6');
+		expect(stamped('_wcpos_register')).toBe('r6');
+		expect(stamped('_pos_user')).toBe('7');
+		expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+		expect(mockMove).toHaveBeenCalledWith('');
+	});
+
+	it('a status-only send asks to send to the store and changes no identity', async () => {
+		renderBox();
+		await stage({ status: 'on-hold' });
+		expect(statusProps().tone).toBe('attention');
+		expect(mockComboboxProps.mock.calls.at(-1)![0].tone).toBeUndefined();
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.send_order_title'
+		);
+		expect(screen.getByTestId('order-meta-send-confirm').textContent).toBe('common.send');
+		await confirm();
+		expect(mockPatch.mock.calls[0][0].data).toEqual({ status: 'on-hold', meta_data: meta });
+	});
+
+	it('waits for another store to answer before Send, offline or loading', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+		];
+		renderBox();
+		await choose('order-meta-store-select', '5');
+		expect(screen.queryByTestId('order-meta-row-register')).toBeNull();
+		expect(send().disabled).toBe(true);
+	});
+
+	it('a store with no registers clears the order register, and the change row is true', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+		];
+		mockDirectories = { ...mockDirectories, '5': [] };
+		renderBox();
+		await choose('order-meta-store-select', '5');
+		expect(send().disabled).toBe(false);
+		await act(async () => fireEvent.click(send()));
+		expect(mockT).toHaveBeenCalledWith('pos_cart.totals_disagree_change', {
+			before: 'Till',
+			after: '—',
+		});
+		await confirm();
+		// The real protectOrderMeta runs in the patch: the cleared row survives it.
+		const stored = order.payload.meta_data as { key: string; value: string }[];
+		expect(stored.find((entry) => entry.key === '_wcpos_register')?.value).toBe('');
+		expect(stored.find((entry) => entry.key === '_pos_store')?.value).toBe('5');
+		expect(mockMove).toHaveBeenCalledWith('');
+	});
+
+	it('a register-only change at the same store names the register', async () => {
+		mockDirectories = {
+			'2': [
+				{ id: 'register', name: 'Till' },
+				{ id: 'r2', name: 'Till 2' },
+			],
+		};
+		renderBox();
+		await choose('order-meta-register-select', 'r2');
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.send_order_to_question'
+		);
+		expect(mockT).toHaveBeenCalledWith('pos_cart.send_order_to_question', { name: 'Till 2' });
+	});
+
+	it('pos-open to pending stays in this cart: the footer, the confirm and the cart agree', async () => {
+		renderBox();
+		await stage({ status: 'pending' });
+		expect(box().dataset.tone).toBe('warning');
+		expect(screen.getByTestId('order-meta-hand-over-summary').textContent).toBe(
+			'pos_cart.stays_in_this_cartpos_cart.totals_disagree_change'
+		);
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByText('pos_cart.send_order_stays_description')).toBeTruthy();
+		await confirm();
+		expect(mockPush).toHaveBeenCalled();
+		expect(mockMove).not.toHaveBeenCalled();
+	});
+
+	it('a failed store hand-over restores the store and the register', async () => {
+		mockPush.mockRejectedValueOnce(new Error('offline'));
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		renderBox();
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		await confirm();
+		expect(order.payload.meta_data).toEqual(meta);
+		expect(mockMove).not.toHaveBeenCalled();
+	});
+
+	it('holds Send while the new cashier name is still resolving', async () => {
+		renderBox();
+		await stage({ cashier_id: '10' });
+		expect(box().dataset.tone).toBe('warning');
+		expect(send().disabled).toBe(true);
+	});
+
+	it('a re-pick of the same store (the phone sheet reports it) keeps the chosen register', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 5, name: 'Annex' },
+		];
+		mockDirectories = {
+			...mockDirectories,
+			'5': [
+				{ id: 'r5a', name: 'A' },
+				{ id: 'r5b', name: 'B' },
+			],
+		};
+		renderBox();
+		await choose('order-meta-store-select', '5');
+		await choose('order-meta-register-select', 'r5b');
+		await choose('order-meta-store-select', '5');
+		expect(selectProps('order-meta-register-select')!.value).toBe('r5b');
+		expect(send().disabled).toBe(false);
+	});
+
+	it('a failed hand-over clears a register the order never had and restores its store', async () => {
+		mockPush.mockRejectedValueOnce(new Error('offline'));
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		const unregistered = meta.filter((entry) => entry.key !== '_wcpos_register');
+		const resident = { ...order, payload: { ...payload, meta_data: unregistered } };
+		resident.getLatest = () => resident;
+		render(
+			<EditOrderMetaForm
+				order={resident as never}
+				{...formProps({ ...payload, cashier_id: '7', meta_data: unregistered })}
+			/>
+		);
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		await confirm();
+		const stored = resident.payload.meta_data as { key: string; value: string }[];
+		expect(stored.find((entry) => entry.key === '_wcpos_register')?.value ?? '').toBe('');
+		expect(stored.find((entry) => entry.key === '_pos_store')?.value).toBe('2');
+		expect(mockMove).not.toHaveBeenCalled();
+	});
 });
