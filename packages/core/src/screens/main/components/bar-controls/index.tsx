@@ -61,7 +61,7 @@ export function BarControls({
 	/** The POS host inside the till; elsewhere the root, and the cashier sheet the drawer layout's `scene` host on wide. */
 	portalHost?: string | null;
 	/** The register bar's: the cashier sheet's drawer figure opens its panel (the one door). */
-	onOpenRegister?: () => void;
+	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The desktop title bar's own pair (`TitleBarStripContent`). */
 	inTitleBar?: boolean;
 }) {

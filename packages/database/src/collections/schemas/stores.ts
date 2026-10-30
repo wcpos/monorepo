@@ -612,16 +612,7 @@ export const storesLiteral = {
 			description:
 				'Which icon family the app draws. Device-local beside the theme, never server-owned.',
 			type: 'string',
-			enum: [
-				'fontawesome',
-				'tabler',
-				'tabler-2',
-				'hugeicons',
-				'lucide',
-				'phosphor',
-				'iconoir',
-				'solar',
-			],
+			enum: ['tabler', 'hugeicons', 'phosphor'],
 			default: 'tabler',
 		},
 		date_created_gmt: {

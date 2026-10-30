@@ -80,8 +80,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 	...jest.requireActual('../../../../../jest/footer.test-utils'),
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
+	DialogContent: ({
+		children,
+		testID,
+		side,
+		portalHost,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		side?: 'left' | 'right';
+		portalHost?: string | null;
+	}) => (
+		<div data-testid={testID} data-side={side} data-portal={String(portalHost)}>
+			{children}
+		</div>
 	),
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
@@ -108,6 +120,15 @@ function fill() {
 beforeEach(() => {
 	jest.clearAllMocks();
 	online = 'online-website-available';
+});
+it("takes the side and host it is given; defaults to the cart's side and the POS host", () => {
+	const view = render(<ApproveSheet {...props} />);
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('pos');
+	view.unmount();
+	render(<ApproveSheet {...props} side="left" portalHost={null} />);
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('left');
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('null');
 });
 it('refused credentials/capability show an error without closing', async () => {
 	post.mockRejectedValue({ response: { status: 403, data: { code: 'wcpos_override_refused' } } });

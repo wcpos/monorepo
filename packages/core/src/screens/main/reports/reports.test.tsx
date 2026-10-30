@@ -27,9 +27,12 @@ jest.mock('./context', () => ({ useReportsScope: () => ({ detail: undefined }) }
 jest.mock('./panels/panel', () => ({ DetailPanel: () => null }));
 jest.mock('./sync-progress', () => ({ ReportsSyncProgress: () => null }));
 jest.mock('./cards', () => ({ PeriodSection: () => null }));
+let mockHeroFails = true;
 jest.mock('./hero', () => ({
+	SalesScope: () => <div data-testid="reports-scope-strip" />,
 	Hero: () => {
-		throw new Error('hero failed');
+		if (mockHeroFails) throw new Error('hero failed');
+		return <div data-testid="reports-hero" />;
 	},
 }));
 
@@ -38,10 +41,23 @@ jest.mock('./hero', () => ({
 it('keeps the till strip on the page when the report body fails', () => {
 	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 	try {
-		render(<Reports title={null} header={<div data-testid="reports-till" />} />);
+		render(<Reports date={null} header={<div data-testid="reports-till" />} />);
 		expect(screen.getByTestId('reports-till')).toBeTruthy();
 		expect(screen.getByTestId('report-fallback')).toBeTruthy();
+		expect(screen.getByTestId('reports-scope-strip')).toBeTruthy();
 	} finally {
 		consoleError.mockRestore();
+	}
+});
+
+it('renders the scope strip between the till and hero', () => {
+	mockHeroFails = false;
+	try {
+		render(<Reports date={null} header={<div data-testid="reports-till" />} />);
+		const strip = screen.getByTestId('reports-scope-strip');
+		expect(strip.previousElementSibling).toBe(screen.getByTestId('reports-till'));
+		expect(strip.nextElementSibling).toBe(screen.getByTestId('reports-hero'));
+	} finally {
+		mockHeroFails = true;
 	}
 });

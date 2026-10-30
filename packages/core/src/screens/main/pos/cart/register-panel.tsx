@@ -54,13 +54,18 @@ export function RegisterPanel({
 	open,
 	onOpenChange,
 	initialPane = 'register',
+	side: sideProp,
+	portalHost = 'pos',
 }: {
 	open: boolean;
 	initialPane?: 'register' | 'count';
+	side?: 'left' | 'right';
+	portalHost?: string | null;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const {
 		session,
+		loaded,
 		binding,
 		expected,
 		terms,
@@ -83,9 +88,10 @@ export function RegisterPanel({
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
-	const [opening, setOpening] = React.useState({ open, initialPane });
-	if (open !== opening.open || initialPane !== opening.initialPane) {
-		setOpening({ open, initialPane });
+	// Off the till, the panel mounts open before its session has loaded (Codex, #3091).
+	const [opening, setOpening] = React.useState({ open, initialPane, loaded });
+	if (open !== opening.open || initialPane !== opening.initialPane || loaded !== opening.loaded) {
+		setOpening({ open, initialPane, loaded });
 		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
@@ -119,7 +125,8 @@ export function RegisterPanel({
 	};
 	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
 	const reportsDenied = blind;
-	const side = usePanelSide('cart');
+	const cartSide = usePanelSide('cart');
+	const side = sideProp ?? cartSide;
 	// The panel stays mounted while closed (register-bar.tsx), so closing clears what an opening
 	// left behind: a failed action's line and a movement in flight.
 	const close = (next: boolean) =>
@@ -167,7 +174,7 @@ export function RegisterPanel({
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- The external opening requests the existing async count transition.
 		if (open) openPane();
-	}, [open, initialPane]);
+	}, [open, initialPane, loaded]);
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
 	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
@@ -236,16 +243,18 @@ export function RegisterPanel({
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
-					<ClosureWritten count={written} onDone={() => close(false)} />
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+					<ClosureWritten count={written} onDone={() => close(false)} portalHost={portalHost} />
 				</DialogContent>
 			</Dialog>
 		);
 	if (pane === 'count' && session)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<RegisterCount
+						side={side}
+						portalHost={portalHost}
 						description={description}
 						onBusyChange={setCountBusy}
 						onBack={() => setPane('register')}
@@ -260,7 +269,7 @@ export function RegisterPanel({
 	if (pane === 'closure' && lastClosure)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<ClosurePanel
 						row={lastClosure}
 						onBack={() => setPane('register')}
@@ -272,7 +281,7 @@ export function RegisterPanel({
 
 	return (
 		<Dialog open={open} onOpenChange={close}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
+			<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 				<DialogHeader className="flex-row items-center gap-3">
 					<ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc" />
 					<View className="min-w-0 flex-1">
@@ -560,11 +569,14 @@ export function RegisterPanel({
 							);
 						}
 					}}
-					portalHost="pos"
+					side={side}
+					portalHost={portalHost ?? undefined}
 					testID="register-panel-print-sheet"
 				/>
 				{movement && (
 					<MovementSheet
+						side={side}
+						portalHost={portalHost}
 						type={movement}
 						onOpenChange={(value) => {
 							if (!value) setMovement(null);

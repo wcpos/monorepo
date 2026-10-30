@@ -5,20 +5,19 @@ import { fileURLToPath } from 'node:url';
 const root = new URL('../../', import.meta.url);
 const readJSON = async (url) => JSON.parse(await readFile(url, 'utf8'));
 const vocabulary = await readJSON(new URL('./vocabulary.json', import.meta.url));
+// The three families that ship (Paul, 2026-10-30), pinned to an Iconify collection each.
 const packages = {
 	tabler: 'tabler@1.2.42',
 	hugeicons: 'hugeicons@1.2.35',
-	lucide: 'lucide@1.2.146',
 	phosphor: 'ph@1.2.2',
-	iconoir: 'iconoir@1.2.12',
-	solar: 'solar@1.2.13',
 };
 const collections = {};
 const metadata = {
-	fontawesome: {
-		description: 'Font Awesome Pro',
-		license: 'Font Awesome Pro, commercial licence',
-		homepage: 'https://fontawesome.com/',
+	// Our own mark, drawn once in `./brand/` and borrowed by every family as `brand:wcpos`.
+	brand: {
+		description: 'WCPOS brand mark',
+		license: 'WCPOS, all rights reserved',
+		homepage: 'https://wcpos.com/',
 	},
 };
 async function fetchJSON(url) {
@@ -33,8 +32,8 @@ for (const [family, pkg] of Object.entries(packages)) {
 }
 
 async function sourceSVG(family, name) {
-	if (family === 'fontawesome') {
-		return readFile(new URL(`./fontawesome-solid/${name}.svg`, import.meta.url), 'utf8');
+	if (family === 'brand') {
+		return readFile(new URL(`./brand/${name}.svg`, import.meta.url), 'utf8');
 	}
 	const collection = collections[family];
 	function iconData(key) {
@@ -58,11 +57,10 @@ await writeFile(new URL('src/icon/names.ts', root), [
 	'',
 ].join('\n'));
 
-for (const setId of ['fontawesome', 'tabler', 'tabler-2', 'hugeicons', 'lucide', 'phosphor', 'iconoir', 'solar']) {
-	const family = setId === 'tabler-2' ? 'tabler' : setId;
+for (const family of Object.keys(packages)) {
 	const map = await readJSON(new URL(`./maps/${family}.json`, import.meta.url));
-	const svgDir = new URL(`src/icon/svg/${setId}/`, root);
-	const componentDir = new URL(`src/icon/components/${setId}/`, root);
+	const svgDir = new URL(`src/icon/svg/${family}/`, root);
+	const componentDir = new URL(`src/icon/components/${family}/`, root);
 	await rm(svgDir, { recursive: true, force: true });
 	await rm(componentDir, { recursive: true, force: true });
 	await mkdir(svgDir, { recursive: true });
@@ -72,7 +70,8 @@ for (const setId of ['fontawesome', 'tabler', 'tabler-2', 'hugeicons', 'lucide',
 		const [source, glyph] = value.includes(':') ? value.split(':') : [family, value];
 		sources.add(source);
 		let svg = await sourceSVG(source, glyph);
-		if (setId === 'tabler') svg = svg.replaceAll('stroke-width="2"', 'stroke-width="1.5"');
+		// Tabler ships width-2 strokes; the app draws it at 1.5.
+		if (family === 'tabler') svg = svg.replaceAll('stroke-width="2"', 'stroke-width="1.5"');
 		const kebab = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 		await writeFile(new URL(`${kebab}.svg`, svgDir), svg);
 	}
@@ -80,14 +79,10 @@ for (const setId of ['fontawesome', 'tabler', 'tabler-2', 'hugeicons', 'lucide',
 		const { description, license, homepage } = metadata[source];
 		return `- ${description}: ${license}. ${homepage}`;
 	});
-	if (family === 'solar') licences.push(
-		'- Solar by 480 Design: https://www.figma.com/community/file/1166831539721848736',
-		'- CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. Converted to React Native components.',
-	);
-	if (setId === 'tabler') licences.push('- Tabler strokes modified from width 2 to 1.5.');
-	await writeFile(new URL('LICENSE.md', svgDir), `# ${setId}\n\n${licences.join('\n')}\n`);
-	const config = ['fontawesome', 'phosphor'].includes(setId)
-		? 'svgr.config.js' : 'scripts/icons/svgr-stroke.cjs';
+	if (family === 'tabler') licences.push('- Tabler strokes modified from width 2 to 1.5.');
+	await writeFile(new URL('LICENSE.md', svgDir), `# ${family}\n\n${licences.join('\n')}\n`);
+	// Phosphor is a filled family; Tabler and Hugeicons are strokes.
+	const config = family === 'phosphor' ? 'svgr.config.js' : 'scripts/icons/svgr-stroke.cjs';
 	execFileSync('svgr', ['--config-file', config, '--no-index', fileURLToPath(svgDir), '--out-dir', fileURLToPath(componentDir)], { cwd: root, stdio: 'inherit' });
 	const imports = vocabulary.map(({ name }) => `import { ${componentName(name)} } from './${name}';`);
 	const entries = vocabulary.map(({ name }) => `\t${name}: ${componentName(name)},`);

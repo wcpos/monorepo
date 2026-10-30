@@ -189,14 +189,9 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const markSaved = useMarkSaved();
 	const icons = resolveIconSet(useDocField(store, (latest) => latest.icons));
 	const labels: Record<IconSetId, string> = {
-		fontawesome: t('settings.icons.fontawesome'),
 		tabler: t('settings.icons.tabler'),
-		'tabler-2': t('settings.icons.tabler-2'),
 		hugeicons: t('settings.icons.hugeicons'),
-		lucide: t('settings.icons.lucide'),
 		phosphor: t('settings.icons.phosphor'),
-		iconoir: t('settings.icons.iconoir'),
-		solar: t('settings.icons.solar'),
 	};
 
 	const handleIconsChange = React.useCallback(

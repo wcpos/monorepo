@@ -68,7 +68,12 @@ jest.mock('@wcpos/components/table', () => {
 	);
 });
 jest.mock('../closures/save-or-share-csv', () => ({ saveOrShareCsv: jest.fn(async () => {}) }));
-jest.mock('../hero', () => ({ Hero: () => <div data-testid="hero-total">Hero</div> }));
+jest.mock('../hero', () => ({
+	Hero: () => <div data-testid="hero-total">Hero</div>,
+	SalesScope: ({ date }: { date: React.ReactNode }) => (
+		<div data-testid="reports-scope-strip">{date}</div>
+	),
+}));
 jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
@@ -161,7 +166,7 @@ export const room = () =>
 	render(
 		<real.ReportsScopeProvider>
 			<SelectionProvider>
-				<Reports title="Sales" />
+				<Reports date="Sales" />
 			</SelectionProvider>
 		</real.ReportsScopeProvider>
 	);

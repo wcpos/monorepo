@@ -29,11 +29,12 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
-// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+// The hero reaches expo-haptics through IconButton; the scope strip keeps the date button.
 jest.mock('./hero', () => ({
-	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
-	HeroShell: ({ title }: { title: React.ReactNode }) => (
-		<div data-testid="reports-hero-loading">{title}</div>
+	Hero: () => <div data-testid="reports-hero" />,
+	HeroShell: () => <div data-testid="reports-hero-loading" />,
+	SalesScope: ({ date }: { date: React.ReactNode }) => (
+		<div data-testid="reports-scope-strip">{date}</div>
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({

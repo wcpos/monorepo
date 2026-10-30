@@ -98,11 +98,12 @@ jest.mock('./till-strip', () => ({
 		</>
 	),
 }));
-// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+// The hero reaches expo-haptics through IconButton; the scope strip keeps the date button.
 jest.mock('./hero', () => ({
-	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
-	HeroShell: ({ title }: { title: React.ReactNode }) => (
-		<div data-testid="reports-hero-loading">{title}</div>
+	Hero: () => <div data-testid="reports-hero" />,
+	HeroShell: () => <div data-testid="reports-hero-loading" />,
+	SalesScope: ({ date }: { date: React.ReactNode }) => (
+		<div data-testid="reports-scope-strip">{date}</div>
 	),
 }));
 jest.mock('./bar', () => ({
@@ -232,12 +233,12 @@ jest.mock('./context', () => ({
 }));
 jest.mock('./reports', () => ({
 	// `header` is the till strip, the page's first row since 2026-10-18.
-	Reports: ({ title, header }: { title: React.ReactNode; header?: React.ReactNode }) => {
+	Reports: ({ date, header }: { date: React.ReactNode; header?: React.ReactNode }) => {
 		const actions = jest.requireActual('../../../query').useQueryStateActions();
 		return (
 			<>
 				{header}
-				{title}
+				<div data-testid="reports-scope-strip">{date}</div>
 				<button
 					data-testid="legacy-register"
 					onClick={() => actions.setFilter('register', 'other')}
@@ -500,6 +501,9 @@ it('keeps the date button while the Sales handle has not answered', () => {
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	render(<ReportsScreen />);
 	expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
+	expect(
+		screen.getByTestId('reports-scope-strip').contains(screen.getByTestId('reports-period'))
+	).toBe(true);
 	expect(screen.getByTestId('reports-period')).toBeTruthy();
 	expect(screen.queryByTestId('legacy-register')).toBeNull();
 });
