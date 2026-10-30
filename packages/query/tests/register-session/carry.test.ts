@@ -8,7 +8,7 @@ import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/reg
 import { sitesLiteral } from '@wcpos/database/collections/schemas/sites';
 import { wpCredentialsLiteral } from '@wcpos/database/collections/schemas/wp-credientials';
 
-import { carryDrawer } from '../../src/register-session/carry';
+import { CarryAdoptionError, carryDrawer } from '../../src/register-session/carry';
 import {
 	bindRegister,
 	readCarriedFrom,
@@ -151,6 +151,19 @@ it.each([false, true])(
 );
 
 // A rejected act must leave persisted rows and device metadata byte-for-byte unchanged.
+it('a local write failing after the POST throws CarryAdoptionError with the carried ids', async () => {
+	http.post.mockResolvedValue({
+		data: {
+			closure: { id: 'closure', closed_at_gmt: at, closed_by: 7 },
+			session: { ...source, id: 'target', register_id: 'B', opened_at_gmt: at, opened_by: 7 },
+		},
+	});
+	await db.register_sessions.findOne('source').remove();
+	const error = await carry().catch((e) => e);
+	expect(error).toBeInstanceOf(CarryAdoptionError);
+	expect(error.carried).toEqual({ closureId: 'closure', sessionId: 'target' });
+});
+
 it.each([
 	'wcpos_session_already_open',
 	'wcpos_session_transition_refused',

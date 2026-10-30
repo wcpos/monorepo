@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
+import { CarryAdoptionError } from '@wcpos/query/register-session';
 import type { UserDatabase } from '@wcpos/database';
 import {
 	readRegister,
@@ -1272,6 +1273,18 @@ describe('carrying the drawer before a store switch', () => {
 			'Drawer carry failed',
 			expect.objectContaining({ code: expect.stringMatching(/^REGISTER/) })
 		);
+	});
+	it('a carry the server committed but this device could not record still switches, with a warning', async () => {
+		mockCarry.mockRejectedValueOnce(
+			new CarryAdoptionError({ closureId: 'c', sessionId: 't' }, new Error('write'))
+		);
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		await confirm();
+		await waitFor(() => expect(mockSwitch).toHaveBeenCalled());
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'warning',
+			text1: 'The drawer was carried. This device records it at the next sync.',
+		});
 	});
 	it('leaving the drawer switches without a carry', async () => {
 		render(<UserSheet open onOpenChange={onOpenChange} />);

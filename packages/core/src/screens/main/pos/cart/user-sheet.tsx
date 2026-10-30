@@ -6,7 +6,12 @@ import { useRouter, useSegments } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
 
-import { carryDrawer, observeRegister$, readLiveSession } from '@wcpos/query/register-session';
+import {
+	CarryAdoptionError,
+	carryDrawer,
+	observeRegister$,
+	readLiveSession,
+} from '@wcpos/query/register-session';
 import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
@@ -494,12 +499,17 @@ export function UserSheet({
 								to: request.carry,
 							});
 						} catch (error) {
-							Toast.show({ text1: t('common.carry_failed'), type: 'error' });
+							// The server carried: the drawer is in Y and the next cycle records it; switch.
+							const carried = error instanceof CarryAdoptionError;
+							Toast.show({
+								text1: t(carried ? 'common.carry_recorded_later' : 'common.carry_failed'),
+								type: carried ? 'warning' : 'error',
+							});
 							log.error('Drawer carry failed', {
 								code: ERROR_CODES.REGISTER_CARRY_FAILED,
-								context: { error },
+								context: { error, carried },
 							});
-							return;
+							if (!carried) return;
 						}
 					}
 					if (await handleSwitchStore(request.store)) onOpenChange(false);

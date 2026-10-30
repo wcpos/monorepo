@@ -353,6 +353,21 @@ it('keeps a cashier transition that lands while the list row is being adopted', 
 		sync_status: 'pending',
 	});
 });
+it('never reopens a closed session that has its closure from a stale list snapshot', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	const stale = serverListRow(row.getLatest().toJSON());
+	await row.getLatest().incrementalPatch({
+		status: 'closed',
+		server_status: 'closed',
+		closure_id: 'closure',
+		closed_at_gmt: '2026-10-18T09:05:00.000Z',
+	});
+	http.get.mockResolvedValue({ data: [stale] });
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(row.getLatest().toJSON()).toMatchObject({ status: 'closed', closure_id: 'closure' });
+});
 /** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
 const serverMovementRow = (
 	local: CashMovementRow,

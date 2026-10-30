@@ -60,4 +60,4 @@ export {
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
 
-export { carryDrawer, type CarryTarget } from './carry';
+export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';

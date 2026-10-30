@@ -19,6 +19,16 @@ export type CarryTarget = {
 	register: { id: string; name: string };
 };
 
+/** The server carried the drawer; a local write after the POST failed. The next cycle reconciles. */
+export class CarryAdoptionError extends Error {
+	constructor(
+		public readonly carried: { closureId: string; sessionId: string },
+		public readonly cause: unknown
+	) {
+		super('Drawer carried; this device could not record it');
+	}
+}
+
 export async function carryDrawer({
 	http,
 	storeDB,
@@ -50,42 +60,53 @@ export async function carryDrawer({
 		closure: Pick<RegisterSessionRow, 'id' | 'closed_at_gmt' | 'closed_by'>;
 		session: RegisterSessionRow;
 	};
-	const source = await storeDB.register_sessions.findOne(sessionId).exec();
-	await source!.incrementalPatch({
-		status: 'closed',
-		closed_at_gmt: closure.closed_at_gmt,
-		closed_by: closure.closed_by,
-		closure_id: closure.id,
-		server_status: 'closed',
-		...synced,
-	});
-	await markCountingHere(userDB, siteUuid, fromRegisterId, true);
-	await recordLiveSession(userDB, siteUuid, fromRegisterId, null);
-	const site = await userDB.sites.findOne(siteUuid).exec();
-	const cashiers = (await site?.populate('wp_credentials')) as WPCredentialsDocument[] | undefined;
-	await recordLiveSession(userDB, siteUuid, to.register.id, {
-		session_id: session.id,
-		status: 'open',
-		opened_at_gmt: session.opened_at_gmt,
-		opened_by:
-			session.opened_by == null
-				? null
-				: {
-						id: session.opened_by,
-						name: cashiers?.find((cashier) => cashier.id === session.opened_by)?.display_name ?? '',
-					},
-		acknowledged: true,
-		expected_float: session.expected_float ?? null,
-		counted_float: session.counted_float ?? null,
-		business_day: session.business_day ?? null,
-	});
-	await recordCarriedFrom(userDB, siteUuid, to.register.id, {
-		session_id: session.id,
-		closure_id: closure.id,
-		store_id: from.id,
-		store_name: from.name,
-		register_id: fromRegisterId,
-	});
-	await bindStoreRegister(userDB, siteUuid, to.store.id, to.register);
-	return { closureId: closure.id, sessionId: session.id };
+	const carried = { closureId: closure.id, sessionId: session.id };
+	try {
+		await adopt();
+	} catch (error) {
+		throw new CarryAdoptionError(carried, error);
+	}
+	return carried;
+
+	async function adopt() {
+		const source = await storeDB.register_sessions.findOne(sessionId).exec();
+		await source!.incrementalPatch({
+			status: 'closed',
+			closed_at_gmt: closure.closed_at_gmt,
+			closed_by: closure.closed_by,
+			closure_id: closure.id,
+			server_status: 'closed',
+			...synced,
+		});
+		await markCountingHere(userDB, siteUuid, fromRegisterId, true);
+		await recordLiveSession(userDB, siteUuid, fromRegisterId, null);
+		const site = await userDB.sites.findOne(siteUuid).exec();
+		const cashiers = (await site?.populate('wp_credentials')) as
+			WPCredentialsDocument[] | undefined;
+		await recordLiveSession(userDB, siteUuid, to.register.id, {
+			session_id: session.id,
+			status: 'open',
+			opened_at_gmt: session.opened_at_gmt,
+			opened_by:
+				session.opened_by == null
+					? null
+					: {
+							id: session.opened_by,
+							name:
+								cashiers?.find((cashier) => cashier.id === session.opened_by)?.display_name ?? '',
+						},
+			acknowledged: true,
+			expected_float: session.expected_float ?? null,
+			counted_float: session.counted_float ?? null,
+			business_day: session.business_day ?? null,
+		});
+		await recordCarriedFrom(userDB, siteUuid, to.register.id, {
+			session_id: session.id,
+			closure_id: closure.id,
+			store_id: from.id,
+			store_name: from.name,
+			register_id: fromRegisterId,
+		});
+		await bindStoreRegister(userDB, siteUuid, to.store.id, to.register);
+	}
 }
