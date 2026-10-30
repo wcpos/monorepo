@@ -3,20 +3,20 @@
 @import 'tw-animate-css';
 
 /* Content sources - tell Tailwind where to scan for class names */
-@source './app/**/*.{js,jsx,ts,tsx}';
-@source '../../packages/components/src/**/*.{ts,tsx}';
-@source '../../packages/core/src/**/*.{ts,tsx}';
+@source "./app/**/*.{js,jsx,ts,tsx}";
+@source "../../packages/components/src/**/*.{ts,tsx}";
+@source "../../packages/core/src/**/*.{ts,tsx}";
 
 @theme static {
-	/* Static colors - don't change between themes */
-	--color-transparent: transparent;
+  /* Static colors - don't change between themes */
+  --color-transparent: transparent;
 
-	/* The JS splash is always light, like the native splash it replaces (expo-splash-screen in
+  /* The JS splash is always light, like the native splash it replaces (expo-splash-screen in
      app.config.ts has no dark variant), so its bar is the light theme's muted and primary
      whatever the system or chosen theme. */
-	--color-splash: #f0f4f8;
-	--color-splash-track: oklch(0.95 0.007 262);
-	--color-splash-indicator: oklch(0.42 0.24 262);
+  --color-splash: #F0F4F8;
+  --color-splash-track: oklch(0.95 0.007 262);
+  --color-splash-indicator: oklch(0.42 0.24 262);
 }
 
 /* The page gutter (CODING_STANDARDS § Design, Gutters): three spacing units: the space between
@@ -27,251 +27,227 @@
    reads `--spacing` where it is used: a step scoped below the root (a gallery cell, Uniwind's
    ScopedVariables) moves it too. */
 @theme inline {
-	--spacing-gutter: calc(var(--spacing) * 3);
-	/* A band (a section heading on a list): seven spacing units, 28 at Regular. `BAND_UNITS` in
+  --spacing-gutter: calc(var(--spacing) * 3);
+  /* A band (a section heading on a list): seven spacing units, 28 at Regular. `BAND_UNITS` in
      scale.ts carries the same 7 with the sources. Not a target, so never floored. */
-	--spacing-band: calc(var(--spacing) * 7);
+  --spacing-band: calc(var(--spacing) * 7);
 }
 
 @theme {
-	/* Regular scale: shared px values on web and native. */
-	--spacing: 4px;
-	--text-base: 14px;
-	--spacing-ctl: 44px;
-	--spacing-row: 44px;
-	--spacing-tile: 64px;
-	--radius: 8px;
-	--text-amt: 40px;
-	/* The small end is explicit per step, never a ratio of base: 12 px is the floor
+  /* Regular scale: shared px values on web and native. */
+  --spacing: 4px;
+  --text-base: 14px;
+  --spacing-ctl: 44px;
+  --spacing-row: 44px;
+  --spacing-tile: 64px;
+  --radius: 8px;
+  --text-amt: 40px;
+  /* The small end is explicit per step, never a ratio of base: 12 px is the floor
      for text a cashier reads (scale.ts SCALE_STEPS has the sources). */
-	--text-xs: 12px;
-	--text-2xs: 11px;
+  --text-xs: 12px;
+  --text-2xs: 11px;
 
-	/* Container widths preserve their 14px-root web sizes. */
-	--width-128: 448px;
-	--width-144: 504px;
-	--width-160: 560px;
+  /* Container widths preserve their 14px-root web sizes. */
+  --width-128: 448px;
+  --width-144: 504px;
+  --width-160: 560px;
 
-	/* Semantic colors (shadcn/ui) - referencing CSS variables */
-	--color-border: var(--border);
-	--color-input: var(--input);
-	--color-ring: var(--ring);
-	--color-selected: var(--selected);
-	--color-selected-foreground: var(--selected-foreground);
-	--color-background: var(--background);
-	--color-foreground: var(--foreground);
-	--color-primary: var(--primary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-secondary: var(--secondary);
-	--color-secondary-foreground: var(--secondary-foreground);
-	--color-destructive: var(--destructive);
-	--color-destructive-foreground: var(--destructive-foreground);
-	--color-success: var(--success);
-	--color-success-foreground: var(--success-foreground);
-	--color-warning: var(--warning);
-	--color-warning-foreground: var(--warning-foreground);
-	--color-attention: var(--attention);
-	--color-attention-foreground: var(--attention-foreground);
-	--color-info: var(--info);
-	--color-info-foreground: var(--info-foreground);
-	--color-action: var(--action);
-	--color-action-foreground: var(--action-foreground);
-	--color-muted: var(--muted);
-	--color-muted-foreground: var(--muted-foreground);
-	--color-accent: var(--accent);
-	--color-accent-foreground: var(--accent-foreground);
-	--color-popover: var(--popover);
-	--color-popover-foreground: var(--popover-foreground);
-	--color-card: var(--card);
-	--color-card-foreground: var(--card-foreground);
+  /* Semantic colors (shadcn/ui) - referencing CSS variables */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-attention: var(--attention);
+  --color-attention-foreground: var(--attention-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-action: var(--action);
+  --color-action-foreground: var(--action-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
 
-	/* Poster tile tints: a tile with no picture (index = tintOf(key), spec 2026-10-12) */
-	--color-tile-tint-0: var(--tile-tint-0);
-	--color-tile-tint-1: var(--tile-tint-1);
-	--color-tile-tint-2: var(--tile-tint-2);
-	--color-tile-tint-3: var(--tile-tint-3);
-	--color-tile-tint-4: var(--tile-tint-4);
-	--color-tile-tint-5: var(--tile-tint-5);
+  /* Poster tile tints: a tile with no picture (index = tintOf(key), spec 2026-10-12) */
+  --color-tile-tint-0: var(--tile-tint-0);
+  --color-tile-tint-1: var(--tile-tint-1);
+  --color-tile-tint-2: var(--tile-tint-2);
+  --color-tile-tint-3: var(--tile-tint-3);
+  --color-tile-tint-4: var(--tile-tint-4);
+  --color-tile-tint-5: var(--tile-tint-5);
+  
+  /* Rail, status, overlay and shared categorical colors */
+  --color-rail: var(--rail);
+  --color-rail-selected: var(--rail-selected);
+  --color-rail-selected-foreground: var(--rail-selected-foreground);
+  --color-rail-accent: var(--rail-accent);
+  --color-rail-foreground: var(--rail-foreground);
+  --color-rail-border: var(--rail-border);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warning-text: var(--warning-text);
+  --color-warning-bg: var(--warning-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-neutral: var(--neutral);
+  --color-scrim: var(--scrim);
+  --color-c1: var(--c1);
+  --color-c2: var(--c2);
+  --color-c3: var(--c3);
+  --color-c4: var(--c4);
+  --color-c5: var(--c5);
 
-	/* Rail, status, overlay and shared categorical colors */
-	--color-rail: var(--rail);
-	--color-rail-selected: var(--rail-selected);
-	--color-rail-selected-foreground: var(--rail-selected-foreground);
-	--color-rail-accent: var(--rail-accent);
-	--color-rail-foreground: var(--rail-foreground);
-	--color-rail-border: var(--rail-border);
-	--color-ok: var(--ok);
-	--color-ok-bg: var(--ok-bg);
-	--color-warning-text: var(--warning-text);
-	--color-warning-bg: var(--warning-bg);
-	--color-bad: var(--bad);
-	--color-bad-bg: var(--bad-bg);
-	--color-neutral: var(--neutral);
-	--color-scrim: var(--scrim);
-	--color-c1: var(--c1);
-	--color-c2: var(--c2);
-	--color-c3: var(--c3);
-	--color-c4: var(--c4);
-	--color-c5: var(--c5);
+  /* Navigation/Drawer colors */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  
+  /* Table row alternating colors */
+  --color-table-row: var(--table-row);
+  --color-table-row-alt: var(--table-row-alt);
+  --color-table-header: var(--table-header);
+  
+  /* Card header color - for card headers, filter bars, toolbars within cards */
+  --color-card-header: var(--card-header);
+  
+  /* Footer color - for table footers, cart totals, and similar "footer" areas */
+  --color-footer: var(--footer);
 
-	/* Navigation/Drawer colors */
-	--color-sidebar: var(--sidebar);
-	--color-sidebar-foreground: var(--sidebar-foreground);
-	--color-sidebar-border: var(--sidebar-border);
+  /* Custom border width */
+  --border-width-hairline: var(--hairline-width);
 
-	/* Table row alternating colors */
-	--color-table-row: var(--table-row);
-	--color-table-row-alt: var(--table-row-alt);
-	--color-table-header: var(--table-header);
-
-	/* Card header color - for card headers, filter bars, toolbars within cards */
-	--color-card-header: var(--card-header);
-
-	/* Footer color - for table footers, cart totals, and similar "footer" areas */
-	--color-footer: var(--footer);
-
-	/* Custom border width */
-	--border-width-hairline: var(--hairline-width);
-
-	/* motion:start */
-	--duration-press: 80ms;
-	--duration-count-swell: 90ms;
-	--duration-count-fade: 170ms;
-	--duration-overlay-fade: 150ms;
-	--duration-crossfade: 200ms;
-	--duration-image-fade: 250ms;
-	--duration-popover-fade: 200ms;
-	--duration-quantity-grow: 180ms;
-	--duration-sheet-rise: 200ms;
-	--duration-beat: 220ms;
-	--duration-panel-slide: 250ms;
-	--duration-panel-slide-out: 200ms;
-	--duration-pane: 280ms;
-	--duration-stamp: 380ms;
-	--duration-spinner: 1000ms;
-	--duration-indeterminate: 1100ms;
-	--ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
-	--ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
-	--animate-pop-in: pop-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-pop-out: pop-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-	--animate-quantity-grow: quantity-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-quantity-grow-up: quantity-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-price-grow: price-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-price-grow-up: price-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-indeterminate: indeterminate 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
-	--animate-accordion-down: accordion-down 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-accordion-up: accordion-up 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-overlay-in: overlay-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-overlay-out: overlay-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-	--animate-dialog-in: dialog-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-dialog-out: dialog-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-	--animate-panel-in-left: panel-in-left 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-panel-in-right: panel-in-right 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
-	--animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
-	--animate-sheet-in: sheet-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-	--animate-sheet-out: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
-	/* motion:end */
+  /* motion:start */
+  --duration-press: 80ms;
+  --duration-count-swell: 90ms;
+  --duration-count-fade: 170ms;
+  --duration-overlay-fade: 150ms;
+  --duration-crossfade: 200ms;
+  --duration-image-fade: 250ms;
+  --duration-popover-fade: 200ms;
+  --duration-quantity-grow: 180ms;
+  --duration-sheet-rise: 200ms;
+  --duration-beat: 220ms;
+  --duration-panel-slide: 250ms;
+  --duration-panel-slide-out: 200ms;
+  --duration-pane: 280ms;
+  --duration-stamp: 380ms;
+  --duration-spinner: 1000ms;
+  --duration-indeterminate: 1100ms;
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --animate-pop-in: pop-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-pop-out: pop-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-quantity-grow: quantity-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-quantity-grow-up: quantity-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-price-grow: price-grow 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-price-grow-up: price-grow-up 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-indeterminate: indeterminate 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+  --animate-accordion-down: accordion-down 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-accordion-up: accordion-up 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-overlay-in: overlay-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-overlay-out: overlay-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-dialog-in: dialog-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-dialog-out: dialog-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-in-left: panel-in-left 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-in-right: panel-in-right 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  --animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  --animate-sheet-in: sheet-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  /* motion:end */
 }
 
 /* Resolve derived values where utilities are used, including inside a scale scope. */
 @theme inline {
-	/* Type ramp from base (xs and 2xs are their own tokens), with a shared 1.35 line height. */
-	--text-2xs--line-height: calc(var(--text-2xs) * 1.35);
-	--text-xs--line-height: calc(var(--text-xs) * 1.35);
-	--text-sm: calc(var(--text-base) * 0.929);
-	--text-sm--line-height: calc(var(--text-base) * 0.929 * 1.35);
-	--text-base--line-height: calc(var(--text-base) * 1.35);
-	--text-lg: calc(var(--text-base) * 1.143);
-	--text-lg--line-height: calc(var(--text-base) * 1.143 * 1.35);
-	--text-xl: calc(var(--text-base) * 1.286);
-	--text-xl--line-height: calc(var(--text-base) * 1.286 * 1.35);
-	--text-2xl: calc(var(--text-base) * 1.5);
-	--text-2xl--line-height: calc(var(--text-base) * 1.5 * 1.35);
-	--text-3xl: calc(var(--text-base) * 1.857);
-	--text-3xl--line-height: calc(var(--text-base) * 1.857 * 1.35);
-	--text-amt--line-height: calc(var(--text-amt) * 1.1);
+  /* Type ramp from base (xs and 2xs are their own tokens), with a shared 1.35 line height. */
+  --text-2xs--line-height: calc(var(--text-2xs) * 1.35);
+  --text-xs--line-height: calc(var(--text-xs) * 1.35);
+  --text-sm: calc(var(--text-base) * 0.929);
+  --text-sm--line-height: calc(var(--text-base) * 0.929 * 1.35);
+  --text-base--line-height: calc(var(--text-base) * 1.35);
+  --text-lg: calc(var(--text-base) * 1.143);
+  --text-lg--line-height: calc(var(--text-base) * 1.143 * 1.35);
+  --text-xl: calc(var(--text-base) * 1.286);
+  --text-xl--line-height: calc(var(--text-base) * 1.286 * 1.35);
+  --text-2xl: calc(var(--text-base) * 1.5);
+  --text-2xl--line-height: calc(var(--text-base) * 1.5 * 1.35);
+  --text-3xl: calc(var(--text-base) * 1.857);
+  --text-3xl--line-height: calc(var(--text-base) * 1.857 * 1.35);
+  --text-amt--line-height: calc(var(--text-amt) * 1.1);
 
-	/* Radius scale */
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
-	--radius-2xl: calc(var(--radius) + 8px);
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
 /* Web-only animation keyframes */
 @keyframes indeterminate {
-	from {
-		transform: translateX(-100%);
-	}
-	to {
-		transform: translateX(340%);
-	}
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
 }
 @keyframes accordion-down {
-	from {
-		height: 0;
-	}
-	to {
-		height: var(--radix-accordion-content-height);
-	}
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
 }
 
 @keyframes accordion-up {
-	from {
-		height: var(--radix-accordion-content-height);
-	}
-	to {
-		height: 0;
-	}
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
 /* The scrim fades its colour, not itself: the panel is its child on web, and an opacity fade
    would make the panel see-through while it slides. */
 @keyframes overlay-in {
-	from {
-		background-color: transparent;
-	}
+  from { background-color: transparent; }
 }
 @keyframes overlay-out {
-	to {
-		background-color: transparent;
-	}
+  to { background-color: transparent; }
 }
 /* Radix wraps the scrim and the panel in elements of its own, and it is THEIR animation it
    waits on before unmounting a closed dialog. Unanimated, they took our exit with them on the
    first frame. A wrapper whose child is marked holds for as long as the exit runs. */
 @keyframes overlay-hold {
-	from {
-		--overlay-hold: 0;
-	}
-	to {
-		--overlay-hold: 1;
-	}
+  from { --overlay-hold: 0; }
+  to { --overlay-hold: 1; }
 }
 [data-state='closed']:has(> [data-exit]) {
-	animation: overlay-hold var(--duration-panel-slide-out) linear;
+  animation: overlay-hold var(--duration-panel-slide-out) linear;
 }
 @keyframes pop-in {
-	from {
-		opacity: 0;
-		transform: translateY(-6px);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes pop-out {
-	from {
-		opacity: 1;
-		transform: none;
-	}
-	to {
-		opacity: 0;
-		transform: translateY(-6px);
-	}
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px); }
 }
 /* QuantityKeypad (components/quantity-keypad, decision 36): the panel is drawn growing out of
    the cart's quantity box. The panel is a 3 x 6 grid of 48 px cells and opens with the box
@@ -279,112 +255,60 @@
    and below a 36 px box: 48 px off each side, 6 px from the row's edge, 42 px down to its other
    edge. `-up` is the same from the bottom row, for a panel that opened above the box. */
 @keyframes quantity-grow {
-	from {
-		clip-path: inset(6px 48px calc(100% - 42px) 48px round 8px);
-	}
-	to {
-		clip-path: inset(0 round 8px);
-	}
+  from { clip-path: inset(6px 48px calc(100% - 42px) 48px round 8px); }
+  to { clip-path: inset(0 round 8px); }
 }
 @keyframes quantity-grow-up {
-	from {
-		clip-path: inset(calc(100% - 42px) 48px 6px 48px round 8px);
-	}
-	to {
-		clip-path: inset(0 round 8px);
-	}
+  from { clip-path: inset(calc(100% - 42px) 48px 6px 48px round 8px); }
+  to { clip-path: inset(0 round 8px); }
 }
 /* PriceKeypad (components/price-keypad, Paul 2026-10-24): the panel grows out of the cart's
    price. Its first row is the display, the panel's full width and 48 px tall, opened over the
    price; the clip starts as that row. `-up` is the same from the bottom row. */
 @keyframes price-grow {
-	from {
-		clip-path: inset(0 0 calc(100% - 48px) 0 round 8px);
-	}
-	to {
-		clip-path: inset(0 round 8px);
-	}
+  from { clip-path: inset(0 0 calc(100% - 48px) 0 round 8px); }
+  to { clip-path: inset(0 round 8px); }
 }
 @keyframes price-grow-up {
-	from {
-		clip-path: inset(calc(100% - 48px) 0 0 0 round 8px);
-	}
-	to {
-		clip-path: inset(0 round 8px);
-	}
+  from { clip-path: inset(calc(100% - 48px) 0 0 0 round 8px); }
+  to { clip-path: inset(0 round 8px); }
 }
 @keyframes dialog-in {
-	from {
-		opacity: 0;
-		transform: scale(0.95);
-	}
-	to {
-		opacity: 1;
-		transform: scale(1);
-	}
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes dialog-out {
-	from {
-		opacity: 1;
-		transform: scale(1);
-	}
-	to {
-		opacity: 0;
-		transform: scale(0.95);
-	}
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
 }
 @keyframes panel-in-left {
-	from {
-		transform: translateX(-100%);
-	}
-	to {
-		transform: translateX(0);
-	}
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 @keyframes panel-out-left {
-	from {
-		transform: translateX(0);
-	}
-	to {
-		transform: translateX(-100%);
-	}
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
 }
 @keyframes panel-in-right {
-	from {
-		transform: translateX(100%);
-	}
-	to {
-		transform: translateX(0);
-	}
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 @keyframes panel-out-right {
-	from {
-		transform: translateX(0);
-	}
-	to {
-		transform: translateX(100%);
-	}
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }
 @keyframes sheet-in {
-	from {
-		transform: translateY(100%);
-	}
-	to {
-		transform: translateY(0);
-	}
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 @keyframes sheet-out {
-	from {
-		transform: translateY(0);
-	}
-	to {
-		transform: translateY(100%);
-	}
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
 }
 
 @layer theme {
-	:root {
-		/* ========================================
+  :root {
+    /* ========================================
      * LIGHT THEME
      * Surface lightness: rail 0.935, background/table-row-alt 0.97,
      * card/table-row 1, muted/headers/footer 0.95, border 0.885.
@@ -392,989 +316,977 @@
      * blue on the screen; the ink is neutral, so the primary separates from it by chroma.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
-		@variant light {
-			--hairline-width: 1px;
-
-			/* Base colors */
-			--background: oklch(0.97 0.005 262);
-			/* Neutral ink (Paul, 2026-10-29, deep-blue board K3): a chroma-free black beside a deep
+    @variant light {
+      --hairline-width: 1px;
+      
+      /* Base colors */
+      --background: oklch(0.97 0.005 262);
+      /* Neutral ink (Paul, 2026-10-29, deep-blue board K3): a chroma-free black beside a deep
          saturated primary separates by chroma; a slate-tinted ink would merge with it. */
-			--foreground: oklch(0.16 0.005 262);
+      --foreground: oklch(0.16 0.005 262);
 
-			/* Card - Pure white for contrast */
-			--card: oklch(1 0 0);
-			--card-foreground: oklch(0.16 0.005 262);
-
-			/* Popover */
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
-
-			/* Primary - deep sapphire (Paul, 2026-10-29, deep-blue board K3): L 0.42 is the floor at
+      /* Card - Pure white for contrast */
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.16 0.005 262);
+      
+      /* Popover */
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      
+      /* Primary - deep sapphire (Paul, 2026-10-29, deep-blue board K3): L 0.42 is the floor at
          which the button still reads lit beside the ink; hue 262 is the sRGB blue axis, where
          C 0.24 is inside the gamut, so every screen shows the same blue. */
-			--primary: oklch(0.42 0.24 262);
-			--primary-foreground: oklch(0.99 0.01 262);
-
-			/* Secondary - quiet muted foreground on card */
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
-
-			/* Muted surface and text */
-			--muted: oklch(0.95 0.007 262);
-			--muted-foreground: oklch(0.45 0.01 262);
-
-			/* Accent - the hover and press wash: Radix step 3 of the accent, one rung below --selected (step 4),
+      --primary: oklch(0.42 0.24 262);
+      --primary-foreground: oklch(0.99 0.01 262);
+      
+      /* Secondary - quiet muted foreground on card */
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      
+      /* Muted surface and text */
+      --muted: oklch(0.95 0.007 262);
+      --muted-foreground: oklch(0.45 0.01 262);
+      
+      /* Accent - the hover and press wash: Radix step 3 of the accent, one rung below --selected (step 4),
          so hover and selected are rungs of one ladder and a pointer resting on a row never looks chosen
          (Paul, 2026-10-30, hover board B). */
-			--accent: oklch(0.965 0.025 262);
-			--accent-foreground: var(--foreground);
-
-			/* Semantic colors */
-			/* L 0.52: on its 10 % wash over the 0.97 page the red reads 4.5:1 (the token contract);
+      --accent: oklch(0.965 0.025 262);
+      --accent-foreground: var(--foreground);
+      
+      /* Semantic colors */
+      /* L 0.52: on its 10 % wash over the 0.97 page the red reads 4.5:1 (the token contract);
          at 0.53 it read 4.47:1 once the page darkened from 0.975 (2026-10-29). */
-			--destructive: oklch(0.52 0.22 25);
-			--destructive-foreground: oklch(0.99 0.01 25);
-			--success: var(--ok);
-			--success-foreground: oklch(0.98 0.01 160);
-			--info: oklch(0.48 0.12 262);
-			--info-foreground: oklch(0.98 0.01 240);
-			--action: oklch(0.55 0.18 295);
-			--action-foreground: oklch(0.98 0.01 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.25 0.03 90);
-			/* Dark ink, as attention and the other four themes use: near-white on the light amber
+      --destructive: oklch(0.52 0.22 25);
+      --destructive-foreground: oklch(0.99 0.01 25);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      /* Dark ink, as attention and the other four themes use: near-white on the light amber
          read 2.8:1, under the 4.5:1 text floor (CODING_STANDARDS § Design 7). */
-			--warning-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      
+      /* Borders and inputs */
+      --border: oklch(0.885 0.01 262);
+      --input: var(--card);
+      --ring: oklch(0.42 0.24 262);
+      /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
+      --selected: oklch(0.935 0.045 262);
+      --selected-foreground: oklch(0.42 0.17 262);
+      
+      /* Card header - muted surface for headers and toolbars */
+      --card-header: var(--muted);
+      
+      /* Sidebar - rail aliases */
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      
+      /* Table - card rows alternate with background */
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      
+      /* Footer - same as table-header for visual consistency */
+      --footer: var(--muted);
 
-			/* Borders and inputs */
-			--border: oklch(0.885 0.01 262);
-			--input: var(--card);
-			--ring: oklch(0.42 0.24 262);
-			/* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-			--selected: oklch(0.935 0.045 262);
-			--selected-foreground: oklch(0.42 0.17 262);
+      /* Charts - shared categorical aliases */
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
 
-			/* Card header - muted surface for headers and toolbars */
-			--card-header: var(--muted);
-
-			/* Sidebar - rail aliases */
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-
-			/* Table - card rows alternate with background */
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-
-			/* Footer - same as table-header for visual consistency */
-			--footer: var(--muted);
-
-			/* Charts - shared categorical aliases */
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-
-			/* Drawn rail, status and overlay colors */
-			--rail: oklch(0.935 0.016 262);
-			/* The current area's square lifts to the card surface with the selected ink on its glyph (Paul, 2026-10-30,
+      /* Drawn rail, status and overlay colors */
+      --rail: oklch(0.935 0.016 262);
+      /* The current area's square lifts to the card surface with the selected ink on its glyph (Paul, 2026-10-30,
          rail board C): --selected sits at the rail's own lightness (0.935) and was lost. The rail's hover/press wash
          is Radix step 5, the one rung that reads on a tinted ground. Flip these three to change the construction. */
-			--rail-selected: var(--card);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: oklch(0.895 0.075 262);
-			--rail-foreground: oklch(0.34 0.01 262);
-			--rail-border: oklch(0.88 0.014 262);
-			--ok: oklch(0.52 0.16 155);
-			--ok-bg: oklch(0.96 0.03 155);
-			--warning: oklch(0.68 0.16 70);
-			--warning-text: oklch(0.5 0.13 70);
-			--warning-bg: oklch(0.97 0.04 85);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.97 0.02 25);
-			--neutral: oklch(0.62 0.01 262);
-			--scrim: oklch(0.2 0.01 262 / 0.28);
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.895 0.075 262);
+      --rail-foreground: oklch(0.34 0.01 262);
+      --rail-border: oklch(0.88 0.014 262);
+      --ok: oklch(0.52 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.97 0.02 25);
+      --neutral: oklch(0.62 0.01 262);
+      --scrim: oklch(0.2 0.01 262 / .28);
 
-			/* Shared categories, independent of theme accents */
-			--c1: oklch(0.42 0.24 262);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0.02 262);
+      /* Shared categories, independent of theme accents */
+      --c1: oklch(0.42 0.24 262);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0.02 262);
 
-			/* Poster tile tints, by index (never by category) */
-			--tile-tint-0: oklch(0.86 0.09 262);
-			--tile-tint-1: oklch(0.88 0.1 160);
-			--tile-tint-2: oklch(0.88 0.1 40);
-			--tile-tint-3: oklch(0.86 0.09 310);
-			--tile-tint-4: oklch(0.9 0.11 90);
-			--tile-tint-5: oklch(0.88 0.09 200);
-		}
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.86 0.09 262);
+      --tile-tint-1: oklch(0.88 0.10 160);
+      --tile-tint-2: oklch(0.88 0.10 40);
+      --tile-tint-3: oklch(0.86 0.09 310);
+      --tile-tint-4: oklch(0.90 0.11 90);
+      --tile-tint-5: oklch(0.88 0.09 200);
+    }
 
-		/* ========================================
+    /* ========================================
      * DARK THEME
      * Surface lightness: rail 0.16, background/table-row-alt 0.19,
      * card/table-row 0.23, muted/headers/footer 0.28, border 0.33.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
-		@variant dark {
-			--hairline-width: 1px;
+    @variant dark {
+      --hairline-width: 1px;
+      
+      /* Base colors - Dark blue-gray */
+      --background: oklch(0.19 0.018 250);
+      --foreground: oklch(0.93 0.01 250);
+      
+      /* Card - Slightly lighter for elevation */
+      --card: oklch(0.23 0.018 250);
+      --card-foreground: oklch(0.93 0.01 250);
+      
+      /* Popover */
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      
+      /* Primary - Bright blue for dark mode */
+      --primary: oklch(0.70 0.17 240);
+      --primary-foreground: oklch(0.16 0.02 250);
+      
+      /* Secondary - quiet muted foreground on card */
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      
+      /* Muted surface and text */
+      --muted: oklch(0.28 0.018 250);
+      --muted-foreground: oklch(0.70 0.015 250);
+      
+      /* Accent */
+      --accent: var(--muted);
+      --accent-foreground: var(--foreground);
+      
+      /* Semantic colors */
+      --destructive: oklch(0.67 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
+      --success: var(--ok);
+      --success-foreground: oklch(0.15 0.02 160);
+      --info: oklch(0.70 0.13 240);
+      --info-foreground: oklch(0.15 0.02 240);
+      --action: oklch(0.68 0.16 295);
+      --action-foreground: oklch(0.15 0.02 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.18 0.025 90);
+      --warning-foreground: oklch(0.15 0.02 45);
+      
+      /* Borders and inputs */
+      --border: oklch(0.33 0.02 250);
+      --input: var(--card);
+      --ring: oklch(0.70 0.17 240);
+      /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
+      --selected: oklch(0.30 0.06 240);
+      --selected-foreground: oklch(0.82 0.13 240);
+      
+      /* Card header - muted surface for headers and toolbars */
+      --card-header: var(--muted);
+      
+      /* Footer - same as table-header */
+      --footer: var(--muted);
 
-			/* Base colors - Dark blue-gray */
-			--background: oklch(0.19 0.018 250);
-			--foreground: oklch(0.93 0.01 250);
+      /* Sidebar - rail aliases */
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
 
-			/* Card - Slightly lighter for elevation */
-			--card: oklch(0.23 0.018 250);
-			--card-foreground: oklch(0.93 0.01 250);
+      /* Table - card rows alternate with background */
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
 
-			/* Popover */
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
+      /* Charts - shared categorical aliases */
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
 
-			/* Primary - Bright blue for dark mode */
-			--primary: oklch(0.7 0.17 240);
-			--primary-foreground: oklch(0.16 0.02 250);
+      /* Drawn rail, status and overlay colors */
+      --rail: oklch(0.16 0.025 250);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
+      --rail-foreground: oklch(0.72 0.02 250);
+      --rail-border: oklch(0.25 0.02 250);
+      --ok: oklch(0.72 0.15 155);
+      --ok-bg: oklch(0.28 0.04 155);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.30 0.05 25);
+      --neutral: oklch(0.62 0.01 250);
+      --scrim: oklch(0.05 0.02 250 / .5);
 
-			/* Secondary - quiet muted foreground on card */
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
+      /* Shared categories, independent of theme accents */
+      --c1: oklch(0.50 0.18 240);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0.02 250);
 
-			/* Muted surface and text */
-			--muted: oklch(0.28 0.018 250);
-			--muted-foreground: oklch(0.7 0.015 250);
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
+    }
 
-			/* Accent */
-			--accent: var(--muted);
-			--accent-foreground: var(--foreground);
-
-			/* Semantic colors */
-			--destructive: oklch(0.67 0.2 25);
-			--destructive-foreground: oklch(0.15 0.02 25);
-			--success: var(--ok);
-			--success-foreground: oklch(0.15 0.02 160);
-			--info: oklch(0.7 0.13 240);
-			--info-foreground: oklch(0.15 0.02 240);
-			--action: oklch(0.68 0.16 295);
-			--action-foreground: oklch(0.15 0.02 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.18 0.025 90);
-			--warning-foreground: oklch(0.15 0.02 45);
-
-			/* Borders and inputs */
-			--border: oklch(0.33 0.02 250);
-			--input: var(--card);
-			--ring: oklch(0.7 0.17 240);
-			/* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-			--selected: oklch(0.3 0.06 240);
-			--selected-foreground: oklch(0.82 0.13 240);
-
-			/* Card header - muted surface for headers and toolbars */
-			--card-header: var(--muted);
-
-			/* Footer - same as table-header */
-			--footer: var(--muted);
-
-			/* Sidebar - rail aliases */
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-
-			/* Table - card rows alternate with background */
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-
-			/* Charts - shared categorical aliases */
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-
-			/* Drawn rail, status and overlay colors */
-			--rail: oklch(0.16 0.025 250);
-			--rail-selected: var(--selected);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: var(--card);
-			--rail-foreground: oklch(0.72 0.02 250);
-			--rail-border: oklch(0.25 0.02 250);
-			--ok: oklch(0.72 0.15 155);
-			--ok-bg: oklch(0.28 0.04 155);
-			--warning: oklch(0.78 0.15 75);
-			--warning-text: var(--warning);
-			--warning-bg: oklch(0.3 0.05 80);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.3 0.05 25);
-			--neutral: oklch(0.62 0.01 250);
-			--scrim: oklch(0.05 0.02 250 / 0.5);
-
-			/* Shared categories, independent of theme accents */
-			--c1: oklch(0.5 0.18 240);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0.02 250);
-
-			/* Poster tile tints, by index (never by category) */
-			--tile-tint-0: oklch(0.32 0.05 250);
-			--tile-tint-1: oklch(0.32 0.05 160);
-			--tile-tint-2: oklch(0.33 0.05 40);
-			--tile-tint-3: oklch(0.32 0.05 300);
-			--tile-tint-4: oklch(0.34 0.05 90);
-			--tile-tint-5: oklch(0.31 0.03 200);
-		}
-
-		/* ========================================
+    /* ========================================
      * OCEAN THEME
      * Surface lightness: rail 0.14, background/table-row-alt 0.19,
      * card/table-row 0.23, muted/headers/footer 0.29, border 0.34.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
-		@variant ocean {
-			--hairline-width: 1px;
+    @variant ocean {
+      --hairline-width: 1px;
+      
+      /* Deep ocean base - rich navy blue */
+      --background: oklch(0.19 0.03 230);
+      --foreground: oklch(0.94 0.015 200);
+      
+      /* Elevated surfaces - slightly lighter, more teal */
+      --card: oklch(0.23 0.03 228);
+      --card-foreground: oklch(0.94 0.015 200);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      
+      /* Primary - vibrant cyan/teal (like bioluminescence) */
+      --primary: oklch(0.72 0.15 195);
+      --primary-foreground: oklch(0.16 0.04 200);
+      
+      /* Secondary - quiet muted foreground on card */
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      
+      /* Muted surface and text */
+      --muted: oklch(0.29 0.03 226);
+      --muted-foreground: oklch(0.70 0.03 210);
+      
+      /* Accent - interactive hover states */
+      --accent: var(--muted);
+      --accent-foreground: var(--foreground);
+      
+      /* Semantic colors; legacy filled-surface partners retain their values */
+      --destructive: oklch(0.67 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
+      --success: var(--ok);
+      --success-foreground: oklch(0.15 0.04 165);
+      --info: oklch(0.70 0.13 240);
+      --info-foreground: oklch(0.15 0.04 210);
+      --action: oklch(0.65 0.14 290);
+      --action-foreground: oklch(0.15 0.03 290);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.18 0.05 85);
+      --warning-foreground: oklch(0.15 0.04 55);
+      
+      /* Borders and inputs */
+      --border: oklch(0.34 0.035 225);
+      --input: var(--card);
+      --ring: oklch(0.72 0.15 195);
+      /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
+      --selected: oklch(0.30 0.06 200);
+      --selected-foreground: oklch(0.84 0.12 195);
+      
+      /* Card header - muted surface for headers and toolbars */
+      --card-header: var(--muted);
+      
+      /* Sidebar - rail aliases */
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      
+      /* Table - card rows alternate with background */
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      
+      /* Footer - same as table-header */
+      --footer: var(--muted);
 
-			/* Deep ocean base - rich navy blue */
-			--background: oklch(0.19 0.03 230);
-			--foreground: oklch(0.94 0.015 200);
+      /* Charts - shared categorical aliases */
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
 
-			/* Elevated surfaces - slightly lighter, more teal */
-			--card: oklch(0.23 0.03 228);
-			--card-foreground: oklch(0.94 0.015 200);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
+      /* Drawn rail, status and overlay colors */
+      --rail: oklch(0.14 0.045 235);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
+      --rail-foreground: oklch(0.75 0.04 200);
+      --rail-border: oklch(0.24 0.04 230);
+      --ok: oklch(0.72 0.15 155);
+      --ok-bg: oklch(0.28 0.04 155);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.30 0.05 25);
+      --neutral: oklch(0.62 0.01 250);
+      --scrim: oklch(0.05 0.03 230 / .5);
 
-			/* Primary - vibrant cyan/teal (like bioluminescence) */
-			--primary: oklch(0.72 0.15 195);
-			--primary-foreground: oklch(0.16 0.04 200);
+      /* Shared categories, independent of theme accents */
+      --c1: oklch(0.50 0.18 240);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0.02 250);
 
-			/* Secondary - quiet muted foreground on card */
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
+    }
 
-			/* Muted surface and text */
-			--muted: oklch(0.29 0.03 226);
-			--muted-foreground: oklch(0.7 0.03 210);
-
-			/* Accent - interactive hover states */
-			--accent: var(--muted);
-			--accent-foreground: var(--foreground);
-
-			/* Semantic colors; legacy filled-surface partners retain their values */
-			--destructive: oklch(0.67 0.2 25);
-			--destructive-foreground: oklch(0.15 0.02 25);
-			--success: var(--ok);
-			--success-foreground: oklch(0.15 0.04 165);
-			--info: oklch(0.7 0.13 240);
-			--info-foreground: oklch(0.15 0.04 210);
-			--action: oklch(0.65 0.14 290);
-			--action-foreground: oklch(0.15 0.03 290);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.18 0.05 85);
-			--warning-foreground: oklch(0.15 0.04 55);
-
-			/* Borders and inputs */
-			--border: oklch(0.34 0.035 225);
-			--input: var(--card);
-			--ring: oklch(0.72 0.15 195);
-			/* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-			--selected: oklch(0.3 0.06 200);
-			--selected-foreground: oklch(0.84 0.12 195);
-
-			/* Card header - muted surface for headers and toolbars */
-			--card-header: var(--muted);
-
-			/* Sidebar - rail aliases */
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-
-			/* Table - card rows alternate with background */
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-
-			/* Footer - same as table-header */
-			--footer: var(--muted);
-
-			/* Charts - shared categorical aliases */
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-
-			/* Drawn rail, status and overlay colors */
-			--rail: oklch(0.14 0.045 235);
-			--rail-selected: var(--selected);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: var(--card);
-			--rail-foreground: oklch(0.75 0.04 200);
-			--rail-border: oklch(0.24 0.04 230);
-			--ok: oklch(0.72 0.15 155);
-			--ok-bg: oklch(0.28 0.04 155);
-			--warning: oklch(0.78 0.15 75);
-			--warning-text: var(--warning);
-			--warning-bg: oklch(0.3 0.05 80);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.3 0.05 25);
-			--neutral: oklch(0.62 0.01 250);
-			--scrim: oklch(0.05 0.03 230 / 0.5);
-
-			/* Shared categories, independent of theme accents */
-			--c1: oklch(0.5 0.18 240);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0.02 250);
-
-			/* Poster tile tints, by index (never by category) */
-			--tile-tint-0: oklch(0.32 0.05 250);
-			--tile-tint-1: oklch(0.32 0.05 160);
-			--tile-tint-2: oklch(0.33 0.05 40);
-			--tile-tint-3: oklch(0.32 0.05 300);
-			--tile-tint-4: oklch(0.34 0.05 90);
-			--tile-tint-5: oklch(0.31 0.03 200);
-		}
-
-		/* ========================================
+    /* ========================================
      * SUNSET THEME
      * Surface lightness: rail 0.15, background/table-row-alt 0.20,
      * card/table-row 0.245, muted/headers/footer 0.30, border 0.35.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
-		@variant sunset {
-			--hairline-width: 1px;
+    @variant sunset {
+      --hairline-width: 1px;
+      
+      /* Deep magenta/purple sky base */
+      --background: oklch(0.20 0.035 318);
+      --foreground: oklch(0.95 0.02 50);
+      
+      /* Elevated surfaces - warmer purple */
+      --card: oklch(0.245 0.04 318);
+      --card-foreground: oklch(0.95 0.02 50);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      
+      /* Primary - vibrant sunset orange/gold */
+      --primary: oklch(0.72 0.18 45);
+      --primary-foreground: oklch(0.18 0.05 318);
+      
+      /* Secondary - quiet muted foreground on card */
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      
+      /* Muted surface and text */
+      --muted: oklch(0.30 0.04 318);
+      --muted-foreground: oklch(0.70 0.04 340);
+      
+      /* Accent - interactive hover states */
+      --accent: var(--muted);
+      --accent-foreground: var(--foreground);
+      
+      /* Semantic colors; legacy filled-surface partners retain their values */
+      --destructive: oklch(0.68 0.2 20);
+      --destructive-foreground: oklch(0.15 0.02 25);
+      --success: var(--ok);
+      --success-foreground: oklch(0.18 0.05 155);
+      --info: oklch(0.70 0.13 240);
+      --info-foreground: oklch(0.18 0.05 260);
+      --action: oklch(0.62 0.13 300);
+      --action-foreground: oklch(0.18 0.04 300);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.20 0.07 70);
+      --warning-foreground: oklch(0.18 0.06 55);
+      
+      /* Borders and inputs */
+      --border: oklch(0.35 0.045 322);
+      --input: var(--card);
+      --ring: oklch(0.72 0.18 45);
+      /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
+      --selected: oklch(0.32 0.07 45);
+      --selected-foreground: oklch(0.84 0.14 45);
+      
+      /* Card header - muted surface for headers and toolbars */
+      --card-header: var(--muted);
+      
+      /* Sidebar - rail aliases */
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      
+      /* Table - card rows alternate with background */
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      
+      /* Footer - same as table-header */
+      --footer: var(--muted);
 
-			/* Deep magenta/purple sky base */
-			--background: oklch(0.2 0.035 318);
-			--foreground: oklch(0.95 0.02 50);
+      /* Charts - shared categorical aliases */
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
 
-			/* Elevated surfaces - warmer purple */
-			--card: oklch(0.245 0.04 318);
-			--card-foreground: oklch(0.95 0.02 50);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
+      /* Drawn rail, status and overlay colors */
+      --rail: oklch(0.15 0.05 320);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
+      --rail-foreground: oklch(0.78 0.05 40);
+      --rail-border: oklch(0.25 0.05 318);
+      --ok: oklch(0.72 0.15 155);
+      --ok-bg: oklch(0.28 0.04 155);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.30 0.05 25);
+      --neutral: oklch(0.62 0.01 250);
+      --scrim: oklch(0.05 0.03 318 / .5);
 
-			/* Primary - vibrant sunset orange/gold */
-			--primary: oklch(0.72 0.18 45);
-			--primary-foreground: oklch(0.18 0.05 318);
+      /* Shared categories, independent of theme accents */
+      --c1: oklch(0.50 0.18 240);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0.02 250);
 
-			/* Secondary - quiet muted foreground on card */
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
+    }
 
-			/* Muted surface and text */
-			--muted: oklch(0.3 0.04 318);
-			--muted-foreground: oklch(0.7 0.04 340);
-
-			/* Accent - interactive hover states */
-			--accent: var(--muted);
-			--accent-foreground: var(--foreground);
-
-			/* Semantic colors; legacy filled-surface partners retain their values */
-			--destructive: oklch(0.68 0.2 20);
-			--destructive-foreground: oklch(0.15 0.02 25);
-			--success: var(--ok);
-			--success-foreground: oklch(0.18 0.05 155);
-			--info: oklch(0.7 0.13 240);
-			--info-foreground: oklch(0.18 0.05 260);
-			--action: oklch(0.62 0.13 300);
-			--action-foreground: oklch(0.18 0.04 300);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.2 0.07 70);
-			--warning-foreground: oklch(0.18 0.06 55);
-
-			/* Borders and inputs */
-			--border: oklch(0.35 0.045 322);
-			--input: var(--card);
-			--ring: oklch(0.72 0.18 45);
-			/* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-			--selected: oklch(0.32 0.07 45);
-			--selected-foreground: oklch(0.84 0.14 45);
-
-			/* Card header - muted surface for headers and toolbars */
-			--card-header: var(--muted);
-
-			/* Sidebar - rail aliases */
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-
-			/* Table - card rows alternate with background */
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-
-			/* Footer - same as table-header */
-			--footer: var(--muted);
-
-			/* Charts - shared categorical aliases */
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-
-			/* Drawn rail, status and overlay colors */
-			--rail: oklch(0.15 0.05 320);
-			--rail-selected: var(--selected);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: var(--card);
-			--rail-foreground: oklch(0.78 0.05 40);
-			--rail-border: oklch(0.25 0.05 318);
-			--ok: oklch(0.72 0.15 155);
-			--ok-bg: oklch(0.28 0.04 155);
-			--warning: oklch(0.78 0.15 75);
-			--warning-text: var(--warning);
-			--warning-bg: oklch(0.3 0.05 80);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.3 0.05 25);
-			--neutral: oklch(0.62 0.01 250);
-			--scrim: oklch(0.05 0.03 318 / 0.5);
-
-			/* Shared categories, independent of theme accents */
-			--c1: oklch(0.5 0.18 240);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0.02 250);
-
-			/* Poster tile tints, by index (never by category) */
-			--tile-tint-0: oklch(0.32 0.05 250);
-			--tile-tint-1: oklch(0.32 0.05 160);
-			--tile-tint-2: oklch(0.33 0.05 40);
-			--tile-tint-3: oklch(0.32 0.05 300);
-			--tile-tint-4: oklch(0.34 0.05 90);
-			--tile-tint-5: oklch(0.31 0.03 200);
-		}
-
-		/* ========================================
+    /* ========================================
      * MONOCHROME THEME
      * Surface lightness: rail 0.08, background/table-row-alt 0.15,
      * card/table-row 0.21, muted/headers/footer 0.28, border 0.36.
      * Status and categorical colors are chromatic in every theme.
      * ======================================== */
-		@variant monochrome {
-			--hairline-width: 1px;
+    @variant monochrome {
+      --hairline-width: 1px;
+      
+      /* Base surfaces - clear hierarchy */
+      --background: oklch(0.15 0 0);
+      --foreground: oklch(0.95 0 0);
+      --card: oklch(0.21 0 0);
+      --card-foreground: oklch(0.95 0 0);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      
+      /* Primary - very light for high visibility */
+      --primary: oklch(0.92 0 0);
+      --primary-foreground: oklch(0.12 0 0);
+      
+      /* Secondary - quiet muted foreground on card */
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      
+      /* Muted surface and text */
+      --muted: oklch(0.28 0 0);
+      --muted-foreground: oklch(0.70 0 0);
+      
+      /* Accent - interactive hover states */
+      --accent: var(--muted);
+      --accent-foreground: var(--foreground);
+      
+      /* Semantic colors; legacy filled-surface partners retain their values */
+      --destructive: oklch(0.66 0.2 25);
+      --destructive-foreground: oklch(0.15 0.02 25);
+      --success: var(--ok);
+      --success-foreground: oklch(0.12 0 0);
+      --info: oklch(0.70 0.13 240);
+      --info-foreground: oklch(0.12 0 0);
+      --action: oklch(0.66 0 0);
+      --action-foreground: oklch(0.12 0 0);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.12 0 0);
+      --warning-foreground: oklch(0.12 0 0);
+      
+      /* Borders and inputs */
+      --border: oklch(0.36 0 0);
+      --input: var(--card);
+      --ring: oklch(0.92 0 0);
+      /* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
+      --selected: oklch(0.32 0 0);
+      --selected-foreground: oklch(0.95 0 0);
+      
+      /* Card header - muted surface for headers and toolbars */
+      --card-header: var(--muted);
+      
+      /* Sidebar - rail aliases */
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      
+      /* Table - card rows alternate with background */
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      
+      /* Footer - same as table-header */
+      --footer: var(--muted);
 
-			/* Base surfaces - clear hierarchy */
-			--background: oklch(0.15 0 0);
-			--foreground: oklch(0.95 0 0);
-			--card: oklch(0.21 0 0);
-			--card-foreground: oklch(0.95 0 0);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
+      /* Charts - shared categorical aliases */
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
 
-			/* Primary - very light for high visibility */
-			--primary: oklch(0.92 0 0);
-			--primary-foreground: oklch(0.12 0 0);
+      /* Drawn rail, status and overlay colors */
+      --rail: oklch(0.08 0 0);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
+      --rail-foreground: oklch(0.78 0 0);
+      --rail-border: oklch(0.22 0 0);
+      --ok: oklch(0.72 0.15 155);
+      --ok-bg: oklch(0.28 0.04 155);
+      --warning: oklch(0.78 0.15 75);
+      --warning-text: var(--warning);
+      --warning-bg: oklch(0.30 0.05 80);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.30 0.05 25);
+      --neutral: oklch(0.62 0.01 250);
+      --scrim: oklch(0 0 0 / .55);
 
-			/* Secondary - quiet muted foreground on card */
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
+      /* Shared categories, independent of theme accents */
+      --c1: oklch(0.50 0.18 240);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0.02 250);
 
-			/* Muted surface and text */
-			--muted: oklch(0.28 0 0);
-			--muted-foreground: oklch(0.7 0 0);
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
+    }
 
-			/* Accent - interactive hover states */
-			--accent: var(--muted);
-			--accent-foreground: var(--foreground);
-
-			/* Semantic colors; legacy filled-surface partners retain their values */
-			--destructive: oklch(0.66 0.2 25);
-			--destructive-foreground: oklch(0.15 0.02 25);
-			--success: var(--ok);
-			--success-foreground: oklch(0.12 0 0);
-			--info: oklch(0.7 0.13 240);
-			--info-foreground: oklch(0.12 0 0);
-			--action: oklch(0.66 0 0);
-			--action-foreground: oklch(0.12 0 0);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.12 0 0);
-			--warning-foreground: oklch(0.12 0 0);
-
-			/* Borders and inputs */
-			--border: oklch(0.36 0 0);
-			--input: var(--card);
-			--ring: oklch(0.92 0 0);
-			/* A selected choice: the accent's tint and its ink (Radix steps 4 and 11) */
-			--selected: oklch(0.32 0 0);
-			--selected-foreground: oklch(0.95 0 0);
-
-			/* Card header - muted surface for headers and toolbars */
-			--card-header: var(--muted);
-
-			/* Sidebar - rail aliases */
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-
-			/* Table - card rows alternate with background */
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-
-			/* Footer - same as table-header */
-			--footer: var(--muted);
-
-			/* Charts - shared categorical aliases */
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-
-			/* Drawn rail, status and overlay colors */
-			--rail: oklch(0.08 0 0);
-			--rail-selected: var(--selected);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: var(--card);
-			--rail-foreground: oklch(0.78 0 0);
-			--rail-border: oklch(0.22 0 0);
-			--ok: oklch(0.72 0.15 155);
-			--ok-bg: oklch(0.28 0.04 155);
-			--warning: oklch(0.78 0.15 75);
-			--warning-text: var(--warning);
-			--warning-bg: oklch(0.3 0.05 80);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.3 0.05 25);
-			--neutral: oklch(0.62 0.01 250);
-			--scrim: oklch(0 0 0 / 0.55);
-
-			/* Shared categories, independent of theme accents */
-			--c1: oklch(0.5 0.18 240);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0.02 250);
-
-			/* Poster tile tints, by index (never by category) */
-			--tile-tint-0: oklch(0.32 0.05 250);
-			--tile-tint-1: oklch(0.32 0.05 160);
-			--tile-tint-2: oklch(0.33 0.05 40);
-			--tile-tint-3: oklch(0.32 0.05 300);
-			--tile-tint-4: oklch(0.34 0.05 90);
-			--tile-tint-5: oklch(0.31 0.03 200);
-		}
-
-		/* ========================================
+    /* ========================================
      * PAPER THEME — Cream paper and ink.
      * Surface lightness: rail 0.912 < page 0.948 < card 0.977.
      * ======================================== */
-		@variant paper {
-			--hairline-width: 1px;
-			--background: oklch(0.948 0.016 83);
-			--foreground: oklch(0.227 0.016 71);
-			--card: oklch(0.977 0.011 85);
-			--card-foreground: oklch(0.227 0.016 71);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
-			--primary: oklch(0.227 0.016 71);
-			--primary-foreground: oklch(0.977 0.011 85);
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
-			--muted: oklch(0.918 0.023 85);
-			--muted-foreground: oklch(0.47 0.03 78);
-			--accent: oklch(0.905 0.028 84);
-			--accent-foreground: var(--foreground);
-			--destructive: oklch(0.5 0.15 34);
-			--destructive-foreground: oklch(0.99 0.01 34);
-			--success: var(--ok);
-			--success-foreground: oklch(0.98 0.01 160);
-			--info: oklch(0.48 0.12 262);
-			--info-foreground: oklch(0.98 0.01 240);
-			--action: oklch(0.55 0.18 295);
-			--action-foreground: oklch(0.98 0.01 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.25 0.03 90);
-			--warning-foreground: oklch(0.25 0.03 90);
-			--border: oklch(0.852 0.031 84);
-			--input: var(--card);
-			--ring: oklch(0.227 0.016 71);
-			--selected: oklch(0.885 0.035 84);
-			--selected-foreground: oklch(0.227 0.016 71);
-			--card-header: var(--muted);
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-			--footer: var(--muted);
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-			--rail: oklch(0.912 0.023 85);
-			--rail-selected: var(--card);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: oklch(0.87 0.035 84);
-			--rail-foreground: oklch(0.437 0.027 78);
-			--rail-border: oklch(0.852 0.031 84);
-			--ok: oklch(0.5 0.16 155);
-			--ok-bg: oklch(0.96 0.03 155);
-			--warning: oklch(0.68 0.16 70);
-			--warning-text: oklch(0.5 0.13 70);
-			--warning-bg: oklch(0.97 0.04 85);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.96 0.02 34);
-			--neutral: oklch(0.62 0.02 84);
-			--scrim: oklch(0.25 0.02 70 / 0.3);
-			--c1: oklch(0.52 0.12 45);
-			--c2: oklch(0.55 0.1 150);
-			--c3: oklch(0.7 0.13 80);
-			--c4: oklch(0.5 0.1 320);
-			--c5: oklch(0.65 0.03 84);
-			--tile-tint-0: oklch(0.9 0.05 85);
-			--tile-tint-1: oklch(0.89 0.05 60);
-			--tile-tint-2: oklch(0.9 0.05 130);
-			--tile-tint-3: oklch(0.89 0.04 300);
-			--tile-tint-4: oklch(0.9 0.06 40);
-			--tile-tint-5: oklch(0.9 0.04 200);
-		}
+    @variant paper {
+      --hairline-width: 1px;
+      --background: oklch(0.948 0.016 83);
+      --foreground: oklch(0.227 0.016 71);
+      --card: oklch(0.977 0.011 85);
+      --card-foreground: oklch(0.227 0.016 71);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.227 0.016 71);
+      --primary-foreground: oklch(0.977 0.011 85);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.918 0.023 85);
+      --muted-foreground: oklch(0.47 0.03 78);
+      --accent: oklch(0.905 0.028 84);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.50 0.15 34);
+      --destructive-foreground: oklch(0.99 0.01 34);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.852 0.031 84);
+      --input: var(--card);
+      --ring: oklch(0.227 0.016 71);
+      --selected: oklch(0.885 0.035 84);
+      --selected-foreground: oklch(0.227 0.016 71);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.912 0.023 85);
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.87 0.035 84);
+      --rail-foreground: oklch(0.437 0.027 78);
+      --rail-border: oklch(0.852 0.031 84);
+      --ok: oklch(0.50 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.96 0.02 34);
+      --neutral: oklch(0.62 0.02 84);
+      --scrim: oklch(0.25 0.02 70 / .3);
+      --c1: oklch(0.52 0.12 45);
+      --c2: oklch(0.55 0.10 150);
+      --c3: oklch(0.70 0.13 80);
+      --c4: oklch(0.50 0.10 320);
+      --c5: oklch(0.65 0.03 84);
+      --tile-tint-0: oklch(0.90 0.05 85);
+      --tile-tint-1: oklch(0.89 0.05 60);
+      --tile-tint-2: oklch(0.90 0.05 130);
+      --tile-tint-3: oklch(0.89 0.04 300);
+      --tile-tint-4: oklch(0.90 0.06 40);
+      --tile-tint-5: oklch(0.90 0.04 200);
+    }
 
-		/* ========================================
+    /* ========================================
      * WARM THEME — Warm neutrals and terracotta.
      * Surface lightness: rail 0.925 < page 0.965 < card 0.995.
      * ======================================== */
-		@variant warm {
-			--hairline-width: 1px;
-			--background: oklch(0.965 0.007 81);
-			--foreground: oklch(0.266 0.012 56);
-			--card: oklch(0.995 0.005 78);
-			--card-foreground: oklch(0.266 0.012 56);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
-			--primary: oklch(0.484 0.092 41);
-			--primary-foreground: oklch(0.983 0.01 58);
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
-			--muted: oklch(0.937 0.013 75);
-			--muted-foreground: oklch(0.47 0.02 65);
-			--accent: oklch(0.95 0.025 41);
-			--accent-foreground: var(--foreground);
-			--destructive: oklch(0.52 0.135 35);
-			--destructive-foreground: oklch(0.99 0.01 35);
-			--success: var(--ok);
-			--success-foreground: oklch(0.98 0.01 160);
-			--info: oklch(0.48 0.12 262);
-			--info-foreground: oklch(0.98 0.01 240);
-			--action: oklch(0.55 0.18 295);
-			--action-foreground: oklch(0.98 0.01 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.25 0.03 90);
-			--warning-foreground: oklch(0.25 0.03 90);
-			--border: oklch(0.895 0.017 76);
-			--input: var(--card);
-			--ring: oklch(0.484 0.092 41);
-			--selected: oklch(0.92 0.04 41);
-			--selected-foreground: oklch(0.42 0.1 41);
-			--card-header: var(--muted);
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-			--footer: var(--muted);
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-			--rail: oklch(0.925 0.015 77);
-			--rail-selected: var(--card);
-			--rail-selected-foreground: var(--selected-foreground);
-			--rail-accent: oklch(0.88 0.03 41);
-			--rail-foreground: oklch(0.456 0.021 67);
-			--rail-border: oklch(0.895 0.017 76);
-			--ok: oklch(0.5 0.16 155);
-			--ok-bg: oklch(0.96 0.03 155);
-			--warning: oklch(0.68 0.16 70);
-			--warning-text: oklch(0.5 0.13 70);
-			--warning-bg: oklch(0.97 0.04 85);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.96 0.02 35);
-			--neutral: oklch(0.62 0.015 76);
-			--scrim: oklch(0.25 0.02 50 / 0.3);
-			--c1: oklch(0.484 0.092 41);
-			--c2: oklch(0.6 0.07 131);
-			--c3: oklch(0.72 0.12 80);
-			--c4: oklch(0.55 0.12 330);
-			--c5: oklch(0.7 0.02 76);
-			--tile-tint-0: oklch(0.88 0.07 47);
-			--tile-tint-1: oklch(0.88 0.06 131);
-			--tile-tint-2: oklch(0.88 0.06 76);
-			--tile-tint-3: oklch(0.87 0.06 330);
-			--tile-tint-4: oklch(0.9 0.09 85);
-			--tile-tint-5: oklch(0.88 0.05 200);
-		}
+    @variant warm {
+      --hairline-width: 1px;
+      --background: oklch(0.965 0.007 81);
+      --foreground: oklch(0.266 0.012 56);
+      --card: oklch(0.995 0.005 78);
+      --card-foreground: oklch(0.266 0.012 56);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.484 0.092 41);
+      --primary-foreground: oklch(0.983 0.010 58);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.937 0.013 75);
+      --muted-foreground: oklch(0.47 0.02 65);
+      --accent: oklch(0.95 0.025 41);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.135 35);
+      --destructive-foreground: oklch(0.99 0.01 35);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.895 0.017 76);
+      --input: var(--card);
+      --ring: oklch(0.484 0.092 41);
+      --selected: oklch(0.92 0.04 41);
+      --selected-foreground: oklch(0.42 0.10 41);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.925 0.015 77);
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.88 0.03 41);
+      --rail-foreground: oklch(0.456 0.021 67);
+      --rail-border: oklch(0.895 0.017 76);
+      --ok: oklch(0.50 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.96 0.02 35);
+      --neutral: oklch(0.62 0.015 76);
+      --scrim: oklch(0.25 0.02 50 / .3);
+      --c1: oklch(0.484 0.092 41);
+      --c2: oklch(0.60 0.07 131);
+      --c3: oklch(0.72 0.12 80);
+      --c4: oklch(0.55 0.12 330);
+      --c5: oklch(0.70 0.02 76);
+      --tile-tint-0: oklch(0.88 0.07 47);
+      --tile-tint-1: oklch(0.88 0.06 131);
+      --tile-tint-2: oklch(0.88 0.06 76);
+      --tile-tint-3: oklch(0.87 0.06 330);
+      --tile-tint-4: oklch(0.90 0.09 85);
+      --tile-tint-5: oklch(0.88 0.05 200);
+    }
 
-		/* ========================================
+    /* ========================================
      * BOLD THEME — Black, white and lime.
      * Surface lightness: rail 0.145 < page 0.985 < card 1.
      * ======================================== */
-		@variant bold {
-			--hairline-width: 1px;
-			--background: oklch(0.985 0 0);
-			--foreground: oklch(0.145 0 0);
-			--card: oklch(1 0 0);
-			--card-foreground: oklch(0.145 0 0);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
-			--primary: oklch(0.145 0 0);
-			--primary-foreground: oklch(1 0 0);
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
-			--muted: oklch(0.958 0 0);
-			--muted-foreground: oklch(0.45 0 0);
-			--accent: oklch(0.97 0.07 123);
-			--accent-foreground: var(--foreground);
-			--destructive: oklch(0.52 0.22 11);
-			--destructive-foreground: oklch(0.99 0.01 11);
-			--success: var(--ok);
-			--success-foreground: oklch(0.98 0.01 160);
-			--info: oklch(0.48 0.12 262);
-			--info-foreground: oklch(0.98 0.01 240);
-			--action: oklch(0.55 0.18 295);
-			--action-foreground: oklch(0.98 0.01 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.25 0.03 90);
-			--warning-foreground: oklch(0.25 0.03 90);
-			--border: oklch(0.925 0 0);
-			--input: var(--card);
-			--ring: oklch(0.145 0 0);
-			--selected: oklch(0.95 0.12 123);
-			--selected-foreground: oklch(0.145 0 0);
-			--card-header: var(--muted);
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-			--footer: var(--muted);
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-			--rail: oklch(0.145 0 0);
-			--rail-selected: oklch(0.908 0.201 123);
-			--rail-selected-foreground: oklch(0.145 0 0);
-			--rail-accent: oklch(0.25 0 0);
-			--rail-foreground: oklch(0.836 0 0);
-			--rail-border: oklch(0.252 0 0);
-			--ok: oklch(0.52 0.16 155);
-			--ok-bg: oklch(0.96 0.03 155);
-			--warning: oklch(0.68 0.16 70);
-			--warning-text: oklch(0.5 0.13 70);
-			--warning-bg: oklch(0.97 0.04 85);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.97 0.02 11);
-			--neutral: oklch(0.62 0 0);
-			--scrim: oklch(0 0 0 / 0.35);
-			--c1: oklch(0.145 0 0);
-			--c2: oklch(0.82 0.18 123);
-			--c3: oklch(0.72 0.15 70);
-			--c4: oklch(0.58 0.16 320);
-			--c5: oklch(0.7 0 0);
-			--tile-tint-0: oklch(0.92 0.14 123);
-			--tile-tint-1: oklch(0.93 0 0);
-			--tile-tint-2: oklch(0.9 0.12 123);
-			--tile-tint-3: oklch(0.9 0 0);
-			--tile-tint-4: oklch(0.94 0.1 123);
-			--tile-tint-5: oklch(0.87 0 0);
-		}
+    @variant bold {
+      --hairline-width: 1px;
+      --background: oklch(0.985 0 0);
+      --foreground: oklch(0.145 0 0);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.145 0 0);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.145 0 0);
+      --primary-foreground: oklch(1 0 0);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.958 0 0);
+      --muted-foreground: oklch(0.45 0 0);
+      --accent: oklch(0.97 0.07 123);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.22 11);
+      --destructive-foreground: oklch(0.99 0.01 11);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.925 0 0);
+      --input: var(--card);
+      --ring: oklch(0.145 0 0);
+      --selected: oklch(0.95 0.12 123);
+      --selected-foreground: oklch(0.145 0 0);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.145 0 0);
+      --rail-selected: oklch(0.908 0.201 123);
+      --rail-selected-foreground: oklch(0.145 0 0);
+      --rail-accent: oklch(0.25 0 0);
+      --rail-foreground: oklch(0.836 0 0);
+      --rail-border: oklch(0.252 0 0);
+      --ok: oklch(0.52 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.97 0.02 11);
+      --neutral: oklch(0.62 0 0);
+      --scrim: oklch(0 0 0 / .35);
+      --c1: oklch(0.145 0 0);
+      --c2: oklch(0.82 0.18 123);
+      --c3: oklch(0.72 0.15 70);
+      --c4: oklch(0.58 0.16 320);
+      --c5: oklch(0.70 0 0);
+      --tile-tint-0: oklch(0.92 0.14 123);
+      --tile-tint-1: oklch(0.93 0 0);
+      --tile-tint-2: oklch(0.90 0.12 123);
+      --tile-tint-3: oklch(0.90 0 0);
+      --tile-tint-4: oklch(0.94 0.10 123);
+      --tile-tint-5: oklch(0.87 0 0);
+    }
 
-		/* ========================================
+    /* ========================================
      * MARKET THEME — Coral, ink and pastel tiles.
      * Surface lightness: rail 0.232 < page 0.991 < card 1.
      * ======================================== */
-		@variant market {
-			--hairline-width: 1px;
-			--background: oklch(0.991 0.01 87);
-			--foreground: oklch(0.232 0.038 290);
-			--card: oklch(1 0 0);
-			--card-foreground: oklch(0.232 0.038 290);
-			--popover: var(--card);
-			--popover-foreground: var(--card-foreground);
-			/* The prototype's coral (0.686) is a fill colour; as `text-primary` ink it read 3.1:1 on card
+    @variant market {
+      --hairline-width: 1px;
+      --background: oklch(0.991 0.010 87);
+      --foreground: oklch(0.232 0.038 290);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.232 0.038 290);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      /* The prototype's coral (0.686) is a fill colour; as `text-primary` ink it read 3.1:1 on card
          (Codex, #3124). L 0.52 keeps the hue and passes the 4.5:1 text floor both as ink and under
          near-white words, so the button words are white again as the prototype drew them. */
-			--primary: oklch(0.52 0.2 34);
-			--primary-foreground: oklch(0.99 0.01 34);
-			--secondary: var(--muted-foreground);
-			--secondary-foreground: var(--card);
-			--muted: oklch(0.959 0.016 86);
-			--muted-foreground: oklch(0.47 0.034 296);
-			--accent: oklch(0.96 0.035 34);
-			--accent-foreground: var(--foreground);
-			--destructive: oklch(0.52 0.21 5);
-			--destructive-foreground: oklch(0.99 0.01 5);
-			--success: var(--ok);
-			--success-foreground: oklch(0.98 0.01 160);
-			--info: oklch(0.48 0.12 262);
-			--info-foreground: oklch(0.98 0.01 240);
-			--action: oklch(0.55 0.18 295);
-			--action-foreground: oklch(0.98 0.01 295);
-			--attention: var(--warning);
-			--attention-foreground: oklch(0.25 0.03 90);
-			--warning-foreground: oklch(0.25 0.03 90);
-			--border: oklch(0.926 0.017 85);
-			--input: var(--card);
-			--ring: oklch(0.232 0.038 290);
-			--selected: oklch(0.93 0.06 34);
-			--selected-foreground: oklch(0.5 0.17 34);
-			--card-header: var(--muted);
-			--sidebar: var(--rail);
-			--sidebar-foreground: var(--rail-foreground);
-			--sidebar-border: var(--rail-border);
-			--table-row: var(--card);
-			--table-row-alt: var(--background);
-			--table-header: var(--muted);
-			--footer: var(--muted);
-			--chart-1: var(--c1);
-			--chart-2: var(--c2);
-			--chart-3: var(--c3);
-			--chart-4: var(--c4);
-			--chart-5: var(--c5);
-			--rail: oklch(0.232 0.038 290);
-			--rail-selected: oklch(0.686 0.205 34);
-			--rail-selected-foreground: oklch(0.232 0.038 290);
-			--rail-accent: oklch(0.3 0.045 290);
-			--rail-foreground: oklch(0.881 0.023 297);
-			--rail-border: oklch(0.298 0.04 290);
-			--ok: oklch(0.52 0.16 155);
-			--ok-bg: oklch(0.96 0.03 155);
-			--warning: oklch(0.68 0.16 70);
-			--warning-text: oklch(0.5 0.13 70);
-			--warning-bg: oklch(0.97 0.04 85);
-			--bad: var(--destructive);
-			--bad-bg: oklch(0.97 0.02 5);
-			--neutral: oklch(0.62 0.02 290);
-			--scrim: oklch(0.23 0.04 290 / 0.35);
-			--c1: oklch(0.52 0.2 34);
-			--c2: oklch(0.62 0.15 160);
-			--c3: oklch(0.8 0.15 98);
-			--c4: oklch(0.58 0.16 300);
-			--c5: oklch(0.7 0.02 290);
-			--tile-tint-0: oklch(0.9 0.09 61);
-			--tile-tint-1: oklch(0.93 0.12 98);
-			--tile-tint-2: oklch(0.9 0.09 151);
-			--tile-tint-3: oklch(0.89 0.09 301);
-			--tile-tint-4: oklch(0.9 0.1 34);
-			--tile-tint-5: oklch(0.9 0.08 220);
-		}
-	}
+      --primary: oklch(0.52 0.20 34);
+      --primary-foreground: oklch(0.99 0.01 34);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.959 0.016 86);
+      --muted-foreground: oklch(0.47 0.034 296);
+      --accent: oklch(0.96 0.035 34);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.21 5);
+      --destructive-foreground: oklch(0.99 0.01 5);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.926 0.017 85);
+      --input: var(--card);
+      --ring: oklch(0.232 0.038 290);
+      --selected: oklch(0.93 0.06 34);
+      --selected-foreground: oklch(0.50 0.17 34);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.232 0.038 290);
+      --rail-selected: oklch(0.686 0.205 34);
+      --rail-selected-foreground: oklch(0.232 0.038 290);
+      --rail-accent: oklch(0.30 0.045 290);
+      --rail-foreground: oklch(0.881 0.023 297);
+      --rail-border: oklch(0.298 0.040 290);
+      --ok: oklch(0.52 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.97 0.02 5);
+      --neutral: oklch(0.62 0.02 290);
+      --scrim: oklch(0.23 0.04 290 / .35);
+      --c1: oklch(0.52 0.20 34);
+      --c2: oklch(0.62 0.15 160);
+      --c3: oklch(0.80 0.15 98);
+      --c4: oklch(0.58 0.16 300);
+      --c5: oklch(0.70 0.02 290);
+      --tile-tint-0: oklch(0.90 0.09 61);
+      --tile-tint-1: oklch(0.93 0.12 98);
+      --tile-tint-2: oklch(0.90 0.09 151);
+      --tile-tint-3: oklch(0.89 0.09 301);
+      --tile-tint-4: oklch(0.90 0.10 34);
+      --tile-tint-5: oklch(0.90 0.08 220);
+    }
+  }
 }
 
 @layer base {
-	:root {
-		--hairline-width: hairlineWidth();
-	}
+  :root {
+    --hairline-width: hairlineWidth();
+  }
 
-	* {
-		border-color: var(--border);
-	}
-	body {
-		background-color: var(--background);
-		color: var(--foreground);
-	}
 
-	/* Theme-aware scrollbar styles (web only) */
-	* {
-		/* Modern browsers (Firefox) */
-		scrollbar-color: var(--muted) var(--card);
-		scrollbar-width: thin;
-	}
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
 
-	/* Webkit browsers (Chrome, Safari, Edge) */
-	::-webkit-scrollbar {
-		width: 8px;
-		height: 8px;
-	}
-	::-webkit-scrollbar-track {
-		background: var(--card);
-		border-radius: 4px;
-	}
-	::-webkit-scrollbar-thumb {
-		background: var(--muted);
-		border-radius: 4px;
-	}
-	::-webkit-scrollbar-thumb:hover {
-		background: var(--muted-foreground);
-	}
-	::-webkit-scrollbar-corner {
-		background: var(--card);
-	}
+  /* Theme-aware scrollbar styles (web only) */
+  * {
+    /* Modern browsers (Firefox) */
+    scrollbar-color: var(--muted) var(--card);
+    scrollbar-width: thin;
+  }
+
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--card);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+  ::-webkit-scrollbar-corner {
+    background: var(--card);
+  }
 }
 
 /* Utility to hide scrollbars - outside @layer for higher specificity */
 .scrollbar-hide {
-	scrollbar-width: none !important; /* Firefox */
-	-ms-overflow-style: none !important; /* IE/Edge */
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
 }
 .scrollbar-hide::-webkit-scrollbar {
-	display: none !important; /* Chrome, Safari, Opera */
-	width: 0 !important;
-	height: 0 !important;
+  display: none !important; /* Chrome, Safari, Opera */
+  width: 0 !important;
+  height: 0 !important;
 }
 /* Also target any scrolling children inside scrollbar-hide */
 .scrollbar-hide *::-webkit-scrollbar {
-	display: none !important;
-	width: 0 !important;
-	height: 0 !important;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* Web only: Uniwind must not apply an unsupported preference query on native.
  * Named functional waits keep moving under reduced motion. */
 @utility duration-crossfade {
-	transition-duration: var(--duration-crossfade);
+  transition-duration: var(--duration-crossfade);
 }
 
 @supports selector(div > div) {
-	@media (prefers-reduced-motion: reduce) {
-		*:not(.web\:animate-spin):not(.web\:animate-indeterminate),
-		*:not(.web\:animate-spin):not(.web\:animate-indeterminate)::before,
-		*:not(.web\:animate-spin):not(.web\:animate-indeterminate)::after {
-			--tw-animation-duration: 0ms !important;
-			animation-duration: 0ms !important;
-			animation-delay: 0ms !important;
-			transition-duration: 0ms !important;
-			transition-delay: 0ms !important;
-		}
-	}
-	/* Controls tier: wcpos/roadmap#376, shared keyboard focus. */
-	:where(
-		[role='button'],
-		[role='link'],
-		[role='checkbox'],
-		[role='radio'],
-		[role='switch'],
-		[role='combobox'],
-		[role='tab'],
-		[role='menuitem'],
-		[role='option'],
-		button,
-		a,
-		summary
-	):focus-visible {
-		outline: 2px solid var(--ring);
-		outline-offset: 2px;
-	}
-	:where(input, textarea, [contenteditable]):focus-visible {
-		outline: none;
-	}
-	/* Overlays tier: wcpos/roadmap#378. Radix focuses its own content element when a panel
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate),
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate)::before,
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate)::after {
+      --tw-animation-duration: 0ms !important;
+      animation-duration: 0ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
+  /* Controls tier: wcpos/roadmap#376, shared keyboard focus. */
+  :where([role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="tab"], [role="menuitem"], [role="option"], button, a, summary):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  :where(input, textarea, [contenteditable]):focus-visible {
+    outline: none;
+  }
+  /* Overlays tier: wcpos/roadmap#378. Radix focuses its own content element when a panel
      opens with nothing tabbable inside; the panel's edge is the affordance, so the
      container never carries the ring. Its rows and controls above still do. */
-	:where([role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']):focus-visible {
-		outline: none;
-	}
+  :where([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]):focus-visible {
+    outline: none;
+  }
 }
