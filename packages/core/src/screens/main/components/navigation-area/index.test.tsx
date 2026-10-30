@@ -22,6 +22,8 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('expo-haptics', () => ({}));
+// The entry hosts the register panel off the till; its derivation drags the table's worklets.
+jest.mock('../../pos/cart/register-panel', () => ({ RegisterPanel: () => null }));
 // The index re-exports `AreaPage`, whose boundary's fallback pulls the overlay stack in.
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
