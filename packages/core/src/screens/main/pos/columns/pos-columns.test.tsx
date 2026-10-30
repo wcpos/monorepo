@@ -7,7 +7,7 @@ import { render, screen } from '@testing-library/react';
 
 import { POSColumns } from './pos-columns';
 
-let mockPosition = 'left';
+let mockPosition = 'right';
 let mockStage = 'cart';
 let mockAutoShow = true;
 let mockReceipt: string | null = null;
@@ -16,10 +16,10 @@ const mockPatchUI = jest.fn();
 type PanelProps = { children?: React.ReactNode; testID?: string; defaultSize?: number };
 
 jest.mock('../../contexts/ui-settings', () => ({
-	useUISettings: () => ({
-		uiSettings: { position: mockPosition, width: 60, autoShowReceipt: mockAutoShow },
-		patchUI: mockPatchUI,
-	}),
+	useUISettings: (id: string) =>
+		id === 'pos-cart'
+			? { uiSettings: { position: mockPosition, autoShowReceipt: mockAutoShow } }
+			: { uiSettings: { width: 60 }, patchUI: mockPatchUI },
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
@@ -77,9 +77,9 @@ describe('POSColumns', () => {
 		mockAutoShow = true;
 		mockReceipt = null;
 		mockIsNew = false;
-		mockPosition = 'left';
+		mockPosition = 'right';
 	});
-	it.each(['left', 'right'])('swaps only the products content at %s', (position) => {
+	it.each(['left', 'right'])('swaps only the products content with cart at %s', (position) => {
 		mockPosition = position;
 		const { rerender } = render(<POSColumns />);
 		expect(screen.getByTestId('products')).not.toBeNull();
@@ -97,7 +97,7 @@ describe('POSColumns', () => {
 			screen.getByTestId('pos-products-panel').contains(screen.getByTestId('checkout-tender-pane'))
 		).toBe(true);
 		expect(screen.getAllByTestId(/^pos-.*-panel$/).map((el) => el.dataset.testid)).toEqual(
-			position === 'right'
+			position === 'left'
 				? ['pos-cart-panel', 'pos-products-panel']
 				: ['pos-products-panel', 'pos-cart-panel']
 		);
@@ -125,12 +125,12 @@ describe('POSColumns', () => {
 		expect(screen.queryByTestId('checkout-tender-pane')).toBeNull();
 	});
 	it('reverses the registered panels when products move right, keeping complementary sizes', () => {
-		mockPosition = 'left';
+		mockPosition = 'right';
 		const { rerender } = render(<POSColumns />);
 		const panelOrder = () => screen.getAllByTestId(/^pos-.*-panel$/).map((el) => el.dataset.testid);
 		expect(panelOrder()).toEqual(['pos-products-panel', 'pos-cart-panel']);
 
-		mockPosition = 'right';
+		mockPosition = 'left';
 		rerender(<POSColumns />);
 		expect(panelOrder()).toEqual(['pos-cart-panel', 'pos-products-panel']);
 		expect(screen.getByTestId('pos-products-panel').dataset.defaultSize).toBe('60');

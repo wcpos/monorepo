@@ -27,6 +27,7 @@ import { useUISettings } from '../../contexts/ui-settings';
 import { QuickDiscountKeys } from './quick-discount-keys';
 
 export const schema = z.object({
+	position: z.enum(['left', 'right']),
 	openOrdersPosition: z.enum(['top', 'bottom']),
 	autoShowReceipt: z.boolean(),
 	sortLines: z.enum(['newest_bottom', 'newest_top', 'name', 'price']).optional(),
@@ -112,6 +113,21 @@ export function UISettingsForm() {
 								onChange={field.onChange}
 								label={getUILabel('quickDiscounts')}
 								testID="cart-setting-quick-discount"
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="position"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('position')}
+								testID="cart-setting-panel-position"
+								segments={[
+									{ value: 'left', label: t('pos_cart.cart_left') },
+									{ value: 'right', label: t('pos_cart.cart_right') },
+								]}
 							/>
 						)}
 					/>

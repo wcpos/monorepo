@@ -17,7 +17,6 @@ import type { ControllerProps, FieldValues } from 'react-hook-form';
 
 type Settings = {
 	viewMode: 'grid' | 'table';
-	position: 'left' | 'right';
 	filterBar: { id: string; type: string; show: boolean }[];
 	showOutOfStock: boolean;
 	sortBy: string;
@@ -30,7 +29,6 @@ type Settings = {
 
 const initialSettings: Settings = {
 	viewMode: 'table',
-	position: 'left',
 	filterBar: [],
 	showOutOfStock: false,
 	sortBy: 'name',
@@ -365,7 +363,6 @@ it('labels each segmented field with the form label that names its radiogroup', 
 	for (const [name, segment] of [
 		['viewMode', 'view-mode-grid'],
 		['pos_products.variations_style', 'products-variations-style-drill'],
-		['position', 'panel-position-left'],
 		['sortDirection', 'sort-direction-asc'],
 	]) {
 		expect(screen.getByRole('radiogroup', { name })).toContainElement(screen.getByTestId(segment));
@@ -413,20 +410,6 @@ it('persists a Sort Direction toggle', async () => {
 	// The write lands after the change handler has validated the field (a microtask).
 	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortDirection: 'desc' });
-	await settle();
-});
-
-it('persists a Panel Position toggle', async () => {
-	render(<UISettingsForm />);
-
-	fireEvent.click(screen.getByTestId('panel-position-right'));
-	act(() => {
-		jest.advanceTimersByTime(1000);
-	});
-
-	// The write lands after the change handler has validated the field (a microtask).
-	await settle();
-	expect(patchSpy).toHaveBeenCalledWith({ position: 'right' });
 	await settle();
 });
 

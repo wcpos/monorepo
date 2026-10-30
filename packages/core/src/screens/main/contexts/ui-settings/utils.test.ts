@@ -1,4 +1,4 @@
-import { mergeWithInitalValues } from './utils';
+import { cartPositionFromProductsPosition, mergeWithInitalValues } from './utils';
 
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 
@@ -49,6 +49,7 @@ describe('mergeWithInitalValues', () => {
 	it('does not write state when columns are already semantically equal', async () => {
 		const currentState = {
 			sortLines: 'newest_top',
+			position: 'right',
 			openOrdersPosition: 'bottom',
 			sortBy: 'id',
 			sortDirection: 'asc',
@@ -188,6 +189,7 @@ describe('mergeWithInitalValues', () => {
 
 		await mergeWithInitalValues('pos-products', state as never);
 
+		expect(state.set).not.toHaveBeenCalledWith('position', expect.any(Function));
 		expect(currentState.filterBar).toEqual([
 			{ id: 'stock_status', type: 'pill', show: true },
 			{ id: 'featured', type: 'pill', show: true },
@@ -233,13 +235,13 @@ describe('mergeWithInitalValues', () => {
 			}),
 		};
 
-		await mergeWithInitalValues('pos-products', state as never);
+		await mergeWithInitalValues('pos-cart', state as never);
 
-		expect(currentState.position).toBe('left');
+		expect(currentState.position).toBe('right');
 	});
 
 	it('keeps a position the cashier actually chose', async () => {
-		const currentState: Record<string, unknown> = { position: 'right', filterBar: [] };
+		const currentState: Record<string, unknown> = { position: 'left', filterBar: [] };
 
 		const state = {
 			get: () => currentState,
@@ -248,9 +250,34 @@ describe('mergeWithInitalValues', () => {
 			}),
 		};
 
-		await mergeWithInitalValues('pos-products', state as never);
+		await mergeWithInitalValues('pos-cart', state as never);
 
-		expect(currentState.position).toBe('right');
+		expect(currentState.position).toBe('left');
+	});
+
+	it('seeds only a missing cart position, falling back to the authored default', async () => {
+		for (const [stored, seed, expected] of [
+			[undefined, 'left', 'left'],
+			['right', 'left', 'right'],
+			[undefined, undefined, 'right'],
+		] as const) {
+			const currentState: Record<string, unknown> = { position: stored };
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+			await mergeWithInitalValues('pos-cart', state as never, { position: seed });
+			expect(currentState.position).toBe(expected);
+		}
+	});
+
+	it('maps the legacy products position to the opposite cart side', () => {
+		expect(cartPositionFromProductsPosition('right')).toBe('left');
+		expect(cartPositionFromProductsPosition('left')).toBe('right');
+		expect(cartPositionFromProductsPosition(undefined)).toBeUndefined();
+		expect(cartPositionFromProductsPosition('top')).toBeUndefined();
 	});
 
 	it('seeds a cart with no sort as newest at top, and keeps a stored newest_bottom', async () => {

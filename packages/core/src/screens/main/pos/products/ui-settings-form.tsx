@@ -57,7 +57,6 @@ export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
 	variationsStyle: z.enum(['drill', 'inline']).optional(),
 	browseBy: z.enum(['all', 'categories', 'tags', 'brands', 'shortcuts']).optional(),
-	position: z.enum(['left', 'right']),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
 	sortDirection: z.enum(['asc', 'desc']),
@@ -158,21 +157,6 @@ export function UISettingsForm() {
 						name="browseBy"
 						render={({ field: { value, onChange } }) => (
 							<BrowseByField value={readBrowseBy(value)} onChange={onChange} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="position"
-						render={({ field }) => (
-							<FormSegmentedControl
-								{...field}
-								label={getUILabel('position')}
-								testID="panel-position"
-								segments={[
-									{ value: 'left', label: t('pos_products.products_left') },
-									{ value: 'right', label: t('pos_products.products_right') },
-								]}
-							/>
 						)}
 					/>
 					<HStack className="items-end px-1">
