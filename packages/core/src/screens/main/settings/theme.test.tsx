@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render } from '@testing-library/react';
 import { Uniwind } from 'uniwind';
 
-import { ThemeSettings } from './theme';
+import { themeColumns, ThemeSettings } from './theme';
 
 jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../jest/property-row.test-utils')
@@ -249,7 +249,18 @@ describe('the Icons section', () => {
 });
 
 describe('theme tiles', () => {
-	it('marks only the selected tile with a check and preserves the ten options', () => {
+	// Rendered 2026-10-30: 358 is a phone's grid, 422 an iPad's in portrait, 674 a 1024 window's.
+	it.each([
+		[358, 2],
+		[422, 3],
+		[674, 5],
+		[1400, 5],
+		[0, 2],
+	])('fits tiles of at least 128 across a %i-wide grid: %i columns', (width, columns) => {
+		expect(themeColumns(width)).toBe(columns);
+	});
+
+	it('selects only the active tile and preserves the ten options', () => {
 		const { getByTestId, getAllByTestId, rerender } = render(<ThemeSettings />);
 		const options = [
 			'system',
@@ -271,7 +282,6 @@ describe('theme tiles', () => {
 			for (const option of options) {
 				const tile = getByTestId(`theme-option-${option}`);
 				expect(tile.getAttribute('aria-selected')).toBe(String(option === name));
-				expect(!!tile.querySelector('[data-icon="check"]')).toBe(option === name);
 			}
 		}
 	});
