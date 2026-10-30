@@ -17,7 +17,7 @@ import Animated, {
 import { Icon } from '../icon';
 import { CROSSFADE, EASE } from '../lib/motion';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 function Accordion({ children, ...props }: AccordionPrimitive.RootProps) {
 	return (

@@ -54,11 +54,15 @@ jest.mock('../text', () => ({
 		testID?: string;
 		className?: string;
 		children?: React.ReactNode;
-	}) => (
-		<span className={className} data-testid={testID}>
-			{children}
-		</span>
-	),
+	}) => {
+		const { TextClassContext } = jest.requireActual('../text/context');
+		const inherited = React.useContext(TextClassContext) as string | undefined;
+		return (
+			<span className={[inherited, className].filter(Boolean).join(' ')} data-testid={testID}>
+				{children}
+			</span>
+		);
+	},
 }));
 jest.mock('../icon', () => ({ Icon: () => null }));
 jest.mock('../lib/overlay', () => ({ useOverlayPresentation: () => 'anchored' }));

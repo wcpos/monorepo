@@ -20,7 +20,7 @@ import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { SPINNER } from '../lib/motion';
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 /**
  * Should match text and icon variants

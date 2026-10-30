@@ -11,6 +11,7 @@ import {
 import { Icon, type IconName } from '../icon';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 export type Segment = {
 	value: string;
@@ -112,17 +113,19 @@ export function SegmentedControl({
 						segment.disabled && 'opacity-45'
 					)}
 				>
-					{segment.icon && <Icon name={segment.icon} className="text-foreground" />}
-					<Text
-						className={cn(
-							'shrink text-center text-base',
-							segment.value === value
-								? 'text-foreground font-semibold'
-								: 'text-muted-foreground font-medium'
-						)}
+					<TextClassContext.Provider
+						value={segment.value === value ? 'text-foreground' : 'text-muted-foreground'}
 					>
-						{segment.label}
-					</Text>
+						{segment.icon && <Icon name={segment.icon} />}
+						<Text
+							className={cn(
+								'shrink text-center text-base',
+								segment.value === value ? 'font-semibold' : 'font-medium'
+							)}
+						>
+							{segment.label}
+						</Text>
+					</TextClassContext.Provider>
 				</Pressable>
 			))}
 		</View>

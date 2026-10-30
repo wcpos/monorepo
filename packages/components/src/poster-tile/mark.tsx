@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
+import { TextClassContext } from '../text/context';
 import { StockPill } from './stock-pill';
 import { CIRCLE } from './style';
 
@@ -27,6 +28,8 @@ import type { PosterMark } from './index';
 	compact?: boolean;
 	className?: string;
 }) {
+	// A bare glyph takes the ink its tile provides (the filled tile's primary foreground); with none it stays muted.
+	const inherited = React.useContext(TextClassContext);
 	if (mark.kind === 'count')
 		return <StockPill value={mark.value} low={mark.low} label={label} testID={testID} />;
 	if (mark.kind === 'backorder') return <StockPill backorder label={label} testID={testID} />;
@@ -39,7 +42,7 @@ import type { PosterMark } from './index';
 			<Icon
 				name={mark.kind === 'folder' ? 'category' : mark.name}
 				size={bare ? 'lg' : compact ? 'xs' : 'sm'}
-				className={bare && className ? className : 'text-muted-foreground'}
+				className={bare && inherited ? className : 'text-muted-foreground'}
 			/>
 		</View>
 	);

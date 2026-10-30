@@ -25,6 +25,7 @@ jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: 'Stack' }));
 jest.mock('@wcpos/components/dialog', () => ({
+	...jest.requireActual('../../../../../../jest/footer.test-utils'),
 	Dialog: 'Dialog',
 	DialogBody: 'Body',
 	DialogContent: 'Content',

@@ -3,6 +3,8 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { NavItem } from './index';
+import { Text } from '../text';
+import { Icon } from '../icon';
 
 let mockPointer: 'fine' | 'coarse' = 'fine';
 // Keep RNW press behaviour; expose classes because Jest does not compile Uniwind.
@@ -23,8 +25,12 @@ jest.mock('react-native', () => {
 });
 jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('../icon', () => ({
-	Icon: ({ name, className }: { name: string; className?: string }) =>
-		React.createElement('span', { 'data-icon': name, 'data-classes': className }),
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const { cn } = jest.requireActual('../lib/utils');
+		const inherited = React.useContext(TextClassContext);
+		return <span data-icon={name} data-classes={cn(inherited, className)} />;
+	},
 }));
 
 const classes = (testID: string) => screen.getByTestId(testID).dataset.classes ?? '';
@@ -89,4 +95,27 @@ it('renders an element label as is', () => {
 		<NavItem selected label={<span data-testid="styled-label">Reports</span>} testID="item" />
 	);
 	expect(screen.getByTestId('item')).toContainElement(screen.getByTestId('styled-label'));
+});
+
+it('one ink: element slots inherit selected ink; the chevron stays muted', () => {
+	const { container } = render(
+		<NavItem
+			selected
+			size="drawer"
+			icon={<Icon name="settings" />}
+			label={<Text>General</Text>}
+			chevron
+		/>
+	);
+	const nodes = Array.from(container.querySelectorAll('[data-classes]')).filter(
+		(node) =>
+			node.hasAttribute('data-icon') || /\btext-/.test(node.getAttribute('data-classes') ?? '')
+	);
+	expect(nodes).toHaveLength(3);
+	for (const node of nodes)
+		expect(node.getAttribute('data-classes')).toContain(
+			node.getAttribute('data-icon') === 'chevronRight'
+				? 'text-muted-foreground'
+				: 'text-selected-foreground'
+		);
 });

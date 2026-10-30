@@ -104,3 +104,17 @@ describe('MoneyList', () => {
 		expect(screen.getByTestId('paid').textContent).toBe('Paid in full');
 	});
 });
+
+it('one ink: an element label, beside and amount all inherit the refund tone', () => {
+	const { container } = render(
+		<MoneyList.Row
+			tone="bad"
+			label={<Text>Refund</Text>}
+			beside={<Text>Returned</Text>}
+			amount="-$10.00"
+		/>
+	);
+	const nodes = container.querySelectorAll('span[data-classes]');
+	expect(nodes).toHaveLength(3);
+	for (const node of nodes) expect(node.getAttribute('data-classes')).toContain('text-bad');
+});

@@ -6,7 +6,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { AlertDialogFooter } from '../alert-dialog';
 import { Button } from '../button';
 import { DeviceScope } from '../lib/device';
-import { Dialog, DialogFooter, DialogLabelsProvider, type FooterButton } from './index';
+import {
+	Dialog,
+	DialogFooter,
+	DialogLabelsProvider,
+	DismissIsClose,
+	type FooterButton,
+} from './index';
 
 let mockPresentation: string | undefined = 'right';
 jest.mock('../lib/overlay', () => ({ useOverlayPresentation: () => mockPresentation }));
@@ -48,7 +54,7 @@ jest.mock('react-native', () => ({
 	),
 }));
 jest.mock('@rn-primitives/dialog', () => {
-	const Context = React.createContext((_open: boolean) => {});
+	const Context = React.createContext<((open: boolean) => void) | undefined>(undefined);
 	return {
 		Root: ({
 			children,
@@ -62,6 +68,10 @@ jest.mock('@rn-primitives/dialog', () => {
 			children: React.ReactElement<React.ComponentProps<typeof Button>>;
 		}) => {
 			const change = React.useContext(Context);
+			if (!change)
+				throw new Error(
+					'Dialog compound components cannot be rendered outside the Dialog component'
+				);
 			return React.cloneElement(children, {
 				onPress: (event) => {
 					children.props.onPress?.(event);
@@ -84,18 +94,55 @@ const slots = {
 function footer(
 	props: React.ComponentProps<typeof DialogFooter> = {},
 	phone = false,
-	onOpenChange = jest.fn()
+	onOpenChange = jest.fn(),
+	recordShell = false
 ) {
+	const content = <DialogFooter testID="footer" {...props} />;
 	return render(
 		<DeviceScope phone={phone}>
 			<Dialog open onOpenChange={onOpenChange}>
 				<DialogLabelsProvider labels={{ close: 'Dismiss', cancel: 'Cancel draft' }}>
-					<DialogFooter testID="footer" {...props} />
+					{recordShell ? <DismissIsClose>{content}</DismissIsClose> : content}
 				</DialogLabelsProvider>
 			</Dialog>
 		</DeviceScope>
 	);
 }
+it('renders translated Close beside an intent inside DismissIsClose', () => {
+	footer({ intent: action('Intent'), close: true }, false, jest.fn(), true);
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+	expect(screen.queryByText('Cancel draft')).not.toBeInTheDocument();
+});
+it('renders translated Close by default, addressed by the footer testID', () => {
+	footer({});
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+	expect(screen.getByTestId('footer-close')).toHaveTextContent('Dismiss');
+});
+it('addresses a default dismiss without a footer testID as dialog-footer-close', () => {
+	render(
+		<Dialog open onOpenChange={jest.fn()}>
+			<DialogLabelsProvider labels={{ close: 'Dismiss', cancel: 'Cancel draft' }}>
+				<DialogFooter />
+			</DialogLabelsProvider>
+		</Dialog>
+	);
+	expect(screen.getByTestId('dialog-footer-close')).toHaveTextContent('Dismiss');
+});
+it('omits the dismiss when close is false beside an intent', () => {
+	footer({ close: false, intent: action('Intent') });
+	expect(screen.queryByText('Dismiss')).not.toBeInTheDocument();
+	expect(screen.queryByText('Cancel draft')).not.toBeInTheDocument();
+	expect(screen.getAllByRole('button')).toHaveLength(1);
+});
+it('omits the dismiss outside an overlay shell even with close true', () => {
+	mockPresentation = undefined;
+	render(
+		<DialogLabelsProvider labels={{ close: 'Dismiss', cancel: 'Cancel draft' }}>
+			<DialogFooter close />
+		</DialogLabelsProvider>
+	);
+	expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
 it.each([
 	[false, ['Aside', 'Destructive', 'Record', 'Close', 'Secondary', 'Other', 'Intent']],
 	[true, ['Intent', 'Secondary', 'Other', 'Close', 'Record', 'Destructive', 'Aside']],
@@ -132,12 +179,12 @@ it('chooses translated Cancel with intent and Close without; close dismisses', (
 	expect(screen.getByText('Dismiss')).toBeInTheDocument();
 });
 it.each(['default', 'lg'] as const)('only a lone lg button fills the row (%s)', (size) => {
-	footer({ size, intent: action('Intent') });
+	footer({ size, intent: action('Intent'), close: false });
 	expect(screen.getByTestId('Intent').classList.contains('flex-1')).toBe(size === 'lg');
 	expect(screen.getByTestId('Intent')).toHaveClass(size === 'lg' ? 'h-14' : 'h-ctl');
 });
 it('gives only the trailing group the remaining width beside an aside', () => {
-	footer({ size: 'lg', intent: action('Intent'), aside: slots.aside });
+	footer({ size: 'lg', intent: action('Intent'), aside: slots.aside, close: false });
 	expect(screen.getByTestId('Aside').parentElement).not.toHaveClass('flex-1');
 	expect(screen.getByTestId('Intent').parentElement).toHaveClass('flex-1');
 	expect(screen.getByTestId('Intent')).toHaveClass('flex-1');

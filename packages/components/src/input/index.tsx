@@ -16,7 +16,7 @@ import { Icon, type IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 interface InputContextValue {
 	isFocused: boolean;

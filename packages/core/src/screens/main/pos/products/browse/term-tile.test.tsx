@@ -21,9 +21,15 @@ jest.mock('../../../../../contexts/translations', () => ({
 }));
 // The leaf components pull in native-only modules; the tiles' own structure is what is tested.
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
-		<span className={className}>{children}</span>
-	),
+	Text: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		const { cn } = jest.requireActual('@wcpos/components/lib/utils');
+		return (
+			<span data-ink className={cn(React.useContext(TextClassContext), className)}>
+				{children}
+			</span>
+		);
+	},
 }));
 // Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
 const mockCopyPicture = jest.fn(() => undefined);
@@ -34,7 +40,17 @@ jest.mock('../deal-stack', () => ({
 	useDealCards: () => mockDealCards(),
 }));
 jest.mock('@wcpos/components/icon', () => ({
-	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		const { cn } = jest.requireActual('@wcpos/components/lib/utils');
+		return (
+			<span
+				data-ink
+				data-testid={`icon-${name}`}
+				className={cn(React.useContext(TextClassContext), className)}
+			/>
+		);
+	},
 }));
 // The image reports the props the tiles control: its source, its fade and its error path.
 jest.mock('@wcpos/components/image', () => ({
@@ -136,6 +152,9 @@ describe('TermTile', () => {
 		expect(screen.getByTestId('browse-all-products')).toHaveAttribute('aria-label', 'All products');
 		expect(screen.getByTestId('icon-viewGrid')).toBeTruthy();
 		expect(squareClasses('browse-all-products')).toContain('bg-primary');
+		const inked = screen.getByTestId('browse-all-products').querySelectorAll('[data-ink]');
+		expect(inked).toHaveLength(2);
+		for (const node of inked) expect(node.className).toContain('text-primary-foreground');
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
 	it('renders a shortcut with its sliders glyph and its description under the name', () => {

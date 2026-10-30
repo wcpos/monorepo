@@ -28,6 +28,7 @@ jest.mock('@wcpos/components/webview', () => {
 jest.mock('@wcpos/components/dialog', () => {
 	const PassThrough = ({ children }: { children?: React.ReactNode }) => children;
 	return {
+		...jest.requireActual('../../../../jest/footer.test-utils'),
 		Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
 			mockDialogClose = onClose;
 			return children;

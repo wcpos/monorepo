@@ -8,9 +8,8 @@ import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
 import { MAX_FONT_SCALE } from '../lib/scale';
+import { TextClassContext } from './context';
 import { TEXT_VARIANTS, textVariants } from './ladder';
-
-const TextClassContext = React.createContext<string | undefined>(undefined);
 
 export type TextProps = SlottableTextProps &
 	VariantProps<typeof textVariants> & { decodeHtml?: boolean };

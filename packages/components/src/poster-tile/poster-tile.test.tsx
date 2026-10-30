@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { Text } from '../text';
 import {
 	PosterPlaceholder,
 	PosterTile,
@@ -85,12 +86,19 @@ jest.mock('react-native-svg', () => {
 });
 jest.mock('uniwind', () => ({ useCSSVariable: () => '#fff' }));
 jest.mock('../text', () => ({
-	Text: ({ className, children }: { className?: string; children?: React.ReactNode }) => (
-		<span data-classes={className}>{children}</span>
-	),
+	Text: ({ className, children }: React.PropsWithChildren<{ className?: string }>) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const { cn } = jest.requireActual('../lib/utils');
+		return <span data-classes={cn(React.useContext(TextClassContext), className)}>{children}</span>;
+	},
 }));
 jest.mock('../icon', () => ({
-	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const { cn } = jest.requireActual('../lib/utils');
+		const inherited = React.useContext(TextClassContext);
+		return <span data-icon={name} data-classes={cn(inherited, className)} />;
+	},
 }));
 jest.mock('../image', () => ({
 	Image: ({ source }: { source: { uri?: string } }) => <span data-image={source.uri} />,
@@ -325,4 +333,29 @@ it("holds a slot in the tile's own shape: square and band", () => {
 	expect(placeholder.children[1].getAttribute('data-classes')).toContain(
 		'h-[calc(var(--text-base)'
 	);
+});
+
+// Without the tile provider, arbitrary word slots miss the fill's ink.
+it('one ink: filled words and the bare mark inherit primary foreground', () => {
+	const { container } = render(
+		tile({
+			picture: { kind: 'fill' },
+			title: <Text>All</Text>,
+			sub: <Text>Products</Text>,
+			mark: { kind: 'folder' },
+		})
+	);
+	const nodes = container.querySelectorAll('span[data-classes]');
+	expect(nodes).toHaveLength(3);
+	for (const node of nodes)
+		expect(node.getAttribute('data-classes')).toBe('text-primary-foreground');
+});
+it.each([false, true])('one ink: stock count and glyph agree (low=%s)', (low) => {
+	const { container } = render(tile({ mark: { kind: 'count', value: 3, low } }));
+	const nodes = container.querySelectorAll('span[data-classes]');
+	expect(nodes).toHaveLength(2);
+	for (const node of nodes)
+		expect(node.getAttribute('data-classes')).toContain(
+			low ? 'text-warning-foreground' : 'text-foreground'
+		);
 });

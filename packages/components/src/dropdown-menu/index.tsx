@@ -14,7 +14,8 @@ import {
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { MenuRow, type MenuRowProps } from '../menu-row';
-import { TextClassContext, Text as ThemedText } from '../text';
+import { Text as ThemedText } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 
 import type { TextProps } from '../text';

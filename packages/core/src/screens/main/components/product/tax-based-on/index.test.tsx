@@ -32,10 +32,29 @@ jest.mock('@wcpos/components/keyboard-controller', () => ({ KeyboardAvoidingView
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Text: ({
+		children,
+		className,
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<span data-testid={testID} data-classes={className} className={className}>
+			{children}
+		</span>
+	),
+}));
+
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('expo-haptics', () => ({}));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		const { cn } = jest.requireActual('@wcpos/components/lib/utils');
+		return <i data-icon={name} data-classes={cn(React.useContext(TextClassContext), className)} />;
+	},
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 // The table's pulse row is native motion; the panel only reads the head recipe.
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'head' }));
@@ -138,6 +157,12 @@ describe.each([false, true])('phone: %s', (phone) => {
 		mockLocation.rates = [];
 		try {
 			renderTaxBasedOn();
+			const nodes = screen.getByTestId('tax-based-on-trigger').querySelectorAll('[data-classes]');
+			expect(nodes).toHaveLength(3);
+			for (const node of nodes)
+				expect(node.getAttribute('data-classes')).toContain(
+					node.getAttribute('data-icon') === 'chevronDown' ? 'text-muted-foreground' : 'text-bad'
+				);
 			fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
 			expect(screen.getByText('common.order_has_no_billing_address')).toBeTruthy();
 			expect(screen.getByText('common.none')).toBeTruthy();

@@ -4,7 +4,7 @@ import { act, render, screen } from '@testing-library/react';
 
 import { Button, type ButtonRef } from './index';
 import { IconButton } from '../icon-button';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 let pressed = false;
 let pressable: Record<string, unknown>;
@@ -37,7 +37,6 @@ jest.mock('../icon', () => ({
 	},
 }));
 jest.mock('../text', () => ({
-	TextClassContext: React.createContext(''),
 	Text: (props: Record<string, unknown>) => {
 		label = props;
 		return <span>{props.children as React.ReactNode}</span>;

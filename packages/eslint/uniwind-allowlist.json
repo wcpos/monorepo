@@ -109,9 +109,6 @@
 	"packages/core/src/screens/main/reports/index.tsx": {
 		"bare-Suspense": 2
 	},
-	"packages/core/src/screens/main/reports/report/generate-html.ts": {
-		"hex-colour": 2
-	},
 	"packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
 		"duration-literal": 3
 	},

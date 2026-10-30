@@ -124,11 +124,7 @@ function useTermWords(term: BrowseTerm) {
 		label,
 		mark,
 		title: (
-			<Text
-				className={`leading-tight font-bold ${term.kind === 'all' ? 'text-primary-foreground' : ''}`}
-				numberOfLines={2}
-				decodeHtml
-			>
+			<Text className="leading-tight font-bold" numberOfLines={2} decodeHtml>
 				{label}
 			</Text>
 		),

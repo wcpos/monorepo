@@ -4,7 +4,8 @@ import { Platform, Pressable, type PressableProps, View } from 'react-native';
 import { Icon, type IconName } from '../icon';
 import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 type ChipProps = Omit<PressableProps, 'children'> & {
 	label: string;

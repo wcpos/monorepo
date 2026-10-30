@@ -142,7 +142,7 @@ export function OrderView({
 
 			{/* Everything but the receipt changes the order (ledger line 8). */}
 			{readOnly ? (
-				receipt && <DialogFooter secondary={receipt} />
+				<DialogFooter secondary={receipt} />
 			) : (
 				<DialogFooter
 					intent={{

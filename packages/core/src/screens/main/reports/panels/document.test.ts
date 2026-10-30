@@ -13,6 +13,7 @@ import { buildReportDocument } from './document';
 import { panelSpec } from './specs';
 import fixture from './__fixtures__/report-sales.json';
 
+import type { PanelSpec } from './specs';
 import type { DetailId, ReportOrder } from '../context';
 
 const orders = [
@@ -54,8 +55,7 @@ const context = {
 	formatMoney: String,
 	i18n: fixture.i18n,
 };
-function document(id: DetailId) {
-	const spec = panelSpec(id, inputs);
+function document(id: DetailId, spec: PanelSpec = panelSpec(id, inputs)) {
 	return buildReportDocument(
 		spec,
 		spec.keys.map((key, i) => ({
@@ -144,4 +144,34 @@ it("generated_at and the scope dates are the server's date bundles", () => {
 		to: { date_ymd: '2026-07-15', time: '23:59' },
 	});
 	expect(report.generated_at.time).toBe('09:00');
+});
+
+// Grouped reports must keep the plugin's exact group shape and ordered cells.
+it('pins grouped rows and subtotals against the report fixture', () => {
+	const spec = panelSpec('payments', inputs);
+	spec.groups = [
+		{ key: '_cash', label: 'Cash', rows: spec.rows, total: spec.total, totalRaw: spec.totalRaw },
+		{ key: 'empty', label: 'Empty', rows: [], total: spec.total, totalRaw: spec.totalRaw },
+	];
+	const { report } = document('payments', spec);
+	expect(report.rows).toEqual([]);
+	expect(report.has_groups).toBe(true);
+	expect(report.has_rows).toBe(true);
+	expect(report.count).toBe(1);
+	for (const group of report.groups) {
+		expect(Object.keys(group).sort()).toEqual(Object.keys(fixture.report.groups[0]).sort());
+		expect(Object.keys(group).sort()).toEqual(['key', 'label', 'rows', 'subtotal']);
+		expect(group.key).toMatch(/^[^_]/);
+		for (const row of [...group.rows, group.subtotal]) {
+			expect(row.cells.map((cell) => cell.key)).toEqual(spec.keys);
+			for (const cell of row.cells) expect(typeof cell.value).toBe('string');
+		}
+	}
+	expect(report.groups[0].rows[0].key).toMatch(/^[^_]/);
+	spec.groups = [];
+	expect(document('payments', spec).report).toMatchObject({
+		count: 0,
+		has_rows: false,
+		has_groups: true,
+	});
 });

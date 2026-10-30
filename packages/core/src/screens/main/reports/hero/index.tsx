@@ -2,9 +2,11 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { filter } from 'rxjs';
+import { format } from 'date-fns/format';
 import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -19,9 +21,9 @@ import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { inZone } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useQueryState, useQueryStateActions } from '../../../../query';
+import { useQueryHandleFields, useQueryState, useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
@@ -34,8 +36,18 @@ import {
 	useReportsSelection,
 } from '../context';
 import { calculateTotals } from '../report/utils';
-import { useReportPrint } from '../report/use-report-print';
-import { ZReport } from '../report/template';
+import { summarySpec } from '../report/summary';
+import { useReportCashier } from '../report/use-report-cashier';
+import { buildReportDocument } from '../panels/document';
+import { usePrintWaiting } from '../panels/use-print-waiting';
+import { periodLabel } from '../date-button';
+import {
+	useRegisterNames,
+	useRegisterNamesReady,
+} from '../../../../services/register/use-register-names';
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
+import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { ReportsSyncProgress } from '../sync-progress';
 
 type Choice = { value: string; label: string; hint?: string };
@@ -281,36 +293,132 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
 		</Card>
 	);
 }
-/** The print action and its hidden document, under their own boundary: the report's cashier
- * name comes from the credentials directory, and its loading must not blank the figure. */
+/** Printing has its own boundary so a loading directory never blanks the sales figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
 	const t = useT();
-	const { print, isPrinting, contentRef, ready, waiting } = useReportPrint(storeId);
+	const { selectedOrders, totals, periodRefunds } = useReportsData();
+	const { dateRange, timezone } = useReportsPeriod();
+	const { statusMode } = useReportsScope();
+	const formats = useReportFormats(storeId);
+	const { presets } = useStoreDay(storeId),
+		{ formatDate } = useLocalDate();
+	const scope = {
+		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
+		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
+	};
+	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
+	const registerId = useQueryState<'orders'>().filters.register;
+	const names = useRegisterNames(storeId),
+		namesLoaded = useRegisterNamesReady(storeId);
+	const binding = useRegisterBinding();
+	const register = registerId
+		? names[registerId] ||
+			(binding.registerId === registerId ? binding.registerName : '') ||
+			t('common.unknown')
+		: t('reports.all_registers');
+	const online = useOnlineStatus().status === 'online-website-available';
+	const cashier = useReportCashier();
+	const { site } = useStoreSession();
+	const source = React.useMemo(
+		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
+		[site]
+	);
+	const directory = useObservableState(source);
+	const [generatedAt] = React.useState(() => new Date().toISOString());
+	const [printError, setPrintError] = React.useState('');
+	const spec = summarySpec(
+		{
+			totals,
+			orders: selectedOrders.length,
+			periodRefunds,
+			registerNames: names,
+			cashierNames: Object.fromEntries(
+				(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
+			),
+			num_decimals: formats.store?.price_num_decimals,
+		},
+		t,
+		formats
+	);
+	const context = useClosureDocumentContext(storeId);
+	const document = buildReportDocument(
+		spec,
+		spec.keys.map((key, i) => ({
+			key,
+			label: spec.head[i],
+			type: spec.types[i],
+			align: spec.align[i],
+		})),
+		{
+			key: 'summary',
+			title: t('reports.summary_title'),
+			label: [
+				t('reports.panel_scope', { period, register }),
+				cashier.name,
+				statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing'),
+			].join(' · '),
+			storeId: storeId ?? 0,
+			registerId: registerId ?? '',
+			registerName: register,
+			from: dateRange.start.toISOString(),
+			to: dateRange.end.toISOString(),
+			generatedAt,
+		},
+		context
+	);
+	const doc = useReceiptDocument({
+		autoPrintAllowed: false,
+		templateType: 'report',
+		storeId,
+		localReport: document,
+	});
+	const { handle: salesHandle, refundsHandle } = useReportsHandles();
+	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
+	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
+	const { waiting, label } = usePrintWaiting({
+		doc,
+		storeReady: !!formats.store,
+		dataReady:
+			!!formats.store &&
+			cashier.ready &&
+			(totals.userStoreArray.length < 2 || !!directory) &&
+			(namesLoaded ||
+				!online ||
+				totals.registerArray.length < 2 ||
+				totals.registerArray.every(({ registerId }) => !!names[registerId])),
+		salesLane: sales.ready && !!sales.laneProgress,
+		refundsLane: refunds.ready && !!refunds.laneProgress,
+		needsRefunds: true,
+	});
+	const print = async () => {
+		setPrintError('');
+		try {
+			if ((await doc.print()) === false) setPrintError(t('reports.print_failed'));
+		} catch {
+			setPrintError(t('reports.print_failed'));
+		}
+	};
 	return (
-		<>
-			{waiting && (
-				<Text testID="hero-print-waiting" variant="key">
-					{waiting === 'store'
-						? t('reports.loading_store')
-						: waiting === 'cashier'
-							? t('reports.loading_cashier')
-							: t('reports.loading_register_names')}
-				</Text>
-			)}
+		<View className="items-end gap-2">
 			<IconButton
 				testID="hero-print"
 				name="print"
-				accessibilityLabel={t('reports.print')}
-				onPress={print}
-				loading={isPrinting}
-				disabled={!ready}
+				accessibilityLabel={t('reports.print_summary')}
+				onPress={() => void print()}
+				loading={doc.isPrinting}
+				disabled={!!waiting}
 			/>
-			<View className="hidden">
-				<View ref={contentRef}>
-					<ZReport storeId={storeId} />
-				</View>
-			</View>
-		</>
+			{waiting && (
+				<Text testID="hero-print-waiting" variant="key">
+					{label}
+				</Text>
+			)}
+			{!!(printError || doc.documentError) && (
+				<Text testID="hero-print-error" variant="key" className="text-bad">
+					{printError || doc.documentError?.message}
+				</Text>
+			)}
+		</View>
 	);
 }
 export function Hero({ title }: { title: React.ReactNode }) {

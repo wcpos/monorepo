@@ -7,6 +7,7 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -89,6 +90,7 @@ export function HelpSheet({
 						{t('pos_commands.help_firefox_note')}
 					</Text>
 				)}
+				<DialogFooter />
 			</DialogContent>
 		</Dialog>
 	);

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 import { PressableTableRow, TableCell, TableHead, TableRow } from './index';
 
 jest.mock('react-native', () => ({
@@ -18,7 +18,7 @@ jest.mock('@rn-primitives/table', () => ({
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'div' }));
 jest.mock('./pulse-row', () => ({ PulseTableRow: () => null }));
 jest.mock('uniwind', () => ({ useCSSVariable: () => ['white', 'gray'] }));
-jest.mock('../text', () => ({ TextClassContext: React.createContext('') }));
+jest.mock('../text', () => ({}));
 
 function Label() {
 	return <span className={React.useContext(TextClassContext)}>Item</span>;
