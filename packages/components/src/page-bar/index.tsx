@@ -74,13 +74,16 @@ export function PageBar({
 			    On wide widths the bar is the page's first row, not a box of its own height: its
 			    controls sit the page gutter from the top and the sides, and the row under it
 			    (the chip row, a page body) brings the gutter between them, so search, chips and card
-			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone keeps the control
-			    height: its search sits in the row or on a row of its own (`searchRow`). */}
+			    share one rhythm (CODING_STANDARDS § Design, Gutters). The phone follows the same rule
+			    (Paul, 2026-10-30: under the desktop title bar no status inset softens the top): its
+			    control row sits the ground's gutter under the bar's top edge, after any inset the
+			    surface pads, and keeps the control height, so the gutter is a margin outside it; its
+			    search sits in the row or directly under it on a row of its own (`searchRow`). */}
 			<HStack
 				className={cn(
 					'bg-background items-center',
 					// The ground's gutter, so a pane's edge that faces another keeps none (`useGround`).
-					phone ? 'h-ctl gap-2 pr-2 pl-4' : cn(ground.px, ground.pt, 'gap-4')
+					phone ? cn(ground.mt, 'h-ctl gap-2 pr-2 pl-4') : cn(ground.px, ground.pt, 'gap-4')
 				)}
 			>
 				{(phone || onMenu) &&
