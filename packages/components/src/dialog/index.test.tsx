@@ -916,3 +916,16 @@ describe('18. title platform contract', () => {
 		expect(screen.getByRole('dialog')).toHaveAccessibleName('Email receipt');
 	});
 });
+
+it('uses the root portal when its host is explicitly null', () => {
+	render(
+		<Dialog open>
+			<DialogContent portalHost={null} testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(mockPortalCalls).toContainEqual(
+		expect.objectContaining({ hostName: undefined, container: undefined })
+	);
+});

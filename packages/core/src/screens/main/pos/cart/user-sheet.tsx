@@ -45,7 +45,6 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { FigureTile } from './figure-tile';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
-import { requestRegisterPanel } from './register-panel-request';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
@@ -401,7 +400,7 @@ export function UserSheet({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onOpenRegister?: () => void;
+	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	portalHost?: string | null;
 }) {
 	const { site, store, storeDB, userDB, wpCredentials, logout } = useStoreSession();
@@ -469,11 +468,7 @@ export function UserSheet({
 		}
 	};
 	const openRegister = (pane: 'register' | 'count' = 'register') => {
-		if (onOpenRegister) onOpenRegister();
-		else {
-			router.push('/(app)/(drawer)/(pos)');
-			requestRegisterPanel(pane);
-		}
+		onOpenRegister?.(pane);
 		onOpenChange(false);
 	};
 	const run = (request: SwitchRequest) => {

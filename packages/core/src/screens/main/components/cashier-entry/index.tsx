@@ -10,6 +10,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { takeRedirectReturn } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 import { UserSheet } from '../../pos/cart/user-sheet';
+import { RegisterPanel } from '../../pos/cart/register-panel';
 import { UserAvatar } from '../user-avatar';
 import {
 	consumeCashierSheetRequest,
@@ -21,7 +22,8 @@ import {
 
 /**
  * The cashier entry: the avatar that opens the one cashier surface (`UserSheet`, CODING_STANDARDS
- * § Design, Situation → overlay), the sheet's host, and the redirect-return claim. It is mounted
+ * § Design, Situation → overlay), the sheet's host, the panel's host outside the till, and the
+ * redirect-return claim. It is mounted
  * once per bar (`BarControls`) on every size, never on the rail: it opens no page (Paul,
  * 2026-10-29), and its sheet's drawer figure is the one door to the register panel.
  */
@@ -34,7 +36,7 @@ export function CashierEntry({
 	testID: string;
 	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
 	portalHost: string | null;
-	onOpenRegister?: () => void;
+	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The sheet's host alone, no avatar: a till bar's while the desktop title bar carries the avatar. */
 	headless?: boolean;
 }) {
@@ -42,6 +44,14 @@ export function CashierEntry({
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const loginUrl = site.wcpos_login_url;
 	const [open, setOpen] = React.useState(false);
+	const [panel, setPanel] = React.useState<{
+		mounted: boolean;
+		open: boolean;
+		pane: 'register' | 'count';
+	}>({ mounted: false, open: false, pane: 'register' });
+	const openRegister =
+		onOpenRegister ??
+		((pane: 'register' | 'count' = 'register') => setPanel({ mounted: true, open: true, pane }));
 	const focused = useIsFocused();
 	const requested = useCashierSheetRequested();
 	const inTill = useCurrentOrderOptional() !== undefined;
@@ -64,12 +74,23 @@ export function CashierEntry({
 	// One cell: a closed sheet still mounts an empty root, which in a bar's gap row would be a
 	// cell of its own pushing the controls out of line (Paul, 2026-10-09).
 	const sheet = (
-		<UserSheet
-			open={open}
-			onOpenChange={setOpen}
-			portalHost={portalHost}
-			onOpenRegister={onOpenRegister}
-		/>
+		<>
+			<UserSheet
+				open={open}
+				onOpenChange={setOpen}
+				portalHost={portalHost}
+				onOpenRegister={openRegister}
+			/>
+			{!onOpenRegister && panel.mounted && (
+				<RegisterPanel
+					open={panel.open}
+					initialPane={panel.pane}
+					onOpenChange={(open) => setPanel((p) => ({ ...p, open }))}
+					side="right"
+					portalHost={portalHost}
+				/>
+			)}
+		</>
 	);
 	if (headless) return sheet;
 	return (

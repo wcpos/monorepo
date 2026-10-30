@@ -120,10 +120,14 @@ const REASONS: Record<MovementType, string[]> = {
 const AFTER_MARK = '\u0001';
 
 export function MovementSheet({
+	side: sideProp,
+	portalHost = 'pos',
 	type,
 	onDone,
 	onOpenChange,
 }: {
+	side?: 'left' | 'right';
+	portalHost?: string | null;
 	type: MovementType | null;
 	onDone: (id: string, type: MovementType, amount: string) => void;
 	onOpenChange: (open: boolean) => void;
@@ -154,7 +158,8 @@ export function MovementSheet({
 		drawer_check: t('register.reason_drawer_check'),
 		other: t('register.reason_other'),
 	};
-	const side = usePanelSide('cart');
+	const cartSide = usePanelSide('cart');
+	const side = sideProp ?? cartSide;
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
 	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';
@@ -204,7 +209,7 @@ export function MovementSheet({
 	const confirm = () => exclusive('confirm', runConfirm);
 	return (
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos">
+			<DialogContent side={side} size="lg" portalHost={portalHost}>
 				<DialogHeader>
 					<DialogTitle>{type ? words[type] : ''}</DialogTitle>
 				</DialogHeader>

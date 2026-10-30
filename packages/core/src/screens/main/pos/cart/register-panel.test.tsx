@@ -298,8 +298,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 				{children}
 			</>
 		) : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
+	DialogContent: ({
+		children,
+		testID,
+		side,
+		portalHost,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		side?: 'left' | 'right';
+		portalHost?: string | null;
+	}) => (
+		<div data-testid={testID} data-side={side} data-portal={String(portalHost)}>
+			{children}
+		</div>
 	),
 	DialogTitle: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<h2 data-testid={testID}>{children}</h2>
@@ -1088,3 +1100,24 @@ it.each([false, true])(
 		expect(screen.getByTestId('register-panel-float').textContent).not.toContain('£100.00');
 	}
 );
+
+it("takes the side and portal host it is given; defaults to the cart's side and the POS host", () => {
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
+	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('pos');
+	view.unmount();
+	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost={null} />);
+	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('left');
+	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
+});
+
+it.each([
+	['right', 'scene'],
+	['left', null],
+] as const)('keeps movement dialogs on the panel side %s and host %s', (side, portalHost) => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} side={side} portalHost={portalHost} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const movement = screen.getByTestId('movement-after').closest('[data-portal]');
+	expect(movement?.getAttribute('data-side')).toBe(side);
+	expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
+});
