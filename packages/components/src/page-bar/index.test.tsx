@@ -207,6 +207,10 @@ it.each([
 		expect(row.contains(screen.getByTestId('bar-menu'))).toBe(true);
 		expect(row.contains(screen.getByTestId('search'))).toBe(inRow);
 		expect(screen.getByTestId('bar').children).toHaveLength(inRow ? 1 : 2);
+		// Inline or not, the row sits the phone gutter under the strip, after the inset the bar
+		// pads (status 24 plus the strip), and keeps the control height (Paul, 2026-10-30).
+		expect(row).toHaveClass('mt-4', 'h-ctl');
+		expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: `${24 + height}px` });
 	}
 );
 
