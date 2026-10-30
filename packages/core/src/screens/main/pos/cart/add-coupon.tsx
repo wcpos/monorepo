@@ -20,6 +20,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
@@ -49,6 +50,9 @@ export function AddCoupon({ onNewCoupon }: { onNewCoupon: () => void }) {
 	const { license } = useAppInfo();
 	const isPro = license?.isPro ?? false;
 	const { caps } = useUserCapabilities();
+	// The store must answer: a coupon created here is acknowledged before it is applied (add-coupon-form.tsx).
+	const { status: onlineStatus } = useOnlineStatus();
+	const storeReachable = onlineStatus === 'online-website-available';
 	const { addCoupon } = useAddCoupon();
 	const { close: closeDialog } = useDialog();
 	const [error, setError] = React.useState<string | null>(null);
@@ -103,7 +107,7 @@ export function AddCoupon({ onNewCoupon }: { onNewCoupon: () => void }) {
 									</ComboboxContent>
 								</Combobox>
 							</View>
-							{isPro && caps.canCreateCoupons ? (
+							{isPro && caps.canCreateCoupons && storeReachable ? (
 								<Tooltip>
 									<TooltipTrigger asChild onPress={onNewCoupon}>
 										<IconButton
@@ -128,9 +132,11 @@ export function AddCoupon({ onNewCoupon }: { onNewCoupon: () => void }) {
 									</CapabilityTooltipTrigger>
 									<TooltipContent>
 										<Text>
-											{isPro
-												? t('capability_hints.create_coupons_admin_path')
-												: t('common.upgrade_to_pro')}
+											{!isPro
+												? t('common.upgrade_to_pro')
+												: !caps.canCreateCoupons
+													? t('capability_hints.create_coupons_admin_path')
+													: t('pos_cart.new_coupon_offline')}
 										</Text>
 									</TooltipContent>
 								</Tooltip>

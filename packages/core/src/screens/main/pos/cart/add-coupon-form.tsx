@@ -19,7 +19,12 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'coupon']);
 
 function AddCouponFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const { createCoupon } = useCouponRecord();
+	// The form says its own sentence below; the funnel's "Coupon saved" would be a second toast.
+	// The store acknowledges the coupon before it is applied: the sale carries only the code, and
+	// WooCommerce refuses an order whose coupon does not exist yet. An order queued earlier keeps
+	// its place in the queue, so a queued create could not be relied on to land first; offline, the
+	// New coupon door is closed (add-coupon.tsx).
+	const { createCoupon } = useCouponRecord({ showSuccessToast: false, awaitRemoteId: true });
 	const { addCoupon } = useAddCoupon();
 	const [loading, setLoading] = React.useState(false);
 	const form = useForm<z.infer<typeof couponFormSchema>>({
@@ -38,7 +43,8 @@ function AddCouponFormBody({ onClose }: { onClose: () => void }) {
 					showToast: true,
 					context: { couponCode: code },
 				});
-			} else {
+			} else if (result.error) {
+				// No sentence means a hook already presented its refusal: not echoed (use-add-coupon).
 				cartLogger.warn(t('pos_cart.coupon_created_not_applied', { code }), {
 					showToast: true,
 					toast: {

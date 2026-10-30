@@ -8,6 +8,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { AddCouponFormDialog } from './add-coupon-form';
 
 const mockCreateCoupon = jest.fn();
+const mockUseCouponRecord = jest.fn();
 const mockAddCoupon = jest.fn();
 const mockSuccess = jest.fn();
 const mockWarn = jest.fn();
@@ -46,7 +47,10 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('../../coupons/commands/use-coupon-record', () => ({
-	useCouponRecord: () => ({ createCoupon: mockCreateCoupon }),
+	useCouponRecord: (options: unknown) => {
+		mockUseCouponRecord(options);
+		return { createCoupon: mockCreateCoupon };
+	},
 }));
 jest.mock('../hooks/use-add-coupon', () => ({
 	useAddCoupon: () => ({ addCoupon: mockAddCoupon }),
@@ -76,6 +80,12 @@ async function submit() {
 
 it('creates from the form, applies the created code, then closes', async () => {
 	await submit();
+	// The funnel's own "Coupon saved" toast is handed off: the form says the one sentence.
+	// ...and the store acknowledges the coupon before the sale references its code.
+	expect(mockUseCouponRecord).toHaveBeenCalledWith({
+		showSuccessToast: false,
+		awaitRemoteId: true,
+	});
 	expect(mockCreateCoupon).toHaveBeenCalledWith(mockFormData);
 	expect(mockAddCoupon).toHaveBeenCalledWith('summer');
 	expect(mockCreateCoupon.mock.invocationCallOrder[0]).toBeLessThan(
@@ -89,6 +99,14 @@ it('creates from the form, applies the created code, then closes', async () => {
 		'pos_cart.coupon_created_applied',
 		expect.objectContaining({ showToast: true, context: { couponCode: 'summer' } })
 	);
+});
+
+it('closes without a second toast when a hook already presented its refusal', async () => {
+	mockAddCoupon.mockResolvedValue({ success: false, error: undefined });
+	await submit();
+	expect(mockWarn).not.toHaveBeenCalled();
+	expect(mockSuccess).not.toHaveBeenCalled();
+	expect(mockOnOpenChange).toHaveBeenCalledWith(false);
 });
 
 it('warns and closes when the saved coupon cannot be applied', async () => {

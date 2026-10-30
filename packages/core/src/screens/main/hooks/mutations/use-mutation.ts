@@ -43,6 +43,8 @@ export const useMutation = ({ collectionName, endpoint, showSuccessToast = true 
 				return t('common.customer');
 			case 'orders':
 				return t('common.order');
+			case 'coupons':
+				return t('common.coupon');
 			default:
 				return t('common.document');
 		}

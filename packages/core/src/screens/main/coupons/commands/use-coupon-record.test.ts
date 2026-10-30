@@ -35,7 +35,7 @@ describe('useCouponRecord', () => {
 		mockCreate.mockResolvedValue(coupon);
 		const { result } = renderHook(() => useCouponRecord());
 		await expect(result.current.createCoupon({ code: 'SAVE10' })).resolves.toBe(coupon);
-		expect(mockCreate).toHaveBeenCalledWith({ data: { code: 'SAVE10' } });
+		expect(mockCreate).toHaveBeenCalledWith({ data: { code: 'SAVE10' }, awaitRemoteId: false });
 	});
 
 	it('does not report a save when the local write resolves undefined', async () => {

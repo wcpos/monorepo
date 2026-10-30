@@ -31,7 +31,7 @@ import {
  * trip to the Money-oracle doctrine (TEST-PLAN.md) — coupon_lines recorded,
  * discount parity, totals parity, and no divergence banner.
  *
- * Pro-gated (menu-add-coupon requires a Pro license) and writer-gated (probe
+ * Pro-gated (the coupon picker behind menu-add-discount requires a Pro license) and writer-gated (probe
  * coupons need the shared e2e-product-writer identity): both absences are
  * declared-missing environment → skip with reason, per the store-agnostic
  * policy. A configured-but-failing write is a FAILURE, not a skip.
