@@ -20,11 +20,13 @@ const fieldBoxVariants = cva(
 		variants: {
 			state: {
 				rest: '',
-				open: 'border-ring web:ring-1 web:ring-ring',
+				// A state that must be seen keeps a 1 px border even where the theme draws no resting
+				// outline (Bold money, Codex on #3139): the later width wins over the token's.
+				open: 'border-ring web:ring-1 web:ring-ring border',
 				disabled: 'web:cursor-not-allowed opacity-45',
-				invalid: 'border-bad',
+				invalid: 'border-bad border',
 				/** Its number needs a look (a cart line over stock). */
-				attention: 'border-attention bg-attention/15',
+				attention: 'border-attention bg-attention/15 border',
 			},
 			/** A Textarea grows from one control's height. */
 			multiline: { false: 'h-ctl', true: 'min-h-ctl' },
