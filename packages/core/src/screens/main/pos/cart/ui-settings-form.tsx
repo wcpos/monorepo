@@ -84,40 +84,6 @@ export function UISettingsForm() {
 				<VStack>
 					<FormField
 						control={form.control}
-						name="autoShowReceipt"
-						render={({ field }) => (
-							<FormSwitch
-								label={getUILabel('autoShowReceipt')}
-								testID="cart-setting-auto-show-receipt"
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="autoPrintReceipt"
-						render={({ field }) => (
-							<FormSwitch
-								label={getUILabel('autoPrintReceipt')}
-								testID="cart-setting-auto-print-receipt"
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="quickDiscounts"
-						render={({ field }) => (
-							<QuickDiscountKeys
-								value={field.value}
-								onChange={field.onChange}
-								label={getUILabel('quickDiscounts')}
-								testID="cart-setting-quick-discount"
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
 						name="position"
 						render={({ field }) => (
 							<FormSegmentedControl
@@ -162,6 +128,40 @@ export function UISettingsForm() {
 								/>
 								<Text variant="key">{t('pos_cart.sort_fees_shipping_last')}</Text>
 							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="quickDiscounts"
+						render={({ field }) => (
+							<QuickDiscountKeys
+								value={field.value}
+								onChange={field.onChange}
+								label={getUILabel('quickDiscounts')}
+								testID="cart-setting-quick-discount"
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="autoShowReceipt"
+						render={({ field }) => (
+							<FormSwitch
+								label={getUILabel('autoShowReceipt')}
+								testID="cart-setting-auto-show-receipt"
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="autoPrintReceipt"
+						render={({ field }) => (
+							<FormSwitch
+								label={getUILabel('autoPrintReceipt')}
+								testID="cart-setting-auto-print-receipt"
+								{...field}
+							/>
 						)}
 					/>
 					<UISettingsColumnsForm getUILabel={getUILabel} />
