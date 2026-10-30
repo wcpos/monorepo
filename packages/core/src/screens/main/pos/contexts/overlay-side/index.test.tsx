@@ -5,17 +5,21 @@ import { usePanelSide } from './index';
 
 let mockPosition = 'left';
 jest.mock('../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { position: mockPosition } }),
+	// The side is the cart doc's setting (#3117); the products doc no longer carries one.
+	useUISettings: (id: string) => ({
+		uiSettings: id === 'pos-cart' ? { position: mockPosition } : {},
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (value: unknown, select: (value: unknown) => unknown) => select(value),
 }));
 
 it.each([
-	['left', 'left', 'right'],
-	['right', 'right', 'left'],
+	// [cart side, cart subjects, products subjects]
+	['right', 'left', 'right'],
+	['left', 'right', 'left'],
 ])(
-	"cart subjects dock on the products' side; products subjects dock opposite",
+	"cart subjects dock on the products' side, opposite the cart; products subjects dock over the cart",
 	(position, cart, products) => {
 		mockPosition = position;
 		const { result } = renderHook(() => [
