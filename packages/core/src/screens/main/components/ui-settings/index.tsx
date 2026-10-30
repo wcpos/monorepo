@@ -94,6 +94,7 @@ interface Props {
 	closeTestID?: string;
 	restoreTestID?: string;
 	portalHost?: string;
+	side?: 'left' | 'right';
 }
 
 /**
@@ -110,6 +111,7 @@ function UISettingsDialog({
 	closeTestID = 'ui-settings-close',
 	restoreTestID = 'ui-settings-restore-defaults',
 	portalHost,
+	side = 'right',
 }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
@@ -142,7 +144,7 @@ function UISettingsDialog({
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side="right" size="lg" portalHost={portalHost} testID={contentTestID}>
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID={contentTestID}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

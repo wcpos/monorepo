@@ -13,6 +13,7 @@ import {
 } from '@wcpos/components/dialog';
 
 import { useT } from '../../contexts/translations';
+import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side';
 import { getCommands, runCommand } from '../commands';
 import { registrantText } from '../actions/present';
 import { chordPlatform, DEFAULT_BINDINGS, describeChord } from './bindings';
@@ -35,6 +36,7 @@ export function HelpSheet({
 	onOpenChange: (open: boolean) => void;
 	ctx: CommandContext;
 }) {
+	const side = usePanelSide('shell');
 	const t = useT();
 	const run = (id: CommandId) => {
 		onOpenChange(false);
@@ -44,7 +46,7 @@ export function HelpSheet({
 	};
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="lg" portalHost="pos" testID="hotkeys-help-sheet">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="hotkeys-help-sheet">
 				<DialogHeader>
 					<DialogTitle>{t('pos_commands.help_title')}</DialogTitle>
 				</DialogHeader>

@@ -104,6 +104,7 @@ jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('../../components/customer-select', () => ({ CustomerSearch: () => null }));
 jest.mock('@wcpos/components/combobox', () => ({}));
 jest.mock('@wcpos/components/chip', () => ({ Chip: () => null }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../hooks/use-add-customer', () => ({
 	useAddCustomer: () => ({ addCustomer: jest.fn() }),
 }));

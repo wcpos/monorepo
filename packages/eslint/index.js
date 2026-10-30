@@ -422,12 +422,6 @@ export const designSystemOwnershipSelectors = [
 		message: "A field's SegmentedControl is FormSegmentedControl: the form draws the one label.",
 	},
 	{
-		// The descendant `Literal` catches `side="left"`, `side={'left'}` and a branch of a ternary.
-		selector:
-			'JSXOpeningElement:matches([name.name="DialogContent"],[name.property.name="DialogContent"]) > JSXAttribute[name.name="side"] Literal[value="left"]',
-		message: 'Every side panel opens from the right (Paul 2026-10-30; dialog LEDGER line 28).',
-	},
-	{
 		// `>` (direct child) deliberately limits this to the STATIC form,
 		// className="…". A cn(…, selected && 'text-primary') is conditional
 		// STATE styling, which no variant currently models — flagging it would

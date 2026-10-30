@@ -89,6 +89,7 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));

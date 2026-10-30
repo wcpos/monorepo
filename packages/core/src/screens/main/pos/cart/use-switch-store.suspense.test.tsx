@@ -36,6 +36,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('../checkout/payments/payment-in-flight', () => ({ usePaymentInFlight: () => false }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: passthrough,
 	DialogContent: passthrough,

@@ -29,6 +29,7 @@ export type PrintSheetProps = {
 	record?: FooterSlot | FooterSlot[];
 	secondary?: FooterSlot | FooterSlot[];
 	onPrint: () => void | Promise<unknown>;
+	side?: 'left' | 'right';
 	portalHost?: string;
 	testID?: string;
 	close?: DialogFooterProps['close'];
@@ -47,6 +48,7 @@ export function PrintSheetContent({
 	record,
 	secondary,
 	onPrint,
+	side = 'right',
 	portalHost,
 	testID = 'print-sheet',
 	close = true,
@@ -55,7 +57,7 @@ export function PrintSheetContent({
 }: PrintSheetProps) {
 	const t = useT();
 	return (
-		<DialogContent side="right" size="xl" portalHost={portalHost} testID={testID}>
+		<DialogContent side={side} size="xl" portalHost={portalHost} testID={testID}>
 			<DialogHeader>
 				<DialogTitle>{title}</DialogTitle>
 				{description ? <DialogDescription>{description}</DialogDescription> : null}

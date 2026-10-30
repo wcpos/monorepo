@@ -25,6 +25,7 @@ jest.mock('../../../../services/register-session/audit', () => ({
 	...jest.requireActual('../../../../services/register-session/audit'),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
@@ -117,8 +118,8 @@ jest.mock('./movement-sheet', () => ({
 	}) => <input data-testid={testID} value={value} onChange={(e) => onChangeText(e.target.value)} />,
 }));
 jest.mock('./approve-sheet', () => ({
-	ApproveSheet: ({ portalHost }: { portalHost?: string | null }) => (
-		<div data-testid="approve-sheet" data-portal={String(portalHost)} />
+	ApproveSheet: ({ side, portalHost }: { side?: 'left' | 'right'; portalHost?: string | null }) => (
+		<div data-testid="approve-sheet" data-side={side} data-portal={String(portalHost)} />
 	),
 }));
 const enter = (value: string) =>
@@ -236,18 +237,20 @@ it('requires manager over threshold', () => {
 		},
 	});
 });
-it('forwards its host to the approval sheet', () => {
+it('forwards its side and host to the approval sheet', () => {
 	varianceThreshold = '5';
 	render(
 		<RegisterCount
 			description="Shop · open since 08:00 · Pat"
 			onBack={jest.fn()}
 			onClosed={jest.fn()}
+			side="right"
 			portalHost="scene"
 		/>
 	);
 	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('scene');
 });
 it('server refusal requires approval even for an exact blind count', () => {

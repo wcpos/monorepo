@@ -27,6 +27,7 @@ import { StorageOutageBanner } from '../components/storage-outage-banner';
 import { ProductGrid } from './tiles/product-grid';
 import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
+import { usePanelSide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
 import { POSFilterBar, useActiveConditionLabels } from './filter-bar/filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
@@ -194,6 +195,7 @@ function POSProductsContent({
 	showOutOfStock: boolean;
 	initialFilters: Record<string, unknown>;
 }) {
+	const side = usePanelSide('products');
 	const { session, sessionsOn } = useRegisterSession();
 	// Under the desktop title bar the register bar is hidden, so its menu rides here (Paul, 2026-10-30).
 	const menu = useBarMenu();
@@ -275,6 +277,7 @@ function POSProductsContent({
 		uiSettings,
 		session,
 		sessionsOn,
+		side,
 		viewMode,
 		browseBy,
 		variationsStyle,
@@ -578,6 +581,7 @@ function POSProductsContent({
 							/>
 							<ViewModeToggle />
 							<UISettingsDialog
+								side={side}
 								portalHost="pos"
 								title={t('pos_products.product_settings')}
 								triggerTestID="products-settings-button"

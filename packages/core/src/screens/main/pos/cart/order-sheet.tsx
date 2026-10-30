@@ -7,6 +7,7 @@ import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { RecordDialog } from '../../components/record-dialog';
+import { usePanelSide } from '../contexts/overlay-side';
 import { EditOrderMeta } from './buttons/edit-order-meta';
 import { useSyncOrder } from '../../hooks/use-sync-order';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -23,6 +24,7 @@ export function OrderSheet({
 	onOpenChange: (open: boolean) => void;
 	order: CurrentOrderRecord;
 }) {
+	const side = usePanelSide('cart');
 	const t = useT();
 	// The form's pending autosave, awaited before Sync order pushes (a debounced note write
 	// still in flight would otherwise be pushed as the value before it).
@@ -31,6 +33,7 @@ export function OrderSheet({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<RecordDialog
+				side={side}
 				portalHost="pos"
 				title={t('pos_cart.order_details')}
 				record={order}

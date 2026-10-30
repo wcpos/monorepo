@@ -12,6 +12,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { usePanelSide } from '../contexts/overlay-side';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
 export function ApproveSheet({
@@ -20,8 +21,10 @@ export function ApproveSheet({
 	denominations,
 	onClosed,
 	onOpenChange,
+	side: sideProp,
 	portalHost = 'pos',
 }: {
+	side?: 'left' | 'right';
 	portalHost?: string | null;
 	counted: Record<string, string>;
 	note?: string;
@@ -41,6 +44,8 @@ export function ApproveSheet({
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const t = useT();
+	const cartSide = usePanelSide('cart');
+	const side = sideProp ?? cartSide;
 	const confirm = async () => {
 		if (!online || busy || !session) return;
 		setBusy(true);
@@ -90,7 +95,7 @@ export function ApproveSheet({
 	};
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="lg" portalHost={portalHost} testID="approve-sheet">
+			<DialogContent side={side} size="lg" portalHost={portalHost} testID="approve-sheet">
 				<DialogTitle>{t('register.manager_approval')}</DialogTitle>
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
 				<ApprovalFields {...{ username, password, setUsername, setPassword }} />
