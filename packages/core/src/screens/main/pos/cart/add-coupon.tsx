@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Platform } from '@wcpos/utils/platform';
 import {
@@ -13,12 +14,16 @@ import {
 } from '@wcpos/components/combobox';
 import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
 import {
 	useDrawnHandle,
 	useGuardedExtension,
@@ -26,6 +31,8 @@ import {
 	useSearchSelect,
 } from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useAddCoupon } from '../hooks/use-add-coupon';
 
 import type { SearchSelect } from '../../../../query';
@@ -37,8 +44,11 @@ interface CouponHit {
 
 type CouponPayload = EngineRecord<'coupons'>['payload'];
 
-export function AddCoupon() {
+export function AddCoupon({ onNewCoupon }: { onNewCoupon: () => void }) {
 	const t = useT();
+	const { license } = useAppInfo();
+	const isPro = license?.isPro ?? false;
+	const { caps } = useUserCapabilities();
 	const { addCoupon } = useAddCoupon();
 	const { close: closeDialog } = useDialog();
 	const [error, setError] = React.useState<string | null>(null);
@@ -73,19 +83,61 @@ export function AddCoupon() {
 		<>
 			<DialogBody contentContainerClassName="gap-4">
 				{error && <Text className="text-bad">{error}</Text>}
-				<Combobox onValueChange={handleValueChange}>
-					<ComboboxTrigger testID="add-coupon-combobox">
-						<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
-					</ComboboxTrigger>
-					<ComboboxContent
-						portalHost="pos"
-						{...(Platform.OS === 'web'
-							? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
-							: {})}
-					>
-						<CouponSearch onSearchChange={() => setError(null)} />
-					</ComboboxContent>
-				</Combobox>
+				<PropertyList prefix="coupon">
+					<PropertyRow label={t('common.coupon')} id="coupon">
+						<HStack className="gap-2">
+							{/* The popover root is a plain, unclassed View (#3072): the picker takes the
+							    row's remaining width through this wrapper, never through the trigger. */}
+							<View className="flex-1">
+								<Combobox onValueChange={handleValueChange}>
+									<ComboboxTrigger testID="add-coupon-combobox">
+										<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
+									</ComboboxTrigger>
+									<ComboboxContent
+										portalHost="pos"
+										{...(Platform.OS === 'web'
+											? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
+											: {})}
+									>
+										<CouponSearch onSearchChange={() => setError(null)} />
+									</ComboboxContent>
+								</Combobox>
+							</View>
+							{isPro && caps.canCreateCoupons ? (
+								<Tooltip>
+									<TooltipTrigger asChild onPress={onNewCoupon}>
+										<IconButton
+											name="plus"
+											testID="add-coupon-new"
+											accessibilityLabel={t('pos_cart.new_coupon')}
+										/>
+									</TooltipTrigger>
+									<TooltipContent>
+										<Text>{t('pos_cart.new_coupon')}</Text>
+									</TooltipContent>
+								</Tooltip>
+							) : (
+								<Tooltip showOnNative>
+									<CapabilityTooltipTrigger>
+										<IconButton
+											name="plus"
+											testID="add-coupon-new"
+											accessibilityLabel={t('pos_cart.new_coupon')}
+											disabled
+										/>
+									</CapabilityTooltipTrigger>
+									<TooltipContent>
+										<Text>
+											{isPro
+												? t('capability_hints.create_coupons_admin_path')
+												: t('common.upgrade_to_pro')}
+										</Text>
+									</TooltipContent>
+								</Tooltip>
+							)}
+						</HStack>
+					</PropertyRow>
+				</PropertyList>
 			</DialogBody>
 			<DialogFooter
 				close

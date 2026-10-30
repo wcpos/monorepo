@@ -53,7 +53,8 @@ for (const [route, trigger, label, input] of dropdowns) {
 		if (route === 'settings') await page.getByTestId('settings-nav-general').click();
 		if (label === 'coupon-picker') {
 			await page.getByTestId('add-cart-item-menu').click();
-			await page.getByTestId('menu-add-coupon').click();
+			await page.getByTestId('menu-add-discount').click();
+			await page.getByTestId('add-discount-kind-coupon').click();
 		}
 		await dropdown(page, testInfo, trigger, label, input);
 	});
