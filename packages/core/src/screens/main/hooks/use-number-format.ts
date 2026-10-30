@@ -8,6 +8,7 @@ import { QUANTITY_PLACES } from '@wcpos/components/quantity-keypad/reducer';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
+import { plainNumberString } from './plain-number-string';
 
 export type NumberFormatOptions = NumericFormatProps;
 
@@ -75,7 +76,8 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 			if (mergedOptions.fixedDecimalScale) {
 				safeValue = round(safeValue, mergedOptions.decimalScale);
 			}
-			return numericFormatter(safeValue.toString(), mergedOptions);
+			// Plain digits, never "1.11e+21": the formatter keeps only the digits it finds.
+			return numericFormatter(plainNumberString(safeValue), mergedOptions);
 		},
 		[mergedOptions]
 	);
