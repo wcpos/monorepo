@@ -971,6 +971,11 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		{ document: 'closure:c', templates: [] },
 		{ document: 'closure:c', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
 		{ document: 'xreport:s', templates: [] },
+		{ document: 'handover:s', templates: [] },
+		{
+			document: 'handover:s',
+			templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }],
+		},
 		{ document: 'xreport:s', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
 	])(
 		'refuses $document printing without a renderable selected template',

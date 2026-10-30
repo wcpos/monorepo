@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import type { UserDatabase } from '@wcpos/database';
@@ -601,3 +601,90 @@ it('offers Take the drawer back only for the matching carried session', async ()
 });
 
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
+
+const mockPrint = jest.fn(async () => undefined);
+const mockSessionReport = jest.fn(() => ({ print: mockPrint, doc: {} }));
+jest.mock('../../../../services/register-session/use-session-report', () => ({
+	useSessionReport: (...args: unknown[]) => mockSessionReport(...(args as [])),
+}));
+// Keep the door/print/close interaction without the preview's router dependencies.
+jest.mock('../../receipt/print-sheet', () => ({
+	PrintSheet: ({
+		open,
+		onOpenChange,
+		onPrint,
+		testID,
+		title,
+		description,
+		error,
+		portalHost,
+	}: {
+		open: boolean;
+		onOpenChange: (open: boolean) => void;
+		onPrint: () => Promise<void>;
+		testID: string;
+		title: string;
+		description: string;
+		error?: string;
+		portalHost: string;
+	}) =>
+		open ? (
+			<div data-testid={testID} data-host={portalHost}>
+				{title}
+				{description}
+				{error}
+				<button data-testid={`${testID}-print`} onClick={() => void onPrint()} />
+				<button data-testid={`${testID}-close`} onClick={() => onOpenChange(false)} />
+			</div>
+		) : null,
+}));
+it('opens and prints the nested hand-over sheet without confirming or dismissing the switch', async () => {
+	mockPrint.mockClear();
+	show({ kind: 'cashier', credential: amy });
+	expect(screen.getByTestId('switch-confirm-handover').textContent).toBe('Print hand-over slip');
+	fireEvent.click(screen.getByTestId('switch-confirm-handover'));
+	const sheet = screen.getByTestId('switch-confirm-handover-sheet');
+	expect(screen.getByTestId('switch-confirm').contains(sheet)).toBe(true);
+	expect(sheet.getAttribute('data-host')).toBe('pos');
+	expect(sheet.textContent).toContain('Hand-over slip');
+	expect(sheet.textContent).toContain('Front counter');
+	expect(sheet.textContent).toContain('open since 09:02');
+	expect(mockSessionReport).toHaveBeenLastCalledWith(undefined, false, undefined, true, 'handover');
+	mockPrint.mockRejectedValueOnce(new Error('reports.reprint_failed'));
+	fireEvent.click(screen.getByTestId('switch-confirm-handover-sheet-print'));
+	await waitFor(() => expect(sheet.textContent).toContain('Printing failed. Try again.'));
+	fireEvent.click(screen.getByTestId('switch-confirm-handover-sheet-print'));
+	await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(2));
+	expect(sheet.textContent).not.toContain('Printing failed. Try again.');
+	fireEvent.click(screen.getByTestId('switch-confirm-handover-sheet-close'));
+	expect(screen.queryByTestId('switch-confirm-handover-sheet')).toBeNull();
+	expect(screen.getByTestId('switch-confirm-confirm')).toBeTruthy();
+	expect(onConfirm).not.toHaveBeenCalled();
+	expect(onOpenChange).not.toHaveBeenCalled();
+});
+it.each(['unbound', 'closed', 'counting', 'missing', 'sign-out', 'store'])(
+	'does not offer a hand-over slip for %s',
+	(reason) => {
+		const original = mockDrawer;
+		try {
+			mockDrawer = {
+				...original,
+				binding: { ...original.binding },
+				session: { ...original.session },
+			};
+			if (reason === 'unbound') mockDrawer.binding.status = 'unbound';
+			if (reason === 'closed' || reason === 'counting') mockDrawer.session.status = reason;
+			if (reason === 'missing') mockDrawer.session = null as never;
+			show(
+				reason === 'sign-out'
+					? { kind: 'sign-out' }
+					: reason === 'store'
+						? { kind: 'store', store }
+						: { kind: 'cashier', credential: amy }
+			);
+			expect(screen.queryByTestId('switch-confirm-handover')).toBeNull();
+		} finally {
+			mockDrawer = original;
+		}
+	}
+);

@@ -239,3 +239,32 @@ it.each([
 		})
 	);
 });
+
+// A hand-over must request its server form and carry the same flag and actor offline.
+it('routes a hand-over to its server document and local form, retaining the X-report fact', async () => {
+	const view = renderHook(() => useSessionReport(undefined, false, undefined, true, 'handover'));
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			document: 'handover:s',
+			localReport: expect.objectContaining({
+				fiscal: expect.objectContaining({
+					is_handover: true,
+					is_x_report: true,
+					document_type: 'handover',
+				}),
+				closure: expect.objectContaining({
+					breakdowns: expect.objectContaining({
+						labels: expect.objectContaining({ cashier_name: 'Pat', opened_by_name: 'Alex' }),
+					}),
+				}),
+			}),
+		})
+	);
+	await view.result.current.print();
+	expect(recordFact).toHaveBeenCalledWith({
+		kind: 'x-report-dispatched',
+		actor: { id: '7', name: 'Pat' },
+		sessionId: 's',
+		registerId: 'r',
+	});
+});

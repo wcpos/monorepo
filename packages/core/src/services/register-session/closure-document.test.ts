@@ -167,6 +167,7 @@ it('maps a local snapshot into the server closure envelope and display companion
 		receipt_number: '42',
 		is_closure_document: true,
 		is_x_report: false,
+		is_handover: false,
 		is_reprint: false,
 		reprint_count: 0,
 	});
@@ -196,6 +197,7 @@ it('marks local copies but never numbers or persists an X-report', () => {
 		is_closure_document: true,
 		receipt_number: '',
 		is_x_report: true,
+		is_handover: false,
 		is_reprint: false,
 	});
 	expect(doc.closure.tenders[0].expected).toBe('110.0000');
@@ -429,4 +431,33 @@ it('falls back to capitalised tender keys when stored titles are unknown', () =>
 	);
 	expect(doc.closure.breakdowns.payment_methods[0]).toMatchObject({ method: 'cash', name: 'Cash' });
 	expect(doc.closure.tenders[0].label).toBe('Cash');
+});
+
+// Without the hand-over flag/name the local paper renders an ordinary X-report.
+it('marks the hand-over as an unnumbered X-report naming the handing-over cashier', () => {
+	const session: RegisterSessionRow = {
+		id: 's',
+		register_id: 'r',
+		status: 'open',
+		opened_at_gmt: row.opened_at,
+		counted_float: '100',
+		sync_status: 'pending',
+		sync_attempts: 0,
+	};
+	const doc = buildXReportDocument(
+		session,
+		{
+			...context,
+			breakdowns: { cashier_name: 'Pat' },
+		},
+		{ handover: true }
+	);
+	expect(doc.fiscal).toMatchObject({
+		is_handover: true,
+		is_x_report: true,
+		document_type: 'handover',
+		receipt_number: '',
+	});
+	expect(doc.closure.breakdowns.labels.cashier_name).toBe('Pat');
+	expect(buildXReportDocument(session, context).closure.breakdowns.labels.cashier_name).toBe('');
 });

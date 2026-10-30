@@ -225,6 +225,8 @@
 	"register.amount": "Amount",
 	"register.in_the_drawer": "in the drawer",
 	"register.opened_at_by": "opened {time} by",
+	"register.handover_slip": "Hand-over slip",
+	"register.print_handover_slip": "Print hand-over slip",
 	"register.print_x_report": "Print X-report",
 	"register.last_count": "Last count {amount} · {date}",
 	"register.last_count_blind": "Last count",

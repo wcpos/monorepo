@@ -407,7 +407,11 @@ export function useTemplateRenderer({
 				data = null;
 			}
 		}
-		if (!data && localReport && document?.startsWith('xreport:')) {
+		if (
+			!data &&
+			localReport &&
+			(document?.startsWith('xreport:') || document?.startsWith('handover:'))
+		) {
 			data = {
 				...localReport,
 				order: {

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns/format';
+import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	AlertDialog,
@@ -19,6 +20,10 @@ import { Notice } from '@wcpos/components/notice';
 import { useDocField } from '@wcpos/query';
 import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
+import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
+import { useNowMs } from '../../../../hooks/use-relative-time';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
+import { PrintSheet } from '../../receipt/print-sheet';
 import { DrawerTile, SalesTile, useSalesToday } from './user-sheet';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -57,12 +62,19 @@ export function SwitchConfirm({
 	const t = useT();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const [choice, setChoice] = React.useState('take');
+	const [sheetOpen, setSheetOpen] = React.useState(false);
+	const [printError, setPrintError] = React.useState('');
+	const { print, doc } = useSessionReport(undefined, false, undefined, sheetOpen, 'handover');
 	const [previous, setPrevious] = React.useState(request);
 	if (request !== previous) {
 		setPrevious(request);
 		setChoice('take');
+		setSheetOpen(false);
+		setPrintError('');
 	}
 	const { wpCredentials, store, site } = useStoreSession();
+	const credentials = useObservableSuspense(credentialsListResource(site));
+	const nowMs = useNowMs(60_000);
 	const { session, expected, blind, figuresPending, binding, unsyncedCount } = useRegisterSession();
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
@@ -94,6 +106,25 @@ export function SwitchConfirm({
 			: '';
 	if (reason && choice !== 'leave') setChoice('leave');
 	if (!request) return null;
+	const handover =
+		request.kind === 'cashier' && binding.status === 'bound' && session?.status === 'open';
+	const openedDate = session?.opened_at_gmt
+		? convertUTCStringToLocalDate(session.opened_at_gmt)
+		: undefined;
+	const minutes = openedDate ? Math.max(0, Math.floor((nowMs - openedDate.getTime()) / 60_000)) : 0;
+	const reportDescription = [
+		binding.registerName,
+		store.name,
+		openedDate && t('register.open_since', { time: time(openedDate) }),
+		openedDate &&
+			(minutes >= 60
+				? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
+				: t('register.age_m', { m: minutes })),
+		credentials.find((row) => row.id === session?.opened_by)?.display_name ??
+			t('register.unknown_cashier'),
+	]
+		.filter(Boolean)
+		.join(' · ');
 	let carry: CarryTarget | undefined;
 	let title: string, description: string, confirm: string;
 	let body: React.ReactNode;
@@ -264,8 +295,37 @@ export function SwitchConfirm({
 										onOpenChange(false);
 									},
 								}
-							: undefined
+							: handover
+								? {
+										label: t('register.print_handover_slip'),
+										testID: 'switch-confirm-handover',
+										onPress: () => setSheetOpen(true),
+									}
+								: undefined
 					}
+				/>
+				<PrintSheet
+					open={sheetOpen && handover}
+					onOpenChange={setSheetOpen}
+					doc={doc}
+					title={t('register.handover_slip')}
+					description={reportDescription}
+					printLabel={t('register.print_handover_slip')}
+					error={printError || doc.documentError?.message || null}
+					onPrint={async () => {
+						setPrintError('');
+						try {
+							await print();
+						} catch (e) {
+							setPrintError(
+								e instanceof Error && e.message === 'reports.reprint_failed'
+									? t('reports.reprint_failed')
+									: String(e)
+							);
+						}
+					}}
+					portalHost="pos"
+					testID="switch-confirm-handover-sheet"
 				/>
 			</AlertDialogContent>
 		</AlertDialog>
