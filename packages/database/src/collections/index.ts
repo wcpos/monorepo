@@ -240,6 +240,18 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			// set — resolveStep and the icon provider fall back — so nothing is written.
 			return oldDoc;
 		},
+		19(oldDoc: StoreDocumentType) {
+			// v19 exists because two v18 schemas were published to `@next`: #2796's eight
+			// icon families and #3099's three. RxDB keeps the schema hash per version, so a
+			// dev-next install that opened the first refused the second with DB6 ("Failed
+			// to create user database", 2026-10-30). "Unreleased" means no store build holds
+			// it; it never means no database holds it. A family #3099 dropped reads as the
+			// default set, which is what the icon provider already falls back to.
+			if (!['tabler', 'hugeicons', 'phosphor'].includes(oldDoc.icons as string)) {
+				oldDoc.icons = 'tabler';
+			}
+			return oldDoc;
+		},
 	},
 };
 
