@@ -3,6 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { Breadcrumb } from '../breadcrumb';
 import { EdgeSurface } from '../edge-surface';
+import { useTitleBarStrip } from '../edge-surface/title-bar-strip';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
@@ -54,10 +55,10 @@ export function PageBar({
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	// A phone's search takes a row of its own only when the control row has a title, a scope
 	// control, a crumb or the menu to share it with. A row of nothing but icons (the POS products
-	// column, whose register bar above carries the place and the menu) keeps it in its middle,
+	// column; the menu too, under the desktop title bar, Paul 2026-10-30) keeps it in its middle,
 	// so the search does not spend a second row (Paul, 2026-10-28).
-	const searchRow =
-		phone && (title !== undefined || titleSlot != null || back != null || onMenu != null);
+	const menuRow = !useTitleBarStrip().height && onMenu != null;
+	const searchRow = phone && (title !== undefined || titleSlot != null || back != null || menuRow);
 	return (
 		// The bar touches the top edge; inside a column that pads it already (the POS products
 		// column), there is nothing left to pad.

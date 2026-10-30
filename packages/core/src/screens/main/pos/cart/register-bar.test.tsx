@@ -210,14 +210,11 @@ it('the cashier sheet Close register door opens the count pane through the bar',
 });
 
 // The desktop title bar carries the place and the pill (Paul, 2026-10-30): under it the till's
-// bar draws nothing, while the panel and the avatarless entry stay mounted; the entry still opens
-// the sheet the title bar asks for. A phone-width window keeps the bar for its menu.
-it.each([
-	[false, true],
-	[true, false],
-])(
-	'with a strip of 28 (phone: %s) hides the bar: %s, keeps the panel and the headless entry',
-	(phone, hidden) => {
+// bar draws nothing at any width, while the panel and the avatarless entry stay mounted; the
+// entry still opens the sheet the title bar asks for. The products bar takes the phone's menu.
+it.each([false, true])(
+	'with a strip hides the row at phone width too (phone: %s), keeps the panel and the headless entry',
+	(phone) => {
 		mockIsPhone = phone;
 		const till = { currentOrderRecord: {} } as unknown as React.ContextType<
 			typeof CurrentOrderContext
@@ -229,9 +226,7 @@ it.each([
 				</CurrentOrderContext.Provider>
 			</TitleBarStripProvider>
 		);
-		expect(screen.getByTestId('register-bar-row').className.split(' ').includes('hidden')).toBe(
-			hidden
-		);
+		expect(screen.getByTestId('register-bar-row').className.split(' ')).toContain('hidden');
 		expect(screen.getByTestId('requested-pane')).toBeTruthy();
 		expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
 		expect(screen.queryByTestId('register-bar-bell')).toBeNull();

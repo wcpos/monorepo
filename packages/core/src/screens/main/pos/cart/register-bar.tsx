@@ -42,9 +42,8 @@ export function RegisterBar({
 	const menu = useBarMenu();
 	const stores = useDocField(wpCredentials, (value) => value.stores) as string[];
 	const { place, pillLabel } = useRegisterBarState();
-	// The desktop title bar carries the place and the pill (Paul, 2026-10-30): under it the row is
-	// hidden, its avatarless entry mounted; a phone-width window keeps the row for its menu.
-	const underStrip = useTitleBarStrip().height > 0 && !menu;
+	// The title bar carries the place and the pill (Paul, 2026-10-30): the row hides under it.
+	const underStrip = useTitleBarStrip().height > 0;
 	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
 	// and inside the bar's gap row that root was an invisible 8 pt cell pushing the bell and
 	// the avatar out of line with the row below (Paul, 2026-10-09). The bar has no register
