@@ -11,6 +11,10 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
+import { Text } from '@wcpos/components/text';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { type CarryTarget, readCarriedFrom } from '@wcpos/query/register-session';
 import { Notice } from '@wcpos/components/notice';
 import { useDocField } from '@wcpos/query';
 import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
@@ -31,7 +35,7 @@ import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-h
 
 export type SwitchRequest =
 	| { kind: 'cashier'; credential: ReadonlyWpCredentialsRecord }
-	| { kind: 'store'; store: ReadonlyStoreRecord }
+	| { kind: 'store'; store: ReadonlyStoreRecord; carry?: CarryTarget }
 	// `state` is the band's description line and `open` the same resolved session (device cache
 	// first, then the directory row), so the confirm's two lines never disagree (CodeRabbit, #3046).
 	| { kind: 'register'; register: Register; state: string; open: boolean }
@@ -51,8 +55,15 @@ export function SwitchConfirm({
 	onSignOutAnyway: () => void;
 }) {
 	const t = useT();
+	const online = useOnlineStatus().status === 'online-website-available';
+	const [choice, setChoice] = React.useState('take');
+	const [previous, setPrevious] = React.useState(request);
+	if (request !== previous) {
+		setPrevious(request);
+		setChoice('take');
+	}
 	const { wpCredentials, store, site } = useStoreSession();
-	const { session, expected, blind, figuresPending, binding } = useRegisterSession();
+	const { session, expected, blind, figuresPending, binding, unsyncedCount } = useRegisterSession();
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -76,7 +87,14 @@ export function SwitchConfirm({
 			: timezone;
 	const time = (date: Date) => formatDate(date, 'HH:mm', zoneOptions(zone));
 	const { format } = useCurrencyFormat();
+	const reason = figuresPending
+		? t('register.figures_after_sync')
+		: unsyncedCount > 0
+			? t('register.send_sales_first', { count: unsyncedCount })
+			: '';
+	if (reason && choice !== 'leave') setChoice('leave');
 	if (!request) return null;
+	let carry: CarryTarget | undefined;
 	let title: string, description: string, confirm: string;
 	let body: React.ReactNode;
 	switch (request.kind) {
@@ -127,6 +145,50 @@ export function SwitchConfirm({
 			// Until the target's directory has answered once, say nothing about its register: an
 			// empty list is "not loaded yet", not "you'll choose one" (CodeRabbit, #3046).
 			const known = y.loaded || y.registers.length > 0;
+			const offered =
+				binding.status === 'bound' &&
+				session?.status === 'open' &&
+				online &&
+				target &&
+				!target.session;
+			if (offered) {
+				if (!reason && choice === 'take')
+					carry = {
+						store: { id: request.store.id!, name: name ?? '' },
+						register: { id: target.id, name: target.name },
+					};
+				const back =
+					readCarriedFrom(site.uuid!, binding.registerId!, session.id)?.store_id ===
+					request.store.id;
+				body = (
+					<RadioGroup
+						testID="switch-confirm-carry"
+						value={reason ? 'leave' : choice}
+						onValueChange={setChoice}
+					>
+						<RadioGroupOption
+							testID="switch-confirm-carry-take"
+							value="take"
+							disabled={!!reason}
+							label={back ? t('register.take_drawer_back') : t('register.take_drawer')}
+							description={t('register.take_drawer_hint', {
+								register: binding.registerName,
+								target: target.name,
+							})}
+						/>
+						{!!reason && (
+							<Text testID="switch-confirm-carry-reason" variant="help">
+								{reason}
+							</Text>
+						)}
+						<RadioGroupOption
+							testID="switch-confirm-carry-leave"
+							value="leave"
+							label={t('register.leave_drawer')}
+						/>
+					</RadioGroup>
+				);
+			}
 			title = t('register.switch_to_question', { name });
 			description = [
 				t('register.store_switch_reloads', { name }),
@@ -138,7 +200,7 @@ export function SwitchConfirm({
 								})
 							: t('register.store_register_closed')
 						: t('register.store_register_choose')),
-				session && t('register.drawer_stays_here', { register: binding.registerName }),
+				session && !carry && t('register.drawer_stays_here', { register: binding.registerName }),
 			]
 				.filter(Boolean)
 				.join(' ');
@@ -188,7 +250,7 @@ export function SwitchConfirm({
 						testID: 'switch-confirm-confirm',
 						disabled: request.kind === 'sign-out' && figuresPending,
 						onPress: () => {
-							onConfirm(request);
+							onConfirm(request.kind === 'store' && carry ? { ...request, carry } : request);
 							onOpenChange(false);
 						},
 					}}

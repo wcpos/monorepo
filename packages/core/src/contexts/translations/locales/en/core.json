@@ -3107,5 +3107,14 @@
 	"register.session_sales": "Session sales",
 	"register.term_count": "{term} · {count}",
 	"register.taken": "Taken",
-	"register.close_register_past": "Close register · it's past {time}"
+	"register.close_register_past": "Close register · it's past {time}",
+	"register.take_drawer": "Take the drawer with you",
+	"register.take_drawer_hint": "Closes {register} at expected and opens {target} with it as the float",
+	"register.take_drawer_back": "Take the drawer back",
+	"register.leave_drawer": "Leave it open here",
+	"register.send_sales_first": "Send {count} sales first",
+	"register.carried_to": "Carried to {store}",
+	"register.carried": "Carried",
+	"register.carried_from": "carried from {store}",
+	"common.carry_failed": "The drawer could not be carried. Nothing has changed."
 }
