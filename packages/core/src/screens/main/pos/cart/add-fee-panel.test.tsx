@@ -90,7 +90,7 @@ jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: jest.fn()
 it('a body inside a side panel flexes and its footer is pinned', () => {
 	render(
 		<Dialog open>
-			<DialogContent side="left" inline>
+			<DialogContent side="right" inline>
 				<AddFee />
 			</DialogContent>
 		</Dialog>

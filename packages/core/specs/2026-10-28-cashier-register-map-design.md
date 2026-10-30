@@ -57,7 +57,7 @@ visual language does not change; every surface is built from components the gall
 
 - Lane `next`; branch per slice off `origin/next`; each PR ≤ 600 added production lines; review
   rounds end at 5.
-- Components only: `Dialog`/`DialogContent side` with `usePanelSide`, `DialogHeader`/`DialogTitle`/
+- Components only: `Dialog`/`DialogContent side` with `usePanelSide` _(amended 2026-10-30: every side panel opens from the right; the subject rule and `usePanelSide` are gone)_, `DialogHeader`/`DialogTitle`/
   `DialogDescription`, `DialogFooter` slots (never a `Button` in a footer), `AlertDialog` +
   `AlertDialogFooter`, `MenuRow` (choice with the check), `Notice`, `Badge tinted`, `StatusBadge`,
   `RadioGroup`, `Avatar`, `AmountFigure`, the `Derivation` rail, the pane-stack push. The closure
@@ -71,7 +71,7 @@ visual language does not change; every surface is built from components the gall
 - `CODING_STANDARDS.md` § Situation → overlay row "The cashier … `UserSheet` (right panel)" changes
   to: on the POS the products side (`usePanelSide('cart')`), on every other screen the page's
   `right`. Decision 46 (2026-09-17, bell and cashier from the right) is reversed for the cashier on
-  the POS only; the bell stays right. The 2026-09-11 ruling "counting → the count in the cart
+  the POS only; the bell stays right. _(amended 2026-10-30: every side panel opens from the right; the subject rule and `usePanelSide` are gone)_ The 2026-09-11 ruling "counting → the count in the cart
   column" is reversed by § 4.5.
 - Two small plugin changes on `woocommerce-pos` `next` (§ 4.5, § 4.6) ship as their own PRs before
   the client slices that read them; the client feature-detects both (an older plugin gets the
@@ -81,14 +81,14 @@ visual language does not change; every surface is built from components the gall
 
 ### 4.1 Places
 
-| Place          | Question it answers                                         | Opened from                                                                                                                                                       | Side                                                                         |
-| -------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Cart column    | the register's state when there is no register to sell with | always                                                                                                                                                            | in place                                                                     |
-| Register panel | what is in my drawer now and what moved it; the close       | the bar's drawer icon; the cashier sheet's drawer tile, on every screen; the empty cart's own Close register button past closing time (`checkout-close-register`) | products side on the POS (`usePanelSide('cart')`); right on any other screen |
-| Cashier sheet  | who am I, where am I, how do I change that                  | the avatar (`CashierEntry`: rail on lg, bar below, on every screen); the register bar's store title (Pro, >1 store)                                               | `right` on every screen (Paul, 2026-10-30; was products side on the POS)     |
-| The confirm    | what a switch does before it happens                        | any switch row; Sign out with an open register                                                                                                                    | centred `AlertDialog`                                                        |
-| Closure pane   | one closure, read back                                      | the panel's last-closure row (pushed); Reports › Closures and the till strip (Reports side panel)                                                                 | same side as its host                                                        |
-| Notifications  | the shell's inbox                                           | the bell                                                                                                                                                          | right (unchanged)                                                            |
+| Place          | Question it answers                                         | Opened from                                                                                                                                                       | Side                                                                     |
+| -------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Cart column    | the register's state when there is no register to sell with | always                                                                                                                                                            | in place                                                                 |
+| Register panel | what is in my drawer now and what moved it; the close       | the bar's drawer icon; the cashier sheet's drawer tile, on every screen; the empty cart's own Close register button past closing time (`checkout-close-register`) | right on every screen (Paul, 2026-10-30; was products side on the POS)   |
+| Cashier sheet  | who am I, where am I, how do I change that                  | the avatar (`CashierEntry`: rail on lg, bar below, on every screen); the register bar's store title (Pro, >1 store)                                               | `right` on every screen (Paul, 2026-10-30; was products side on the POS) |
+| The confirm    | what a switch does before it happens                        | any switch row; Sign out with an open register                                                                                                                    | centred `AlertDialog`                                                    |
+| Closure pane   | one closure, read back                                      | the panel's last-closure row (pushed); Reports › Closures and the till strip (Reports side panel)                                                                 | same side as its host                                                    |
+| Notifications  | the shell's inbox                                           | the bell                                                                                                                                                          | right (unchanged)                                                        |
 
 One register-family panel is open at a time: opening the sheet while the panel is open replaces it;
 the sheet's drawer tile opens the panel and closes the sheet. Away from the POS the drawer tile opens the panel in place, from the right, hosted by the avatar's entry (Paul, 2026-10-30); the close works there as on the POS, since the cart holds Pay through the session's status, not through the panel.

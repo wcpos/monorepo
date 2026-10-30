@@ -377,7 +377,7 @@ becomes a page.
 
 | Situation                                                           | Overlay                                                            | Notes                                                                                            |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`                                   | `right` on a page; on the POS `usePanelSide` puts it over the other column                       |
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side`                                   | `right` on every screen (Paul, 2026-10-30)                                                       |
 | Confirm a loss                                                      | `AlertDialog`                                                      | no ×, the scrim does not dismiss, the confirm is solid `destructive`                             |
 | Row actions                                                         | `DropdownMenu` on an `IconButton` ⋮                                | destructive last and red, after a separator                                                      |
 | Display or column settings                                          | side panel (`UISettingsDialog`)                                    | on every screen, never a popover                                                                 |

@@ -144,7 +144,6 @@ jest.mock('observable-hooks', () => ({
 
 const mockPush = jest.fn();
 let mockSegments = ['(app)', '(drawer)', '(pos)'];
-let mockCartSide = 'left';
 let mockLastAccess = '2026-10-28T13:05:00Z';
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, push: mockPush }),
@@ -254,7 +253,6 @@ beforeEach(async () => {
 	mockBind.mockClear();
 	mockRefresh.mockClear();
 });
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {

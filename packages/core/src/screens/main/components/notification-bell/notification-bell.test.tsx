@@ -13,7 +13,6 @@ jest.mock('../../../../contexts/novu', () => ({
 	useNovuNotificationsSummary: () => ({ unreadCount: 2, markAllAsSeen: mockSeen }),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../pos/contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('./notification-panel', () => ({ NotificationPanelContent: () => mockPanel() }));
 function passthrough({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
 	return <div data-testid={testID}>{children}</div>;

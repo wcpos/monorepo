@@ -97,7 +97,6 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT(
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en' }) }));
 jest.mock('@wcpos/components/button', () => ({

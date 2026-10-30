@@ -86,7 +86,6 @@ export function CashierEntry({
 					open={panel.open}
 					initialPane={panel.pane}
 					onOpenChange={(open) => setPanel((p) => ({ ...p, open }))}
-					side="right"
 					portalHost={portalHost}
 				/>
 			)}

@@ -464,3 +464,29 @@ test('allows FormSegmentedControl in a FormField, and a SegmentedControl outside
 	);
 	assert.equal(restrictedSyntax(messages, FIELD_SEGMENTS).length, 0);
 });
+
+const PANELS_RIGHT = 'Every side panel opens from the right';
+
+test('rejects a left DialogContent under the core and main configs, in every literal form', async () => {
+	// Paul 2026-10-30: the cashier sheet, the register panel and a cash movement never swap edges.
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(
+			`export const Bad = ({ phone }) => <><DialogContent side="left" /><DialogContent side={'left'} /><UI.DialogContent side={phone ? 'left' : 'right'} /></>;`,
+			file,
+			'no-restricted-syntax',
+			base,
+			cwd
+		);
+		assert.equal(restrictedSyntax(messages, PANELS_RIGHT).length, 3);
+	}
+});
+
+test('allows a right DialogContent and a left PopoverContent', async () => {
+	const messages = await variantOwnership(
+		`export const Fine = () => <><DialogContent side="right" /><PopoverContent side="left" /></>;`
+	);
+	assert.equal(restrictedSyntax(messages, PANELS_RIGHT).length, 0);
+});

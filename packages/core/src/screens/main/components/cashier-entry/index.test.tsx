@@ -55,19 +55,16 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 jest.mock('../../pos/cart/register-panel', () => ({
 	RegisterPanel: ({
 		open,
-		side,
 		portalHost,
 		initialPane,
 	}: {
 		open: boolean;
-		side?: 'left' | 'right';
 		portalHost?: string | null;
 		initialPane?: 'register' | 'count';
 	}) => (
 		<div
 			data-testid="register-panel"
 			data-open={String(open)}
-			data-side={side}
 			data-portal={String(portalHost)}
 			data-pane={initialPane}
 		/>
@@ -186,7 +183,7 @@ it('off the till, the title bar opens its own sheet', () => {
 	expect(screen.getByTestId('user-sheet').getAttribute('data-order')).toBe('undefined');
 });
 
-it("outside the till, the drawer door opens the register panel in place from the right, on the entry's host", () => {
+it("outside the till, the drawer door opens the register panel in place, on the entry's host", () => {
 	render(<CashierEntry testID="avatar" portalHost="scene" />);
 	expect(screen.queryByTestId('register-panel')).toBeNull();
 	fireEvent.click(screen.getByTestId('avatar'));
@@ -194,7 +191,6 @@ it("outside the till, the drawer door opens the register panel in place from the
 	fireEvent.click(screen.getByTestId('open-register'));
 	const panel = screen.getByTestId('register-panel');
 	expect(panel.getAttribute('data-open')).toBe('true');
-	expect(panel.getAttribute('data-side')).toBe('right');
 	expect(panel.getAttribute('data-portal')).toBe('scene');
 	expect(panel.getAttribute('data-pane')).toBe('register');
 });

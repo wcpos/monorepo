@@ -504,15 +504,10 @@ it('shows the refund title without email and keeps sale actions unchanged', () =
 	}
 });
 
-// Revert: ignore the explicit cart side or derive it from the removed POS provider.
-it.each([null, mockOrder])(
-	'uses the explicit panel side for a resolved or missing order (%p)',
-	(order) => {
-		mockSuspenseValue = order;
-		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
-		const { rerender } = render(<Receipt {...{ resource: {} as never, side: 'left' as const }} />);
-		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('left');
-		rerender(<Receipt resource={{} as never} />);
-		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('right');
-	}
-);
+// Every side panel opens from the right (Paul, 2026-10-30), the POS receipt included.
+it.each([null, mockOrder])('opens from the right for a resolved or missing order (%p)', (order) => {
+	mockSuspenseValue = order;
+	mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	render(<Receipt resource={{} as never} />);
+	expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('right');
+});

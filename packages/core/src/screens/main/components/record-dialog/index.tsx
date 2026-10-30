@@ -31,8 +31,6 @@ export interface RecordDialogProps<R> {
 	payload: object | undefined;
 	/** A `DialogFooter` (its slots decide the buttons), under the tabs. */
 	footer?: React.ReactNode;
-	/** `right` on a page; on the POS, `usePanelSide` with the `pos` portal host. */
-	side?: 'left' | 'right';
 	portalHost?: string;
 	testID?: string;
 }
@@ -46,7 +44,6 @@ export function RecordDialog<R>({
 	initialTab,
 	payload,
 	footer,
-	side = 'right',
 	portalHost,
 	testID,
 }: RecordDialogProps<R>) {
@@ -62,7 +59,7 @@ export function RecordDialog<R>({
 
 	return (
 		// One size for every record panel: the larger of the two in use (LEDGER line 1).
-		<DialogContent side={side} size="xl" portalHost={portalHost} testID={testID}>
+		<DialogContent side="right" size="xl" portalHost={portalHost} testID={testID}>
 			<DialogHeader>
 				<DialogTitle>
 					<Text decodeHtml>{title}</Text>

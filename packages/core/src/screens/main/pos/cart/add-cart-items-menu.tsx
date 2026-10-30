@@ -25,12 +25,10 @@ import { useRegisterSurface } from '../../../../extensions/commands/use-register
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-import { usePanelSide } from '../contexts/overlay-side';
 
 type DialogType = 'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'coupon' | null;
 
 export function AddCartItemsMenu() {
-	const side = usePanelSide('cart');
 	const t = useT();
 	const { license } = useAppInfo();
 	const isPro = license?.isPro ?? false;
@@ -105,7 +103,7 @@ export function AddCartItemsMenu() {
 
 			{openDialog === 'misc-product' && (
 				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-					<DialogContent side={side} testID="add-misc-product-dialog" size="lg" portalHost="pos">
+					<DialogContent side="right" testID="add-misc-product-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
 						</DialogHeader>
@@ -119,7 +117,7 @@ export function AddCartItemsMenu() {
 			{(openDialog === 'fee' || openDialog === 'discount') && (
 				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 					<DialogContent
-						side={side}
+						side="right"
 						testID={openDialog === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'}
 						size="lg"
 						portalHost="pos"
@@ -136,7 +134,7 @@ export function AddCartItemsMenu() {
 
 			{openDialog === 'shipping' && (
 				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-					<DialogContent side={side} testID="add-shipping-dialog" size="lg" portalHost="pos">
+					<DialogContent side="right" testID="add-shipping-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
 						</DialogHeader>
@@ -149,7 +147,7 @@ export function AddCartItemsMenu() {
 
 			{openDialog === 'coupon' && (
 				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-					<DialogContent side={side} size="lg" portalHost="pos">
+					<DialogContent side="right" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_coupon')}</DialogTitle>
 						</DialogHeader>
