@@ -5,13 +5,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import type { UserDatabase } from '@wcpos/database';
-import {
-	readRegister,
-	recordCarriedFrom,
-	type RegisterDocument,
-} from '@wcpos/query/register-session';
+import { readRegister, type RegisterDocument } from '@wcpos/query/register-session';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 
+import { recordCarriedFrom } from '../../../../../../query/src/register-session/register-document';
 import { createTestT } from '../../../../../jest/translate';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 jest.mock('@wcpos/query/user-db', () => ({
