@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useUniwind } from 'uniwind';
 
 import { TitleBarStripProvider } from '@wcpos/components/edge-surface';
+import { hasDarkRail } from '@wcpos/components/lib/themes';
 import type { TypedIpcRenderer, WindowColorScheme } from '@wcpos/printer/ipc-channels';
 
 /**
@@ -107,13 +108,13 @@ function subscribeToTitleBarGeometry(onChange: () => void): () => void {
 }
 
 /**
- * Windows/Linux draw the window-control glyphs over the page and default their
- * colour to the OS theme, not ours. Every theme but `light` has a dark rail.
+ * Windows/Linux draw the window-control glyphs over the rail and default their
+ * colour to the OS theme, not ours. The rail, not the page, decides their scheme.
  * A leaf, like the auth stack's ThemedSystemBars: `useUniwind` re-renders on
  * every theme change and must not drag the whole tree with it.
  */
 export function windowColorScheme(theme: string): WindowColorScheme {
-	return theme === 'light' ? 'light' : 'dark';
+	return hasDarkRail(theme) ? 'dark' : 'light';
 }
 
 function WindowColorSchemeSync(): null {

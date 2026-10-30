@@ -5,6 +5,7 @@ import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
 import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useDocField } from '@wcpos/query';
@@ -194,7 +195,7 @@ function POSStack() {
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
 				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
-					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
+					<SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />
 					{/* With the upgrade notice showing, the notice owns the top edge: this column pads
 					    the status bar in the notice's colour, and nothing under it touches the top. */}
 					<EdgeSurface

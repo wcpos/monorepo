@@ -4,6 +4,7 @@ import { Redirect, Stack } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
@@ -17,7 +18,7 @@ export const unstable_settings = {
 
 /**
  * Status bar style for auth screens.
- * - Light theme: dark icons (background is light)
+ * - Light themes: dark icons (background is light)
  * - Dark themes: light icons (background is dark)
  *
  * Isolated into its own component so that `useUniwind()` does not cause
@@ -26,7 +27,7 @@ export const unstable_settings = {
  */
 function ThemedSystemBars() {
 	const { theme } = useUniwind();
-	const statusBarStyle = theme === 'light' ? 'dark' : 'light';
+	const statusBarStyle = isLightTheme(theme) ? 'dark' : 'light';
 	return <SystemBars style={statusBarStyle} />;
 }
 

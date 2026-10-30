@@ -157,8 +157,10 @@ describe('DesktopWindowChrome (electron) on an older shell', () => {
 });
 
 describe('windowColorScheme', () => {
-	it('is light only for the light theme: every other theme has a dark rail', async () => {
-		expect(windowColorScheme('light')).toBe('light');
+	it('is light for every light-rail theme and dark for the rest', async () => {
+		for (const light of ['light', 'paper', 'warm']) {
+			expect(windowColorScheme(light)).toBe('light');
+		}
 		for (const dark of ['dark', 'ocean', 'sunset', 'monochrome']) {
 			expect(windowColorScheme(dark)).toBe('dark');
 		}

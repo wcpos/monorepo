@@ -6,6 +6,7 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
@@ -169,7 +170,7 @@ function Scene({ children }: { children: React.ReactNode }) {
 
 function ThemedSystemBars() {
 	const { theme } = useUniwind();
-	return <SystemBars style={theme === 'light' ? 'dark' : 'light'} />;
+	return <SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />;
 }
 
 function DrawerLayoutContent() {

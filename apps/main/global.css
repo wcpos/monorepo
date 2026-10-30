@@ -884,6 +884,160 @@
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
     }
+
+    /* ========================================
+     * PAPER THEME — Cream paper and ink.
+     * Surface lightness: rail 0.912 < page 0.948 < card 0.977.
+     * ======================================== */
+    @variant paper {
+      --hairline-width: 1px;
+      --background: oklch(0.948 0.016 83);
+      --foreground: oklch(0.227 0.016 71);
+      --card: oklch(0.977 0.011 85);
+      --card-foreground: oklch(0.227 0.016 71);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.227 0.016 71);
+      --primary-foreground: oklch(0.977 0.011 85);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.918 0.023 85);
+      --muted-foreground: oklch(0.47 0.03 78);
+      --accent: oklch(0.905 0.028 84);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.50 0.15 34);
+      --destructive-foreground: oklch(0.99 0.01 34);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.852 0.031 84);
+      --input: var(--card);
+      --ring: oklch(0.227 0.016 71);
+      --selected: oklch(0.885 0.035 84);
+      --selected-foreground: oklch(0.227 0.016 71);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.912 0.023 85);
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.87 0.035 84);
+      --rail-foreground: oklch(0.437 0.027 78);
+      --rail-border: oklch(0.852 0.031 84);
+      --ok: oklch(0.50 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.96 0.02 34);
+      --neutral: oklch(0.62 0.02 84);
+      --scrim: oklch(0.25 0.02 70 / .3);
+      --c1: oklch(0.52 0.12 45);
+      --c2: oklch(0.55 0.10 150);
+      --c3: oklch(0.70 0.13 80);
+      --c4: oklch(0.50 0.10 320);
+      --c5: oklch(0.65 0.03 84);
+      --tile-tint-0: oklch(0.90 0.05 85);
+      --tile-tint-1: oklch(0.89 0.05 60);
+      --tile-tint-2: oklch(0.90 0.05 130);
+      --tile-tint-3: oklch(0.89 0.04 300);
+      --tile-tint-4: oklch(0.90 0.06 40);
+      --tile-tint-5: oklch(0.90 0.04 200);
+    }
+
+    /* ========================================
+     * WARM THEME — Warm neutrals and terracotta.
+     * Surface lightness: rail 0.925 < page 0.965 < card 0.995.
+     * ======================================== */
+    @variant warm {
+      --hairline-width: 1px;
+      --background: oklch(0.965 0.007 81);
+      --foreground: oklch(0.266 0.012 56);
+      --card: oklch(0.995 0.005 78);
+      --card-foreground: oklch(0.266 0.012 56);
+      --popover: var(--card);
+      --popover-foreground: var(--card-foreground);
+      --primary: oklch(0.484 0.092 41);
+      --primary-foreground: oklch(0.983 0.010 58);
+      --secondary: var(--muted-foreground);
+      --secondary-foreground: var(--card);
+      --muted: oklch(0.937 0.013 75);
+      --muted-foreground: oklch(0.47 0.02 65);
+      --accent: oklch(0.95 0.025 41);
+      --accent-foreground: var(--foreground);
+      --destructive: oklch(0.52 0.135 35);
+      --destructive-foreground: oklch(0.99 0.01 35);
+      --success: var(--ok);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.48 0.12 262);
+      --info-foreground: oklch(0.98 0.01 240);
+      --action: oklch(0.55 0.18 295);
+      --action-foreground: oklch(0.98 0.01 295);
+      --attention: var(--warning);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning-foreground: oklch(0.25 0.03 90);
+      --border: oklch(0.895 0.017 76);
+      --input: var(--card);
+      --ring: oklch(0.484 0.092 41);
+      --selected: oklch(0.92 0.04 41);
+      --selected-foreground: oklch(0.42 0.10 41);
+      --card-header: var(--muted);
+      --sidebar: var(--rail);
+      --sidebar-foreground: var(--rail-foreground);
+      --sidebar-border: var(--rail-border);
+      --table-row: var(--card);
+      --table-row-alt: var(--background);
+      --table-header: var(--muted);
+      --footer: var(--muted);
+      --chart-1: var(--c1);
+      --chart-2: var(--c2);
+      --chart-3: var(--c3);
+      --chart-4: var(--c4);
+      --chart-5: var(--c5);
+      --rail: oklch(0.925 0.015 77);
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.88 0.03 41);
+      --rail-foreground: oklch(0.456 0.021 67);
+      --rail-border: oklch(0.895 0.017 76);
+      --ok: oklch(0.50 0.16 155);
+      --ok-bg: oklch(0.96 0.03 155);
+      --warning: oklch(0.68 0.16 70);
+      --warning-text: oklch(0.50 0.13 70);
+      --warning-bg: oklch(0.97 0.04 85);
+      --bad: var(--destructive);
+      --bad-bg: oklch(0.96 0.02 35);
+      --neutral: oklch(0.62 0.015 76);
+      --scrim: oklch(0.25 0.02 50 / .3);
+      --c1: oklch(0.484 0.092 41);
+      --c2: oklch(0.60 0.07 131);
+      --c3: oklch(0.72 0.12 80);
+      --c4: oklch(0.55 0.12 330);
+      --c5: oklch(0.70 0.02 76);
+      --tile-tint-0: oklch(0.88 0.07 47);
+      --tile-tint-1: oklch(0.88 0.06 131);
+      --tile-tint-2: oklch(0.88 0.06 76);
+      --tile-tint-3: oklch(0.87 0.06 330);
+      --tile-tint-4: oklch(0.90 0.09 85);
+      --tile-tint-5: oklch(0.88 0.05 200);
+    }
   }
 }
 

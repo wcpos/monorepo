@@ -109,7 +109,7 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 
 config = withUniwindConfig(config, {
 	cssEntryFile: './global.css',
-	extraThemes: ['ocean', 'sunset', 'monochrome'],
+	extraThemes: ['ocean', 'sunset', 'monochrome', 'paper', 'warm'],
 });
 
 // Outermost on purpose: every serializer wrapper above (Expo, Atlas, uniwind)
