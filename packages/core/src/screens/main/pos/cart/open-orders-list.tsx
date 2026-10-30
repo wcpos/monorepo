@@ -6,6 +6,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
@@ -138,6 +139,7 @@ function OrderRow({
 		? convertUTCStringToLocalDate(payload.date_created_gmt).getTime()
 		: undefined;
 	const stale = openedMs !== undefined && nowMs - openedMs >= STALE_AFTER_MS;
+	const ink = stale ? 'text-warning-text' : 'text-muted-foreground';
 	return (
 		<ListRow
 			testID={`open-orders-row-${order.uuid}`}
@@ -169,20 +171,18 @@ function OrderRow({
 					<HStack space="sm">
 						{/* A cart that will restart with its next line has no age to show (#2183). */}
 						{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
-							<HStack space="xs">
-								<Icon
-									name="pending"
-									size="xs"
-									className={stale ? 'text-warning-text' : 'text-muted-foreground'}
-								/>
-								<Text
-									testID={`open-orders-row-${order.uuid}-age`}
-									variant="help"
-									className={stale ? 'text-warning-text font-semibold' : undefined}
-								>
-									{relative(openedMs, nowMs)}
-								</Text>
-							</HStack>
+							<TextClassContext.Provider value={ink}>
+								<HStack space="xs">
+									<Icon name="pending" size="xs" />
+									<Text
+										testID={`open-orders-row-${order.uuid}-age`}
+										variant="help"
+										className={stale ? `${ink} font-semibold` : undefined}
+									>
+										{relative(openedMs, nowMs)}
+									</Text>
+								</HStack>
+							</TextClassContext.Provider>
 						)}
 						<TabChip order={order} fallbackLabel={getLabel(payload.status)} fallbackIsStatus />
 					</HStack>

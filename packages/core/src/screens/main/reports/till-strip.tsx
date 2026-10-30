@@ -14,6 +14,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
@@ -304,34 +305,23 @@ export function TillStrip({
 			>
 				{rows.map(([id, sign, label, amount]) => {
 					const primary = open && sign === '=';
-					const color = primary
-						? 'text-primary-foreground'
-						: id === 'till-result'
-							? resultColor
-							: '';
+					const ink = primary ? 'text-primary-foreground' : 'text-muted-foreground';
+					const color = primary ? '' : id === 'till-result' ? resultColor : 'text-foreground';
 					const chip = (
 						<View
 							testID={id}
 							className={`rounded-md px-2.5 py-1 ${primary ? 'bg-primary' : 'bg-muted'} ${phone ? 'flex-1 flex-row items-center gap-2' : ''}`}
 						>
-							{phone && (
+							<TextClassContext.Provider value={ink}>
+								{phone && <Text className="w-4 text-center font-semibold">{sign}</Text>}
+								<Text className={phone ? 'flex-1' : 'text-sm'}>{label}</Text>
 								<Text
-									className={`w-4 text-center font-semibold ${primary ? color : 'text-muted-foreground'}`}
+									testID={`${id}-amount`}
+									className={`font-semibold tabular-nums ${color} ${phone ? 'text-right' : ''}`}
 								>
-									{sign}
+									{amount}
 								</Text>
-							)}
-							<Text
-								className={`${primary ? color : 'text-muted-foreground'} ${phone ? 'flex-1' : 'text-sm'}`}
-							>
-								{label}
-							</Text>
-							<Text
-								testID={`${id}-amount`}
-								className={`font-semibold tabular-nums ${color} ${phone ? 'text-right' : ''}`}
-							>
-								{amount}
-							</Text>
+							</TextClassContext.Provider>
 						</View>
 					);
 					return (

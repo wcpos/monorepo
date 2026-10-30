@@ -5,7 +5,8 @@ import { HStack } from '../hstack';
 import { Icon } from '../icon';
 import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 // A label is a store name as WooCommerce sends it, entities and all ("Flags &amp; Banners"):
 // the crumb decodes it, as the tile and the row for the same term do.

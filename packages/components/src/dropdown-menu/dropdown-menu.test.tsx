@@ -5,7 +5,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { mockPhone, mockRoot } from './sheet.test-utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 import * as C from './index';
 jest.mock('@rn-primitives/dropdown-menu', () =>
 	jest.requireActual('./sheet.test-utils').mockPrimitive()

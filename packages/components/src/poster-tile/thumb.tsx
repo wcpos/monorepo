@@ -2,6 +2,7 @@ import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Image } from '../image';
+import { TextClassContext } from '../text/context';
 import { Mark } from './mark';
 import { CARD, FAR, NEAR, TINTS } from './style';
 
@@ -26,6 +27,7 @@ export function PosterThumb({
 }: PosterThumbProps) {
 	const tint = picture.kind === 'tint' ? picture.tint : null;
 	const filled = picture.kind === 'fill';
+	const ink = filled ? 'text-primary-foreground' : undefined;
 	return (
 		<View
 			className={`relative overflow-visible ${size === 'md' ? 'size-14' : 'size-10'}`}
@@ -64,12 +66,9 @@ export function PosterThumb({
 							: 'absolute inset-0 items-center justify-center'
 					}
 				>
-					<Mark
-						mark={mark}
-						bare={tint !== null || filled}
-						compact
-						className={filled ? 'text-primary-foreground' : undefined}
-					/>
+					<TextClassContext.Provider value={ink}>
+						<Mark mark={mark} bare={tint !== null || filled} compact />
+					</TextClassContext.Provider>
 				</View>
 			)}
 		</View>

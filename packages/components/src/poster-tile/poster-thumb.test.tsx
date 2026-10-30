@@ -37,7 +37,12 @@ jest.mock('react-native-svg', () => {
 });
 jest.mock('uniwind', () => ({ useCSSVariable: () => '#fff' }));
 jest.mock('../icon', () => ({
-	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const { cn } = jest.requireActual('../lib/utils');
+		const inherited = React.useContext(TextClassContext);
+		return <span data-icon={name} data-classes={cn(inherited, className)} />;
+	},
 }));
 jest.mock('../image', () => ({
 	Image: () => <span data-testid="picture" />,
@@ -49,6 +54,10 @@ it('puts a folder bare in a tint, without a circle', () => {
 	);
 	expect(container.querySelector('[data-icon="category"]')).not.toBeNull();
 	expect(container.querySelector('[data-classes*="rounded-full"]')).toBeNull();
+	// no ink provided on a tint: the bare glyph keeps the muted default
+	expect(container.querySelector('[data-icon="category"]')?.getAttribute('data-classes')).toBe(
+		'text-muted-foreground'
+	);
 });
 
 it('puts a folder in a circle over a picture', () => {
@@ -67,4 +76,14 @@ it('puts a folder in a circle over a picture', () => {
 it('draws two cards behind a stacked thumb', () => {
 	render(<PosterThumb picture={{ kind: 'tint', tint: 2 }} stacked />);
 	expect(screen.getByTestId('poster-stack').children).toHaveLength(2);
+});
+
+it('one ink: a filled thumb provides primary foreground to its mark', () => {
+	const { container } = render(
+		<PosterThumb picture={{ kind: 'fill' }} mark={{ kind: 'folder' }} />
+	);
+	const nodes = container.querySelectorAll('[data-icon]');
+	expect(nodes).toHaveLength(1);
+	for (const node of nodes)
+		expect(node.getAttribute('data-classes')).toBe('text-primary-foreground');
 });

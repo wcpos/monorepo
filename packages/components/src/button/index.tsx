@@ -7,7 +7,8 @@ import { HStack } from '../hstack';
 import { Icon, type IconName, type IconProps } from '../icon';
 import { Loader } from '../loader';
 import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { VariantProps } from 'class-variance-authority';
 

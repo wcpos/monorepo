@@ -28,7 +28,14 @@ jest.mock('react-native', () => {
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('../icon', () => ({
-	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const inherited = React.useContext(TextClassContext) as string | undefined;
+		return React.createElement('span', {
+			'data-icon': name,
+			'data-classes': [inherited, className].filter(Boolean).join(' '),
+		});
+	},
 }));
 
 const segments = [
@@ -135,4 +142,26 @@ it('grows for a wrapped label instead of clipping it', () => {
 	const root = screen.getByRole('radiogroup').getAttribute('class')?.split(' ') ?? [];
 	expect(root).toContain('min-h-ctl');
 	expect(root).not.toContain('h-ctl');
+});
+
+it('one ink: selected and unselected segments give every glyph and word the same ink', () => {
+	render(
+		<SegmentedControl
+			segments={[
+				{ value: 'a', label: 'A', icon: 'plus' },
+				{ value: 'b', label: 'B', icon: 'check' },
+			]}
+			value="a"
+			onValueChange={jest.fn()}
+		/>
+	);
+	for (const [index, radio] of screen.getAllByRole('radio').entries()) {
+		const inked = Array.from(radio.querySelectorAll<HTMLElement>('[data-classes]'));
+		expect(inked).toHaveLength(2);
+		for (const node of inked) {
+			expect(node.dataset.classes?.match(/\btext-(?:muted-)?foreground\b/g)).toEqual([
+				index === 0 ? 'text-foreground' : 'text-muted-foreground',
+			]);
+		}
+	}
 });

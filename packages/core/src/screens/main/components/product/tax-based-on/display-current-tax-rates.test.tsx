@@ -14,6 +14,19 @@ import type { TaxRateData } from '../../../contexts/tax-rates';
 
 // No tax, cart, order or extra-data provider and no mock of their hooks: on native the panel
 // renders at the root PortalHost, outside all of them, so everything must arrive as props.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Text: ({
+		children,
+		className,
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<span data-testid={testID} data-classes={className} className={className}>
+			{children}
+		</span>
+	),
+}));
+
 const mockClose = jest.fn();
 jest.mock('@wcpos/components/popover', () => ({
 	useRootContext: () => ({ onOpenChange: mockClose }),
@@ -94,6 +107,16 @@ it('renders the three nodes from props alone, with no tax provider above it', ()
 	expect(screen.getByText('common.rates_that_match_it')).toBeTruthy();
 	expect(screen.getByText('Standard rate')).toBeTruthy();
 	expect(screen.getByText('21%')).toBeTruthy();
+	for (const [label, ink] of [
+		['Standard rate', 'font-semibold'],
+		['VAT', 'text-muted-foreground'],
+	]) {
+		const nodes = screen
+			.getByText(label)
+			.parentElement!.parentElement!.querySelectorAll('[data-classes]');
+		expect(nodes.length).toBeGreaterThanOrEqual(3);
+		for (const node of nodes) expect(node.getAttribute('data-classes')).toContain(ink);
+	}
 	// A worldwide rate reads plain "anywhere", not "anywhere in GB".
 	expect(screen.getByText(/· common\.tax_why_anywhere$/)).toBeTruthy();
 	expect(screen.getByText(/· common\.tax_why_anywhere_in \{"country":"GB"\}$/)).toBeTruthy();

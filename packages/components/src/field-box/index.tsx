@@ -4,7 +4,7 @@ import { View, type ViewProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 /** What a field holds reads in the foreground, its placeholder muted. */
 const FIELD_TEXT = 'text-foreground placeholder:text-muted-foreground text-base';

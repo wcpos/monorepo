@@ -4,7 +4,8 @@ import * as SelectPrimitive from '@rn-primitives/select';
 import { Slot } from '@rn-primitives/slot';
 
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { SlottableTextProps } from '@rn-primitives/types';
 

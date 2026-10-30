@@ -10,7 +10,8 @@ import { AnchoredOverlay } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { MenuRow } from '../menu-row';
 import { POPOVER_ANCHOR } from '../popover/anchor';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type {
 	Option,

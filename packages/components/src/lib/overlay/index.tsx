@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEdgeInsets, useTitleBarStrip } from '../../edge-surface';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
-import { TextClassContext } from '../../text';
+import { TextClassContext } from '../../text/context';
 import { useIsPhone } from '../device';
 import {
 	EASE,

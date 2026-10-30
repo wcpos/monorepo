@@ -20,8 +20,7 @@ export function CameraScanButton({ open, onToggle }: CameraScanButtonProps) {
 			<TooltipTrigger asChild>
 				<IconButton
 					name="scan"
-					variant={open ? 'primary' : 'default'}
-					iconClassName={open ? 'text-primary' : undefined}
+					on={open}
 					accessibilityLabel={
 						open ? t('pos_products.camera_scan_close') : t('pos_products.camera_scan_open')
 					}

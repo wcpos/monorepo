@@ -10,7 +10,7 @@ import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { Loader, Spin } from '../loader';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 import { useIconSet } from './set-context';
 import { ICON_SETS } from './sets';
 

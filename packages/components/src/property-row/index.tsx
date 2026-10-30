@@ -9,7 +9,8 @@ import { SavedMark, useSavedName } from '../form/saved-mark';
 import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Switch } from '../switch';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 /**
  * Property rows (Paul, 2026-10-25): a record is a list of facts, one row per fact, key · value ·

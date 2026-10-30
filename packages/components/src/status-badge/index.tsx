@@ -5,7 +5,8 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 // The dot carries the status colour and the word stays in the foreground, so a
 // status reads at arm's length in every theme and never by colour alone

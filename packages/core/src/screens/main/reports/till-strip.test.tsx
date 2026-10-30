@@ -6,7 +6,19 @@ import { of } from 'rxjs';
 
 import { TillStrip } from './till-strip';
 
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Text: ({
+		children,
+		className,
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<span data-testid={testID} data-classes={className} className={className}>
+			{children}
+		</span>
+	),
+}));
+
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
@@ -171,6 +183,7 @@ it('shows closed Expected · Counted = short result and dispatches the local rep
 	expect(screen.getByTestId('till-expected').textContent).toContain('£422.00');
 	expect(screen.getByTestId('till-counted').textContent).toContain('£412.00');
 	expect(screen.getByTestId('till-result').textContent).toContain('£10.00 short');
+	expect(screen.getByTestId('till-result-amount').className).toContain('text-bad');
 	expect(screen.getByTestId('till-since').textContent).toBe('Closed 12:30 · Pat');
 	expect(screen.getByTestId('till-reprint').textContent).toBe('Print again');
 	fireEvent.click(screen.getByTestId('till-reprint'));
@@ -201,6 +214,11 @@ it('renders the phone ledger with the result row last and actions below it', () 
 		screen.getByTestId('till-actions')
 	);
 	expect(screen.getByTestId('till-note').textContent).toContain('2 no-sales');
+	const inked = screen.getByTestId('till-expected').querySelectorAll('[data-classes]');
+	expect(inked).toHaveLength(3);
+	for (const node of inked)
+		expect(node.getAttribute('data-classes')).toContain('text-primary-foreground');
+	expect(screen.getByTestId('till-term-cash-sales-amount').className).toContain('text-foreground');
 });
 it.each(['unbound', 'off'])('keeps only the no-register title and chevron when %s', (state) => {
 	if (state === 'off') data.sessionsOn = false;

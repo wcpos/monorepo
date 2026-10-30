@@ -28,7 +28,12 @@ jest.mock('react-native', () => {
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('../icon', () => ({
-	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
+	Icon: ({ name, className }: { name: string; className?: string }) => {
+		const { TextClassContext } = jest.requireActual('../text');
+		const { cn } = jest.requireActual('../lib/utils');
+		const inherited = React.useContext(TextClassContext);
+		return <span data-icon={name} data-classes={cn(inherited, className)} />;
+	},
 }));
 
 const rows: readonly (readonly KeypadKey[])[] = [
@@ -109,4 +114,24 @@ it('without a separator there is no decimal key and 0 spans its cell', () => {
 		['0', 2],
 		['backspace', undefined],
 	]);
+});
+
+it.each([
+	[{ on: true, variant: 'bad' }, 'text-primary-foreground'],
+	[{ on: false }, 'text-primary'],
+	[{ variant: 'bad' }, 'text-bad'],
+	[{ variant: 'primary' }, 'text-primary'],
+] as const)('one ink: text and icon keys share %j', (state, ink) => {
+	const { container } = render(
+		<>
+			<Key name="word" label="Word" {...state} />
+			<Key name="glyph" label="Glyph" icon="plus" {...state} />
+		</>
+	);
+	const nodes = Array.from(container.querySelectorAll('[data-classes]')).filter(
+		(node) =>
+			node.hasAttribute('data-icon') || /\btext-/.test(node.getAttribute('data-classes') ?? '')
+	);
+	expect(nodes).toHaveLength(2);
+	for (const node of nodes) expect(node.getAttribute('data-classes')).toContain(ink);
 });

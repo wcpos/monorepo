@@ -6,7 +6,8 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { BeatingCount, type CountMotion, useCountBeat } from './count-beat';
 import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 export { BeatingCount, COUNT_MOTION, type CountMotion, useCountBeat } from './count-beat';
 

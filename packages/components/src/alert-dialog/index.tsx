@@ -16,7 +16,8 @@ import {
 	useSheetInset,
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
 
 import type { FooterButton } from '../dialog';
