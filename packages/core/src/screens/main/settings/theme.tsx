@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { type LayoutChangeEvent, View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
@@ -11,6 +12,7 @@ import {
 	IconSetProvider,
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { iconSetForTheme } from '@wcpos/components/lib/themes';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Tile } from '@wcpos/components/tile';
@@ -34,40 +36,46 @@ type ThemeOption = {
 };
 
 /**
- * Single theme button. Isolated so the parent doesn't need `useUniwind()`.
+ * A theme tile narrower than this cuts its name and description: rendered 2026-10-30, 78 wide
+ * at a 768 window broke "Monochrome" mid-word, 130 wide at 1024 fit every line.
+ */
+const MIN_TILE_WIDTH = 128;
+/** The grid's gutter, `TileGrid`'s `gap-2`. */
+const TILE_GAP = 8;
+/** Two tiles even on a phone, never more than the tender pane's five. */
+const MIN_COLUMNS = 2;
+const MAX_COLUMNS = 5;
+
+/** As many columns as the grid's width gives tiles of `MIN_TILE_WIDTH`, two to five. */
+export function themeColumns(width: number): number {
+	const fit = Math.floor((width + TILE_GAP) / (MIN_TILE_WIDTH + TILE_GAP));
+	return Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, fit));
+}
+
+/**
+ * One theme tile, as the tender pane and the register panel draw theirs: the tile's own
+ * surface and ink carry the selected state. Isolated so the parent doesn't need `useUniwind()`.
  */
 function ThemeOptionButton({
 	option,
 	activeTheme,
 	onPress,
-	t,
 }: {
 	option: ThemeOption;
 	activeTheme: string;
 	onPress: (name: string) => Promise<void> | void;
-	t: ReturnType<typeof useT>;
 }) {
-	const isActive = activeTheme === option.name;
 	return (
 		<Tile
 			testID={`theme-option-${option.name}`}
 			onPress={() => {
 				void onPress(option.name);
 			}}
-			selected={isActive}
-			// min-h-40 clears the tallest possible card — icon + 2-line label cap
-			// + 2-line description cap (≈9.4rem) — so all eight tiles match across
-			// rows, locales, and widths, not just within a stretched row.
-			className="min-h-40 gap-2 p-3"
+			selected={activeTheme === option.name}
 			title={option.label}
 			sub={option.description}
 		>
-			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
-			<Icon
-				name={option.icon}
-				size="xl"
-				className={isActive ? 'text-primary' : 'text-muted-foreground'}
-			/>
+			<Icon name={option.icon} />
 		</Tile>
 	);
 }
@@ -88,33 +96,44 @@ function ThemeGrid({
 	t: ReturnType<typeof useT>;
 }) {
 	const { theme, hasAdaptiveThemes } = useUniwind();
+	const phone = useIsPhone();
+	const [width, setWidth] = React.useState(0);
+	const onLayout = React.useCallback(
+		(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width),
+		[]
+	);
+	// Before the first layout the device decides, as the tender pane's grid does.
+	const columns = width > 0 ? themeColumns(width) : phone ? MIN_COLUMNS : MAX_COLUMNS;
 	const activeTheme = hasAdaptiveThemes ? 'system' : theme;
 	const activeThemeLabel = themeOptions.find((o) => o.name === activeTheme)?.label ?? activeTheme;
 
-	// The status line keys the grid, and the grid's Saved mark sits on that line.
+	// The status line keys the grid and carries its Saved mark; the grid sits under the row, not
+	// in its 320 value column, so the tiles take the section's width as the Icons list does.
 	return (
-		<PropertyRow
-			stacked
-			name="theme"
-			label={
-				hasAdaptiveThemes
-					? t('settings.following_system_theme')
-					: t('settings.current_theme', { theme: activeThemeLabel })
-			}
-		>
-			{/* System, Light, Dark; then Ocean, Sunset, Monochrome; then Paper till, Warm shop, Bold money; then Market stall. */}
-			<TileGrid columns={3} className="pt-2">
-				{themeOptions.map((option) => (
-					<ThemeOptionButton
-						key={option.name}
-						option={option}
-						activeTheme={activeTheme as string}
-						onPress={onThemeChange}
-						t={t}
-					/>
-				))}
-			</TileGrid>
-		</PropertyRow>
+		<>
+			<PropertyRow
+				stacked
+				name="theme"
+				label={
+					hasAdaptiveThemes
+						? t('settings.following_system_theme')
+						: t('settings.current_theme', { theme: activeThemeLabel })
+				}
+			/>
+			{/* The measured width picks the columns: five on a desktop, three on an iPad in portrait, two on a phone. */}
+			<View onLayout={onLayout} className="pt-2">
+				<TileGrid columns={columns}>
+					{themeOptions.map((option) => (
+						<ThemeOptionButton
+							key={option.name}
+							option={option}
+							activeTheme={activeTheme as string}
+							onPress={onThemeChange}
+						/>
+					))}
+				</TileGrid>
+			</View>
+		</>
 	);
 }
 
