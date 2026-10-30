@@ -3,6 +3,9 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { AmountFigure } from './index';
+import { ThemeTraitsContext } from '../lib/theme-traits';
+
+jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false } }));
 
 // Expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
@@ -10,7 +13,11 @@ jest.mock('react-native', () => {
 	const host = (tag: string, props: Record<string, any>) =>
 		React.createElement(
 			tag,
-			{ 'data-testid': props.testID, 'data-classes': props.className },
+			{
+				'data-testid': props.testID,
+				'data-classes': props.className,
+				style: actual.StyleSheet.flatten(props.style),
+			},
 			props.children
 		);
 	return {
@@ -33,6 +40,27 @@ const scale: [string, string, string[]][] = [
 ];
 
 describe('AmountFigure', () => {
+	it('uses the italic display family, leaving its eyebrow in the body family', () => {
+		render(
+			<ThemeTraitsContext.Provider
+				value={{ type: { body: 'DM Sans', display: 'Instrument Serif', displayItalic: true } }}
+			>
+				<AmountFigure testID="figure" eyebrow="Total">
+					$10.00
+				</AmountFigure>
+				<AmountFigure testID="override" style={{ fontFamily: 'X' }}>
+					$20.00
+				</AmountFigure>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByTestId('figure')).toHaveStyle({ fontFamily: 'Instrument Serif' });
+		expect(words('figure')).toEqual(
+			expect.arrayContaining(['italic', 'font-bold', 'tabular-nums'])
+		);
+		expect(screen.getByText('Total')).toHaveStyle({ fontFamily: 'DM Sans' });
+		expect(screen.getByTestId('override')).toHaveStyle({ fontFamily: 'X' });
+	});
+
 	it.each(scale)('%s %s is bold, tabular and one size step', (size, tone, present) => {
 		render(
 			<AmountFigure testID="figure" size={size as never} tone={tone as never}>

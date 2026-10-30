@@ -4,6 +4,9 @@ import { render, screen } from '@testing-library/react';
 
 import { Text } from './index';
 import { MAX_FONT_SCALE } from '../lib/scale';
+import { ThemeTraitsContext } from '../lib/theme-traits';
+
+jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false } }));
 
 // Mock rn-primitives slot to provide a generic Slot
 jest.mock('@rn-primitives/slot', () => ({
@@ -17,7 +20,11 @@ jest.mock('@rn-primitives/slot', () => ({
 
 // Mock react-native with createElement instead of JSX
 jest.mock('react-native', () => ({
-	Text: (props: any) => React.createElement('span', props),
+	Text: ({ style, ...props }: import('react-native').TextProps) =>
+		React.createElement('span', {
+			...props,
+			style: jest.requireActual('react-native').StyleSheet.flatten(style),
+		}),
 	StyleSheet: { create: (styles: any) => styles },
 }));
 
@@ -68,6 +75,26 @@ describe('Text component', () => {
 		);
 		expect(screen.getByTestId('child')).toBeInTheDocument();
 		expect(screen.getByText('Slotted content')).toBeInTheDocument();
+	});
+});
+
+describe('Text theme type', () => {
+	it('leaves the font family unset without a provider', () => {
+		render(<Text>System</Text>);
+		expect(screen.getByText('System').style.fontFamily).toBe('');
+	});
+
+	it('uses the body and number families and lets a caller override them', () => {
+		render(
+			<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+				<Text>Body</Text>
+				<Text tabular>123</Text>
+				<Text style={{ fontFamily: 'X' }}>Override</Text>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('Body')).toHaveStyle({ fontFamily: 'Manrope' });
+		expect(screen.getByText('123')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
+		expect(screen.getByText('Override')).toHaveStyle({ fontFamily: 'X' });
 	});
 });
 

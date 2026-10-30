@@ -1,3 +1,6 @@
+import { THEME_FONT_FAMILIES, type ThemeFontFamily } from './fonts';
+import { SYSTEM_TYPE, type ThemeType } from './theme-traits';
+
 import type { IconSetId } from '../icon/sets';
 
 /** The names global.css draws (`@variant <name>`); `system` is a Settings choice, not a theme. */
@@ -13,6 +16,42 @@ export const THEMES = [
 	'market',
 ] as const;
 export type ThemeName = (typeof THEMES)[number];
+
+export const THEME_TYPE: Record<ThemeName, ThemeType> = {
+	light: SYSTEM_TYPE,
+	dark: SYSTEM_TYPE,
+	ocean: SYSTEM_TYPE,
+	sunset: SYSTEM_TYPE,
+	monochrome: SYSTEM_TYPE,
+	paper: {
+		body: THEME_FONT_FAMILIES.dmSans,
+		num: THEME_FONT_FAMILIES.jetbrainsMono,
+		display: THEME_FONT_FAMILIES.instrumentSerif,
+		displayItalic: true,
+	},
+	bold: {
+		body: THEME_FONT_FAMILIES.spaceGrotesk,
+		num: THEME_FONT_FAMILIES.spaceGrotesk,
+		display: THEME_FONT_FAMILIES.spaceGrotesk,
+	},
+	warm: {
+		body: THEME_FONT_FAMILIES.dmSans,
+		num: THEME_FONT_FAMILIES.dmSans,
+		display: THEME_FONT_FAMILIES.fraunces,
+		displayItalic: true,
+	},
+	market: {
+		body: THEME_FONT_FAMILIES.manrope,
+		num: THEME_FONT_FAMILIES.manrope,
+		display: THEME_FONT_FAMILIES.manrope,
+	},
+};
+
+export function familiesForTheme(theme: string | undefined): ThemeFontFamily[] {
+	if (!THEMES.includes(theme as ThemeName)) return [];
+	const { body, num, display } = THEME_TYPE[theme as ThemeName];
+	return [...new Set([body, num, display].filter((family) => family !== undefined))];
+}
 
 /** Decision 45: the icon set is a rule of the theme. */
 export const THEME_ICON_SET: Record<ThemeName, IconSetId> = {

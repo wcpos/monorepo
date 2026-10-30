@@ -40,6 +40,7 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.ts'],
 	moduleNameMapper: {
+		'\\.(ttf|otf)$': '<rootDir>/jest/__mocks__/font.js',
 		'^react-native$': 'react-native-web',
 		// ESM only; see the mock. Every pressable surface imports it through `lib/haptics`.
 		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',

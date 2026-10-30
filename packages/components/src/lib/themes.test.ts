@@ -1,9 +1,33 @@
-import { hasDarkRail, iconSetForTheme, isLightTheme, THEME_ICON_SET, THEMES } from './themes';
+import {
+	familiesForTheme,
+	hasDarkRail,
+	iconSetForTheme,
+	isLightTheme,
+	THEME_ICON_SET,
+	THEME_TYPE,
+	THEMES,
+} from './themes';
 import { DEFAULT_ICON_SET } from '../icon/sets';
 
 jest.mock('react-native-svg', () => {
 	const elements = jest.requireActual('react-native-svg/lib/commonjs/elements.web');
 	return { ...elements, default: elements.Svg, __esModule: true };
+});
+
+it.each(THEMES)('defines type for %s', (theme) => {
+	expect(THEME_TYPE[theme]).toBeDefined();
+});
+
+it.each([
+	['paper', ['DM Sans', 'JetBrains Mono', 'Instrument Serif']],
+	['bold', ['Space Grotesk']],
+	['warm', ['DM Sans', 'Fraunces']],
+	['market', ['Manrope']],
+	['light', []],
+	['nope', []],
+	[undefined, []],
+])('lists only the distinct families for %p', (theme, families) => {
+	expect(familiesForTheme(theme as string | undefined)).toEqual(families);
 });
 
 it.each(THEMES)('maps the drawn theme %s to an icon family', (theme) => {

@@ -66,6 +66,7 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
+		'\\.(ttf|otf)$': '<rootDir>/jest/__mocks__/font.js',
 		'^@wcpos/database/create-db$': '<rootDir>/../query/tests/__mocks__/create-db.ts',
 		'^expo-crypto$': '<rootDir>/../query/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/core-test/mock-use-doc-field$': '<rootDir>/jest/mock-use-doc-field.js',

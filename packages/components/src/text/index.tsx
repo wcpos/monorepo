@@ -8,6 +8,8 @@ import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
 import { MAX_FONT_SCALE } from '../lib/scale';
+import { fontFamilyStyle } from '../lib/fonts';
+import { useThemeTraits } from '../lib/theme-traits';
 import { TextClassContext } from './context';
 import { TEXT_VARIANTS, textVariants } from './ladder';
 
@@ -27,6 +29,8 @@ function Text({
 	...props
 }: TextProps) {
 	const textClass = React.useContext(TextClassContext);
+	const { type } = useThemeTraits();
+	const family = tabular ? (type.num ?? type.body) : type.body;
 	const Component = asChild ? Slot : RNText;
 
 	const processedChildren =
@@ -44,6 +48,7 @@ function Text({
 			)}
 			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			{...props}
+			style={family ? [fontFamilyStyle(family), props.style] : props.style}
 		>
 			{processedChildren}
 		</Component>

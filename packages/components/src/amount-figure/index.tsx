@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { TONE } from '../lib/tone';
+import { fontFamilyStyle } from '../lib/fonts';
+import { useThemeTraits } from '../lib/theme-traits';
 import { cn } from '../lib/utils';
 import { Text, type TextProps } from '../text';
 
@@ -30,10 +32,17 @@ type AmountFigureProps = Omit<TextProps, 'variant' | 'tabular'> &
 	};
 
 function AmountFigure({ size, tone, eyebrow, center, className, ...props }: AmountFigureProps) {
+	const { type } = useThemeTraits();
 	const figure = (
 		<Text
-			className={cn(amountFigure({ size, tone }), center && 'text-center', className)}
+			className={cn(
+				amountFigure({ size, tone }),
+				type.displayItalic && 'italic',
+				center && 'text-center',
+				className
+			)}
 			{...props}
+			style={type.display ? [fontFamilyStyle(type.display), props.style] : props.style}
 		/>
 	);
 	if (eyebrow === undefined) return figure;
