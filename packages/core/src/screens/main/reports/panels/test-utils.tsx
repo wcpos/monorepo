@@ -199,7 +199,9 @@ jest.mock('../../receipt/use-receipt-document', () => ({
 }));
 
 jest.mock('@wcpos/components/webview', () => ({
-	WebView: () => <iframe title="Report preview" />,
+	WebView: ({ testID }: { testID?: string }) => (
+		<iframe data-testid={testID} title="Report preview" />
+	),
 }));
 jest.mock('../../receipt/components/receipt-preview-viewport', () => ({
 	ReceiptPreviewViewport: ({ children }: React.PropsWithChildren) => <div>{children}</div>,

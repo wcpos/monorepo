@@ -3033,7 +3033,6 @@
 	"reports.col_time": "Time",
 	"reports.col_reason": "Reason",
 	"reports.all_products": "All products",
-	"reports.no_rows_in_period": "Nothing in this period",
 	"orders.display_options": "Display options",
 	"orders.restore_defaults": "Restore defaults",
 	"common.status_offline": "Offline",
