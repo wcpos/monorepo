@@ -44,7 +44,7 @@ const keyFace = cva('items-center justify-center', {
 	variants: {
 		face: {
 			key: 'bg-muted min-h-ctl rounded-lg active:opacity-70',
-			cell: 'web:hover:bg-muted active:bg-muted',
+			cell: 'web:hover:bg-accent active:bg-accent',
 		},
 		quick: { none: '', off: '', lit: 'bg-primary' },
 	},

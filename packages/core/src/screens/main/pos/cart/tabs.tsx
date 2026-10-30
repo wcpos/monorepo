@@ -56,7 +56,7 @@ import { tabWho } from './tab-who';
 
 // Every control in the strip is a full-height cell: the hover and the press fill the
 // rectangle (Paul, 2026-10-09), never a round button inside it.
-const CELL = 'web:hover:bg-muted active:bg-muted h-full items-center justify-center';
+const CELL = 'web:hover:bg-accent active:bg-accent h-full items-center justify-center';
 // A tab is as wide as its text (Paul, 2026-10-09), clipped at the scroll edges.
 const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
 // The DOM id the tablist owns the + cell by (web).
@@ -292,7 +292,7 @@ export function OpenOrderTabs({
 					});
 				}}
 				style={{ minWidth: TAB_MIN, flexShrink: 0 }}
-				className={`${TAB} web:hover:bg-muted active:bg-muted ${active && !solo ? 'border-primary' : 'border-transparent'}`}
+				className={`${TAB} web:hover:bg-accent active:bg-accent ${active && !solo ? 'border-primary' : 'border-transparent'}`}
 			>
 				{content}
 			</Pressable>

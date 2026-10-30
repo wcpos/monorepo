@@ -273,9 +273,9 @@ describe('action', () => {
 	});
 	it('fills each cell on its own, never the pill (read from source)', () => {
 		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-		expect(source).toContain("action ? 'gap-0 px-0' : 'active:bg-muted web:hover:bg-muted'");
+		expect(source).toContain("action ? 'gap-0 px-0' : 'active:bg-accent web:hover:bg-accent'");
 		expect(source).toContain(
-			"'border-border active:bg-muted web:hover:bg-muted rounded-r-full border-l'"
+			"'border-border active:bg-accent web:hover:bg-accent rounded-r-full border-l'"
 		);
 	});
 });

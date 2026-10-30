@@ -74,7 +74,7 @@ export function ReceiptPreviewViewport({
 	};
 
 	const buttonClass =
-		'flex h-7 w-7 cursor-pointer items-center justify-center border-0 bg-transparent text-base leading-none text-foreground hover:bg-muted disabled:cursor-default disabled:text-muted-foreground/50 disabled:hover:bg-transparent';
+		'flex h-7 w-7 cursor-pointer items-center justify-center border-0 bg-transparent text-base leading-none text-foreground hover:bg-accent disabled:cursor-default disabled:text-muted-foreground/50 disabled:hover:bg-transparent';
 
 	return (
 		<div

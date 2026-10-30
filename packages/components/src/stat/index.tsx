@@ -49,7 +49,7 @@ export function Stat({
 			accessibilityRole="button"
 			accessibilityLabel={label}
 			onPress={onPress}
-			className="web:hover:bg-muted/50 -m-1 rounded-md p-1"
+			className="web:hover:bg-accent/50 -m-1 rounded-md p-1"
 		>
 			{body}
 		</Pressable>

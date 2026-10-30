@@ -113,7 +113,7 @@ export function DataTableRow<TData extends RowData>({
 			// no press (the management tables open a record from its actions icon only) has none.
 			className={
 				pointer === 'fine' && onPress
-					? 'border-border web:hover:bg-muted flex-row items-center border-b'
+					? 'border-border web:hover:bg-accent flex-row items-center border-b'
 					: 'border-border flex-row items-center border-b'
 			}
 		>
@@ -145,7 +145,7 @@ export function DataTableRow<TData extends RowData>({
 				}
 				className={cn(
 					'min-h-row flex-1 flex-row items-center',
-					onPress && 'active:bg-muted',
+					onPress && 'active:bg-accent',
 					// The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
 					pointer !== 'fine' && 'gap-3 px-3 py-1.5'
 				)}

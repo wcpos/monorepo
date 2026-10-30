@@ -107,7 +107,7 @@ export function SegmentedControl({
 							onKeyDown(event, segment.value),
 					}}
 					className={cn(
-						'min-w-ctl web:hover:bg-muted flex-1 flex-row items-center justify-center gap-1.5 px-3 py-1.5 active:opacity-70',
+						'min-w-ctl web:hover:bg-accent flex-1 flex-row items-center justify-center gap-1.5 px-3 py-1.5 active:opacity-70',
 						index > 0 && 'border-border border-l',
 						segment.value === value && 'bg-muted',
 						segment.disabled && 'opacity-45'

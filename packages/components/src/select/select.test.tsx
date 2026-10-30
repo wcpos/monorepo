@@ -72,7 +72,7 @@ it('hosts the anchored web row in the Radix option, which keeps the data-testid 
 	);
 	expect(screen.getByTestId('primitive-content')).toBeInTheDocument();
 	const option = screen.getByTestId('anchored');
-	expect(option).toHaveClass('rounded-md web:focus:bg-muted');
+	expect(option).toHaveClass('rounded-md web:focus:bg-accent');
 	// The row inside draws (inset, check) but is no second control: its click would be swallowed.
 	const row = option.querySelector('.px-2\\.5');
 	expect(row).not.toBeNull();

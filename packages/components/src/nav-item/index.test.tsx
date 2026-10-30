@@ -43,16 +43,16 @@ beforeEach(() => {
 
 it.each([
 	['row', 'h-10 rounded-md', 'text-foreground', 'text-muted-foreground'],
-	['drawer', 'h-12 rounded-lg', 'text-selected-foreground', 'text-sidebar-foreground'],
+	['drawer', 'h-12 rounded-lg', 'text-rail-selected-foreground', 'text-sidebar-foreground'],
 ] as const)('paints the %s size and its selected surface', (size, shape, on, off) => {
 	const { container, unmount } = render(
 		<NavItem size={size} selected icon="settings" label="General" testID="item" />
 	);
 	expect(classes('item')).toContain(shape);
-	expect(classes('item').split(' ')).toContain(size === 'drawer' ? 'bg-selected' : 'bg-card');
+	expect(classes('item').split(' ')).toContain(size === 'drawer' ? 'bg-rail-selected' : 'bg-card');
 	if (size === 'drawer') {
-		expect(classes('item')).toContain('active:bg-selected');
-		expect(classes('item')).toContain('web:hover:bg-selected');
+		expect(classes('item')).toContain('active:bg-rail-selected');
+		expect(classes('item')).toContain('web:hover:bg-rail-selected');
 	}
 	expect(classes('item-label')).toContain(on);
 	expect(icon(container, 'settings')).toContain(on);
@@ -61,7 +61,7 @@ it.each([
 
 	const rest = render(<NavItem size={size} icon="settings" label="General" testID="item" />);
 	expect(classes('item').split(' ')).not.toContain('bg-card');
-	expect(classes('item')).toContain('active:bg-card');
+	expect(classes('item')).toContain(size === 'drawer' ? 'active:bg-rail-accent' : 'active:bg-card');
 	expect(classes('item-label')).toContain(off);
 	expect(icon(rest.container, 'settings')).toContain(off);
 });
@@ -116,6 +116,6 @@ it('one ink: element slots inherit selected ink; the chevron stays muted', () =>
 		expect(node.getAttribute('data-classes')).toContain(
 			node.getAttribute('data-icon') === 'chevronRight'
 				? 'text-muted-foreground'
-				: 'text-selected-foreground'
+				: 'text-rail-selected-foreground'
 		);
 });

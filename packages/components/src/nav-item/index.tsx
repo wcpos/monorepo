@@ -29,9 +29,9 @@ const sizes: Record<NavItemSize, string> = {
 };
 
 /**
- * One navigation row: the area list's rows and the drawer's items. The selected row lifts onto
- * `bg-card` (the surface the content sits on), and the surface's press and hover wash is the same
- * lift.
+ * One navigation row: the area list's rows lift onto `bg-card` on selection, press and hover.
+ * The drawer uses its own rail wash and selected surface: in light, the active square lifts to
+ * card with selected ink; the other themes keep their selected tint.
  */
 export function NavItem({
 	selected = false,
@@ -47,7 +47,7 @@ export function NavItem({
 	const drawer = size === 'drawer';
 	const tint = selected
 		? drawer
-			? 'text-selected-foreground'
+			? 'text-rail-selected-foreground'
 			: 'text-foreground'
 		: drawer
 			? 'text-sidebar-foreground'
@@ -56,13 +56,13 @@ export function NavItem({
 		<PressableSurface
 			role="button"
 			selected={selected}
-			wash="card"
+			wash={drawer ? 'rail' : 'card'}
 			className={cn(
 				'flex-row items-center gap-3 px-3',
 				sizes[size],
 				!label && 'justify-center',
-				selected && (drawer ? 'bg-selected' : 'bg-card'),
-				selected && drawer && 'web:hover:bg-selected active:bg-selected',
+				selected && (drawer ? 'bg-rail-selected' : 'bg-card'),
+				selected && drawer && 'web:hover:bg-rail-selected active:bg-rail-selected',
 				className
 			)}
 			testID={testID}

@@ -64,10 +64,10 @@ export function MenuRow({
 				role={role ?? (checkbox ? 'checkbox' : choice ? 'radio' : 'button')}
 				selected={choice || checkbox || role === 'option' ? selected : undefined}
 				dimmed={locked}
-				wash={destructive ? 'destructive' : 'muted'}
+				wash={destructive ? 'destructive' : 'accent'}
 				className={cn(
 					'web:outline-none web:cursor-default min-h-row w-full flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
-					destructive ? 'web:focus:bg-destructive/10' : 'web:focus:bg-muted',
+					destructive ? 'web:focus:bg-destructive/10' : 'web:focus:bg-accent',
 					className
 				)}
 			>

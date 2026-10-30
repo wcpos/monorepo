@@ -38,9 +38,9 @@ jest.mock('../text', () => ({
 	Text: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />,
 }));
 
-it('uses the card surface and row height on the muted-wash surface', () => {
+it('uses the card surface and row height on the accent-wash surface', () => {
 	const { getByTestId } = render(<ListItem testID="row" title="Paul" />);
-	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted');
+	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-accent');
 });
 
 it('announces the selected row, not only paints it', () => {

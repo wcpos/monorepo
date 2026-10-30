@@ -119,7 +119,7 @@ it("a field rests as the field box with the Input's padding, its display row ins
 	expect(trigger.className).toContain(fieldBox({ state: 'rest' }));
 	expect(trigger.className).toContain('px-3');
 	// The outline Button's pressed wash, written as Button writes it.
-	expect(trigger.className).toContain('active:bg-muted');
+	expect(trigger.className).toContain('active:bg-accent');
 	expect(displayRow().className).toContain('px-3');
 });
 

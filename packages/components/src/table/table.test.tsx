@@ -39,8 +39,8 @@ it('renders hairline rows without stripes or inline background paint', () => {
 	}
 	// Only the pressable row lifts under the pointer; a header or plain row wraps TableHead
 	// in the static one and must not look interactive (Codex review on #2213).
-	expect(pressableRow).toHaveClass('web:hover:bg-muted');
-	expect(staticRow).not.toHaveClass('web:hover:bg-muted');
+	expect(pressableRow).toHaveClass('web:hover:bg-accent');
+	expect(staticRow).not.toHaveClass('web:hover:bg-accent');
 });
 
 it('renders an unfilled uppercase head and padded column cell', () => {
