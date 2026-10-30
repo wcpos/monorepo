@@ -450,23 +450,20 @@ it.each([
 	}
 );
 
-it.each(['right'] as const)(
-	'6. phone %s becomes a full page and keeps the close control',
-	(side) => {
-		render(
-			<DeviceScope phone>
-				<Dialog open>
-					<DialogContent inline testID="d" side={side} size="lg">
-						Task
-					</DialogContent>
-				</Dialog>
-			</DeviceScope>
-		);
-		expect(screen.getByTestId('d')).toHaveClass('w-full', 'border-0');
-		expect(screen.getByTestId('d')).not.toHaveClass('w-lg');
-		expect(screen.getByTestId('d-close')).toBeInTheDocument();
-	}
-);
+it('6. phone right becomes a full page and keeps the close control', () => {
+	render(
+		<DeviceScope phone>
+			<Dialog open>
+				<DialogContent inline testID="d" side="right" size="lg">
+					Task
+				</DialogContent>
+			</Dialog>
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('d')).toHaveClass('w-full', 'border-0');
+	expect(screen.getByTestId('d')).not.toHaveClass('w-lg');
+	expect(screen.getByTestId('d-close')).toBeInTheDocument();
+});
 it.each([
 	['center', 'rounded-lg'],
 	['bottom', 'rounded-t-2xl'],
