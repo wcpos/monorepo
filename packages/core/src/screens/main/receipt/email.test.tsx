@@ -35,7 +35,9 @@ function createQueue() {
 	};
 }
 
+const mockCloseDialog = jest.fn();
 jest.mock('@wcpos/components/dialog', () => ({
+	useDialog: () => ({ open: true, close: () => mockCloseDialog(false) }),
 	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogAction: ({ children, testID, onPress }: PressProps) => (
 		<button data-testid={testID} onClick={onPress} type="button">
@@ -156,6 +158,8 @@ describe('EmailForm', () => {
 			attempts: 0,
 		});
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
+		// Queued is a kept promise: the dialog's job is done.
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('queues when the store is unreachable even though the device has a network', async () => {
@@ -165,6 +169,7 @@ describe('EmailForm', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	// ADR 0040 Decided 1 rule 1: the store has not heard the sale, so the email queues as offline.
@@ -174,6 +179,7 @@ describe('EmailForm', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('posts straight away when online and reports success', async () => {
@@ -187,6 +193,8 @@ describe('EmailForm', () => {
 		});
 		expect(queueRows).toHaveLength(0);
 		expect(mockLoggerSuccess).toHaveBeenCalled();
+		// The merchant on 1.11.6 found the dialog still open after every Send.
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('queues an online send that failed on the connection', async () => {
@@ -206,6 +214,7 @@ describe('EmailForm', () => {
 			Date.parse(queueRows[0].lastAttemptAt ?? '')
 		);
 		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('surfaces a rejected address immediately instead of queuing it', async () => {
@@ -224,6 +233,8 @@ describe('EmailForm', () => {
 			'Failed to send receipt email',
 			expect.objectContaining({ showToast: true })
 		);
+		// A failure keeps the dialog open so the address can be corrected.
+		expect(mockCloseDialog).not.toHaveBeenCalled();
 	});
 
 	it('surfaces a 200 that did not send, rather than promising to retry it', async () => {
@@ -233,6 +244,7 @@ describe('EmailForm', () => {
 
 		expect(queueRows).toHaveLength(0);
 		expect(mockLoggerError).toHaveBeenCalled();
+		expect(mockCloseDialog).not.toHaveBeenCalled();
 	});
 
 	it('falls back to surfacing the error when there is no queue to write to', async () => {
