@@ -127,7 +127,11 @@ jest.mock('./movement-sheet', () => ({
 		testID: string;
 	}) => <input data-testid={testID} value={value} onChange={(e) => onChangeText(e.target.value)} />,
 }));
-jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="approve-sheet" /> }));
+jest.mock('./approve-sheet', () => ({
+	ApproveSheet: ({ side, portalHost }: { side?: 'left' | 'right'; portalHost?: string | null }) => (
+		<div data-testid="approve-sheet" data-side={side} data-portal={String(portalHost)} />
+	),
+}));
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
@@ -240,6 +244,22 @@ it('requires manager over threshold', () => {
 			threshold: '5',
 		},
 	});
+});
+it('forwards its side and host to the approval sheet', () => {
+	varianceThreshold = '5';
+	render(
+		<RegisterCount
+			description="Shop · open since 08:00 · Pat"
+			onBack={jest.fn()}
+			onClosed={jest.fn()}
+			side="right"
+			portalHost="scene"
+		/>
+	);
+	enter('463.30');
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
+	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('scene');
 });
 it('server refusal requires approval even for an exact blind count', () => {
 	blind = true;

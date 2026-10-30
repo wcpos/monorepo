@@ -35,7 +35,7 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 		open: boolean;
 		portalHost?: string | null;
 
-		onOpenRegister?: () => void;
+		onOpenRegister?: (pane?: 'register' | 'count') => void;
 	}) =>
 		open ? (
 			<div
@@ -47,9 +47,31 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 						?.uuid
 				)}
 			>
-				{onOpenRegister && <button data-testid="open-register" onClick={onOpenRegister} />}
+				{onOpenRegister && <button data-testid="open-register" onClick={() => onOpenRegister()} />}
 			</div>
 		) : null,
+}));
+
+jest.mock('../../pos/cart/register-panel', () => ({
+	RegisterPanel: ({
+		open,
+		side,
+		portalHost,
+		initialPane,
+	}: {
+		open: boolean;
+		side?: 'left' | 'right';
+		portalHost?: string | null;
+		initialPane?: 'register' | 'count';
+	}) => (
+		<div
+			data-testid="register-panel"
+			data-open={String(open)}
+			data-side={side}
+			data-portal={String(portalHost)}
+			data-pane={initialPane}
+		/>
+	),
 }));
 
 const CSRF = 'a'.repeat(64);
@@ -104,12 +126,13 @@ it('opens the one cashier surface from the avatar, on the host and with the rows
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
 });
 
-it('passes the drawer door from the bar to the sheet', () => {
+it("on the till the bar's door is used and the entry mounts no panel", () => {
 	const onOpenRegister = jest.fn();
 	render(<CashierEntry testID="avatar" portalHost="pos" onOpenRegister={onOpenRegister} />);
 	fireEvent.click(screen.getByTestId('avatar'));
 	fireEvent.click(screen.getByTestId('open-register'));
 	expect(onOpenRegister).toHaveBeenCalledTimes(1);
+	expect(screen.queryByTestId('register-panel')).toBeNull();
 });
 
 let mockFocused = true;
@@ -161,4 +184,17 @@ it('off the till, the title bar opens its own sheet', () => {
 	fireEvent.click(screen.getByTestId('title-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
 	expect(screen.getByTestId('user-sheet').getAttribute('data-order')).toBe('undefined');
+});
+
+it("outside the till, the drawer door opens the register panel in place from the right, on the entry's host", () => {
+	render(<CashierEntry testID="avatar" portalHost="scene" />);
+	expect(screen.queryByTestId('register-panel')).toBeNull();
+	fireEvent.click(screen.getByTestId('avatar'));
+	expect(screen.queryByTestId('register-panel')).toBeNull();
+	fireEvent.click(screen.getByTestId('open-register'));
+	const panel = screen.getByTestId('register-panel');
+	expect(panel.getAttribute('data-open')).toBe('true');
+	expect(panel.getAttribute('data-side')).toBe('right');
+	expect(panel.getAttribute('data-portal')).toBe('scene');
+	expect(panel.getAttribute('data-pane')).toBe('register');
 });

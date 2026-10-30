@@ -46,7 +46,7 @@ export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' |
 	ref?: React.Ref<DialogPrimitive.ContentRef>;
 	side?: DialogSide;
 	size?: DialogSize;
-	portalHost?: string;
+	portalHost?: string | null;
 	inline?: boolean;
 	closeLabel?: string;
 	// `closeLabel` names the close control, so its props never carry a second name.
@@ -112,7 +112,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	const { route } = React.useContext(RouteContext);
 	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
-	const container = usePortalContainer(portalHost);
+	const container = usePortalContainer(portalHost ?? undefined);
 	if (!open && !route && !OVERLAY_EXIT_MOUNTED) return null;
 	const shell = (
 		<OverlayShell
@@ -130,7 +130,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	return renderInline ? (
 		shell
 	) : (
-		<DialogPrimitive.Portal hostName={portalHost} container={container}>
+		<DialogPrimitive.Portal hostName={portalHost ?? undefined} container={container}>
 			{shell}
 		</DialogPrimitive.Portal>
 	);

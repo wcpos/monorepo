@@ -5,6 +5,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { ManagementBar } from './index';
 jest.mock('expo-haptics', () => ({}));
+// The entry hosts the register panel off the till; its derivation drags the table's worklets.
+jest.mock('../../pos/cart/register-panel', () => ({ RegisterPanel: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 let mockPhone = false;

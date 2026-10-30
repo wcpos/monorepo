@@ -55,6 +55,7 @@ let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
 let currentSession: Record<string, unknown> | null = null;
+let currentLoaded = true;
 let serverNumber: number | null = null;
 let syncStatus = 'pending';
 let syncedRowsAt: string | null = null;
@@ -73,6 +74,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
 		session: currentSession,
+		loaded: currentLoaded,
 		binding: { registerName: 'Front', registerId: 'front' },
 		expected,
 		terms,
@@ -318,13 +320,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogContent: ({
 		children,
 		testID,
+		side,
 		portalHost,
 	}: {
 		children: React.ReactNode;
 		testID?: string;
-		portalHost?: string;
+		side?: 'left' | 'right';
+		portalHost?: string | null;
 	}) => (
-		<div data-testid={testID} data-host={portalHost}>
+		<div
+			data-testid={testID}
+			data-side={side}
+			data-portal={String(portalHost)}
+			data-host={portalHost ?? undefined}
+		>
 			{children}
 		</div>
 	),
@@ -345,6 +354,7 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
+	currentLoaded = true;
 	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
@@ -1003,6 +1013,27 @@ it.each(['count-back', 'panel-x'])(
 );
 
 let mockCountingHere = false;
+it('a panel mounted open before its session loaded lands on the count once it arrives', () => {
+	const openSession = currentSession;
+	const previousClosure = mockHasClosure,
+		previousHere = mockCountingHere;
+	try {
+		currentLoaded = false;
+		currentSession = null;
+		mockHasClosure = false;
+		const onOpenChange = jest.fn();
+		const view = render(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		expect(screen.queryByTestId('register-panel')).toBeNull();
+		currentLoaded = true;
+		currentSession = { ...openSession, status: 'counting' };
+		mockCountingHere = true;
+		view.rerender(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+	} finally {
+		mockHasClosure = previousClosure;
+		mockCountingHere = previousHere;
+	}
+});
 it('opens on the count pane while this device is counting, only when opened', async () => {
 	const previous = currentSession,
 		previousHere = mockCountingHere;
@@ -1126,3 +1157,32 @@ it.each([false, true])(
 jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: () => <div data-testid="sheet-preview" />,
 }));
+
+it("takes the side and portal host it is given; defaults to the cart's side and the POS host", () => {
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
+	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('pos');
+	view.unmount();
+	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost={null} />);
+	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('left');
+	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
+});
+
+it('keeps the X-report print sheet on the panel side and host', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} side="left" portalHost="scene" />);
+	fireEvent.click(screen.getByTestId('register-panel-print'));
+	const sheet = screen.getByTestId('register-panel-print-sheet');
+	expect(sheet.getAttribute('data-side')).toBe('left');
+	expect(sheet.getAttribute('data-host')).toBe('scene');
+});
+
+it.each([
+	['right', 'scene'],
+	['left', null],
+] as const)('keeps movement dialogs on the panel side %s and host %s', (side, portalHost) => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} side={side} portalHost={portalHost} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const movement = screen.getByTestId('movement-after').closest('[data-portal]');
+	expect(movement?.getAttribute('data-side')).toBe(side);
+	expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
+});

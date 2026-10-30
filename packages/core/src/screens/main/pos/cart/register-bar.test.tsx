@@ -15,10 +15,17 @@ jest.mock('../../components/notification-bell/notification-bell', () => ({
 }));
 
 jest.mock('./user-sheet', () => ({
-	UserSheet: ({ open, onOpenRegister }: { open: boolean; onOpenRegister?: () => void }) =>
+	UserSheet: ({
+		open,
+		onOpenRegister,
+	}: {
+		open: boolean;
+		onOpenRegister?: (pane?: 'register' | 'count') => void;
+	}) =>
 		open ? (
 			<div data-testid="user-sheet">
-				<button data-testid="user-sheet-drawer" onClick={onOpenRegister} />
+				<button data-testid="user-sheet-drawer" onClick={() => onOpenRegister?.()} />
+				<button data-testid="user-sheet-close-register" onClick={() => onOpenRegister?.('count')} />
 			</div>
 		) : null,
 }));
@@ -181,4 +188,13 @@ it('an ordinary cashier-sheet opening replaces a consumed count request', () => 
 	} finally {
 		consumeRegisterPanelRequest();
 	}
+});
+
+it('the cashier sheet Close register door opens the count pane through the bar', () => {
+	const onPanelOpenChange = jest.fn();
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-bar-avatar'));
+	fireEvent.click(screen.getByTestId('user-sheet-close-register'));
+	expect(screen.getByTestId('requested-pane').textContent).toBe('count');
+	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
 });

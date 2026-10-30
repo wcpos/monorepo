@@ -17,7 +17,6 @@ import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { createTestT } from '../../../../../jest/translate';
-import { consumeRegisterPanelRequest } from './register-panel-request';
 import { DrawerTile, UserSheet, useSalesToday } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
@@ -817,12 +816,12 @@ describe('drawer door', () => {
 		render(<DrawerTile label="Drawer stays at" />);
 		expect(screen.getByTestId('user-sheet-drawer').querySelector(chevron)).toBeNull();
 	});
-	it('from a page bar, the drawer door goes to the POS and asks for the panel', () => {
+	it('the drawer door never navigates', () => {
 		mockSegments = ['(app)', '(drawer)', 'orders'];
 		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
-		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
-		expect(consumeRegisterPanelRequest()).toBe('register');
+		expect(mockPush).not.toHaveBeenCalled();
+		expect(onOpenChange).toHaveBeenLastCalledWith(false);
 		mockSegments = ['(app)', '(drawer)', '(pos)'];
 	});
 	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
@@ -990,7 +989,6 @@ describe('switch confirmations and guards', () => {
 		mockLogin.mockClear();
 		mockLogout.mockClear();
 		mockDrawer.actions.startCounting.mockClear();
-		consumeRegisterPanelRequest();
 	});
 	afterEach(() => {
 		mockStoreId = previous.storeId;
@@ -1099,22 +1097,24 @@ describe('switch confirmations and guards', () => {
 	});
 	it('Sign out with an open register asks to close first; Close register opens the count', async () => {
 		const close = jest.fn();
-		render(<UserSheet open onOpenChange={close} />);
+		const onOpenRegister = jest.fn();
+		render(<UserSheet open onOpenChange={close} onOpenRegister={onOpenRegister} />);
 		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
 		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
-		expect(consumeRegisterPanelRequest()).toBe('count');
+		expect(onOpenRegister).toHaveBeenCalledWith('count');
 		expect(close).toHaveBeenCalledWith(false);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
 	it('a refused count keeps the sheet and says so; the register panel is not opened', async () => {
 		const close = jest.fn();
+		const onOpenRegister = jest.fn();
 		mockDrawer.actions.startCounting.mockRejectedValueOnce(new Error('register_figures_pending'));
-		render(<UserSheet open onOpenChange={close} />);
+		render(<UserSheet open onOpenChange={close} onOpenRegister={onOpenRegister} />);
 		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
-		expect(consumeRegisterPanelRequest()).toBeNull();
+		expect(onOpenRegister).not.toHaveBeenCalled();
 		expect(close).not.toHaveBeenCalledWith(false);
 		expect(mockLogError).toHaveBeenCalledWith(
 			'The count could not start',

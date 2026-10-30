@@ -93,7 +93,11 @@ export function RegisterCount({
 	onBack,
 	onClosed,
 	onBusyChange,
+	side,
+	portalHost,
 }: {
+	side?: 'left' | 'right';
+	portalHost?: string | null;
 	description: string;
 	onBack: () => void;
 	onClosed: (count: ClosureCount) => void;
@@ -308,7 +312,13 @@ export function RegisterCount({
 				</Text>
 			)}
 			{approving && (
-				<ApproveSheet counted={counted} onClosed={completed} onOpenChange={setApproving} />
+				<ApproveSheet
+					side={side}
+					portalHost={portalHost}
+					counted={counted}
+					onClosed={completed}
+					onOpenChange={setApproving}
+				/>
 			)}
 		</ScrollView>
 	);
