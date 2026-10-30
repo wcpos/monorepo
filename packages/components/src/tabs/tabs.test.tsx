@@ -44,7 +44,9 @@ it('paints the active underline and label without a pill surface', () => {
 	);
 	const [active, disabled] = getAllByRole('button');
 	expect(active).toHaveClass('h-ctl', 'border-b-2', 'border-primary');
-	expect(active.firstElementChild).toHaveClass('text-foreground', 'font-semibold');
+	expect(active.firstElementChild).toHaveClass('text-foreground', 'font-medium');
+	// One weight in both states: a heavier active label is wider and reflows the strip (ledger line 12).
+	expect(active.firstElementChild).not.toHaveClass('font-semibold');
 	expect(disabled).toHaveClass('h-ctl', 'border-b-2', 'border-transparent', 'opacity-45');
 	expect(container.firstElementChild).toHaveClass('border-b');
 	expect(container.firstElementChild).not.toHaveClass('bg-muted');

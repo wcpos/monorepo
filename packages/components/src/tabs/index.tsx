@@ -331,8 +331,11 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 	return (
 		<TextClassContext.Provider
 			value={cn(
+				// One weight in both states: the ink and the underline carry the selection. A heavier
+				// face is wider, so the old semibold on the active tab grew it and the strip reflowed
+				// on every switch (chip ledger line 21; Paul's ruling 2026-10-30 on #3100).
 				'text-muted-foreground text-center text-base font-medium',
-				value === props.value && 'text-foreground font-semibold'
+				value === props.value && 'text-foreground'
 			)}
 		>
 			<TabsPrimitive.Trigger
