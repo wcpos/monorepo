@@ -21,6 +21,7 @@ import {
 } from '../../src/register-session/session-store';
 import { remintRegister } from '../../src/register-session/register-document';
 import {
+	adoptSessionRow,
 	drainRegisterSessionQueue,
 	type ServerMovementRow,
 } from '../../src/register-session/queue';
@@ -1488,4 +1489,20 @@ it('merges counting_by from the server after the local count starts', async () =
 	http.post.mockResolvedValueOnce({ data: { ...counting.toJSON(), counting_by: 8 } });
 	await drain();
 	expect(row.getLatest().counting_by).toBe(8);
+});
+
+// Removing the carry schema properties would silently prune the server's source note.
+it('adopts the carried float source fields from a server session', async () => {
+	const source = await open();
+	await adoptSessionRow(db.register_sessions, {
+		...source.toJSON(),
+		id: 'carried',
+		float_source: 'carried',
+		carried_from_closure_id: 'closure',
+	});
+	expect((await db.register_sessions.findOne('carried').exec())?.toJSON()).toMatchObject({
+		float_source: 'carried',
+		carried_from_closure_id: 'closure',
+		sync_status: 'synced',
+	});
 });
