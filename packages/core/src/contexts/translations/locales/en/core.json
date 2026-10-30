@@ -2955,7 +2955,6 @@
 	"reports.median": "Median",
 	"reports.largest": "Largest",
 	"reports.items_per_order": "Items per order",
-	"reports.discounts": "Discounts",
 	"reports.nothing_needs_you": "Nothing needs you",
 	"reports.n_processing_one": "{count} processing",
 	"reports.n_processing_other": "{count} processing",
