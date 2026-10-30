@@ -55,6 +55,7 @@
     "./lib/retryable-lazy": "./src/lib/retryable-lazy.ts",
     "./lib/scale": "./src/lib/scale.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
+    "./lib/themes": "./src/lib/themes.ts",
     "./lib/use-spacing-unit": "./src/lib/use-spacing-unit.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./list-item": "./src/list-item/index.tsx",

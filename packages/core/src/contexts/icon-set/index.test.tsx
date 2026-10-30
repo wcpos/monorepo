@@ -4,7 +4,11 @@ import * as React from 'react';
 import { act, render } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-const store: { icons?: string; $?: BehaviorSubject<{ icons: string }> } = { icons: undefined };
+const store: {
+	icons?: string;
+	theme?: string;
+	$?: BehaviorSubject<{ icons: string; theme?: string }>;
+} = { icons: undefined };
 const appState: { store: { icons?: string } | null } = { store };
 
 // The set context as `@wcpos/components/icon` exports it, without the three glyph maps.
@@ -14,11 +18,16 @@ jest.mock('@wcpos/components/icon', () => {
 	return {
 		ICON_SET_IDS: ['tabler', 'hugeicons', 'phosphor'],
 		DEFAULT_ICON_SET: 'tabler',
+		ICON_SETTING_AUTO: 'auto',
 		IconSetProvider: ({ set, children }: React.PropsWithChildren<{ set: string }>) =>
 			createElement(IconSet.Provider, { value: set }, children),
 		useIconSet: () => useContext(IconSet),
 	};
 });
+jest.mock('@wcpos/components/lib/themes', () => ({
+	iconSetForTheme: (theme: string | undefined) =>
+		theme === 'ocean' || theme === 'sunset' ? 'phosphor' : 'tabler',
+}));
 jest.mock('../app-state', () => ({ useAppState: () => appState }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -45,6 +54,7 @@ function renderedSet() {
 
 beforeEach(() => {
 	store.icons = undefined;
+	store.theme = undefined;
 	delete store.$;
 	appState.store = store;
 });
@@ -57,12 +67,27 @@ describe('IconSetSettingProvider', () => {
 
 	it("draws the store's chosen set", () => {
 		store.icons = 'hugeicons';
+		store.theme = 'ocean';
 		expect(renderedSet().textContent).toBe('hugeicons');
 	});
 
-	it('falls back to the default for a value that is not a set', () => {
-		store.icons = 'material';
-		expect(renderedSet().textContent).toBe('tabler');
+	it.each(['auto', undefined, 'material'])('follows the theme for icons %p', (icons) => {
+		store.icons = icons;
+		store.theme = 'ocean';
+		expect(renderedSet().textContent).toBe('phosphor');
+	});
+
+	it('follows theme emissions while matching the theme', () => {
+		store.$ = new BehaviorSubject<{ icons: string; theme?: string }>({
+			icons: 'auto',
+			theme: 'light',
+		});
+		const set = renderedSet();
+		expect(set.textContent).toBe('tabler');
+
+		act(() => store.$!.next({ icons: 'auto', theme: 'ocean' }));
+
+		expect(set.textContent).toBe('phosphor');
 	});
 
 	it('follows a new emission on the same store', () => {
