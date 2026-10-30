@@ -332,7 +332,7 @@ beforeEach(() => {
 it('opens a template-backed phone page with its single selector and available reprint action', () => {
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').textContent).toBe('4');
 	expect(screen.getByTestId('receipt-template-select')).toBeTruthy();
 	expect(screen.getByTestId('receipt-template-core').textContent).toBe('Default');
@@ -371,7 +371,7 @@ it('shows settled figures below the server document and retains its baseline/cor
 	};
 	const view = render(<ClosurePanel row={row} onClose={() => {}} />);
 	expect(screen.getByTestId('dialog-right')).toBeTruthy();
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').textContent).toBe('9');
 	expect(screen.getByTestId('closure-settled').textContent).toContain(
 		'Recorded $99.00 · −$11.00 short. Settled at $111.00 after 1 recount.'
@@ -391,7 +391,7 @@ it('shows settled figures below the server document and retains its baseline/cor
 	view.unmount();
 	mockRemote = null;
 	render(<ClosurePanel row={{ ...row, ...snapshot }} onClose={() => {}} />);
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').textContent).toBe('9');
 	expect(screen.getByTestId('closure-settled').textContent).toContain(
 		'Recorded $99.00 · −$11.00 short. Settled at $111.00 after 1 recount.'
@@ -429,7 +429,7 @@ it('hosts the tablet panel in Reports with a full-width document and close actio
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
 	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
 	expect(screen.getByTestId('closure-panel-close')).toBeTruthy();
 	expect(screen.queryByTestId('closure-back')).toBeNull();
@@ -493,7 +493,7 @@ it('replaces the online fallback with a document error and a manual retry', () =
 	mockLoadError = new Error('document refused');
 	const view = render(<ClosurePanel row={row} onClose={jest.fn()} />);
 	expect(screen.queryByTestId('document')).toBeNull();
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('closure-document-error').textContent).toContain(
 		'Could not load closures'
 	);
@@ -510,7 +510,7 @@ it('keeps the offline document and warning rather than online Retry', () => {
 	mockOffline = true;
 	mockLoadError = new Error('disconnected');
 	render(<ClosurePanel row={row} onClose={jest.fn()} />);
-	fireEvent.click(screen.getByTestId('closure-zreport'));
+	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').textContent).toBe('4');
 	expect(screen.queryByTestId('closure-document-retry')).toBeNull();
 	expect(screen.getByText('Connect to recount')).toBeTruthy();
@@ -554,7 +554,7 @@ it.each([true, false])(
 	async (phone) => {
 		mockPhone = phone;
 		render(<ClosurePanel row={row} onClose={jest.fn()} />);
-		fireEvent.click(screen.getByTestId('closure-zreport'));
+		fireEvent.click(screen.getByTestId('closure-paper'));
 		const selector = screen.getByTestId('receipt-printer-select');
 		expect(selector.textContent).toContain('Thermal');
 		expect(selector.className).toContain('min-h-12');
