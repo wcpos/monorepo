@@ -248,7 +248,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 			style={lifted ? LIFTED : undefined}
 			accessibilityRole="button"
 			accessibilityLabel={accessibilityLabel}
-			className={`m-1 ${grow ? 'grow' : 'flex-1'} rounded-lg`}
+			className={`m-1 ${grow ? 'grow' : 'flex-1'} rounded-tile`}
 			testID={testID}
 		>
 			{({ pressed }) => (
@@ -264,7 +264,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						</Animated.View>
 					)}
 					<View
-						className={`rounded-media overflow-hidden border ${
+						className={`rounded-tile overflow-hidden border ${
 							filled
 								? 'bg-primary border-transparent'
 								: tint === null
@@ -273,7 +273,9 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						}`}
 						testID="poster-card"
 					>
-						<View className="aspect-square overflow-hidden" testID={squareTestID}>
+						{/* The theme's media radius clips the picture alone (a circle on Paper till); the card, its
+						    words and its corner marks keep the tile radius (Codex on #3139). */}
+						<View className="rounded-media aspect-square overflow-hidden" testID={squareTestID}>
 							<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
 								<Picture picture={picture} />
 							</View>

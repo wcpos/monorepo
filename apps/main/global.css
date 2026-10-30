@@ -454,7 +454,7 @@
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
       --shape-radius-control: 8px;
       --shape-radius-tile: 8px;
-      --shape-radius-media: 6px;
+      --shape-radius-media: 8px;
       --shape-radius-commit: 8px;
       --shape-radius-field: 8px;
       --shape-radius-chip: 999px;
@@ -586,7 +586,7 @@
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
       --shape-radius-control: 8px;
       --shape-radius-tile: 8px;
-      --shape-radius-media: 6px;
+      --shape-radius-media: 8px;
       --shape-radius-commit: 8px;
       --shape-radius-field: 8px;
       --shape-radius-chip: 999px;
@@ -716,7 +716,7 @@
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
       --shape-radius-control: 8px;
       --shape-radius-tile: 8px;
-      --shape-radius-media: 6px;
+      --shape-radius-media: 8px;
       --shape-radius-commit: 8px;
       --shape-radius-field: 8px;
       --shape-radius-chip: 999px;
@@ -846,7 +846,7 @@
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
       --shape-radius-control: 8px;
       --shape-radius-tile: 8px;
-      --shape-radius-media: 6px;
+      --shape-radius-media: 8px;
       --shape-radius-commit: 8px;
       --shape-radius-field: 8px;
       --shape-radius-chip: 999px;
@@ -974,7 +974,7 @@
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities. */
       --shape-radius-control: 8px;
       --shape-radius-tile: 8px;
-      --shape-radius-media: 6px;
+      --shape-radius-media: 8px;
       --shape-radius-commit: 8px;
       --shape-radius-field: 8px;
       --shape-radius-chip: 999px;

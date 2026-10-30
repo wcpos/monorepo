@@ -67,7 +67,8 @@ it('keeps the quantity id/value and commits the same hook arguments', () => {
 	const input = screen.getByTestId('cart-quantity-input') as HTMLInputElement;
 	expect(input.value).toBe('20');
 	expect(input.className).toContain('rounded-control');
-	expect(input.className).toContain('border-[length:var(--shape-ctl-border)]');
+	// The width is the shared field's: a caller-level width would erase the open/invalid border (Codex, #3139).
+	expect(input.className).not.toContain('border-[length:var(--shape-ctl-border)]');
 	fireEvent.change(input, { target: { value: '3' } });
 	fireEvent.keyDown(input, { key: 'Enter' });
 	expect(mockUpdateCartLine).toHaveBeenCalledTimes(1);
