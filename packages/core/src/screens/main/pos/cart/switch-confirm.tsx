@@ -106,8 +106,12 @@ export function SwitchConfirm({
 			: '';
 	if (reason && choice !== 'leave') setChoice('leave');
 	if (!request) return null;
+	// The slip is a report: a cashier counting blind does not read it (the register panel's X-report rule).
 	const handover =
-		request.kind === 'cashier' && binding.status === 'bound' && session?.status === 'open';
+		request.kind === 'cashier' &&
+		binding.status === 'bound' &&
+		session?.status === 'open' &&
+		!blind;
 	const openedDate = session?.opened_at_gmt
 		? convertUTCStringToLocalDate(session.opened_at_gmt)
 		: undefined;
@@ -266,68 +270,72 @@ export function SwitchConfirm({
 			if (figuresPending) description += ' ' + t('register.figures_after_sync');
 			confirm = t('register.close_register');
 	}
+	// The confirmation steps aside while the slip is up (its scrim would sit above the sheet) and
+	// returns when the sheet closes, request intact, so the cashier can then confirm the hand-over.
 	return (
-		<AlertDialog open onOpenChange={onOpenChange}>
-			<AlertDialogContent portalHost={portalHost} testID="switch-confirm">
-				<AlertDialogHeader>
-					<AlertDialogTitle>{title}</AlertDialogTitle>
-					<AlertDialogDescription>{description}</AlertDialogDescription>
-				</AlertDialogHeader>
-				{body && <View className="gap-4 px-4">{body}</View>}
-				<AlertDialogFooter
-					cancel={{ testID: 'switch-confirm-cancel', onPress: () => onOpenChange(false) }}
-					confirm={{
-						label: confirm,
-						testID: 'switch-confirm-confirm',
-						disabled: request.kind === 'sign-out' && figuresPending,
-						onPress: () => {
-							onConfirm(request.kind === 'store' && carry ? { ...request, carry } : request);
-							onOpenChange(false);
-						},
-					}}
-					secondary={
-						request.kind === 'sign-out'
-							? {
-									label: t('register.sign_out_anyway'),
-									testID: 'switch-confirm-secondary',
-									onPress: () => {
-										onSignOutAnyway();
-										onOpenChange(false);
-									},
-								}
-							: handover
+		<>
+			<AlertDialog open={!sheetOpen} onOpenChange={onOpenChange}>
+				<AlertDialogContent portalHost={portalHost} testID="switch-confirm">
+					<AlertDialogHeader>
+						<AlertDialogTitle>{title}</AlertDialogTitle>
+						<AlertDialogDescription>{description}</AlertDialogDescription>
+					</AlertDialogHeader>
+					{body && <View className="gap-4 px-4">{body}</View>}
+					<AlertDialogFooter
+						cancel={{ testID: 'switch-confirm-cancel', onPress: () => onOpenChange(false) }}
+						confirm={{
+							label: confirm,
+							testID: 'switch-confirm-confirm',
+							disabled: request.kind === 'sign-out' && figuresPending,
+							onPress: () => {
+								onConfirm(request.kind === 'store' && carry ? { ...request, carry } : request);
+								onOpenChange(false);
+							},
+						}}
+						secondary={
+							request.kind === 'sign-out'
 								? {
-										label: t('register.print_handover_slip'),
-										testID: 'switch-confirm-handover',
-										onPress: () => setSheetOpen(true),
+										label: t('register.sign_out_anyway'),
+										testID: 'switch-confirm-secondary',
+										onPress: () => {
+											onSignOutAnyway();
+											onOpenChange(false);
+										},
 									}
-								: undefined
-					}
-				/>
-				<PrintSheet
-					open={sheetOpen && handover}
-					onOpenChange={setSheetOpen}
-					doc={doc}
-					title={t('register.handover_slip')}
-					description={reportDescription}
-					printLabel={t('register.print_handover_slip')}
-					error={printError || doc.documentError?.message || null}
-					onPrint={async () => {
-						setPrintError('');
-						try {
-							await print();
-						} catch (e) {
-							setPrintError(
-								e instanceof Error && e.message === 'reports.reprint_failed'
-									? t('reports.reprint_failed')
-									: String(e)
-							);
+								: handover
+									? {
+											label: t('register.print_handover_slip'),
+											testID: 'switch-confirm-handover',
+											onPress: () => setSheetOpen(true),
+										}
+									: undefined
 						}
-					}}
-					portalHost="pos"
-					testID="switch-confirm-handover-sheet"
-				/>
-			</AlertDialogContent>
-		</AlertDialog>
+					/>
+				</AlertDialogContent>
+			</AlertDialog>
+			<PrintSheet
+				open={sheetOpen && handover}
+				onOpenChange={setSheetOpen}
+				doc={doc}
+				title={t('register.handover_slip')}
+				description={reportDescription}
+				printLabel={t('register.print_handover_slip')}
+				error={printError || doc.documentError?.message || null}
+				onPrint={async () => {
+					setPrintError('');
+					try {
+						await print();
+					} catch (e) {
+						setPrintError(
+							e instanceof Error && e.message === 'reports.reprint_failed'
+								? t('reports.reprint_failed')
+								: String(e)
+						);
+					}
+				}}
+				portalHost={portalHost}
+				testID="switch-confirm-handover-sheet"
+			/>
+		</>
 	);
 }

@@ -350,9 +350,11 @@ const store = { id: 2, name: 'Other store' } as Extract<SwitchRequest, { kind: '
 const onOpenChange = jest.fn();
 const onConfirm = jest.fn();
 const onSignOutAnyway = jest.fn();
+const HOST = 'scene-host';
 const show = (request: SwitchRequest | null) =>
 	render(
 		<SwitchConfirm
+			portalHost={HOST}
 			request={request}
 			onOpenChange={onOpenChange}
 			onConfirm={onConfirm}
@@ -644,8 +646,10 @@ it('opens and prints the nested hand-over sheet without confirming or dismissing
 	expect(screen.getByTestId('switch-confirm-handover').textContent).toBe('Print hand-over slip');
 	fireEvent.click(screen.getByTestId('switch-confirm-handover'));
 	const sheet = screen.getByTestId('switch-confirm-handover-sheet');
-	expect(screen.getByTestId('switch-confirm').contains(sheet)).toBe(true);
-	expect(sheet.getAttribute('data-host')).toBe('pos');
+	// The confirmation steps aside while the slip is up (its scrim would cover the sheet) and
+	// comes back when the sheet closes; the sheet goes to the caller's host, not a fixed one.
+	expect(screen.queryByTestId('switch-confirm')).toBeNull();
+	expect(sheet.getAttribute('data-host')).toBe(HOST);
 	expect(sheet.textContent).toContain('Hand-over slip');
 	expect(sheet.textContent).toContain('Front counter');
 	expect(sheet.textContent).toContain('open since 09:02');
@@ -658,11 +662,12 @@ it('opens and prints the nested hand-over sheet without confirming or dismissing
 	expect(sheet.textContent).not.toContain('Printing failed. Try again.');
 	fireEvent.click(screen.getByTestId('switch-confirm-handover-sheet-close'));
 	expect(screen.queryByTestId('switch-confirm-handover-sheet')).toBeNull();
+	expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 	expect(screen.getByTestId('switch-confirm-confirm')).toBeTruthy();
 	expect(onConfirm).not.toHaveBeenCalled();
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
-it.each(['unbound', 'closed', 'counting', 'missing', 'sign-out', 'store'])(
+it.each(['unbound', 'closed', 'counting', 'missing', 'blind', 'sign-out', 'store'])(
 	'does not offer a hand-over slip for %s',
 	(reason) => {
 		const original = mockDrawer;
@@ -675,6 +680,8 @@ it.each(['unbound', 'closed', 'counting', 'missing', 'sign-out', 'store'])(
 			if (reason === 'unbound') mockDrawer.binding.status = 'unbound';
 			if (reason === 'closed' || reason === 'counting') mockDrawer.session.status = reason;
 			if (reason === 'missing') mockDrawer.session = null as never;
+			// A cashier counting blind does not read reports; the slip is one.
+			if (reason === 'blind') mockDrawer.blind = true;
 			show(
 				reason === 'sign-out'
 					? { kind: 'sign-out' }
