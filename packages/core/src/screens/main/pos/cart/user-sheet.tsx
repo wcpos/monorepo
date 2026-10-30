@@ -502,7 +502,7 @@ export function UserSheet({
 							// The server carried: the drawer is in Y and the next cycle records it; switch.
 							const carried = error instanceof CarryAdoptionError;
 							Toast.show({
-								text1: t(carried ? 'common.carry_recorded_later' : 'common.carry_failed'),
+								text1: carried ? t('common.carry_recorded_later') : t('common.carry_failed'),
 								type: carried ? 'warning' : 'error',
 							});
 							log.error('Drawer carry failed', {
