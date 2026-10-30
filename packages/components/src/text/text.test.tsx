@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { Text } from './index';
+import { Text, TextClassContext } from './index';
 import { MAX_FONT_SCALE } from '../lib/scale';
 import { ThemeTraitsContext } from '../lib/theme-traits';
 
@@ -116,5 +116,29 @@ describe('Text OS text-size cap', () => {
 		render(<Text maxFontSizeMultiplier={2}>Raised</Text>);
 
 		expect(screen.getByText('Raised')).toHaveAttribute('maxfontsizemultiplier', '2');
+	});
+});
+
+// 93 amounts ask for tabular numerals through the class rather than the prop (Codex on #3138): the
+// numbers face must answer both, and an inherited `tabular-nums` context too.
+describe('the numbers face from a class', () => {
+	const traits = { type: { body: 'Manrope' as const, num: 'JetBrains Mono' as const } };
+	it('draws the numbers face for a tabular-nums class', () => {
+		render(
+			<ThemeTraitsContext.Provider value={traits}>
+				<Text className="text-right tabular-nums">1.00</Text>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('1.00')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
+	});
+	it('draws the numbers face under an inherited tabular-nums context', () => {
+		render(
+			<ThemeTraitsContext.Provider value={traits}>
+				<TextClassContext.Provider value="tabular-nums">
+					<Text>2.00</Text>
+				</TextClassContext.Provider>
+			</ThemeTraitsContext.Provider>
+		);
+		expect(screen.getByText('2.00')).toHaveStyle({ fontFamily: 'JetBrains Mono' });
 	});
 });

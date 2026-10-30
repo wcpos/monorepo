@@ -30,7 +30,11 @@ function Text({
 }: TextProps) {
 	const textClass = React.useContext(TextClassContext);
 	const { type } = useThemeTraits();
-	const family = tabular ? (type.num ?? type.body) : type.body;
+	// The numbers face answers the `tabular` prop AND a `tabular-nums` class, from the caller or an
+	// inherited context: 93 amounts ask through the class today (Codex, #3138), and a theme whose body
+	// face has proportional digits (DM Sans) would otherwise draw them unaligned.
+	const numeric = tabular || hasTabularClass(className) || hasTabularClass(textClass);
+	const family = numeric ? (type.num ?? type.body) : type.body;
 	const Component = asChild ? Slot : RNText;
 
 	const processedChildren =
@@ -53,6 +57,11 @@ function Text({
 			{processedChildren}
 		</Component>
 	);
+}
+
+const TABULAR_CLASS = /(^|\s)tabular-nums(\s|$)/;
+function hasTabularClass(classes: string | undefined) {
+	return classes !== undefined && TABULAR_CLASS.test(classes);
 }
 
 export { Text, TextClassContext };
