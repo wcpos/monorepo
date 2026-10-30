@@ -78,8 +78,11 @@ it.each(['lg', 'sm'])('labels the document properties above the body on %s', (si
 	const header = screen.getByTestId('detail-panel-scope').parentElement!;
 	expect(within(header).queryByTestId('receipt-template-select')).toBeNull();
 	expect(within(header).queryByTestId('receipt-printer-select')).toBeNull();
-	expect(header.nextElementSibling).toBe(template.parentElement);
-	expect(template.parentElement?.nextElementSibling).toBe(screen.getByTestId('detail-panel-body'));
+	// The rows sit in their own gutter wrapper between the header and the body.
+	const rows = screen.getByTestId('detail-panel-print-rows');
+	expect(rows.contains(template)).toBe(true);
+	expect(header.nextElementSibling).toBe(rows);
+	expect(rows.nextElementSibling).toBe(screen.getByTestId('detail-panel-body'));
 	expect(screen.getByTestId('detail-panel-print').textContent).toBe('Print report');
 });
 it('the phone page shows the crumb and returns on back', () => {

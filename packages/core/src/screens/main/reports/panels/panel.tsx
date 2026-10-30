@@ -286,27 +286,30 @@ export function DetailPanel() {
 					{t('reports.panel_scope', { period, register })}
 				</Text>
 			</DialogHeader>
-			<PropertyList>
-				{/* The selects are the rows' VALUES, in the value column: the `control` slot sits
+			{/* The rows share the header's and the body's 16-point gutter (CODING_STANDARDS § Gutters). */}
+			<View testID="detail-panel-print-rows" className="px-4">
+				<PropertyList>
+					{/* The selects are the rows' VALUES, in the value column: the `control` slot sits
 				    absolute beside the key on a phone and is for a switch (Codex, #3077). */}
-				<PropertyRow label={t('reports.template')} testID="detail-panel-template">
-					<TemplateSwitcher
-						templates={doc.templates}
-						selectedId={doc.selectedTemplateId}
-						onSelect={doc.setSelectedTemplateId}
-						isOffline={doc.isOffline}
-						alwaysVisible
-					/>
-				</PropertyRow>
-				<PropertyRow label={t('reports.printer')} testID="detail-panel-printer">
-					<PrinterSwitcher
-						printers={doc.allPrinters}
-						printerSelection={doc.printerSelection}
-						resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
-						onSelect={doc.setPrinterSelection}
-					/>
-				</PropertyRow>
-			</PropertyList>
+					<PropertyRow label={t('reports.template')} testID="detail-panel-template">
+						<TemplateSwitcher
+							templates={doc.templates}
+							selectedId={doc.selectedTemplateId}
+							onSelect={doc.setSelectedTemplateId}
+							isOffline={doc.isOffline}
+							alwaysVisible
+						/>
+					</PropertyRow>
+					<PropertyRow label={t('reports.printer')} testID="detail-panel-printer">
+						<PrinterSwitcher
+							printers={doc.allPrinters}
+							printerSelection={doc.printerSelection}
+							resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+							onSelect={doc.setPrinterSelection}
+						/>
+					</PropertyRow>
+				</PropertyList>
+			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
 					detail === 'orders' ? (
