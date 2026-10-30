@@ -12,6 +12,15 @@ import { StockQuantity } from './stock-quantity';
 import { resolveVariationName } from '../../../components/product/resolve-variation-name';
 
 /**
+ * The parent product's name, for the rows of a drilled-in variations pane: a row of bare
+ * option chips has no noun, and the crumb is above the card, not beside the row. Provided by
+ * the pane only; the inline rows under a parent row in the products table (same cell) leave it
+ * unset, since the parent's row is the line above. The grid's variation tile prints the same
+ * line above its chips.
+ */
+export const VariationParentNameContext = React.createContext<string | undefined>(undefined);
+
+/**
  *
  */
 export function ProductVariationName(
@@ -30,12 +39,18 @@ export function ProductVariationName(
 	}));
 	const meta = column.columnDef.meta;
 	const show = meta?.show ?? (() => false);
+	const parentName = React.useContext(VariationParentNameContext);
 
 	/**
 	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
 	return (
 		<VStack space="xs">
+			{!!parentName && (
+				<Text variant="help" numberOfLines={1} decodeHtml testID="variation-parent-name">
+					{parentName}
+				</Text>
+			)}
 			<OptionChips attributes={variation.attributes} fallback={variation.name} />
 			<View className="flex-row flex-wrap items-center gap-x-2.5 gap-y-px">
 				{show('stock_quantity') && <StockQuantity {...props} />}

@@ -89,7 +89,10 @@ jest.mock('./rows/product-row', () => ({
 	useVariationCount: () => 0,
 	InCartCount: ({ empty }: { empty: React.ReactNode }) => empty,
 }));
-jest.mock('./cells/variation-name', () => ({ ProductVariationName: () => null }));
+jest.mock('./cells/variation-name', () => ({
+	ProductVariationName: () => null,
+	VariationParentNameContext: jest.requireActual('react').createContext(undefined),
+}));
 jest.mock('./cells/stock-quantity', () => ({ StockQuantity: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
