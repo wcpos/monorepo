@@ -621,9 +621,11 @@ export async function adoptSessionRow(
 	const row = pruneToSchemaProperties(sessions, server) as RegisterSessionRow;
 	const local = await sessions.findOne(row.id).exec();
 	if (local?.sync_status === 'pending') return;
-	// A session with its closure is final: a snapshot read before the close (a refresh in
-	// flight while a carry committed) must not reopen it (Codex, #3079).
-	if (local?.closure_id && local.status === 'closed' && row.status !== 'closed') return;
+	// A close the server confirmed is final: a snapshot read before it (a refresh in flight
+	// while a carry committed) must not reopen the session. A close the server REFUSED keeps
+	// `closure_id` with `server_status` unchanged, and the server's row is its recovery.
+	if (local?.server_status === 'closed' && local.status === 'closed' && row.status !== 'closed')
+		return;
 	const adopted = { ...row, ...synced, server_status: row.status, pending_status: null };
 	/**
 	 * Merge over the local document, never replace it: the list route serves only the

@@ -3118,6 +3118,6 @@
 	"register.carried_to": "Carried to {store}",
 	"register.carried": "Carried",
 	"register.carried_from": "carried from {store}",
-	"common.carry_failed": "The drawer could not be carried. Nothing has changed.",
+	"common.carry_failed": "The drawer carry did not complete. Check both registers before trying again.",
 	"common.carry_recorded_later": "The drawer was carried. This device records it at the next sync."
 }

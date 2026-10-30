@@ -368,6 +368,22 @@ it('never reopens a closed session that has its closure from a stale list snapsh
 	await refreshSessions({ registerId: 'register', http, storeDB: db });
 	expect(row.getLatest().toJSON()).toMatchObject({ status: 'closed', closure_id: 'closure' });
 });
+it('a refused close is recovered from the server row: the session reopens at counting', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), status: 'open' } });
+	await drain();
+	await row.getLatest().incrementalPatch({
+		status: 'closed',
+		closure_id: row.id,
+		sync_status: 'failed',
+		sync_error: 'wcpos_session_transition_refused',
+	});
+	http.get.mockResolvedValue({
+		data: [serverListRow({ ...row.getLatest().toJSON(), status: 'counting' })],
+	});
+	await refreshSessions({ registerId: 'register', http, storeDB: db });
+	expect(row.getLatest().toJSON()).toMatchObject({ status: 'counting' });
+});
 /** A movement as `Cash_Movement_Store` serves it: `SELECT *`, the cashier under `actor`. */
 const serverMovementRow = (
 	local: CashMovementRow,

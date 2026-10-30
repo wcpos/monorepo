@@ -1267,7 +1267,7 @@ describe('carrying the drawer before a store switch', () => {
 		);
 		expect(Toast.show).toHaveBeenCalledWith({
 			type: 'error',
-			text1: 'The drawer could not be carried. Nothing has changed.',
+			text1: 'The drawer carry did not complete. Check both registers before trying again.',
 		});
 		expect(mockLogError).toHaveBeenCalledWith(
 			'Drawer carry failed',
