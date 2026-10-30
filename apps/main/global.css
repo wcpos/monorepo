@@ -202,12 +202,12 @@
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
 
-  --radius-control: var(--shape-radius-control);
-  --radius-tile: var(--shape-radius-tile);
-  --radius-media: var(--shape-radius-media);
-  --radius-commit: var(--shape-radius-commit);
-  --radius-field: var(--shape-radius-field);
-  --radius-chip: var(--shape-radius-chip);
+  --radius-control: calc(var(--radius) * var(--shape-radius-control));
+  --radius-tile: calc(var(--radius) * var(--shape-radius-tile));
+  --radius-media: calc(var(--radius) * var(--shape-radius-media));
+  --radius-commit: calc(var(--radius) * var(--shape-radius-commit));
+  --radius-field: calc(var(--radius) * var(--shape-radius-field));
+  --radius-chip: calc(var(--radius) * var(--shape-radius-chip));
   --shadow-commit: var(--shape-commit-shadow);
   --shadow-commit-press: var(--shape-commit-shadow-press);
   --font-weight-ui: var(--type-w-ui);
@@ -452,13 +452,15 @@
       --tile-tint-5: oklch(0.88 0.09 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: var(--radius);
-      --shape-radius-tile: var(--radius);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: var(--radius);
-      --shape-radius-field: var(--radius);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -585,13 +587,15 @@
       --tile-tint-5: oklch(0.31 0.03 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: var(--radius);
-      --shape-radius-tile: var(--radius);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: var(--radius);
-      --shape-radius-field: var(--radius);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -716,13 +720,15 @@
       --tile-tint-5: oklch(0.31 0.03 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: var(--radius);
-      --shape-radius-tile: var(--radius);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: var(--radius);
-      --shape-radius-field: var(--radius);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -847,13 +853,15 @@
       --tile-tint-5: oklch(0.31 0.03 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: var(--radius);
-      --shape-radius-tile: var(--radius);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: var(--radius);
-      --shape-radius-field: var(--radius);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -976,13 +984,15 @@
       --tile-tint-5: oklch(0.31 0.03 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: var(--radius);
-      --shape-radius-tile: var(--radius);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: var(--radius);
-      --shape-radius-field: var(--radius);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -1072,13 +1082,15 @@
       --tile-tint-5: oklch(0.90 0.04 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: calc(var(--radius) * 0.5);
-      --shape-radius-tile: calc(var(--radius) * 0.5);
-      --shape-radius-media: 999px;
-      --shape-radius-commit: calc(var(--radius) * 0.5);
-      --shape-radius-field: calc(var(--radius) * 0.5);
-      --shape-radius-chip: calc(var(--radius) * 0.5);
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 0.5;
+      --shape-radius-tile: 0.5;
+      --shape-radius-media: 999;
+      --shape-radius-commit: 0.5;
+      --shape-radius-field: 0.5;
+      --shape-radius-chip: 0.5;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -1168,13 +1180,15 @@
       --tile-tint-5: oklch(0.88 0.05 200);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: calc(var(--radius) * 1.5);
-      --shape-radius-tile: calc(var(--radius) * 1.5);
-      --shape-radius-media: var(--radius);
-      --shape-radius-commit: 999px;
-      --shape-radius-field: calc(var(--radius) * 1.5);
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1.5;
+      --shape-radius-tile: 1.5;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 1.5;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 1px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -1264,13 +1278,15 @@
       --tile-tint-5: oklch(0.87 0 0);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: calc(var(--radius) * 2.25);
-      --shape-radius-tile: calc(var(--radius) * 2.5);
-      --shape-radius-media: calc(var(--radius) * 1.75);
-      --shape-radius-commit: 999px;
-      --shape-radius-field: 999px;
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 2.25;
+      --shape-radius-tile: 2.5;
+      --shape-radius-media: 1.75;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 999;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 0px;
       --shape-commit-shadow: 0 0 0 transparent;
       --shape-commit-shadow-press: 0 0 0 transparent;
@@ -1363,13 +1379,15 @@
       --tile-tint-5: oklch(0.90 0.08 220);
 
       /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
-         Radii derive from --radius so they follow the density step (compact 6 · regular 8 · spacious 10). */
-      --shape-radius-control: calc(var(--radius) * 2);
-      --shape-radius-tile: calc(var(--radius) * 2);
-      --shape-radius-media: calc(var(--radius) * 1.5);
-      --shape-radius-commit: 999px;
-      --shape-radius-field: 999px;
-      --shape-radius-chip: 999px;
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 2;
+      --shape-radius-tile: 2;
+      --shape-radius-media: 1.5;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 999;
+      --shape-radius-chip: 999;
       --shape-ctl-border: 2px;
       --shape-commit-shadow: 0 4px 0 var(--primary-shadow);
       --shape-commit-shadow-press: 0 1px 0 var(--primary-shadow);

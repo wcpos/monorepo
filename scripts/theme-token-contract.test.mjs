@@ -57,11 +57,13 @@ test('shape, shadow and weight utilities resolve inline', () => {
 		'font-weight-commit': 'type-w-commit',
 	};
 	for (const [utility, token] of Object.entries(mappings)) {
-		assert.match(
-			inlineThemeBody,
-			new RegExp(`--${utility}\\s*:\\s*var\\(--${token}\\)\\s*;`),
-			utility
-		);
+		// A radius is a unitless multiple of --radius applied HERE, where the density scope's --radius is
+		// in force; a px token computed in the variant would read the root's 8 (the compact gallery cells
+		// moved 15 px before this). Shadows and weights map straight through.
+		const value = utility.startsWith('radius-')
+			? `calc\\(var\\(--radius\\) \\* var\\(--${token}\\)\\)`
+			: `var\\(--${token}\\)`;
+		assert.match(inlineThemeBody, new RegExp(`--${utility}\\s*:\\s*${value}\\s*;`), utility);
 		assert.doesNotMatch(themeBody, new RegExp(`--${utility}\\s*:`));
 	}
 });
@@ -77,6 +79,22 @@ const themeNames = [
 	'bold',
 	'market',
 ];
+
+for (const name of themeNames) {
+	test(`${name}: every shape radius is a unitless multiple (999 is a pill or a circle)`, () => {
+		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+		assert.ok(body, `Missing ${name} theme`);
+		for (const token of ['control', 'tile', 'media', 'commit', 'field', 'chip']) {
+			const value = body.match(new RegExp(`--shape-radius-${token}\\s*:\\s*([^;]+);`))?.[1].trim();
+			assert.ok(value, `${name}: --shape-radius-${token}`);
+			assert.match(
+				value,
+				/^\d+(\.\d+)?$/,
+				`${name}: --shape-radius-${token} is ${value}, not a unitless number`
+			);
+		}
+	});
+}
 
 test('the contract covers every variant in the theme layer, in sheet order', () => {
 	const layer = css.match(/@layer\s+theme\s*\{([\s\S]*?)^\}/m)?.[1];

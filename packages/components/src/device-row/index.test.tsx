@@ -56,7 +56,7 @@ it('is a flush hairline row: the name and its tag, the identifiers and ONE capti
 	expect(row).toHaveClass('py-3', 'gap-3');
 	// Alone, outside a list, it draws no rule at all.
 	expect(row.className).not.toMatch(/rounded|bg-card|border/);
-	expect(screen.getByText('WisePad 3')).toHaveClass('text-base', 'font-medium');
+	expect(screen.getByText('WisePad 3')).toHaveClass('text-base', 'font-ui');
 	expect(screen.getByTestId('row-tag')).toHaveTextContent('Stripe');
 	// Blanks drop out of line 2, so no stray separator.
 	expect(screen.getByTestId('row-identifiers')).toHaveTextContent(/^WPC-1 · London Shop$/);
