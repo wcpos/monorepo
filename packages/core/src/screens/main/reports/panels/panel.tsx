@@ -287,31 +287,25 @@ export function DetailPanel() {
 				</Text>
 			</DialogHeader>
 			<PropertyList>
-				<PropertyRow
-					label={t('reports.template')}
-					testID="detail-panel-template"
-					control={
-						<TemplateSwitcher
-							templates={doc.templates}
-							selectedId={doc.selectedTemplateId}
-							onSelect={doc.setSelectedTemplateId}
-							isOffline={doc.isOffline}
-							alwaysVisible
-						/>
-					}
-				/>
-				<PropertyRow
-					label={t('reports.printer')}
-					testID="detail-panel-printer"
-					control={
-						<PrinterSwitcher
-							printers={doc.allPrinters}
-							printerSelection={doc.printerSelection}
-							resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
-							onSelect={doc.setPrinterSelection}
-						/>
-					}
-				/>
+				{/* The selects are the rows' VALUES, in the value column: the `control` slot sits
+				    absolute beside the key on a phone and is for a switch (Codex, #3077). */}
+				<PropertyRow label={t('reports.template')} testID="detail-panel-template">
+					<TemplateSwitcher
+						templates={doc.templates}
+						selectedId={doc.selectedTemplateId}
+						onSelect={doc.setSelectedTemplateId}
+						isOffline={doc.isOffline}
+						alwaysVisible
+					/>
+				</PropertyRow>
+				<PropertyRow label={t('reports.printer')} testID="detail-panel-printer">
+					<PrinterSwitcher
+						printers={doc.allPrinters}
+						printerSelection={doc.printerSelection}
+						resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+						onSelect={doc.setPrinterSelection}
+					/>
+				</PropertyRow>
 			</PropertyList>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
