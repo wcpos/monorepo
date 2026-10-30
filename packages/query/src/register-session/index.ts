@@ -59,3 +59,5 @@ export {
 	observeSessionAccounting,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
+
+export { carryDrawer, type CarryTarget } from './carry';
