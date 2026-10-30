@@ -47,12 +47,7 @@ export function ProductVariationName(
 	return (
 		<VStack space="xs">
 			{!!parentName && (
-				<Text
-					className="text-muted-foreground text-xs"
-					numberOfLines={1}
-					decodeHtml
-					testID="variation-parent-name"
-				>
+				<Text variant="help" numberOfLines={1} decodeHtml testID="variation-parent-name">
 					{parentName}
 				</Text>
 			)}
