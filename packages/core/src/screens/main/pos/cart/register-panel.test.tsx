@@ -55,6 +55,7 @@ let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
 let currentSession: Record<string, unknown> | null = null;
+let currentLoaded = true;
 let serverNumber: number | null = null;
 let syncStatus = 'pending';
 let syncedRowsAt: string | null = null;
@@ -73,6 +74,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
 		session: currentSession,
+		loaded: currentLoaded,
 		binding: { registerName: 'Front', registerId: 'front' },
 		expected,
 		terms,
@@ -330,6 +332,7 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
+	currentLoaded = true;
 	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
@@ -981,6 +984,27 @@ it.each(['count-back', 'panel-x'])(
 );
 
 let mockCountingHere = false;
+it('a panel mounted open before its session loaded lands on the count once it arrives', () => {
+	const openSession = currentSession;
+	const previousClosure = mockHasClosure,
+		previousHere = mockCountingHere;
+	try {
+		currentLoaded = false;
+		currentSession = null;
+		mockHasClosure = false;
+		const onOpenChange = jest.fn();
+		const view = render(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		expect(screen.queryByTestId('register-panel')).toBeNull();
+		currentLoaded = true;
+		currentSession = { ...openSession, status: 'counting' };
+		mockCountingHere = true;
+		view.rerender(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+	} finally {
+		mockHasClosure = previousClosure;
+		mockCountingHere = previousHere;
+	}
+});
 it('opens on the count pane while this device is counting, only when opened', async () => {
 	const previous = currentSession,
 		previousHere = mockCountingHere;

@@ -65,6 +65,7 @@ export function RegisterPanel({
 }) {
 	const {
 		session,
+		loaded,
 		binding,
 		expected,
 		terms,
@@ -87,9 +88,10 @@ export function RegisterPanel({
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
-	const [opening, setOpening] = React.useState({ open, initialPane });
-	if (open !== opening.open || initialPane !== opening.initialPane) {
-		setOpening({ open, initialPane });
+	// Off the till, the panel mounts open before its session has loaded (Codex, #3091).
+	const [opening, setOpening] = React.useState({ open, initialPane, loaded });
+	if (open !== opening.open || initialPane !== opening.initialPane || loaded !== opening.loaded) {
+		setOpening({ open, initialPane, loaded });
 		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
@@ -169,7 +171,7 @@ export function RegisterPanel({
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- The external opening requests the existing async count transition.
 		if (open) openPane();
-	}, [open, initialPane]);
+	}, [open, initialPane, loaded]);
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
 	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
@@ -248,6 +250,8 @@ export function RegisterPanel({
 			<Dialog open={open} onOpenChange={close}>
 				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
 					<RegisterCount
+						side={side}
+						portalHost={portalHost}
 						description={description}
 						onBusyChange={setCountBusy}
 						onBack={() => setPane('register')}

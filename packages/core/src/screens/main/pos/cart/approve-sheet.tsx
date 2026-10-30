@@ -19,7 +19,11 @@ export function ApproveSheet({
 	counted,
 	onClosed,
 	onOpenChange,
+	side: sideProp,
+	portalHost = 'pos',
 }: {
+	side?: 'left' | 'right';
+	portalHost?: string | null;
 	counted: Record<string, string>;
 	onClosed: (
 		closure: Awaited<ReturnType<ReturnType<typeof useRegisterSession>['actions']['closeSession']>>
@@ -36,7 +40,8 @@ export function ApproveSheet({
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const t = useT();
-	const side = usePanelSide('cart');
+	const cartSide = usePanelSide('cart');
+	const side = sideProp ?? cartSide;
 	const confirm = async () => {
 		if (!online || busy || !session) return;
 		setBusy(true);
@@ -86,7 +91,7 @@ export function ApproveSheet({
 	};
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="approve-sheet">
+			<DialogContent side={side} size="lg" portalHost={portalHost} testID="approve-sheet">
 				<DialogTitle>{t('register.manager_approval')}</DialogTitle>
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
 				<ApprovalFields {...{ username, password, setUsername, setPassword }} />
