@@ -427,6 +427,25 @@ it('keeps New sale disabled while auto-print is pending', () => {
 	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(true);
 	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 });
+it('the corner X on the columns pane finishes the sale as New sale does', () => {
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-close'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	expect(mockReplace).not.toHaveBeenCalled();
+});
+it('the corner X waits on auto-print exactly as New sale does', () => {
+	mockAutoPrintPending = true;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-close'));
+	expect(screen.getByTestId('receipt-close').getAttribute('aria-disabled')).toBe('true');
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(true);
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+});
+it('the modal host draws no second X: the dialog chrome already finishes the sale', () => {
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.queryByTestId('receipt-close')).toBeNull();
+});
 it('renders a complete tick and surface without animation when motion is reduced', async () => {
 	await act(async () => {
 		render(<ReceiptStage orderUuid="paid" compact />);
