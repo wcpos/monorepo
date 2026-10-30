@@ -18,11 +18,10 @@ const typed = (text: string, places = 2): PriceEntryAction[] =>
 const discount = (percent: number): PriceEntryAction => ({ type: 'discount', percent });
 
 describe('priceEntryReducer', () => {
-	it('a currency with fewer places takes more whole digits, up to what the display fits', () => {
-		expect(run(...typed('12345678')).buffer).toBe('1234567');
-		expect(run(...typed('12345678901', 0)).buffer).toBe('1234567890');
-		expect(run(...typed('123456789', 1)).buffer).toBe('12345678');
-		expect(run(...typed('12345678', 3)).buffer).toBe('1234567');
+	it('takes any number of whole digits: a cashier is never stopped', () => {
+		expect(run(...typed('12345678')).buffer).toBe('12345678');
+		expect(run(...typed('12345678901', 0)).buffer).toBe('12345678901');
+		expect(run(...typed('123456789.5', 1)).buffer).toBe('123456789.5');
 	});
 
 	it('a separator with no places leaves a lit discount lit', () => {

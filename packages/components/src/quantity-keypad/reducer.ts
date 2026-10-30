@@ -8,8 +8,11 @@ import { typeDecimal } from '../lib/decimal-entry';
 export type QuantityEntry = { buffer: string; stepped?: number };
 
 export type QuantityEntryAction =
-	/** A digit, `decimal` or `backspace`, typed by `typeDecimal`. */
-	| { type: 'key'; key: string; places: number; whole: number }
+	/**
+	 * Whole digits are never capped: a cashier is never stopped (Paul 2026-10-30);
+	 * the display shrinks, then truncates.
+	 */
+	| { type: 'key'; key: string; places: number }
 	| { type: 'step'; quantity: number }
 	| { type: 'unstep'; quantity: number }
 	| { type: 'settle' }
@@ -22,10 +25,6 @@ export const EMPTY_ENTRY: QuantityEntry = { buffer: '' };
  * (`QUANTITY_FORMAT`), so a typed fraction or a step never cuts a line's own digits.
  */
 export const QUANTITY_PLACES = 6;
-/** A line's whole digits: it never holds 10 000, and "9999" is what the 48 px cell fits. */
-export const LINE_DIGITS = 4;
-/** A count (stock) holds more than a line: six whole digits, the cell's text shrinks for them. */
-export const COUNT_DIGITS = 6;
 
 export function quantityEntryReducer(
 	entry: QuantityEntry,
@@ -34,7 +33,7 @@ export function quantityEntryReducer(
 	const { buffer } = entry;
 	switch (action.type) {
 		case 'key': {
-			const typed = typeDecimal(buffer, action.key, action.places, action.whole);
+			const typed = typeDecimal(buffer, action.key, action.places);
 			return typed === buffer ? entry : { ...entry, buffer: typed };
 		}
 		case 'step':

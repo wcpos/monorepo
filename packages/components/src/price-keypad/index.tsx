@@ -246,7 +246,8 @@ function Display({
 			)}
 			<Text
 				testID="price-keypad-value"
-				className={cn('font-semibold tabular-nums', sheet ? 'text-xl' : 'text-base')}
+				numberOfLines={1}
+				className={cn('max-w-full font-semibold tabular-nums', sheet ? 'text-xl' : 'text-base')}
 			>
 				{shown}
 			</Text>

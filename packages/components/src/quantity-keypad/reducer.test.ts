@@ -1,6 +1,5 @@
 import {
 	EMPTY_ENTRY,
-	LINE_DIGITS,
 	QUANTITY_PLACES,
 	type QuantityEntry,
 	type QuantityEntryAction,
@@ -11,13 +10,13 @@ import {
 // The buffer rules themselves are `lib/decimal-entry.test.ts`; this is the quantity's own keys.
 const run = (...actions: QuantityEntryAction[]): QuantityEntry =>
 	actions.reduce(quantityEntryReducer, EMPTY_ENTRY);
-const keys = (text: string, places = QUANTITY_PLACES, whole = LINE_DIGITS): QuantityEntryAction[] =>
-	[...text].map((char) => ({ type: 'key', key: char === '.' ? 'decimal' : char, places, whole }));
+const keys = (text: string, places = QUANTITY_PLACES): QuantityEntryAction[] =>
+	[...text].map((char) => ({ type: 'key', key: char === '.' ? 'decimal' : char, places }));
 
 describe('quantityEntryReducer', () => {
-	it('types through the decimal entry at the given places and whole digits', () => {
-		expect(run(...keys('12345.5')).buffer).toBe('1234.5');
-		expect(run(...keys('1234567', 0, 6)).buffer).toBe('123456');
+	it('takes any number of whole digits: a cashier is never stopped', () => {
+		expect(run(...keys('12345.5')).buffer).toBe('12345.5');
+		expect(run(...keys('12345678', 0)).buffer).toBe('12345678');
 	});
 
 	it('typing keeps a stepped number until the stored quantity settles', () => {
