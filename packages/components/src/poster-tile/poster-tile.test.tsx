@@ -183,6 +183,13 @@ it('puts the words straight on a tint, with the tint’s class and no scrim', ()
 	expect(classes('poster-card')).toContain('bg-tile-tint-4');
 });
 
+it('puts words directly on an accent fill without a scrim', () => {
+	render(tile({ picture: { kind: 'fill' }, title: 'All products' }));
+	expect(classes('poster-card')).toContain('bg-primary border-transparent');
+	expect(screen.queryByTestId('poster-scrim')).toBeNull();
+	expect(screen.getByTestId('poster-words').textContent).toBe('All products');
+});
+
 it('greys the picture of a tile that is out', () => {
 	const { rerender } = render(tile());
 	expect(classes('poster-picture')).not.toContain('opacity-40');

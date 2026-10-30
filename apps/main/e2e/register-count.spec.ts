@@ -88,7 +88,9 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await expect(page.getByTestId('open-register-card')).toBeVisible();
 	await page.getByTestId('open-register-amount').fill('100');
 	await page.getByTestId('open-register-button').click();
-	await page.getByTestId('register-bar-drawer').click();
+	// The one door to the register (Paul, 2026-10-29): avatar, cashier sheet, In the drawer.
+	await page.getByTestId('register-bar-avatar').click();
+	await page.getByTestId('user-sheet-drawer').click();
 	await page.getByTestId('register-panel-close-register').click();
 	await expect(page.getByTestId('count-amount')).toBeVisible();
 	await page.getByTestId('count-denominations').click();
@@ -97,9 +99,9 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await expect(page.getByTestId('den-tile-20-badge')).toHaveText('2');
 	await expect(page.getByTestId('count-amount')).toHaveValue('40.00');
 	await page.getByTestId('count-close').click();
-	await expect(page.getByTestId('closure-sheet')).toBeVisible();
+	await expect(page.getByTestId('closure-written')).toBeVisible();
 	await page.getByTestId('closure-done').click();
-	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
+	await expect(page.getByTestId('closure-written')).toHaveCount(0);
 	await expect(page.getByTestId('open-register-card')).toBeVisible();
 	// Routes stay armed after the last assertion; a late fetch would otherwise abort the run.
 	await page.unrouteAll({ behavior: 'ignoreErrors' });

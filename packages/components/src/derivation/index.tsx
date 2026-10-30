@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
+import { Button } from '../button';
 import { Icon } from '../icon';
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
@@ -110,5 +111,45 @@ function DerivationStep({
 	);
 }
 
-export { Derivation, DerivationStep };
+interface DerivationLineProps extends ViewProps {
+	label: string;
+	note?: string;
+	amount?: string;
+	action?: { label: string; testID?: string; onPress: () => void; disabled?: boolean };
+	tone?: 'bad';
+}
+
+/** A step's sub-line: the movement's reason, optional amount and one action, including refusal. */
+function DerivationLine({
+	label,
+	note,
+	amount,
+	action,
+	tone,
+	className,
+	...props
+}: DerivationLineProps) {
+	return (
+		<View className={cn('min-h-row flex-row items-center gap-2', className)} {...props}>
+			<Text numberOfLines={1} className={cn('min-w-0 flex-1', tone && TONE[tone].text)}>
+				{label}
+			</Text>
+			{note && <Text variant="key">{note}</Text>}
+			{amount != null && <Text className="tabular-nums">{amount}</Text>}
+			{action && (
+				<Button
+					variant="ghost"
+					size="sm"
+					testID={action.testID}
+					onPress={action.onPress}
+					disabled={action.disabled}
+				>
+					{action.label}
+				</Button>
+			)}
+		</View>
+	);
+}
+
+export { Derivation, DerivationStep, DerivationLine };
 export type { DerivationStepProps };

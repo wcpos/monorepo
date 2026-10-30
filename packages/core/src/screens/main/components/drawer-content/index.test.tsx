@@ -75,24 +75,6 @@ jest.mock('../notification-bell/notification-bell', () => ({
 	NotificationBell: () => <div data-testid="bell" />,
 }));
 jest.mock('./version', () => ({ Version: () => <div data-testid="version" /> }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({
-		site: { wcpos_login_url: 'login' },
-		wpCredentials: { display_name: 'Cashier' },
-	}),
-}));
-jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
-	takeRedirectReturn: () => false,
-}));
-jest.mock('@wcpos/query', () => ({
-	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
-}));
-jest.mock('../user-avatar', () => ({ UserAvatar: () => <div data-testid="avatar" /> }));
-jest.mock('../../pos/cart/user-sheet', () => ({
-	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="user-sheet" data-host={String(portalHost)} /> : null,
-}));
-
 const names = ['(pos)', 'orders', 'health', 'settings'];
 const dispatch = jest.fn();
 const drawerProps = {
@@ -160,7 +142,7 @@ describe.each(['rail', 'front'] as const)('the %s', (presentation) => {
 		// NavItem paints the tint from the route's icon name.
 		const tint = (name: string) =>
 			container.querySelector(`[data-icon="${name}"]`)?.getAttribute('data-classes');
-		expect(tint('register')).toContain('text-primary');
+		expect(tint('register')).toContain('text-selected-foreground');
 		expect(tint('receipt')).toContain('text-sidebar-foreground');
 		expect(
 			screen.getByTestId('drawer-bottom-group').contains(screen.getByTestId('health-badge'))
@@ -214,17 +196,10 @@ it.each(['web', 'ios'])('wraps the rail items in a tooltip on web only (%s)', (o
 	expect(screen.queryAllByTestId('tooltip')).toHaveLength(os === 'web' ? names.length : 0);
 });
 
-// Every bar carries the bell since #3018, so the drawer does not: a phone showed it twice
-// (Paul, 2026-10-28).
-it('puts the avatar on the rail only, and no bell in either drawer', () => {
-	const { unmount } = render(<Drawer presentation="rail" />);
-	expect(screen.queryByTestId('bell')).toBeNull();
-	fireEvent.click(screen.getByTestId('register-bar-avatar'));
-	// Beside the rail, as the register panel is: the drawer layout's scene host, never the root.
-	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
-	unmount();
-
-	render(<Drawer presentation="front" />);
+// Every bar carries the bell since #3018 and the avatar since 2026-10-29, so neither drawer does:
+// the rail and the front drawer list pages only (Paul: the avatar opens no page).
+it.each(['rail', 'front'] as const)('has no avatar and no bell in the %s', (presentation) => {
+	render(<Drawer presentation={presentation} />);
 	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
 	expect(screen.queryByTestId('bell')).toBeNull();
 });

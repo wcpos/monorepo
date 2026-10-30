@@ -45,6 +45,8 @@ export type PosterPicture =
 			 */
 			blurred?: React.ReactNode;
 	  }
+	/** The accent fill, for the one tile that is the root of the grid. */
+	| { kind: 'fill' }
 	| { kind: 'tint'; tint: Tint }
 	| { kind: 'mosaic'; sources: ImageSource[] };
 
@@ -166,7 +168,9 @@ function Picture({ picture }: { picture: PosterPicture }) {
 
 /** Whether the picture has a blurred twin for the native scrim: a tint has nothing to blur. */
 function hasTwin(picture: PosterPicture) {
-	return picture.kind === 'slot' ? picture.blurred != null : picture.kind !== 'tint';
+	return picture.kind === 'slot'
+		? picture.blurred != null
+		: picture.kind !== 'tint' && picture.kind !== 'fill';
 }
 
 /** The picture's blurred twin: the slot owner's, or the same image or mosaic built blurred. */
@@ -225,6 +229,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 	ref
 ) {
 	const tint = picture.kind === 'tint' ? picture.tint : null;
+	const filled = picture.kind === 'fill';
 	const words = hasWords(title, money, sub, facts) && (
 		<>
 			{title}
@@ -258,7 +263,11 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 					)}
 					<View
 						className={`overflow-hidden rounded-lg border ${
-							tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`
+							filled
+								? 'bg-primary border-transparent'
+								: tint === null
+									? 'bg-card border-border'
+									: `${TINTS[tint]} border-transparent`
 						}`}
 						testID="poster-card"
 					>
@@ -275,7 +284,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						{/* Anchored to the card: one line of name and the money row sit on the band, and the
 						    fade begins at the picture's foot; more lines climb into it. */}
 						{words &&
-							(tint === null ? (
+							(tint === null && !filled ? (
 								<Scrim
 									className={`${WORDS} px-2.5 pb-2.5`}
 									// The reach is the scrim's top padding: one constant for both.
@@ -304,7 +313,13 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						{/* Last, so the fade and blur of words that climb far never wash over them. */}
 						{mark && (
 							<View className="absolute top-2 left-2">
-								<Mark mark={mark} label={markLabel} testID={markTestID} bare={tint !== null} />
+								<Mark
+									mark={mark}
+									label={markLabel}
+									testID={markTestID}
+									bare={tint !== null || filled}
+									className={filled ? 'text-primary-foreground' : undefined}
+								/>
 							</View>
 						)}
 						{back && (

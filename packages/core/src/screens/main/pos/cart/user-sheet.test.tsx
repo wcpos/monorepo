@@ -17,7 +17,7 @@ import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { createTestT } from '../../../../../jest/translate';
 import { consumeRegisterPanelRequest } from './register-panel-request';
-import { UserSheet, useSalesToday } from './user-sheet';
+import { DrawerTile, UserSheet, useSalesToday } from './user-sheet';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeSiteCredentials: () => of(mockCredentials),
@@ -34,7 +34,9 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 
 jest.mock('expo-haptics', () => ({}));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
 
 jest.mock('@wcpos/components/alert-dialog', () => {
 	function Box({ children }: React.PropsWithChildren) {
@@ -707,6 +709,7 @@ let mockDrawer = {
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter' },
 	countingHere: false,
+	countingBy: null as { id: number; name: string | null; at: string | null } | null,
 	loaded: true,
 	actions: { startCounting: jest.fn(async () => {}) },
 };
@@ -742,12 +745,22 @@ describe('drawer door', () => {
 		expect(onOpenRegister).toHaveBeenCalled();
 		expect(onOpenChange).toHaveBeenLastCalledWith(false);
 	});
-	it('from the rail, the drawer door goes to the POS and asks for the panel', () => {
+	// The one door to the register (Paul, 2026-10-29) reads as one: the row's chevron. The confirm's
+	// tile only shows, so it has none.
+	it('the door carries a chevron; the tile with no door does not', () => {
+		const { unmount } = render(<UserSheet open onOpenChange={onOpenChange} portalHost="pos" />);
+		const chevron = '[data-icon="chevronRight"]';
+		expect(screen.getByTestId('user-sheet-drawer').querySelector(chevron)).not.toBeNull();
+		unmount();
+		render(<DrawerTile label="Drawer stays at" />);
+		expect(screen.getByTestId('user-sheet-drawer').querySelector(chevron)).toBeNull();
+	});
+	it('from a page bar, the drawer door goes to the POS and asks for the panel', () => {
 		mockSegments = ['(app)', '(drawer)', 'orders'];
 		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 		expect(mockPush).toHaveBeenCalledWith('/(app)/(drawer)/(pos)');
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('register');
 		mockSegments = ['(app)', '(drawer)', '(pos)'];
 	});
 	it("opening the sheet before a seeded session's first refresh shows the drawer as unknown", () => {
@@ -1029,7 +1042,7 @@ describe('switch confirmations and guards', () => {
 		expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 		expect(mockDrawer.actions.startCounting).toHaveBeenCalledTimes(1);
-		expect(consumeRegisterPanelRequest()).toBe(true);
+		expect(consumeRegisterPanelRequest()).toBe('count');
 		expect(close).toHaveBeenCalledWith(false);
 		expect(mockLogout).not.toHaveBeenCalled();
 	});
@@ -1039,7 +1052,7 @@ describe('switch confirmations and guards', () => {
 		render(<UserSheet open onOpenChange={close} />);
 		fireEvent.click(screen.getByTestId('user-sheet-sign-out'));
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
-		expect(consumeRegisterPanelRequest()).toBe(false);
+		expect(consumeRegisterPanelRequest()).toBeNull();
 		expect(close).not.toHaveBeenCalledWith(false);
 		expect(mockLogError).toHaveBeenCalledWith(
 			'The count could not start',
@@ -1073,4 +1086,34 @@ describe('switch confirmations and guards', () => {
 			expect(screen.queryByTestId('switch-confirm')).toBeNull();
 		}
 	);
+});
+
+it('the Register band names the current counter only when the plugin supplies one', () => {
+	const previous = mockDrawer,
+		previousRegisters = mockRegisters,
+		previousT = mockT,
+		previousCart = mockCart;
+	mockT = createTestT();
+	mockCart = { payload: { meta_data: [] } };
+	mockRegisters = [
+		{
+			...mockDirectory[0],
+			last_closure: undefined,
+			session: { ...mockDirectory[0].session!, status: 'counting' },
+		},
+		mockDirectory[1],
+	];
+	mockDrawer = { ...mockDrawer, countingBy: { id: 7, name: 'Alex', at: '2026-10-29T17:41:00Z' } };
+	try {
+		const view = render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain('Alex');
+		mockDrawer = { ...mockDrawer, countingBy: null };
+		view.rerender(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).not.toContain('Alex');
+	} finally {
+		mockDrawer = previous;
+		mockRegisters = previousRegisters;
+		mockT = previousT;
+		mockCart = previousCart;
+	}
 });

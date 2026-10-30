@@ -8,7 +8,6 @@ import * as z from 'zod';
 import {
 	Form,
 	FormField,
-	FormInput,
 	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
@@ -25,14 +24,14 @@ import {
 	useDialogContext,
 } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
+import { QuickDiscountKeys } from './quick-discount-keys';
 
 export const schema = z.object({
 	openOrdersPosition: z.enum(['top', 'bottom']),
 	autoShowReceipt: z.boolean(),
 	sortLines: z.enum(['newest_bottom', 'newest_top', 'name', 'price']).optional(),
 	autoPrintReceipt: z.boolean(),
-	// quickDiscounts: z.array(z.number()).optional(),
-	quickDiscounts: z.string().optional(),
+	quickDiscounts: z.array(z.number()).max(3).optional(),
 	...columnsFormSchema.shape,
 });
 
@@ -108,10 +107,11 @@ export function UISettingsForm() {
 						control={form.control}
 						name="quickDiscounts"
 						render={({ field }) => (
-							<FormInput
+							<QuickDiscountKeys
+								value={field.value}
+								onChange={field.onChange}
 								label={getUILabel('quickDiscounts')}
-								description={t('pos_cart.quick_discounts_help')}
-								{...field}
+								testID="cart-setting-quick-discount"
 							/>
 						)}
 					/>

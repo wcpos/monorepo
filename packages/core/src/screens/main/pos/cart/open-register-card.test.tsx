@@ -3,12 +3,12 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { OpenRegisterCard } from './open-register-card';
+import { CountingElsewhereCard, OpenRegisterCard } from './open-register-card';
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({}),
+	useStoreSession: () => ({ site: {}, store: { id: 1 } }),
 }));
 
 let defaultFloat: string | undefined = '200';
@@ -19,7 +19,13 @@ const open = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		binding: { registerId: 'r', registers: [{ id: 'r', default_float: defaultFloat }] },
+		closedElsewhere: mockClosedElsewhere,
+		countingBy: mockCountingBy,
+		binding: {
+			registerName: 'Front',
+			registerId: 'r',
+			registers: [{ id: 'r', default_float: defaultFloat }],
+		},
 		lastClosed: { counted: { cash: lastCount } },
 		lastClosure: hasClosure
 			? { number: 3, server_number: 8, closed_at: '2026-09-28T10:00:00Z', counted: { cash: '480' } }
@@ -33,7 +39,9 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
+}));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: string) => `£${v}` }),
 }));
@@ -78,6 +86,8 @@ jest.mock('@wcpos/components/input', () => {
 	};
 });
 jest.mock('@wcpos/components/text', () => ({
+	// The real context: a real Chip below provides its ink through it.
+	TextClassContext: jest.requireActual('@wcpos/components/text').TextClassContext,
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -146,5 +156,55 @@ it('hides the previous cash figures from a blind-count cashier', () => {
 		expect(screen.getByTestId('open-register-chip-default')).toBeTruthy();
 	} finally {
 		blind = false;
+	}
+});
+
+let mockClosedElsewhere: { by: number | null; at: string } | null = null;
+let mockCountingBy: { id: number; name: string | null; at: string | null } | null = null;
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
+}));
+jest.mock('../../../../hooks/user-db-list-resources', () => ({
+	credentialsListResource: () => null,
+}));
+jest.mock('../../../../hooks/use-store-day-label', () => ({
+	useStoreDayLabel: () => ({ time: (at: string) => at.slice(11, 16) }),
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+it.each([
+	null,
+	{ id: 7, name: 'Alex', at: '2026-10-29T17:41:00Z' },
+	{ id: 8, name: null, at: null },
+])('names the counter only when the plugin supplies one (%s)', (counter) => {
+	const previous = mockCountingBy;
+	mockCountingBy = counter;
+	try {
+		render(<CountingElsewhereCard />);
+		expect(screen.getByText('Front')).toBeTruthy();
+		expect(screen.getByText('Counting on another till')).toBeTruthy();
+		expect(screen.queryAllByRole('button')).toHaveLength(0);
+		if (counter)
+			expect(screen.getByTestId('counting-elsewhere-by').textContent).toContain(
+				counter.name ?? 'Cashier'
+			);
+		else expect(screen.queryByTestId('counting-elsewhere-by')).toBeNull();
+	} finally {
+		mockCountingBy = previous;
+	}
+});
+it('says who closed on another till and when, but not after a close here', () => {
+	const previous = mockClosedElsewhere;
+	mockClosedElsewhere = { by: 7, at: '2026-10-29T17:41:00Z' };
+	try {
+		const view = render(<OpenRegisterCard />);
+		expect(screen.getByTestId('open-register-closed-elsewhere').textContent).toContain(
+			'Front was closed on another till at 17:41 by Alex'
+		);
+		mockClosedElsewhere = null;
+		view.rerender(<OpenRegisterCard />);
+		expect(screen.queryByTestId('open-register-closed-elsewhere')).toBeNull();
+	} finally {
+		mockClosedElsewhere = previous;
 	}
 });

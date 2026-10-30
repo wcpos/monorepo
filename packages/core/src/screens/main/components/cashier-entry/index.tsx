@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { useIsFocused } from 'expo-router/react-navigation';
 
-import { cn } from '@wcpos/components/lib/utils';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { useDocField } from '@wcpos/query';
 
@@ -16,19 +15,16 @@ import { consumeCashierSheetRequest, useCashierSheetRequested } from './cashier-
 /**
  * The cashier entry: the avatar that opens the one cashier surface (`UserSheet`, CODING_STANDARDS
  * § Design, Situation → overlay), the sheet's host, and the redirect-return claim. It is mounted
- * once per screen tree: in the bar below `lg` (`BarControls`) and on the rail on `lg`
- * (`DrawerContent`), so no layout needs a sheet of its own just to claim a login.
+ * once per bar (`BarControls`) on every size, never on the rail: it opens no page (Paul,
+ * 2026-10-29), and its sheet's drawer figure is the one door to the register panel.
  */
 export function CashierEntry({
 	testID,
-	placement,
 	portalHost,
 	onOpenRegister,
 }: {
 	testID: string;
-	/** `bar`: a control-height square in a page or register bar; `rail`: the rail's 48 square. */
-	placement: 'bar' | 'rail';
-	/** The POS host inside the till; the drawer layout's `scene` host from the rail; the root (`null`) where the till may be hidden or detached. */
+	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
 	portalHost: string | null;
 	onOpenRegister?: () => void;
 }) {
@@ -37,15 +33,13 @@ export function CashierEntry({
 	const loginUrl = site.wcpos_login_url;
 	const [open, setOpen] = React.useState(false);
 	const focused = useIsFocused();
-	const canClaim = placement === 'rail' || focused;
 	const requested = useCashierSheetRequested();
 	React.useEffect(() => {
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- this is a one-shot external request, claimed after commit by the visible entry.
-		if (canClaim && requested && consumeCashierSheetRequest()) {
-			// eslint-disable-next-line react-hooks/set-state-in-effect, react-you-might-not-need-an-effect/no-adjust-state-on-prop-change -- claim the external request at commit, never in a discarded render.
+		if (focused && requested && consumeCashierSheetRequest()) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- claim the external request at commit, never in a discarded render.
 			setOpen(true);
 		}
-	}, [canClaim, requested]);
+	}, [focused, requested]);
 	// The redirect-return claim: after a full-page OAuth return for this site the sheet opens, so
 	// its Add user consumer mounts to claim the one-shot result, as Connect does. Taken once per
 	// page load, by the first entry to COMMIT: an effect, so a render React discards (a Suspense
@@ -62,12 +56,9 @@ export function CashierEntry({
 				role="button"
 				testID={testID}
 				accessibilityLabel={displayName}
-				// The rail's items lift onto the card (NavItem); a bar's controls wash muted (IconButton).
-				wash={placement === 'rail' ? 'card' : 'muted'}
-				className={cn(
-					'items-center justify-center rounded-lg',
-					placement === 'rail' ? 'size-12' : 'size-ctl'
-				)}
+				// A bar's control: the control-height square with the muted wash (as `IconButton`).
+				wash="muted"
+				className="size-ctl items-center justify-center rounded-lg"
 				onPress={() => setOpen(true)}
 			>
 				<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />

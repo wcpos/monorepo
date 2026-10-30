@@ -79,12 +79,14 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		onPress,
+		disabled,
 	}: {
 		children: React.ReactNode;
 		testID: string;
 		onPress: () => void;
+		disabled?: boolean;
 	}) => (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
 			{children}
 		</button>
 	),
@@ -306,3 +308,35 @@ it('registers its pay path as the checkout surface while mounted (roadmap#428)',
 	unmount();
 	await expect(invokeSurface('pay')).rejects.toBeInstanceOf(SurfaceNotMountedError);
 });
+
+let mockSessionStatus = 'open';
+jest.mock('../../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: { status: mockSessionStatus } }),
+}));
+it.each(['counting', 'closed'])(
+	'holds Pay for a %s session, including the keyboard command',
+	async (status) => {
+		const previous = mockSessionStatus;
+		mockSessionStatus = status;
+		try {
+			const view = render(<PayButton />);
+			expect((screen.getByTestId('checkout-button') as HTMLButtonElement).disabled).toBe(true);
+			expect(screen.getByTestId('checkout-button').textContent).toBe(
+				'register.counting_the_drawer'
+			);
+			fireEvent.click(screen.getByTestId('checkout-button'));
+			await act(async () => {
+				await invokeSurface('pay');
+			});
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockLegacySave).not.toHaveBeenCalled();
+			expect(mockEnter).not.toHaveBeenCalled();
+			expect(mockPush).not.toHaveBeenCalled();
+			mockSessionStatus = 'open';
+			view.rerender(<PayButton />);
+			expect((screen.getByTestId('checkout-button') as HTMLButtonElement).disabled).toBe(false);
+		} finally {
+			mockSessionStatus = previous;
+		}
+	}
+);

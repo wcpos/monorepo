@@ -92,7 +92,7 @@ export function AmountField(props: AmountFieldProps) {
 			onOpenChange={setOpen}
 			testID={testID}
 			textClassName={textClassName}
-			field={props.look !== 'quiet'}
+			rest={props.look === 'quiet' ? 'text' : (props.look ?? 'field')}
 			placeholder={placeholder}
 			labelledBy={labelledBy}
 			describedBy={describedBy}

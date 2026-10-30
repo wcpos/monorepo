@@ -365,7 +365,7 @@ A footer's buttons are chosen by role: `DialogFooter` and `AlertDialogFooter` ta
 
 One intent per footer. A record action is never the intent. The footer chooses Cancel versus Close from `DialogLabels`; the caller never chooses the word.
 
-Every footer carries the dismiss: `close` defaults on, and `close={false}` is for a footer whose intent is the dismissal (the closure sheet's Done), nothing else (ruled 2026-10-29, after the cart's Order details sheet shipped without one). A form that saves as it is edited has nothing to cancel: `RecordDialog` wraps its body (tabs and footer) in `DismissIsClose`, so the dismiss reads Close beside Sync order or Re-open; a call site never chooses the word. Outside an overlay shell (a Reports panel's phone page) there is no dialog to close and no dismiss is drawn.
+Every footer carries the dismiss: `close` defaults on, and `close={false}` is for a footer whose intent is the dismissal (the written closure's Done), nothing else (ruled 2026-10-29, after the cart's Order details sheet shipped without one). A form that saves as it is edited has nothing to cancel: `RecordDialog` wraps its body (tabs and footer) in `DismissIsClose`, so the dismiss reads Close beside Sync order or Re-open; a call site never chooses the word. Outside an overlay shell (a Reports panel's phone page) there is no dialog to close and no dismiss is drawn.
 
 The ESLint `designSystemOwnershipSelectors` footer selector in `packages/eslint/index.js` refuses a button written inside a footer, including its `aside` prop; a button rendered by a child component inside `aside` (the tax rates' sync control) is the caller's responsibility and the one place this rule is review, not lint.
 

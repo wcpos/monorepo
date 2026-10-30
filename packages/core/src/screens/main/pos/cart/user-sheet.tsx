@@ -36,6 +36,7 @@ import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
+import { FigureTile } from './figure-tile';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { requestRegisterPanel } from './register-panel-request';
@@ -92,14 +93,12 @@ export function SalesTile({ sub }: { sub?: string }) {
 	const { format } = useCurrencyFormat();
 	const t = useT();
 	return (
-		<View
+		<FigureTile
 			testID="user-sheet-sales-today"
-			className="border-border flex-1 rounded-lg border px-3 py-2.5"
-		>
-			<Text variant="key">{t('register.your_sales_today')}</Text>
-			<AmountFigure size="tile">{format(total)}</AmountFigure>
-			{sub && <Text variant="key">{sub}</Text>}
-		</View>
+			label={t('register.your_sales_today')}
+			value={format(total)}
+			sub={sub}
+		/>
 	);
 }
 
@@ -137,11 +136,15 @@ export function DrawerTile({
 					testID="user-sheet-drawer"
 					onPress={onOpen}
 					disabled={busy}
-					// In the confirm the tile only shows: no wash, so it does not read as a door.
+					// The one door to the register panel (Paul, 2026-10-29): the row's chevron and wash. In
+					// the confirm the tile only shows: no chevron, no wash, so it does not read as a door.
 					wash={onOpen ? 'muted' : 'none'}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
-					<Text variant="key">{label}</Text>
+					<View className="flex-row items-center justify-between gap-1">
+						<Text variant="key">{label}</Text>
+						{onOpen && <Icon name="chevronRight" className="text-muted-foreground" />}
+					</View>
 					{session ? (
 						<>
 							<AmountFigure size="tile">
@@ -321,6 +324,7 @@ function RegisterBand({
 	}, [refresh]);
 	const register$ = React.useMemo(() => observeRegister$(userDB), [userDB]);
 	const device = useObservableState(register$);
+	const { countingBy } = useRegisterSession();
 	const { timezone } = useStoreDay();
 	const t = useT();
 	return (
@@ -333,7 +337,18 @@ function RegisterBand({
 				const live = cached ? cached.live : (readLiveSession(site.uuid!, row.id) ?? row.session);
 				const description =
 					live?.status === 'counting'
-						? t('register.counting_short')
+						? row.id === registerId && countingBy
+							? t('register.counting_by_since', {
+									name: countingBy.name ?? t('register.unknown_cashier'),
+									time: countingBy.at
+										? formatDate(
+												convertUTCStringToLocalDate(countingBy.at),
+												'HH:mm',
+												zoneOptions(timezone)
+											)
+										: '—',
+								})
+							: t('register.counting_short')
 						: live?.status === 'open'
 							? t('register.open_since_name', {
 									time: formatDate(
@@ -419,7 +434,7 @@ export function UserSheet({
 	const storeName = useDocField(store, (value) => value.name);
 	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
-	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
+	// A page bar is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
 	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
 	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
@@ -449,11 +464,11 @@ export function UserSheet({
 			});
 		}
 	};
-	const openRegister = () => {
+	const openRegister = (pane: 'register' | 'count' = 'register') => {
 		if (onOpenRegister) onOpenRegister();
 		else {
 			router.push('/(app)/(drawer)/(pos)');
-			requestRegisterPanel();
+			requestRegisterPanel(pane);
 		}
 		onOpenChange(false);
 	};
@@ -482,7 +497,7 @@ export function UserSheet({
 						});
 						return;
 					}
-					openRegister();
+					openRegister('count');
 				});
 		}
 	};
@@ -523,7 +538,7 @@ export function UserSheet({
 					{open && (
 						<DialogBody className="gap-0">
 							<Suspense>
-								<Figures busy={busy} onOpen={openRegister} />
+								<Figures busy={busy} onOpen={() => openRegister()} />
 							</Suspense>
 							<AwaitingStore />
 							{paying && (

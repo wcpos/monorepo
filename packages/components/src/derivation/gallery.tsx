@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import { Text } from '../text';
-import { Derivation, DerivationStep } from './index';
+import { Derivation, DerivationLine, DerivationStep } from './index';
 
 function Panel({ children }: { children: React.ReactNode }) {
 	return <View className="bg-card w-96 p-4">{children}</View>;
@@ -33,6 +33,11 @@ export const stories = [
 							<Line name="Standard rate" value="22%" strong />
 							<Line name="VAT · anywhere in GB" value="20%" />
 							<Line name="Edinburgh Levy · city" value="2%" />
+							<DerivationLine
+								label="Window cleaner"
+								amount="−20,00 £"
+								action={{ label: 'Void', onPress: () => {} }}
+							/>
 						</View>
 					</DerivationStep>
 				</Derivation>

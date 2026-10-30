@@ -87,7 +87,9 @@ export function TermRow({
 							picture={
 								term.kind === 'term' && term.imageSrc
 									? { kind: 'image', source: { uri: term.imageSrc }, recyclingKey: termKey(term) }
-									: { kind: 'tint', tint: term.kind === 'term' ? tintOf(term.id) : 5 }
+									: term.kind === 'all'
+										? { kind: 'fill' }
+										: { kind: 'tint', tint: term.kind === 'term' ? tintOf(term.id) : 5 }
 							}
 							mark={
 								term.kind === 'term'

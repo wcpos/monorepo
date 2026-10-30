@@ -144,6 +144,8 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/text', () => ({
+	// The real context: a real Chip below provides its ink through it.
+	TextClassContext: jest.requireActual('@wcpos/components/text').TextClassContext,
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/suspense', () => ({

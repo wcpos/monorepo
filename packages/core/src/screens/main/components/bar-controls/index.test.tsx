@@ -34,11 +34,12 @@ beforeEach(() => {
 	mockOpenDrawer.mockClear();
 });
 
-// Below `lg` the bar opens the drawer and carries the cashier entry; on `lg` the rail does both.
+// Below `lg` the bar opens the drawer; on `lg` the rail is always on screen. The cashier entry is
+// the bar's on every size: the rail lists pages only (Paul, 2026-10-29).
 it.each([
 	['sm', true],
 	['lg', false],
-] as const)('on %s the bar has the menu and the avatar: %s', (size, below) => {
+] as const)('on %s the bar has the menu: %s, and the avatar always', (size, below) => {
 	mockSize = size;
 	const { result } = renderHook(() => useBarMenu());
 	expect(result.current?.label).toBe(below ? 'common.menu' : undefined);
@@ -47,13 +48,22 @@ it.each([
 
 	render(<BarControls testID="register-bar" portalHost="pos" />);
 	expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
-	expect(screen.queryByTestId('register-bar-avatar') !== null).toBe(below);
+	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
 });
 
-it('puts the bell and the entry on the root host unless the bar names one', () => {
-	render(<BarControls testID="orders-bar" />);
+// The cashier sheet opens beside the rail on wide (the drawer layout's `scene` host, #3061), never
+// over it; a phone has no rail, so the root. The bell stays on the root; a named host wins.
+it.each([
+	['sm', 'null'],
+	['lg', 'scene'],
+] as const)('on %s puts the entry on the %s host unless the bar names one', (size, host) => {
+	mockSize = size;
+	const { unmount } = render(<BarControls testID="orders-bar" />);
 	expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe('undefined');
-	expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe('null');
+	expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
+	unmount();
+	render(<BarControls testID="register-bar" portalHost="pos" />);
+	expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
 });
 
 // One form for every bar: Offline as a StatusBadge in the warning tone, an unreachable store

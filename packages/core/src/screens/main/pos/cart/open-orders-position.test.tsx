@@ -36,7 +36,6 @@ jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,
 }));
 jest.mock('./register-count', () => ({ RegisterCount: () => null }));
-jest.mock('./closure-sheet', () => ({ ClosureSheet: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({
 		status: mockBindingStatus,

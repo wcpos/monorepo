@@ -249,13 +249,15 @@ for (const [device, viewport] of Object.entries({
 					await state(
 						'register-panel',
 						async () => {
-							// Forced: the phone mounts a register bar per tab, stacked at the same point, and the
-							// actionability check refuses a click whose hit-test lands on the other bar's button.
+							// The one door (Paul, 2026-10-29): avatar, cashier sheet, In the drawer. Forced: the
+							// phone mounts a register bar per tab, stacked at the same point, and the actionability
+							// check refuses a click whose hit-test lands on the other bar's avatar.
 							await page
-								.getByTestId('register-bar-drawer')
+								.getByTestId('register-bar-avatar')
 								.locator('visible=true')
 								.first()
 								.click({ force: true });
+							await page.getByTestId('user-sheet-drawer').click();
 							await expect(page.getByTestId('register-panel')).toBeVisible();
 						},
 						escape
@@ -263,13 +265,15 @@ for (const [device, viewport] of Object.entries({
 					await state(
 						'movement-sheet',
 						async () => {
-							// Forced: the phone mounts a register bar per tab, stacked at the same point, and the
-							// actionability check refuses a click whose hit-test lands on the other bar's button.
+							// The one door (Paul, 2026-10-29): avatar, cashier sheet, In the drawer. Forced: the
+							// phone mounts a register bar per tab, stacked at the same point, and the actionability
+							// check refuses a click whose hit-test lands on the other bar's avatar.
 							await page
-								.getByTestId('register-bar-drawer')
+								.getByTestId('register-bar-avatar')
 								.locator('visible=true')
 								.first()
 								.click({ force: true });
+							await page.getByTestId('user-sheet-drawer').click();
 							await page.getByTestId('register-panel-paid-in').click();
 							await expect(page.getByTestId('movement-amount')).toBeVisible();
 						},

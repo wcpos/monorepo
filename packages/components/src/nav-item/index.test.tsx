@@ -37,29 +37,30 @@ beforeEach(() => {
 
 it.each([
 	['row', 'h-10 rounded-md', 'text-foreground', 'text-muted-foreground'],
-	['drawer', 'h-12 rounded-lg', 'text-primary', 'text-sidebar-foreground'],
-] as const)(
-	'paints the %s size, lifting the selected row onto the card',
-	(size, shape, on, off) => {
-		const { container, unmount } = render(
-			<NavItem size={size} selected icon="settings" label="General" testID="item" />
-		);
-		expect(classes('item')).toContain(shape);
-		expect(classes('item')).toContain('bg-card');
-		expect(classes('item-label')).toContain(on);
-		expect(icon(container, 'settings')).toContain(on);
-		expect(screen.getByTestId('item').getAttribute('aria-selected')).toBe('true');
-		unmount();
-
-		const rest = render(<NavItem size={size} icon="settings" label="General" testID="item" />);
-		expect(classes('item').split(' ')).not.toContain('bg-card');
-		expect(classes('item')).toContain('active:bg-card');
-		expect(classes('item-label')).toContain(off);
-		expect(icon(rest.container, 'settings')).toContain(off);
+	['drawer', 'h-12 rounded-lg', 'text-selected-foreground', 'text-sidebar-foreground'],
+] as const)('paints the %s size and its selected surface', (size, shape, on, off) => {
+	const { container, unmount } = render(
+		<NavItem size={size} selected icon="settings" label="General" testID="item" />
+	);
+	expect(classes('item')).toContain(shape);
+	expect(classes('item').split(' ')).toContain(size === 'drawer' ? 'bg-selected' : 'bg-card');
+	if (size === 'drawer') {
+		expect(classes('item')).toContain('active:bg-selected');
+		expect(classes('item')).toContain('web:hover:bg-selected');
 	}
-);
+	expect(classes('item-label')).toContain(on);
+	expect(icon(container, 'settings')).toContain(on);
+	expect(screen.getByTestId('item').getAttribute('aria-selected')).toBe('true');
+	unmount();
 
-it('carries no left border and no tinted row (retired 2026-10-16)', () => {
+	const rest = render(<NavItem size={size} icon="settings" label="General" testID="item" />);
+	expect(classes('item').split(' ')).not.toContain('bg-card');
+	expect(classes('item')).toContain('active:bg-card');
+	expect(classes('item-label')).toContain(off);
+	expect(icon(rest.container, 'settings')).toContain(off);
+});
+
+it('carries no retired left border or primary/10 wash', () => {
 	render(<NavItem size="drawer" selected label="POS" testID="item" />);
 	expect(classes('item')).not.toMatch(/border-l|border-x|bg-white|bg-primary\/10/);
 });

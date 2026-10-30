@@ -15,7 +15,12 @@ jest.mock('../../components/notification-bell/notification-bell', () => ({
 }));
 
 jest.mock('./user-sheet', () => ({
-	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
+	UserSheet: ({ open, onOpenRegister }: { open: boolean; onOpenRegister?: () => void }) =>
+		open ? (
+			<div data-testid="user-sheet">
+				<button data-testid="user-sheet-drawer" onClick={onOpenRegister} />
+			</div>
+		) : null,
 }));
 let mockStores: string[] = [];
 let mockIsPhone = true;
@@ -106,31 +111,28 @@ let mockSession: { status: string } | null = null;
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ session: mockSession, sessionsOn: true, overdue: false }),
 }));
-jest.mock('./register-panel', () => ({ RegisterPanel: () => null }));
-it('shows the drawer only with a session and opens its panel', () => {
-	const onPanelOpenChange = jest.fn();
-	const view = render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
-	expect(screen.queryByTestId('register-bar-drawer')).toBeNull();
+jest.mock('./register-panel', () => ({
+	RegisterPanel: ({ initialPane }: { initialPane: string }) => (
+		<div data-testid="requested-pane">{initialPane}</div>
+	),
+}));
+// One door to the register (Paul, 2026-10-29): the bar has no register button, on any size and
+// with a session open; the avatar's sheet opens the panel through the bar.
+it.each([true, false])('has the avatar and no register button (phone: %s)', (phone) => {
+	mockIsPhone = phone;
 	mockSession = { status: 'open' };
-	view.rerender(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
-	fireEvent.click(screen.getByTestId('register-bar-drawer'));
+	const onPanelOpenChange = jest.fn();
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	expect(screen.queryByTestId('register-bar-drawer')).toBeNull();
+	fireEvent.click(screen.getByTestId('register-bar-avatar'));
+	fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
 	mockSession = null;
 });
 
-it('has no avatar on wide, where the rail carries it', () => {
-	mockIsPhone = false;
-	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
-	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
-});
-it('has an avatar on the phone', () => {
-	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
-	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
-});
-
 let mockFocused = true;
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
-it('opens the register panel when the rail asked for it, on the focused bar only', () => {
+it("opens the register panel when a page bar's sheet asked for it, on the focused bar only", () => {
 	const hiddenOpen = jest.fn();
 	const onPanelOpenChange = jest.fn();
 	requestRegisterPanel();
@@ -140,15 +142,43 @@ it('opens the register panel when the rail asked for it, on the focused bar only
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
 	expect(hiddenOpen).not.toHaveBeenCalled();
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
-	expect(consumeRegisterPanelRequest()).toBe(false);
+	expect(consumeRegisterPanelRequest()).toBeNull();
 });
 
-it('the store title asks for the cashier sheet instead of a sheet of its own', () => {
+it('the store title opens the cashier sheet instead of a sheet of its own', () => {
 	mockStores = ['a', 'b'];
 	mockIsPhone = false;
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-bar-store'));
-	expect(consumeCashierSheetRequest()).toBe(true);
+	// The bar's own avatar claims the request, on wide as on the phone.
+	expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	expect(consumeCashierSheetRequest()).toBe(false);
 	expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
 	mockStores = [];
+});
+
+it('passes the count pane claimed from an external request to its panel', () => {
+	try {
+		requestRegisterPanel('count');
+		render(<RegisterBar panelOpen onPanelOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('requested-pane').textContent).toBe('count');
+	} finally {
+		consumeRegisterPanelRequest();
+	}
+});
+
+it('an ordinary cashier-sheet opening replaces a consumed count request', () => {
+	try {
+		requestRegisterPanel('count');
+		const onPanelOpenChange = jest.fn();
+		const view = render(<RegisterBar panelOpen onPanelOpenChange={onPanelOpenChange} />);
+		expect(consumeRegisterPanelRequest()).toBeNull();
+		view.rerender(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+		fireEvent.click(screen.getByTestId('register-bar-avatar'));
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(screen.getByTestId('requested-pane').textContent).toBe('register');
+		expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	} finally {
+		consumeRegisterPanelRequest();
+	}
 });

@@ -204,6 +204,7 @@ async function acknowledge(
 			approver_token: outstanding ? local.approver_token : null,
 			closure_id: local.closure_id ?? server.closure_id,
 			counted: outstanding ? local.counted : server.counted,
+			counting_by: server.counting_by,
 			counting_started_at_gmt: outstanding
 				? local.counting_started_at_gmt
 				: server.counting_started_at_gmt,
