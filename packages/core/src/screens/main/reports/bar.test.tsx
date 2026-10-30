@@ -364,7 +364,23 @@ it('offers the selected Pro store registers without rebinding the till', () => {
 	expect(screen.queryByTestId('reports-register-other')).toBeNull();
 	fireEvent.click(screen.getByTestId('reports-scope'));
 	fireEvent.click(screen.getByTestId('reports-register-remote'));
-	expect(screen.getByTestId('reports-scope').textContent).toContain('Remote till · Second');
+	// Store · Register, the larger container first.
+	expect(screen.getByTestId('reports-scope').textContent).toContain('Second · Remote till');
+});
+
+// The menu reads in the title's order: the Store group above the Register group.
+it('lists the store group above the register group when there is more than one store', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	const storeGroup = screen.getByTestId('reports-store-2').closest('[role="radiogroup"]')!;
+	const registerGroup = screen
+		.getByTestId('reports-register-other')
+		.closest('[role="radiogroup"]')!;
+	expect(storeGroup).not.toBe(registerGroup);
+	expect(
+		storeGroup.compareDocumentPosition(registerGroup) & Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
 });
 
 // Revert: clear only the menu marker, leaving the popover root open.

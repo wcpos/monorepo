@@ -10,8 +10,8 @@ const base = {
 it('shows only the store for one register', () => {
 	expect(describeRegisterBar(base)).toEqual({ place: 'Shop', pill: null });
 });
-it('shows register and store for three registers', () => {
-	expect(describeRegisterBar({ ...base, registerCount: 3 }).place).toBe('Front · Shop');
+it('shows store then register for three registers', () => {
+	expect(describeRegisterBar({ ...base, registerCount: 3 }).place).toBe('Shop · Front');
 });
 it('asks for a register', () => {
 	expect(describeRegisterBar({ ...base, bindingStatus: 'choose' }).pill).toBe(

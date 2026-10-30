@@ -25,7 +25,8 @@ export function describeRegisterBar({
 	awaitingStore?: number;
 }) {
 	return {
-		place: registerCount > 1 && registerName ? `${registerName} · ${storeName}` : storeName,
+		// Store · Register: the larger container first, as every line that names both reads.
+		place: registerCount > 1 && registerName ? `${storeName} · ${registerName}` : storeName,
 		pill:
 			bindingStatus === 'choose'
 				? ('register.choose_register' as const)
