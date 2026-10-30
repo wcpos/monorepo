@@ -1,4 +1,8 @@
-import { orderTaxLocation } from './cart-config-for-order';
+import {
+	cartConfigForOrder,
+	cartConfigFromLocation,
+	orderTaxLocation,
+} from './cart-config-for-order';
 
 const base = { country: 'US', state: 'CA', city: 'LA', postcode: '90001' };
 
@@ -62,4 +66,40 @@ describe('orderTaxLocation', () => {
 		expect(result.location).toEqual(base);
 		expect(result.addressUsed).toBe('base');
 	});
+});
+
+const settings = {
+	calcTaxes: true,
+	pricesIncludeTax: false,
+	taxRoundAtSubtotal: false,
+	priceNumDecimals: 2,
+	shippingTaxClass: '',
+	taxClassSlugs: [],
+	calcDiscountsSequentially: false,
+	taxBasedOn: 'base',
+};
+it.each([
+	['yes', true],
+	['no', false],
+	['other', false],
+	[undefined, false],
+])('carries the exact exemption flag %s', (value, expected) => {
+	const order = { meta_data: value === undefined ? [] : [{ key: 'is_vat_exempt', value }] };
+	expect(cartConfigForOrder({ settings, rates: [], baseLocation: base, order }).vatExempt).toBe(
+		expected
+	);
+});
+it('defaults a location-only config to taxable', () => {
+	expect(cartConfigFromLocation(settings, [], base).vatExempt).toBe(false);
+});
+
+it('ignores server exemption on inclusive-price stores', () => {
+	expect(
+		cartConfigForOrder({
+			settings: { ...settings, pricesIncludeTax: true },
+			rates: [],
+			baseLocation: base,
+			order: { meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] },
+		}).vatExempt
+	).toBe(false);
 });

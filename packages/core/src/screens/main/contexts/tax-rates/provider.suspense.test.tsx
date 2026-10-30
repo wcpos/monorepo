@@ -79,7 +79,11 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('@wcpos/sync-core', () => ({
 	...jest.requireActual('@wcpos/sync-core'),
-	wooMetaCarrier: { readIdentity: () => ({}), taxBasedOnOverride: () => undefined },
+	wooMetaCarrier: {
+		readIdentity: () => ({}),
+		taxBasedOnOverride: () => undefined,
+		vatExempt: () => false,
+	},
 }));
 // The real boundary without the app's fallback (whose icon pulls in the styling runtime).
 jest.mock('@wcpos/components/error-boundary', () => {

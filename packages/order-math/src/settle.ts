@@ -1,3 +1,5 @@
+import isEqual from 'lodash/isEqual';
+
 import { calculateCartLine } from './cart-line';
 import { recalculateCoupons } from './internal/coupons/recalculate';
 import { couponValidationContext, resolveCouponReplay } from './internal/coupons/context';
@@ -115,7 +117,10 @@ function canonicalMoney(value: unknown, key = 'total'): unknown {
 	if (Array.isArray(value)) return value.map((entry) => canonicalMoney(entry, key));
 	if (value !== null && typeof value === 'object') {
 		return Object.fromEntries(
-			Object.entries(value).map(([field, entry]) => [field, canonicalMoney(entry, field)])
+			// Woo emits empty money slots as absent; undefined fields are absent too.
+			Object.entries(value)
+				.filter(([field, entry]) => entry !== undefined && !(MONEY_KEYS.has(field) && entry === ''))
+				.map(([field, entry]) => [field, canonicalMoney(entry, field)])
 		);
 	}
 	return MONEY_KEYS.has(key) &&
@@ -123,6 +128,11 @@ function canonicalMoney(value: unknown, key = 'total'): unknown {
 		Number.isFinite(Number(value))
 		? String(Number(value))
 		: value;
+}
+
+/** Numeric money equality, independent of object key order; metadata stays opaque. */
+export function sameLineMoney(a: unknown, b: unknown): boolean {
+	return isEqual(canonicalMoney(a), canonicalMoney(b));
 }
 
 /**
@@ -145,12 +155,7 @@ function computeChanged(snapshot: CartSnapshot, patch: SettlePatch): boolean {
 		'shipping_lines',
 		'tax_lines',
 	] as const) {
-		if (
-			patch[field] &&
-			JSON.stringify(canonicalMoney(snapshot[field] ?? [])) !==
-				JSON.stringify(canonicalMoney(patch[field]))
-		)
-			return true;
+		if (patch[field] && !sameLineMoney(snapshot[field] ?? [], patch[field])) return true;
 	}
 	return false;
 }

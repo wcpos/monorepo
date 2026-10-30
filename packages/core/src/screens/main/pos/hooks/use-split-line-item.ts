@@ -3,7 +3,7 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
-import { calculateCartLine } from '@wcpos/order-math';
+import { calculateCartLine, type CartConfig } from '@wcpos/order-math';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -11,7 +11,7 @@ import { reportStaleCartLine } from './cart-failure';
 import { enqueueCartAction } from './enqueue-cart-action';
 import { reducedStockQuantity } from './stock-guard';
 import { useActionContext } from './use-action-context';
-import { useCartConfig } from './use-cart-config';
+import { useCartConfigReader } from './use-cart-config';
 import { dispatchAction } from '../../../../extensions/actions';
 import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrderActions } from '../contexts/current-order';
@@ -21,7 +21,7 @@ type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'line-item']);
 
-function splitLine(lineItemToSplit: LineItem, cartConfig: ReturnType<typeof useCartConfig>) {
+function splitLine(lineItemToSplit: LineItem, cartConfig: CartConfig) {
 	const split = calculateCartLine(
 		{ kind: 'line_item', line: { ...lineItemToSplit, quantity: 1 } },
 		cartConfig
@@ -86,7 +86,7 @@ function splitLine(lineItemToSplit: LineItem, cartConfig: ReturnType<typeof useC
 export const useSplitLineItem = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { localPatch } = useCartWrite();
-	const cartConfig = useCartConfig();
+	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { ctx, actor } = useActionContext();
 	const splitLineItem = React.useCallback(
@@ -108,7 +108,7 @@ export const useSplitLineItem = () => {
 						return;
 					}
 					if ((line.quantity ?? 0) <= 1) return;
-					const { lines, warnings } = splitLine(line, cartConfig);
+					const { lines, warnings } = splitLine(line, configForOrder(order.payload));
 					return dispatchAction({
 						event: 'cart.line.split',
 						token: queue.dispatchToken,
@@ -136,7 +136,7 @@ export const useSplitLineItem = () => {
 				{ ctx, context: { orderId: record.uuid, uuid } }
 			);
 		},
-		[actor, cartConfig, ctx, getCurrentOrderRecord, localPatch, reportEngineWarnings]
+		[actor, configForOrder, ctx, getCurrentOrderRecord, localPatch, reportEngineWarnings]
 	);
 	return { splitLineItem };
 };

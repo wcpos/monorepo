@@ -26,18 +26,19 @@ unrelated queued writes.
 
 ## The events (closed list)
 
-| Event                    | Raised by           | Rewritable keys                                                | Can refuse |
-| ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
-| `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
-| `cart.line.update`       | `useUpdateCartLine` (one writer; `type` says which list) | `changes` | yes |
-| `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
-| `cart.line.split` | `useSplitLineItem` (the cart's Split link; `line_items` only; one write replaces the line with its unit lines) | none | yes |
-| `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
-| `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
-| `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29) | `billing`, `shipping`, `taxIds` | yes |
-| `cart.order.void`        | the order sheet's footer (`OrderSheetFooter` in `pos/cart/order-sheet.tsx`), through `useVoidOrder`; guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
-| `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`, through `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
+| Event                    | Raised by                                                                                                                                                                                                     | Rewritable keys                                                           | Can refuse |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------- |
+| `cart.line.add`          | `useAddItemToOrder` (money recomputed inside the slot from `_woocommerce_pos_data`; pricing hooks rewrite `_woocommerce_pos_data.price`; a rewrite of `price`, `total` or `subtotal` on the line is replaced) | `line`                                                                    | yes        |
+| `cart.line.update`       | `useUpdateCartLine` (one writer; `type` says which list)                                                                                                                                                      | `changes`                                                                 | yes        |
+| `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`)                                                                                                                                      | none                                                                      | yes        |
+| `cart.line.split`        | `useSplitLineItem` (the cart's Split link; `line_items` only; one write replaces the line with its unit lines)                                                                                                | none                                                                      | yes        |
+| `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine`                                                                                                                                              | none (v1)                                                                 | yes        |
+| `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine`                                                                                                                                                                 | none                                                                      | yes        |
+| `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29)                                            | `billing`, `shipping`, `taxIds`                                           | yes        |
+| `cart.tax_exempt.set`    | `setTaxExempt` (`pos/commands/tax-exempt.ts`)                                                                                                                                                                 | none                                                                      | yes        |
+| `cart.order.void`        | the order sheet's footer (`OrderSheetFooter` in `pos/cart/order-sheet.tsx`), through `useVoidOrder`; guard `payments.gate`, after-hook `audit.order-voided`                                                   | none                                                                      | yes        |
+| `checkout.complete`      | `completeSale`                                                                                                                                                                                                | none                                                                      | **no**     |
+| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`, through `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate`                                                                                | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
 roundingMinor, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`

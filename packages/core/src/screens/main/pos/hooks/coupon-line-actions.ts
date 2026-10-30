@@ -11,7 +11,6 @@ import type { RecalculateResult } from './coupon-recalculate';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/query').OrderPayload;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
 type CouponLine = NonNullable<OrderDocument['coupon_lines']>[number];
 type Plain = Record<string, unknown>;
 
@@ -26,7 +25,7 @@ export class CartChangedError extends Error {
 export interface CouponLineWriter {
 	ctx: ActionContext;
 	actor: ActionActor;
-	recalculate: (lineItems: LineItem[], couponLines: CouponLine[]) => Promise<RecalculateResult>;
+	recalculate: (order: OrderDocument, couponLines: CouponLine[]) => Promise<RecalculateResult>;
 	localPatch: (input: {
 		document: CurrentOrderRecord;
 		data: Plain;
@@ -55,7 +54,7 @@ async function writeCouponLines(
 	queue: OrderMutationContext
 ) {
 	const latest = order.getLatest();
-	const result = await writer.recalculate(latest.payload.line_items ?? [], couponLines);
+	const result = await writer.recalculate(latest.payload, couponLines);
 	// A recalculation that could not price the cart writes nothing (kept from the hook it replaced).
 	if (!result) return false;
 	// The recalculation reads the engine; a cart that moved meanwhile is not the cart it priced.

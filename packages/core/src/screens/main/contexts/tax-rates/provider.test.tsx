@@ -730,3 +730,25 @@ it('settles a queued command with new rates after its caller unmounts', async ()
 jest.mock('../../pos/commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
 }));
+
+it.each(['no', 'yes'])(
+	'applies order exemption only to exclusive prices (inclusive=%s)',
+	(inclusive) => {
+		storeSubjects.prices_include_tax$.next(inclusive);
+		const order = makeOrder([{ key: 'is_vat_exempt', value: 'yes' }]);
+		function Probe() {
+			return <output data-testid="exemption">{String(useTaxLocation().vatExempt)}</output>;
+		}
+		render(
+			<CurrentOrderContext.Provider
+				value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
+			>
+				<TaxRatesProvider>
+					<Probe />
+				</TaxRatesProvider>
+			</CurrentOrderContext.Provider>
+		);
+		expect(screen.getByTestId('exemption').textContent).toBe(String(inclusive === 'no'));
+		storeSubjects.prices_include_tax$.next('no');
+	}
+);

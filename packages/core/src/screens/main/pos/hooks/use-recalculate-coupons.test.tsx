@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { recalculateCoupons } from './coupon-recalculate';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 
+let mockTaxRates: object[] = [];
 const engine = {
 	active: jest.fn(),
 };
@@ -18,8 +19,16 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('./use-cart-config', () => ({
+	useCartConfigReader: () => (payload: import('@wcpos/query').OrderPayload) => ({
+		rates: mockTaxRates,
+		pricesIncludeTax: false,
+		calcDiscountsSequentially: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		vatExempt: jest.requireActual('@wcpos/sync-core').wooMetaCarrier.vatExempt(payload.meta_data),
+	}),
 	useCartConfig: () => ({
-		rates: [],
+		rates: mockTaxRates,
 		pricesIncludeTax: false,
 		calcDiscountsSequentially: false,
 		taxRoundAtSubtotal: false,
@@ -173,7 +182,9 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 		expect(reads.productFind).toHaveBeenCalledWith({
 			selector: { remoteKey: { $in: ['83', '82'] } },
 		});
@@ -202,7 +213,9 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 	});
 
 	it('builds the replay config directly from the coupon record payload', async () => {
@@ -231,7 +244,9 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 	});
 });
 
@@ -251,7 +266,7 @@ it.each(['missing', 'mixed', 'collision'])('resolves virtual coupons: %s', async
 	};
 	const coupons = mode === 'mixed' ? [virtual, { code: 'real', meta_data: [] }] : [virtual];
 	const { result } = renderHook(() => useRecalculateCoupons());
-	const recalculated = await result.current.recalculate(lineItems, coupons);
+	const recalculated = await result.current.recalculate({ line_items: lineItems }, coupons);
 	expect(recalculated.couponLines[0]).toEqual(
 		expect.objectContaining({ discount: '3.6', meta_data: virtual.meta_data })
 	);
@@ -265,7 +280,25 @@ it.each(['missing', 'mixed', 'collision'])('resolves virtual coupons: %s', async
 it('throws when an active coupon record has an unknown discount_type', async () => {
 	installEngineFixture({ code: 'broken', discount_type: 'unknown', amount: '10' });
 	const { result } = renderHook(() => useRecalculateCoupons());
-	await expect(result.current.recalculate(lineItems, [{ code: 'broken' }])).rejects.toThrow(
-		'Coupon "broken" not found in local collection'
-	);
+	await expect(
+		result.current.recalculate({ line_items: lineItems }, [{ code: 'broken' }])
+	).rejects.toThrow('Coupon "broken" not found in local collection');
+});
+
+it('recalculates using the target payload exemption, not the rendered config', async () => {
+	mockTaxRates = [{ id: 1, rate: '10', class: 'standard' }];
+	installEngineFixture({ code: 'ten', discount_type: 'percent', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const payload = { meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] };
+	const taxed = lineItems.map((line) => ({
+		...line,
+		subtotal_tax: '1.8',
+		total_tax: '1.8',
+		taxes: [{ id: 1, total: '1.8', subtotal: '1.8' }],
+	}));
+	const replay = await result.current.recalculate({ ...payload, line_items: taxed }, [
+		{ code: 'ten' },
+	]);
+	expect(replay.lineItems.map((line) => line.total_tax)).toEqual(['0', '0']);
+	expect(replay.couponLines[0].discount_tax).toBe('0');
 });

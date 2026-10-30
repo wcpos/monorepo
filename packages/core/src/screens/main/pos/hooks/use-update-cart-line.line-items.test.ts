@@ -24,6 +24,8 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 let mockLineItemQuantity = 1;
 let mockReducedStock: unknown;
+let mockDisplayedPayload: import('@wcpos/query').OrderPayload = {};
+const mockConfigReads: import('@wcpos/query').OrderPayload[] = [];
 
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = {
@@ -177,7 +179,25 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
+	return {
+		useCartConfig: () =>
+			createCartConfig({
+				...config,
+				vatExempt: jest
+					.requireActual('@wcpos/sync-core')
+					.wooMetaCarrier.vatExempt(mockDisplayedPayload.meta_data),
+			}),
+		useCartConfigReader: () => (payload: import('@wcpos/query').OrderPayload) => {
+			mockConfigReads.push(payload);
+			return createCartConfig({
+				...config,
+				rates: [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }],
+				vatExempt: jest
+					.requireActual('@wcpos/sync-core')
+					.wooMetaCarrier.vatExempt(payload.meta_data),
+			});
+		},
+	};
 });
 
 // Mock useLineItemData
@@ -591,3 +611,81 @@ describe('useUpdateCartLine — line_items', () => {
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
 }));
+
+// A captured render config would reintroduce tax after the queued flag write.
+it.each([false, true])(
+	'reads exemption after the preceding slot, background=%s',
+	async (background) => {
+		resetOrderMutationQueues();
+		jest.clearAllMocks();
+		mockLocalPatch.mockResolvedValue(true);
+		const payload = {
+			status: 'pos-open',
+			meta_data: [{ key: 'is_vat_exempt', value: 'no' }],
+			line_items: [
+				{
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					tax_class: '',
+					meta_data: [
+						{ key: '_woocommerce_pos_uuid', value: 'target-line' },
+						{ key: '_woocommerce_pos_data', value: { price: 10, tax_status: 'taxable' } },
+					],
+				},
+			],
+		};
+		const target = {
+			uuid: background ? 'background-order' : 'order-uuid',
+			payload,
+			getLatest() {
+				return this;
+			},
+			toMutableJSON: () => ({ payload }),
+		} as unknown as import('../contexts/current-order').CurrentOrderRecord;
+		let release!: () => void;
+		const held = enqueueOrderMutation(
+			target.uuid,
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		await Promise.resolve();
+		mockDisplayedPayload = background
+			? { id: 999, meta_data: [{ key: 'is_vat_exempt', value: 'no' }] }
+			: payload;
+		mockConfigReads.length = 0;
+		const { result } = renderHook(() => ({
+			...useUpdateCartLine(),
+			rendered: jest.requireMock('./use-cart-config').useCartConfig(),
+		}));
+		let edit!: Promise<unknown>;
+		await act(async () => {
+			edit = result.current.updateCartLine(
+				'line_items',
+				'target-line',
+				{ quantity: 1 },
+				{ record: target, skipStockGuard: true }
+			);
+			payload.meta_data[0].value = 'yes';
+			if (background) {
+				expect(result.current.rendered.vatExempt).toBe(false);
+				expect(mockDisplayedPayload).not.toBe(payload);
+			}
+			release();
+			await held;
+			await edit;
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].document.uuid).toBe(target.uuid);
+		expect(mockConfigReads).toContain(payload);
+		if (background) expect(mockConfigReads).not.toContain(mockDisplayedPayload);
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items[0]).toMatchObject({
+			total: '10',
+			taxes: [],
+			total_tax: '0',
+		});
+	}
+);

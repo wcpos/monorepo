@@ -39,7 +39,7 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	resetActionRegistry();
 	couponLines = [];
-	recalculate.mockImplementation(async (lines, coupons) => ({
+	recalculate.mockImplementation(async ({ line_items: lines }, coupons) => ({
 		lineItems: lines.map((line: Record<string, unknown>) => ({ ...line, total: '90' })),
 		couponLines: coupons,
 	}));
@@ -70,7 +70,10 @@ it('apply: dispatches the entering line with the cart, then recalculates and pat
 			payload: { couponLine: saved, lineItems, couponLines: [{ code: 'existing' }] },
 		}),
 	]);
-	expect(recalculate).toHaveBeenCalledWith(lineItems, [{ code: 'existing' }, saved]);
+	expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
+		{ code: 'existing' },
+		saved,
+	]);
 	expect(localPatch).toHaveBeenCalledWith({
 		document: order,
 		queue: expect.objectContaining({ dispatchToken: expect.any(Object) }),
@@ -94,7 +97,7 @@ it('apply: a guard refusal is returned and nothing is recalculated or written', 
 });
 
 it('apply: a cart that moved under the recalculation is refused with CartChangedError, unwritten', async () => {
-	recalculate.mockImplementationOnce(async (lines, coupons) => {
+	recalculate.mockImplementationOnce(async ({ line_items: lines }, coupons) => {
 		couponLines = [{ code: 'slipped-in' }];
 		return { lineItems: lines, couponLines: coupons };
 	});
@@ -127,7 +130,10 @@ it.each([
 		lineItems,
 		couponLines: [line, { code: 'keep' }],
 	});
-	expect(recalculate).toHaveBeenCalledWith(lineItems, [...remaining, { code: 'keep' }]);
+	expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
+		...remaining,
+		{ code: 'keep' },
+	]);
 	expect(localPatch).toHaveBeenCalledTimes(1);
 });
 
@@ -176,7 +182,10 @@ it('apply: a write queued ahead that moves the cart refuses the apply at slot en
 it('remove: every line carrying the code leaves, not only the first', async () => {
 	couponLines = [{ id: 1, code: 'save10' }, { code: 'keep' }, { code: 'SAVE10' }];
 	await removeCouponLine(writer, order, 'save10');
-	expect(recalculate).toHaveBeenCalledWith(lineItems, [{ id: 1, code: null }, { code: 'keep' }]);
+	expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
+		{ id: 1, code: null },
+		{ code: 'keep' },
+	]);
 });
 
 it('apply: lands on the saved order a first add left on the slot, not the record it was called with', async () => {
