@@ -32,7 +32,8 @@ import {
 	zoneOptions,
 } from '../../../hooks/use-store-day';
 import { ManagementBar } from '../components/management-bar';
-import { Bar, CashierButton } from './bar';
+import { Bar, ClosuresCashierChip } from './bar';
+import { ScopeRow } from './scope-row';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
@@ -401,27 +402,27 @@ function ReportsShell({
 							<Closures
 								renderScopeRow={({ actions }) => (
 									<View
-										testID="reports-scope-row"
 										// The row under the wide bar brings the page gutter between the bar's
 										// controls and its own; the Closures body's `p-gutter` brings the gutter
 										// below. The phone keeps its 8 under its control-height bar.
-										className={cn(
-											'flex-row items-center justify-between gap-2',
-											ground.px,
-											phone ? 'py-2' : ground.pt
-										)}
+										className={cn(ground.px, phone ? 'py-2' : ground.pt)}
 									>
-										<DateButton
-											scope={scope}
-											onScopeChange={setSelection}
-											storeId={scope.storeId}
-											// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
-											key={license?.isPro ? 'pro' : 'free'}
-											lockedScopeName={t('reports.earlier_closures')}
-											initialHistoryLimit={outsideHistory}
+										<ScopeRow
+											testID="reports-scope-row"
+											date={
+												<DateButton
+													scope={scope}
+													onScopeChange={setSelection}
+													storeId={scope.storeId}
+													// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
+													key={license?.isPro ? 'pro' : 'free'}
+													lockedScopeName={t('reports.earlier_closures')}
+													initialHistoryLimit={outsideHistory}
+												/>
+											}
+											chips={<ClosuresCashierChip scope={scope} onScopeChange={setSelection} />}
+											actions={actions}
 										/>
-										<CashierButton scope={scope} onScopeChange={setSelection} />
-										{actions}
 									</View>
 								)}
 								scope={scope}

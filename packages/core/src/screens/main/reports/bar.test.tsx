@@ -8,7 +8,7 @@ import { of } from 'rxjs';
 
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
-import { Bar, CashierButton } from './bar';
+import { Bar, ClosuresCashierChip } from './bar';
 import { DateButton } from './date-button';
 import { ReportsScreen } from './index';
 
@@ -286,7 +286,7 @@ function Controls({
 				onScopeChange={onScopeChange}
 				lockedScopeName="Earlier closures"
 			/>
-			<CashierButton scope={currentScope} onScopeChange={onScopeChange} />
+			<ClosuresCashierChip scope={currentScope} onScopeChange={onScopeChange} />
 		</>
 	);
 }
@@ -398,6 +398,32 @@ it.each([
 	expect(change).toHaveBeenCalled();
 	expect(screen.queryByTestId(option)).toBeNull();
 });
+// Revert: omit the cashier chip's clear action or keep the selected cashier when clearing.
+it('turns the cashier chip on after selection and clears back to All cashiers', () => {
+	function Browse() {
+		const [selected, select] = React.useState(scope);
+		return (
+			<ClosuresCashierChip
+				scope={selected}
+				onScopeChange={(next) => {
+					change(next);
+					select(next);
+				}}
+			/>
+		);
+	}
+	render(<Browse />);
+	fireEvent.click(screen.getByTestId('reports-cashier'));
+	fireEvent.click(screen.getByTestId('reports-cashier-8'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, cashier: 8 });
+	expect(screen.getByTestId('reports-cashier-label').getAttribute('aria-pressed')).toBe('true');
+	fireEvent.click(screen.getByTestId('reports-cashier-clear'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, cashier: undefined });
+	expect(screen.getByTestId('reports-cashier').textContent).toBe('All cashiers');
+	expect(screen.getByTestId('reports-cashier').getAttribute('aria-pressed')).toBe('false');
+	expect(screen.queryByTestId('reports-cashier-clear')).toBeNull();
+});
+
 // Revert: keep the scope beside a private bar instead of in the page bar's title place.
 it('seats the scope in the page bar title place and returns to Sales from an arrow on wide widths', () => {
 	mockScreenSize = 'lg';
