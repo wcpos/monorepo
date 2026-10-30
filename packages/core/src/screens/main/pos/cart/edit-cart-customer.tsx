@@ -29,9 +29,9 @@ import {
 	useAddressFacts,
 } from '../../components/customer/address-rows';
 import {
-	TAX_ID_DEFAULT_ROW,
 	TaxIdsForm,
 	taxIdsFormSchema,
+	useNewTaxIdRow,
 } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
@@ -102,6 +102,7 @@ function EditCartCustomerFields() {
 		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: { billing, shipping, tax_ids },
 	});
+	const newTaxIdRow = useNewTaxIdRow(form.control);
 	const { linked, focus, labels, ...address } = useAddressFacts(form, 'cart-address');
 
 	// While linked, a write carries billing as shipping; a verb's own shipping write lands as set.
@@ -257,10 +258,7 @@ function EditCartCustomerFields() {
 								testID="cart-address-add-tax_id"
 								label={t('tax_id.tax_id')}
 								onPress={() =>
-									form.setValue('tax_ids', [
-										...(form.getValues().tax_ids ?? []),
-										TAX_ID_DEFAULT_ROW,
-									])
+									form.setValue('tax_ids', [...(form.getValues().tax_ids ?? []), newTaxIdRow()])
 								}
 							/>
 						</PropertyAddRow>

@@ -60,7 +60,16 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/collapsible', () => ({}));
 jest.mock('@wcpos/components/icon-button', () => ({}));
 jest.mock('@wcpos/components/tooltip', () => ({}));
-jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
+jest.mock('@wcpos/components/select', () => ({
+	OptionSelect: () => null,
+	Select: () => null,
+	SelectTrigger: () => null,
+	SelectValue: () => null,
+	SelectContent: () => null,
+	SelectGroup: () => null,
+	SelectItem: () => null,
+	SelectSeparator: () => null,
+}));
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useDocField: (value: unknown, select: (value: unknown) => unknown) =>
@@ -72,6 +81,8 @@ jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordByWooId: () => mockCustomerResource,
 }));
 jest.mock('../../../../lib/tax-id', () => ({
+	suggestTaxIdTypes: () => [],
+	splitTaxIdTypesForCountry: () => ({ suggested: [], rest: [] }),
 	isValidTaxIdFormat: () => true,
 	TAX_ID_DEFAULT_COUNTRIES: {},
 	useTaxIdLabels: () => ({}),

@@ -54,9 +54,9 @@ import {
 	useAddressFacts,
 } from '../../components/customer/address-rows';
 import {
-	TAX_ID_DEFAULT_ROW,
 	TaxIdsForm,
 	taxIdsFormSchema,
+	useNewTaxIdRow,
 } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import {
@@ -160,6 +160,7 @@ function EditOrderFormFields({ order }: Props) {
 		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: formData as FormValues,
 	});
+	const newTaxIdRow = useNewTaxIdRow(form.control);
 	const markSaved = useMarkSaved();
 	const { linked, ...address } = useAddressFacts(form, 'order');
 	// Read at write time, like `stored`: a debounced billing write lands after the verb that
@@ -495,7 +496,7 @@ function EditOrderFormFields({ order }: Props) {
 						<PropertyAdd
 							testID="order-add-tax_id"
 							label={t('tax_id.tax_id')}
-							onPress={() => append('tax_ids', TAX_ID_DEFAULT_ROW)}
+							onPress={() => append('tax_ids', newTaxIdRow())}
 						/>
 						{!currencyRow.shown && (
 							<PropertyAdd
