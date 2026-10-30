@@ -156,6 +156,7 @@ describe('EmailForm', () => {
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
 		// Queued is a kept promise: the dialog's job is done.
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
+		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('queues when the store is unreachable even though the device has a network', async () => {
@@ -165,6 +166,8 @@ describe('EmailForm', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
+		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('posts straight away when online and reports success', async () => {
@@ -180,6 +183,7 @@ describe('EmailForm', () => {
 		expect(mockLoggerSuccess).toHaveBeenCalled();
 		// The merchant on 1.11.6 found the dialog still open after every Send.
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
+		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('queues an online send that failed on the connection', async () => {
@@ -200,6 +204,7 @@ describe('EmailForm', () => {
 		);
 		expect(mockLoggerError).not.toHaveBeenCalled();
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
+		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('surfaces a rejected address immediately instead of queuing it', async () => {
