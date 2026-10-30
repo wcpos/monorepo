@@ -80,7 +80,7 @@ export function DateRangeCalendar({ onSelect }: Props) {
 				/>
 			</HStack>
 			<HStack className="justify-end">
-				<Button onPress={() => date && onSelect(date)}>
+				<Button testID="order-filter-date-done" onPress={() => date && onSelect(date)}>
 					<ButtonText>{t('common.done')}</ButtonText>
 				</Button>
 			</HStack>
