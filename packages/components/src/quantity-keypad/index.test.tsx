@@ -150,6 +150,14 @@ it('typing 1 2 replaces the number, and ✓ commits 12', async () => {
 	expect(isOpen()).toBe(false);
 });
 
+it('a line takes more than four whole digits: a cashier is never stopped', async () => {
+	await open({ value: 3 });
+	for (const digit of '12345') await press(`keypad-key-${digit}`);
+	expect(shown()).toBe('12345');
+	await press('keypad-key-done');
+	expect(onChange).toHaveBeenCalledWith(12345);
+});
+
 it('the physical keyboard types, and Enter commits', async () => {
 	await open({ value: 3, decimalSeparator: ',' });
 	// The panel holds focus, not its first key, so Enter is Done rather than a press of −.
@@ -416,15 +424,15 @@ describe('without onRemove, a count (stock)', () => {
 		expect(onChange).toHaveBeenCalledWith(0);
 	});
 
-	it('whole numbers: no decimal key, the physical separator ignored, six digits', async () => {
+	it('whole numbers: no decimal key, the physical separator ignored, any number of digits', async () => {
 		await count({ value: 4 });
 		expect(screen.queryByTestId('keypad-key-decimal')).toBeNull();
 		await press('keypad-key-1');
 		panelKey('.');
-		for (const digit of '234567') await press(`keypad-key-${digit}`);
-		expect(shown()).toBe('123456');
+		for (const digit of '2345678') await press(`keypad-key-${digit}`);
+		expect(shown()).toBe('12345678');
 		await press('keypad-key-done');
-		expect(onChange).toHaveBeenCalledWith(123456);
+		expect(onChange).toHaveBeenCalledWith(12345678);
 	});
 });
 

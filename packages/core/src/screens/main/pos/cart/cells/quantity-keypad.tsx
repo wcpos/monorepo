@@ -59,8 +59,10 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// The column is 56 wide and the input box 41; the shared input's 12-point
 				// horizontal padding left ~17 points for the digits, so "19" fit and "20"
 				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09): the number pads 4
-				// itself, and on web the box pads 4 more around it.
-				className="web:px-1 min-w-9 items-center justify-center"
+				// itself, and on web the box pads 4 more around it. The box grows with the
+				// number to 56 (the keypad's 48 cell plus its padding: five characters at the
+				// regular step) and the number truncates beyond, never pushing into the name.
+				className="web:px-1 web:max-w-14 min-w-9 items-center justify-center"
 				textClassName="px-1 text-center font-semibold"
 				tone={overStock ? 'attention' : undefined}
 				value={item.quantity}

@@ -7,14 +7,7 @@ import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
 import { Text } from '../text';
-import {
-	COUNT_DIGITS,
-	EMPTY_ENTRY,
-	LINE_DIGITS,
-	QUANTITY_PLACES,
-	quantityEntryReducer,
-	typedQuantity,
-} from './reducer';
+import { EMPTY_ENTRY, QUANTITY_PLACES, quantityEntryReducer, typedQuantity } from './reducer';
 
 /** Material's minimum touch target (decision 36): the anchored panel is a grid of them. */
 const CELL = 48;
@@ -23,6 +16,10 @@ const GRID = 10 ** QUANTITY_PLACES;
 const onGrid = (quantity: number) => Math.round(quantity * GRID) / GRID;
 const ARROW_KEYS = { ArrowUp: 'increase', ArrowDown: 'decrease' };
 const ANIMATION = { down: 'web:animate-quantity-grow', up: 'web:animate-quantity-grow-up' };
+// Measured in the 48 px cell at the regular step (2026-10-30), with no side padding: five
+// characters fit at `text-base` ("2.222", "12345"), six at `text-xs`; seven and more truncate.
+const sizeFor = (display: string, sheet: boolean) =>
+	sheet ? 'text-xl' : display.length <= 5 ? 'text-base' : 'text-xs';
 
 export type QuantityKeypadLabels = {
 	decrease: string;
@@ -44,7 +41,7 @@ export type QuantityKeypadProps = {
 	onChange: (quantity: number) => void | boolean | Promise<void | boolean>;
 	/**
 	 * − pressed at 1 (the trash). Without it the keypad edits a count (a product's stock): −
-	 * stops at 0, a typed 0 commits, and six whole digits fit.
+	 * stops at 0, a typed 0 commits.
 	 */
 	onRemove?: () => void;
 	/** The places a quantity may carry (six, a line's); with none there is no decimal key. */
@@ -154,7 +151,6 @@ export function QuantityKeypad({
 				type: 'key',
 				key: name,
 				places: decimals,
-				whole: count ? COUNT_DIGITS : LINE_DIGITS,
 			});
 	};
 
@@ -165,7 +161,7 @@ export function QuantityKeypad({
 		trash
 			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'bad' }
 			: { name: 'decrease', label: labels.decrease, icon: 'minus' },
-		{ display: <Value display={display} fit={count} textClassName={textClassName} /> },
+		{ display: <Value display={display} textClassName={textClassName} /> },
 		{ name: 'increase', label: labels.increase, icon: 'plus' },
 	];
 	return (
@@ -204,37 +200,42 @@ export function QuantityKeypad({
 					className
 				)}
 			>
-				<Text className={cn('tabular-nums', textClassName)}>{format(value)}</Text>
+				{/* The same ladder at rest, and the number's own side padding is the box's business
+				    (the cart's `px-1` on the text left "2.222" clipped in its 56-wide column). */}
+				<Text
+					numberOfLines={1}
+					className={cn(
+						'max-w-full tabular-nums',
+						textClassName,
+						sizeFor(format(value), false),
+						'px-0'
+					)}
+				>
+					{format(value)}
+				</Text>
 			</PressableSurface>
 		</GrowKeypad>
 	);
 }
 
 /**
- * The number, centred in the stepper row's middle cell. A count (`fit`) reaches `999,999`,
- * which the 48 px cell holds only smaller: past five characters it shrinks, never the panel.
+ * The number, centred in the stepper row's middle cell. Every quantity shrinks past five
+ * characters and truncates past the 48 px cell; it never widens the panel.
  */
-function Value({
-	display,
-	fit,
-	textClassName,
-}: {
-	display: string;
-	fit: boolean;
-	textClassName?: string;
-}) {
+function Value({ display, textClassName }: { display: string; textClassName?: string }) {
 	const sheet = useOverlayPresentation() === 'bottom';
-	const size = sheet
-		? 'text-xl'
-		: !fit || display.length <= 5
-			? 'text-base'
-			: display.length <= 6
-				? 'text-sm'
-				: 'text-xs';
 	return (
 		<Text
 			testID="quantity-keypad-value"
-			className={cn('text-center font-semibold tabular-nums', size, textClassName)}
+			numberOfLines={1}
+			// The cell's size and no side padding win over the caller's rest-box classes (the cart's
+			// `px-1`): the 48 px cell is the whole room the number has.
+			className={cn(
+				'text-center font-semibold tabular-nums',
+				textClassName,
+				sizeFor(display, sheet),
+				'px-0'
+			)}
 		>
 			{display}
 		</Text>
