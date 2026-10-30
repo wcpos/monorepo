@@ -432,7 +432,6 @@ export function SalesScope({ date, settled }: { date: React.ReactNode; settled: 
 		<ScopeRow
 			testID="reports-scope-strip"
 			date={date}
-			inset
 			chips={<SalesScopeChips settled={settled} />}
 			actions={
 				settled ? (
