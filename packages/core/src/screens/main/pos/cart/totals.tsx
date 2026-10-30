@@ -84,7 +84,7 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 	return (
 		<>
 			{hasTotals ? (
-				<MoneyList className="border-border bg-card border-t p-2">
+				<MoneyList className="border-border bg-card border-t [border-style:var(--shape-rule-style)] p-2">
 					<MoneyList.Row
 						testID="cart-subtotal"
 						label={t('common.subtotal')}

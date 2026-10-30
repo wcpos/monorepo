@@ -7,6 +7,8 @@ import { useObservableSuspense } from 'observable-hooks';
 import { Button } from '@wcpos/components/button';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { useThemeTraits } from '@wcpos/components/lib/theme-traits';
+import { ReceiptEdge } from '@wcpos/components/receipt-edge';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { cn } from '@wcpos/components/lib/utils';
 import { VStack } from '@wcpos/components/vstack';
@@ -68,6 +70,8 @@ function CartColumn({
 	isColumn?: boolean;
 	receiptOrderUuid?: string;
 }) {
+	const { tear } = useThemeTraits();
+	const surface = isColumn ? 'bg-cart' : 'bg-background';
 	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
 	const { sessionsOn, session, loaded, overdue, countingHere, countingElsewhere } =
 		useRegisterSession();
@@ -163,11 +167,19 @@ function CartColumn({
 	// The cart has no frame of its own: the register bar, the customer row and the foot run their
 	// hairlines to the column's edges (Paul, 2026-10-09), and on the phone to the screen's (Paul,
 	// 2026-10-23: the tab had kept an 8 inset that drew a frame around the rows). The column
-	// paints the card colour; the phone tab stays on the ground, as the products tab does, because
+	// paints the cart colour; the phone tab stays on the ground, as the products tab does, because
 	// the tabs container pads the status bar in `bg-background` (columns ledger line 6: no band),
 	// and the rows, the totals and the open-order tabs paint their own card colour.
 	return (
-		<VStack className={cn('h-full gap-0', isColumn ? 'bg-card' : 'bg-background')}>
+		<VStack className={cn('h-full gap-0', !tear && surface)}>
+			{tear && <ReceiptEdge />}
+			{tear && (
+				// Keep the strip inside the panel's clip, with no column paint behind its transparent gaps.
+				<View
+					pointerEvents="none"
+					className={cn('absolute inset-x-0 top-[10px] bottom-0', surface)}
+				/>
+			)}
 			<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
 			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&

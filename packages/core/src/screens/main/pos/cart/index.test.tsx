@@ -8,6 +8,14 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { OpenOrders } from './index';
 import { consumeRegisterPanelRequest } from './register-panel-request';
 
+let mockTear = false;
+jest.mock('@wcpos/components/lib/theme-traits', () => ({
+	useThemeTraits: () => ({ tear: mockTear }),
+}));
+jest.mock('@wcpos/components/receipt-edge', () => ({
+	ReceiptEdge: () => <svg data-testid="receipt-edge" />,
+}));
+
 let mockPosition = 'bottom';
 let mockIsNew = false;
 let mockStage = 'cart';
@@ -124,7 +132,9 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	VStack: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -206,5 +216,20 @@ it.each([true, false])('keeps the cart only for this device’s count (countingH
 	} finally {
 		mockSession = previous;
 		consumeRegisterPanelRequest();
+	}
+});
+
+it.each([true, false])('mounts the receipt edge only when tear is %s', (tear) => {
+	mockTear = tear;
+	try {
+		render(<OpenOrders isColumn />);
+		const edge = screen.queryByTestId('receipt-edge');
+		expect(!!edge).toBe(tear);
+		if (edge) {
+			expect(edge.parentElement?.firstElementChild).toBe(edge);
+			expect(edge.parentElement?.dataset.classes).not.toContain('bg-cart');
+		}
+	} finally {
+		mockTear = false;
 	}
 });

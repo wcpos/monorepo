@@ -4,7 +4,12 @@ import { loadAsync } from 'expo-font';
 
 import { FONT_FACES } from '@wcpos/components/lib/fonts';
 import { SYSTEM_TYPE, ThemeTraitsContext } from '@wcpos/components/lib/theme-traits';
-import { familiesForTheme, THEME_TYPE, type ThemeName } from '@wcpos/components/lib/themes';
+import {
+	familiesForTheme,
+	THEME_TYPE,
+	type ThemeName,
+	traitsForTheme,
+} from '@wcpos/components/lib/themes';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../app-state';
@@ -43,6 +48,7 @@ export function ThemeTraitsSettingProvider({ children }: { children: React.React
 
 	const value = React.useMemo(
 		() => ({
+			...traitsForTheme(theme),
 			type:
 				state?.status === 'loaded' && state.theme === theme
 					? (THEME_TYPE[theme as ThemeName] ?? SYSTEM_TYPE)

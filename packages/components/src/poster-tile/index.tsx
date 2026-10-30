@@ -5,6 +5,9 @@ import Animated from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
+import { fontFamilyStyle } from '../lib/fonts';
+import { useThemeTraits } from '../lib/theme-traits';
+import { Text } from '../text';
 import { TextClassContext } from '../text/context';
 import { Mark } from './mark';
 import { StockPill } from './stock-pill';
@@ -229,13 +232,23 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 	},
 	ref
 ) {
+	const { type, media, wordsAlign, priceChip } = useThemeTraits();
+	const wordsClass = wordsAlign === 'center' ? `${WORDS} items-center text-center` : WORDS;
 	const tint = picture.kind === 'tint' ? picture.tint : null;
 	const filled = picture.kind === 'fill';
 	const ink = filled ? 'text-primary-foreground' : undefined;
 	const words = hasWords(title, money, sub, facts) && (
 		<>
 			{title}
-			{money}
+			{priceChip && hasWords(money) ? (
+				<View className="bg-price-chip rounded-chip self-start px-2">
+					<TextClassContext.Provider value="text-price-chip-foreground">
+						{money}
+					</TextClassContext.Provider>
+				</View>
+			) : (
+				money
+			)}
 			{sub}
 			{facts}
 		</>
@@ -278,6 +291,19 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						<View className="rounded-media aspect-square overflow-hidden" testID={squareTestID}>
 							<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
 								<Picture picture={picture} />
+								{picture.kind === 'tint' && media === 'initial' && typeof title === 'string' && (
+									<View
+										className="absolute inset-0 items-center justify-center"
+										pointerEvents="none"
+									>
+										<Text
+											className={`text-tile-ink font-strong text-3xl ${type.displayItalic ? 'italic' : ''}`}
+											style={fontFamilyStyle(type.display)}
+										>
+											{[...title.trim()][0]?.toUpperCase()}
+										</Text>
+									</View>
+								)}
 							</View>
 							{/* The press dims the picture or the tint alike, under the words and marks. */}
 							{pressed && <View className={VEIL} pointerEvents="none" testID="poster-pressed" />}
@@ -290,7 +316,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						{words &&
 							(tint === null && !filled ? (
 								<Scrim
-									className={`${WORDS} px-2.5 pb-2.5`}
+									className={`${wordsClass} px-2.5 pb-2.5`}
 									// The reach is the scrim's top padding: one constant for both.
 									style={REACH}
 									testID="poster-scrim"
@@ -310,7 +336,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									{words}
 								</Scrim>
 							) : (
-								<View className={`${WORDS} p-2.5`} testID="poster-words">
+								<View className={`${wordsClass} p-2.5`} testID="poster-words">
 									{words}
 								</View>
 							))}

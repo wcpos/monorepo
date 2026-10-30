@@ -103,6 +103,7 @@ test('the contract covers every variant in the theme layer, in sheet order', () 
 	assert.deepEqual(themeNames, variants);
 });
 const shapeTokens = [
+	'shape-rule-style',
 	'shape-radius-control',
 	'shape-radius-tile',
 	'shape-radius-media',
@@ -122,6 +123,10 @@ const shapeTokens = [
 ];
 
 const newColors = [
+	'tile-ink',
+	'cart',
+	'price-chip',
+	'price-chip-foreground',
 	'chip',
 	'chip-border',
 	'primary-shadow',
@@ -467,6 +472,7 @@ for (const name of themeNames) {
 
 for (const name of themeNames) {
 	for (const [text, ground] of [
+		['price-chip-foreground', 'price-chip'],
 		['selected-foreground', 'selected'],
 		// `text-primary` is ink on links and the Split action, not only a fill (Codex on #3124).
 		['primary', 'card'],
@@ -486,6 +492,7 @@ for (const name of themeNames) {
 		test(`${name}: ${text} on ${ground} reaches 4.5:1`, () => {
 			const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
 			assert.ok(body, `Missing ${name} theme`);
+			if (ground === 'price-chip' && themeToken(body, ground) === 'transparent') return;
 			const ratio = contrast(themeToken(body, text), themeToken(body, ground));
 			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${text} on ${ground} is ${ratio.toFixed(2)}:1`);
 		});

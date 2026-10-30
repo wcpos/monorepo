@@ -73,6 +73,7 @@
     "./panels": "./src/panels/index.tsx",
     "./popover": "./src/popover/index.tsx",
     "./portal": "./src/portal/index.ts",
+    "./receipt-edge": "./src/receipt-edge/index.tsx",
     "./poster-tile": "./src/poster-tile/index.tsx",
     "./log-view": "./src/log-view/index.tsx",
     "./pressable-surface": "./src/pressable-surface/index.tsx",

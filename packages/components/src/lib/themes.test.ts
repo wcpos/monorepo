@@ -1,11 +1,14 @@
+import { DEFAULT_TRAITS } from './theme-traits';
 import {
 	familiesForTheme,
 	hasDarkRail,
 	iconSetForTheme,
 	isLightTheme,
 	THEME_ICON_SET,
+	THEME_TRAITS,
 	THEME_TYPE,
 	THEMES,
+	traitsForTheme,
 } from './themes';
 import { DEFAULT_ICON_SET } from '../icon/sets';
 
@@ -74,3 +77,16 @@ it.each(['system', undefined, 'nope', 'toString'])(
 		expect(hasDarkRail(theme)).toBe(false);
 	}
 );
+
+it.each(THEMES)('defines construction traits for %s', (theme) => {
+	expect(THEME_TRAITS[theme]).toBeDefined();
+	expect(traitsForTheme(theme)).toEqual({ ...THEME_TRAITS[theme], type: THEME_TYPE[theme] });
+});
+it('uses default traits for an unknown theme', () => {
+	expect(traitsForTheme('nope')).toBe(DEFAULT_TRAITS);
+});
+it('gives paper and market a tear and bold blank media with a price chip', () => {
+	expect(traitsForTheme('paper')).toMatchObject({ tear: true, wordsAlign: 'center' });
+	expect(traitsForTheme('market').tear).toBe(true);
+	expect(traitsForTheme('bold')).toMatchObject({ priceChip: true, media: 'blank' });
+});

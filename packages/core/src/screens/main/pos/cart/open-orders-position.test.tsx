@@ -20,6 +20,7 @@ let mockDirectoryFailed = false;
 let mockRetrying: false | 'none' | 'failed' = false;
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/receipt-edge', () => ({ ReceiptEdge: () => null }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
 // The strip's portal comes with the edge surface, which reads the safe-area insets.
 jest.mock('react-native-safe-area-context', () => ({

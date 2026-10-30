@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DEFAULT_TRAITS, ThemeTraitsContext } from '../lib/theme-traits';
 import { Text } from '../text';
 import {
 	PosterPlaceholder,
@@ -363,4 +364,34 @@ it.each([false, true])('one ink: stock count and glyph agree (low=%s)', (low) =>
 		expect(node.getAttribute('data-classes')).toContain(
 			low ? 'text-warning-foreground' : 'text-foreground'
 		);
+});
+
+it('draws a tint initial only for string titles and initial media', () => {
+	const props = { picture: { kind: 'tint', tint: 0 }, title: ' Flat white' } as const;
+	const { rerender } = render(tile(props));
+	expect(screen.getByText('F').dataset.classes).toContain('text-tile-ink');
+	rerender(
+		<ThemeTraitsContext.Provider value={{ ...DEFAULT_TRAITS, media: 'blank' }}>
+			{tile(props)}
+		</ThemeTraitsContext.Provider>
+	);
+	expect(screen.queryByText('F')).toBeNull();
+	rerender(tile({ title: 'Flat white' }));
+	expect(screen.queryByText('F')).toBeNull();
+	rerender(tile({ ...props, title: <Text>Flat white</Text> }));
+	expect(screen.queryByText('F')).toBeNull();
+});
+
+it('wraps money in the theme chip and centres the words', () => {
+	render(
+		<ThemeTraitsContext.Provider
+			value={{ ...DEFAULT_TRAITS, priceChip: true, wordsAlign: 'center' }}
+		>
+			{tile({ picture: { kind: 'tint', tint: 0 }, title: 'Flat white', money: <Text>4.00</Text> })}
+		</ThemeTraitsContext.Provider>
+	);
+	const money = screen.getByText('4.00');
+	expect(money.parentElement?.dataset.classes).toBe('bg-price-chip rounded-chip self-start px-2');
+	expect(money.dataset.classes).toContain('text-price-chip-foreground');
+	expect(classes('poster-words')).toContain('items-center text-center');
 });

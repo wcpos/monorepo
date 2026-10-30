@@ -8,12 +8,25 @@ export type ThemeType = {
 	display?: ThemeFontFamily;
 	displayItalic?: boolean;
 };
-export type ThemeTraits = { type: ThemeType };
+export type ThemeTraits = {
+	type: ThemeType;
+	media: 'initial' | 'blank';
+	wordsAlign: 'start' | 'center';
+	priceChip: boolean;
+	tear: boolean;
+};
 export const SYSTEM_TYPE: ThemeType = {};
+export const DEFAULT_TRAITS: ThemeTraits = {
+	type: SYSTEM_TYPE,
+	media: 'initial',
+	wordsAlign: 'start',
+	priceChip: false,
+	tear: false,
+};
 
 /**
- * Traits a stylesheet cannot carry (which typeface, later which tile media and which moments),
+ * Traits a stylesheet cannot carry (which typeface and tile construction, later which moments),
  * supplied per theme by the app's provider; without a provider everything is the system default.
  */
-export const ThemeTraitsContext = React.createContext<ThemeTraits>({ type: SYSTEM_TYPE });
+export const ThemeTraitsContext = React.createContext<ThemeTraits>(DEFAULT_TRAITS);
 export const useThemeTraits = () => React.useContext(ThemeTraitsContext);

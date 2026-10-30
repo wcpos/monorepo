@@ -29,7 +29,12 @@ function pendingLoad() {
 }
 
 function Probe() {
-	return <span data-testid="type">{JSON.stringify(useThemeTraits().type)}</span>;
+	const traits = useThemeTraits();
+	return (
+		<span data-testid="type" data-tear={String(traits.tear)}>
+			{JSON.stringify(traits.type)}
+		</span>
+	);
 }
 
 function renderType() {
@@ -62,6 +67,7 @@ it('draws system type until the market faces load', async () => {
 	renderType();
 	expect(drawnType()).toEqual(SYSTEM_TYPE);
 	expect(loadAsync).toHaveBeenCalledWith([FONT_FACES.Manrope]);
+	expect(screen.getByTestId('type').dataset.tear).toBe('true');
 	await act(async () => load.resolve());
 	expect(drawnType()).toEqual(THEME_TYPE.market);
 });
