@@ -594,6 +594,10 @@ export function calculateCartLine(
 export function calculateCartLine(
 	input: CartLineInput,
 	config: CartConfig
+): CalcLineResult<LineItemInput | FeeLineInput | ShippingLineInput>;
+export function calculateCartLine(
+	input: CartLineInput,
+	config: CartConfig
 ): CalcLineResult<LineItemInput | FeeLineInput | ShippingLineInput> {
 	const warnings: EngineWarning[] = [];
 

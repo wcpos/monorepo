@@ -7,7 +7,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
-import { resetActionHookStrikes } from '../../../../extensions/actions';
+import { registerActionHook, resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
 
 const mockLocalPatch = jest.fn();
@@ -16,6 +16,8 @@ const mockBirthOrder = jest.fn();
 const mockFindBirthState = jest.fn();
 const mockReadCatalog = jest.fn();
 let mockStockGuardEnabled = false;
+let mockTaxRates: { id: number; rate: string; compound: boolean; order: number; class: string }[] =
+	[];
 
 /**
  * Every line the POS creates carries `_woocommerce_pos_data` — `convertProductToLineItem`
@@ -86,7 +88,17 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
+	return {
+		useCartConfig: () => createCartConfig({ ...config, rates: mockTaxRates }),
+		useCartConfigReader: () => (payload: { meta_data?: { key?: string; value?: unknown }[] }) =>
+			createCartConfig({
+				...config,
+				rates: mockTaxRates,
+				vatExempt: jest
+					.requireActual('@wcpos/sync-core')
+					.wooMetaCarrier.vatExempt(payload.meta_data),
+			}),
+	};
 });
 
 const order: Record<string, unknown> & {
@@ -158,6 +170,7 @@ describe('useAddItemToOrder', () => {
 		resetActionHookStrikes();
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
+		mockTaxRates = [];
 		mockFindBirthState.mockResolvedValue('none');
 		mockReadCatalog.mockResolvedValue({
 			manage_stock: true,
@@ -174,9 +187,108 @@ describe('useAddItemToOrder', () => {
 		order.toMutableJSON = () => ({ payload: { ...order.payload } });
 	});
 
+	it.each([false, true])('recomputes an exempt add inside its slot, merge=%s', async (merge) => {
+		mockTaxRates = [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }];
+		Object.assign(order.payload, { meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] });
+		const line = {
+			product_id: 1,
+			quantity: 1,
+			subtotal: '10',
+			total: '10',
+			total_tax: '1',
+			subtotal_tax: '1',
+			taxes: [{ id: 1, total: '1', subtotal: '1' }],
+			meta_data: [posPrice(10)],
+		};
+		if (merge) order.payload.line_items = [line];
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', line);
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items[0]).toMatchObject({
+			total: merge ? '20' : '10',
+			total_tax: '0',
+			taxes: [],
+		});
+	});
+
+	it.each([false, true])(
+		'carries a temporary exemption through the first add, orphan=%s',
+		async (orphan) => {
+			order.isNew = true;
+			mockTaxRates = [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }];
+			if (orphan) {
+				const payload = {
+					status: 'pos-open',
+					line_items: [],
+					meta_data: [{ key: 'is_vat_exempt', value: 'no' }],
+				};
+				mockFindBirthState.mockResolvedValue({
+					orphan: { payload, toMutableJSON: () => ({ payload }) },
+				});
+			}
+			mockBirthOrder.mockImplementation(async ({ payload }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			}));
+			const { result } = renderHook(() => useAddItemToOrder());
+			// The temporary-order flag changes after the optimistic line was calculated.
+			Object.assign(order.payload, { meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] });
+			await act(async () => {
+				await result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					total: '10',
+					subtotal: '10',
+					total_tax: '1',
+					subtotal_tax: '1',
+					taxes: [{ id: 1, total: '1', subtotal: '1' }],
+					meta_data: [posPrice(10)],
+				});
+			});
+			expect(mockBirthOrder.mock.calls[0][0].payload).toMatchObject({
+				meta_data: expect.arrayContaining([{ key: 'is_vat_exempt', value: 'yes' }]),
+				line_items: [expect.objectContaining({ total: '10', total_tax: '0', taxes: [] })],
+			});
+		}
+	);
+	it('replaces a hook total-only rewrite with the POS catalog price inside the slot', async () => {
+		let active = true;
+		registerActionHook(
+			'cart.line.add',
+			async (_ctx, event, next) =>
+				next(
+					active
+						? {
+								...event,
+								payload: { ...event.payload, line: { ...event.payload.line, total: '999' } },
+							}
+						: event
+				),
+			{ id: 'total-only-rewrite', tier: 'extension' }
+		);
+		try {
+			const { result } = renderHook(() => useAddItemToOrder());
+			await act(async () => {
+				await result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					total: '10',
+					subtotal: '10',
+					meta_data: [posPrice(10)],
+				});
+			});
+			expect(mockLocalPatch.mock.calls[0][0].data.line_items[0].total).toBe('10');
+		} finally {
+			active = false;
+		}
+	});
+
 	it.each([false, true])(
 		'settles resident and create money before birth (orphan: %s)',
 		async (orphan) => {
+			mockTaxRates = [{ id: 1, rate: '20', compound: false, order: 1, class: 'standard' }];
 			order.isNew = true;
 			const payload = { uuid: 'order-uuid', line_items: [] };
 			if (orphan)
@@ -235,6 +347,7 @@ describe('useAddItemToOrder', () => {
 		});
 
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
+		expect(mockBirthOrder.mock.calls[0][0].payload.billing).toEqual({ first_name: 'Guest' });
 		expect(mockReadCatalog).not.toHaveBeenCalled();
 	});
 

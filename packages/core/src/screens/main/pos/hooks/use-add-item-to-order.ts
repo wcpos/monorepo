@@ -2,14 +2,14 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { calculateCartLine } from '@wcpos/order-math';
+import { calculateCartLine, type CartConfig } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
-import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
+import { isMiscProductLine, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { birthOrder, documentRecordId, findBirthState } from '@wcpos/query/mutations';
 
 import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
-import { useCartConfig } from './use-cart-config';
+import { useCartConfigReader } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { dispatchAction } from '../../../../extensions/actions';
@@ -31,6 +31,7 @@ type ShippingLine = NonNullable<EngineRecord<'orders'>['payload']['shipping_line
 type CouponLine = NonNullable<EngineRecord<'orders'>['payload']['coupon_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
+const kinds = { line_items: 'line_item', fee_lines: 'fee', shipping_lines: 'shipping' } as const;
 /**
  * Provides the queued mutation used to add a cart line to the current order.
  *
@@ -43,7 +44,7 @@ export const useAddItemToOrder = () => {
 	const runtime = useQueryRuntime();
 	const { localPatch, settleIntent } = useCartWrite();
 	const { ctx, actor } = useActionContext();
-	const cartConfig = useCartConfig();
+	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
@@ -75,7 +76,13 @@ export const useAddItemToOrder = () => {
 	 * caller would have made had it seen the current cart.
 	 */
 	const buildCartLines = React.useCallback(
-		(orderId: string | undefined, existing: CartLine[], type: CartLineType, data: CartLine) => {
+		(
+			orderId: string | undefined,
+			existing: CartLine[],
+			type: CartLineType,
+			data: CartLine,
+			cartConfig: CartConfig
+		) => {
 			const lineItem = data as LineItem;
 			// A miscellaneous product (product_id 0) is always its own line, matching
 			// the duplicate check in useAddProduct/useAddVariation.
@@ -101,7 +108,7 @@ export const useAddItemToOrder = () => {
 			reportEngineWarnings(warnings, { orderId, site: 'useAddItemToOrder' });
 			return (existing as LineItem[]).map((item) => (item === match ? (merged as LineItem) : item));
 		},
-		[cartConfig, reportEngineWarnings]
+		[reportEngineWarnings]
 	);
 
 	/**
@@ -114,7 +121,10 @@ export const useAddItemToOrder = () => {
 			order: CurrentOrderRecord,
 			type: CartLineType,
 			data: CartLine,
-			options?: { orphanedSkeleton?: EngineRecord<'orders'> | null }
+			options: {
+				orphanedSkeleton: EngineRecord<'orders'> | null;
+				priorPayload: CurrentOrderRecord['payload'];
+			}
 		) => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
@@ -123,16 +133,14 @@ export const useAddItemToOrder = () => {
 			const orphanedSkeleton = options?.orphanedSkeleton ?? null;
 			let payload: Record<string, unknown>;
 			if (orphanedSkeleton) {
-				const priorPayload = (orphanedSkeleton.toMutableJSON().payload ?? {}) as Record<
-					string,
-					unknown
-				>;
+				const priorPayload = options.priorPayload;
 				payload = settleIntent(orphanedSkeleton, {
 					[type]: buildCartLines(
 						recordId,
 						(priorPayload[type] as CartLine[] | undefined) ?? [],
 						type,
-						data
+						data,
+						configForOrder(priorPayload)
 					),
 					meta_data: ensurePosOrderIdentityMeta(
 						priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
@@ -141,7 +149,7 @@ export const useAddItemToOrder = () => {
 					),
 				});
 			} else {
-				const orderData = order.toMutableJSON().payload;
+				const orderData = options.priorPayload;
 				const orderJSON: Record<string, unknown> = {
 					...orderData,
 					meta_data: ensurePosOrderIdentityMeta(
@@ -162,7 +170,7 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, identity, runtime, setCurrentOrderID, settleIntent]
+		[buildCartLines, configForOrder, identity, runtime, setCurrentOrderID, settleIntent]
 	);
 
 	/**
@@ -177,7 +185,6 @@ export const useAddItemToOrder = () => {
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
 			const run = async (target: CurrentOrderRecord, context: OrderMutationContext) => {
-				const temporaryOrder = order.getLatest();
 				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineRecord<'orders'> | null = null;
@@ -213,10 +220,40 @@ export const useAddItemToOrder = () => {
 						payload: { type, line: data, lineItems: latest.payload.line_items ?? [] },
 					},
 					bottom: async (e) => {
-						const data = { ...e.payload.line } as CartLine;
+						latest = latest.getLatest();
+						const incoming = e.payload.line as CartLine;
+						const temporaryOrder = order.getLatest();
+						const priorPayload = isNew ? latest.toMutableJSON().payload : latest.payload;
+						if (isNew)
+							priorPayload.meta_data = [
+								...(priorPayload.meta_data ?? []).filter(
+									({ key }) => key !== POS_META_KEYS.vatExempt
+								),
+								...(temporaryOrder.payload.meta_data ?? []).filter(
+									({ key }) => key === POS_META_KEYS.vatExempt
+								),
+							];
+						const cartConfig = configForOrder(priorPayload);
+
+						const { line: data, warnings } =
+							type === 'coupon_lines'
+								? { line: incoming, warnings: [] }
+								: calculateCartLine(
+										{
+											kind: kinds[type],
+											line: incoming,
+											cartLineItems: priorPayload.line_items ?? [],
+										},
+										cartConfig
+									);
+						reportEngineWarnings(warnings, {
+							orderId: latest.uuid,
+							site: 'useAddItemToOrder',
+						});
 						let result;
 						if (isNew) {
 							const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
+								priorPayload,
 								orphanedSkeleton,
 							});
 							context.order = savedOrder;
@@ -240,7 +277,8 @@ export const useAddItemToOrder = () => {
 										latest.uuid,
 										(latest.payload[type] as CartLine[] | undefined) ?? [],
 										type,
-										data
+										data,
+										cartConfig
 									),
 								} as never,
 							});
@@ -253,12 +291,14 @@ export const useAddItemToOrder = () => {
 		},
 		[
 			buildCartLines,
+			configForOrder,
 			ctx,
 			actor,
 			getCurrentOrderRecord,
 			identity,
 			localPatch,
 			runtime,
+			reportEngineWarnings,
 			saveNewOrder,
 			setCurrentOrderID,
 			site,

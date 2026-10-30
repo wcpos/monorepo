@@ -1,11 +1,16 @@
 import {
+	activeAwaitingCustomer,
 	derive,
 	getNetPaymentTotal,
+	hasLiveSettlementLeg,
 	readLedger,
+	serverOwnsMoney,
 	settlementPatch,
 	toMinor,
 } from '@wcpos/order-math';
+import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
+import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
 
 export type BoundaryResult = Parameters<typeof settlementPatch>[0];
@@ -37,5 +42,35 @@ export function crossesPaidBalanceBoundary({
 		payload.status === 'pos-partial' &&
 		(result.changed || toMinor(payload.total, dp) <= netPaid) &&
 		toMinor(settlementPatch(result).total, dp) <= netPaid
+	);
+}
+
+export type OrderLockReaders = {
+	serverOwnsMoney: (uuid: string) => boolean;
+	orderSaveState: (uuid: string) => { kind: string } | null;
+	inCheckout: (uuid: string) => boolean;
+};
+export function orderLocked(
+	payload: OrderPayload,
+	record: CurrentOrderRecord,
+	deps: OrderLockReaders,
+	dp: number,
+	options: { ignoreCheckout?: boolean; allowNew?: boolean; allowDurableHint?: boolean } = {}
+) {
+	const netPaid = netPaidForBoundary(payload, dp);
+	return Boolean(
+		!OPEN_ORDER_STATUSES.some((status) => status === payload.status) ||
+		(!options.allowNew && (record as { isNew?: boolean }).isNew) ||
+		hasLiveSettlementLeg(payload.meta_data) ||
+		activeAwaitingCustomer(payload.meta_data) ||
+		(payload.status !== 'pos-partial' &&
+			netPaid > 0 &&
+			toMinor(payload.total, dp) <= toMinor(netPaid, dp)) ||
+		['rejected', 'conflicted', 'needs-revision'].includes(
+			deps.orderSaveState(record.uuid)?.kind ?? ''
+		) ||
+		(!options.ignoreCheckout && deps.inCheckout(record.uuid)) ||
+		deps.serverOwnsMoney(record.uuid) ||
+		(!options.allowDurableHint && serverOwnsMoney(payload.meta_data))
 	);
 }

@@ -27,7 +27,8 @@ export type {
 } from './settle';
 
 export { calculateCartLine } from './cart-line';
-export { retaxLine } from './retax-line';
+export { retaxCartLines } from './retax-cart-lines';
+export { retaxLine, type TaxStatus } from './retax-line';
 export type { RetaxLineInput } from './retax-line';
 export type {
 	CartLineInput,

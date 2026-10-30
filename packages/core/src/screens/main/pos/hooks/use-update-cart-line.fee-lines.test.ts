@@ -3,7 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import { resetOrderMutationQueues } from './order-mutation-queue';
+import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
 	registerActionHook,
@@ -17,6 +17,7 @@ const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
+let mockTaxedConfig = false;
 let mockFeeLines: object[] = [];
 let mockLineItems: object[] = [];
 const mockOrder = {
@@ -111,7 +112,25 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
+	return {
+		useCartConfig: () =>
+			mockTaxedConfig
+				? createCartConfig({
+						...config,
+						rates: [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }],
+					})
+				: config,
+		useCartConfigReader: () => (payload: { meta_data?: { key?: string; value?: unknown }[] }) =>
+			createCartConfig({
+				...config,
+				rates: payload.meta_data
+					? [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }]
+					: [],
+				vatExempt: jest
+					.requireActual('@wcpos/sync-core')
+					.wooMetaCarrier.vatExempt(payload.meta_data),
+			}),
+	};
 });
 
 describe('useUpdateCartLine — fee_lines', () => {
@@ -119,6 +138,7 @@ describe('useUpdateCartLine — fee_lines', () => {
 		resetOrderMutationQueues();
 		jest.clearAllMocks();
 		resetActionRegistry();
+		mockTaxedConfig = false;
 		mockFeeLines = [];
 		mockLineItems = [];
 		mockLocalPatch.mockResolvedValue(true);
@@ -298,3 +318,65 @@ describe('useUpdateCartLine — fee_lines', () => {
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
 }));
+
+// A captured render config would reintroduce tax after the queued flag write.
+it.each([false, true])(
+	'reads exemption after the preceding slot, background=%s',
+	async (background) => {
+		resetOrderMutationQueues();
+		jest.clearAllMocks();
+		mockLocalPatch.mockResolvedValue(true);
+		mockTaxedConfig = true;
+		const payload = {
+			status: 'pos-open',
+			meta_data: [{ key: 'is_vat_exempt', value: 'no' }],
+			fee_lines: [
+				{
+					name: 'Handling',
+					total: '10',
+					tax_status: 'taxable',
+					tax_class: '',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: 'target-line' }],
+				},
+			],
+		};
+		const target = {
+			uuid: background ? 'background-order' : 'order-uuid',
+			payload,
+			getLatest() {
+				return this;
+			},
+			toMutableJSON: () => ({ payload }),
+		} as unknown as import('../contexts/current-order').CurrentOrderRecord;
+		let release!: () => void;
+		const held = enqueueOrderMutation(
+			target.uuid,
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		await Promise.resolve();
+		const { result } = renderHook(() => useUpdateCartLine());
+		let edit!: Promise<unknown>;
+		await act(async () => {
+			edit = result.current.updateCartLine(
+				'fee_lines',
+				'target-line',
+				{ amount: '10' },
+				{ record: target, skipStockGuard: true }
+			);
+			payload.meta_data[0].value = 'yes';
+			release();
+			await held;
+			await edit;
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].document.uuid).toBe(target.uuid);
+		expect(mockLocalPatch.mock.calls[0][0].data.fee_lines[0]).toMatchObject({
+			total: '10',
+			taxes: [],
+			total_tax: '0',
+		});
+	}
+);

@@ -1,16 +1,8 @@
 import { combineLatest, type Observable, Subscription } from 'rxjs';
 
-import {
-	activeAwaitingCustomer,
-	type CouponContext,
-	hasLiveSettlementLeg,
-	readLedger,
-	serverOwnsMoney,
-	toMinor,
-} from '@wcpos/order-math';
-import { OPEN_ORDER_STATUSES } from '@wcpos/query';
+import { type CouponContext, readLedger } from '@wcpos/order-math';
 
-import { netPaidForBoundary } from './paid-balance-boundary';
+import { orderLocked } from './paid-balance-boundary';
 import { type CouponReferences, replayContentKey } from './coupon-continuation';
 import { isActionRefusal } from '../../../../extensions/actions';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
@@ -45,32 +37,7 @@ interface Deps {
 	observe: (event: SettlementDiagnostic) => void;
 }
 
-function closed(
-	payload: OrderPayload,
-	record: CurrentOrderRecord,
-	deps: Deps,
-	dp: number,
-	ignoreCheckout = false
-) {
-	const netPaid = netPaidForBoundary(payload, dp);
-	return Boolean(
-		!OPEN_ORDER_STATUSES.some((status) => status === payload.status) ||
-		(record as { isNew?: boolean }).isNew ||
-		hasLiveSettlementLeg(payload.meta_data) ||
-		activeAwaitingCustomer(payload.meta_data) ||
-		(payload.status !== 'pos-partial' &&
-			netPaid > 0 &&
-			toMinor(payload.total, dp) <= toMinor(netPaid, dp)) ||
-		['rejected', 'conflicted', 'needs-revision'].includes(
-			deps.orderSaveState(record.uuid)?.kind ?? ''
-		) ||
-		(!ignoreCheckout && deps.inCheckout(record.uuid)) ||
-		deps.serverOwnsMoney(record.uuid) ||
-		serverOwnsMoney(payload.meta_data)
-	);
-}
-
-const needsReferences = (record: { payload: OrderPayload }) =>
+export const needsReferences = (record: { payload: OrderPayload }) =>
 	record.payload.coupon_lines?.some((line) => line.code != null && !readQuickDiscountIntent(line));
 
 const hasCoupons = (record: { payload: OrderPayload }) =>
@@ -112,7 +79,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			readLedger(p.meta_data)
 				.filter(({ status }) => status === 'authorized' || status === 'captured')
 				.map(({ id, status, amount, refunded_amount }) => [id, status, amount, refunded_amount]),
-			closed(p, record, deps, inputs.settings.priceNumDecimals, ignoreCheckout),
+			orderLocked(p, record, deps, inputs.settings.priceNumDecimals, { ignoreCheckout }),
 			inputs,
 			rates.generation,
 			completionGeneration,
@@ -175,7 +142,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					records.some((r) => r.uuid === uuid) &&
 					fingerprint(fresh, ignoreCheckout) === key &&
 					replayContentKey({ uuid, payload }) === content &&
-					!closed(payload, fresh, deps, inputs.settings.priceNumDecimals, ignoreCheckout);
+					!orderLocked(payload, fresh, deps, inputs.settings.priceNumDecimals, { ignoreCheckout });
 				if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, coupons, slot);
 			});
 		} catch (error) {
@@ -196,11 +163,13 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					if (hasCoupons(record.getLatest())) {
 						const fresh = record.getLatest();
 						const key = fingerprint(fresh);
-						if (closed(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
+						if (orderLocked(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
 							// Preserve the in-flight fence when checkout is the only new exclusion.
 							if (
 								flights.has(uuid) &&
-								!closed(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals, true)
+								!orderLocked(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals, {
+									ignoreCheckout: true,
+								})
 							)
 								continue;
 							seen.delete(uuid);
@@ -222,7 +191,9 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 							const allowed = (payload: OrderPayload, ignoreCheckout = false) =>
 								current() &&
 								!hasCoupons({ payload }) &&
-								!closed(payload, fresh, deps, inputs.settings.priceNumDecimals, ignoreCheckout);
+								!orderLocked(payload, fresh, deps, inputs.settings.priceNumDecimals, {
+									ignoreCheckout,
+								});
 							if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, undefined, slot);
 						});
 					} catch (error) {

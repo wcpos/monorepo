@@ -113,7 +113,9 @@ it.each(['percent', 'fixed_cart'] as const)(
 				{ key: '_woocommerce_pos_uuid', value: 'discount-uuid' },
 			],
 		};
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [line]);
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
+			line,
+		]);
 		expect(localPatch).toHaveBeenCalledWith({
 			document: expect.anything(),
 			data: expect.objectContaining({
@@ -244,7 +246,7 @@ it('does not read the catalog when the only applied coupons are quick discounts'
 	expect(whenSettled).not.toHaveBeenCalled();
 	expect(demandDeclared).toHaveBeenLastCalledWith(false);
 	expect(recalculate).toHaveBeenCalledWith(
-		lineItems,
+		expect.objectContaining({ line_items: lineItems }),
 		expect.arrayContaining([expect.objectContaining({ code: 'pos-discount-2' })])
 	);
 });

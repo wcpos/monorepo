@@ -10,8 +10,9 @@ import type { CartConfig } from './config';
 import type { FeeLineInput, LineItemInput } from './types';
 
 type DbLineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+export type TaxStatus = 'taxable' | 'none' | 'shipping';
 export type RetaxLineInput =
-	| { kind: 'line_item'; line: LineItemInput; taxStatus?: 'taxable' | 'none' | 'shipping' }
+	| { kind: 'line_item'; line: LineItemInput; taxStatus?: TaxStatus }
 	| { kind: 'fee'; line: FeeLineInput };
 
 /**

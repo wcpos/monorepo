@@ -20,6 +20,7 @@ export const ACTION_EVENTS = [
 	'cart.coupon.apply',
 	'cart.coupon.remove',
 	'cart.customer.set',
+	'cart.tax_exempt.set',
 	ORDER_VOID_EVENT,
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
@@ -147,6 +148,15 @@ export interface ActionContracts {
 		};
 		result: unknown;
 	};
+	'cart.tax_exempt.set': {
+		payload: {
+			orderId: string;
+			exempt: boolean;
+			previousExempt: boolean;
+			source: 'user' | 'repair';
+		};
+		result: unknown;
+	};
 	'cart.customer.set': {
 		payload: {
 			customerId: number;
@@ -194,6 +204,7 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.coupon.apply': [],
 	'cart.coupon.remove': [],
 	'cart.customer.set': ['billing', 'shipping', 'taxIds'],
+	'cart.tax_exempt.set': [],
 	[ORDER_VOID_EVENT]: [],
 	// The handler derives the split, provenance and completion facts from the payload after the
 	// chain, so the amounts are rewritable (cash rounding, #66 and #84).

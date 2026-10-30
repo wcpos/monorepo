@@ -137,6 +137,7 @@ export const useAddProduct = () => {
 				// is an internal fault rather than a merchant condition — reported all the
 				// same, because "every engine call site in core reports" is the rule, and a
 				// site exempted by argument is how the dropped-warnings comment spread.
+				// Computed for the optimistic add; useAddItemToOrder recomputes it inside the slot before it is written.
 				const computed = calculateCartLine({ kind: 'line_item', line: newLineItem }, cartConfig);
 				reportEngineWarnings(computed.warnings, {
 					orderId: currentOrderRecord.uuid,

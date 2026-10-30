@@ -8,7 +8,7 @@ import { reportStaleCartLine } from './cart-failure';
 import { enqueueCartAction } from './enqueue-cart-action';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
-import { useCartConfig } from './use-cart-config';
+import { useCartConfigReader } from './use-cart-config';
 import { extractLineItemData, lineMetaForWrite } from './utils';
 import {
 	type ActionContext,
@@ -97,7 +97,7 @@ const lineInfo = {
 export const useUpdateCartLine = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { localPatch } = useCartWrite();
-	const cartConfig = useCartConfig();
+	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { ctx, actor } = useActionContext();
 	const write = React.useCallback(
@@ -110,6 +110,7 @@ export const useUpdateCartLine = () => {
 		) => {
 			const order = record.getLatest();
 			const json = order.toMutableJSON().payload;
+			const cartConfig = configForOrder(json);
 			let updated = false;
 			let warnings: readonly EngineWarning[] = [];
 			const previous = json[type]?.find((line) => wooMetaCarrier.lineUuid(line) === uuid);
@@ -177,7 +178,7 @@ export const useUpdateCartLine = () => {
 			}
 			return result;
 		},
-		[cartConfig, localPatch, reportEngineWarnings]
+		[configForOrder, localPatch, reportEngineWarnings]
 	);
 	const apply = React.useCallback(
 		async (
