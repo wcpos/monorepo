@@ -24,11 +24,11 @@ beforeEach(() => {
 	mockPointer = 'fine';
 });
 
-it('is a hairline-ruled row on the muted-wash surface', () => {
+it('is a hairline-ruled row on the accent-wash surface', () => {
 	render(<ListRow testID="row" onPress={() => {}} />);
 	expect(classes('row')).toContain('border-b');
 	expect(classes('row')).toContain('min-h-14');
-	expect(classes('row')).toContain('active:bg-muted');
+	expect(classes('row')).toContain('active:bg-accent');
 	expect(classes('row')).not.toContain('rounded');
 });
 

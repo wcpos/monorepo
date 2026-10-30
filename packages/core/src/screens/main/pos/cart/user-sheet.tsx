@@ -144,7 +144,7 @@ export function DrawerTile({
 					disabled={busy}
 					// The one door to the register panel (Paul, 2026-10-29): the row's chevron and wash. In
 					// the confirm the tile only shows: no chevron, no wash, so it does not read as a door.
-					wash={onOpen ? 'muted' : 'none'}
+					wash={onOpen ? 'accent' : 'none'}
 					className="border-border flex-1 rounded-lg border px-3 py-2.5"
 				>
 					<View className="flex-row items-center justify-between gap-1">

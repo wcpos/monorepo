@@ -88,7 +88,9 @@ it.each([
 });
 
 it.each([
-	['muted', 'active:bg-muted', 'web:hover:bg-muted'],
+	[undefined, 'active:bg-accent', 'web:hover:bg-accent'],
+	['accent', 'active:bg-accent', 'web:hover:bg-accent'],
+	['rail', 'active:bg-rail-accent', 'web:hover:bg-rail-accent'],
 	['card', 'active:bg-card', 'web:hover:bg-card'],
 	['destructive', 'active:bg-destructive/10', 'web:hover:bg-destructive/10'],
 ] as const)('washes %s on press, and on hover for a fine pointer only', (wash, active, hover) => {

@@ -64,7 +64,7 @@ function PressableTableRow({
 			role="row"
 			aria-selected={selected}
 			className={cn(
-				'web:transition-colors web:hover:bg-muted web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				'web:transition-colors web:hover:bg-accent web:data-[state=selected]:bg-selected border-border min-h-row flex-row border-b',
 				currentRowMark(selected),
 				className
 			)}
@@ -89,7 +89,7 @@ function TableRow({
 			aria-selected={selected}
 			// A static row: header and plain rows take no hover; the pressable row does.
 			className={cn(
-				'web:transition-colors web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				'web:transition-colors web:data-[state=selected]:bg-selected border-border min-h-row flex-row border-b',
 				currentRowMark(selected),
 				className
 			)}

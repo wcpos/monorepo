@@ -768,7 +768,7 @@ it('16. keeps the header close borderless and the footer close outlined', () => 
 	const classes = (testID: string) =>
 		mockPressableProps.find((props) => props.testID === testID)?.className?.split(' ');
 	expect(classes('d-close')).toEqual(
-		expect.arrayContaining(['h-ctl', 'w-ctl', 'web:hover:bg-muted', 'active:bg-muted'])
+		expect.arrayContaining(['h-ctl', 'w-ctl', 'web:hover:bg-accent', 'active:bg-accent'])
 	);
 	expect(classes('d-close')).not.toContain('border');
 	expect(screen.getByTestId('d-close').querySelector('svg')).toHaveClass('text-muted-foreground');

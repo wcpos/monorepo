@@ -42,9 +42,9 @@ it('renders a label and the button role with the menu surface classes', () => {
 		'px-2.5',
 		'py-1.5',
 		'gap-2',
-		'active:bg-muted',
-		'web:hover:bg-muted',
-		'web:focus:bg-muted',
+		'active:bg-accent',
+		'web:hover:bg-accent',
+		'web:focus:bg-accent',
 		'web:outline-none',
 	]) {
 		expect(row.dataset.classes?.split(' ')).toContain(token);
@@ -95,7 +95,7 @@ it.each([
 	const mark = slot ? row.querySelector(`[data-classes~="${slot}"]`) : null;
 	if (slot) expect(mark?.querySelector('svg')).not.toBeNull();
 	else expect(row.querySelector('[aria-hidden] svg')).toBeNull();
-	const wash = kind === 'destructive' ? 'active:bg-destructive/10' : 'active:bg-muted';
+	const wash = kind === 'destructive' ? 'active:bg-destructive/10' : 'active:bg-accent';
 	expect(row.dataset.classes?.split(' ')).toContain(wash);
 	fireEvent.click(row);
 	expect(onPress).toHaveBeenCalledTimes(1);

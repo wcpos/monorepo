@@ -95,6 +95,9 @@
   
   /* Rail, status, overlay and shared categorical colors */
   --color-rail: var(--rail);
+  --color-rail-selected: var(--rail-selected);
+  --color-rail-selected-foreground: var(--rail-selected-foreground);
+  --color-rail-accent: var(--rail-accent);
   --color-rail-foreground: var(--rail-foreground);
   --color-rail-border: var(--rail-border);
   --color-ok: var(--ok);
@@ -344,8 +347,10 @@
       --muted: oklch(0.95 0.007 262);
       --muted-foreground: oklch(0.45 0.01 262);
       
-      /* Accent - subtle hover/focus states */
-      --accent: var(--muted);
+      /* Accent - the hover and press wash: Radix step 3 of the accent, one rung below --selected (step 4),
+         so hover and selected are rungs of one ladder and a pointer resting on a row never looks chosen
+         (Paul, 2026-10-30, hover board B). */
+      --accent: oklch(0.965 0.025 262);
       --accent-foreground: var(--foreground);
       
       /* Semantic colors */
@@ -398,6 +403,12 @@
 
       /* Drawn rail, status and overlay colors */
       --rail: oklch(0.935 0.016 262);
+      /* The current area's square lifts to the card surface with the selected ink on its glyph (Paul, 2026-10-30,
+         rail board C): --selected sits at the rail's own lightness (0.935) and was lost. The rail's hover/press wash
+         is Radix step 5, the one rung that reads on a tinted ground. Flip these three to change the construction. */
+      --rail-selected: var(--card);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: oklch(0.895 0.075 262);
       --rail-foreground: oklch(0.34 0.01 262);
       --rail-border: oklch(0.88 0.014 262);
       --ok: oklch(0.52 0.16 155);
@@ -509,6 +520,9 @@
 
       /* Drawn rail, status and overlay colors */
       --rail: oklch(0.16 0.025 250);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
       --rail-foreground: oklch(0.72 0.02 250);
       --rail-border: oklch(0.25 0.02 250);
       --ok: oklch(0.72 0.15 155);
@@ -618,6 +632,9 @@
 
       /* Drawn rail, status and overlay colors */
       --rail: oklch(0.14 0.045 235);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
       --rail-foreground: oklch(0.75 0.04 200);
       --rail-border: oklch(0.24 0.04 230);
       --ok: oklch(0.72 0.15 155);
@@ -727,6 +744,9 @@
 
       /* Drawn rail, status and overlay colors */
       --rail: oklch(0.15 0.05 320);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
       --rail-foreground: oklch(0.78 0.05 40);
       --rail-border: oklch(0.25 0.05 318);
       --ok: oklch(0.72 0.15 155);
@@ -834,6 +854,9 @@
 
       /* Drawn rail, status and overlay colors */
       --rail: oklch(0.08 0 0);
+      --rail-selected: var(--selected);
+      --rail-selected-foreground: var(--selected-foreground);
+      --rail-accent: var(--card);
       --rail-foreground: oklch(0.78 0 0);
       --rail-border: oklch(0.22 0 0);
       --ok: oklch(0.72 0.15 155);

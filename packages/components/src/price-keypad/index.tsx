@@ -202,7 +202,7 @@ export function PriceKeypad({
 					className={cn(
 						fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : 'rest' }),
 						// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
-						'active:bg-muted w-full items-end justify-center px-3'
+						'active:bg-accent w-full items-end justify-center px-3'
 					)}
 				>
 					<Text className={tone}>{text}</Text>

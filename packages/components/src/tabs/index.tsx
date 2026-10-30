@@ -337,7 +337,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 		>
 			<TabsPrimitive.Trigger
 				className={cn(
-					'web:cursor-default h-ctl active:bg-muted -mb-px flex-row items-center justify-center border-b-2 border-transparent px-3',
+					'web:cursor-default h-ctl active:bg-accent -mb-px flex-row items-center justify-center border-b-2 border-transparent px-3',
 					props.disabled && 'web:pointer-events-none opacity-45',
 					props.value === value && 'border-primary',
 					className

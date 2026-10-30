@@ -23,9 +23,10 @@ export type SurfaceRole =
 	| 'link'
 	| 'row';
 
-/** The press wash, and the same wash on a fine-pointer hover, by the ground under the surface. */
+/** The press and fine-pointer hover wash: accent by default, or matched to the ground. */
 const WASH = {
-	muted: ['active:bg-muted', 'web:hover:bg-muted'],
+	accent: ['active:bg-accent', 'web:hover:bg-accent'],
+	rail: ['active:bg-rail-accent', 'web:hover:bg-rail-accent'],
 	card: ['active:bg-card', 'web:hover:bg-card'],
 	destructive: ['active:bg-destructive/10', 'web:hover:bg-destructive/10'],
 } as const;
@@ -65,7 +66,7 @@ export function PressableSurface(props: PressableSurfaceProps) {
 	return props.wash === 'none' ? <Surface {...props} /> : <WashedSurface {...props} />;
 }
 
-function WashedSurface({ wash = 'muted', ...props }: PressableSurfaceProps) {
+function WashedSurface({ wash = 'accent', ...props }: PressableSurfaceProps) {
 	const pointer = usePointer();
 	const [press, hover] = WASH[wash as keyof typeof WASH];
 	return <Surface {...props} washClassName={cn(press, pointer === 'fine' && hover)} />;

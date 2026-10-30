@@ -86,7 +86,7 @@ it('sizes icon roots separately from their glyphs and supports on', () => {
 		<IconButton name="plus" accessibilityLabel="Add" className="h-ctl w-ctl" />
 	);
 	expect(pressable.className).toContain('rounded-lg');
-	expect(pressable.className).toContain('active:bg-muted');
+	expect(pressable.className).toContain('active:bg-accent');
 	expect(icon.className).toBe('text-muted-foreground');
 	rerender(<IconButton name="plus" accessibilityLabel="Add" on size="sm" />);
 	expect(icon.className).toBe('text-primary');

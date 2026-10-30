@@ -41,7 +41,7 @@ const buttonVariants = cva(
 				/**
 				 * Outline buttons
 				 */
-				outline: 'border-border bg-card web:hover:bg-muted active:bg-muted border',
+				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
 				'outline-destructive':
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
@@ -50,7 +50,7 @@ const buttonVariants = cva(
 				 * a muted label that turns to the foreground with the hover/press
 				 * surface — navigation, escapes and "more" sitting after the primary.
 				 */
-				ghost: 'web:hover:bg-muted active:bg-muted',
+				ghost: 'web:hover:bg-accent active:bg-accent',
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**

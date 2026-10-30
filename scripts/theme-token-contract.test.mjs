@@ -46,9 +46,17 @@ const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
 const newColors = [
 	'selected',
 	'selected-foreground',
+	// The hover and press wash: a value of its own in light (the accent's step 3, 2026-10-30), an
+	// alias of muted in the other themes until their own pass.
+	'accent',
 	'rail',
 	'rail-foreground',
 	'rail-border',
+	// The rail's active square and its wash (2026-10-30): card + the selected ink in light, the
+	// selected tint elsewhere. Three tokens so the construction flips in one place.
+	'rail-selected',
+	'rail-selected-foreground',
+	'rail-accent',
 	'ok',
 	'ok-bg',
 	'warning',
@@ -72,7 +80,6 @@ const aliases = {
 	attention: 'warning',
 	// One red: a state that is bad and an action that destroys are the same colour (card 16).
 	bad: 'destructive',
-	accent: 'muted',
 	'accent-foreground': 'foreground',
 	popover: 'card',
 	'popover-foreground': 'card-foreground',

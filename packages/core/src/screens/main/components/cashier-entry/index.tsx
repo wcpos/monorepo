@@ -78,8 +78,8 @@ export function CashierEntry({
 				role="button"
 				testID={testID}
 				accessibilityLabel={displayName}
-				// A bar's control: the control-height square with the muted wash (as `IconButton`).
-				wash="muted"
+				// A bar's control: the control-height square with the accent wash (as `IconButton`).
+				wash="accent"
 				className="size-ctl items-center justify-center rounded-lg"
 				onPress={() => (!inTill && tillEntryFocused() ? requestCashierSheet() : setOpen(true))}
 			>

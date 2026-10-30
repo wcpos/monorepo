@@ -278,7 +278,7 @@ function SelectAnchoredItem({ className, ...props }: SelectPrimitive.ItemProps) 
 	return (
 		<SelectPrimitive.Item
 			asChild={Platform.OS !== 'web'}
-			className="web:outline-none web:focus:bg-muted rounded-md"
+			className="web:outline-none web:focus:bg-accent rounded-md"
 			{...item}
 			{...(Platform.OS === 'web' ? webTestID(testID) : { testID })}
 		>

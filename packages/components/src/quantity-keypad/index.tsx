@@ -196,7 +196,7 @@ export function QuantityKeypad({
 				className={cn(
 					fieldBox({ state: disabled ? 'disabled' : invalid ? 'invalid' : (tone ?? 'rest') }),
 					// The outline Button's pressed wash, written as Button writes its own (`wash="none"`).
-					'active:bg-muted max-w-full min-w-10 items-start justify-center px-3',
+					'active:bg-accent max-w-full min-w-10 items-start justify-center px-3',
 					className
 				)}
 			>

@@ -203,7 +203,7 @@ function LevelPill({
 			onPress={onPress}
 			className={cn(
 				'-mx-1.5 self-start rounded-full px-1.5 py-0.5',
-				'web:hover:bg-muted/60',
+				'web:hover:bg-accent/60',
 				active && 'bg-muted'
 			)}
 		>
@@ -251,7 +251,7 @@ function LedgerRow({
 			    pressable overlay sits ABOVE the static cells, and the interactive
 			    children (level pill, code chip) float above the overlay — nested
 			    <button> is invalid DOM on web, so siblings-by-z-order it is. */}
-			<View className={cn('web:hover:bg-muted/20 relative', phone && 'hidden')}>
+			<View className={cn('web:hover:bg-accent/20 relative', phone && 'hidden')}>
 				<HStack className="items-baseline gap-3 py-2">
 					<Text variant="help" tabular className="w-20 font-mono">
 						{timeText}
