@@ -957,3 +957,22 @@ it.each(['', undefined])(
 		expect(settleAggregate({ ...applied, total: undefined }, config).changed).toBe(true);
 	}
 );
+
+it('forwards catalog tax status through coupon replay', () => {
+	const rate = { id: 1, rate: '10', compound: false, order: 1, class: 'standard' };
+	const result = settleCart(
+		{
+			line_items: [{ ...makePosLineItem(1, 10), meta_data: [] }],
+			coupon_lines: [makeCouponLine('ten')],
+		},
+		makeConfig({ rates: [rate], allRates: [rate] }),
+		{
+			coupons: makeCouponContext([makeCouponInput({ code: 'ten' })]),
+			taxStatusFor: () => 'none',
+		}
+	);
+	expect(result).toMatchObject({
+		ok: true,
+		patch: { line_items: [{ total_tax: '0' }], discount_tax: '0' },
+	});
+});

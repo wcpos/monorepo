@@ -19,6 +19,13 @@ export function refusalText(deny: ActionRefusal['deny'], t: ActionContext['t']):
 	if (deny.reasonKey === 'actions.hook_failed') return t('actions.hook_failed', deny.params);
 	if (deny.reasonKey === 'pos_cart.void_payments_first')
 		return t('pos_cart.void_payments_first', deny.params);
+	if (deny.reasonKey === 'pos_cart.tax_exempt_locked') return t('pos_cart.tax_exempt_locked');
+	if (deny.reasonKey === 'pos_cart.tax_exempt_references_unavailable')
+		return t('pos_cart.tax_exempt_references_unavailable');
+	if (deny.reasonKey === 'pos_cart.tax_exempt_wc_version')
+		return t('pos_cart.tax_exempt_wc_version');
+	if (deny.reasonKey === 'pos_cart.tax_exempt_inclusive_store')
+		return t('pos_cart.tax_exempt_inclusive_store');
 	return registrantText(t, deny.reasonKey, deny.params);
 }
 

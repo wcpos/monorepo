@@ -5,6 +5,8 @@ import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useAddQuickDiscount } from './use-add-quick-discount';
 
+jest.mock('../commands/use-tax-exempt', () => ({ useWcVersion: () => () => '11.3.0' }));
+
 const localPatch = jest.fn();
 const recalculate = jest.fn();
 const mockInfo = jest.fn();

@@ -9,7 +9,7 @@ import {
 	snapshotFromOrderJSON,
 } from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
-import type { CartConfig, CouponContext } from '@wcpos/order-math';
+import type { CartConfig, CouponContext, SettleOptions } from '@wcpos/order-math';
 
 import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
 import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
@@ -22,7 +22,12 @@ import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 type Input = {
 	document: CurrentOrderRecord;
 	data: object | ((currentPayload: OrderPayload) => object | ActionRefusal);
-	coupons?: { context: CouponContext; missing: ActionRefusal; boundary: ActionRefusal };
+	coupons?: {
+		taxStatusFor?: SettleOptions['taxStatusFor'];
+		context: CouponContext;
+		missing: ActionRefusal;
+		boundary: ActionRefusal;
+	};
 	queue?: OrderMutationContext;
 };
 export type Deps<T> = {
@@ -89,7 +94,10 @@ export function settleCartWrite<T>(
 				owned || hasLiveSettlementLeg(after.meta_data) || (hasCoupons && !input.coupons)
 					? undefined
 					: hasCoupons && input.coupons
-						? settleCart(snapshotFromOrderJSON(after), config, { coupons: input.coupons.context })
+						? settleCart(snapshotFromOrderJSON(after), config, {
+								coupons: input.coupons.context,
+								taxStatusFor: input.coupons.taxStatusFor,
+							})
 						: settleAggregate(snapshotFromOrderJSON(after), config);
 			if (result && 'error' in result) {
 				refusal = input.coupons!.missing;

@@ -14,6 +14,7 @@ import {
 } from './snapshot';
 
 import type { CartConfig } from './config';
+import type { TaxStatus } from './retax-line';
 import type { CartSnapshot } from './snapshot';
 import type {
 	CouponContext,
@@ -33,6 +34,7 @@ type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines'
 // ===== public types (SPEC §3) =====
 
 export interface SettleOptions {
+	taxStatusFor?: (line: LineItemInput) => TaxStatus | undefined;
 	/** Required iff snapshot has >=1 active coupon line OR validate is given. */
 	coupons?: CouponContext;
 	/** Validate these codes as newly-added candidates before replaying. */
@@ -369,6 +371,7 @@ export function settleCart(
 			couponConfigs: replayContext.couponConfigs,
 			pricesIncludeTax: config.pricesIncludeTax,
 			vatExempt: config.vatExempt,
+			taxStatusFor: options?.taxStatusFor,
 			calcDiscountsSequentially: config.calcDiscountsSequentially,
 			// QUIRK(parity): replay taxes are recomputed from config.rates UNGATED by
 			// calcTaxes (SPEC §8.4) — pinned by the migrated recalculate tests.

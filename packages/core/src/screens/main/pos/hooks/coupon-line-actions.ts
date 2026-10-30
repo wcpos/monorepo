@@ -1,3 +1,6 @@
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
+import { exemptCouponsSupported } from '../commands/tax-exempt';
 import {
 	type ActionActor,
 	type ActionContext,
@@ -23,6 +26,7 @@ export class CartChangedError extends Error {
 }
 
 export interface CouponLineWriter {
+	wcVersion: () => string;
 	ctx: ActionContext;
 	actor: ActionActor;
 	recalculate: (order: OrderDocument, couponLines: CouponLine[]) => Promise<RecalculateResult>;
@@ -47,7 +51,7 @@ function cartSnapshot(order: CurrentOrderRecord): string {
  * two coupon events, inside the order's mutation queue.
  */
 async function writeCouponLines(
-	writer: CouponLineWriter,
+	writer: Omit<CouponLineWriter, 'wcVersion'>,
 	order: CurrentOrderRecord,
 	before: string,
 	couponLines: CouponLine[],
@@ -87,12 +91,14 @@ export function applyCouponLine(
 	couponLine: CouponLine,
 	validated: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
-	return enqueueOrderMutation(order.uuid, (queue) => {
+	return enqueueOrderMutation(order.uuid, async (queue) => {
 		// A first add queued ahead left the saved order on the slot; the coupon lands on it.
 		const target = queue.order ?? order;
 		const before = cartSnapshot(target);
 		if (before !== validated) throw new CartChangedError();
 		const latest = target.getLatest().payload;
+		if (wooMetaCarrier.vatExempt(latest.meta_data) && !exemptCouponsSupported(writer.wcVersion()))
+			return { deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } };
 		const couponLines = latest.coupon_lines ?? [];
 		return dispatchAction({
 			event: 'cart.coupon.apply',
@@ -115,7 +121,7 @@ export function applyCouponLine(
 
 /** A coupon line leaves the order: a synced line is retired by nulling its code, a local one dropped. */
 export function removeCouponLine(
-	writer: CouponLineWriter,
+	writer: Omit<CouponLineWriter, 'wcVersion'>,
 	order: CurrentOrderRecord,
 	code: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
