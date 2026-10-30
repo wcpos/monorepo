@@ -67,6 +67,11 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('../../checkout/refusal-toast', () => ({ showOrderRefusedToast: jest.fn() }));
+// Pay reads the register session for its hold; an open session here (the real hook drags the
+// app-state hydration chain and its ESM uuid into this CommonJS harness).
+jest.mock('../../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: { status: 'open' } }),
+}));
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),

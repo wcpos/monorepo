@@ -118,13 +118,12 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 	await page.getByTestId('count-amount').fill('100');
 	await expect(page.getByTestId('count-amount')).toHaveValue('100');
 	await page.getByTestId('count-close').click();
-	// The minted number, read from its own testID: the title around it is translated
-	// (es_ES: "Cierre 1 registrado"). The title must still show that number offline.
-	await expect(page.getByTestId('closure-number')).toHaveText('1', { timeout: 15_000 });
-	await expect(page.getByTestId('closure-title')).toBeVisible();
+	// The minted number inside the translated title (es_ES: "Cierre 1 registrado"); the title
+	// must show it offline too.
+	await expect(page.getByTestId('closure-title')).toBeVisible({ timeout: 15_000 });
 	await expect(page.getByTestId('closure-title')).toContainText('1');
 	await page.getByTestId('closure-done').click();
-	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
+	await expect(page.getByTestId('closure-written')).toHaveCount(0);
 	// The one door to the register (Paul, 2026-10-29): avatar, cashier sheet, In the drawer.
 	await page.getByTestId('register-bar-avatar').click();
 	await page.getByTestId('user-sheet-drawer').click();

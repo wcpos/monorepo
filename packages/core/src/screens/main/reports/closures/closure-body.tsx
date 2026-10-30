@@ -201,7 +201,8 @@ export function ClosureBody({
 					</View>
 				))}
 			</View>
-			{touched.size > 0 && (
+			{/* The notice names the recorded result, which is money: never for a blind cashier. */}
+			{touched.size > 0 && !blind && (
 				<Notice
 					testID="closure-settled"
 					tone="warning"
@@ -311,11 +312,14 @@ export function ClosureBody({
 										{term(
 											`${label} · ${t('register.counted')}`,
 											[
-												varianceText(
-													countVariance(settled.counted[name], settled.expected[name] ?? '0'),
-													format,
-													t
-												),
+												// The result names the expected by subtraction: never for a blind cashier.
+												blind
+													? ''
+													: varianceText(
+															countVariance(settled.counted[name], settled.expected[name] ?? '0'),
+															format,
+															t
+														),
 												touched.has(`counted.${name}`) ? t('reports.settled') : '',
 											]
 												.filter(Boolean)
@@ -350,6 +354,7 @@ export function ClosureBody({
 				)}
 				<MenuRow
 					testID="closure-zreport"
+					disabled={blind}
 					className={ACTION_ROW}
 					onPress={() => setPreview(!preview)}
 					label={t('register.z_report')}
@@ -376,7 +381,7 @@ export function ClosureBody({
 						</Button>
 					</View>
 				)}
-				{preview && !documentError && (
+				{!blind && preview && !documentError && (
 					<View className="gap-2 py-2">
 						<View className="min-w-0 gap-2">
 							<TemplateSwitcher

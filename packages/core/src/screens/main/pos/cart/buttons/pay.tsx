@@ -20,6 +20,7 @@ import {
 	leaveCheckout,
 	markOrderSaving,
 } from '../../checkout/checkout-mode';
+import { useRegisterSession } from '../../../../../services/register-session/use-register-session';
 import { useT } from '../../../../../contexts/translations';
 import { scrollToLine, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { reportPushFailure } from '../../../contexts/push-failure-code';
@@ -40,6 +41,9 @@ const BLOCKED_OPACITY = 0.38; // the dimmed Pay of the checkout-conditions board
  */
 export function PayButton() {
 	const { currentOrderRecord } = useCurrentOrder();
+	// Held while the drawer is counted or a close awaits its closure write (kept for recovery).
+	const status = useRegisterSession().session?.status;
+	const counting = status === 'counting' || status === 'closed';
 	const total = useRecordField(currentOrderRecord, (order) => order.payload.total);
 	const refunds = useRecordField(currentOrderRecord, (order) => order.payload.refunds);
 	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);
@@ -61,6 +65,7 @@ export function PayButton() {
 	 *
 	 */
 	const handlePay = React.useCallback(async () => {
+		if (counting) return;
 		if (unmet.length > 0) {
 			scrollToLine(unmet[0].lineUuid);
 			return checkoutLogger.info(t('pos_cart.checkout_blocked', { n: unmet.length }), {
@@ -190,6 +195,7 @@ export function PayButton() {
 			setLoading(false);
 		}
 	}, [
+		counting,
 		unmet,
 		blockIfDegraded,
 		pushDocument,
@@ -229,11 +235,11 @@ export function PayButton() {
 				// `flex-1`: the foot's wrapper is a column, where `flex-1` would stretch it vertically.
 				className="w-full"
 				loading={loading}
-				disabled={storageDegraded}
+				disabled={storageDegraded || counting}
 			>
-				{t('pos_cart.checkout', {
-					order_total: format(displayTotal || 0),
-				})}
+				{counting
+					? t('register.counting_the_drawer')
+					: t('pos_cart.checkout', { order_total: format(displayTotal || 0) })}
 			</Button>
 		</Animated.View>
 	);

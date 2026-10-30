@@ -1,6 +1,11 @@
 import * as React from 'react';
 import { ScrollView, type TextInputInstance, View } from 'react-native';
 
+import { useObservableSuspense } from 'observable-hooks';
+
+import { Card } from '@wcpos/components/card';
+import { Notice } from '@wcpos/components/notice';
+import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Chip } from '@wcpos/components/chip';
 import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -8,13 +13,20 @@ import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 
+import { useStoreSession } from '../../../../contexts/app-state';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
+import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RegisterAmount } from './movement-sheet';
 
 export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
-	const { binding, lastClosed, lastClosure, actions, blind } = useRegisterSession();
+	const { binding, lastClosed, lastClosure, actions, blind, closedElsewhere } =
+		useRegisterSession();
+	const { site, store } = useStoreSession();
+	const credentials = useObservableSuspense(credentialsListResource(site));
+	const { time } = useStoreDayLabel(store.id);
 	const defaultFloat = binding.registers.find(
 		(row) => row.id === binding.registerId
 	)?.default_float;
@@ -51,6 +63,19 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			keyboardShouldPersistTaps="handled"
 			testID="open-register-card"
 		>
+			{closedElsewhere && (
+				<Notice
+					tone="info"
+					testID="open-register-closed-elsewhere"
+					title={t('register.closed_on_another_till', {
+						register: binding.registerName,
+						name:
+							credentials.find((row) => row.id === closedElsewhere.by)?.display_name ??
+							t('register.unknown_cashier'),
+						time: time(closedElsewhere.at),
+					})}
+				/>
+			)}
 			{lastClosure && (
 				<Text className="text-muted-foreground">
 					{t('register.last_closure')} {lastClosure.server_number ?? lastClosure.number} ·{' '}
@@ -128,5 +153,29 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 				</ListRow>
 			)}
 		</ScrollView>
+	);
+}
+
+export function CountingElsewhereCard() {
+	const { binding, countingBy } = useRegisterSession();
+	const { store } = useStoreSession();
+	const { time } = useStoreDayLabel(store.id);
+	const t = useT();
+	return (
+		<View className="p-4">
+			<Card padding="body" testID="counting-elsewhere-card" className="gap-3">
+				<ToneDisc tone="muted" icon="register" size="sm" />
+				<Text variant="section">{binding.registerName}</Text>
+				<Text>{t('register.counting_on_another_till')}</Text>
+				{countingBy && (
+					<Text testID="counting-elsewhere-by" variant="key">
+						{t('register.counting_by_since', {
+							name: countingBy.name ?? t('register.unknown_cashier'),
+							time: countingBy.at ? time(countingBy.at) : '—',
+						})}
+					</Text>
+				)}
+			</Card>
+		</View>
 	);
 }

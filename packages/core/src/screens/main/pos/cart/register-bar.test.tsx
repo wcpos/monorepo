@@ -111,7 +111,11 @@ let mockSession: { status: string } | null = null;
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ session: mockSession, sessionsOn: true, overdue: false }),
 }));
-jest.mock('./register-panel', () => ({ RegisterPanel: () => null }));
+jest.mock('./register-panel', () => ({
+	RegisterPanel: ({ initialPane }: { initialPane: string }) => (
+		<div data-testid="requested-pane">{initialPane}</div>
+	),
+}));
 // One door to the register (Paul, 2026-10-29): the bar has no register button, on any size and
 // with a session open; the avatar's sheet opens the panel through the bar.
 it.each([true, false])('has the avatar and no register button (phone: %s)', (phone) => {
@@ -138,7 +142,7 @@ it("opens the register panel when a page bar's sheet asked for it, on the focuse
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
 	expect(hiddenOpen).not.toHaveBeenCalled();
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
-	expect(consumeRegisterPanelRequest()).toBe(false);
+	expect(consumeRegisterPanelRequest()).toBeNull();
 });
 
 it('the store title opens the cashier sheet instead of a sheet of its own', () => {
@@ -151,4 +155,30 @@ it('the store title opens the cashier sheet instead of a sheet of its own', () =
 	expect(consumeCashierSheetRequest()).toBe(false);
 	expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
 	mockStores = [];
+});
+
+it('passes the count pane claimed from an external request to its panel', () => {
+	try {
+		requestRegisterPanel('count');
+		render(<RegisterBar panelOpen onPanelOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('requested-pane').textContent).toBe('count');
+	} finally {
+		consumeRegisterPanelRequest();
+	}
+});
+
+it('an ordinary cashier-sheet opening replaces a consumed count request', () => {
+	try {
+		requestRegisterPanel('count');
+		const onPanelOpenChange = jest.fn();
+		const view = render(<RegisterBar panelOpen onPanelOpenChange={onPanelOpenChange} />);
+		expect(consumeRegisterPanelRequest()).toBeNull();
+		view.rerender(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+		fireEvent.click(screen.getByTestId('register-bar-avatar'));
+		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
+		expect(screen.getByTestId('requested-pane').textContent).toBe('register');
+		expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	} finally {
+		consumeRegisterPanelRequest();
+	}
 });
