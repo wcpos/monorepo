@@ -58,6 +58,18 @@ it('asks for the store on a couponed order when the store is unreachable', () =>
 	});
 	// A removed coupon (tombstone) is not a coupon.
 	expect(state({ coupon_lines: [{ code: null }] } as OrderPayload, {}, false).disabled).toBe(false);
+	// A quick discount replays locally; it needs no store.
+	const quick = {
+		coupon_lines: [
+			{
+				code: 'pos-discount',
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			},
+		],
+	} as unknown as OrderPayload;
+	expect(state(quick, {}, false).disabled).toBe(false);
 });
 
 it.each([

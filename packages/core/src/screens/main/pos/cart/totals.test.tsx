@@ -250,6 +250,16 @@ describe('a tax exempt order', () => {
 		);
 	});
 
+	it('with a line whose tax lives only in total_tax (no rate rows yet) shows the real rows', () => {
+		mockTotalTax = '0.50';
+		orderPayload = {
+			...untaxed,
+			line_items: [{ product_id: 1, total_tax: '0.50', taxes: [] }],
+		};
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(expect.objectContaining({ exempt: false }));
+	});
+
 	it('is not exempt without the flag', () => {
 		orderPayload = { ...untaxed, meta_data: [] };
 		render(<Totals />);

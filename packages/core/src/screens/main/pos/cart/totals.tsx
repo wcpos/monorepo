@@ -64,7 +64,15 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 				...(payload.line_items ?? []).filter(isActiveLineItem),
 				...(payload.fee_lines ?? []).filter(isActiveFeeLine),
 				...(payload.shipping_lines ?? []).filter(isActiveShippingLine),
-			].every((line) => (line.taxes ?? []).every((tax) => !toNumber(tax?.total)))
+			].every(
+				(line) =>
+					!toNumber(line.total_tax) &&
+					!toNumber((line as { subtotal_tax?: string }).subtotal_tax) &&
+					(line.taxes ?? []).every(
+						(tax) =>
+							!toNumber(tax?.total) && !toNumber((tax as { subtotal?: string } | null)?.subtotal)
+					)
+			)
 	);
 
 	/**

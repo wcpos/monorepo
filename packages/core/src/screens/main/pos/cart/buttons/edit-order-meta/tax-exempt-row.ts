@@ -1,6 +1,7 @@
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 
 import { orderLocked, type OrderLockReaders } from '../../../commands/paid-balance-boundary';
+import { needsReferences } from '../../../commands/settlement-coordinator';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 import type { OrderPayload } from '../../../commands/cart-config-for-order';
@@ -21,7 +22,8 @@ export function taxExemptRowState(
 	const hidden = readers.configForOrder(payload).pricesIncludeTax;
 	let reason: 'reopen' | 'offline' | 'payment' | undefined;
 	if (!OPEN_ORDER_STATUSES.some((status) => status === payload.status)) reason = 'reopen';
-	else if (!online && payload.coupon_lines?.some((line) => line.code != null)) reason = 'offline';
+	// A quick discount replays locally; only a store coupon needs its references.
+	else if (!online && needsReferences({ payload })) reason = 'offline';
 	else if (orderLocked(payload, record, readers, dp, { allowNew: true, allowDurableHint: true }))
 		reason = 'payment';
 	return { hidden, disabled: !!reason, reason };
