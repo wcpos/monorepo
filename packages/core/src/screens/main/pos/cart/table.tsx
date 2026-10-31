@@ -337,7 +337,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 					)}
 				<TableHeader className="border-border border-b [border-style:var(--shape-rule-style)]">
 					{table.getHeaderGroups().map((group) => (
-						<TableRow key={group.id} className="min-h-row">
+						<TableRow key={group.id} className="min-h-row [border-style:var(--shape-rule-style)]">
 							{group.headers.map((header) => {
 								const meta = header.column.columnDef.meta;
 								return (

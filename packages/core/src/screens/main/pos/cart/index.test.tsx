@@ -227,7 +227,7 @@ it.each([true, false])('mounts the receipt edge only when tear is %s', (tear) =>
 		expect(!!edge).toBe(tear);
 		if (edge) {
 			expect(edge.parentElement?.firstElementChild).toBe(edge);
-			expect(edge.parentElement?.dataset.classes).not.toContain('bg-cart');
+			expect(edge.parentElement?.dataset.classes).toContain('bg-cart');
 		}
 	} finally {
 		mockTear = false;

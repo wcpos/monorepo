@@ -366,19 +366,22 @@ it.each([false, true])('one ink: stock count and glyph agree (low=%s)', (low) =>
 		);
 });
 
-it('draws a tint initial only for string titles and initial media', () => {
+// The initial is a personality trait: the no-provider default (the five original themes) draws the
+// bare tint, as it always has (CodeRabbit on #3146).
+const INITIAL = { ...DEFAULT_TRAITS, media: 'initial' as const };
+const withInitial = (node: React.ReactElement) => (
+	<ThemeTraitsContext.Provider value={INITIAL}>{node}</ThemeTraitsContext.Provider>
+);
+
+it('draws a tint initial only for a plain name under initial media', () => {
 	const props = { picture: { kind: 'tint', tint: 0 }, title: ' Flat white' } as const;
-	const { rerender } = render(tile(props));
+	const { rerender } = render(withInitial(tile(props)));
 	expect(screen.getByText('F').dataset.classes).toContain('text-tile-ink');
-	rerender(
-		<ThemeTraitsContext.Provider value={{ ...DEFAULT_TRAITS, media: 'blank' }}>
-			{tile(props)}
-		</ThemeTraitsContext.Provider>
-	);
+	rerender(tile(props));
 	expect(screen.queryByText('F')).toBeNull();
-	rerender(tile({ title: 'Flat white' }));
+	rerender(withInitial(tile({ title: 'Flat white' })));
 	expect(screen.queryByText('F')).toBeNull();
-	rerender(tile({ ...props, title: <Text>Flat white</Text> }));
+	rerender(withInitial(tile({ ...props, title: <Text>Flat white</Text> })));
 	expect(screen.queryByText('F')).toBeNull();
 });
 
@@ -399,11 +402,13 @@ it('wraps money in the theme chip and centres the words', () => {
 // The catalogue passes its title as an element; the plain-text `name` carries the initial (Codex, #3146).
 it('draws the initial from name when the title is an element', () => {
 	render(
-		tile({
-			picture: { kind: 'tint', tint: 2 },
-			name: 'sourdough loaf',
-			title: <Text>Sourdough</Text>,
-		})
+		withInitial(
+			tile({
+				picture: { kind: 'tint', tint: 2 },
+				name: '&Eacute;clair',
+				title: <Text>Éclair</Text>,
+			})
+		)
 	);
-	expect(screen.getByText('S').dataset.classes).toContain('text-tile-ink');
+	expect(screen.getByText('É').dataset.classes).toContain('text-tile-ink');
 });

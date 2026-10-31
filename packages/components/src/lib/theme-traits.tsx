@@ -18,7 +18,8 @@ export type ThemeTraits = {
 export const SYSTEM_TYPE: ThemeType = {};
 export const DEFAULT_TRAITS: ThemeTraits = {
 	type: SYSTEM_TYPE,
-	media: 'initial',
+	// The bare tint, as the five original themes have always drawn it; the initial is a personality trait.
+	media: 'blank',
 	wordsAlign: 'start',
 	priceChip: false,
 	tear: false,

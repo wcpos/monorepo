@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 
+import { decode } from 'html-entities';
 import Animated from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../icon';
@@ -115,7 +116,8 @@ const BLURRED = { blurRadius: SCRIM_BLUR_RADIUS, transition: 0 };
 /** The first grapheme of a plain-text name, upper-cased; nothing for an element or an empty name. */
 function initialOf(name: unknown): string | undefined {
 	if (typeof name !== 'string') return undefined;
-	return [...name.trim()][0]?.toUpperCase();
+	// The title draws decoded (`decodeHtml`), so `&Eacute;clair` starts with É, not & (CodeRabbit, #3146).
+	return [...decode(name).trim()][0]?.toUpperCase();
 }
 
 function hasWords(...slots: React.ReactNode[]) {

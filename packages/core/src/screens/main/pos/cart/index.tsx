@@ -171,15 +171,9 @@ function CartColumn({
 	// the tabs container pads the status bar in `bg-background` (columns ledger line 6: no band),
 	// and the rows, the totals and the open-order tabs paint their own card colour.
 	return (
-		<VStack className={cn('h-full gap-0', !tear && surface)}>
+		<VStack className={cn('h-full gap-0', surface)}>
+			{/* The torn edge bites the page colour out of this surface; nothing sits behind it. */}
 			{tear && <ReceiptEdge />}
-			{tear && (
-				// Keep the strip inside the panel's clip, with no column paint behind its transparent gaps.
-				<View
-					pointerEvents="none"
-					className={cn('absolute inset-x-0 top-[10px] bottom-0', surface)}
-				/>
-			)}
 			<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
 			<SessionHoldBanner gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&

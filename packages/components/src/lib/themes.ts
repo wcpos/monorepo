@@ -48,11 +48,11 @@ export const THEME_TYPE: Record<ThemeName, ThemeType> = {
 };
 
 export const THEME_TRAITS: Record<ThemeName, Omit<ThemeTraits, 'type'>> = {
-	light: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
-	dark: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
-	ocean: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
-	sunset: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
-	monochrome: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
+	light: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	dark: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	ocean: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	sunset: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	monochrome: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
 	paper: { media: 'initial', wordsAlign: 'center', priceChip: false, tear: true },
 	bold: { media: 'blank', wordsAlign: 'start', priceChip: true, tear: false },
 	warm: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
