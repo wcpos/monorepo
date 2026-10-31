@@ -59,14 +59,25 @@ describe('Button variants', () => {
 		expect(buttonVariants({ size: 'default' })).not.toContain('h-10');
 		expect(buttonVariants({ size: 'sm' })).toContain('h-9');
 		expect(buttonVariants({ size: 'lg' })).toContain('h-14');
-		for (const token of [
-			'rounded-commit',
+		// The commit shadow and press belong to the solid lg buttons; an outline lg keeps the pill only
+		// (CodeRabbit on #3139), and an outline keeps its 1 px border in every theme.
+		const lift = [
 			'shadow-commit',
 			'active:shadow-commit-press',
 			'active:translate-y-[var(--shape-commit-press-y)]',
-		]) {
-			expect(buttonVariants({ size: 'lg' })).toContain(token);
+		];
+		for (const variant of ['default', 'destructive'] as const) {
+			expect(buttonVariants({ variant, size: 'lg' })).toContain('rounded-commit');
+			for (const token of lift) expect(buttonVariants({ variant, size: 'lg' })).toContain(token);
 		}
+		expect(buttonVariants({ variant: 'outline', size: 'lg' })).toContain('rounded-commit');
+		for (const token of lift) {
+			expect(buttonVariants({ variant: 'outline', size: 'lg' })).not.toContain(token);
+		}
+		expect(buttonVariants({ variant: 'outline' })).toContain('border');
+		expect(buttonVariants({ variant: 'outline' })).not.toContain(
+			'border-[length:var(--shape-ctl-border)]'
+		);
 		expect(buttonVariants({})).toContain('rounded-control');
 	});
 

@@ -353,9 +353,7 @@ it('an add is a 36-tall outline Button with the plus icon, and presses', () => {
 		</PropertyAddRow>
 	);
 	const add = screen.getByTestId('add');
-	expect(classes(add)).toEqual(
-		expect.arrayContaining(['h-9', 'border-[length:var(--shape-ctl-border)]', 'border-border'])
-	);
+	expect(classes(add)).toEqual(expect.arrayContaining(['h-9', 'border', 'border-border']));
 	expect(screen.getByTestId('icon-plus')).toBeTruthy();
 	expect(classes(add.parentElement as HTMLElement)).toEqual(
 		expect.arrayContaining(['flex-row', 'flex-wrap', 'gap-2', 'pt-2'])

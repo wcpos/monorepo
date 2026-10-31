@@ -41,10 +41,11 @@ const buttonVariants = cva(
 				/**
 				 * Outline buttons
 				 */
-				outline:
-					'border-border bg-card web:hover:bg-accent active:bg-accent border-[length:var(--shape-ctl-border)]',
+				// The outline IS the variant, so it stays 1 px in every theme: Bold money's 0 px control
+				// outline is for fields and chips, and would make this button vanish on a card (CodeRabbit, #3139).
+				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
 				'outline-destructive':
-					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border-[length:var(--shape-ctl-border)]',
+					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
 				/**
 				 * Ghost buttons. Plain `ghost` is the quiet button: no surface at rest,
@@ -73,14 +74,23 @@ const buttonVariants = cva(
 			size: {
 				default: 'h-ctl rounded-control px-4 py-2',
 				sm: 'rounded-control h-9 px-3',
-				lg: 'rounded-commit shadow-commit active:shadow-commit-press h-14 px-6 active:translate-y-[var(--shape-commit-press-y)]',
+				lg: 'rounded-commit h-14 px-6',
 			},
 		},
 		defaultVariants: {
 			variant: 'default',
 			size: 'default',
 		},
-		compoundVariants: [],
+		compoundVariants: [
+			// The commit shadow and its press belong to the solid commit buttons only (Pay, Take payment,
+			// a destructive confirm); an outline or ghost lg keeps the pill without the lift.
+			{
+				variant: ['default', 'destructive'],
+				size: 'lg',
+				class:
+					'shadow-commit active:shadow-commit-press active:translate-y-[var(--shape-commit-press-y)]',
+			},
+		],
 	}
 );
 

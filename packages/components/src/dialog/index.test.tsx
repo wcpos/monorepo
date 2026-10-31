@@ -773,13 +773,7 @@ it('16. keeps the header close borderless and the footer close outlined', () => 
 	expect(classes('d-close')).not.toContain('border');
 	expect(screen.getByTestId('d-close').querySelector('svg')).toHaveClass('text-muted-foreground');
 	for (const testID of ['plain-close']) {
-		expect(classes(testID)).toEqual(
-			expect.arrayContaining([
-				'border-[length:var(--shape-ctl-border)]',
-				'border-border',
-				'bg-card',
-			])
-		);
+		expect(classes(testID)).toEqual(expect.arrayContaining(['border', 'border-border', 'bg-card']));
 		expect(classes(testID)).not.toContain('bg-primary');
 	}
 });
