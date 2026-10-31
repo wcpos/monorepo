@@ -42,10 +42,12 @@ export const ROLL_IN_DURATION = 480;
 // Keep pixel and percentage travel separate: timing cannot interpolate between different units.
 // Built on first use, not at import: twelve core suites mock Reanimated without `Keyframe`, and a
 // module that constructs one while loading would take every importer of this file down with it.
-let tearOffKeyframe: Keyframe | undefined;
-let rollInKeyframe: Keyframe | undefined;
+/** What `new Keyframe({…}).duration()` returns: the value a layout animation prop accepts. */
+type LayoutKeyframe = ReturnType<Keyframe['duration']>;
+let tearOffKeyframe: LayoutKeyframe | undefined;
+let rollInKeyframe: LayoutKeyframe | undefined;
 /** The cart column tears off when the sale is paid (Paper till, Market stall). */
-export function tearOff(): Keyframe {
+export function tearOff(): LayoutKeyframe {
 	tearOffKeyframe ??= new Keyframe({
 		0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
 		25: {
@@ -61,7 +63,7 @@ export function tearOff(): Keyframe {
 	return tearOffKeyframe;
 }
 /** The next receipt rolls in after a tear-off. */
-export function rollIn(): Keyframe {
+export function rollIn(): LayoutKeyframe {
 	rollInKeyframe ??= new Keyframe({
 		0: { opacity: 0, transform: [{ translateY: -14 }] },
 		100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
