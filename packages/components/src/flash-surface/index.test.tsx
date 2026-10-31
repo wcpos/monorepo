@@ -36,8 +36,8 @@ jest.mock('react-native-reanimated', () => ({
 	useReducedMotion: () => false,
 	useSharedValue: (value: number) => React.useRef({ value }).current,
 	useAnimatedStyle: (fn: () => object) => fn(),
-	interpolateColor: (...args: unknown[]) => mockColor(...args),
-	withTiming: (...args: unknown[]) => mockTiming(...args),
+	interpolateColor: (...args: unknown[]) => (mockColor as (...a: unknown[]) => unknown)(...args),
+	withTiming: (...args: unknown[]) => (mockTiming as (...a: unknown[]) => unknown)(...args),
 }));
 beforeEach(() => {
 	mockTiming.mockClear();

@@ -33,7 +33,7 @@ jest.mock('react-native-reanimated', () => ({
 			},
 		}).current,
 	useAnimatedStyle: (fn: () => object) => fn(),
-	withTiming: (...args: unknown[]) => mockTiming(...args),
+	withTiming: (...args: unknown[]) => (mockTiming as (...a: unknown[]) => unknown)(...args),
 }));
 beforeEach(() => {
 	mockReduced = false;
