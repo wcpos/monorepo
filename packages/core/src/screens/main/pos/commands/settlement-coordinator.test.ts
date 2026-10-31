@@ -631,6 +631,16 @@ it.each([[], null])('forgets repair state when orders are removed (%s)', async (
 	await emit(h.openOrders$, [record]);
 	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
 });
+it.each([[], null])('forgets a refused repair when the order is removed (%s)', async (removed) => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([record], false);
+	h.repairTaxExempt.mockResolvedValue({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, removed);
+	await emit(h.openOrders$, [record]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+});
 it('reports a thrown repair without retrying the same fingerprint', async () => {
 	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
 	const h = start([record], false);

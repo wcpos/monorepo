@@ -275,7 +275,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					})
 				);
 			}
-			for (const uuid of new Set([...seen.keys(), ...lastFlag.keys()]))
+			for (const uuid of new Set([...seen.keys(), ...lastFlag.keys(), ...repaired.keys()]))
 				if (!records.some((r) => r.uuid === uuid)) {
 					seen.delete(uuid);
 					flights.delete(uuid);
