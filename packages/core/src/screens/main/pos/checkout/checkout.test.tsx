@@ -57,7 +57,9 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (...args: unknown[]) => mockUseObservableEagerState(...args),
 }));
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: jest.fn(), canDismiss: () => true, dismiss: jest.fn() }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));

@@ -26,6 +26,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
+import { returnToTill } from './till-route';
 import { useT } from '../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
@@ -257,10 +258,7 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
 					)}
 					{showStockRejection ? (
-						<ModalAction
-							testID="return-to-cart-button"
-							onPress={() => router.replace({ pathname: '/cart' })}
-						>
+						<ModalAction testID="return-to-cart-button" onPress={() => returnToTill(router)}>
 							{t('pos_checkout.return_to_cart')}
 						</ModalAction>
 					) : (

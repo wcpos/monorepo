@@ -16,6 +16,7 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { refreshOrderBounded } from '../bounded-order-refresh';
+import { returnToTill } from '../till-route';
 
 // A pre-hardening store or an async gateway can report "not paid yet" while the
 // provider's confirmation is still in flight. Re-read server truth on a short
@@ -407,7 +408,7 @@ export function PaymentWebview({
 						params: { orderId: order.uuid },
 					});
 				} else {
-					router.replace({ pathname: '/cart' });
+					returnToTill(router);
 				}
 			} catch (err) {
 				// Best-effort safety net only. Order completion is authoritatively
@@ -536,9 +537,7 @@ export function PaymentWebview({
 							params: { orderId: order.uuid },
 						});
 					} else {
-						router.replace({
-							pathname: '/cart',
-						});
+						returnToTill(router);
 					}
 					adoptSnapshot(payload, true);
 				} catch (err) {

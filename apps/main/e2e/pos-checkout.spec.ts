@@ -178,6 +178,20 @@ async function ensureSwitchEnabled(toggle: Locator) {
 	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(true);
 }
 
+async function ensureSwitchDisabled(toggle: Locator) {
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	if (await isSwitchEnabled(toggle)) {
+		await toggle.click();
+	}
+	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(false);
+}
+
+async function disableAutoShowReceipt(page: Page) {
+	await page.getByTestId('cart-settings-button').click();
+	await ensureSwitchDisabled(page.getByTestId('cart-setting-auto-show-receipt').first());
+	await page.keyboard.press('Escape');
+}
+
 /**
  * Configure POS cart UI settings from the UI itself rather than mutating
  * storage internals. This is resilient across storage backend migrations.
@@ -530,6 +544,31 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// above is the checkout modal's rendering of this same number; `cart.total`
 			// is the cart's persisted figure at full stored precision.
 			expectMoneyMatches(server.total, cart.total, 'order total parity (cart vs server)');
+		}
+	);
+
+	liveTest(
+		'a sale without the receipt leaves exactly one POS screen',
+		async ({ posPage: page, trackOrder }) => {
+			liveTest.slow();
+
+			await disableAutoShowReceipt(page);
+			await page.reload();
+			await expect(page.getByTestId('search-products')).toBeVisible({
+				timeout: 30_000,
+			});
+
+			const label = newRunLabel();
+			await addTestProductToCart(page);
+			await stampRunLabel(page, label);
+			await openCheckout(page, {
+				onOrderCreated: (order) => trackOrder({ ...order, label }),
+			});
+			await processPayment(page);
+
+			// Replacing checkout stacked another POS screen, making one scan add N units.
+			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
+			await expect(page.getByTestId('search-products')).toHaveCount(1);
 		}
 	);
 
