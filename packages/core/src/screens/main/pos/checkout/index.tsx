@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -25,13 +25,14 @@ export function CheckoutScreen() {
 	// not resolve it, so the order's own checkout opens instead.
 	const standalone = params[STANDALONE_CHECKOUT_PARAM] === '1';
 	const redirectToColumns = !phone && loaded && !unsupportedSchema && !standalone;
-	// Writing the external store during render would notify its subscribers mid-render; the
-	// checkout store write and navigation both belong in this effect.
-	React.useEffect(() => {
-		if (!redirectToColumns) return;
-		enterCheckout(orderId);
-		handSheetToColumns(router, orderId);
-	}, [redirectToColumns, orderId, router]);
+	// A Redirect that pops: replacing stacked a second POS screen under the sheet (#3148).
+	useFocusEffect(
+		React.useCallback(() => {
+			if (!redirectToColumns) return;
+			enterCheckout(orderId);
+			handSheetToColumns(router, orderId);
+		}, [redirectToColumns, orderId, router])
+	);
 	if (redirectToColumns) return null;
 	return <Checkout resource={resource} />;
 }

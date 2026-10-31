@@ -18,6 +18,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('expo-router', () => ({
+	useFocusEffect: (effect: () => void) => jest.requireActual('react').useEffect(effect, [effect]),
 	useLocalSearchParams: () => mockParams,
 	useRouter: () => mockRouter,
 }));

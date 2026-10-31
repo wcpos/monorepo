@@ -5,7 +5,6 @@ import { Redirect, router, Slot, Stack, Tabs } from 'expo-router';
 import { act, renderRouter } from 'expo-router/testing-library';
 
 import {
-	columnsCheckoutHref,
 	handSheetToColumns,
 	returnToTill,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
@@ -41,9 +40,16 @@ const posStack = (view: Awaited<ReturnType<typeof renderRouter>>) =>
 		?.state?.routes.find((route) => route.name === '(pos)')?.state;
 
 async function renderDeepLinkCheckout() {
-	return renderRouter(checkoutRoutes, {
-		initialUrl: '/(app)/(drawer)/(pos)/(modals)/cart/o1/checkout',
-	});
+	return renderRouter(
+		{
+			...checkoutRoutes,
+			'(app)/(drawer)/(pos)/_layout': {
+				default: () => <Stack />,
+				unstable_settings: { anchor: 'index' },
+			},
+		},
+		{ initialUrl: '/(app)/(drawer)/(pos)/(modals)/cart/o1/checkout' }
+	);
 }
 
 async function renderCheckout(wide = false) {
@@ -58,7 +64,6 @@ async function renderCheckout(wide = false) {
 		expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
 		await act(async () => router.navigate('/(app)/(drawer)/(pos)/(tabs)/cart'));
 	}
-	const originalRoute = posStack(view)?.routes[0];
 	await act(async () => {
 		router.push({
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
@@ -74,7 +79,7 @@ async function renderCheckout(wide = false) {
 		'[orderId]',
 		'checkout',
 	]);
-	return { view, originalRoute };
+	return { view };
 }
 
 describe('checkout returns to the phone till (#2363)', () => {
@@ -89,27 +94,15 @@ describe('checkout returns to the phone till (#2363)', () => {
 		await act(async () => returnToTill(router, true, 'products'));
 		// Segments identify the focused route even when the other tab stays mounted.
 		expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
-		const posStack = view
-			.getRouterState()
-			?.routes.find((route) => route.name === '__root')
-			?.state?.routes.find((route) => route.name === '(app)')
-			?.state?.routes.find((route) => route.name === '(drawer)')
-			?.state?.routes.find((route) => route.name === '(pos)')?.state;
-		expect(posStack?.routes.map((route) => route.name)).toEqual(['(tabs)']);
-		expect(posStack?.routes[0].state?.index).toBe(0);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
+		expect(posStack(view)?.routes[0].state?.index).toBe(0);
 	});
 
 	it('dismisses to the Cart tab when checkout is abandoned', async () => {
 		const { view } = await renderCheckout();
 		await act(async () => returnToTill(router, true, 'cart'));
 		expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)', 'cart']);
-		const posStack = view
-			.getRouterState()
-			?.routes.find((route) => route.name === '__root')
-			?.state?.routes.find((route) => route.name === '(app)')
-			?.state?.routes.find((route) => route.name === '(drawer)')
-			?.state?.routes.find((route) => route.name === '(pos)')?.state;
-		expect(posStack?.routes.map((route) => route.name)).toEqual(['(tabs)']);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
 	});
 
 	it('keeps exactly one tabs route in the POS stack after two sales', async () => {
@@ -122,13 +115,7 @@ describe('checkout returns to the phone till (#2363)', () => {
 			});
 		});
 		await act(async () => returnToTill(router, true, 'products'));
-		const posStack = view
-			.getRouterState()
-			?.routes.find((route) => route.name === '__root')
-			?.state?.routes.find((route) => route.name === '(app)')
-			?.state?.routes.find((route) => route.name === '(drawer)')
-			?.state?.routes.find((route) => route.name === '(pos)')?.state;
-		expect(posStack?.routes.map((route) => route.name)).toEqual(['(tabs)']);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
 	});
 });
 
@@ -171,7 +158,12 @@ describe('checkout returns to the wide till', () => {
 describe('a wide checkout sheet hands off to the columns cart', () => {
 	it('control: replacing the sheet with columns checkout leaves two POS routes', async () => {
 		const { view } = await renderCheckout(true);
-		await act(async () => router.replace(columnsCheckoutHref('o1')));
+		await act(async () =>
+			router.replace({
+				pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+				params: { orderId: ['o1', 'checkout'] },
+			})
+		);
 		expect(posStack(view)?.routes).toHaveLength(2);
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
 			'(columns)/cart/[...orderId]',
@@ -180,7 +172,8 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 	});
 
 	it('with the wide till beneath, pops to the original route', async () => {
-		const { view, originalRoute } = await renderCheckout(true);
+		const { view } = await renderCheckout(true);
+		const originalRoute = posStack(view)?.routes[0];
 		await act(async () => handSheetToColumns(router, 'o1'));
 		expect(posStack(view)?.routes).toEqual([originalRoute]);
 		expect(view.getPathname()).toBe('/cart/o1');
@@ -192,12 +185,17 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
 	});
 
-	it('with nothing beneath, replaces a deep link with columns checkout', async () => {
+	it('a cold-loaded sheet over the anchor is replaced by the columns checkout', async () => {
 		const view = await renderDeepLinkCheckout();
-		expect(view.getSegments().slice(-4)).toEqual(['(modals)', 'cart', '[orderId]', 'checkout']);
-		await act(async () => handSheetToColumns(router, 'o1'));
-		expect(posStack(view)?.routes).toHaveLength(1);
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'index',
+			'(modals)/cart/[orderId]/checkout',
+		]);
+		// The seeded stack is typeless (expo-router's canDismiss has a TODO for it), so the sheet
+		// cannot be popped; the replace keeps the unfocused anchor beneath, which renders nothing.
+		await act(async () => handSheetToColumns(router, 'o1'));
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'index',
 			'(columns)/cart/[...orderId]',
 		]);
 		expect(view.getPathname()).toBe('/cart/o1/checkout');

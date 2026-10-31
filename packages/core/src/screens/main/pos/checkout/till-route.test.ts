@@ -1,4 +1,4 @@
-import { columnsCheckoutHref, handSheetToColumns, returnToTill, tillHref } from './till-route';
+import { handSheetToColumns, returnToTill, tillHref } from './till-route';
 
 it.each([
 	[true, 'products', '/(app)/(drawer)/(pos)/(tabs)'],
@@ -53,13 +53,6 @@ it.each(['products', 'cart'] as const)('replaces a wide deep link with the cart 
 	expect(router.dismiss).not.toHaveBeenCalled();
 });
 
-it('columnsCheckoutHref names the columns cart in checkout for the order', () => {
-	expect(columnsCheckoutHref('o1')).toEqual({
-		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-		params: { orderId: ['o1', 'checkout'] },
-	});
-});
-
 describe('handSheetToColumns', () => {
 	it('pops a sheet with a till beneath without replacing', () => {
 		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
@@ -72,7 +65,10 @@ describe('handSheetToColumns', () => {
 		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => false };
 		handSheetToColumns(router, 'o1');
 		expect(router.replace).toHaveBeenCalledTimes(1);
-		expect(router.replace).toHaveBeenCalledWith(columnsCheckoutHref('o1'));
+		expect(router.replace).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+			params: { orderId: ['o1', 'checkout'] },
+		});
 		expect(router.dismiss).not.toHaveBeenCalled();
 	});
 });
