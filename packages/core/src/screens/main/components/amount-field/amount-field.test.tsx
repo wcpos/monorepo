@@ -19,6 +19,7 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: {} }) }));
 const mockStore = {
+	decimal_qty: true,
 	price_decimal_sep: '.',
 	price_thousand_sep: ',',
 	price_num_decimals: 2,

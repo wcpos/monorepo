@@ -112,7 +112,7 @@ describe('stores migration strategy', () => {
 		}
 	);
 
-	it('v20 reads an unset family as auto and is the current version', async () => {
+	it('v20 reads an unset family as auto', async () => {
 		const { userCollections } = await import('./index');
 		const { storesLiteral } = await import('./schemas/stores');
 		const migrate = userCollections.stores.migrationStrategies?.[20];
@@ -128,8 +128,26 @@ describe('stores migration strategy', () => {
 			'phosphor',
 		]);
 		expect(storesLiteral.properties.icons.default).toBe('auto');
-		expect(storesLiteral.version).toBe(20);
-		expect(userCollections.stores.migrationStrategies?.[21]).toBeUndefined();
+		expect(storesLiteral.version).toBeGreaterThanOrEqual(20);
+	});
+
+	it('v21 defaults decimal quantities off and syncs the server setting', async () => {
+		const { userCollections } = await import('./index');
+		const { storesLiteral, AUTO_SYNCED_STORE_FIELDS } = await import('./schemas/stores');
+		const migrate = userCollections.stores.migrationStrategies?.[21];
+		if (!migrate) throw new Error('stores migration 21 missing');
+
+		const migrated = migrate({ localID: 'store-1' } as never, undefined as never);
+
+		expect(migrated.decimal_qty).toBe(false);
+		expect(storesLiteral.properties).toHaveProperty('decimal_qty', {
+			title: 'Decimal quantities',
+			description: 'Whether the store accepts decimal quantities on POS orders.',
+			type: 'boolean',
+			default: false,
+		});
+		expect(AUTO_SYNCED_STORE_FIELDS).toContain('decimal_qty');
+		expect(storesLiteral.version).toBe(21);
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier

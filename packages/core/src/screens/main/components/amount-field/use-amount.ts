@@ -26,7 +26,13 @@ export function useAmount(props: AmountFieldProps) {
 		(useDocField(store, (state) => state.price_thousand_sep) as string) || '';
 	// WooCommerce's default, 2, before the store loads.
 	const priceDecimals = useDocField(store, (state) => state.price_num_decimals);
-	const places = kind === 'money' ? (props.places ?? Number(priceDecimals ?? 2)) : PLACES[kind];
+	const decimalQty = useDocField(store, (s) => s.decimal_qty) === true;
+	const places =
+		kind === 'money'
+			? (props.places ?? Number(priceDecimals ?? 2))
+			: kind === 'quantity' && !decimalQty
+				? 0
+				: PLACES[kind];
 	// A grid's price is in the open order's currency on the POS; a field's number has no symbol.
 	const currencySymbol = useRecordField(
 		useCurrentOrderOptional(),
