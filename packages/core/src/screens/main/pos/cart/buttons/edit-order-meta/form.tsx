@@ -25,8 +25,10 @@ import {
 	PropertyList,
 	PropertyRow,
 } from '@wcpos/components/property-row';
+import { Switch } from '@wcpos/components/switch';
 import { Text } from '@wcpos/components/text';
-import { OPEN_ORDER_STATUSES, useDocField } from '@wcpos/query';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { OPEN_ORDER_STATUSES, useDocField, useRecordField } from '@wcpos/query';
 import {
 	isPushableOrderStatus,
 	NO_STORE,
@@ -61,6 +63,12 @@ import {
 } from '../../../../components/meta-data-form';
 import { useRecordAutosave } from '../../../../components/use-record-autosave';
 import { useOrderFieldsWrite } from '../../../commands/use-order-fields-write';
+import { useSetTaxExempt, useWcVersion } from '../../../commands/use-tax-exempt';
+import { useCheckoutMode } from '../../../checkout/checkout-mode';
+import { useOrderSaveState } from '../../../checkout/use-order-save-state';
+import { useOrderMoneyDivergence } from '../../../contexts/order-money-divergence';
+import { useCartConfigReader } from '../../../hooks/use-cart-config';
+import { taxExemptRowState } from './tax-exempt-row';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
@@ -369,6 +377,28 @@ export function EditOrderMetaForm({
 	}
 
 	const currencyRow = useCurrencyRow(useWatch({ control: form.control, name: 'currency' }));
+	// Tax exempt is a command, not an autosaved field: the switch reads the live record, so an
+	// autosave of the other rows can neither carry nor revert it.
+	const setTaxExempt = useSetTaxExempt();
+	// The command reads the locks imperatively at toggle time; the row subscribes to them, so a
+	// checkout, refused save or ownership change that leaves the payload alone still disables it.
+	const configForOrder = useCartConfigReader();
+	const saveState = useOrderSaveState(order.uuid);
+	const checkoutOrders = useCheckoutMode().checkoutOrders;
+	const { serverOwnsMoney } = useOrderMoneyDivergence(order.uuid);
+	const taxReaders = {
+		configForOrder,
+		orderSaveState: () => saveState,
+		inCheckout: () => checkoutOrders.has(order.uuid),
+		serverOwnsMoney: () => serverOwnsMoney,
+	};
+	// As add-coupon: the store, not just a network (the command waits on its coupon references).
+	const online = useOnlineStatus().status === 'online-website-available';
+	const live = useRecordField(order, (record) => record.payload);
+	const exempt = wooMetaCarrier.vatExempt(live.meta_data);
+	const { dp } = taxReaders.configForOrder(live);
+	const wcVersion = useWcVersion();
+	const taxExempt = taxExemptRowState(live, order, taxReaders, dp, online, wcVersion());
 
 	return (
 		<Form {...form}>
@@ -522,6 +552,33 @@ export function EditOrderMetaForm({
 								)}
 							/>
 						</PropertyRow>
+					)}
+					{!taxExempt.hidden && (
+						<PropertyRow
+							id="tax_exempt"
+							label={t('pos_cart.tax_exempt')}
+							help={
+								taxExempt.reason === 'reopen'
+									? t('pos_cart.tax_exempt_reopen')
+									: taxExempt.reason === 'offline'
+										? t('pos_cart.tax_exempt_offline')
+										: taxExempt.reason === 'payment'
+											? t('pos_cart.tax_exempt_payment')
+											: taxExempt.reason === 'wc_version'
+												? t('pos_cart.tax_exempt_wc_version')
+												: t('pos_cart.tax_exempt_hint')
+							}
+							testID="order-meta-tax-exempt"
+							control={
+								<Switch
+									checked={exempt}
+									disabled={taxExempt.disabled}
+									onCheckedChange={(checked) => void setTaxExempt(order, checked)}
+									accessibilityLabel={t('pos_cart.tax_exempt')}
+									testID="order-meta-tax-exempt-switch"
+								/>
+							}
+						/>
 					)}
 					<MetaDataForm testID="order-meta" hiddenKeys={PROTECTED_ORDER_META_KEYS} />
 					<PropertyAddRow>

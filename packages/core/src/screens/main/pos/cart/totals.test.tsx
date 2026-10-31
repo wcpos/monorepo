@@ -67,7 +67,14 @@ jest.mock('@wcpos/components/chip', () => {
 	return { Chip };
 });
 
-jest.mock('./totals/taxes', () => ({ Taxes: () => null }));
+const mockTaxes = jest.fn();
+let mockTotalTax = '0';
+jest.mock('./totals/taxes', () => ({
+	Taxes: (props: unknown) => {
+		mockTaxes(props);
+		return null;
+	},
+}));
 
 jest.mock('../../../../contexts/translations', () => {
 	const i18n = jest.requireActual('i18next').createInstance();
@@ -101,7 +108,7 @@ jest.mock('../hooks/use-order-totals', () => ({
 		fee_total: '0',
 		fee_tax: '0',
 		tax_lines: [],
-		total_tax: '0',
+		total_tax: mockTotalTax,
 		shipping_tax: '0',
 		shipping_total: '0',
 	}),
@@ -205,4 +212,57 @@ it('prints every row as label then amount, the refunds and the net payment last'
 		expect(text).toContain(row);
 	}
 	expect(text.indexOf('Net Payment')).toBeGreaterThan(text.indexOf('Refund #5'));
+});
+
+describe('a tax exempt order', () => {
+	const exemptMeta = [{ key: 'is_vat_exempt', value: 'yes' }];
+	const untaxed = {
+		meta_data: exemptMeta,
+		line_items: [
+			{ product_id: 1, taxes: [] },
+			// A removed line (tombstone) is not counted.
+			{ product_id: null, taxes: [{ id: 1, total: '1.00' }] },
+		],
+		fee_lines: [{ name: 'Fee', taxes: [{ id: 1, total: '0' }] }],
+		shipping_lines: [{ method_id: 'flat_rate', taxes: [] }],
+	};
+	beforeEach(() => {
+		mockTaxes.mockClear();
+		mockTotalTax = '0';
+		couponLines = [];
+	});
+
+	it('with every line untaxed hands Taxes the exemption, at zero tax', () => {
+		orderPayload = untaxed;
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(expect.objectContaining({ exempt: true }));
+	});
+
+	it('with a line still carrying tax (repair pending) shows the real rows', () => {
+		mockTotalTax = '0.50';
+		orderPayload = {
+			...untaxed,
+			shipping_lines: [{ method_id: 'flat_rate', taxes: [{ id: 1, total: '0.50' }] }],
+		};
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(
+			expect.objectContaining({ exempt: false, totalTax: '0.50' })
+		);
+	});
+
+	it('with a line whose tax lives only in total_tax (no rate rows yet) shows the real rows', () => {
+		mockTotalTax = '0.50';
+		orderPayload = {
+			...untaxed,
+			line_items: [{ product_id: 1, total_tax: '0.50', taxes: [] }],
+		};
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(expect.objectContaining({ exempt: false }));
+	});
+
+	it('is not exempt without the flag', () => {
+		orderPayload = { ...untaxed, meta_data: [] };
+		render(<Totals />);
+		expect(mockTaxes).not.toHaveBeenCalled();
+	});
 });

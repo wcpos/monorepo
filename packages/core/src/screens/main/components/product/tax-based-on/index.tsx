@@ -19,7 +19,7 @@ import { useCartConfig } from '../../../pos/hooks/use-cart-config';
 export function TaxBasedOn() {
 	// `hasOrder` is false on the standalone Products screen: there the address is the shop base
 	// whatever the setting says (`orderTaxLocation`).
-	const { rates, taxBasedOn, location, addressUsed, hasOrder } = useTaxLocation();
+	const { rates, taxBasedOn, location, addressUsed, hasOrder, vatExempt } = useTaxLocation();
 	const { allRates } = useTaxSettings();
 	const t = useT();
 	/**
@@ -72,6 +72,7 @@ export function TaxBasedOn() {
 				</TextClassContext.Provider>
 			</PopoverTrigger>
 			<PopoverContent side="top" align="start" className="w-96" testID="tax-based-on-content">
+				{vatExempt ? <Text className="text-sm">{t('common.order_tax_exempt')}</Text> : null}
 				<DisplayCurrentTaxRates
 					rates={rates}
 					allRates={allRates}

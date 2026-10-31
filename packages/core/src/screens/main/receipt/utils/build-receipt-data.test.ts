@@ -1,7 +1,7 @@
 import { createInstance } from 'i18next';
 import { setI18n } from 'react-i18next';
 
-import { mapReceiptData, ReceiptDataSchema } from '@wcpos/printer/encoder';
+import { mapReceiptData, ReceiptDataSchema, renderPreview } from '@wcpos/printer/encoder';
 
 import en from '../../../../contexts/translations/locales/en/core.json';
 import { buildReceiptData } from './build-receipt-data';
@@ -452,6 +452,21 @@ describe('buildReceiptData', () => {
 		};
 		const result = buildReceiptData(orderBadSubtotal, mockStore);
 		expect(result.totals.subtotal).toBe('10.00');
+	});
+
+	// The gallery receipts gate their tax row on {{#totals.tax_total}}. The string "0.00" built
+	// here would be true to Mustache; the app renders through mapReceiptData, whose number is not.
+	it.each([
+		['0.00', ''],
+		['1.50', 'TAX 1.5'],
+	])('a total_tax of %s renders the tax_total section as %j', (total_tax, row) => {
+		const data = buildReceiptData({ ...mockOrder, total_tax }, mockStore);
+		const { html } = renderPreview({
+			template: '{{#totals.tax_total}}TAX {{totals.tax_total}}{{/totals.tax_total}}',
+			engine: 'logicless',
+			data,
+		});
+		expect(html.trim()).toBe(row);
 	});
 
 	it('formats tax_total using the requested decimal precision', () => {

@@ -12,12 +12,14 @@ import { useTaxInclOrExcl } from '../../../hooks/use-tax-incl-or-excl';
 interface Props {
 	totalTax: string;
 	taxLines: import('@wcpos/query').OrderTaxLines;
+	/** Exempt, and every line already untaxed: one Tax exempt row at zero. */
+	exempt?: boolean;
 }
 
 /**
  *
  */
-export function Taxes({ totalTax, taxLines = [] }: Props) {
+export function Taxes({ totalTax, taxLines = [], exempt = false }: Props) {
 	const { store } = useAppState();
 	const taxTotalDisplay = useDocField(store, (value) => value.tax_total_display);
 	const { format } = useCurrentOrderCurrencyFormat();
@@ -26,6 +28,7 @@ export function Taxes({ totalTax, taxLines = [] }: Props) {
 
 	// The rate's own label (Woo's itemized display), its incl/excl beside it at the help size.
 	const beside = <Text variant="help">{String(inclOrExcl)}</Text>;
+	if (exempt) return <MoneyList.Row label={t('common.tax_exempt')} amount={format(0)} />;
 	if (taxTotalDisplay === 'itemized') {
 		return taxLines.map((tax, index) => (
 			<MoneyList.Row

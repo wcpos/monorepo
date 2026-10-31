@@ -4,11 +4,18 @@ import * as React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WriteDeferredError } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { EditOrderMetaForm } from './form';
 import { protectOrderMeta } from '../../../../../../../../query/src/mutations/protected-order-meta';
 import { enqueueOrderMutation } from '../../../hooks/order-mutation-queue';
+import {
+	enterCheckout,
+	leaveCheckout,
+	markOrderSaveRejected,
+	resetCheckoutMode,
+} from '../../../checkout/checkout-mode';
 
 const mockBeforePatch = jest.fn();
 const mockPatch = jest.fn(),
@@ -120,6 +127,35 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockButton, ButtonText: mockWrap }));
+jest.mock('@wcpos/components/switch', () => ({
+	Switch: (props: {
+		checked: boolean;
+		disabled?: boolean;
+		onCheckedChange: (checked: boolean) => void;
+		testID: string;
+	}) => (
+		<input
+			type="checkbox"
+			data-testid={props.testID}
+			checked={props.checked}
+			disabled={props.disabled}
+			onChange={() => props.onCheckedChange(!props.checked)}
+		/>
+	),
+}));
+const mockSetTaxExempt = jest.fn();
+let mockPricesIncludeTax = false;
+jest.mock('../../../commands/use-tax-exempt', () => ({
+	useSetTaxExempt: () => mockSetTaxExempt,
+	useWcVersion: () => () => '11.3.0',
+}));
+jest.mock('../../../hooks/use-cart-config', () => ({
+	useCartConfigReader: () => () => ({ dp: 2, pricesIncludeTax: mockPricesIncludeTax }),
+}));
+let mockOnlineStatus = 'online-website-available';
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
 jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../../../../jest/property-row.test-utils')
 );
@@ -193,6 +229,7 @@ jest.mock('@wcpos/query', () => {
 		OPEN_ORDER_STATUSES: jest.requireActual('../../../../../../../../query/src/open-orders-scope')
 			.OPEN_ORDER_STATUSES,
 		useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
+		useRecordField: <T,>(record: T, select: (value: T) => unknown) => select(record),
 		WriteDeferredError,
 		WriteOutcomeError: class WriteOutcomeError extends Error {},
 	};
@@ -285,6 +322,8 @@ async function confirm() {
 beforeEach(() => {
 	jest.clearAllMocks();
 	order.payload = payload;
+	mockPricesIncludeTax = false;
+	mockOnlineStatus = 'online-website-available';
 	mockStores = [{ id: 2, name: 'Main' }];
 	mockDirectories = { '2': [{ id: 'register', name: 'Till' }] };
 	mockPatch.mockImplementation((input) => {
@@ -389,7 +428,11 @@ it('does not write or push when storage is degraded', async () => {
 // A meta edit saves as it is made (never carrying the hidden identity rows, which the local
 // patch keeps); a hand-off afterwards stamps the identity onto the order's meta as it stands.
 it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) => {
-	const protectedMeta = [...meta, { id: 42, key: '_wcpos_money_owner_hint', value: 'server' }];
+	const protectedMeta = [
+		...meta,
+		{ id: 42, key: '_wcpos_money_owner_hint', value: 'server' },
+		{ id: 43, key: 'is_vat_exempt', value: 'yes' },
+	];
 	const resident = { ...order, payload: { ...payload, meta_data: protectedMeta } };
 	resident.getLatest = () => resident;
 	const custom = { key: 'custom', value: 'edited' };
@@ -400,6 +443,7 @@ it.each(['pos-open', 'completed'])('protects meta on %s save', async (status) =>
 	};
 	render(<EditOrderMetaForm order={resident as never} {...formProps(formData)} />);
 	expect(screen.queryAllByDisplayValue('server')).toHaveLength(0);
+	expect(screen.queryAllByDisplayValue('is_vat_exempt')).toHaveLength(0);
 	expect(screen.getByDisplayValue('custom')).toBeTruthy();
 	fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'edited' } });
 	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
@@ -876,5 +920,132 @@ describe('the hand-over box', () => {
 		expect(stored.find((entry) => entry.key === '_wcpos_register')?.value ?? '').toBe('');
 		expect(stored.find((entry) => entry.key === '_pos_store')?.value).toBe('2');
 		expect(mockMove).not.toHaveBeenCalled();
+	});
+});
+
+describe('the Tax exempt row', () => {
+	const flag = () =>
+		(screen.getByTestId('order-meta-tax-exempt-switch') as HTMLInputElement).checked;
+	function renderResident(meta_data: { key: string; value: string }[]) {
+		const resident = { ...order, payload: { ...payload, meta_data } };
+		resident.getLatest = () => resident;
+		// The command, as far as this form sees it: it stamps the flag on the live record.
+		mockSetTaxExempt.mockImplementation(async (record: typeof resident, exempt: boolean) => {
+			record.payload = {
+				...record.payload,
+				meta_data: wooMetaCarrier.stampVatExempt(record.payload.meta_data, exempt) as typeof meta,
+			};
+		});
+		const view = render(
+			<EditOrderMetaForm
+				order={resident as never}
+				{...formProps({ ...payload, cashier_id: '7', meta_data })}
+			/>
+		);
+		return { resident, view };
+	}
+
+	it('sits above the custom fields; flipping runs the command, never the autosave', async () => {
+		const { resident } = renderResident(meta);
+		const row = screen.getByTestId('order-meta-tax-exempt');
+		expect(row.textContent).toContain('pos_cart.tax_exempt');
+		expect(row.textContent).toContain('pos_cart.tax_exempt_hint');
+		expect(flag()).toBe(false);
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-tax-exempt-switch')));
+		expect(mockSetTaxExempt).toHaveBeenCalledWith(resident, true);
+		await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+		expect(mockPatch).not.toHaveBeenCalled();
+		expect(screen.queryAllByDisplayValue('is_vat_exempt')).toHaveLength(0);
+	});
+
+	it('reads the flag from the live record and names why it cannot change', () => {
+		const { resident, view } = renderResident([...meta, { key: 'is_vat_exempt', value: 'yes' }]);
+		expect(flag()).toBe(true);
+		resident.payload = { ...resident.payload, status: 'completed' };
+		view.rerender(
+			<EditOrderMetaForm
+				order={resident as never}
+				{...formProps({ ...payload, cashier_id: '7' })}
+			/>
+		);
+		const toggle = screen.getByTestId('order-meta-tax-exempt-switch') as HTMLInputElement;
+		expect(toggle.disabled).toBe(true);
+		expect(screen.getByTestId('order-meta-tax-exempt').textContent).toContain(
+			'pos_cart.tax_exempt_reopen'
+		);
+	});
+
+	// The command waits on coupon references from the store: an unreachable website is offline too.
+	it.each(['offline', 'online-website-unavailable'])(
+		'a couponed order asks for the store when %s',
+		(status) => {
+			mockOnlineStatus = status;
+			const { resident, view } = renderResident(meta);
+			resident.payload = { ...resident.payload, coupon_lines: [{ code: 'save10' }] } as never;
+			view.rerender(
+				<EditOrderMetaForm
+					order={resident as never}
+					{...formProps({ ...payload, cashier_id: '7' })}
+				/>
+			);
+			expect(
+				(screen.getByTestId('order-meta-tax-exempt-switch') as HTMLInputElement).disabled
+			).toBe(true);
+			expect(screen.getByTestId('order-meta-tax-exempt').textContent).toContain(
+				'pos_cart.tax_exempt_offline'
+			);
+		}
+	);
+
+	// The command reads these at toggle time; the row subscribes, so it never offers a refused toggle.
+	it('disables with the payment hint when checkout opens or the save is refused, order unchanged', () => {
+		const disabled = () =>
+			(screen.getByTestId('order-meta-tax-exempt-switch') as HTMLInputElement).disabled;
+		const hint = () => screen.getByTestId('order-meta-tax-exempt').textContent;
+		try {
+			renderResident(meta);
+			expect(disabled()).toBe(false);
+			act(() => enterCheckout('order-1'));
+			expect(disabled()).toBe(true);
+			expect(hint()).toContain('pos_cart.tax_exempt_payment');
+			act(() => leaveCheckout('order-1'));
+			expect(disabled()).toBe(false);
+			act(() => markOrderSaveRejected('order-1', { status: 400, reason: null, message: null }));
+			expect(disabled()).toBe(true);
+			expect(hint()).toContain('pos_cart.tax_exempt_payment');
+		} finally {
+			act(() => resetCheckoutMode());
+		}
+	});
+
+	it('is hidden on a store whose prices include tax', () => {
+		mockPricesIncludeTax = true;
+		renderResident(meta);
+		expect(screen.queryByTestId('order-meta-tax-exempt')).toBeNull();
+	});
+
+	it('a custom-field edit before and after a toggle, across a delayed autosave, keeps the flag', async () => {
+		const { resident } = renderResident([...meta, { key: 'custom', value: 'before' }]);
+		const apply = mockPatch.getMockImplementation()!;
+		let release: () => void = () => undefined;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		mockPatch.mockImplementationOnce(async (input) => {
+			await held;
+			return apply(input);
+		});
+		fireEvent.change(screen.getByDisplayValue('before'), { target: { value: 'mid' } });
+		await waitFor(() => expect(mockPatch).toHaveBeenCalledTimes(1));
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-tax-exempt-switch')));
+		await act(async () => release());
+		await waitFor(() =>
+			expect(resident.payload.meta_data).toContainEqual({ key: 'custom', value: 'mid' })
+		);
+		expect(wooMetaCarrier.vatExempt(resident.payload.meta_data)).toBe(true);
+		fireEvent.change(screen.getByDisplayValue('mid'), { target: { value: 'after' } });
+		await waitFor(() =>
+			expect(resident.payload.meta_data).toContainEqual({ key: 'custom', value: 'after' })
+		);
+		expect(wooMetaCarrier.vatExempt(resident.payload.meta_data)).toBe(true);
+		expect(mockSetTaxExempt).toHaveBeenCalledTimes(1);
 	});
 });
