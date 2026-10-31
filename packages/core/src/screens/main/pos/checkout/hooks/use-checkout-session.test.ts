@@ -13,6 +13,7 @@ import { classifyCheckoutFailure, useCheckoutSession } from './use-checkout-sess
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
@@ -21,7 +22,7 @@ const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number)
 );
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace }),
+	useRouter: () => ({ replace: mockReplace, canDismiss: () => true, dismiss: mockDismiss }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
@@ -254,7 +255,8 @@ describe('useCheckoutSession', () => {
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
-		expect(mockReplace).toHaveBeenCalled();
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		jest.useRealTimers();
 	});
 
@@ -293,12 +295,13 @@ describe('useCheckoutSession', () => {
 			await jest.advanceTimersByTimeAsync(0);
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		// The paid order is still pos-open locally until the refresh lands, so the cart
 		// must drop it BEFORE routing or new items would be added to the paid sale.
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockSetCurrentOrderID.mock.invocationCallOrder[0]).toBeLessThan(
-			mockReplace.mock.invocationCallOrder[0]
+			mockDismiss.mock.invocationCallOrder[0]
 		);
 		expect(release).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
@@ -341,7 +344,8 @@ describe('useCheckoutSession', () => {
 			await result.current.startCheckout();
 		});
 
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(release).toHaveBeenCalledTimes(1);
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
 		expect(mockCheckoutWarn).toHaveBeenCalledWith(

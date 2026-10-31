@@ -31,6 +31,7 @@ import {
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
 import { refreshOrderBounded } from '../bounded-order-refresh';
+import { returnToTill } from '../till-route';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -237,7 +238,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				params: { orderId: order.uuid! },
 			});
 		} else {
-			router.replace({ pathname: '/cart' });
+			returnToTill(router);
 		}
 
 		await refreshOrderBounded(runtime.engine, orderId);
