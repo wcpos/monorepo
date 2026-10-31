@@ -21,6 +21,7 @@ let webViewMounts = 0;
 const mockPostMessage = jest.fn();
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
@@ -67,7 +68,12 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	adoptStoreOrderSnapshot: jest.requireActual(
@@ -257,6 +263,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
 		expect(setLoading).toHaveBeenCalledWith(false);
@@ -297,6 +304,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 
@@ -415,7 +423,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 			expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
 			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-			expect(mockReplace).toHaveBeenCalledTimes(1);
+			expect(mockDismiss).toHaveBeenCalledTimes(1);
+			expect(mockReplace).not.toHaveBeenCalled();
 		}
 	);
 
@@ -685,6 +694,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(setLoading).toHaveBeenCalledWith(false);
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 		// The poll ran and, with server truth still pos-open, left everything alone.
@@ -733,7 +743,8 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(postMessageOrder);
 		expect(mockStockAdjustment).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(1);
-		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 });
 
@@ -801,6 +812,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 	});
 
@@ -834,7 +846,8 @@ describe('PaymentWebview settled order status', () => {
 		);
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(
 			expect.objectContaining({ payment_method: 'bacs', status: 'pending' })
 		);
@@ -873,7 +886,8 @@ describe('PaymentWebview settled order status', () => {
 			})
 		);
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it('ignores a late payment message once the poll has already settled the sale', async () => {
@@ -894,11 +908,13 @@ describe('PaymentWebview settled order status', () => {
 		await act(async () => {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
-		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 
 		await postReceived(pendingPayload);
 
-		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
 	});
 
@@ -926,7 +942,8 @@ describe('PaymentWebview settled order status', () => {
 		);
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(pendingPayload);
 		expect(setLoading).toHaveBeenCalledWith(false);
 		// Settled on the message's say-so, so no server poll was armed.
@@ -957,6 +974,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 	});
@@ -986,6 +1004,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockGet).not.toHaveBeenCalled();
 	});
 
@@ -1011,6 +1030,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 	});
 });

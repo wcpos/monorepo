@@ -147,7 +147,7 @@ jest.mock('../../../contexts/use-push-document', () => ({
 	usePushDocument: () => mockPushDocument,
 }));
 const mockBegin = jest.fn();
-const mockDismiss = jest.fn(() => {
+const mockDismissTerminal = jest.fn(() => {
 	mockLeg = null;
 });
 const mockCancel = jest.fn();
@@ -166,7 +166,7 @@ jest.mock('../../../../../services/terminal-payments', () => ({
 			subscribe: () => () => {},
 			flushOffline: async () => {},
 			begin: mockBegin,
-			dismiss: mockDismiss,
+			dismiss: mockDismissTerminal,
 			get: () => mockLeg,
 			readersInUse: () => mockReadersInUse,
 			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),
@@ -220,6 +220,7 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 const mockLocalPatch = jest.fn();
 const mockBlockIfDegraded = jest.fn();
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockInfo = jest.fn();
 const mockError = jest.fn();
@@ -419,7 +420,12 @@ jest.mock('@wcpos/query', () => ({
 		mockResend(...args),
 }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
@@ -1665,6 +1671,7 @@ describe('useTenderFlow', () => {
 		);
 		expect(result.current.state.view).toBe('cancel');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
 			expect.objectContaining({
@@ -1710,6 +1717,7 @@ describe('useTenderFlow', () => {
 		).toHaveLength(0);
 		expect(result.current.state.view).toBe('cancel');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 
@@ -1798,6 +1806,7 @@ it('leaves wide checkout mode without navigating after cancellation', async () =
 	await act(async () => result.current.cancelPayment());
 	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });
 
 const terminal = {
@@ -2056,7 +2065,7 @@ describe('server tender', () => {
 				saleComplete: balance === '0.00',
 			};
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			expect(mockDismiss).toHaveBeenCalledTimes(balance === '0.00' ? 0 : 1);
+			expect(mockDismissTerminal).toHaveBeenCalledTimes(balance === '0.00' ? 0 : 1);
 			expect(result.current.state.view).toBe('amount');
 			expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 			expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(
@@ -2701,6 +2710,7 @@ it.each([
 			).toHaveLength(completed ? 1 : 0);
 			expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 			expect(mockReplace).not.toHaveBeenCalled();
+			expect(mockDismiss).not.toHaveBeenCalled();
 			expect(mockRequire).toHaveBeenCalledTimes(1);
 			expect(mockRequire).toHaveBeenCalledWith(
 				expect.objectContaining({ kind: 'targeted-records', remoteIds: ['42'], forceRefresh: true })
@@ -3262,11 +3272,11 @@ it('does not present a raw final leg until the service records its settlement', 
 });
 
 it.each([
-	['modal', [{ pathname: '/cart' }]],
-	['columns', undefined],
+	['modal', 1],
+	['columns', 0],
 ] as const)(
 	'a terminal sale completing with no receipt stage on a wide screen leaves the %s host it opened in',
-	async (host, replacedWith) => {
+	async (host, dismissCount) => {
 		jest.clearAllMocks();
 		resetCheckoutMode();
 		mockSize = 'lg';
@@ -3277,8 +3287,8 @@ it.each([
 			// A standalone checkout is the routed modal on a wide screen too.
 			const hook = renderHook(() => useTenderFlow(order, host));
 			await act(async () => {});
-			if (replacedWith) expect(mockReplace).toHaveBeenCalledWith(...replacedWith);
-			else expect(mockReplace).not.toHaveBeenCalled();
+			expect(mockDismiss).toHaveBeenCalledTimes(dismissCount);
+			expect(mockReplace).not.toHaveBeenCalled();
 			expect(mockDismissTo).not.toHaveBeenCalled();
 			hook.unmount();
 		} finally {
@@ -3317,7 +3327,7 @@ it('keeps a captured partial payment with a failed mirror out of the Take pane',
 	};
 	const hook = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	await act(async () => {});
-	expect(mockDismiss).not.toHaveBeenCalled();
+	expect(mockDismissTerminal).not.toHaveBeenCalled();
 	expect(hook.result.current.terminalLeg?.outcome).toBe('captured');
 	expect(Toast.show).not.toHaveBeenCalled();
 	hook.unmount();

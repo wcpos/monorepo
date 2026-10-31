@@ -22,6 +22,7 @@ jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() 
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 let mockPrintedTo: string | null = null;
@@ -88,7 +89,12 @@ jest.mock('../column/use-checkout-back', () => ({
 	},
 }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(''),
@@ -339,6 +345,7 @@ it('New sale finishes the sale on both layouts', () => {
 	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 	wide.unmount();
 	enterReceipt('paid');
 	render(<ReceiptStage orderUuid="paid" compact />);
@@ -347,6 +354,7 @@ it('New sale finishes the sale on both layouts', () => {
 	expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(2);
 	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });
 it('a standalone checkout modal on a wide screen leaves for the wide cart when the sale is done', () => {
 	// The modal's layout is compact on every width; leaving it is the host's, never the width's.
@@ -354,7 +362,8 @@ it('a standalone checkout modal on a wide screen leaves for the wide cart when t
 	try {
 		render(<ReceiptStage orderUuid="paid" compact />);
 		fireEvent.click(screen.getByTestId('receipt-new-sale'));
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	} finally {
 		mockScreenSize = 'sm';
@@ -367,6 +376,7 @@ it('finishes on Android hardware back', () => {
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });
 
 it('shows the paid headline and joined methods with only captured payments counted', () => {
@@ -438,6 +448,7 @@ it('the corner X on the columns pane finishes the sale as New sale does', () => 
 	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });
 it('the corner X waits on auto-print exactly as New sale does', () => {
 	mockAutoPrintPending = true;

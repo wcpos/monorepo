@@ -13,17 +13,42 @@ it.each([
 	['products', '/(app)/(drawer)/(pos)/(tabs)'],
 	['cart', '/(app)/(drawer)/(pos)/(tabs)/cart'],
 ] as const)('dismisses to the phone %s tab without replacing', (tab, href) => {
-	const router = { replace: jest.fn(), dismissTo: jest.fn() };
+	const router = {
+		replace: jest.fn(),
+		dismissTo: jest.fn(),
+		dismiss: jest.fn(),
+		canDismiss: () => true,
+	};
 	returnToTill(router, true, tab);
 	expect(router.dismissTo).toHaveBeenCalledTimes(1);
 	expect(router.dismissTo).toHaveBeenCalledWith(href);
 	expect(router.replace).not.toHaveBeenCalled();
+	expect(router.dismiss).not.toHaveBeenCalled();
 });
 
-it.each(['products', 'cart'] as const)('replaces with the wide cart for %s', (tab) => {
-	const router = { replace: jest.fn(), dismissTo: jest.fn() };
+it.each(['products', 'cart'] as const)('dismisses to the wide till for %s', (tab) => {
+	const router = {
+		replace: jest.fn(),
+		dismissTo: jest.fn(),
+		dismiss: jest.fn(),
+		canDismiss: () => true,
+	};
+	returnToTill(router, false, tab);
+	expect(router.dismiss).toHaveBeenCalledTimes(1);
+	expect(router.replace).not.toHaveBeenCalled();
+	expect(router.dismissTo).not.toHaveBeenCalled();
+});
+
+it.each(['products', 'cart'] as const)('replaces a wide deep link with the cart for %s', (tab) => {
+	const router = {
+		replace: jest.fn(),
+		dismissTo: jest.fn(),
+		dismiss: jest.fn(),
+		canDismiss: () => false,
+	};
 	returnToTill(router, false, tab);
 	expect(router.replace).toHaveBeenCalledTimes(1);
 	expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
 	expect(router.dismissTo).not.toHaveBeenCalled();
+	expect(router.dismiss).not.toHaveBeenCalled();
 });

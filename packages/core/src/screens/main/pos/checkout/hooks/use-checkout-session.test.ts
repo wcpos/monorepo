@@ -25,6 +25,7 @@ const mockCheckoutInfo = jest.fn();
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
@@ -42,7 +43,12 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	useIsPhone: () => true,
 }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
@@ -339,6 +345,7 @@ describe('useCheckoutSession', () => {
 			if (refresh === 'synchronously thrown') {
 				expect(release).not.toHaveBeenCalled();
 				expect(mockReplace).not.toHaveBeenCalled();
+				expect(mockDismiss).not.toHaveBeenCalled();
 				expect(mockDismissTo).not.toHaveBeenCalled();
 				expect(result.current.error).toBe('refresh failed');
 				// Paid; only the follow-up threw: PAYMENT101 at warn, never "could not confirm".
@@ -354,6 +361,7 @@ describe('useCheckoutSession', () => {
 				expect(release).toHaveBeenCalledTimes(1);
 				expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
 				expect(mockReplace).not.toHaveBeenCalled();
+				expect(mockDismiss).not.toHaveBeenCalled();
 				expect(mockCheckoutError).not.toHaveBeenCalled();
 				expect(result.current.error).toBeNull();
 			}

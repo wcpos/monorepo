@@ -6,7 +6,7 @@ import { act, renderRouter } from 'expo-router/testing-library';
 
 import { returnToTill } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
 
-async function renderCheckout() {
+async function renderCheckout(wide = false) {
 	const view = await renderRouter(
 		{
 			'(app)/_layout': () => <Slot />,
@@ -31,10 +31,16 @@ async function renderCheckout() {
 			'(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]': () => <Text testID="tabs-cart" />,
 			'(app)/(drawer)/(pos)/index': () => <Redirect href="/(app)/(drawer)/(pos)/(tabs)" />,
 		},
-		{ initialUrl: '/' }
+		{ initialUrl: wide ? '/(app)/(drawer)/(pos)/(columns)/cart/o1' : '/' }
 	);
-	expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
-	await act(async () => router.navigate('/(app)/(drawer)/(pos)/(tabs)/cart'));
+	if (wide) {
+		await act(async () => router.navigate('/(app)/(drawer)/(pos)/(columns)/cart/o1'));
+		expect(view.getSegments().slice(-3)).toEqual(['(columns)', 'cart', '[...orderId]']);
+		expect(view.getPathname()).toBe('/cart/o1');
+	} else {
+		expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
+		await act(async () => router.navigate('/(app)/(drawer)/(pos)/(tabs)/cart'));
+	}
 	await act(async () => {
 		router.push({
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
@@ -105,5 +111,49 @@ describe('checkout returns to the phone till (#2363)', () => {
 			?.state?.routes.find((route) => route.name === '(drawer)')
 			?.state?.routes.find((route) => route.name === '(pos)')?.state;
 		expect(posStack?.routes.map((route) => route.name)).toEqual(['(tabs)']);
+	});
+});
+
+describe('checkout returns to the wide till', () => {
+	const posStack = (view: Awaited<ReturnType<typeof renderRouter>>) =>
+		view
+			.getRouterState()
+			?.routes.find((route) => route.name === '__root')
+			?.state?.routes.find((route) => route.name === '(app)')
+			?.state?.routes.find((route) => route.name === '(drawer)')
+			?.state?.routes.find((route) => route.name === '(pos)')?.state;
+
+	it('control: replacing with /cart leaves two POS routes', async () => {
+		const { view } = await renderCheckout(true);
+		await act(async () => router.replace({ pathname: '/cart' }));
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+			'(columns)/cart/index',
+		]);
+	});
+
+	it('dismisses to the original wide till route', async () => {
+		const { view } = await renderCheckout(true);
+		const originalRoute = posStack(view)?.routes[0];
+		await act(async () => returnToTill(router, false, 'products'));
+		expect(posStack(view)?.routes).toEqual([originalRoute]);
+		expect(view.getSegments().slice(-3)).toEqual(['(columns)', 'cart', '[...orderId]']);
+		expect(view.getPathname()).toBe('/cart/o1');
+	});
+
+	it('keeps exactly one wide till route after two sales', async () => {
+		const { view } = await renderCheckout(true);
+		const originalRoute = posStack(view)?.routes[0];
+		await act(async () => returnToTill(router, false, 'products'));
+		await act(async () => {
+			router.push({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+				params: { orderId: 'o2' },
+			});
+		});
+		await act(async () => returnToTill(router, false, 'products'));
+		expect(posStack(view)?.routes).toEqual([originalRoute]);
+		expect(view.getSegments().slice(-3)).toEqual(['(columns)', 'cart', '[...orderId]']);
+		expect(view.getPathname()).toBe('/cart/o1');
 	});
 });

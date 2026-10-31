@@ -1,7 +1,8 @@
 import type { ImperativeRouter } from 'expo-router';
 
 // From checkout, the /cart tie between (columns) and (tabs) resolves to (columns) (#2363).
-// Phones target (tabs) explicitly; dismissTo keeps repeated sales from stacking (tabs) routes.
+// Pop the sheet on every width; phones target (tabs) explicitly with dismissTo.
+// The wide replace survives only when nothing is beneath the sheet; the layout's `anchor` makes that rare.
 
 /** The phone tab checkout hands the cashier back to. */
 export type TillTab = 'products' | 'cart';
@@ -15,13 +16,14 @@ export function tillHref(compact: boolean, tab: TillTab) {
 		: '/cart';
 }
 
-/** Leaves checkout by dismissing to the phone tabs or replacing with the wide cart. */
+/** Pops checkout to the till, falling back to the wide cart for a deep link. */
 export function returnToTill(
-	router: Pick<ImperativeRouter, 'replace' | 'dismissTo'>,
+	router: Pick<ImperativeRouter, 'replace' | 'dismissTo' | 'dismiss' | 'canDismiss'>,
 	compact: boolean,
 	tab: TillTab
 ): void {
 	if (compact) router.dismissTo(tillHref(true, tab));
+	else if (router.canDismiss()) router.dismiss();
 	else router.replace({ pathname: '/cart' });
 }
 
