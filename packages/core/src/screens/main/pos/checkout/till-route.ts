@@ -2,7 +2,7 @@ import type { ImperativeRouter } from 'expo-router';
 
 // From checkout, the /cart tie between (columns) and (tabs) resolves to (columns) (#2363).
 // Pop the sheet on every width; phones target (tabs) explicitly with dismissTo.
-// The wide replace survives only when nothing is beneath the sheet; the layout's initialRouteName makes that rare.
+// The wide replace survives only when nothing is beneath the sheet; the layout's `anchor` makes that rare.
 
 /** The phone tab checkout hands the cashier back to. */
 export type TillTab = 'products' | 'cart';

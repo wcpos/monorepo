@@ -424,7 +424,7 @@ describe('PaymentWebview fallback order refresh', () => {
 			expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
 			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
 			expect(mockDismiss).toHaveBeenCalledTimes(1);
-			expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+			expect(mockReplace).not.toHaveBeenCalled();
 		}
 	);
 
@@ -744,7 +744,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockStockAdjustment).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(1);
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 });
 
@@ -847,7 +847,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(
 			expect.objectContaining({ payment_method: 'bacs', status: 'pending' })
 		);
@@ -887,7 +887,7 @@ describe('PaymentWebview settled order status', () => {
 		);
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it('ignores a late payment message once the poll has already settled the sale', async () => {
@@ -909,12 +909,12 @@ describe('PaymentWebview settled order status', () => {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 
 		await postReceived(pendingPayload);
 
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
 	});
 
@@ -943,7 +943,7 @@ describe('PaymentWebview settled order status', () => {
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(pendingPayload);
 		expect(setLoading).toHaveBeenCalledWith(false);
 		// Settled on the message's say-so, so no server poll was armed.

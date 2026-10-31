@@ -363,7 +363,7 @@ it('a standalone checkout modal on a wide screen leaves for the wide cart when t
 		render(<ReceiptStage orderUuid="paid" compact />);
 		fireEvent.click(screen.getByTestId('receipt-new-sale'));
 		expect(mockDismiss).toHaveBeenCalledTimes(1);
-		expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	} finally {
 		mockScreenSize = 'sm';

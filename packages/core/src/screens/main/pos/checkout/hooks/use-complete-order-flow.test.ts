@@ -265,7 +265,7 @@ it.each([true, false])(
 			expect(mockDismiss).not.toHaveBeenCalled();
 		} else {
 			expect(mockDismiss).toHaveBeenCalledTimes(1);
-			expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+			expect(mockReplace).not.toHaveBeenCalled();
 		}
 	}
 );
