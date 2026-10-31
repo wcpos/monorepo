@@ -48,7 +48,7 @@
 		"esbuild": "0.28.2",
 		"eslint": "^9.39.5",
 		"expo": "~57.0.13",
-		"glob": "^13.0.6",
+		"glob": "^14.0.2",
 		"lint-staged": "^17.3.0",
 		"prettier-plugin-tailwindcss": "^0.8.1",
 		"rxdb": "17.6.0",
