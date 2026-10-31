@@ -47,14 +47,14 @@ it('asks for a reopen on an order that is not open', () => {
 	expect(state({ status: 'completed' }, {}, false)).toEqual({
 		hidden: false,
 		disabled: true,
-		reason: 'pos_cart.tax_exempt_reopen',
+		reason: 'reopen',
 	});
 });
 
 it('asks for the store on a couponed order when the store is unreachable', () => {
 	expect(state(couponed, {}, false)).toMatchObject({
 		disabled: true,
-		reason: 'pos_cart.tax_exempt_offline',
+		reason: 'offline',
 	});
 	// A removed coupon (tombstone) is not a coupon.
 	expect(state({ coupon_lines: [{ code: null }] } as OrderPayload, {}, false).disabled).toBe(false);
@@ -70,7 +70,7 @@ it.each([
 	(_, payload, overrides) => {
 		expect(state(payload, overrides)).toMatchObject({
 			disabled: true,
-			reason: 'pos_cart.tax_exempt_payment',
+			reason: 'payment',
 		});
 	}
 );

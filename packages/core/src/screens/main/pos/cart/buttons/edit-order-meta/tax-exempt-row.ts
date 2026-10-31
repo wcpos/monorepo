@@ -19,12 +19,10 @@ export function taxExemptRowState(
 	online: boolean
 ) {
 	const hidden = readers.configForOrder(payload).pricesIncludeTax;
-	let reason: string | undefined;
-	if (!OPEN_ORDER_STATUSES.some((status) => status === payload.status))
-		reason = 'pos_cart.tax_exempt_reopen';
-	else if (!online && payload.coupon_lines?.some((line) => line.code != null))
-		reason = 'pos_cart.tax_exempt_offline';
+	let reason: 'reopen' | 'offline' | 'payment' | undefined;
+	if (!OPEN_ORDER_STATUSES.some((status) => status === payload.status)) reason = 'reopen';
+	else if (!online && payload.coupon_lines?.some((line) => line.code != null)) reason = 'offline';
 	else if (orderLocked(payload, record, readers, dp, { allowNew: true, allowDurableHint: true }))
-		reason = 'pos_cart.tax_exempt_payment';
+		reason = 'payment';
 	return { hidden, disabled: !!reason, reason };
 }

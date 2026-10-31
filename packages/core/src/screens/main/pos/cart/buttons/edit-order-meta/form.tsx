@@ -556,7 +556,15 @@ export function EditOrderMetaForm({
 						<PropertyRow
 							id="tax_exempt"
 							label={t('pos_cart.tax_exempt')}
-							help={t(taxExempt.reason ?? 'pos_cart.tax_exempt_hint')}
+							help={
+								taxExempt.reason === 'reopen'
+									? t('pos_cart.tax_exempt_reopen')
+									: taxExempt.reason === 'offline'
+										? t('pos_cart.tax_exempt_offline')
+										: taxExempt.reason === 'payment'
+											? t('pos_cart.tax_exempt_payment')
+											: t('pos_cart.tax_exempt_hint')
+							}
 							testID="order-meta-tax-exempt"
 							control={
 								<Switch
