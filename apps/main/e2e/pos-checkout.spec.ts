@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import {
 	becomesVisible,
@@ -155,6 +155,37 @@ async function omitPaymentLinkFromPushAcks(page: Page) {
 			await route.abort().catch(() => {});
 		}
 	});
+}
+
+async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
+	return toggle.evaluate((node) => {
+		const element = node as HTMLElement & { checked?: boolean };
+		const ariaChecked = element.getAttribute('aria-checked');
+		if (ariaChecked !== null) {
+			return ariaChecked === 'true';
+		}
+
+		const dataState = element.getAttribute('data-state');
+		if (dataState !== null) {
+			return dataState === 'checked';
+		}
+
+		return element.checked === true;
+	});
+}
+
+async function ensureSwitchDisabled(toggle: Locator) {
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	if (await isSwitchEnabled(toggle)) {
+		await toggle.click();
+	}
+	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(false);
+}
+
+async function disableAutoShowReceipt(page: Page) {
+	await page.getByTestId('cart-settings-button').click();
+	await ensureSwitchDisabled(page.getByTestId('cart-setting-auto-show-receipt').first());
+	await page.keyboard.press('Escape');
 }
 
 test.describe('POS Cart - Order Actions', () => {
@@ -460,6 +491,31 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// above is the checkout modal's rendering of this same number; `cart.total`
 			// is the cart's persisted figure at full stored precision.
 			expectMoneyMatches(server.total, cart.total, 'order total parity (cart vs server)');
+		}
+	);
+
+	liveTest(
+		'a sale without the receipt leaves exactly one POS screen',
+		async ({ posPage: page, trackOrder }) => {
+			liveTest.slow();
+
+			await disableAutoShowReceipt(page);
+			await page.reload();
+			await expect(page.getByTestId('search-products')).toBeVisible({
+				timeout: 30_000,
+			});
+
+			const label = newRunLabel();
+			await addTestProductToCart(page);
+			await stampRunLabel(page, label);
+			await openCheckout(page, {
+				onOrderCreated: (order) => trackOrder({ ...order, label }),
+			});
+			await processPayment(page);
+
+			// Replacing checkout stacked another POS screen, making one scan add N units.
+			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
+			await expect(page.getByTestId('search-products')).toHaveCount(1);
 		}
 	);
 
