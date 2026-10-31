@@ -10,6 +10,16 @@ jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The Button mock exposes its variant: the 10-30 ruling (#3126) makes a bar-level
+// Clear all a link, never a box, and the Orders bar follows it (Paul, 2026-10-31).
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children, testID, onPress, variant }: any) => (
+		<button data-testid={testID} data-variant={variant} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: any) => <span>{children}</span>,
+}));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({}) }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/app-state', () => ({
@@ -75,6 +85,8 @@ it('shows Clear all once two groups are set, and Clear all empties them', () => 
 	expect(screen.queryByTestId('orders-filter-clear-all')).toBeNull();
 	fireEvent.click(screen.getByTestId('set-cashier'));
 	expect(filters().cashier).toBe('7');
+	// A link, not a box: the same shape as the POS filter bar's Clear all (#3126).
+	expect(screen.getByTestId('orders-filter-clear-all').getAttribute('data-variant')).toBe('link');
 	fireEvent.click(screen.getByTestId('orders-filter-clear-all'));
 	expect(filters()).toEqual({});
 });
