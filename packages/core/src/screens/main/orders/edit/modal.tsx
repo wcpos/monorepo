@@ -41,8 +41,8 @@ export function EditOrderModal({ resource }: Props) {
 				<ModalHeader>
 					<ModalTitle>
 						<Text>
-							{payload?.id
-								? t('orders.edit_order_2', { number: payload.id })
+							{payload?.number || payload?.id
+								? t('orders.edit_order_2', { number: payload.number || payload.id })
 								: t('orders.edit_order')}
 						</Text>
 					</ModalTitle>
