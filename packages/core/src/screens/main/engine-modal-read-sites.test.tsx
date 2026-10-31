@@ -18,6 +18,7 @@ let mockRouteParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRouteParams,
+	useRouter: () => ({ canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() }),
 }));
 
 jest.mock('@wcpos/query/record-readers', () => ({

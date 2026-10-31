@@ -4,35 +4,52 @@ import { Text } from 'react-native';
 import { Redirect, router, Slot, Stack, Tabs } from 'expo-router';
 import { act, renderRouter } from 'expo-router/testing-library';
 
-import { returnToTill } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
+import {
+	columnsCheckoutHref,
+	handSheetToColumns,
+	returnToTill,
+} from '../../../packages/core/src/screens/main/pos/checkout/till-route';
+
+const checkoutRoutes = {
+	'(app)/_layout': () => <Slot />,
+	'(app)/(drawer)/_layout': () => <Slot />,
+	'(app)/(drawer)/(pos)/_layout': () => <Stack />,
+	// expo-router breaks the /cart tie by config order, which on disk is alphabetical.
+	'(app)/(drawer)/(pos)/(columns)/index': () => <Text testID="columns-index" />,
+	'(app)/(drawer)/(pos)/(columns)/cart/index': () => <Text testID="columns-cart" />,
+	'(app)/(drawer)/(pos)/(columns)/cart/[...orderId]': () => <Text testID="columns-cart" />,
+	'(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout': () => <Text testID="checkout-modal" />,
+	'(app)/(drawer)/(pos)/(tabs)/_layout': () => (
+		<Tabs>
+			<Tabs.Screen name="index" />
+			<Tabs.Screen name="cart" />
+		</Tabs>
+	),
+	'(app)/(drawer)/(pos)/(tabs)/index': () => <Text testID="tabs-products" />,
+	'(app)/(drawer)/(pos)/(tabs)/cart/_layout': () => <Slot />,
+	'(app)/(drawer)/(pos)/(tabs)/cart/index': () => <Text testID="tabs-cart" />,
+	'(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]': () => <Text testID="tabs-cart" />,
+	'(app)/(drawer)/(pos)/index': () => <Redirect href="/(app)/(drawer)/(pos)/(tabs)" />,
+};
+
+const posStack = (view: Awaited<ReturnType<typeof renderRouter>>) =>
+	view
+		.getRouterState()
+		?.routes.find((route) => route.name === '__root')
+		?.state?.routes.find((route) => route.name === '(app)')
+		?.state?.routes.find((route) => route.name === '(drawer)')
+		?.state?.routes.find((route) => route.name === '(pos)')?.state;
+
+async function renderDeepLinkCheckout() {
+	return renderRouter(checkoutRoutes, {
+		initialUrl: '/(app)/(drawer)/(pos)/(modals)/cart/o1/checkout',
+	});
+}
 
 async function renderCheckout(wide = false) {
-	const view = await renderRouter(
-		{
-			'(app)/_layout': () => <Slot />,
-			'(app)/(drawer)/_layout': () => <Slot />,
-			'(app)/(drawer)/(pos)/_layout': () => <Stack />,
-			// expo-router breaks the /cart tie by config order, which on disk is alphabetical.
-			'(app)/(drawer)/(pos)/(columns)/index': () => <Text testID="columns-index" />,
-			'(app)/(drawer)/(pos)/(columns)/cart/index': () => <Text testID="columns-cart" />,
-			'(app)/(drawer)/(pos)/(columns)/cart/[...orderId]': () => <Text testID="columns-cart" />,
-			'(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout': () => (
-				<Text testID="checkout-modal" />
-			),
-			'(app)/(drawer)/(pos)/(tabs)/_layout': () => (
-				<Tabs>
-					<Tabs.Screen name="index" />
-					<Tabs.Screen name="cart" />
-				</Tabs>
-			),
-			'(app)/(drawer)/(pos)/(tabs)/index': () => <Text testID="tabs-products" />,
-			'(app)/(drawer)/(pos)/(tabs)/cart/_layout': () => <Slot />,
-			'(app)/(drawer)/(pos)/(tabs)/cart/index': () => <Text testID="tabs-cart" />,
-			'(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]': () => <Text testID="tabs-cart" />,
-			'(app)/(drawer)/(pos)/index': () => <Redirect href="/(app)/(drawer)/(pos)/(tabs)" />,
-		},
-		{ initialUrl: wide ? '/(app)/(drawer)/(pos)/(columns)/cart/o1' : '/' }
-	);
+	const view = await renderRouter(checkoutRoutes, {
+		initialUrl: wide ? '/(app)/(drawer)/(pos)/(columns)/cart/o1' : '/',
+	});
 	if (wide) {
 		await act(async () => router.navigate('/(app)/(drawer)/(pos)/(columns)/cart/o1'));
 		expect(view.getSegments().slice(-3)).toEqual(['(columns)', 'cart', '[...orderId]']);
@@ -41,6 +58,7 @@ async function renderCheckout(wide = false) {
 		expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
 		await act(async () => router.navigate('/(app)/(drawer)/(pos)/(tabs)/cart'));
 	}
+	const originalRoute = posStack(view)?.routes[0];
 	await act(async () => {
 		router.push({
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
@@ -56,7 +74,7 @@ async function renderCheckout(wide = false) {
 		'[orderId]',
 		'checkout',
 	]);
-	return { view };
+	return { view, originalRoute };
 }
 
 describe('checkout returns to the phone till (#2363)', () => {
@@ -115,14 +133,6 @@ describe('checkout returns to the phone till (#2363)', () => {
 });
 
 describe('checkout returns to the wide till', () => {
-	const posStack = (view: Awaited<ReturnType<typeof renderRouter>>) =>
-		view
-			.getRouterState()
-			?.routes.find((route) => route.name === '__root')
-			?.state?.routes.find((route) => route.name === '(app)')
-			?.state?.routes.find((route) => route.name === '(drawer)')
-			?.state?.routes.find((route) => route.name === '(pos)')?.state;
-
 	it('control: replacing with /cart leaves two POS routes', async () => {
 		const { view } = await renderCheckout(true);
 		await act(async () => router.replace({ pathname: '/cart' }));
@@ -155,5 +165,41 @@ describe('checkout returns to the wide till', () => {
 		expect(posStack(view)?.routes).toEqual([originalRoute]);
 		expect(view.getSegments().slice(-3)).toEqual(['(columns)', 'cart', '[...orderId]']);
 		expect(view.getPathname()).toBe('/cart/o1');
+	});
+});
+
+describe('a wide checkout sheet hands off to the columns cart', () => {
+	it('control: replacing the sheet with columns checkout leaves two POS routes', async () => {
+		const { view } = await renderCheckout(true);
+		await act(async () => router.replace(columnsCheckoutHref('o1')));
+		expect(posStack(view)?.routes).toHaveLength(2);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+			'(columns)/cart/[...orderId]',
+		]);
+	});
+
+	it('with the wide till beneath, pops to the original route', async () => {
+		const { view, originalRoute } = await renderCheckout(true);
+		await act(async () => handSheetToColumns(router, 'o1'));
+		expect(posStack(view)?.routes).toEqual([originalRoute]);
+		expect(view.getPathname()).toBe('/cart/o1');
+	});
+
+	it('with the phone tabs beneath, leaves only the tabs route', async () => {
+		const { view } = await renderCheckout(false);
+		await act(async () => handSheetToColumns(router, 'o1'));
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
+	});
+
+	it('with nothing beneath, replaces a deep link with columns checkout', async () => {
+		const view = await renderDeepLinkCheckout();
+		expect(view.getSegments().slice(-4)).toEqual(['(modals)', 'cart', '[orderId]', 'checkout']);
+		await act(async () => handSheetToColumns(router, 'o1'));
+		expect(posStack(view)?.routes).toHaveLength(1);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+		]);
+		expect(view.getPathname()).toBe('/cart/o1/checkout');
 	});
 });

@@ -41,3 +41,19 @@ export function standaloneCheckoutHref(orderId: string) {
 		params: { orderId, [STANDALONE_CHECKOUT_PARAM]: '1' },
 	} as const;
 }
+
+export function columnsCheckoutHref(orderId: string) {
+	return {
+		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]' as const,
+		params: { orderId: [orderId, 'checkout'] },
+	};
+}
+
+/** Pop to the till that enterCheckout updates; only a deep link needs a replacement (#3149). */
+export function handSheetToColumns(
+	router: Pick<ImperativeRouter, 'replace' | 'dismiss' | 'canDismiss'>,
+	orderId: string
+): void {
+	if (router.canDismiss()) router.dismiss();
+	else router.replace(columnsCheckoutHref(orderId));
+}
