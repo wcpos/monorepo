@@ -223,7 +223,9 @@ it.each(['0.30', '0.40'])('commits a partial order crossing net paid %s', async 
 const references = new BehaviorSubject({ ready: false, generation: '0:0' });
 const context = {
 	taxStatusFor: () => 'none' as const,
-	coupons: new Map([['summer', { code: 'summer', discount_type: 'percent', amount: '10' }]]),
+	coupons: new Map<string, orderMath.CouponInput>([
+		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
+	]),
 	productCategories: new Map(),
 	categoryParents: new Map(),
 };
@@ -237,7 +239,11 @@ it.each(['valid', 'missing', 'boundary'])(
 	'#963 replays a %s coupon only after references, once, with a translated failure toast',
 	async (kind) => {
 		references.next({ ready: false, generation: '0:0' });
-		const coupon = { code: 'summer', discount_type: 'percent', amount: '10' };
+		const coupon: orderMath.CouponInput = {
+			code: 'summer',
+			discount_type: 'percent',
+			amount: '10',
+		};
 		context.coupons = new Map(kind === 'missing' ? [] : [['summer', coupon]]);
 		// prettier-ignore
 		const a = record({
@@ -927,11 +933,12 @@ it('dispatches the hook repair and gives it the shared system boundary commit', 
 	const view = render(<SettlementCoordinatorProvider />);
 	try {
 		await flush();
-		expect(mockRepairTaxExempt).toHaveBeenCalledWith(a, true);
+		expect(mockRepairTaxExempt).toHaveBeenCalledWith(a, true, expect.any(Function));
 		const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
+		const valid = jest.fn(() => true);
 		const result = orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config);
 		await enqueueOrderMutation(a.uuid, (queue) =>
-			systemCommit(a as CurrentOrderRecord, result, queue)
+			systemCommit(a as CurrentOrderRecord, result, queue, undefined, valid)
 		);
 		const [ctx, input] = jest.mocked(commitAtBoundary).mock.calls[0];
 		expect(ctx.source).toBe('system');
@@ -941,8 +948,9 @@ it('dispatches the hook repair and gives it the shared system boundary commit', 
 		expect(input.allowed!(a.payload)).toBe(false);
 		expect(input.allowed!(a.payload, true)).toBe(true);
 		act(() => leaveCheckout(a.uuid));
-		expect(input.allowed!({ ...a.payload, coupon_lines: [{ code: 'ten' }] })).toBe(false);
-		expect(input.allowed!({ ...a.payload, coupon_lines: [{ code: 'ten' }] }, true)).toBe(false);
+		valid.mockReturnValue(false);
+		expect(input.allowed!(a.payload)).toBe(false);
+		expect(input.allowed!(a.payload, true)).toBe(false);
 		await ctx.complete(
 			a as Parameters<typeof ctx.complete>[0],
 			{ source: 'zero-balance', order: {} } as never,
@@ -960,3 +968,39 @@ it('dispatches the hook repair and gives it the shared system boundary commit', 
 		view.unmount();
 	}
 });
+
+it.each([false, true])(
+	'passes coupon context and tax status to the repair boundary (override=%s)',
+	async (override) => {
+		orders.next({ ready: true, hits: [] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			const a = record({ coupon_lines: [{ code: 'summer' }] });
+			const taxStatusFor = () => 'taxable' as const;
+			const coupons = {
+				context,
+				missing: { deny: { reasonKey: 'missing' } },
+				...(override && { taxStatusFor }),
+			};
+			jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+			const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
+			await enqueueOrderMutation(a.uuid, (queue) =>
+				systemCommit(
+					a as CurrentOrderRecord,
+					orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
+					queue,
+					coupons,
+					() => true
+				)
+			);
+			const input = jest.mocked(commitAtBoundary).mock.calls[0][1];
+			expect(input.coupons).toEqual({
+				...context,
+				taxStatusFor: override ? taxStatusFor : context.taxStatusFor,
+			});
+			expect(input.allowed!(a.payload)).toBe(true);
+		} finally {
+			view.unmount();
+		}
+	}
+);

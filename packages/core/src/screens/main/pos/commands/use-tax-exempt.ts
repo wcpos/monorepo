@@ -86,11 +86,19 @@ export function useSetTaxExempt() {
 }
 
 /** A repair runs with nobody at the till: the coordinator's system boundary commit, never the cashier's. */
-export function useRepairTaxExempt(commitAtBoundary: TaxExemptDeps['commitAtBoundary']) {
+export function useRepairTaxExempt(
+	commitAtBoundary: (
+		...args: [...Parameters<TaxExemptDeps['commitAtBoundary']>, valid: () => boolean]
+	) => Promise<unknown>
+) {
 	const deps = useTaxExemptDeps();
 	return React.useCallback(
-		(record: CurrentOrderRecord, exempt: boolean) =>
-			setTaxExempt({ ...deps, commitAtBoundary }, record, { exempt, source: 'repair' }),
+		(record: CurrentOrderRecord, exempt: boolean, valid: () => boolean = () => true) =>
+			setTaxExempt(
+				{ ...deps, commitAtBoundary: (o, r, q, c) => commitAtBoundary(o, r, q, c, valid) },
+				record,
+				{ exempt, source: 'repair', valid }
+			),
 		[deps, commitAtBoundary]
 	);
 }

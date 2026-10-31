@@ -57,7 +57,7 @@ const referenceInputs = (payload: OrderPayload) => [
 export async function setTaxExempt(
 	deps: TaxExemptDeps,
 	order: CurrentOrderRecord,
-	input: { exempt: boolean; source: 'user' | 'repair' }
+	input: { exempt: boolean; source: 'user' | 'repair'; valid?: () => boolean }
 ) {
 	const payload = order.getLatest().payload;
 	const readInputs = referenceInputs(payload);
@@ -76,7 +76,7 @@ export async function setTaxExempt(
 			productCategories: context?.productCategories ?? new Map(),
 		},
 		missing,
-		boundary: locked,
+		boundary: input.source === 'repair' ? undefined : locked,
 	};
 	// Collection reads precede the queue; the resolver is synchronous on every resident run.
 	const taxStatusFor = await deps.readTaxStatuses(
@@ -98,6 +98,7 @@ export async function setTaxExempt(
 						: input.exempt;
 				// Temporary orders carry the flag into birth; only user toggles may write through the hint.
 				const options = { allowNew: true, allowDurableHint: input.source === 'user' };
+				if (input.valid && !input.valid()) return locked;
 				if (orderLocked(currentPayload, target, deps, dp, options)) return locked;
 				// Inclusive stores are a separate spec (epic §3).
 				if (exempt && pricesIncludeTax)

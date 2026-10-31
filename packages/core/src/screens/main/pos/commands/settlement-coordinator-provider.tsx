@@ -45,7 +45,6 @@ import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { useCartConfigInputs, useCartConfigReader } from '../hooks/use-cart-config';
 
 import type { BoundaryResult } from './paid-balance-boundary';
-import type { BoundaryCommit } from './settle-cart-write';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
 
@@ -90,16 +89,19 @@ export function SettlementCoordinatorProvider() {
 		[saleContext, read, serverOwnsMoney, bindingStatus, closeSale]
 	);
 	const repair = useRepairTaxExempt(
-		React.useCallback<BoundaryCommit>(
-			(order, result, queue) =>
+		React.useCallback<Parameters<typeof useRepairTaxExempt>[0]>(
+			(order, result, queue, coupons, valid) =>
 				commitAtBoundary(systemContext(), {
 					order: order as EngineRecord<'orders'>,
 					result,
 					queue,
 					write: (changes) => writeOrderChanges(manager, { document: order, changes }),
-					coupons: undefined,
+					coupons: coupons && {
+						...coupons.context,
+						taxStatusFor: coupons.taxStatusFor ?? coupons.context.taxStatusFor,
+					},
 					allowed: (payload, ignoreCheckout) =>
-						!payload.coupon_lines?.some((line) => line.code != null) &&
+						valid() &&
 						!orderLocked(
 							payload,
 							order,
@@ -158,7 +160,7 @@ export function SettlementCoordinatorProvider() {
 			serverOwnsMoney,
 			orderSaveState: getOrderSaveState,
 			inCheckout,
-			repairTaxExempt: (record, exempt) => repairRef.current(record, exempt),
+			repairTaxExempt: (record, exempt, valid) => repairRef.current(record, exempt, valid),
 			now: Date.now,
 			observe,
 			settle: async (uuid, document, allowed, coupons, queue) => {

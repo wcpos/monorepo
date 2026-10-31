@@ -512,3 +512,52 @@ it('repair refuses durable store ownership without writing', async () => {
 	expect(JSON.stringify(h.order.payload)).toBe(before);
 	expect(h.deps.commitAtBoundary).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+	'refuses an invalid repair at resident resolution (rerun=%s)',
+	async (rerun) => {
+		const h = setup({ meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] });
+		const before = JSON.stringify(h.order.payload);
+		let valid = rerun;
+		if (rerun) {
+			h.rerun();
+			h.beforeSecond.mockImplementation(() => {
+				valid = false;
+			});
+		}
+		expect(
+			await setTaxExempt(h.deps, h.order, { exempt: true, source: 'repair', valid: () => valid })
+		).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+		expect(h.patches).toEqual([{}]);
+		expect(JSON.stringify(h.order.payload)).toBe(before);
+		expect(h.deps.commitAtBoundary).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['repair', 'user'] as const)('couponed paid-balance crossing from %s', async (source) => {
+	const h = setup({
+		status: 'pos-partial',
+		total: '14.5',
+		meta_data: [...ledger('captured', '14'), { key: 'is_vat_exempt', value: 'yes' }],
+		line_items: [{ ...product, total: '9', total_tax: '0', subtotal_tax: '0', taxes: [] }],
+		coupon_lines: [{ code: 'ten', discount: '1', discount_tax: '0' }],
+	});
+	const result = await toggle(h, true, source);
+	if (source === 'user') {
+		expect(result).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+		expect(h.patches).toEqual([{}]);
+		expect(h.deps.commitAtBoundary).not.toHaveBeenCalled();
+	} else {
+		expect(h.deps.commitAtBoundary).toHaveBeenCalledWith(
+			h.order,
+			expect.objectContaining({ totals: expect.objectContaining({ total: '14' }) }),
+			expect.anything(),
+			expect.objectContaining({
+				context: expect.objectContaining({
+					coupons: new Map([['ten', { code: 'ten', discount_type: 'percent', amount: '10' }]]),
+				}),
+			})
+		);
+		expect(h.order.payload.fee_lines?.[0].total_tax).toBe('0');
+	}
+});

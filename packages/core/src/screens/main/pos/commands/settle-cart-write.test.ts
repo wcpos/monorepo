@@ -166,7 +166,8 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 		expect(commitAtBoundary).toHaveBeenCalledWith(
 			order,
 			expect.objectContaining({ changed: true }),
-			queue
+			queue,
+			undefined
 		);
 	} else {
 		expect(order.payload.total).toBe('6');

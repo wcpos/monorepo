@@ -28,7 +28,7 @@ interface Deps {
 	serverOwnsMoney: (uuid: string) => boolean;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
-	repairTaxExempt: (record: CurrentOrderRecord, exempt: boolean) => Promise<unknown>;
+	repairTaxExempt(order: CurrentOrderRecord, flag: boolean, valid: () => boolean): Promise<unknown>;
 	settle: (
 		uuid: string,
 		record: CurrentOrderRecord,
@@ -58,7 +58,9 @@ export function needsTaxRepair(payload: OrderPayload, lastFlag: boolean | undefi
 	];
 	return lines.some(
 		(line) =>
-			Number(line.total_tax || 0) !== 0 || line.taxes?.some((t) => Number(t.total || 0) !== 0)
+			Number(line.total_tax || 0) !== 0 ||
+			Number((line as { subtotal_tax?: string }).subtotal_tax || 0) !== 0 ||
+			line.taxes?.some((t) => Number(t.total || 0) !== 0 || Number(t.subtotal || 0) !== 0)
 	);
 }
 
@@ -184,16 +186,18 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				for (const record of [...records].sort((a, b) => a.uuid.localeCompare(b.uuid))) {
 					if (stopped || pass !== epoch || !rates.ready) break;
 					const uuid = record.uuid;
+					const current = () =>
+						!stopped && pass === epoch && rates.ready && records.some((r) => r.uuid === uuid);
 					const fresh = record.getLatest();
 					const flag = wooMetaCarrier.vatExempt(fresh.payload.meta_data);
 					const key = fingerprint(fresh);
 					const repair = needsTaxRepair(fresh.payload, lastFlag.get(uuid));
 					if (!repair) lastFlag.set(uuid, flag);
-					if (repair && repaired.get(uuid) !== key) {
+					else if (repaired.get(uuid) !== key && (!needsReferences(fresh) || references.ready)) {
 						repaired.set(uuid, key);
 						try {
 							// The till's own toggle also trips this rule; equal meta and clean lines write nothing.
-							if (!isActionRefusal(await deps.repairTaxExempt(fresh, flag)))
+							if (!isActionRefusal(await deps.repairTaxExempt(fresh, flag, current)))
 								lastFlag.set(uuid, flag);
 						} catch (error) {
 							deps.observe({ type: 'settlement.failed', uuid, at: deps.now(), error });
@@ -223,8 +227,6 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					try {
 						await enqueueOrderMutation(uuid, async (slot) => {
 							const fresh = (slot.order ?? record).getLatest();
-							const current = () =>
-								!stopped && pass === epoch && rates.ready && records.some((r) => r.uuid === uuid);
 							if (!current()) return;
 							seen.set(uuid, fingerprint(fresh));
 							const allowed = (payload: OrderPayload, ignoreCheckout = false) =>
