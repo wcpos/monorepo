@@ -26,13 +26,12 @@ export function useAmount(props: AmountFieldProps) {
 		(useDocField(store, (state) => state.price_thousand_sep) as string) || '';
 	// WooCommerce's default, 2, before the store loads.
 	const priceDecimals = useDocField(store, (state) => state.price_num_decimals);
+	const places = kind === 'money' ? (props.places ?? Number(priceDecimals ?? 2)) : PLACES[kind];
+	// Entry is gated by the store's decimal_qty setting (Paul, 2026-10-31): a store that refuses
+	// decimal quantities gets no decimal key. Display and the commit rounding keep the full places,
+	// so a stored 1.5 still reads 1.5 after the setting is switched off.
 	const decimalQty = useDocField(store, (s) => s.decimal_qty) === true;
-	const places =
-		kind === 'money'
-			? (props.places ?? Number(priceDecimals ?? 2))
-			: kind === 'quantity' && !decimalQty
-				? 0
-				: PLACES[kind];
+	const entryPlaces = kind === 'quantity' && !decimalQty ? 0 : places;
 	// A grid's price is in the open order's currency on the POS; a field's number has no symbol.
 	const currencySymbol = useRecordField(
 		useCurrentOrderOptional(),
@@ -63,5 +62,5 @@ export function useAmount(props: AmountFieldProps) {
 		void Promise.resolve(written).then((ok) => ok === false && refused(), refused);
 		return written;
 	};
-	return { places, decimalSeparator, thousandSeparator, format, stored, commit };
+	return { places, entryPlaces, decimalSeparator, thousandSeparator, format, stored, commit };
 }

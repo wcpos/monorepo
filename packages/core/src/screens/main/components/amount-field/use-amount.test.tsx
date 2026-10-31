@@ -42,7 +42,7 @@ it.each([
 	[false, 0],
 	[true, 6],
 ] as const)(
-	'decimal_qty %s gives a quantity %d places and the matching decimal key',
+	'decimal_qty %s gives a quantity %d entry places and the matching decimal key',
 	async (enabled, places) => {
 		mockStore.decimal_qty = enabled;
 		const props = { kind: 'quantity', value: 1, onCommit: jest.fn() } as const;
@@ -56,6 +56,9 @@ it.each([
 		await act(async () => jest.runOnlyPendingTimers());
 		expect(screen.getByTestId('quantity-keypad-value')).toBeTruthy();
 		expect(screen.queryByTestId('keypad-key-decimal') !== null).toBe(enabled);
-		expect(result.current.places).toBe(places);
+		expect(result.current.entryPlaces).toBe(places);
+		// Display and commit rounding keep the full places either way: a stored 1.5 still reads 1.5.
+		expect(result.current.places).toBe(6);
+		expect(result.current.format(1.5)).toContain('1.5');
 	}
 );
