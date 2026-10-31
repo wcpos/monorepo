@@ -51,6 +51,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	}),
 }));
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
@@ -72,7 +73,12 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockRequire } }),
@@ -160,6 +166,7 @@ describe('useCompleteOrderFlow', () => {
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 	});
 
@@ -174,6 +181,7 @@ describe('useCompleteOrderFlow', () => {
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
 	});
 
@@ -231,6 +239,7 @@ describe('useCompleteOrderFlow', () => {
 		expect(release).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 		jest.useRealTimers();
 	});
@@ -248,14 +257,16 @@ it.each([true, false])(
 		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
-		expect(mockReplace).toHaveBeenCalledWith(
-			autoShowReceipt
-				? {
-						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-						params: { orderId: 'uuid-42' },
-					}
-				: { pathname: '/cart' }
-		);
+		if (autoShowReceipt) {
+			expect(mockReplace).toHaveBeenCalledWith({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+				params: { orderId: 'uuid-42' },
+			});
+			expect(mockDismiss).not.toHaveBeenCalled();
+		} else {
+			expect(mockDismiss).toHaveBeenCalledTimes(1);
+			expect(mockReplace).not.toHaveBeenCalledWith({ pathname: '/cart' });
+		}
 	}
 );
 
@@ -369,6 +380,7 @@ it.each(['stage', 'modal'] as const)(
 		});
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	}
 );
@@ -427,6 +439,7 @@ it.each([false, true])(
 		expect(mockSelectedOrder).toBe(switched ? 'B' : 'uuid-42');
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 	}
 );
 
@@ -446,6 +459,7 @@ it('deselects A when the cashier switches after its receipt was selected', async
 	expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
 	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });
 
 it.each([null, 'B', 'uuid-42'])(

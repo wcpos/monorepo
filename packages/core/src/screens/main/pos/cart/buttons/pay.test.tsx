@@ -21,6 +21,7 @@ const mockLeave = jest.fn();
 const mockMarkSaving = jest.fn();
 const mockClearSaving = jest.fn();
 const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
 const mockDismissTo = jest.fn();
 const mockOrder = { isNew: false, uuid: 'order-1', payload: { total: '10.00', line_items: [] } };
 let mockUnmet: { id: string; lineUuid: string }[] = [];
@@ -39,7 +40,13 @@ jest.mock('@wcpos/utils/logger', () => {
 	return { ...jest.requireActual('@wcpos/utils/logger'), getLogger: () => logger };
 });
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush, replace: mockReplace, dismissTo: mockDismissTo }),
+	useRouter: () => ({
+		push: mockPush,
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
@@ -162,6 +169,7 @@ it.each(['lg', 'sm'])(
 			expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)/cart');
 		else expect(mockDismissTo).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 	}
 );
 
@@ -250,6 +258,7 @@ it.each(['lg', 'sm'])(
 		expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
 		// The cashier may be on another order by now: a late outcome never moves the screen.
 		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
 	}
 );
 

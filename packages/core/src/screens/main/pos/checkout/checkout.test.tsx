@@ -60,7 +60,14 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (...args: unknown[]) => mockUseObservableEagerState(...args),
 }));
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({
+		replace: jest.fn(),
+		dismissTo: jest.fn(),
+		canDismiss: () => true,
+		dismiss: jest.fn(),
+	}),
+}));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => false,
