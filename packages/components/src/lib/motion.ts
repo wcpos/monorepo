@@ -42,13 +42,10 @@ export const ROLL_IN_DURATION = 480;
 // Keep pixel and percentage travel separate: timing cannot interpolate between different units.
 // Built on first use, not at import: twelve core suites mock Reanimated without `Keyframe`, and a
 // module that constructs one while loading would take every importer of this file down with it.
-/** What `new Keyframe({…}).duration()` returns: the value a layout animation prop accepts. */
-type LayoutKeyframe = ReturnType<Keyframe['duration']>;
-let tearOffKeyframe: LayoutKeyframe | undefined;
-let rollInKeyframe: LayoutKeyframe | undefined;
-/** The cart column tears off when the sale is paid (Paper till, Market stall). */
-export function tearOff(): LayoutKeyframe {
-	tearOffKeyframe ??= new Keyframe({
+// The types are inferred from the builders: what `.duration()` returns is what a layout animation
+// prop accepts.
+function buildTearOff() {
+	return new Keyframe({
 		0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
 		25: {
 			transform: [{ translateY: 6 }, { translateY: '0%' }, { rotate: '0.6deg' }],
@@ -60,14 +57,23 @@ export function tearOff(): LayoutKeyframe {
 			easing: EASE_EXIT,
 		},
 	}).duration(TEAR_OFF_DURATION);
-	return tearOffKeyframe;
 }
-/** The next receipt rolls in after a tear-off. */
-export function rollIn(): LayoutKeyframe {
-	rollInKeyframe ??= new Keyframe({
+function buildRollIn() {
+	return new Keyframe({
 		0: { opacity: 0, transform: [{ translateY: -14 }] },
 		100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
 	}).duration(ROLL_IN_DURATION);
+}
+let tearOffKeyframe: ReturnType<typeof buildTearOff> | undefined;
+let rollInKeyframe: ReturnType<typeof buildRollIn> | undefined;
+/** The cart column tears off when the sale is paid (Paper till, Market stall). */
+export function tearOff() {
+	tearOffKeyframe ??= buildTearOff();
+	return tearOffKeyframe;
+}
+/** The next receipt rolls in after a tear-off. */
+export function rollIn() {
+	rollInKeyframe ??= buildRollIn();
 	return rollInKeyframe;
 }
 
