@@ -16,7 +16,7 @@ interface Props {
 export function RefundOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
-	const orderId = useRecordField(order, (record) => record.payload.id);
+	const orderNumber = useRecordField(order, (record) => record.payload.number || record.payload.id);
 
 	if (!order) {
 		return (
@@ -37,7 +37,7 @@ export function RefundOrderModal({ resource }: Props) {
 			<DialogContent side="right" size="xl">
 				<DialogHeader>
 					<DialogTitle>
-						<Text>{t('orders.refund_order', { number: orderId || '' })}</Text>
+						<Text>{t('orders.refund_order', { number: orderNumber || '' })}</Text>
 					</DialogTitle>
 				</DialogHeader>
 				<RefundOrderForm order={order} />
