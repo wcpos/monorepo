@@ -36,6 +36,7 @@ import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/conte
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
+import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -82,8 +83,11 @@ export default function POSLayout() {
 		setLastOrderId(orderIdFromParams);
 	}
 
-	// Use the route param if in POS, otherwise use the remembered value (for modals)
-	const orderId = isInPOSRoute ? orderIdFromParams : lastOrderId;
+	// The sheets carry their own order id; the provider follows the till (see tillOrderIdForRoute).
+	const [tillOrderId, setTillOrderId] = React.useState<string | undefined>(undefined);
+	const resolved = tillOrderIdForRoute({ segments, orderIdFromParams, tillOrderId, lastOrderId });
+	if (resolved.tillOrderId !== tillOrderId) setTillOrderId(resolved.tillOrderId);
+	const orderId = resolved.orderId;
 
 	// The open orders are scoped IN STORAGE by cashier, store and register (#2242, `openOrdersSelector`).
 	const { registerId } = useRegisterBinding();

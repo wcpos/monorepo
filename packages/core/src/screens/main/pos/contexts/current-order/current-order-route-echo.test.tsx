@@ -188,6 +188,28 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-b');
 	});
 
+	it('P1-3: a sale completed from a sheet never re-adopts the set-aside order', () => {
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
+		expect(renderedUUID()).toBe('order-a');
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		act(() => {
+			actions!.setCurrentOrderID('order-b');
+		});
+		// The layout keeps delivering the till's A while B's sheet is focused.
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
+		expect(renderedUUID()).toBe('order-b');
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		// Popping the sheet still delivers A, not a navigation back to it.
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
+		expect(renderedUUID()).toBe('new-order');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('new-order');
+	});
+
 	it('releases the parked id when the cashier selects that order again', () => {
 		const handle = makeHandle();
 		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
