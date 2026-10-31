@@ -3,7 +3,7 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { AmountFigure } from './index';
-import { ThemeTraitsContext } from '../lib/theme-traits';
+import { DEFAULT_TRAITS, ThemeTraitsContext } from '../lib/theme-traits';
 
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false } }));
 
@@ -43,7 +43,10 @@ describe('AmountFigure', () => {
 	it('uses the italic display family, leaving its eyebrow in the body family', () => {
 		render(
 			<ThemeTraitsContext.Provider
-				value={{ type: { body: 'DM Sans', display: 'Instrument Serif', displayItalic: true } }}
+				value={{
+					...DEFAULT_TRAITS,
+					type: { body: 'DM Sans', display: 'Instrument Serif', displayItalic: true },
+				}}
 			>
 				<AmountFigure testID="figure" eyebrow="Total">
 					$10.00

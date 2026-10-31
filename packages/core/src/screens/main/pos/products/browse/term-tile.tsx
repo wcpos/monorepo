@@ -154,6 +154,7 @@ export function TermTile({
 			ref={tile}
 			picture={picture}
 			mark={mark}
+			name={label}
 			title={title}
 			sub={sub}
 			// A tile that opens onto more tiles is a stack (owner, 2026-10-13).
@@ -177,7 +178,7 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 	const stackStyle = useAnimatedStyle(() => ({
 		opacity: cards ? Math.min(1, Math.max(0, cards.value)) : 1,
 	}));
-	const { t, mark, title, sub } = useTermWords(term);
+	const { t, label, mark, title, sub } = useTermWords(term);
 	// The same picture the tapped tile was showing: it moves, it does not arrive.
 	const picture = useTermPicture(term, true);
 	return (
@@ -188,6 +189,7 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 			backTestID="browse-parent-badge"
 			stacked
 			stackStyle={stackStyle}
+			name={label}
 			title={title}
 			sub={sub}
 			grow

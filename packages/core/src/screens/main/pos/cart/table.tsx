@@ -335,9 +335,9 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 						).CartAddTimingCommit,
 						{ orderId: currentOrderRecord.uuid, lines: line_items }
 					)}
-				<TableHeader className="border-border border-b">
+				<TableHeader className="border-border border-b [border-style:var(--shape-rule-style)]">
 					{table.getHeaderGroups().map((group) => (
-						<TableRow key={group.id} className="min-h-row">
+						<TableRow key={group.id} className="min-h-row [border-style:var(--shape-rule-style)]">
 							{group.headers.map((header) => {
 								const meta = header.column.columnDef.meta;
 								return (
@@ -371,7 +371,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 								<TableRow
 									key={row.id}
 									testID="checkout-line-row"
-									className="bg-card border-border min-h-row border-b"
+									className="bg-card border-border min-h-row border-b [border-style:var(--shape-rule-style)]"
 								>
 									{row.getVisibleCells().map((cell) => (
 										<TableCell
@@ -411,7 +411,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 									index={index}
 									table={table}
 									row={row}
-									className="bg-card border-border min-h-row border-b"
+									className="bg-card border-border min-h-row border-b [border-style:var(--shape-rule-style)]"
 									onLayout={(e) => {
 										const { y, height } = e.nativeEvent.layout;
 										rowLayouts.current.set(row.id, { y, height });

@@ -1,10 +1,14 @@
 import * as React from 'react';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 
+import { decode } from 'html-entities';
 import Animated from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
+import { fontFamilyStyle } from '../lib/fonts';
+import { useThemeTraits } from '../lib/theme-traits';
+import { Text } from '../text';
 import { TextClassContext } from '../text/context';
 import { Mark } from './mark';
 import { StockPill } from './stock-pill';
@@ -70,6 +74,8 @@ export type PosterTileProps = {
 	/** The tile in slot 0 of a dealt grid: tapping it is the way back. */
 	back?: boolean;
 	backTestID?: string;
+	/** The plain-text name behind a tint's initial: the title is usually an element (Codex, #3146). */
+	name?: string;
 	/** Words on the scrim, in this order. Every slot empty: no scrim. */
 	title?: React.ReactNode;
 	money?: React.ReactNode;
@@ -106,6 +112,13 @@ const LIFTED = { opacity: 0 };
 const STILL = { transition: 0 };
 // The native scrim's blurred copy of the picture: blurred at decode, and never fading in on its own.
 const BLURRED = { blurRadius: SCRIM_BLUR_RADIUS, transition: 0 };
+
+/** The first grapheme of a plain-text name, upper-cased; nothing for an element or an empty name. */
+function initialOf(name: unknown): string | undefined {
+	if (typeof name !== 'string') return undefined;
+	// The title draws decoded (`decodeHtml`), so `&Eacute;clair` starts with É, not & (CodeRabbit, #3146).
+	return [...decode(name).trim()][0]?.toUpperCase();
+}
 
 function hasWords(...slots: React.ReactNode[]) {
 	return slots.some((slot) => slot != null && slot !== false && slot !== '');
@@ -212,6 +225,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 		corner,
 		back,
 		backTestID,
+		name,
 		title,
 		money,
 		sub,
@@ -229,13 +243,23 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 	},
 	ref
 ) {
+	const { type, media, wordsAlign, priceChip } = useThemeTraits();
+	const wordsClass = wordsAlign === 'center' ? `${WORDS} items-center text-center` : WORDS;
 	const tint = picture.kind === 'tint' ? picture.tint : null;
 	const filled = picture.kind === 'fill';
 	const ink = filled ? 'text-primary-foreground' : undefined;
 	const words = hasWords(title, money, sub, facts) && (
 		<>
 			{title}
-			{money}
+			{priceChip && hasWords(money) ? (
+				<View className="bg-price-chip rounded-chip self-start px-2">
+					<TextClassContext.Provider value="text-price-chip-foreground">
+						{money}
+					</TextClassContext.Provider>
+				</View>
+			) : (
+				money
+			)}
 			{sub}
 			{facts}
 		</>
@@ -278,6 +302,19 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						<View className="rounded-media aspect-square overflow-hidden" testID={squareTestID}>
 							<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
 								<Picture picture={picture} />
+								{picture.kind === 'tint' && media === 'initial' && initialOf(name ?? title) && (
+									<View
+										className="absolute inset-0 items-center justify-center"
+										pointerEvents="none"
+									>
+										<Text
+											className={`text-tile-ink font-strong text-3xl ${type.displayItalic ? 'italic' : ''}`}
+											style={fontFamilyStyle(type.display)}
+										>
+											{initialOf(name ?? title)}
+										</Text>
+									</View>
+								)}
 							</View>
 							{/* The press dims the picture or the tint alike, under the words and marks. */}
 							{pressed && <View className={VEIL} pointerEvents="none" testID="poster-pressed" />}
@@ -290,7 +327,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						{words &&
 							(tint === null && !filled ? (
 								<Scrim
-									className={`${WORDS} px-2.5 pb-2.5`}
+									className={`${wordsClass} px-2.5 pb-2.5`}
 									// The reach is the scrim's top padding: one constant for both.
 									style={REACH}
 									testID="poster-scrim"
@@ -310,7 +347,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									{words}
 								</Scrim>
 							) : (
-								<View className={`${WORDS} p-2.5`} testID="poster-words">
+								<View className={`${wordsClass} p-2.5`} testID="poster-words">
 									{words}
 								</View>
 							))}

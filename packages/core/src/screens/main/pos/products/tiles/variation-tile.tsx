@@ -175,6 +175,7 @@ export function VariationTile({
 			markTestID={`variation-tile-stock-${id}`}
 			// Always mounted: the count has to be there before the first add to show it land.
 			corner={<InCartCount product={record.uuid} count={count} />}
+			name={parentName}
 			title={
 				gridFields.name && (
 					<View className="gap-0.5">
@@ -228,7 +229,7 @@ export function ParentTile({
 	gridFields: GridFields;
 	onPress: () => void;
 }) {
-	const { t, title, money, sub, facts } = useProductWords(record, gridFields, true);
+	const { t, fields, title, money, sub, facts } = useProductWords(record, gridFields, true);
 	// The same picture the tapped tile was showing: it moves, it does not arrive.
 	const picture = useProductPicture(record, true);
 	const cards = useDealCards();
@@ -241,6 +242,7 @@ export function ParentTile({
 			back
 			stacked
 			stackStyle={stackStyle}
+			name={fields.name}
 			title={title}
 			money={money}
 			sub={sub}

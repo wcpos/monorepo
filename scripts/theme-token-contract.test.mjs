@@ -103,6 +103,7 @@ test('the contract covers every variant in the theme layer, in sheet order', () 
 	assert.deepEqual(themeNames, variants);
 });
 const shapeTokens = [
+	'shape-rule-style',
 	'shape-radius-control',
 	'shape-radius-tile',
 	'shape-radius-media',
@@ -122,6 +123,10 @@ const shapeTokens = [
 ];
 
 const newColors = [
+	'tile-ink',
+	'cart',
+	'price-chip',
+	'price-chip-foreground',
 	'chip',
 	'chip-border',
 	'primary-shadow',
@@ -373,6 +378,27 @@ function oklchLinearRgb(value) {
 function luminance([r, g, bl]) {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
 }
+// A tile's words sit straight on its tint at 70 % of the foreground (no scrim on a tint), so the
+// blended ink must still read 4.5:1 on every tint of every theme (Codex on #3146: Warm's swatches
+// had dropped to 3.2:1).
+for (const name of themeNames) {
+	test(`${name}: the words' 70 % foreground reads 4.5:1 on every tile tint`, () => {
+		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+		assert.ok(body, `Missing ${name} theme`);
+		for (const i of [0, 1, 2, 3, 4, 5]) {
+			const tint = themeToken(body, `tile-tint-${i}`);
+			const ratio = luminanceContrast(
+				blend(themeToken(body, 'foreground'), 0.7, tint),
+				oklchLuminance(tint)
+			);
+			assert.ok(
+				ratio >= TEXT_CONTRAST,
+				`${name}: foreground/70 on tile-tint-${i} is ${ratio.toFixed(2)}:1`
+			);
+		}
+	});
+}
+
 function oklchLuminance(value) {
 	return luminance(oklchLinearRgb(value));
 }
@@ -467,6 +493,7 @@ for (const name of themeNames) {
 
 for (const name of themeNames) {
 	for (const [text, ground] of [
+		['price-chip-foreground', 'price-chip'],
 		['selected-foreground', 'selected'],
 		// `text-primary` is ink on links and the Split action, not only a fill (Codex on #3124).
 		['primary', 'card'],
@@ -486,6 +513,7 @@ for (const name of themeNames) {
 		test(`${name}: ${text} on ${ground} reaches 4.5:1`, () => {
 			const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
 			assert.ok(body, `Missing ${name} theme`);
+			if (ground === 'price-chip' && themeToken(body, ground) === 'transparent') return;
 			const ratio = contrast(themeToken(body, text), themeToken(body, ground));
 			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${text} on ${ground} is ${ratio.toFixed(2)}:1`);
 		});

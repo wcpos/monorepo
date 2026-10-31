@@ -1,5 +1,5 @@
 import { THEME_FONT_FAMILIES, type ThemeFontFamily } from './fonts';
-import { SYSTEM_TYPE, type ThemeType } from './theme-traits';
+import { DEFAULT_TRAITS, SYSTEM_TYPE, type ThemeTraits, type ThemeType } from './theme-traits';
 
 import type { IconSetId } from '../icon/sets';
 
@@ -46,6 +46,23 @@ export const THEME_TYPE: Record<ThemeName, ThemeType> = {
 		display: THEME_FONT_FAMILIES.manrope,
 	},
 };
+
+export const THEME_TRAITS: Record<ThemeName, Omit<ThemeTraits, 'type'>> = {
+	light: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	dark: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	ocean: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	sunset: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	monochrome: { media: 'blank', wordsAlign: 'start', priceChip: false, tear: false },
+	paper: { media: 'initial', wordsAlign: 'center', priceChip: false, tear: true },
+	bold: { media: 'blank', wordsAlign: 'start', priceChip: true, tear: false },
+	warm: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: false },
+	market: { media: 'initial', wordsAlign: 'start', priceChip: false, tear: true },
+};
+
+export function traitsForTheme(theme: string | undefined): ThemeTraits {
+	if (!THEMES.includes(theme as ThemeName)) return DEFAULT_TRAITS;
+	return { ...THEME_TRAITS[theme as ThemeName], type: THEME_TYPE[theme as ThemeName] };
+}
 
 export function familiesForTheme(theme: string | undefined): ThemeFontFamily[] {
 	if (!THEMES.includes(theme as ThemeName)) return [];

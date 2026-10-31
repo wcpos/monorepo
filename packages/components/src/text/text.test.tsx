@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 
 import { Text, TextClassContext } from './index';
 import { MAX_FONT_SCALE } from '../lib/scale';
-import { ThemeTraitsContext } from '../lib/theme-traits';
+import { DEFAULT_TRAITS, ThemeTraitsContext } from '../lib/theme-traits';
 
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false } }));
 
@@ -86,7 +86,9 @@ describe('Text theme type', () => {
 
 	it('uses the body and number families and lets a caller override them', () => {
 		render(
-			<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+			<ThemeTraitsContext.Provider
+				value={{ ...DEFAULT_TRAITS, type: { body: 'Manrope', num: 'JetBrains Mono' } }}
+			>
 				<Text>Body</Text>
 				<Text tabular>123</Text>
 				<Text style={{ fontFamily: 'X' }}>Override</Text>
@@ -122,7 +124,10 @@ describe('Text OS text-size cap', () => {
 // 93 amounts ask for tabular numerals through the class rather than the prop (Codex on #3138): the
 // numbers face must answer both, and an inherited `tabular-nums` context too.
 describe('the numbers face from a class', () => {
-	const traits = { type: { body: 'Manrope' as const, num: 'JetBrains Mono' as const } };
+	const traits = {
+		...DEFAULT_TRAITS,
+		type: { body: 'Manrope' as const, num: 'JetBrains Mono' as const },
+	};
 	it('draws the numbers face for a tabular-nums class', () => {
 		render(
 			<ThemeTraitsContext.Provider value={traits}>
@@ -147,7 +152,9 @@ describe('the numbers face from a class', () => {
 // `font-mono` must stay monospace under Paper till.
 it('steps back from the theme face when the caller names a family class', () => {
 	render(
-		<ThemeTraitsContext.Provider value={{ type: { body: 'Manrope', num: 'JetBrains Mono' } }}>
+		<ThemeTraitsContext.Provider
+			value={{ ...DEFAULT_TRAITS, type: { body: 'Manrope', num: 'JetBrains Mono' } }}
+		>
 			<Text className="font-mono tabular-nums">E42</Text>
 			<Text className="font-sans">Plain</Text>
 		</ThemeTraitsContext.Provider>
