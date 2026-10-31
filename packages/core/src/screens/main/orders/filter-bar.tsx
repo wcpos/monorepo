@@ -88,7 +88,8 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 			<DateRangePill />
 			{changed >= 2 && (
 				<Button
-					variant="ghost"
+					variant="link"
+					size="sm"
 					testID="orders-filter-clear-all"
 					onPress={() => actions.resetFilters()}
 				>
