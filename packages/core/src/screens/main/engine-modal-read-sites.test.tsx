@@ -17,7 +17,9 @@ const mockUseEngineRecord = jest.fn((_collection: unknown, _uuid: unknown) => mo
 let mockRouteParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
+	useFocusEffect: (effect: () => void) => jest.requireActual('react').useEffect(effect, [effect]),
 	useLocalSearchParams: () => mockRouteParams,
+	useRouter: () => ({ canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() }),
 }));
 
 jest.mock('@wcpos/query/record-readers', () => ({

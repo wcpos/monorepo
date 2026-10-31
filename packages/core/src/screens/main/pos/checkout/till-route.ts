@@ -41,3 +41,16 @@ export function standaloneCheckoutHref(orderId: string) {
 		params: { orderId, [STANDALONE_CHECKOUT_PARAM]: '1' },
 	} as const;
 }
+
+/** Pops a wide checkout sheet onto the till beneath; a cold-loaded sheet, which cannot pop, replaces (#3148). */
+export function handSheetToColumns(
+	router: Pick<ImperativeRouter, 'replace' | 'dismiss' | 'canDismiss'>,
+	orderId: string
+): void {
+	if (router.canDismiss()) router.dismiss();
+	else
+		router.replace({
+			pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+			params: { orderId: [orderId, 'checkout'] },
+		});
+}
