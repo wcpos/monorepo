@@ -18,11 +18,12 @@ import type { EngineRecord } from '@wcpos/query';
 import { useCoverageGeneration } from '@wcpos/query/query-state';
 
 import { couponReferences } from './coupon-continuation';
+import { useRepairTaxExempt } from './use-tax-exempt';
 import { readCouponContext } from '../hooks/use-coupon-context';
 import { writeOrderChanges } from './write-order-changes';
 import { commitAtBoundary } from './boundary-commit';
 import { useCloseSale } from './close-sale';
-import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
+import { crossesPaidBalanceBoundary, orderLocked } from './paid-balance-boundary';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { completeSale } from '../checkout/sale-completion';
 import {
@@ -43,11 +44,13 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { useCartConfigInputs, useCartConfigReader } from '../hooks/use-cart-config';
 
+import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
 
 const logger = getLogger(['wcpos', 'pos', 'settlement']);
 const observe = (event: SettlementDiagnostic) => logger.warn(event.type, { context: event });
+const inCheckout = (uuid: string) => getCheckoutModeSnapshot().checkoutOrders.has(uuid);
 
 /** Session-owned, beside the config reader; no cart tab owns this subscription. */
 export function SettlementCoordinatorProvider() {
@@ -68,6 +71,53 @@ export function SettlementCoordinatorProvider() {
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const report = useReportEngineWarnings();
 	const t = useT();
+	// One system context for the coordinator's boundary commits and the tax-exempt repair's.
+	const systemContext = React.useCallback(
+		(): Parameters<typeof commitAtBoundary>[0] => ({
+			...saleContext,
+			source: 'system',
+			configForOrder: read,
+			serverOwnsMoney,
+			bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+			readBindingStatus: () =>
+				bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
+			readRegisterId: () => bindingRef.current.registerId,
+			complete: (order, outcome, slot) =>
+				completeSale(saleContext, order, outcome, { host: 'background' }, slot),
+			closeSale,
+		}),
+		[saleContext, read, serverOwnsMoney, bindingStatus, closeSale]
+	);
+	const repair = useRepairTaxExempt(
+		React.useCallback<Parameters<typeof useRepairTaxExempt>[0]>(
+			(order, result, queue, coupons, valid) =>
+				commitAtBoundary(systemContext(), {
+					order: order as EngineRecord<'orders'>,
+					result,
+					queue,
+					write: (changes) => writeOrderChanges(manager, { document: order, changes }),
+					coupons: coupons && {
+						...coupons.context,
+						taxStatusFor: coupons.taxStatusFor ?? coupons.context.taxStatusFor,
+					},
+					allowed: (payload, ignoreCheckout) =>
+						valid() &&
+						!orderLocked(
+							payload,
+							order,
+							{ serverOwnsMoney, orderSaveState: getOrderSaveState, inCheckout },
+							read(payload).dp,
+							{ ignoreCheckout }
+						),
+				}),
+			[systemContext, manager, serverOwnsMoney, read]
+		)
+	);
+	// Held in a ref so a deps identity change never tears the coordinator down.
+	const repairRef = React.useRef(repair);
+	React.useLayoutEffect(() => {
+		repairRef.current = repair;
+	}, [repair]);
 	const generation = useCoverageGeneration(manager.engine, 'taxRates');
 	const coverage$ = React.useMemo(
 		() => observeCoverage(manager.engine, { collection: 'taxRates', lane: 'reference' }),
@@ -109,7 +159,8 @@ export function SettlementCoordinatorProvider() {
 				}),
 			serverOwnsMoney,
 			orderSaveState: getOrderSaveState,
-			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
+			inCheckout,
+			repairTaxExempt: (record, exempt, valid) => repairRef.current(record, exempt, valid),
 			now: Date.now,
 			observe,
 			settle: async (uuid, document, allowed, coupons, queue) => {
@@ -141,29 +192,14 @@ export function SettlementCoordinatorProvider() {
 				});
 				let outcome;
 				if (boundary)
-					outcome = await commitAtBoundary(
-						{
-							...saleContext,
-							source: 'system',
-							configForOrder: read,
-							serverOwnsMoney,
-							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-							readBindingStatus: () =>
-								bindingRef.current.status === 'unknown' ? 'none' : bindingRef.current.status,
-							readRegisterId: () => bindingRef.current.registerId,
-							complete: (order, outcome, slot) =>
-								completeSale(saleContext, order, outcome, { host: 'background' }, slot),
-							closeSale,
-						},
-						{
-							order: document as EngineRecord<'orders'>,
-							result: boundary,
-							queue,
-							write,
-							coupons,
-							allowed,
-						}
-					);
+					outcome = await commitAtBoundary(systemContext(), {
+						order: document as EngineRecord<'orders'>,
+						result: boundary,
+						queue,
+						write,
+						coupons,
+						allowed,
+					});
 				report(warnings, { orderId: uuid, site: 'settlement-coordinator' });
 				if (failure)
 					logger.warn('Cart settlement failed', {
@@ -218,6 +254,7 @@ export function SettlementCoordinatorProvider() {
 		ratesReady$,
 		coverage$,
 		saleContext,
+		systemContext,
 		bindingStatus,
 		registerId,
 	]);

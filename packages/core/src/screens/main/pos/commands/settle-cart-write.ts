@@ -26,7 +26,7 @@ type Input = {
 		taxStatusFor?: SettleOptions['taxStatusFor'];
 		context: CouponContext;
 		missing: ActionRefusal;
-		boundary: ActionRefusal;
+		boundary?: ActionRefusal;
 	};
 	queue?: OrderMutationContext;
 };
@@ -38,7 +38,8 @@ export type Deps<T> = {
 export type BoundaryCommit = (
 	order: CurrentOrderRecord,
 	result: BoundaryResult,
-	queue: OrderMutationContext
+	queue: OrderMutationContext,
+	coupons?: Input['coupons']
 ) => Promise<unknown>;
 
 // Birth intents remain synchronous; persisted cart commands await completion in their held slot.
@@ -107,7 +108,7 @@ export function settleCartWrite<T>(
 				result && crossesPaidBalanceBoundary({ payload: after, result, dp: config.dp })
 					? result
 					: undefined;
-			if (boundary && hasCoupons) {
+			if (boundary && hasCoupons && input.coupons!.boundary) {
 				refusal = input.coupons!.boundary;
 				return {};
 			}
@@ -125,7 +126,7 @@ export function settleCartWrite<T>(
 		if (refusal) return refusal;
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
 		if (boundary && value) {
-			const outcome = await deps.commitAtBoundary!(document, boundary, input.queue!);
+			const outcome = await deps.commitAtBoundary!(document, boundary, input.queue!, input.coupons);
 			if (isActionRefusal(outcome)) return outcome;
 		}
 		return value;

@@ -3,6 +3,7 @@ import {
 	isActiveFeeLine,
 	isActiveLineItem,
 	isActiveShippingLine,
+	isFixedFeeLine,
 	snapshotFromOrderJSON,
 } from './snapshot';
 
@@ -41,3 +42,26 @@ test('tombstone predicates match the four conventions', () => {
 	expect(isActiveCouponLine({})).toBe(false); // loose != null: undefined is tombstone too
 	expect(isActiveCouponLine({ code: 'x' })).toBe(true);
 });
+
+test.each([true, false])(
+	'fixed-fee classification uses parsed percent intent (inclusive=%s)',
+	(inclusive) => {
+		expect(isFixedFeeLine({ name: 'Fee' }, inclusive)).toBe(true);
+		for (const percent of [true, 'true', '1']) {
+			expect(
+				isFixedFeeLine(
+					{ meta_data: [{ key: '_woocommerce_pos_data', value: JSON.stringify({ percent }) }] },
+					inclusive
+				)
+			).toBe(false);
+		}
+		expect(
+			isFixedFeeLine(
+				{
+					meta_data: [{ key: '_woocommerce_pos_data', value: JSON.stringify({ percent: false }) }],
+				},
+				inclusive
+			)
+		).toBe(true);
+	}
+);

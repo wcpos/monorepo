@@ -139,13 +139,13 @@ it.each(['user', 'repair'] as const)('returns refusal and presents only for %s',
 			actor,
 			localPatch,
 			// The repair never completes a sale through the cashier's foreground flow.
-			commitAtBoundary: source === 'user' ? boundary : systemBoundary,
+			commitAtBoundary: source === 'user' ? boundary : expect.any(Function),
 			configForOrder: config,
 			serverOwnsMoney: owns,
 			reportEngineWarnings: report,
 		}),
 		order,
-		{ exempt: true, source }
+		{ exempt: true, source, ...(source === 'repair' && { valid: expect.any(Function) }) }
 	);
 	if (source === 'user')
 		expect(presentActionRefusal).toHaveBeenCalledWith(ctx, refusal, { orderId: 'target' });
@@ -215,4 +215,22 @@ it('returns undefined when catalog is unavailable', async () => {
 		.mockReturnValueOnce(of({ available: false, products: [], variations: [] }));
 	const read = await readCatalogTaxStatuses(runtime.engine as RxdbSyncEngine, [{ product_id: 1 }]);
 	expect(read({ product_id: 1 })).toBeUndefined();
+});
+
+it('threads the repair validity and coupons into its system boundary', async () => {
+	const systemBoundary = jest.fn(async () => undefined);
+	const valid = () => false;
+	const order = { uuid: 'target' } as CurrentOrderRecord;
+	const { result } = renderHook(() => useRepairTaxExempt(systemBoundary));
+	await result.current(order, true, valid);
+	const [deps, , input] = jest.mocked(setTaxExempt).mock.lastCall!;
+	expect(input.valid).toBe(valid);
+	const boundaryResult = {} as Parameters<typeof deps.commitAtBoundary>[1];
+	const queue = {} as Parameters<typeof deps.commitAtBoundary>[2];
+	const coupons = {
+		context: { coupons: new Map(), productCategories: new Map() },
+		missing: { deny: { reasonKey: 'missing' } },
+	};
+	await deps.commitAtBoundary(order, boundaryResult, queue, coupons);
+	expect(systemBoundary).toHaveBeenCalledWith(order, boundaryResult, queue, coupons, valid);
 });

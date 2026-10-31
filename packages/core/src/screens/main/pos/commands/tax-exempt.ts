@@ -57,7 +57,7 @@ const referenceInputs = (payload: OrderPayload) => [
 export async function setTaxExempt(
 	deps: TaxExemptDeps,
 	order: CurrentOrderRecord,
-	input: { exempt: boolean; source: 'user' | 'repair' }
+	input: { exempt: boolean; source: 'user' | 'repair'; valid?: () => boolean }
 ) {
 	const payload = order.getLatest().payload;
 	const readInputs = referenceInputs(payload);
@@ -76,7 +76,7 @@ export async function setTaxExempt(
 			productCategories: context?.productCategories ?? new Map(),
 		},
 		missing,
-		boundary: locked,
+		boundary: input.source === 'repair' ? undefined : locked,
 	};
 	// Collection reads precede the queue; the resolver is synchronous on every resident run.
 	const taxStatusFor = await deps.readTaxStatuses(
@@ -92,13 +92,18 @@ export async function setTaxExempt(
 			const data = (currentPayload: OrderPayload) => {
 				warnings = [];
 				const { dp, pricesIncludeTax } = deps.configForOrder(currentPayload);
-				// Temporary orders carry the flag into birth; the durable hint skips settlement, not this write.
-				const options = { allowNew: true, allowDurableHint: true };
+				const exempt =
+					input.source === 'repair'
+						? wooMetaCarrier.vatExempt(currentPayload.meta_data)
+						: input.exempt;
+				// Temporary orders carry the flag into birth; only user toggles may write through the hint.
+				const options = { allowNew: true, allowDurableHint: input.source === 'user' };
+				if (input.valid && !input.valid()) return locked;
 				if (orderLocked(currentPayload, target, deps, dp, options)) return locked;
 				// Inclusive stores are a separate spec (epic §3).
-				if (input.exempt && pricesIncludeTax)
+				if (exempt && pricesIncludeTax)
 					return { deny: { reasonKey: 'pos_cart.tax_exempt_inclusive_store' } };
-				if (input.exempt && couponed(currentPayload) && !exemptCouponsSupported(deps.wcVersion()))
+				if (exempt && couponed(currentPayload) && !exemptCouponsSupported(deps.wcVersion()))
 					return unsupported;
 				if (
 					needsReferences({ payload: currentPayload }) &&
@@ -110,7 +115,7 @@ export async function setTaxExempt(
 					if (line.code != null && intent)
 						definitions.set(line.code.toLowerCase(), quickDiscountCouponInput(line.code, intent));
 				}
-				const meta_data = wooMetaCarrier.stampVatExempt(currentPayload.meta_data, input.exempt);
+				const meta_data = wooMetaCarrier.stampVatExempt(currentPayload.meta_data, exempt);
 				const config = deps.configForOrder({ ...currentPayload, meta_data });
 				const retaxed = retaxCartLines(currentPayload, config, { taxStatusFor });
 				const { changed: _changed, warnings: latestWarnings, ...lines } = retaxed;

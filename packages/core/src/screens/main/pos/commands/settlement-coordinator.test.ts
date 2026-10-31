@@ -5,7 +5,7 @@ import { BehaviorSubject, firstValueFrom, Subject } from 'rxjs';
 
 import { type CouponContext, withAwaitingCustomer } from '@wcpos/order-math';
 
-import { createSettlementCoordinator } from './settlement-coordinator';
+import { createSettlementCoordinator, needsTaxRepair } from './settlement-coordinator';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -60,6 +60,9 @@ function start(records = [order()], ready = true) {
 		openOrders$,
 		ratesReady$,
 		settle,
+		repairTaxExempt: jest.fn<Promise<unknown>, [CurrentOrderRecord, boolean, () => boolean]>(
+			async () => {}
+		),
 		references$,
 		readCoupons,
 		serverOwnsMoney,
@@ -575,3 +578,180 @@ it.each(['register_changed', 'session_changed'])(
 		expect(h.settle).toHaveBeenCalledTimes(2);
 	}
 );
+
+const exemptMeta = (value = 'yes') => [{ key: 'is_vat_exempt', value }];
+it.each([
+	['no', 'yes', true],
+	['yes', 'no', false],
+] as const)('repairs a flag flip %s → %s before settlement', async (before, after, exempt) => {
+	const h = start([order('a', { meta_data: exemptMeta(before), line_items: [] })]);
+	await flush();
+	h.settle.mockClear();
+	const changed = order('a', { meta_data: exemptMeta(after), line_items: [] });
+	await emit(h.openOrders$, [changed]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	expect(h.repairTaxExempt).toHaveBeenCalledWith(changed, exempt, expect.any(Function));
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, [changed]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	expect(h.settle).toHaveBeenCalledTimes(1);
+});
+it.each(['1', '0.00'])('first sight repairs only taxed exempt lines (%s)', async (tax) => {
+	const record = order('a', {
+		meta_data: exemptMeta(),
+		line_items: [{ total_tax: tax, taxes: [{ total: tax }] }],
+	});
+	const h = start([record]);
+	await flush();
+	if (tax === '1') {
+		expect(h.repairTaxExempt).toHaveBeenCalledWith(record, true, expect.any(Function));
+		expect(h.settle).toHaveBeenCalledTimes(1);
+	} else {
+		expect(h.repairTaxExempt).not.toHaveBeenCalled();
+		expect(h.settle).toHaveBeenCalledTimes(1);
+	}
+});
+it('remembers a refused repair until the payload changes', async () => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([record], false);
+	h.repairTaxExempt.mockResolvedValue({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, [record]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, [order('a', { ...record.payload, line_items: [{ total_tax: '2' }] })]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+	expect(h.observe).not.toHaveBeenCalled();
+});
+it.each([[], null])('forgets repair state when orders are removed (%s)', async (removed) => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([record]);
+	await flush();
+	await emit(h.openOrders$, removed);
+	await emit(h.openOrders$, [record]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+});
+it.each([[], null])('forgets a refused repair when the order is removed (%s)', async (removed) => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([record], false);
+	h.repairTaxExempt.mockResolvedValue({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	await emit(h.openOrders$, removed);
+	await emit(h.openOrders$, [record]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+});
+it('reports a thrown repair without retrying the same fingerprint', async () => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([record], false);
+	const error = new Error('repair failed');
+	h.repairTaxExempt.mockRejectedValueOnce(error);
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	expect(h.observe).toHaveBeenCalledWith({ type: 'settlement.failed', uuid: 'a', at: 123, error });
+	await emit(h.openOrders$, [record]);
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+	await emit(h.inputs$, { ...inputs, baseLocation: { country: 'GB' } });
+	expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+});
+it.each<[string, OrderPayload, boolean]>([
+	['absent taxes', { line_items: [{ total: '10' }] }, false],
+	['absent tax total', { line_items: [{ total_tax: '0', taxes: [{ id: 1 }] }] }, false],
+	['tax array', { line_items: [{ total_tax: '0', taxes: [{ total: '1' }] }] }, true],
+	['line tombstone', { line_items: [{ product_id: null, total_tax: '1' }] }, false],
+	['fixed fee', { fee_lines: [{ name: 'Fee', total_tax: '1' }] }, true],
+	['fee tombstone', { fee_lines: [{ name: null, total_tax: '1' }] }, false],
+	[
+		'percent fee',
+		{
+			fee_lines: [
+				{
+					name: 'Fee',
+					total_tax: '1',
+					meta_data: [{ key: '_woocommerce_pos_data', value: JSON.stringify({ percent: true }) }],
+				},
+			],
+		},
+		false,
+	],
+	['shipping', { shipping_lines: [{ total_tax: '1' }] }, false],
+])('tax repair predicate: %s', (_, payload, expected) => {
+	expect(needsTaxRepair({ ...payload, meta_data: exemptMeta() }, undefined)).toBe(expected);
+});
+
+it.each(['refused', 'thrown'])(
+	'retains an un-exempt trigger after a %s repair in checkout',
+	async (outcome) => {
+		const record = order('a', {
+			meta_data: exemptMeta(),
+			line_items: [{ total: '10', total_tax: '0', taxes: [] }],
+		});
+		const h = start([record]);
+		await flush();
+		h.settle.mockClear();
+		h.inCheckout.mockReturnValue(true);
+		if (outcome === 'refused')
+			h.repairTaxExempt.mockResolvedValue({ deny: { reasonKey: 'pos_cart.tax_exempt_locked' } });
+		else h.repairTaxExempt.mockRejectedValue(new Error('repair failed'));
+		record.payload.meta_data = exemptMeta('no');
+		await emit(h.openOrders$, [record]);
+		expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+		expect(h.settle).not.toHaveBeenCalled();
+		await emit(h.openOrders$, [record]);
+		expect(h.repairTaxExempt).toHaveBeenCalledTimes(1);
+		h.inCheckout.mockReturnValue(false);
+		h.repairTaxExempt.mockResolvedValue(undefined);
+		await emit(h.openOrders$, [record]);
+		expect(h.repairTaxExempt).toHaveBeenCalledTimes(2);
+		expect(h.repairTaxExempt).toHaveBeenLastCalledWith(record, false, expect.any(Function));
+		expect(h.settle).toHaveBeenCalledTimes(1);
+	}
+);
+
+it.each(['stop', 'rebind'] as const)('invalidates an awaiting repair after %s', async (kind) => {
+	const record = order('a', { meta_data: exemptMeta(), line_items: [{ total_tax: '1' }] });
+	const h = start([], false);
+	let release!: () => void;
+	const validity: boolean[] = [];
+	h.repairTaxExempt.mockImplementationOnce(async (_record, _exempt, valid) => {
+		validity.push(valid?.());
+		await new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		validity.push(valid?.());
+	});
+	h.openOrders$.next([record]);
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	if (kind === 'stop') h.stop();
+	else h.openOrders$.next(null);
+	release();
+	await flush();
+	expect(validity).toEqual([true, false]);
+});
+
+it('defers coupon repair without blocking the next order in the drain', async () => {
+	const a = order('a', {
+		meta_data: exemptMeta(),
+		coupon_lines: [{ code: 'ten' }],
+		line_items: [{ total_tax: '1' }],
+	});
+	const h = start([a, order('b')]);
+	await flush();
+	expect(h.repairTaxExempt).not.toHaveBeenCalled();
+	expect(h.settle.mock.calls.map(([uuid]) => uuid)).toEqual(['b']);
+	expect(h.references$.observed).toBe(true);
+	await emit(h.references$, { ready: true, generation: '0:0' });
+	expect(h.repairTaxExempt).toHaveBeenCalledWith(a, true, expect.any(Function));
+});
+
+it.each([
+	{ subtotal_tax: '0.50', taxes: [{ id: 1, subtotal: '0', total: '0' }] },
+	{ subtotal_tax: '0', taxes: [{ id: 1, subtotal: '0.50', total: '0' }] },
+])('repairs exempt lines with only subtotal taxes: %j', async (taxes) => {
+	const record = order('a', {
+		meta_data: exemptMeta(),
+		line_items: [{ subtotal: '5', total: '0', total_tax: '0', ...taxes }],
+	});
+	const h = start([record]);
+	await flush();
+	expect(h.repairTaxExempt).toHaveBeenCalledWith(record, true, expect.any(Function));
+});
