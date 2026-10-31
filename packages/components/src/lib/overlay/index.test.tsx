@@ -46,6 +46,7 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: { View: ({ children }: React.PropsWithChildren) => <div>{children}</div> },
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => (value: number) => value },
 		...Object.fromEntries(
 			[

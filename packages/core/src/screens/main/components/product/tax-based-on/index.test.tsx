@@ -20,6 +20,7 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: { View: () => null },
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: jest.fn() },
 		...Object.fromEntries(
 			'FadeIn FadeOut SlideInLeft SlideOutLeft SlideInRight SlideOutRight SlideInDown SlideOutDown'

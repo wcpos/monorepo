@@ -50,6 +50,7 @@ jest.mock('react-native-reanimated', () => ({
 	FadeOut: { duration: () => undefined },
 	ZoomIn: { duration: () => ({ easing: () => undefined }) },
 	useReducedMotion: () => true,
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => undefined },
 }));
 jest.mock('../switch', () => ({

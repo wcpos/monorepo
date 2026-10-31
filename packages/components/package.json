@@ -25,6 +25,8 @@
     "./docs-link": "./src/docs-link/index.tsx",
     "./dnd": "./src/dnd/index.ts",
     "./dropdown-menu": "./src/dropdown-menu/index.tsx",
+    "./settle": "./src/settle/index.tsx",
+    "./flash-surface": "./src/flash-surface/index.tsx",
     "./edge-surface": "./src/edge-surface/index.tsx",
     "./edge-surface/title-bar-strip": "./src/edge-surface/title-bar-strip.tsx",
     "./editable-field": "./src/editable-field/index.tsx",

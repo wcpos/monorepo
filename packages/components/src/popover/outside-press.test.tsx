@@ -18,7 +18,11 @@ jest.mock('@rn-primitives/popover', () =>
 // The overlay shell's native motion and insets; the web path never uses them.
 jest.mock('react-native-reanimated', () => {
 	const animation = { duration: () => animation, easing: () => animation };
-	const mod: Record<string | symbol, unknown> = { __esModule: true, Easing: { bezier: jest.fn() } };
+	const mod: Record<string | symbol, unknown> = {
+		__esModule: true,
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
+		Easing: { bezier: jest.fn() },
+	};
 	return new Proxy(mod, { get: (target, key) => target[key] ?? animation });
 });
 jest.mock('../keyboard-controller', () => ({ KeyboardAvoidingView: () => null }));

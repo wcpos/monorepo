@@ -4,7 +4,10 @@ import { render, screen } from '@testing-library/react';
 
 import { Switch } from './index';
 
-jest.mock('react-native-reanimated', () => ({ Easing: { bezier: () => () => 0 } }));
+jest.mock('react-native-reanimated', () => ({
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
+	Easing: { bezier: () => () => 0 },
+}));
 jest.mock('uniwind', () => ({ useCSSVariable: jest.fn() }));
 jest.mock('../label', () => ({ Label: () => null }));
 jest.mock('@rn-primitives/switch', () => ({

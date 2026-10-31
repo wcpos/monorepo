@@ -3,6 +3,7 @@ import { View, type ViewProps } from 'react-native';
 
 import { TONE, type Tone } from '../lib/tone';
 import { cn } from '../lib/utils';
+import { Settle } from '../settle';
 import { Text } from '../text';
 import { TextClassContext } from '../text/context';
 import { TEXT_LADDER } from '../text/ladder';
@@ -47,6 +48,18 @@ function Line({
 		tone === 'default' && !indent && !total && 'text-muted-foreground',
 		tone !== 'default' && TONE[tone].text
 	);
+	const figure =
+		amount === undefined ? null : (
+			<Text
+				testID={amountTestID}
+				className={cn(
+					!indent && tone === 'default' && 'text-foreground',
+					'text-right tabular-nums'
+				)}
+			>
+				{amount}
+			</Text>
+		);
 	return (
 		<View
 			className={cn(
@@ -68,17 +81,7 @@ function Line({
 					)}
 					{beside}
 				</View>
-				{amount === undefined ? null : (
-					<Text
-						testID={amountTestID}
-						className={cn(
-							!indent && tone === 'default' && 'text-foreground',
-							'text-right tabular-nums'
-						)}
-					>
-						{amount}
-					</Text>
-				)}
+				{total && figure ? <Settle value={amount}>{figure}</Settle> : figure}
 			</TextClassContext.Provider>
 		</View>
 	);

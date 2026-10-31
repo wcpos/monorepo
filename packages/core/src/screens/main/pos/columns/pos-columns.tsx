@@ -4,8 +4,10 @@ import { Platform } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { FlashSurface } from '@wcpos/components/flash-surface';
+import { useThemeTraits } from '@wcpos/components/lib/theme-traits';
 import { GroundInnerEdge } from '@wcpos/components/lib/ground';
-import { CROSSFADE } from '@wcpos/components/lib/motion';
+import { CROSSFADE, rollIn, tearOff } from '@wcpos/components/lib/motion';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
@@ -44,6 +46,7 @@ const PANEL_VIEWS: Record<
 const RING_ROOM = { overflow: 'visible' as const };
 
 export function POSColumns() {
+	const { tear } = useThemeTraits();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(currentOrderRecord);
@@ -116,18 +119,18 @@ export function POSColumns() {
 											key={
 												receiptUuid ? `receipt:${receiptUuid}` : showTender ? 'checkout' : 'cart'
 											}
-											entering={FadeIn.duration(CROSSFADE)}
-											exiting={FadeOut.duration(CROSSFADE)}
-											style={{ flex: 1 }}
+											entering={tear ? rollIn() : FadeIn.duration(CROSSFADE)}
+											exiting={tear ? tearOff() : FadeOut.duration(CROSSFADE)}
+											style={{ flex: 1, transformOrigin: 'top center' }}
 										>
 											{receiptUuid ? (
-												<EdgeSurface
+												<FlashSurface
 													testID="pos-receipt-column"
 													edges={COLUMN}
 													className="bg-card flex-1"
 												>
 													<ReceiptStage orderUuid={receiptUuid} compact={false} />
-												</EdgeSurface>
+												</FlashSurface>
 											) : showTender ? (
 												<EdgeSurface
 													testID="pos-checkout-column"

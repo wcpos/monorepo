@@ -16,7 +16,14 @@ export function loadMotion() {
 	});
 	runInNewContext(outputText, {
 		exports,
-		require: () => ({ Easing: { bezier: (...points) => `cubic-bezier(${points.join(', ')})` } }),
+		require: () => ({
+			Easing: { bezier: (...points) => `cubic-bezier(${points.join(', ')})` },
+			Keyframe: class {
+				duration() {
+					return this;
+				}
+			},
+		}),
 	});
 	return exports;
 }

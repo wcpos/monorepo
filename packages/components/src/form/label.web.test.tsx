@@ -31,6 +31,7 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: { Text },
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => () => 0 },
 		FadeInDown: motion,
 		FadeOut: motion,

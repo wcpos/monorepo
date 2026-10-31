@@ -56,6 +56,7 @@ jest.mock('react-native-reanimated', () => ({
 			return React.createElement('div', { 'data-testid': 'loader-spin', className }, children);
 		},
 	},
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { linear: 'mock-linear-easing', bezier: () => (value: number) => value },
 	ReduceMotion: { Never: 'mock-reduce-motion-never', System: 'mock-reduce-motion-system' },
 	cancelAnimation: (...args: unknown[]) => cancelAnimationMock(...args),

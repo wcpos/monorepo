@@ -7,6 +7,20 @@ import { render, screen } from '@testing-library/react';
 
 import { POSColumns } from './pos-columns';
 
+let mockTear = false;
+const mockAnimated = jest.fn();
+jest.mock('@wcpos/components/lib/theme-traits', () => ({
+	useThemeTraits: () => ({ tear: mockTear }),
+}));
+jest.mock('@wcpos/components/flash-surface', () => ({
+	FlashSurface: jest.requireActual('@wcpos/components/edge-surface').EdgeSurface,
+}));
+jest.mock('@wcpos/components/lib/motion', () => ({
+	CROSSFADE: 200,
+	tearOff: () => 'tear',
+	rollIn: () => 'roll',
+}));
+
 let mockPosition = 'right';
 let mockStage = 'cart';
 let mockAutoShow = true;
@@ -50,9 +64,14 @@ jest.mock('../checkout/receipt-stage/receipt-stage', () => ({
 jest.mock('react-native-reanimated', () => ({
 	Easing: { bezier: jest.fn() },
 	__esModule: true,
-	default: { View: ({ children }: PanelProps) => <div>{children}</div> },
-	FadeIn: { duration: () => ({}) },
-	FadeOut: { duration: () => ({}) },
+	default: {
+		View: (props: PanelProps) => {
+			mockAnimated(props);
+			return <div>{props.children}</div>;
+		},
+	},
+	FadeIn: { duration: () => 'fade-in' },
+	FadeOut: { duration: () => 'fade-out' },
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -221,4 +240,16 @@ it('shows the current paid order its receipt column before any selection', () =>
 	render(<POSColumns />);
 	expect(screen.getByTestId('checkout-receipt-stage').textContent).toBe('a');
 	expect(screen.queryByTestId('checkout-tender-pane')).toBeNull();
+});
+
+it.each([false, true])('uses the trait for column transitions: tear=%s', (tear) => {
+	mockTear = tear;
+	render(<POSColumns />);
+	expect(mockAnimated).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			entering: tear ? 'roll' : 'fade-in',
+			exiting: tear ? 'tear' : 'fade-out',
+		})
+	);
+	mockTear = false;
 });

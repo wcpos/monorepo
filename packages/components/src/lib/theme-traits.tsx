@@ -14,6 +14,8 @@ export type ThemeTraits = {
 	wordsAlign: 'start' | 'center';
 	priceChip: boolean;
 	tear: boolean;
+	settle: boolean;
+	paidFlash: boolean;
 };
 export const SYSTEM_TYPE: ThemeType = {};
 export const DEFAULT_TRAITS: ThemeTraits = {
@@ -23,10 +25,12 @@ export const DEFAULT_TRAITS: ThemeTraits = {
 	wordsAlign: 'start',
 	priceChip: false,
 	tear: false,
+	settle: true,
+	paidFlash: false,
 };
 
 /**
- * Traits a stylesheet cannot carry (which typeface and tile construction, later which moments),
+ * Traits a stylesheet cannot carry (which typeface, tile construction and moments),
  * supplied per theme by the app's provider; without a provider everything is the system default.
  */
 export const ThemeTraitsContext = React.createContext<ThemeTraits>(DEFAULT_TRAITS);

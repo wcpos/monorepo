@@ -31,6 +31,7 @@ jest.mock('react-native-reanimated', () => {
 			},
 		},
 		__layouts: layouts,
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => 'ease' },
 		__started: started,
 		__pending: pending,
