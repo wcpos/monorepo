@@ -63,7 +63,7 @@ import {
 } from '../../../../components/meta-data-form';
 import { useRecordAutosave } from '../../../../components/use-record-autosave';
 import { useOrderFieldsWrite } from '../../../commands/use-order-fields-write';
-import { useSetTaxExempt } from '../../../commands/use-tax-exempt';
+import { useSetTaxExempt, useWcVersion } from '../../../commands/use-tax-exempt';
 import { useCheckoutMode } from '../../../checkout/checkout-mode';
 import { useOrderSaveState } from '../../../checkout/use-order-save-state';
 import { useOrderMoneyDivergence } from '../../../contexts/order-money-divergence';
@@ -397,7 +397,8 @@ export function EditOrderMetaForm({
 	const live = useRecordField(order, (record) => record.payload);
 	const exempt = wooMetaCarrier.vatExempt(live.meta_data);
 	const { dp } = taxReaders.configForOrder(live);
-	const taxExempt = taxExemptRowState(live, order, taxReaders, dp, online);
+	const wcVersion = useWcVersion();
+	const taxExempt = taxExemptRowState(live, order, taxReaders, dp, online, wcVersion());
 
 	return (
 		<Form {...form}>
@@ -563,7 +564,9 @@ export function EditOrderMetaForm({
 										? t('pos_cart.tax_exempt_offline')
 										: taxExempt.reason === 'payment'
 											? t('pos_cart.tax_exempt_payment')
-											: t('pos_cart.tax_exempt_hint')
+											: taxExempt.reason === 'wc_version'
+												? t('pos_cart.tax_exempt_wc_version')
+												: t('pos_cart.tax_exempt_hint')
 							}
 							testID="order-meta-tax-exempt"
 							control={

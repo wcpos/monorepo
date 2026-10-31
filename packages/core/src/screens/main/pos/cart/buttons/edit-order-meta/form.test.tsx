@@ -147,6 +147,7 @@ const mockSetTaxExempt = jest.fn();
 let mockPricesIncludeTax = false;
 jest.mock('../../../commands/use-tax-exempt', () => ({
 	useSetTaxExempt: () => mockSetTaxExempt,
+	useWcVersion: () => () => '11.3.0',
 }));
 jest.mock('../../../hooks/use-cart-config', () => ({
 	useCartConfigReader: () => () => ({ dp: 2, pricesIncludeTax: mockPricesIncludeTax }),

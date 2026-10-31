@@ -19,13 +19,19 @@ function readers(overrides: Record<string, unknown> = {}) {
 		...overrides,
 	};
 }
-const state = (payload: OrderPayload, overrides = {}, storeReachable = true) =>
+const state = (
+	payload: OrderPayload,
+	overrides = {},
+	storeReachable = true,
+	wcVersion = '11.3.0'
+) =>
 	taxExemptRowState(
 		{ status: 'pos-open', total: '10', ...payload },
 		record,
 		readers(overrides),
 		2,
-		storeReachable
+		storeReachable,
+		wcVersion
 	);
 const couponed = { coupon_lines: [{ code: 'save10' }] } as OrderPayload;
 
@@ -95,4 +101,18 @@ it('stays enabled on a temporary order and under the durable money-owner hint', 
 	expect(state({ meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] }).disabled).toBe(
 		false
 	);
+});
+
+it('needs WooCommerce 11.3 to turn the exemption on over a coupon, never to turn it off', () => {
+	expect(state(couponed, {}, true, '11.2.0')).toMatchObject({
+		disabled: true,
+		reason: 'wc_version',
+	});
+	expect(state(couponed, {}, true, '11.3.0').disabled).toBe(false);
+	expect(state({}, {}, true, '11.2.0').disabled).toBe(false);
+	const exempt = {
+		...couponed,
+		meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
+	} as OrderPayload;
+	expect(state(exempt, {}, true, '11.2.0').disabled).toBe(false);
 });
