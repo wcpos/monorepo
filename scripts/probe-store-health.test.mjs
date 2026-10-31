@@ -61,3 +61,16 @@ test('reports the caller-supplied phase when the store is saturated', async () =
 		}
 	);
 });
+
+test('a 404 on both route forms is reported as a missing store, never as healthy', async () => {
+	await withServer(
+		(request, response) => {
+			response.writeHead(404).end();
+		},
+		async (storeUrl) => {
+			const { stdout } = await runProbe(storeUrl, 'before the tests started');
+			assert.match(stdout, /::error title=E2E store not found::/);
+			assert.doesNotMatch(stdout, /healthy/);
+		}
+	);
+});
