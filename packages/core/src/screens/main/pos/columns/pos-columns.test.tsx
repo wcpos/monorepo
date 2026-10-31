@@ -17,8 +17,8 @@ jest.mock('@wcpos/components/flash-surface', () => ({
 }));
 jest.mock('@wcpos/components/lib/motion', () => ({
 	CROSSFADE: 200,
-	TEAR_OFF: 'tear',
-	ROLL_IN: 'roll',
+	tearOff: () => 'tear',
+	rollIn: () => 'roll',
 }));
 
 let mockPosition = 'right';

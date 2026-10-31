@@ -7,7 +7,7 @@ import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { FlashSurface } from '@wcpos/components/flash-surface';
 import { useThemeTraits } from '@wcpos/components/lib/theme-traits';
 import { GroundInnerEdge } from '@wcpos/components/lib/ground';
-import { CROSSFADE, ROLL_IN, TEAR_OFF } from '@wcpos/components/lib/motion';
+import { CROSSFADE, rollIn, tearOff } from '@wcpos/components/lib/motion';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
@@ -119,8 +119,8 @@ export function POSColumns() {
 											key={
 												receiptUuid ? `receipt:${receiptUuid}` : showTender ? 'checkout' : 'cart'
 											}
-											entering={tear ? ROLL_IN : FadeIn.duration(CROSSFADE)}
-											exiting={tear ? TEAR_OFF : FadeOut.duration(CROSSFADE)}
+											entering={tear ? rollIn() : FadeIn.duration(CROSSFADE)}
+											exiting={tear ? tearOff() : FadeOut.duration(CROSSFADE)}
 											style={{ flex: 1, transformOrigin: 'top center' }}
 										>
 											{receiptUuid ? (

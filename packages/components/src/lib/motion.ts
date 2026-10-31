@@ -40,22 +40,34 @@ export const TEAR_OFF_DURATION = 420;
 export const PAID_FLASH_DURATION = 600;
 export const ROLL_IN_DURATION = 480;
 // Keep pixel and percentage travel separate: timing cannot interpolate between different units.
-export const TEAR_OFF = new Keyframe({
-	0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
-	25: {
-		transform: [{ translateY: 6 }, { translateY: '0%' }, { rotate: '0.6deg' }],
-		easing: EASE_EXIT,
-	},
-	100: {
-		opacity: 0.9,
-		transform: [{ translateY: 0 }, { translateY: '110%' }, { rotate: '2deg' }],
-		easing: EASE_EXIT,
-	},
-}).duration(TEAR_OFF_DURATION);
-export const ROLL_IN = new Keyframe({
-	0: { opacity: 0, transform: [{ translateY: -14 }] },
-	100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
-}).duration(ROLL_IN_DURATION);
+// Built on first use, not at import: twelve core suites mock Reanimated without `Keyframe`, and a
+// module that constructs one while loading would take every importer of this file down with it.
+let tearOffKeyframe: Keyframe | undefined;
+let rollInKeyframe: Keyframe | undefined;
+/** The cart column tears off when the sale is paid (Paper till, Market stall). */
+export function tearOff(): Keyframe {
+	tearOffKeyframe ??= new Keyframe({
+		0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
+		25: {
+			transform: [{ translateY: 6 }, { translateY: '0%' }, { rotate: '0.6deg' }],
+			easing: EASE_EXIT,
+		},
+		100: {
+			opacity: 0.9,
+			transform: [{ translateY: 0 }, { translateY: '110%' }, { rotate: '2deg' }],
+			easing: EASE_EXIT,
+		},
+	}).duration(TEAR_OFF_DURATION);
+	return tearOffKeyframe;
+}
+/** The next receipt rolls in after a tear-off. */
+export function rollIn(): Keyframe {
+	rollInKeyframe ??= new Keyframe({
+		0: { opacity: 0, transform: [{ translateY: -14 }] },
+		100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
+	}).duration(ROLL_IN_DURATION);
+	return rollInKeyframe;
+}
 
 type Beat = {
 	name: string;
