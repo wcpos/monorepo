@@ -976,3 +976,27 @@ it('forwards catalog tax status through coupon replay', () => {
 		patch: { line_items: [{ total_tax: '0' }], discount_tax: '0' },
 	});
 });
+
+it.each([undefined, 'taxable'] as const)(
+	'uses context tax status unless overridden: %s',
+	(override) => {
+		const rate = { id: 1, rate: '10', compound: false, order: 1, class: 'standard' };
+		const result = settleCart(
+			{
+				line_items: [{ ...makePosLineItem(1, 10), meta_data: [] }],
+				coupon_lines: [makeCouponLine('ten')],
+			},
+			makeConfig({ rates: [rate], allRates: [rate] }),
+			{
+				coupons: {
+					...makeCouponContext([makeCouponInput({ code: 'ten' })]),
+					taxStatusFor: () => 'none',
+				},
+				...(override && { taxStatusFor: () => override }),
+			}
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error('settlement failed');
+		expect(Number(result.patch.line_items?.[0].total_tax)).toBe(override ? 0.9 : 0);
+	}
+);

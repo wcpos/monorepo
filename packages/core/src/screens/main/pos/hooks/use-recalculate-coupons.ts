@@ -44,6 +44,7 @@ export const useRecalculateCoupons = () => {
 				lineItems,
 				couponLines,
 				couponConfigs: replay.couponConfigs,
+				taxStatusFor: context.taxStatusFor,
 				productCategories: replay.productCategories,
 				pricesIncludeTax: config.pricesIncludeTax,
 				vatExempt: config.vatExempt,

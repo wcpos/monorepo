@@ -16,6 +16,12 @@ jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({ engine }),
+	observeCatalogByWooIds: () =>
+		of({
+			available: true,
+			products: [{ remoteId: '82', payload: { tax_status: 'none' } }],
+			variations: [],
+		}),
 }));
 
 jest.mock('./use-cart-config', () => ({
@@ -300,5 +306,19 @@ it('recalculates using the target payload exemption, not the rendered config', a
 		{ code: 'ten' },
 	]);
 	expect(replay.lineItems.map((line) => line.total_tax)).toEqual(['0', '0']);
+	expect(replay.couponLines[0].discount_tax).toBe('0');
+});
+
+it('keeps a catalog-none web line untaxed through coupon recalculation', async () => {
+	mockTaxRates = [{ id: 1, rate: '10', class: 'standard' }];
+	installEngineFixture({ code: 'ten', discount_type: 'percent', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const replay = await result.current.recalculate(
+		{
+			line_items: [{ ...lineItems[1], meta_data: [] }],
+		},
+		[{ code: 'ten' }]
+	);
+	expect(replay.lineItems[0].total_tax).toBe('0');
 	expect(replay.couponLines[0].discount_tax).toBe('0');
 });
