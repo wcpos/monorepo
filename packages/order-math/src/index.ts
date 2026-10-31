@@ -10,6 +10,7 @@ export {
 	snapshotFromOrderJSON,
 	isActiveLineItem,
 	isActiveFeeLine,
+	isFixedFeeLine,
 	isActiveShippingLine,
 	isActiveCouponLine,
 } from './snapshot';

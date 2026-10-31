@@ -8,7 +8,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import * as orderMath from '@wcpos/order-math';
 import { createCartConfig } from '@wcpos/order-math';
 
+import { enterCheckout, leaveCheckout } from '../checkout/checkout-mode';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { useRepairTaxExempt } from './use-tax-exempt';
 import { useBoundaryCommit } from './use-boundary-commit';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { row } from '../checkout/payments/device/fixtures.test-utils';
@@ -26,6 +28,9 @@ jest.mock('@wcpos/order-math', () => ({
 	...jest.requireActual('@wcpos/order-math'),
 	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
 }));
+
+const mockRepairTaxExempt = jest.fn(async (_record: CurrentOrderRecord, _exempt: boolean) => {});
+jest.mock('./use-tax-exempt', () => ({ useRepairTaxExempt: jest.fn(() => mockRepairTaxExempt) }));
 
 const events = new Subject<{ type: string; collection?: string }>();
 const coverage = new BehaviorSubject({ complete: true });
@@ -908,6 +913,50 @@ it('passes the context lookup to replay', async () => {
 			})
 		);
 	} finally {
+		view.unmount();
+	}
+});
+
+it('dispatches the hook repair and gives it the shared system boundary commit', async () => {
+	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+	const a = record({
+		meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
+		line_items: [{ total_tax: '1' }],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		expect(mockRepairTaxExempt).toHaveBeenCalledWith(a, true);
+		const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
+		const result = orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config);
+		await enqueueOrderMutation(a.uuid, (queue) =>
+			systemCommit(a as CurrentOrderRecord, result, queue)
+		);
+		const [ctx, input] = jest.mocked(commitAtBoundary).mock.calls[0];
+		expect(ctx.source).toBe('system');
+		expect(input.coupons).toBeUndefined();
+		expect(input.allowed!(a.payload)).toBe(true);
+		act(() => enterCheckout(a.uuid));
+		expect(input.allowed!(a.payload)).toBe(false);
+		expect(input.allowed!(a.payload, true)).toBe(true);
+		act(() => leaveCheckout(a.uuid));
+		expect(input.allowed!({ ...a.payload, coupon_lines: [{ code: 'ten' }] })).toBe(false);
+		expect(input.allowed!({ ...a.payload, coupon_lines: [{ code: 'ten' }] }, true)).toBe(false);
+		await ctx.complete(
+			a as Parameters<typeof ctx.complete>[0],
+			{ source: 'zero-balance', order: {} } as never,
+			input.queue
+		);
+		expect(completeSale).toHaveBeenLastCalledWith(
+			saleContext,
+			a,
+			expect.anything(),
+			{ host: 'background' },
+			input.queue
+		);
+	} finally {
+		act(() => leaveCheckout(a.uuid));
 		view.unmount();
 	}
 });

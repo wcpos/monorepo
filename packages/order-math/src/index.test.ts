@@ -23,6 +23,7 @@ test('public value surface is exactly the spec', () => {
 		'isCompletingStatus',
 		'isFailedPaymentStatus',
 		'isFinalPaymentStatus',
+		'isFixedFeeLine',
 		// Added 2026-10-23 (C6, ADR 0033 item 8): the row-state vocabulary — money in motion, the
 		// offline device authorization, and §3.4 rule 2's voidable partition — one home for the
 		// copies in core and query.

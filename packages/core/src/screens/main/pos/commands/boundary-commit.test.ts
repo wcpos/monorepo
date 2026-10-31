@@ -490,6 +490,7 @@ it.each(['amount', 'status', 'refund'])(
 		});
 		const observe = jest.fn();
 		const coordinator = createSettlementCoordinator({
+			repairTaxExempt: jest.fn(async () => {}),
 			inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
 			openOrders$,
 			ratesReady$: of({ ready: true, generation: 0 }),
@@ -886,6 +887,7 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 	);
 	const complete = jest.fn();
 	const coordinator = createSettlementCoordinator({
+		repairTaxExempt: jest.fn(async () => {}),
 		inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
 		openOrders$: of([order]),
 		ratesReady$: of({ ready: true, generation: 0 }),
@@ -950,6 +952,7 @@ it.each([
 			});
 		const outcomes: unknown[] = [];
 		const coordinator = createSettlementCoordinator({
+			repairTaxExempt: jest.fn(async () => {}),
 			inputs$: of({ settings: { priceNumDecimals: 2 } } as CartConfigInputs),
 			openOrders$,
 			ratesReady$: of({ ready: true, generation: 0 }),

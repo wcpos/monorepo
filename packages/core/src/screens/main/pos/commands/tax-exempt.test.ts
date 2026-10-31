@@ -329,14 +329,14 @@ it.each([false, true])(
 	}
 );
 it('dispatches an immutable exemption intent after reading previousExempt in the slot', async () => {
-	const h = setup();
+	const h = setup({ meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] });
 	registerActionHook(
 		'cart.tax_exempt.set',
 		async (_ctx, event, next) => {
 			expect(event.payload).toEqual({
 				orderId: 'target',
 				exempt: true,
-				previousExempt: false,
+				previousExempt: true,
 				source: 'repair',
 			});
 			return next({ ...event, payload: { ...event.payload, exempt: false } });
@@ -485,4 +485,30 @@ it('un-exempting a couponed catalog-none web line does not reintroduce tax in re
 	await toggle(h, false);
 	expect(h.order.payload.line_items?.[0].total_tax).toBe('0');
 	expect(h.order.payload.discount_tax).toBe('0');
+});
+
+it('repair re-taxes the resident un-exempt payload instead of stamping a stale flag', async () => {
+	const h = setup({ meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] });
+	await toggle(h);
+	h.rerun();
+	const meta = [{ key: 'is_vat_exempt', value: 'no' }];
+	h.beforeSecond.mockImplementation(() => {
+		h.order.payload.meta_data = meta;
+	});
+	await toggle(h, true, 'repair');
+	expect(h.order.payload.line_items).toEqual([product]);
+	expect(h.order.payload.fee_lines).toEqual([fee]);
+	expect(h.order.payload.total).toBe('16.5');
+	expect(h.order.payload.meta_data).toBe(meta);
+	expect(h.patches[1]).not.toHaveProperty('meta_data');
+});
+it('repair refuses durable store ownership without writing', async () => {
+	const h = setup({ meta_data: [{ key: '_wcpos_money_owner_hint', value: 'server' }] });
+	const before = JSON.stringify(h.order.payload);
+	expect(await toggle(h, true, 'repair')).toEqual({
+		deny: { reasonKey: 'pos_cart.tax_exempt_locked' },
+	});
+	expect(h.patches).toEqual([{}]);
+	expect(JSON.stringify(h.order.payload)).toBe(before);
+	expect(h.deps.commitAtBoundary).not.toHaveBeenCalled();
 });

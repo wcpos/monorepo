@@ -1,6 +1,8 @@
 import { combineLatest, type Observable, Subscription } from 'rxjs';
 
-import { type CouponContext, readLedger } from '@wcpos/order-math';
+import { isActiveFeeLine, isActiveLineItem, isFixedFeeLine, readLedger } from '@wcpos/order-math';
+import type { CouponContext } from '@wcpos/order-math';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { orderLocked } from './paid-balance-boundary';
 import { type CouponReferences, replayContentKey } from './coupon-continuation';
@@ -26,6 +28,7 @@ interface Deps {
 	serverOwnsMoney: (uuid: string) => boolean;
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
+	repairTaxExempt: (record: CurrentOrderRecord, exempt: boolean) => Promise<unknown>;
 	settle: (
 		uuid: string,
 		record: CurrentOrderRecord,
@@ -43,6 +46,22 @@ export const needsReferences = (record: { payload: OrderPayload }) =>
 const hasCoupons = (record: { payload: OrderPayload }) =>
 	record.payload.coupon_lines?.some((line) => line.code != null);
 
+export function needsTaxRepair(payload: OrderPayload, lastFlag: boolean | undefined): boolean {
+	const flag = wooMetaCarrier.vatExempt(payload.meta_data);
+	if (lastFlag !== undefined && lastFlag !== flag) return true;
+	if (!flag) return false;
+	const lines = [
+		...(payload.line_items ?? []).filter(isActiveLineItem),
+		...(payload.fee_lines ?? []).filter(
+			(line) => isActiveFeeLine(line) && isFixedFeeLine(line, !!payload.prices_include_tax)
+		),
+	];
+	return lines.some(
+		(line) =>
+			Number(line.total_tax || 0) !== 0 || line.taxes?.some((t) => Number(t.total || 0) !== 0)
+	);
+}
+
 /** One sequential drain; content and payment coverage (not aggregates/revisions) invalidate a pass. */
 export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let records: CurrentOrderRecord[] = [];
@@ -54,6 +73,8 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let stopped = false;
 	let running = false;
 	let dirty = false;
+	const lastFlag = new Map<string, boolean>();
+	const repaired = new Map<string, string>();
 	const seen = new Map<string, string>();
 	const flights = new Map<string, symbol>();
 	let references: CouponReferences = { ready: false, generation: '' };
@@ -73,7 +94,10 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			p.billing,
 			p.shipping,
 			p.meta_data?.filter(
-				({ key }) => key === '_woocommerce_pos_tax_based_on' || key === '_wcpos_money_owner_hint'
+				({ key }) =>
+					key === POS_META_KEYS.vatExempt ||
+					key === '_woocommerce_pos_tax_based_on' ||
+					key === '_wcpos_money_owner_hint'
 			),
 			// A guard can outlive a ledger update that supersedes a paid-balance completion.
 			readLedger(p.meta_data)
@@ -160,9 +184,24 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 				for (const record of [...records].sort((a, b) => a.uuid.localeCompare(b.uuid))) {
 					if (stopped || pass !== epoch || !rates.ready) break;
 					const uuid = record.uuid;
-					if (hasCoupons(record.getLatest())) {
-						const fresh = record.getLatest();
-						const key = fingerprint(fresh);
+					const fresh = record.getLatest();
+					const flag = wooMetaCarrier.vatExempt(fresh.payload.meta_data);
+					const key = fingerprint(fresh);
+					const repair = needsTaxRepair(fresh.payload, lastFlag.get(uuid));
+					if (!repair) lastFlag.set(uuid, flag);
+					if (repair && repaired.get(uuid) !== key) {
+						repaired.set(uuid, key);
+						try {
+							// The till's own toggle also trips this rule; equal meta and clean lines write nothing.
+							if (!isActionRefusal(await deps.repairTaxExempt(fresh, flag)))
+								lastFlag.set(uuid, flag);
+						} catch (error) {
+							deps.observe({ type: 'settlement.failed', uuid, at: deps.now(), error });
+						}
+						dirty = true;
+						continue;
+					}
+					if (hasCoupons(fresh)) {
 						if (orderLocked(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
 							// Preserve the in-flight fence when checkout is the only new exclusion.
 							if (
@@ -234,10 +273,12 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					})
 				);
 			}
-			for (const uuid of seen.keys())
+			for (const uuid of new Set([...seen.keys(), ...lastFlag.keys()]))
 				if (!records.some((r) => r.uuid === uuid)) {
 					seen.delete(uuid);
 					flights.delete(uuid);
+					lastFlag.delete(uuid);
+					repaired.delete(uuid);
 				}
 			dirty = true;
 			void drain();
