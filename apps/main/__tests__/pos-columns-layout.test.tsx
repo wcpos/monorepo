@@ -50,6 +50,11 @@ jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => ({
 	default: 'Pressable',
 }));
 jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
+// The paid flash reads uniwind (ESM, untransformed here) and Reanimated colour interpolation; this
+// layout test wants the plain surface it wraps.
+jest.mock('@wcpos/components/flash-surface', () => ({
+	FlashSurface: jest.requireActual('@wcpos/components/edge-surface').EdgeSurface,
+}));
 // The EAS Observe marker needs the native module; the route's layout is what is under test.
 jest.mock('expo-observe', () => {
 	const react = jest.requireActual('react');
