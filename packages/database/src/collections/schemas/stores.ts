@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 20,
+	version: 21,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -232,6 +232,12 @@ export const storesLiteral = {
 		prevent_overselling: {
 			title: 'Prevent overselling',
 			description: 'Whether the server prevents checkout when there is insufficient stock.',
+			type: 'boolean',
+			default: false,
+		},
+		decimal_qty: {
+			title: 'Decimal quantities',
+			description: 'Whether the store accepts decimal quantities on POS orders.',
 			type: 'boolean',
 			default: false,
 		},
@@ -703,6 +709,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'price_num_decimals',
 	'wc_price_decimals',
 	'prevent_overselling',
+	'decimal_qty',
 	'prices_include_tax',
 	'tax_based_on',
 	'shipping_tax_class',

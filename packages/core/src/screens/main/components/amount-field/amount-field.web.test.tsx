@@ -48,6 +48,7 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, select: (store: Record<string, unknown>) => unknown) =>
 		select({
+			decimal_qty: true,
 			price_decimal_sep: ',',
 			price_thousand_sep: '.',
 			price_num_decimals: 0,

@@ -258,6 +258,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			// bump exists because the schema hash moved (the v19 lesson above).
 			return oldDoc;
 		},
+		21(oldDoc: StoreDocumentType) {
+			oldDoc.decimal_qty = false;
+			return oldDoc;
+		},
 	},
 };
 

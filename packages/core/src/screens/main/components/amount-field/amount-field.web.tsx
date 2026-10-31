@@ -24,7 +24,7 @@ export function AmountField(props: AmountFieldProps) {
 		testID,
 		autoFocus,
 	} = props;
-	const { decimalSeparator, places: decimals, format, stored, commit } = useAmount(props);
+	const { decimalSeparator, entryPlaces: decimals, format, stored, commit } = useAmount(props);
 	const t = useT();
 	// The percent with the store's separator at its own scale, as the cart's discount line names
 	// it: a comma store reads "12,5", and a store pricing to 0 places never reads 12.5 % as "12".
