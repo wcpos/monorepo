@@ -28,7 +28,7 @@ function ButtonText(props: React.ComponentProps<typeof Text>) {
 }
 
 const buttonVariants = cva(
-	'web:transition-colors flex max-w-full shrink items-center justify-center rounded-lg',
+	'web:transition-colors flex max-w-full shrink items-center justify-center',
 	{
 		variants: {
 			variant: {
@@ -41,6 +41,8 @@ const buttonVariants = cva(
 				/**
 				 * Outline buttons
 				 */
+				// The outline IS the variant, so it stays 1 px in every theme: Bold money's 0 px control
+				// outline is for fields and chips, and would make this button vanish on a card (CodeRabbit, #3139).
 				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
 				'outline-destructive':
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
@@ -70,20 +72,29 @@ const buttonVariants = cva(
 			 * `Chip size="sm"`, never a Button.
 			 */
 			size: {
-				default: 'h-ctl px-4 py-2',
-				sm: 'h-9 px-3',
-				lg: 'h-14 px-6',
+				default: 'h-ctl rounded-control px-4 py-2',
+				sm: 'rounded-control h-9 px-3',
+				lg: 'rounded-commit h-14 px-6',
 			},
 		},
 		defaultVariants: {
 			variant: 'default',
 			size: 'default',
 		},
-		compoundVariants: [],
+		compoundVariants: [
+			// The commit shadow and its press belong to the solid commit buttons only (Pay, Take payment,
+			// a destructive confirm); an outline or ghost lg keeps the pill without the lift.
+			{
+				variant: ['default', 'destructive'],
+				size: 'lg',
+				class:
+					'shadow-commit active:shadow-commit-press active:translate-y-[var(--shape-commit-press-y)]',
+			},
+		],
 	}
 );
 
-const buttonTextVariants = cva('text-foreground web:transition-colors text-base font-medium', {
+const buttonTextVariants = cva('text-foreground web:transition-colors font-ui text-base', {
 	variants: {
 		pressed: { true: '', false: '' },
 		hovered: { true: '', false: '' },
@@ -91,7 +102,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			/**
 			 * Solid buttons
 			 */
-			default: 'text-primary-foreground font-semibold',
+			default: 'text-primary-foreground font-strong',
 			destructive: 'text-destructive-foreground',
 
 			/**
@@ -112,7 +123,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		size: {
 			default: '',
 			sm: 'text-sm',
-			lg: 'text-lg font-semibold',
+			lg: 'font-commit text-lg',
 		},
 	},
 	compoundVariants: [

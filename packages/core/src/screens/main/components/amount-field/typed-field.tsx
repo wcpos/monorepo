@@ -142,8 +142,8 @@ export function TypedField({
 			aria-describedby={props['aria-describedby']}
 			aria-invalid={props['aria-invalid']}
 			className={cn(
-				props.className,
-				props.tone === 'attention' && fieldBox({ state: 'attention' })
+				props.tone === 'attention' && fieldBox({ state: 'attention' }),
+				props.className
 			)}
 			inputClassName={cn('tabular-nums', props.textClassName)}
 			// A tap replaces the number, as a keypad's first key does (not "1" → "31").

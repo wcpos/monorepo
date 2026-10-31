@@ -4,6 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 
+import * as InputModule from '@wcpos/components/input';
 import { FormFieldContext } from '@wcpos/components/form/context';
 
 import { AmountField, FormAmountField } from './index';
@@ -326,4 +327,21 @@ describe('FormAmountField hands the form the number in the form’s own type', (
 		fireEvent.change(input, { target: { value: '6' } });
 		expect(screen.getByTestId('held').textContent).toBe('string:6');
 	});
+});
+
+it('keeps the cart control radius when the native quantity needs attention', () => {
+	const input = jest
+		.spyOn(InputModule, 'Input')
+		.mockImplementation((props) => (
+			<input data-testid={props.testID} className={props.className} />
+		));
+	try {
+		field({ kind: 'quantity', tone: 'attention', className: 'rounded-control' });
+		const classes = screen.getByTestId('amount').className.split(' ');
+		expect(classes).toContain('rounded-control');
+		expect(classes).not.toContain('rounded-field');
+		expect(classes).toContain('border-attention');
+	} finally {
+		input.mockRestore();
+	}
 });

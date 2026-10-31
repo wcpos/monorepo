@@ -242,8 +242,9 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   never shares a colour with Void.
 - Text contrast 4.5:1, UI and icon contrast 3:1 (WCAG). Light and dark are both first-class; check
   every new surface in both.
-- Flat surfaces, hairline borders, one radius. No gradients, glass or drop shadows to make a card
-  look "premium"; hierarchy comes from spacing, weight and colour, in that order.
+- Flat surfaces, hairline borders, one radius per theme (the theme owns `--shape-*`, components read the
+  utilities); no gradients, glass or decorative shadows — a theme's commit-button shadow is a signature,
+  not decoration (Paul, 2026-10-30); hierarchy comes from spacing, weight and colour, in that order.
 
 #### 8. Words the cashier uses
 

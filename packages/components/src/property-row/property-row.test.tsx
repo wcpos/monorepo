@@ -372,6 +372,6 @@ it('a verb is a small link Button in primary ink', () => {
 		expect.arrayContaining(['bg-transparent', 'h-9'])
 	);
 	expect(classes(screen.getByText('Edit'))).toEqual(
-		expect.arrayContaining(['text-primary', 'text-sm', 'font-medium'])
+		expect.arrayContaining(['text-primary', 'text-sm', 'font-ui'])
 	);
 });

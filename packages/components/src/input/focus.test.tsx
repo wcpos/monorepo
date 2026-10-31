@@ -25,6 +25,8 @@ jest.mock('../icon', () => ({ Icon: () => null }));
 it('lights the border and one-pixel ring only while focused', () => {
 	const { rerender } = render(<Input testID="field" />);
 	expect(box.className).toContain('bg-card');
+	expect(box.className).toContain('rounded-field');
+	expect(box.className).toContain('border-[length:var(--shape-ctl-border)]');
 	expect(box.className).not.toContain('border-ring');
 	fireEvent.focus(screen.getByTestId('field'));
 	expect(box.className).toContain('border-ring web:ring-1 web:ring-ring');

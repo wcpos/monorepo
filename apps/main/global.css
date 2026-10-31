@@ -84,6 +84,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-chip: var(--chip);
+  --color-chip-border: var(--chip-border);
+  --color-primary-shadow: var(--primary-shadow);
 
   /* Poster tile tints: a tile with no picture (index = tintOf(key), spec 2026-10-12) */
   --color-tile-tint-0: var(--tile-tint-0);
@@ -198,6 +201,18 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+
+  --radius-control: calc(var(--radius) * var(--shape-radius-control));
+  --radius-tile: calc(var(--radius) * var(--shape-radius-tile));
+  --radius-media: calc(var(--radius) * var(--shape-radius-media));
+  --radius-commit: calc(var(--radius) * var(--shape-radius-commit));
+  --radius-field: calc(var(--radius) * var(--shape-radius-field));
+  --radius-chip: calc(var(--radius) * var(--shape-radius-chip));
+  --shadow-commit: var(--shape-commit-shadow);
+  --shadow-commit-press: var(--shape-commit-shadow-press);
+  --font-weight-ui: var(--type-w-ui);
+  --font-weight-strong: var(--type-w-strong);
+  --font-weight-commit: var(--type-w-commit);
 }
 
 /* Web-only animation keyframes */
@@ -435,6 +450,27 @@
       --tile-tint-3: oklch(0.86 0.09 310);
       --tile-tint-4: oklch(0.90 0.11 90);
       --tile-tint-5: oklch(0.88 0.09 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -549,6 +585,27 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -661,6 +718,27 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -773,6 +851,27 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -883,6 +982,27 @@
       --tile-tint-3: oklch(0.32 0.05 300);
       --tile-tint-4: oklch(0.34 0.05 90);
       --tile-tint-5: oklch(0.31 0.03 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1;
+      --shape-radius-tile: 1;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 1;
+      --shape-radius-field: 1;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -960,6 +1080,27 @@
       --tile-tint-3: oklch(0.89 0.04 300);
       --tile-tint-4: oklch(0.90 0.06 40);
       --tile-tint-5: oklch(0.90 0.04 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 0.5;
+      --shape-radius-tile: 0.5;
+      --shape-radius-media: 999;
+      --shape-radius-commit: 0.5;
+      --shape-radius-field: 0.5;
+      --shape-radius-chip: 0.5;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 500;
+      --chip: var(--card);
+      --chip-border: var(--foreground);
     }
 
     /* ========================================
@@ -1037,6 +1178,27 @@
       --tile-tint-3: oklch(0.87 0.06 330);
       --tile-tint-4: oklch(0.90 0.09 85);
       --tile-tint-5: oklch(0.88 0.05 200);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 1.5;
+      --shape-radius-tile: 1.5;
+      --shape-radius-media: 1;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 1.5;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 1px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 600;
+      --type-w-commit: 600;
+      --chip: var(--card);
+      --chip-border: var(--border);
     }
 
     /* ========================================
@@ -1114,6 +1276,27 @@
       --tile-tint-3: oklch(0.90 0 0);
       --tile-tint-4: oklch(0.94 0.10 123);
       --tile-tint-5: oklch(0.87 0 0);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 2.25;
+      --shape-radius-tile: 2.5;
+      --shape-radius-media: 1.75;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 999;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 0px;
+      --shape-commit-shadow: 0 0 0 transparent;
+      --shape-commit-shadow-press: 0 0 0 transparent;
+      --shape-commit-press-y: 0px;
+      --primary-shadow: transparent;
+      --type-w-ui: 500;
+      --type-w-strong: 700;
+      --type-w-commit: 700;
+      --chip: var(--muted);
+      --chip-border: transparent;
     }
 
     /* ========================================
@@ -1194,6 +1377,27 @@
       --tile-tint-3: oklch(0.89 0.09 301);
       --tile-tint-4: oklch(0.90 0.10 34);
       --tile-tint-5: oklch(0.90 0.08 220);
+
+      /* Shape and weight (Paul, 2026-10-30): the theme owns them; components read the utilities.
+         Radii are UNITLESS multiples of --radius, applied in @theme inline where the density scope's
+         --radius is in force (compact 6 · regular 8 · spacious 10); a token computed here would read the
+         root's 8. 999 is a pill or a circle. */
+      --shape-radius-control: 2;
+      --shape-radius-tile: 2;
+      --shape-radius-media: 1.5;
+      --shape-radius-commit: 999;
+      --shape-radius-field: 999;
+      --shape-radius-chip: 999;
+      --shape-ctl-border: 2px;
+      --shape-commit-shadow: 0 4px 0 var(--primary-shadow);
+      --shape-commit-shadow-press: 0 1px 0 var(--primary-shadow);
+      --shape-commit-press-y: 3px;
+      --primary-shadow: oklch(0.46 0.19 34);
+      --type-w-ui: 600;
+      --type-w-strong: 800;
+      --type-w-commit: 800;
+      --chip: var(--card);
+      --chip-border: var(--foreground);
     }
   }
 }

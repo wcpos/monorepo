@@ -312,7 +312,7 @@ describe('ComboboxValue', () => {
 		);
 		mockPopoverRoot.open = true;
 		const classes = mockViews.map((view) => String((view as { className?: string }).className));
-		const box = classes.find((className) => className.includes('rounded-lg border'));
+		const box = classes.find((className) => className.includes('rounded-field'));
 		expect(box).toContain(mark);
 		if (open) expect(box).not.toContain('border-attention');
 	});

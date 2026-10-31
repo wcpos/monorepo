@@ -58,7 +58,7 @@ it('renders an unfilled uppercase head and padded column cell', () => {
 	expect(head.firstElementChild).toHaveClass(
 		'text-muted-foreground',
 		'text-xs',
-		'font-medium',
+		'font-ui',
 		'tracking-wide',
 		'uppercase'
 	);

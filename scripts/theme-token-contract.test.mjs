@@ -42,6 +42,32 @@ test('derived type and radius tokens are inline so scopes recompute them', () =>
 		assert.doesNotMatch(themeBody, declaration, `${token} must not be in plain @theme`);
 	}
 });
+test('shape, shadow and weight utilities resolve inline', () => {
+	const mappings = {
+		'radius-control': 'shape-radius-control',
+		'radius-tile': 'shape-radius-tile',
+		'radius-media': 'shape-radius-media',
+		'radius-commit': 'shape-radius-commit',
+		'radius-field': 'shape-radius-field',
+		'radius-chip': 'shape-radius-chip',
+		'shadow-commit': 'shape-commit-shadow',
+		'shadow-commit-press': 'shape-commit-shadow-press',
+		'font-weight-ui': 'type-w-ui',
+		'font-weight-strong': 'type-w-strong',
+		'font-weight-commit': 'type-w-commit',
+	};
+	for (const [utility, token] of Object.entries(mappings)) {
+		// A radius is a unitless multiple of --radius applied HERE, where the density scope's --radius is
+		// in force; a px token computed in the variant would read the root's 8 (the compact gallery cells
+		// moved 15 px before this). Shadows and weights map straight through.
+		const value = utility.startsWith('radius-')
+			? `calc\\(var\\(--radius\\) \\* var\\(--${token}\\)\\)`
+			: `var\\(--${token}\\)`;
+		assert.match(inlineThemeBody, new RegExp(`--${utility}\\s*:\\s*${value}\\s*;`), utility);
+		assert.doesNotMatch(themeBody, new RegExp(`--${utility}\\s*:`));
+	}
+});
+
 const themeNames = [
 	'light',
 	'dark',
@@ -54,13 +80,51 @@ const themeNames = [
 	'market',
 ];
 
+for (const name of themeNames) {
+	test(`${name}: every shape radius is a unitless multiple (999 is a pill or a circle)`, () => {
+		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+		assert.ok(body, `Missing ${name} theme`);
+		for (const token of ['control', 'tile', 'media', 'commit', 'field', 'chip']) {
+			const value = body.match(new RegExp(`--shape-radius-${token}\\s*:\\s*([^;]+);`))?.[1].trim();
+			assert.ok(value, `${name}: --shape-radius-${token}`);
+			assert.match(
+				value,
+				/^\d+(\.\d+)?$/,
+				`${name}: --shape-radius-${token} is ${value}, not a unitless number`
+			);
+		}
+	});
+}
+
 test('the contract covers every variant in the theme layer, in sheet order', () => {
 	const layer = css.match(/@layer\s+theme\s*\{([\s\S]*?)^\}/m)?.[1];
 	assert.ok(layer, 'Missing theme layer');
 	const variants = [...layer.matchAll(/@variant\s+([\w-]+)\s*\{/g)].map(([, name]) => name);
 	assert.deepEqual(themeNames, variants);
 });
+const shapeTokens = [
+	'shape-radius-control',
+	'shape-radius-tile',
+	'shape-radius-media',
+	'shape-radius-commit',
+	'shape-radius-field',
+	'shape-radius-chip',
+	'shape-ctl-border',
+	'shape-commit-shadow',
+	'shape-commit-shadow-press',
+	'shape-commit-press-y',
+	'primary-shadow',
+	'type-w-ui',
+	'type-w-strong',
+	'type-w-commit',
+	'chip',
+	'chip-border',
+];
+
 const newColors = [
+	'chip',
+	'chip-border',
+	'primary-shadow',
 	'selected',
 	'selected-foreground',
 	// The hover and press wash: a value of its own in light (the accent's step 3, 2026-10-30), an
@@ -177,6 +241,9 @@ for (const name of themeNames) {
 			);
 		}
 		assert.doesNotMatch(body, /--radius\s*:/);
+		for (const token of shapeTokens) {
+			assert.match(body, new RegExp(`--${token}\\s*:\\s*[^;]+;`), `${name}: ${token}`);
+		}
 	});
 }
 
