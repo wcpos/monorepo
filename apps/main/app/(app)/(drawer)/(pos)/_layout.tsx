@@ -17,6 +17,7 @@ import {
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 
+import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -60,8 +61,11 @@ export default function POSLayout() {
 		setLastOrderId(orderIdFromParams);
 	}
 
-	// Use the route param if in POS, otherwise use the remembered value (for modals)
-	const orderId = isInPOSRoute ? orderIdFromParams : lastOrderId;
+	// The sheets carry their own order id; the provider follows the till (see tillOrderIdForRoute).
+	const [tillOrderId, setTillOrderId] = React.useState<string | undefined>(undefined);
+	const resolved = tillOrderIdForRoute({ segments, orderIdFromParams, tillOrderId, lastOrderId });
+	if (resolved.tillOrderId !== tillOrderId) setTillOrderId(resolved.tillOrderId);
+	const orderId = resolved.orderId;
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store
