@@ -826,54 +826,55 @@ it.each([
 );
 
 // Revert: let local X-reports reuse the preview timestamp (or reject their online fallback).
-it.each(['offline', 'online-website-available'])(
-	'refreshes the local X-report timestamp at dispatch when %s',
-	async (status) => {
-		jest.useFakeTimers().setSystemTime(new Date('2026-09-17T09:00:00Z'));
-		try {
-			mockUseOnlineStatus.mockReturnValue({ status });
-			const fetchForPrint = jest.fn().mockRejectedValue(new Error('Unavailable'));
-			mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
-			mockUseActiveTemplates.mockReturnValue([
-				{
-					id: 'closure',
-					offline_capable: true,
-					engine: 'logicless',
-					content: '<p>{{order.printed.datetime}} / {{order.printed.time}}</p>',
-				},
-			] as never);
-			const localReport = {
-				order: { currency: 'GBP', printed: { datetime: '17 Sept 2026, 02:00', time: '02:00' } },
-				closure: { status: 'open' },
-				fiscal: { document_type: 'xreport', is_reprint: false },
-			};
-			const { result } = renderHook(() =>
-				useTemplateRenderer({
-					...defaultOptions,
-					order: undefined,
-					orderId: undefined,
-					document: 'xreport:s',
-					templateType: 'closure',
-					localReport,
-				})
-			);
-			expect(result.current.renderedHtml).toContain('02:00');
-			jest.setSystemTime(new Date('2026-09-17T10:15:00Z'));
-			const count = jest.fn();
-			const printed = await result.current.preparePrintContent(count);
-			expect(printed.html).toContain('17 Sept 2026, 03:15 / 03:15');
-			expect(printed.receiptData).toMatchObject({
-				order: { currency: 'GBP' },
-				fiscal: { document_type: 'xreport', is_reprint: false },
-			});
-			expect(count).not.toHaveBeenCalled();
-			expect(fetchForPrint).toHaveBeenCalledTimes(status === 'offline' ? 0 : 1);
-			expect(localReport.order.printed.time).toBe('02:00');
-		} finally {
-			jest.useRealTimers();
-		}
+it.each(
+	['offline', 'online-website-available'].flatMap((status) =>
+		['xreport', 'handover'].map((variant) => [status, variant])
+	)
+)('refreshes the local report timestamp at dispatch when %s (%s)', async (status, variant) => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T09:00:00Z'));
+	try {
+		mockUseOnlineStatus.mockReturnValue({ status });
+		const fetchForPrint = jest.fn().mockRejectedValue(new Error('Unavailable'));
+		mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+		mockUseActiveTemplates.mockReturnValue([
+			{
+				id: 'closure',
+				offline_capable: true,
+				engine: 'logicless',
+				content: '<p>{{order.printed.datetime}} / {{order.printed.time}}</p>',
+			},
+		] as never);
+		const localReport = {
+			order: { currency: 'GBP', printed: { datetime: '17 Sept 2026, 02:00', time: '02:00' } },
+			closure: { status: 'open' },
+			fiscal: { document_type: variant, is_reprint: false },
+		};
+		const { result } = renderHook(() =>
+			useTemplateRenderer({
+				...defaultOptions,
+				order: undefined,
+				orderId: undefined,
+				document: `${variant}:s`,
+				templateType: 'closure',
+				localReport,
+			})
+		);
+		expect(result.current.renderedHtml).toContain('02:00');
+		jest.setSystemTime(new Date('2026-09-17T10:15:00Z'));
+		const count = jest.fn();
+		const printed = await result.current.preparePrintContent(count);
+		expect(printed.html).toContain('17 Sept 2026, 03:15 / 03:15');
+		expect(printed.receiptData).toMatchObject({
+			order: { currency: 'GBP' },
+			fiscal: { document_type: variant, is_reprint: false },
+		});
+		expect(count).not.toHaveBeenCalled();
+		expect(fetchForPrint).toHaveBeenCalledTimes(status === 'offline' ? 0 : 1);
+		expect(localReport.order.printed.time).toBe('02:00');
+	} finally {
+		jest.useRealTimers();
 	}
-);
+});
 
 // ADR 0040 Decided 1 rule 1: a sale the store has not heard renders locally, its line first.
 it('renders a local-only sale from local data with the awaiting-store line, and drops both once answered', async () => {

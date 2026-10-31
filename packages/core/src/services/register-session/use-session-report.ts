@@ -27,7 +27,8 @@ export function useSessionReport(
 	closure?: ReadonlyClosureDocument | null,
 	isReprint = false,
 	knownClosure?: ClosureRow,
-	previewEnabled = true
+	previewEnabled = true,
+	variant: 'xreport' | 'handover' = 'xreport'
 ) {
 	const actor = useRegisterActor();
 	const { site, storeDB } = useStoreSession();
@@ -43,20 +44,25 @@ export function useSessionReport(
 	const localReport = snapshot
 		? buildClosureDocument(snapshot, context)
 		: session
-			? buildXReportDocument(session, {
-					...context,
-					expected: blind ? {} : expected,
-					breakdowns: {
-						register_name: binding.registerName,
-						opened_by_name:
-							String(session.opened_by) === actor.id
-								? actor.name
-								: (cashiers.find((row) => row.id === session.opened_by)?.display_name ??
-									String(session.opened_by ?? '')),
-						movements,
-						transaction_count: salesCount,
+			? buildXReportDocument(
+					session,
+					{
+						...context,
+						expected: blind ? {} : expected,
+						breakdowns: {
+							register_name: binding.registerName,
+							...(variant === 'handover' ? { cashier_name: actor.name } : {}),
+							opened_by_name:
+								String(session.opened_by) === actor.id
+									? actor.name
+									: (cashiers.find((row) => row.id === session.opened_by)?.display_name ??
+										String(session.opened_by ?? '')),
+							movements,
+							transaction_count: salesCount,
+						},
 					},
-				})
+					{ handover: variant === 'handover' }
+				)
 			: undefined;
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
@@ -68,7 +74,7 @@ export function useSessionReport(
 		document: snapshot
 			? `closure:${snapshot.server_closure_id ?? snapshot.id}`
 			: session
-				? `xreport:${session.id}`
+				? `${variant}:${session.id}`
 				: undefined,
 		documentReady: snapshot
 			? snapshot?.sync_status === 'synced' || snapshot?.sync_status === 'superseded'

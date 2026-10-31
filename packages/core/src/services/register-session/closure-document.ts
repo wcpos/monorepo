@@ -60,7 +60,12 @@ export function formatClosureDate(
 	}
 	return result;
 }
-function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = false) {
+function envelope(
+	row: Partial<ClosureRow>,
+	context: ClosureContext,
+	xreport = false,
+	handover = false
+) {
 	const money = <T extends Values, K extends string>(values: T, fields: K[]) =>
 		Object.assign(
 			{},
@@ -78,6 +83,7 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 		approved_by_name: '',
 		...Object.fromEntries(Object.entries(breakdowns).filter(([key]) => key.endsWith('_name'))),
 		...(breakdowns.labels as Values),
+		cashier_name: context.breakdowns?.cashier_name ?? '',
 	};
 	const rows = (key: string, fields: string[]) =>
 		Object.entries((breakdowns[key] ?? {}) as Record<string, Values>).map(([key, value]) => {
@@ -201,12 +207,13 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 			sequence: null,
 			signed_at: null,
 			extra_fields: [],
-			document_type: xreport ? 'xreport' : 'closure',
+			document_type: handover ? 'handover' : xreport ? 'xreport' : 'closure',
 			receipt_number: xreport ? '' : String(row.number),
 			is_sale_document: false,
 			is_refund_document: false,
 			is_closure_document: true,
 			is_x_report: xreport,
+			is_handover: handover,
 			is_reprint: !xreport && !!row.print_count,
 			reprint_count: xreport ? 0 : (row.print_count ?? 0),
 		},
@@ -219,7 +226,11 @@ export function buildClosureDocument(row: ClosureRow, context: ClosureContext) {
 		context
 	);
 }
-export function buildXReportDocument(session: RegisterSessionRow, context: ClosureContext) {
+export function buildXReportDocument(
+	session: RegisterSessionRow,
+	context: ClosureContext,
+	options?: { handover?: boolean }
+) {
 	const expected = context.expected ?? session.server_expected ?? {};
 	const counted = session.counted ?? {};
 	const breakdowns = Object.fromEntries(
@@ -257,6 +268,7 @@ export function buildXReportDocument(session: RegisterSessionRow, context: Closu
 			},
 		},
 		context,
-		true
+		true,
+		options?.handover
 	);
 }

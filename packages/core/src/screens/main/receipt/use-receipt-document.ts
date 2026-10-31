@@ -368,7 +368,9 @@ export function useReceiptDocument({
 			// Not read yet: whether the paper needs the awaiting-store line is unknown (rule 1).
 			if (awaits === null) return false;
 			if (
-				(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
+				(document?.startsWith('closure:') ||
+					document?.startsWith('xreport:') ||
+					document?.startsWith('handover:')) &&
 				(!selectedTemplate?.offline_capable || !selectedTemplate.content)
 			) {
 				// Refused before anything reached a printer: the view shows the inline

@@ -222,3 +222,18 @@ it.each([
 	});
 	expect(printed).toMatchObject({ closure: { print_count: 6 }, fiscal: { reprint_count: 5 } });
 });
+
+// Open-session papers are reads, never a counted print or closure commit.
+it.each(['xreport', 'handover'])('does not send print intent for %s', async (variant) => {
+	jest.clearAllMocks();
+	mockGet.mockResolvedValue({ data: { data: { fiscal: { document_type: variant } } } });
+	const { result } = renderHook(() =>
+		useReceiptData({ orderId: undefined, document: `${variant}:s`, previewEnabled: false })
+	);
+	await result.current.fetchForPrint();
+	expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
+		params: { mode: 'fiscal', document: `${variant}:s` },
+	});
+	await result.current.commitPrint();
+	expect(mockPost).not.toHaveBeenCalled();
+});

@@ -110,7 +110,15 @@ export function useReceiptData({
 				},
 			};
 		}
-		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
+		return (
+			(
+				await fetchData(
+					document?.startsWith('xreport:') || document?.startsWith('handover:')
+						? undefined
+						: 'print'
+				)
+			).data ?? null
+		);
 	}, [orderId, document, fetchData, isReprint, nextLocalCount]);
 	const commitPrint = React.useCallback(async () => {
 		if (!document?.startsWith('closure:')) return;
