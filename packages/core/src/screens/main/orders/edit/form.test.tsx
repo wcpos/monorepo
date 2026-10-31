@@ -165,8 +165,12 @@ jest.mock('../../components/customer/tax-ids-form', () => ({
 	taxIdsFormSchema: {},
 }));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
+const mockMetaDataForm = jest.fn();
 jest.mock('../../components/meta-data-form', () => ({
-	MetaDataForm: () => null,
+	MetaDataForm: (props: unknown) => {
+		mockMetaDataForm(props);
+		return null;
+	},
 	metaDataSchema: {},
 }));
 jest.mock('../../components/order/order-status-select', () => ({ OrderStatusSelect: () => null }));
@@ -425,6 +429,11 @@ describe('EditOrderForm autosave', () => {
 			document: order,
 			data: { meta_data: [{ key: 'custom', value: 'edited' }] },
 		});
+	});
+
+	it('never lists is_vat_exempt as a custom field', () => {
+		render(<EditOrderForm order={order} />);
+		expect(mockMetaDataForm.mock.calls.at(-1)![0].hiddenKeys).toContain('is_vat_exempt');
 	});
 
 	it('writes tax_ids without blank rows', async () => {

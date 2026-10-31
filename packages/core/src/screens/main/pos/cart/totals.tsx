@@ -1,11 +1,18 @@
 import toNumber from 'lodash/toNumber';
 
 import { Chip } from '@wcpos/components/chip';
-import { getNetPaymentTotal, refundValue } from '@wcpos/order-math';
+import {
+	getNetPaymentTotal,
+	isActiveFeeLine,
+	isActiveLineItem,
+	isActiveShippingLine,
+	refundValue,
+} from '@wcpos/order-math';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { MoneyList } from '@wcpos/components/money-list';
 import { Text } from '@wcpos/components/text';
 import { useRecordField } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
@@ -46,6 +53,18 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 	const orderDiscountTotal = useRecordField(
 		currentOrderRecord,
 		(order) => order.payload.discount_total
+	);
+	// Exempt with every line untaxed. A line still carrying tax (repair pending) keeps the real
+	// rows: a forced zero would hide the inconsistency.
+	const exempt = useRecordField(
+		currentOrderRecord,
+		({ payload }) =>
+			wooMetaCarrier.vatExempt(payload.meta_data) &&
+			[
+				...(payload.line_items ?? []).filter(isActiveLineItem),
+				...(payload.fee_lines ?? []).filter(isActiveFeeLine),
+				...(payload.shipping_lines ?? []).filter(isActiveShippingLine),
+			].every((line) => (line.taxes ?? []).every((tax) => !toNumber(tax?.total)))
 	);
 
 	/**
@@ -127,9 +146,10 @@ export function Totals({ readOnly = false }: { readOnly?: boolean }) {
 					{hasShipping && (
 						<MoneyList.Row label={t('common.shipping')} amount={format(displayShippingTotal)} />
 					)}
-					{hasTax ? (
+					{hasTax || exempt ? (
 						<ErrorBoundary>
 							<Taxes
+								exempt={exempt}
 								totalTax={total_tax}
 								taxLines={tax_lines?.filter((t): t is NonNullable<typeof t> => t !== null)}
 							/>

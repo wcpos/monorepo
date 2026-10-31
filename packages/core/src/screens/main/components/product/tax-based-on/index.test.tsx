@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { DeviceScope } from '@wcpos/components/lib/device';
 
@@ -66,6 +66,7 @@ const mockLocation = {
 	addressUsed: 'base',
 	location: { country: 'GB', state: '', city: '', postcode: '' },
 	hasOrder: false,
+	vatExempt: false,
 };
 jest.mock('../../../contexts/tax-rates', () => ({
 	useTaxLocation: () => mockLocation,
@@ -97,6 +98,7 @@ beforeEach(() => {
 	jest.useFakeTimers();
 	mockPush.mockClear();
 	mockLocation.hasOrder = false;
+	mockLocation.vatExempt = false;
 	mockLocation.taxBasedOn = 'base';
 	mockLocation.addressUsed = 'base';
 });
@@ -171,6 +173,18 @@ describe.each([false, true])('phone: %s', (phone) => {
 			mockLocation.location = location;
 			mockLocation.rates = rates;
 		}
+	});
+
+	it('says so when the current order is tax exempt', () => {
+		renderTaxBasedOn();
+		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+		expect(screen.queryByText('common.order_tax_exempt')).toBeNull();
+		cleanup();
+		mockLocation.hasOrder = true;
+		mockLocation.vatExempt = true;
+		renderTaxBasedOn();
+		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+		expect(screen.getByText('common.order_tax_exempt')).toBeTruthy();
 	});
 
 	it('on the Products screen (no order) the address is the shop base whatever the setting', () => {
