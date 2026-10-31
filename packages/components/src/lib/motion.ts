@@ -35,6 +35,9 @@ export const EASE_EXIT = Easing.bezier(...EASE_EXIT_POINTS);
 export const EASE_EXIT_CSS = `cubic-bezier(${EASE_EXIT_POINTS.join(', ')})`;
 
 export const TEAR_OFF_DURATION = 420;
+// Bold money's receipt column: the selected lime releases to the card. Long enough to read as a
+// flash, not a fade; a duration is a beat, never a literal at a call site (the uniwind ratchet).
+export const PAID_FLASH_DURATION = 600;
 export const ROLL_IN_DURATION = 480;
 // Keep pixel and percentage travel separate: timing cannot interpolate between different units.
 export const TEAR_OFF = new Keyframe({
@@ -72,6 +75,13 @@ export const BEATS = {
 		name: 'Receipt tears off',
 		duration: TEAR_OFF_DURATION,
 		easing: EASE_EXIT,
+		class: 'beat',
+		waitingPath: false,
+	},
+	paidFlash: {
+		name: 'Paid flash releases',
+		duration: PAID_FLASH_DURATION,
+		easing: EASE,
 		class: 'beat',
 		waitingPath: false,
 	},

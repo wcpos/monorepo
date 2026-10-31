@@ -10,7 +10,7 @@ import Animated, {
 import { useCSSVariable } from 'uniwind';
 
 import { EdgeSurface } from '../edge-surface';
-import { EASE } from '../lib/motion';
+import { EASE, PAID_FLASH_DURATION } from '../lib/motion';
 import { useThemeTraits } from '../lib/theme-traits';
 import { cn } from '../lib/utils';
 
@@ -34,7 +34,7 @@ function Flash({ style, ...props }: Props) {
 	const card = useCSSVariable('--color-card') as string;
 	const progress = useSharedValue(0);
 	React.useEffect(() => {
-		progress.value = withTiming(1, { duration: 600, easing: EASE });
+		progress.value = withTiming(1, { duration: PAID_FLASH_DURATION, easing: EASE });
 	}, [progress]);
 	const animatedStyle = useAnimatedStyle(() => ({
 		backgroundColor: interpolateColor(progress.value, [0, 1], [selected, card]),

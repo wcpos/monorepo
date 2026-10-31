@@ -13,7 +13,7 @@ test('committed sheet equals generated motion tokens', () => {
 
 test('waiting-path beats stay in budget and only functional waits are exempt', () => {
 	const { BEATS } = loadMotion();
-	assert.equal(Object.keys(BEATS).length, 25);
+	assert.equal(Object.keys(BEATS).length, 26);
 	assert.deepEqual(
 		Object.entries(BEATS)
 			.filter(([, beat]) => beat.exempt)
