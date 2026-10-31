@@ -67,6 +67,7 @@ export function ProductTile({ record, gridFields, onDrill, lifted, grow }: Produ
 			markTestID={`product-tile-stock-${id}`}
 			// Always mounted: the count has to be there before the first add to show it land.
 			corner={<InCartCount product={record.uuid} count={count} />}
+			name={fields.name}
 			title={title}
 			money={money}
 			sub={sub}

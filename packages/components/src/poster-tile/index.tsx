@@ -73,6 +73,8 @@ export type PosterTileProps = {
 	/** The tile in slot 0 of a dealt grid: tapping it is the way back. */
 	back?: boolean;
 	backTestID?: string;
+	/** The plain-text name behind a tint's initial: the title is usually an element (Codex, #3146). */
+	name?: string;
 	/** Words on the scrim, in this order. Every slot empty: no scrim. */
 	title?: React.ReactNode;
 	money?: React.ReactNode;
@@ -109,6 +111,12 @@ const LIFTED = { opacity: 0 };
 const STILL = { transition: 0 };
 // The native scrim's blurred copy of the picture: blurred at decode, and never fading in on its own.
 const BLURRED = { blurRadius: SCRIM_BLUR_RADIUS, transition: 0 };
+
+/** The first grapheme of a plain-text name, upper-cased; nothing for an element or an empty name. */
+function initialOf(name: unknown): string | undefined {
+	if (typeof name !== 'string') return undefined;
+	return [...name.trim()][0]?.toUpperCase();
+}
 
 function hasWords(...slots: React.ReactNode[]) {
 	return slots.some((slot) => slot != null && slot !== false && slot !== '');
@@ -215,6 +223,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 		corner,
 		back,
 		backTestID,
+		name,
 		title,
 		money,
 		sub,
@@ -291,7 +300,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						<View className="rounded-media aspect-square overflow-hidden" testID={squareTestID}>
 							<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
 								<Picture picture={picture} />
-								{picture.kind === 'tint' && media === 'initial' && typeof title === 'string' && (
+								{picture.kind === 'tint' && media === 'initial' && initialOf(name ?? title) && (
 									<View
 										className="absolute inset-0 items-center justify-center"
 										pointerEvents="none"
@@ -300,7 +309,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 											className={`text-tile-ink font-strong text-3xl ${type.displayItalic ? 'italic' : ''}`}
 											style={fontFamilyStyle(type.display)}
 										>
-											{[...title.trim()][0]?.toUpperCase()}
+											{initialOf(name ?? title)}
 										</Text>
 									</View>
 								)}

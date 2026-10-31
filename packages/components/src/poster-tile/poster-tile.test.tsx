@@ -395,3 +395,15 @@ it('wraps money in the theme chip and centres the words', () => {
 	expect(money.dataset.classes).toContain('text-price-chip-foreground');
 	expect(classes('poster-words')).toContain('items-center text-center');
 });
+
+// The catalogue passes its title as an element; the plain-text `name` carries the initial (Codex, #3146).
+it('draws the initial from name when the title is an element', () => {
+	render(
+		tile({
+			picture: { kind: 'tint', tint: 2 },
+			name: 'sourdough loaf',
+			title: <Text>Sourdough</Text>,
+		})
+	);
+	expect(screen.getByText('S').dataset.classes).toContain('text-tile-ink');
+});
