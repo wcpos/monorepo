@@ -21,8 +21,8 @@ import { useDocField } from '@wcpos/query';
 import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
-import { useNowMs } from '../../../../hooks/use-relative-time';
 import { ageLabel } from './register-bar.helpers';
+import { Ticking } from './ticking';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { DrawerTile, SalesTile, useSalesToday } from './user-sheet';
@@ -75,7 +75,6 @@ export function SwitchConfirm({
 	}
 	const { wpCredentials, store, site } = useStoreSession();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const nowMs = useNowMs(60_000);
 	const { session, expected, blind, figuresPending, binding, unsyncedCount } = useRegisterSession();
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
@@ -116,16 +115,17 @@ export function SwitchConfirm({
 	const openedDate = session?.opened_at_gmt
 		? convertUTCStringToLocalDate(session.opened_at_gmt)
 		: undefined;
-	const reportDescription = [
-		binding.registerName,
-		store.name,
-		openedDate && t('register.open_since', { time: time(openedDate) }),
-		openedDate && ageLabel(t, openedDate.getTime(), nowMs),
-		credentials.find((row) => row.id === session?.opened_by)?.display_name ??
-			t('register.unknown_cashier'),
-	]
-		.filter(Boolean)
-		.join(' · ');
+	const reportDescription = (nowMs: number) =>
+		[
+			binding.registerName,
+			store.name,
+			openedDate && t('register.open_since', { time: time(openedDate) }),
+			openedDate && ageLabel(t, openedDate.getTime(), nowMs),
+			credentials.find((row) => row.id === session?.opened_by)?.display_name ??
+				t('register.unknown_cashier'),
+		]
+			.filter(Boolean)
+			.join(' · ');
 	let carry: CarryTarget | undefined;
 	let title: string, description: string, confirm: string;
 	let body: React.ReactNode;
@@ -315,7 +315,7 @@ export function SwitchConfirm({
 				onOpenChange={setSheetOpen}
 				doc={doc}
 				title={t('register.handover_slip')}
-				description={reportDescription}
+				description={<Ticking>{reportDescription}</Ticking>}
 				printLabel={t('register.print_handover_slip')}
 				error={printError || doc.documentError?.message || null}
 				onPrint={async () => {

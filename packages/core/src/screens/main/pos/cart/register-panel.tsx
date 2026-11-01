@@ -36,8 +36,8 @@ import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
 import { FigureTile } from './figure-tile';
-import { useNowMs } from '../../../../hooks/use-relative-time';
 import { ageLabel } from './register-bar.helpers';
+import { Ticking } from './ticking';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -114,7 +114,6 @@ export function RegisterPanel({
 	const { registers } = useRegisterBinding();
 	const { heading, time } = useStoreDayLabel(store.id);
 	const { timezone } = useStoreDay();
-	const nowMs = useNowMs(60_000);
 	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
 	const reportsDenied = blind;
 	// The register panel opens from the right on every screen, as the cashier sheet does; what it
@@ -221,19 +220,22 @@ export function RegisterPanel({
 			: variance < 0
 				? 'bad'
 				: 'ok';
-	const description = [
-		store.name,
-		openedTime &&
-			(session
-				? t('register.open_since', { time: openedTime })
-				: t('register.closed_at_time', { time: openedTime })),
-		session && openedDate && ageLabel(t, openedDate.getTime(), nowMs),
-		session &&
-			(credentials.find((row) => row.id === session.opened_by)?.display_name ??
-				t('register.unknown_cashier')),
-	]
-		.filter(Boolean)
-		.join(' · ');
+	// Only the description ticks, wherever it is shown; the panel never re-renders on the clock.
+	const describe = (nowMs: number) =>
+		[
+			store.name,
+			openedTime &&
+				(session
+					? t('register.open_since', { time: openedTime })
+					: t('register.closed_at_time', { time: openedTime })),
+			session && openedDate && ageLabel(t, openedDate.getTime(), nowMs),
+			session &&
+				(credentials.find((row) => row.id === session.opened_by)?.display_name ??
+					t('register.unknown_cashier')),
+		]
+			.filter(Boolean)
+			.join(' · ');
+	const description = <Ticking>{describe}</Ticking>;
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
@@ -548,7 +550,9 @@ export function RegisterPanel({
 					onOpenChange={setSheetOpen}
 					doc={doc}
 					title={t('register.x_report')}
-					description={binding.registerName + ' · ' + description}
+					description={
+						<Ticking>{(nowMs) => binding.registerName + ' · ' + describe(nowMs)}</Ticking>
+					}
 					printLabel={t('register.print_x_report')}
 					error={printError || doc.documentError?.message || null}
 					onPrint={async () => {

@@ -103,7 +103,7 @@ export function RegisterCount({
 }: {
 	side?: 'left' | 'right';
 	portalHost?: string | null;
-	description: string;
+	description: React.ReactNode;
 	onBack: () => void;
 	onClosed: (count: ClosureCount) => void;
 	/** The close in flight: the panel refuses its own dismissal meanwhile (Codex, #3073). */
