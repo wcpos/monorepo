@@ -144,11 +144,10 @@ describe('awaitWriteOutcome', () => {
 			const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });
 
 			emit({
-				type,
 				collection: 'orders',
 				recordId: 'order-1',
 				mutationId: 'mutation-1',
-				...(type === 'write-conflict' ? { currentRevision: 'rev-2' } : {}),
+				...(type === 'write-conflict' ? { type, currentRevision: 'rev-2' } : { type }),
 			});
 
 			await expect(outcome).rejects.toThrow(`${type} for mutation "mutation-1"`);

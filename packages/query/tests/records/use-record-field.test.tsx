@@ -23,6 +23,7 @@ import { useDocField, useRecordField } from '../../src/records/use-record-field'
 type Shape = {
 	uuid: string;
 	remoteId: string | null;
+	remoteKey: string;
 	payload: { total?: string; note?: string; nested?: { qty: number } };
 };
 
@@ -33,7 +34,7 @@ const schema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 64 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
-		remoteKey: String({ type: ['string', 'null'], maxLength: 64 } ?? ''),
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 	},
 	required: ['uuid'],
@@ -149,7 +150,7 @@ describe('useRecordField', () => {
 			Object.defineProperty(doc, 'toJSON', {
 				value: (...args: Parameters<typeof original>) => (toJSON(), original(...args)),
 			});
-		}, false);
+		});
 		const document = await insertRow();
 
 		function Probe({ record }: { record: RxDocument<Shape> }) {

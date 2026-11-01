@@ -9,6 +9,8 @@ import {
 	readClosure,
 } from '../../src/register-session/reads';
 
+import type { Observable } from 'rxjs';
+
 // A replacement must clear the old rows before its delayed first answer, and late old answers
 // must not reach the cashier. Dropping switchMap/startWith or the owner guard breaks this test.
 it('follows only this store’s session replacements and invalidates the old generation', () => {
@@ -18,7 +20,10 @@ it('follows only this store’s session replacements and invalidates the old gen
 	const first = {
 		find: jest.fn(({ selector }) => ({ $: selector.status === 'closed' ? closed : active })),
 	};
-	const db = { collections: { register_sessions: first }, reset$ };
+	const db: {
+		collections: { register_sessions: { find: (query: unknown) => { $: Observable<unknown> } } };
+		reset$: typeof reset$;
+	} = { collections: { register_sessions: first }, reset$ };
 	const values: unknown[] = [];
 	const sub = observeRegisterSessions(db, 'register').subscribe((value) => values.push(value));
 	expect(values[0]).toBeNull();
@@ -47,7 +52,7 @@ it('follows only this store’s session replacements and invalidates the old gen
 it('keeps movements unscoped, scopes closures, and declares null absence for all three reads', () => {
 	for (const read of [observeRegisterSessions, observeCashMovements, observeRegisterClosures]) {
 		const values: unknown[] = [];
-		read(null, 'register').subscribe((value) => values.push(value));
+		(read(null, 'register') as Observable<unknown>).subscribe((value) => values.push(value));
 		expect(values).toEqual([null]);
 	}
 	const rows = new BehaviorSubject([{ id: 'row' }]);
@@ -78,9 +83,10 @@ it('distinguishes unavailable open-session presence from a closed session', () =
 		selector: { status: 'open', sync_status: { $ne: 'failed' }, id: 'session' },
 	});
 	sub.unsubscribe();
+	const selector = { id: 'id', sessionId: 'session' };
 	for (const read of [observeClosures, observeOpenSessionPresence]) {
 		const absent: unknown[] = [];
-		read(null, { id: 'id', sessionId: 'session' }).subscribe((value) => absent.push(value));
+		(read(null, selector) as Observable<unknown>).subscribe((value) => absent.push(value));
 		expect(absent).toEqual([null]);
 	}
 });

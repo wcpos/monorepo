@@ -10,8 +10,8 @@ import { engineProduct, engineVariation } from '../../src/testing';
 import { sqlitePlan } from '../helpers/sqlite-plan';
 import { storages } from '../helpers/storages';
 
+import type { RxCollectionCreator, RxDatabase } from 'rxdb';
 import type { AdapterDatabase } from '../../src/engine-adapter/execute-query';
-import type { RxDatabase } from 'rxdb';
 
 jest.mock('@wcpos/query', () => jest.requireActual('../../src/engine-adapter/translate-selector'));
 
@@ -28,7 +28,11 @@ describe.each(storages)('%s default grid', (name, storage) => {
 				storage,
 				multiInstance: false,
 			});
-			await database.addCollections({ [collection]: engineSyncCollectionCreators()[collection] });
+			await database.addCollections({
+				[collection]: engineSyncCollectionCreators()[collection] as RxCollectionCreator<
+					Record<string, unknown>
+				>,
+			});
 			const build = collection === 'products' ? engineProduct : engineVariation;
 			const fixtures = [
 				['z', 'Éclair', 1],
@@ -86,7 +90,11 @@ it('orders 😀 after ｚ on SQLite and in the JS search-hit comparator', async 
 		multiInstance: false,
 	});
 	try {
-		await database.addCollections({ products: engineSyncCollectionCreators().products });
+		await database.addCollections({
+			products: engineSyncCollectionCreators().products as RxCollectionCreator<
+				Record<string, unknown>
+			>,
+		});
 		await database.products.bulkInsert([
 			engineProduct({ uuid: 'emoji', name: '😀', id: 1 }),
 			engineProduct({ uuid: 'fullwidth', name: 'ｚ', id: 2 }),

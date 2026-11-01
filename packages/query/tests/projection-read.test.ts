@@ -11,7 +11,7 @@ import { readLiveProjection } from '../src/projection-read';
 import { engineProduct } from '../src/testing';
 import { storages } from './helpers/storages';
 
-import type { RxDatabase } from 'rxdb';
+import type { RxCollectionCreator, RxDatabase } from 'rxdb';
 
 describe.each(storages)('%s projection reads', (_name, storage) => {
 	let database: RxDatabase;
@@ -21,7 +21,11 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 			storage,
 			multiInstance: false,
 		});
-		await database.addCollections({ products: engineSyncCollectionCreators().products });
+		await database.addCollections({
+			products: engineSyncCollectionCreators().products as RxCollectionCreator<
+				Record<string, unknown>
+			>,
+		});
 		await database.products.bulkInsert([
 			engineProduct({ uuid: 'coffee', name: 'Coffee', sku: 'C1' }),
 			engineProduct({ uuid: 'tea', name: 'Tea', sku: 'T1' }),

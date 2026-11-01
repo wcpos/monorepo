@@ -11,7 +11,7 @@ it('clears on every binding, projects plain rows, and follows only its own reset
 	const newRows$ = new Subject<{ toJSON: () => typeof after }[]>();
 	const find = jest.fn(() => ({ $: oldRows$ }));
 	const replacementFind = jest.fn(() => ({ $: newRows$ }));
-	const reset$ = new Subject<LocalCollectionReset>();
+	const reset$ = new Subject<LocalCollectionReset & { find?: typeof replacementFind }>();
 	const database = { collections: { notifications: { find } }, reset$ };
 	const seen: unknown[] = [];
 	const sub = query

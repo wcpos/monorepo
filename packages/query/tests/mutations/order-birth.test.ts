@@ -17,7 +17,11 @@ const payload = { line_items: [{ product_id: 1, quantity: 1 }] };
 beforeEach(async () => {
 	jest.clearAllMocks();
 	database = await createEngineDatabase(['orders']);
-	manager = { engine: Object.assign(createFakeEngine(database), { write }) } as QueryRuntime;
+	manager = {
+		engine: Object.assign(createFakeEngine(database), { write }),
+		localDB: database,
+		locale: 'en',
+	} satisfies QueryRuntime;
 	write.mockResolvedValue({ mutationId: 'birth' });
 });
 afterEach(async () => database.close());

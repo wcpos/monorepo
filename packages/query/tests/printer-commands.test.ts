@@ -18,14 +18,14 @@ function fakeCollection(rows: Row[] = []) {
 			calls.push(`patch:${this.id}`);
 			Object.assign(this, patch);
 		}),
-		remove: jest.fn(async () => {
+		remove: jest.fn(async (): Promise<void> => {
 			docs.splice(
 				docs.findIndex((doc) => doc.id === row.id && doc.template_id === row.template_id),
 				1
 			);
 		}),
 	});
-	const docs = rows.map(document);
+	const docs: (Row & ReturnType<typeof document>)[] = rows.map(document);
 	const match = (selector: Row = {}) =>
 		docs.filter((doc) => Object.entries(selector).every(([key, value]) => doc[key] === value));
 	return {

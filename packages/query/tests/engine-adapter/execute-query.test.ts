@@ -365,12 +365,12 @@ describe('executeAdapterQuery', () => {
 				read: {
 					prefilter: { categoryIds: { $in: [7] } },
 					residual: (document) =>
-						(document.payload.tags as { id: number }[]).some(({ id }) => id === 9),
+						(document.payload!.tags as { id: number }[]).some(({ id }) => id === 9),
 					complete: false,
 					sort: [
 						{
 							direction: 'asc',
-							value: (document) => Number(document.payload.price),
+							value: (document) => Number(document.payload!.price),
 						},
 					],
 					sortPushable: false,

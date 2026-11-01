@@ -129,7 +129,10 @@ it('records site info without erasing omitted license or search keys', async () 
 	const site = await db.sites.insert({
 		uuid: 'site',
 		wcpos_version: 'old',
-		search_meta_keys: { products: ['sku'] },
+		// Deliberately retain a legacy key absent from the current site schema.
+		search_meta_keys: { products: ['sku'] } as unknown as NonNullable<
+			import('@wcpos/database').SiteDocument['search_meta_keys']
+		>,
 	});
 	await recordSiteInfo(site, { search_meta_keys: {} });
 	expect(site.getLatest().wcpos_version).toBe('old');

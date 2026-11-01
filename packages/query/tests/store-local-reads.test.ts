@@ -6,6 +6,7 @@ import {
 	observeTemplatePrinterOverrides,
 } from '../src';
 
+import type { Observable } from 'rxjs';
 import type { LocalCollectionReset } from '../src/use-local-collection';
 
 const reads = {
@@ -38,12 +39,12 @@ it.each(cases)(
 		const newRows$ = new BehaviorSubject([{ toJSON: () => after }]);
 		const find = jest.fn(() => ({ $: oldRows$ }));
 		const replacementFind = jest.fn(() => ({ $: newRows$ }));
-		const reset$ = new Subject<LocalCollectionReset>();
+		const reset$ = new Subject<LocalCollectionReset & { find: typeof replacementFind }>();
 		const database = { collections: { [collectionName]: { find } }, reset$ };
 		const seen: unknown[] = [];
-		const subscription = reads[name](database, { type: 'closure', storeId: 2 }).subscribe((rows) =>
-			seen.push(rows)
-		);
+		const subscription = (
+			reads[name](database, { type: 'closure', storeId: 2 }) as Observable<unknown>
+		).subscribe((rows) => seen.push(rows));
 		expect(seen).toEqual([[before]]);
 		expect(find.mock.calls).toEqual([query ? [query] : []]);
 		reset$.next({ name: collectionName, database, find: replacementFind });
@@ -61,7 +62,7 @@ it.each(cases)('%s emits an empty placeholder without a database', (name) => {
 	expect(typeof reads[name]).toBe('function');
 	for (const database of [null, undefined]) {
 		const seen: unknown[] = [];
-		reads[name](database, { type: 'receipt', storeId: 2 })
+		(reads[name](database, { type: 'receipt', storeId: 2 }) as Observable<unknown>)
 			.subscribe((rows) => seen.push(rows))
 			.unsubscribe();
 		expect(seen).toEqual([[]]);

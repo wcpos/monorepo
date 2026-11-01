@@ -1526,7 +1526,7 @@ it('merges counting_by from the server after the local count starts', async () =
 it('adopts the carried float source fields from a server session', async () => {
 	const source = await open();
 	await adoptSessionRow(db.register_sessions, {
-		...source.toJSON(),
+		...source.toMutableJSON(),
 		id: 'carried',
 		float_source: 'carried',
 		carried_from_closure_id: 'closure',

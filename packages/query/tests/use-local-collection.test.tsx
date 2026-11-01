@@ -46,7 +46,7 @@ describe('useLocalCollection$', () => {
 		return renderHook(() => useLocalCollection$('logs'), { wrapper });
 	}
 
-	const latest = (obs: ReturnType<typeof useLocalCollection$>) => {
+	const latest = (obs: ReturnType<typeof useLocalCollection$<Record<string, unknown>>>) => {
 		let seen: unknown;
 		obs.subscribe((value) => (seen = value)).unsubscribe();
 		return (seen as { label?: string } | undefined)?.label;
@@ -63,7 +63,7 @@ describe('useLocalCollection$', () => {
 	 * subscribes after the fact never observes the reset path at all and passes
 	 * against any filter — including no filter.
 	 */
-	const track = (obs: ReturnType<typeof useLocalCollection$>) => {
+	const track = (obs: ReturnType<typeof useLocalCollection$<Record<string, unknown>>>) => {
 		const seen: (string | undefined)[] = [];
 		const subscription = obs.subscribe((value) =>
 			seen.push((value as { label?: string } | undefined)?.label)

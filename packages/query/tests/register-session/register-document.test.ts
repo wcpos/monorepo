@@ -314,9 +314,9 @@ it('re-mints a cloned till: new id, counters back at zero, store bindings and fl
 		at: '2026-10-28T13:05:00Z',
 	};
 	// A closure the source till has in flight is the source's, not the clone's.
-	const doc = await db.getLocal<{ sites: Record<string, { registers?: Record<string, unknown> }> }>(
-		'register'
-	);
+	const doc = await db.getLocal<{
+		sites: Record<string, { registers?: Record<string, Record<string, unknown>> }>;
+	}>('register');
 	await doc!.incrementalModify((data) => ({
 		...data,
 		sites: {

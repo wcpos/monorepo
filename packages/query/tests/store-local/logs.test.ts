@@ -2,7 +2,7 @@ import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { firstValueFrom, of, Subject } from 'rxjs';
+import { firstValueFrom, type Observable, of, Subject } from 'rxjs';
 
 import { logsLiteral } from '../../../database/src/collections/schemas/logs';
 import * as reads from '../../src/store-local';
@@ -44,7 +44,7 @@ afterEach(async () => {
 });
 
 it('reads newest errors with the requested limit and resolves the current collection at call time', async () => {
-	const storeDB = { collections: { logs: db.logs } };
+	const storeDB: { collections: { logs?: typeof db.logs } } = { collections: { logs: db.logs } };
 	expect((await reads.readRecentErrorLogs(storeDB, 1)).map((row) => row.logId)).toEqual(['new']);
 	expect((await reads.readRecentErrorLogs(storeDB)).map((row) => row.logId)).toEqual([
 		'new',
@@ -84,8 +84,8 @@ it('emits explicit absent values', async () => {
 it('follows replacements for each live read without resubscribing the caller', () => {
 	const reset$ = new Subject<{
 		name: string;
-		count: () => { $: ReturnType<typeof of<number>> };
-		find: () => { $: ReturnType<typeof of<never[]>> };
+		count: () => { $: Observable<number> };
+		find: () => { $: Observable<never[]> };
 	}>();
 	const storeDB = { collections: {}, reset$ };
 	const volume: unknown[] = [],
