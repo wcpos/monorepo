@@ -7,6 +7,8 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { FormItem, FormLabel } from './common';
 import { FormFieldContext } from './context';
 import { FormInput } from './input';
+import { FormSegmentedControl } from './segmented-control';
+import { FormSelect } from './select';
 import { FormSwitch } from './switch';
 
 /**
@@ -40,6 +42,11 @@ jest.mock('react-native-reanimated', () => {
 
 // The input is injected through `customComponent` (RNW's TextInput: a real <input>).
 jest.mock('../input', () => ({ Input: () => null }));
+
+jest.mock('../select', () => ({
+	OptionSelect: () => <button role="combobox">Draft</button>,
+}));
+jest.mock('../icon', () => ({ Icon: () => null }));
 
 jest.mock('../switch', () => ({
 	Switch: ({ checked, onCheckedChange, ...props }: Record<string, any>) => (
@@ -127,6 +134,69 @@ describe('web form labels', () => {
 
 		fireEvent.click(screen.getByText('Show out of stock'));
 		expect(onChange).toHaveBeenCalledWith(true);
+	});
+
+	it('focuses the select trigger when its own label is clicked', () => {
+		render(
+			<Harness>
+				<FormSelect
+					name="field"
+					label="Status"
+					value="draft"
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		const trigger = screen.getByRole('combobox');
+		expect(document.activeElement).not.toBe(trigger);
+		fireEvent.click(labelRoot('Status'));
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it("focuses the selected segment, the group's tab stop, when its own label is clicked", () => {
+		render(
+			<Harness>
+				<FormSegmentedControl
+					name="field"
+					label="Discount type"
+					value="amount"
+					segments={[
+						{ label: 'Percentage', value: 'percent' },
+						{ label: 'Amount', value: 'amount' },
+					]}
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		const selected = screen.getAllByRole('radio')[1];
+		expect(document.activeElement).not.toBe(selected);
+		fireEvent.click(labelRoot('Discount type'));
+		expect(document.activeElement).toBe(selected);
+	});
+
+	it('never lands on a disabled segment: the first enabled one takes the press', () => {
+		render(
+			<Harness>
+				<FormSegmentedControl
+					name="field"
+					label="Discount type"
+					value="percent"
+					segments={[
+						{ label: 'Percentage', value: 'percent', disabled: true },
+						{ label: 'Amount', value: 'amount' },
+					]}
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		fireEvent.click(labelRoot('Discount type'));
+		expect(document.activeElement).toBe(screen.getAllByRole('radio')[1]);
 	});
 
 	/**

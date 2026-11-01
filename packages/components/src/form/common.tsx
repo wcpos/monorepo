@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import type { ViewProps } from 'react-native';
 
 import { Noop } from 'react-hook-form';
@@ -40,6 +40,23 @@ type FormItemProps<U> = FormFieldFieldProps<U> & {
 		| 'twitter'
 		| 'web-search';
 };
+
+/**
+ * A label press lands on the control's tab stop: the first enabled focusable inside the wrapper,
+ * preferring the one at `tabindex="0"` (a radiogroup's roving stop). Disabled parts never take it.
+ */
+export function focusFirstControl(ref: React.RefObject<React.ComponentRef<typeof View> | null>) {
+	if (Platform.OS !== 'web') return;
+	const root = ref.current as unknown as HTMLElement | null;
+	const enabled = Array.from(
+		root?.querySelectorAll<HTMLElement>(
+			'button, [role="combobox"], [role="radio"], [tabindex], input'
+		) ?? []
+	).filter(
+		(node) => !node.hasAttribute('disabled') && node.getAttribute('aria-disabled') !== 'true'
+	);
+	(enabled.find((node) => node.getAttribute('tabindex') === '0') ?? enabled[0])?.focus();
+}
 
 /** `nativeID` seeds the ids of the item's label, description and message (see `aria.ts`). */
 function FormItem({ className, nativeID: itemNativeID, ...props }: ViewProps) {
