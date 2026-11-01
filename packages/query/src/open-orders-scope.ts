@@ -46,7 +46,7 @@ export function openOrdersSelector(
 	registerId?: string | null
 ): MangoQuerySelector<EngineDocument> {
 	const statusPath = resolveLegacyField('orders', 'status').enginePath;
-	// The register is not a promoted column: it is the `_pos_register` entry of `meta_data`,
+	// The register is not a promoted column: it is the `_wcpos_register` entry of `meta_data`,
 	// matched with the carrier's own condition once the indexed cashier/store scope has done
 	// the narrowing (Paul, 2026-09-29: a cashier sees their orders on this store AND register).
 	const register =

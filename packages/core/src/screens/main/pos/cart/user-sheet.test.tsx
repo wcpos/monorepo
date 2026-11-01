@@ -990,6 +990,13 @@ it("names each other cashier's open carts on this till, nothing when none", asyn
 			storeId: 2,
 			registerId: 'A',
 		});
+		expect(mockUseOpenOrdersHandle).toHaveBeenCalled();
+		for (const id of [8, 9])
+			expect(mockUseOpenOrdersHandle).not.toHaveBeenCalledWith(
+				id,
+				expect.anything(),
+				expect.anything()
+			);
 		for (const [cashierId] of mockUseOpenOrdersHandle.mock.calls) expect(cashierId).toBe(7);
 	} finally {
 		mockCredentials.splice(1, Infinity, ...saved);

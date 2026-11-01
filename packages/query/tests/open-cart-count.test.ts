@@ -50,6 +50,9 @@ it.each([
 	['a store and a bound register', { cashierId: 8, storeId: 2, registerId: 'A' }],
 	['no store attribution', { cashierId: 8, storeId: NO_STORE, registerId: 'A' }],
 	['no register bound', { cashierId: 8, storeId: 2, registerId: null }],
+	['no store known', { cashierId: 8, storeId: undefined, registerId: 'A' }],
+	['an empty register id', { cashierId: 8, storeId: 2, registerId: '' }],
+	['an undefined register id', { cashierId: 8, storeId: 2, registerId: undefined }],
 ])('compiles to the open-orders scope with %s', async (_name, scope) => {
 	expect(await compiledScope(scope)).toEqual(
 		openOrdersSelector(scope.cashierId, scope.storeId, scope.registerId)

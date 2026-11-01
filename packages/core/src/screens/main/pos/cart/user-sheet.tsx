@@ -245,16 +245,17 @@ function AwaitingStore() {
 // Local read only: the open-orders handle would declare a server fetch per cashier (line 51).
 function CashierRow({
 	credential,
+	registerId,
 	disabled,
 	onChoose,
 }: {
 	credential: ReadonlyWpCredentialsRecord;
+	registerId?: string | null;
 	disabled: boolean;
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const runtime = useQueryRuntime();
 	const { store } = useStoreSession();
-	const registerId = useRegisterSession().binding.registerId;
 	const t = useT();
 	const count$ = React.useMemo(
 		() =>
@@ -291,11 +292,13 @@ function UserRows({
 	busy,
 	hold,
 	counting,
+	registerId,
 	onChoose,
 }: {
 	busy: boolean;
 	hold: boolean;
 	counting: boolean;
+	registerId?: string | null;
 	onChoose: (request: SwitchRequest) => void;
 }) {
 	const { site, wpCredentials } = useStoreSession();
@@ -309,6 +312,7 @@ function UserRows({
 					<CashierRow
 						key={credential.uuid}
 						credential={credential}
+						registerId={registerId}
 						disabled={busy || hold || counting}
 						onChoose={onChoose}
 					/>
@@ -710,6 +714,7 @@ export function UserSheet({
 										busy={busy}
 										hold={paying}
 										counting={countingHere}
+										registerId={binding.registerId}
 										onChoose={setRequest}
 									/>
 								</Suspense>

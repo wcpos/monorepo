@@ -6,11 +6,7 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import { observeEngineQuery } from '../engine-query';
 import { OPEN_ORDER_STATUSES, type OpenOrdersScope } from '../open-orders-scope';
 
-/**
- * How many open carts a cashier has on this store and register, from local rows only: the
- * scope `openOrdersSelector` means, in the legacy spelling `observeEngineQuery` compiles. Unlike
- * the open-orders handle it declares no server demand (opening the user sheet fetches nothing).
- */
+/** A cashier's open carts on this store and register (`openOrdersSelector`'s scope); local only, no demand. */
 export function observeOpenCartCount(
 	engine: RxdbSyncEngine,
 	{ cashierId, storeId, registerId }: OpenOrdersScope

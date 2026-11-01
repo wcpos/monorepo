@@ -104,6 +104,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockEngine }),
 	observeCashierSalesTotal: () =>
 		new (jest.requireActual('rxjs').BehaviorSubject)({ total: 0, count: 0 }),
+	observeOpenCartCount: () => new (jest.requireActual('rxjs').BehaviorSubject)(0),
 }));
 jest.mock('@wcpos/query/local-data-reset', () => ({
 	clearLocalDataNow: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
