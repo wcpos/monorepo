@@ -191,6 +191,14 @@ export function TextPart(props: {
 	secureTextEntry?: boolean;
 }) {
 	const { control } = useFormContext();
+	const value = useWatch({ control, name: props.name });
+	const [draft, setDraft] = React.useState(value ?? '');
+	const [prevValue, setPrevValue] = React.useState(value);
+	// External form resets replace the local password draft.
+	if (value !== prevValue) {
+		setPrevValue(value);
+		setDraft(value ?? '');
+	}
 	const Item = props.label ? FormItem : View;
 	return (
 		<FormField
@@ -201,7 +209,14 @@ export function TextPart(props: {
 				<Item className="min-w-0 flex-1 gap-0">
 					<FormInput
 						{...field}
-						value={field.value ?? ''}
+						value={props.secureTextEntry ? draft : (field.value ?? '')}
+						onChange={props.secureTextEntry ? setDraft : field.onChange}
+						// Password commits on blur/Enter still use the ordinary debounced autosave.
+						onBlur={() => {
+							if (props.secureTextEntry) field.onChange(draft);
+							field.onBlur();
+						}}
+						onSubmitEditing={props.secureTextEntry ? () => field.onChange(draft) : undefined}
 						placeholder={props.placeholder}
 						aria-label={props.label}
 						autoFocus={props.autoFocus}
