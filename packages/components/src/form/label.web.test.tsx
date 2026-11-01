@@ -4,12 +4,14 @@ import { TextInput } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 
+import { FormCombobox } from './combobox';
 import { FormItem, FormLabel } from './common';
 import { FormFieldContext } from './context';
 import { FormInput } from './input';
 import { FormSegmentedControl } from './segmented-control';
 import { FormSelect } from './select';
 import { FormSwitch } from './switch';
+import { FormTreeCombobox } from './tree-combobox';
 
 /**
  * Tab in a web form must go field to field. A label rendered as a react-native-web
@@ -45,6 +47,17 @@ jest.mock('../input', () => ({ Input: () => null }));
 
 jest.mock('../select', () => ({
 	OptionSelect: () => <button role="combobox">Draft</button>,
+}));
+jest.mock('../combobox', () => ({
+	Combobox: () => <button role="combobox">Select customer</button>,
+}));
+jest.mock('../tree-combobox', () => ({
+	TreeCombobox: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TreeComboboxTrigger: ({ children }: { children: React.ReactNode }) => (
+		<button role="combobox">{children}</button>
+	),
+	TreeComboboxValue: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TreeComboboxContent: () => null,
 }));
 jest.mock('../icon', () => ({ Icon: () => null }));
 
@@ -152,6 +165,45 @@ describe('web form labels', () => {
 		const trigger = screen.getByRole('combobox');
 		expect(document.activeElement).not.toBe(trigger);
 		fireEvent.click(labelRoot('Status'));
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it('focuses the combobox trigger when its own label is clicked', () => {
+		render(
+			<Harness>
+				<FormCombobox
+					name="field"
+					label="Customer"
+					value=""
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		const trigger = screen.getByRole('combobox');
+		expect(document.activeElement).not.toBe(trigger);
+		fireEvent.click(labelRoot('Customer'));
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it('focuses the tree combobox trigger when its own label is clicked', () => {
+		render(
+			<Harness>
+				<FormTreeCombobox
+					name="field"
+					label="Categories"
+					value={[]}
+					options={[]}
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		const trigger = screen.getByRole('combobox');
+		expect(document.activeElement).not.toBe(trigger);
+		fireEvent.click(labelRoot('Categories'));
 		expect(document.activeElement).toBe(trigger);
 	});
 

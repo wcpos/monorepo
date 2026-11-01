@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
+import { focusFirstControl, FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { optionToFieldValue } from './option-value';
 
 import type { FormItemProps } from './common';
@@ -69,7 +70,13 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	...props
 }: FormOptionControlProps<TControl>) {
 	const [open, setOpen] = React.useState(false);
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const controlRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const handleOnLabelPress = () => focusFirstControl(controlRef);
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	/**
 	 * The control is chosen at runtime, so its props cannot be resolved statically here.
@@ -93,15 +100,21 @@ export function FormOptionControl<TControl extends React.ElementType>({
 
 	return (
 		<FormItem nativeID={itemNativeID}>
-			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
-			<Component
-				{...ariaProps}
-				open={open}
-				onOpenChange={setOpen}
-				value={controlValue}
-				onValueChange={handleValueChange}
-				{...props}
-			/>
+			{!!label && (
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
+					{label}
+				</FormLabel>
+			)}
+			<View ref={controlRef}>
+				<Component
+					{...ariaProps}
+					open={open}
+					onOpenChange={setOpen}
+					value={controlValue}
+					onValueChange={handleValueChange}
+					{...props}
+				/>
+			</View>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>
