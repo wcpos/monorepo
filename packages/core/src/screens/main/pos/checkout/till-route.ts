@@ -1,6 +1,7 @@
 import type { Href, ImperativeRouter } from 'expo-router';
 
-// From checkout, the /cart tie between (columns) and (tabs) resolves to (columns) (#2363).
+// From checkout, the /cart tie between (columns) and (tabs) resolves to (columns) (#2363), so phones
+// dismissTo the explicit (tabs) route.
 
 /** The phone tab checkout hands the cashier back to. */
 export type TillTab = 'products' | 'cart';
