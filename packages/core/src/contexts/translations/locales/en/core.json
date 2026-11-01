@@ -555,6 +555,7 @@
 	"orders.refunded_by": "By",
 	"orders.refunds": "Refunds",
 	"orders.refunds_load_failed": "Could not load refund details.",
+	"orders.reopen_paid_refund_instead": "This sale is already paid. Refund it instead of re-opening it.",
 	"orders.search_orders": "Search Orders",
 	"orders.status.partially-refunded": "Partially refunded",
 	"orders.status.pos-open": "POS open",

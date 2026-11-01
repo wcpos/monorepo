@@ -103,6 +103,19 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 	 * - navigate to POS screen
 	 */
 	const handleOpen = React.useCallback(async () => {
+		const { date_paid_gmt, transaction_id } = order.payload;
+		if (
+			(typeof date_paid_gmt === 'string' && date_paid_gmt.length > 0) ||
+			(typeof transaction_id === 'string' && transaction_id.length > 0)
+		) {
+			syncLogger.debug('Refused to re-open paid order', {
+				showToast: true,
+				toast: { title: t('orders.reopen_paid_refund_instead'), type: 'warning' },
+				context: { orderId: order.uuid },
+			});
+			return;
+		}
+
 		// #163 ruling R5: re-opening writes status + cashier/store meta to the order.
 		// With the worker dead that write cannot be recorded, and the cart it lands
 		// in could not be checked out anyway.
@@ -127,7 +140,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
 		});
-	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id]);
+	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id, t]);
 
 	/**
 	 * Handle delete button click
