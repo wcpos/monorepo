@@ -390,6 +390,7 @@ describe('query-state translator', () => {
 				{
 					posStoreId: '3',
 				},
+				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
 		});
 		expect(compiled.demand[0]).toMatchObject({
@@ -401,7 +402,7 @@ describe('query-state translator', () => {
 		});
 	});
 
-	it('pushes cashier and store filters but evaluates the sale date locally', () => {
+	it('keeps cashier, store, and date grid reads complete and pushable', () => {
 		const compiled = compileQuery(
 			'orders',
 			{
@@ -426,9 +427,10 @@ describe('query-state translator', () => {
 					{
 						posStoreId: '3',
 					},
+					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 				],
 			},
-			complete: false,
+			complete: true,
 			sortPushable: true,
 		});
 	});
@@ -581,6 +583,23 @@ describe('query-state translator', () => {
 			);
 			expect(new Query(read.prefilter).test(fixtures[1])).toBe(false);
 			expect(read.residual(fixtures[1])).toBe(false);
+		});
+		// Reports count a sale on the day the money moved; the Orders screen keeps creation dates.
+		it('storeScope sales evaluates the date range on the sale moment, pos on the creation date', () => {
+			const paidToday = engineOrder({
+				uuid: 'paid-today',
+				date_created_gmt: '2026-07-01T22:15:00',
+				date_paid_gmt: '2026-07-02T09:40:00',
+			}) as EngineDocument;
+			const state = {
+				...base,
+				filters: { dateRange: { from: '2026-07-02T00:00:00', to: '2026-07-02T23:59:59' } },
+			};
+			const sales = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' }).read;
+			const pos = compileQuery('orders', state, { id: 'pos' }).read;
+			expect(new Query(sales.prefilter).test(paidToday) && sales.residual(paidToday)).toBe(true);
+			expect(new Query(pos.prefilter).test(paidToday) && pos.residual(paidToday)).toBe(false);
+			expect(pos.complete).toBe(true);
 		});
 		it('storeScope sales with a register filter compiles as pos', () => {
 			for (const store of ['12', 'woocommerce-pos']) {

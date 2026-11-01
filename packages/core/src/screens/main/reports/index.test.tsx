@@ -337,7 +337,11 @@ describe('ReportsScreen query-state wiring', () => {
 			const sales = compileQuery('orders', queryState, { id: 'report', ...options });
 			const pos = compileQuery('orders', queryState, { id: 'report' });
 			expect(sales.demand).toEqual(pos.demand);
-			expect(sales.read.prefilter).toEqual(pos.read.prefilter);
+			// Store scoping stays pos; only the date clause moves to the local sale-moment predicate.
+			const { $and: clauses } = pos.read.prefilter as { $and: Record<string, unknown>[] };
+			expect(sales.read.prefilter).toEqual({
+				$and: clauses.filter((clause) => !('dateCreatedGmt' in clause)),
+			});
 			expect(sales.represented).toBe(true);
 		}
 	});

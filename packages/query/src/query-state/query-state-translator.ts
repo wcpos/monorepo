@@ -90,7 +90,7 @@ export const FILTER_TRANSLATORS = {
 		register: mappedEntry(collectionMap.orders.fields.register, 'metadata'),
 		payment_method: mappedEntry(collectionMap.orders.fields.payment_method, 'payment-method'),
 		store: mappedEntry(collectionMap.orders.fields.store, 'store'),
-		dateRange: mappedEntry(collectionMap.orders.fields.date_created_gmt, 'sale-date-range'),
+		dateRange: mappedEntry(collectionMap.orders.fields.date_created_gmt, 'date-range'),
 	},
 	coupons: {
 		discount_type: mappedEntry(collectionMap.coupons.fields.discount_type),
@@ -454,8 +454,16 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		collection === 'orders' &&
 		options.storeScope === 'sales' &&
 		!active.some(({ field }) => field === 'register');
-	const readFilters = active.map(({ translator, value }) =>
-		compileReadFilter(translator, value, salesStoreScope)
+	// Reports count a sale on the day the money moved; the Orders screen keeps creation dates.
+	const salesRead = collection === 'orders' && options.storeScope === 'sales';
+	const readFilters = active.map(({ field, translator, value }) =>
+		compileReadFilter(
+			salesRead && field === 'dateRange'
+				? { ...translator, operator: 'sale-date-range' }
+				: translator,
+			value,
+			salesStoreScope
+		)
 	);
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
