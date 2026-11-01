@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
+import { focusFirstControl, FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { SegmentedControl, type SegmentedControlHandle } from '../segmented-control';
 
 import type { FormItemProps } from './common';
@@ -24,7 +25,13 @@ export function FormSegmentedControl({
 	onBlur,
 	ref,
 }: FormItemProps<string> & { segments: Segments; testID?: string }) {
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const controlRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const handleOnLabelPress = () => focusFirstControl(controlRef);
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 	const drawn = segments.map((segment) => ({
 		...segment,
 		disabled: !!(disabled || segment.disabled),
@@ -33,20 +40,26 @@ export function FormSegmentedControl({
 
 	return (
 		<FormItem nativeID={itemNativeID}>
-			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
-			<SegmentedControl
-				segments={drawn}
-				value={value ?? ''}
-				onValueChange={(next) => onChange?.(next)}
-				testID={testID}
-				aria-disabled={!!disabled}
-				// The controller's blur marks the field touched (focus leaving a segment bubbles
-				// here); its ref gets the control's handle, whose focus() lands on the tab stop
-				// segment, so focus-on-error reaches the field.
-				onBlur={onBlur}
-				ref={ref as React.Ref<SegmentedControlHandle>}
-				{...ariaProps}
-			/>
+			{!!label && (
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
+					{label}
+				</FormLabel>
+			)}
+			<View ref={controlRef}>
+				<SegmentedControl
+					segments={drawn}
+					value={value ?? ''}
+					onValueChange={(next) => onChange?.(next)}
+					testID={testID}
+					aria-disabled={!!disabled}
+					// The controller's blur marks the field touched (focus leaving a segment bubbles
+					// here); its ref gets the control's handle, whose focus() lands on the tab stop
+					// segment, so focus-on-error reaches the field.
+					onBlur={onBlur}
+					ref={ref as React.Ref<SegmentedControlHandle>}
+					{...ariaProps}
+				/>
+			</View>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>

@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
+import { focusFirstControl, FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { OptionSelect } from '../select';
 
 import type { FormItemProps } from './common';
@@ -27,20 +28,32 @@ export function FormSelect<TControl extends React.ElementType = typeof OptionSel
 	customComponent,
 	...props
 }: FormSelectProps<TControl>) {
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const controlRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const handleOnLabelPress = () => focusFirstControl(controlRef);
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 	const Control: React.ElementType<any> = customComponent ?? OptionSelect;
 	return (
 		<FormItem nativeID={itemNativeID}>
-			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
-			<Control
-				{...ariaProps}
-				matchWidth
-				fallbackLabel={value}
-				{...props}
-				value={value}
-				// A clear is '' and never undefined: the patch's JSON would drop the key (line 5).
-				onChange={(next: string | undefined) => onChange?.(next ?? '')}
-			/>
+			{!!label && (
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
+					{label}
+				</FormLabel>
+			)}
+			<View ref={controlRef}>
+				<Control
+					{...ariaProps}
+					matchWidth
+					fallbackLabel={value}
+					{...props}
+					value={value}
+					// A clear is '' and never undefined: the patch's JSON would drop the key (line 5).
+					onChange={(next: string | undefined) => onChange?.(next ?? '')}
+				/>
+			</View>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>

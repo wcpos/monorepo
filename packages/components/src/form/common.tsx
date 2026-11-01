@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import type { ViewProps } from 'react-native';
 
 import { Noop } from 'react-hook-form';
@@ -40,6 +40,15 @@ type FormItemProps<U> = FormFieldFieldProps<U> & {
 		| 'twitter'
 		| 'web-search';
 };
+
+export function focusFirstControl(ref: React.RefObject<React.ComponentRef<typeof View> | null>) {
+	if (Platform.OS !== 'web') return;
+	(ref.current as unknown as HTMLElement | null)
+		?.querySelector<HTMLElement>(
+			'button, [role="combobox"], [role="radio"], [tabindex]:not([tabindex="-1"]), input'
+		)
+		?.focus();
+}
 
 /** `nativeID` seeds the ids of the item's label, description and message (see `aria.ts`). */
 function FormItem({ className, nativeID: itemNativeID, ...props }: ViewProps) {
