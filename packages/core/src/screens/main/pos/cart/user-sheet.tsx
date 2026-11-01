@@ -52,6 +52,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { FigureTile } from './figure-tile';
 import { ageLabel } from './register-bar.helpers';
+import { Ticking } from './ticking';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -63,7 +64,6 @@ import {
 	convertUTCStringToLocalDate,
 } from '../../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useNowMs } from '../../../../hooks/use-relative-time';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -525,7 +525,6 @@ export function UserSheet({
 	const signedInAt = lastAccess ? new Date(lastAccess) : null;
 	const signedIn = signedInAt && !Number.isNaN(signedInAt.getTime()) ? signedInAt : null;
 	const storeName = useDocField(store, (value) => value.name);
-	const nowMs = useNowMs(60_000);
 	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
 	// A page bar is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
@@ -663,19 +662,23 @@ export function UserSheet({
 							<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
 							<View className="min-w-0 flex-1">
 								<DialogTitle numberOfLines={1}>{displayName}</DialogTitle>
-								<DialogDescription testID="user-sheet-description">
-									{[
-										storeName,
-										registers.length > 1 && registerName,
-										signedIn &&
-											t('register.on_the_till_since', {
-												time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
-											}),
-										signedIn && ageLabel(t, signedIn.getTime(), nowMs),
-									]
-										.filter(Boolean)
-										.join(' · ')}
-								</DialogDescription>
+								<Ticking>
+									{(nowMs) => (
+										<DialogDescription testID="user-sheet-description">
+											{[
+												storeName,
+												registers.length > 1 && registerName,
+												signedIn &&
+													t('register.on_the_till_since', {
+														time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
+													}),
+												signedIn && ageLabel(t, signedIn.getTime(), nowMs),
+											]
+												.filter(Boolean)
+												.join(' · ')}
+										</DialogDescription>
+									)}
+								</Ticking>
 							</View>
 						</DialogHeader>
 					)}

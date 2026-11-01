@@ -22,7 +22,7 @@ import type { useReceiptDocument } from './use-receipt-document';
 export type PrintSheetProps = {
 	doc: ReturnType<typeof useReceiptDocument>;
 	title: string;
-	description?: string;
+	description?: React.ReactNode;
 	printLabel: string;
 	waiting?: string | null;
 	error?: React.ReactNode;
