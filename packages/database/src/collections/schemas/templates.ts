@@ -1,6 +1,6 @@
 export const templatesLiteral = {
 	title: 'WCPOS Template schema',
-	version: 2,
+	version: 0,
 	description: 'POS receipt/report templates',
 	type: 'object',
 	primaryKey: 'uuid',

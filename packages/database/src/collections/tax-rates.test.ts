@@ -11,7 +11,7 @@ describe('tax rate schema', () => {
 });
 
 describe('taxes schema', () => {
-	it('bumps taxes to schema version 1', () => {
-		expect(taxRatesLiteral.version).toBe(1);
+	it('uses schema version 0', () => {
+		expect(taxRatesLiteral.version).toBe(0);
 	});
 });

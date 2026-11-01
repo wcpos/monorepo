@@ -2,7 +2,7 @@ import { sessionOutboxProperties } from './register-sessions';
 
 export const cashMovementsLiteral = {
 	title: 'Cash movements',
-	version: 1,
+	version: 0,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {

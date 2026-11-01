@@ -2,7 +2,7 @@ import { taxIdLiteral } from './tax-id';
 
 export const ordersLiteral = {
 	title: 'WooCommerce Order schema',
-	version: 6,
+	version: 0,
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',

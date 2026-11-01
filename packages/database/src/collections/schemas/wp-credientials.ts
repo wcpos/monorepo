@@ -1,6 +1,6 @@
 export const wpCredentialsLiteral = {
 	title: 'WP Credentials schema',
-	version: 5,
+	version: 0,
 	description: 'WordPress credentials',
 	type: 'object',
 	primaryKey: 'uuid',
