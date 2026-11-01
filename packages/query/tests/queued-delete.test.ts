@@ -28,7 +28,7 @@ it('the queued-delete read excludes superseded deletes', async () => {
 			supersededBy: 'coalesce:writer',
 		});
 		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(false);
-		await row.modify(({ supersededBy: _, ...data }) => data);
+		await row.modify(({ supersededBy: _, ...data }: Record<string, unknown>) => data);
 		expect(await orderHasQueuedDelete(engineOver(db), 'order')).toBe(true);
 	} finally {
 		await db.remove();

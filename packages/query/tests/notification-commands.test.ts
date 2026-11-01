@@ -45,7 +45,7 @@ function fixture(initial: query.NotificationRow[] = [row]) {
 							([key, value]) => item[key as keyof typeof item] === value
 						)
 					)
-					.map((item) => document(item.id)),
+					.map((item) => document(item.id!)),
 		})),
 		upsert: jest.fn(async (next: query.NotificationRow) => {
 			stored.set(next.id, next);

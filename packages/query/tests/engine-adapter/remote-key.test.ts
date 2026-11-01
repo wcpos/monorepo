@@ -6,7 +6,7 @@ import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { storages } from '../helpers/storages';
 import { sqlitePlan } from '../helpers/sqlite-plan';
 
-import type { RxDatabase } from 'rxdb';
+import type { RxCollectionCreator, RxDatabase } from 'rxdb';
 
 describe.each(storages)('%s remote key lookups', (name, storage) => {
 	let database: RxDatabase;
@@ -19,7 +19,11 @@ describe.each(storages)('%s remote key lookups', (name, storage) => {
 			storage,
 			multiInstance: false,
 		});
-		await database.addCollections({ customers: engineSyncCollectionCreators().customers });
+		await database.addCollections({
+			customers: engineSyncCollectionCreators().customers as RxCollectionCreator<
+				Record<string, unknown>
+			>,
+		});
 		await database.customers.bulkInsert(
 			[null, '7', '8', '9'].map((remoteId, n) => ({
 				uuid: `c${n}`,

@@ -8,12 +8,18 @@ import type { ReadonlyStoreRecord } from '../../src/user-db/records';
 const t = (_key: string, { message }: { message: string }) => `Translated: ${message}`;
 function fixture(hasDate = false) {
 	let data: Record<string, unknown> = { theme: 'light', nested: { keep: true, value: 'latest' } };
-	const latest = {
+	type Latest = {
+		toMutableJSON: () => typeof data;
+		incrementalModify: jest.Mock<Promise<Latest>, [(old: typeof data) => typeof data]>;
+	};
+	const latest: Latest = {
 		toMutableJSON: () => data,
-		incrementalModify: jest.fn(async (modify: (old: typeof data) => typeof data) => {
-			data = modify(data);
-			return latest;
-		}),
+		incrementalModify: jest.fn(
+			async (modify: (old: typeof data) => typeof data): Promise<Latest> => {
+				data = modify(data);
+				return latest;
+			}
+		),
 	};
 	const store = {
 		id: 1,

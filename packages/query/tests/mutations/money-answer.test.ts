@@ -10,6 +10,7 @@ import { insertEngineResident } from '../../src/mutations';
 import { mirrorMoneyAnswer } from '../../src/mutations/money-answer';
 import { createEngineDatabase, createFakeEngine } from '../../src/testing';
 
+import type { EngineRecord } from '../../src/records/engine-record';
 import type { QueryRuntime } from '../../src/provider';
 import type { RxDatabase } from 'rxdb';
 
@@ -33,12 +34,12 @@ describe('mirrorMoneyAnswer', () => {
 		({ status, total: '100.0000', payment_method: 'cash', payment_method_title: 'Cash' }) as never;
 
 	async function seed(rows: PaymentRow[], revision = 'sha256:sent') {
-		const order = await insertEngineResident({
+		const order = (await insertEngineResident({
 			manager,
 			collection: 'orders',
 			recordId: 'order',
 			payload: { total: '100.0000', status: 'pos-open', meta_data: withLedger([], rows) },
-		});
+		})) as unknown as EngineRecord<'orders'>;
 		await order.incrementalModify((doc) => ({ ...doc, sync: { ...doc.sync, revision } }));
 		return order;
 	}
@@ -56,7 +57,11 @@ describe('mirrorMoneyAnswer', () => {
 
 	beforeEach(async () => {
 		database = await createEngineDatabase(['orders', 'products']);
-		manager = { engine: Object.assign(createFakeEngine(database), { write }) } as QueryRuntime;
+		manager = {
+			engine: Object.assign(createFakeEngine(database), { write }),
+			localDB: database,
+			locale: 'en',
+		} satisfies QueryRuntime;
 	});
 	afterEach(async () => {
 		await database.close();

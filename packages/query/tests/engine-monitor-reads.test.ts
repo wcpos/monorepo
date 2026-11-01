@@ -57,6 +57,8 @@ function queueRow(row: Partial<QueueRow> = {}) {
 		recordId: 'record-1',
 		status: 'pending',
 		payload: {},
+		baseRevision: null,
+		origin: 'existing',
 		queuedAt: '',
 		...row,
 	};

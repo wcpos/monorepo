@@ -13,7 +13,7 @@ import { createFakeEngine, engineOrder } from '../../src/testing';
 import { sqlitePlan } from '../helpers/sqlite-plan';
 import { storages } from '../helpers/storages';
 
-import type { RxDatabase } from 'rxdb';
+import type { RxCollectionCreator, RxDatabase } from 'rxdb';
 
 describe.each(storages)('%s open-orders scope', (name, storage) => {
 	let database: RxDatabase;
@@ -47,7 +47,9 @@ describe.each(storages)('%s open-orders scope', (name, storage) => {
 			storage,
 			multiInstance: false,
 		});
-		await database.addCollections({ orders: engineSyncCollectionCreators().orders });
+		await database.addCollections({
+			orders: engineSyncCollectionCreators().orders as RxCollectionCreator<Record<string, unknown>>,
+		});
 		await database.orders.bulkInsert(
 			[
 				['late', 7, 2, '03', 'pos-open'],

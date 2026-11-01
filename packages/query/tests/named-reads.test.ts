@@ -4,6 +4,8 @@ import { observePaymentMethodHistory } from '../src/reads/payment-method-history
 import { observeProductMetaKeys } from '../src/reads/product-meta-keys';
 import { residentEngine } from './helpers/resident-engine';
 
+import type { Observable } from 'rxjs';
+
 it.each([
 	[
 		'orders',
@@ -48,7 +50,9 @@ it.each([
 		const { engine, databases } = residentEngine();
 		const rows = new BehaviorSubject(payloads.map((payload) => ({ payload })));
 		const seen: unknown[] = [];
-		const sub = observe(engine).subscribe((value: unknown) => seen.push(value));
+		const sub = (observe(engine) as Observable<unknown>).subscribe((value: unknown) =>
+			seen.push(value)
+		);
 		expect(seen).toEqual([[]]);
 		databases.next({ collections: { [name]: { find: () => ({ $: rows }) } } });
 		expect(seen).toEqual([[], expected]);

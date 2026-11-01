@@ -758,12 +758,12 @@ it('persists count details on close and clears them on back to selling', async (
 		denominations: [{ value: '50', pieces: 3 }],
 	});
 	const stored = await db.register_sessions.findOne(session.id).exec();
-	expect(stored.toJSON()).toMatchObject({
+	expect(stored!.toJSON()).toMatchObject({
 		count_note: 'Found coins',
 		count_denominations: [{ value: '50', pieces: 3 }],
 	});
 	await backToSelling(db, session.id);
-	expect(stored.getLatest().toJSON()).toMatchObject({
+	expect(stored!.getLatest().toJSON()).toMatchObject({
 		count_note: null,
 		count_denominations: null,
 		approved_counted: null,

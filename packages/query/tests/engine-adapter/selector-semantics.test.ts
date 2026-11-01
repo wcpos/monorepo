@@ -6,7 +6,7 @@ import { normalizeSelectorSemantics } from '../../src/engine-adapter/normalize-s
 import { storages } from '../helpers/storages';
 
 import type { EngineRxDocument } from '../../src/engine-adapter/execute-query';
-import type { RxCollection, RxDatabase, RxJsonSchema } from 'rxdb';
+import type { MangoQuery, RxCollection, RxDatabase, RxJsonSchema } from 'rxdb';
 
 type Probe = { uuid: string; value?: string | number | null };
 const schema: RxJsonSchema<Probe> = {
@@ -44,7 +44,10 @@ describe.each(storages)('%s selector semantics', (name, storage) => {
 	afterEach(async () => {
 		await database.close();
 	});
-	async function query(selector: Record<string, unknown>, sort = [{ uuid: 'asc' as const }]) {
+	async function query(
+		selector: Record<string, unknown>,
+		sort: MangoQuery<Probe>['sort'] = [{ uuid: 'asc' }]
+	) {
 		return (
 			await collection.storageInstance.query(
 				prepareQuery(

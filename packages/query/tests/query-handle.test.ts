@@ -431,7 +431,7 @@ describe('query handle', () => {
 				registry
 			)
 		);
-		const seen: number[] = [];
+		const seen: (number | undefined)[] = [];
 		let closed = false;
 		queryHandleAnswers$(handle).subscribe({
 			next: (result) => seen.push(result.count),

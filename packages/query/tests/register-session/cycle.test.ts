@@ -23,7 +23,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let storeDB: StoreDatabase;
 let userDB: UserDatabase;
 const http = { get: jest.fn(), post: jest.fn() };
-const engine = { active: () => null };
+const engine = { active: () => null } as import('@wcpos/sync-engine').RxdbSyncEngine;
 const live: LiveSession = {
 	session_id: 's1',
 	status: 'open',
@@ -40,9 +40,10 @@ const live: LiveSession = {
 const existing = {
 	id: 's1',
 	register_id: 'A',
-	status: 'open',
+	status: 'open' as const,
 	opened_at_gmt: live.opened_at_gmt,
-	sync_status: 'synced',
+	sync_status: 'synced' as const,
+	sync_attempts: 0,
 	counted_float: '123.0000',
 };
 beforeEach(async () => {

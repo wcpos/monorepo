@@ -26,6 +26,8 @@ it('joins residents and keeps per-row failures from rejecting the stream', async
 				collectionName: 'products',
 				operation: 'create',
 				payload: {},
+				baseRevision: null,
+				origin: 'existing',
 				queuedAt: '',
 				status: 'rejected',
 			}))

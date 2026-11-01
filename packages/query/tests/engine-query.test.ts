@@ -1,6 +1,6 @@
 import { waitFor } from '@testing-library/react';
 import { firstValueFrom, of } from 'rxjs';
-import { fillWithDefaultSettings } from 'rxdb';
+import { fillWithDefaultSettings, type RxDatabase, type RxJsonSchema } from 'rxdb';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
@@ -13,8 +13,6 @@ import {
 	engineProduct,
 	engineVariation,
 } from '../src/testing';
-
-import type { RxDatabase } from 'rxdb';
 
 const searchLogger = getLogger(['wcpos', 'query', 'search']);
 const searchError = jest.mocked(searchLogger.error);
@@ -200,7 +198,7 @@ describe('observeEngineQuery', () => {
 		const collection = database.collections.products;
 		const hit = await collection.insert(engineProduct({ uuid: 'hit', name: 'Shirt' }));
 		// A single index answer isolates point-read reactivity from search-lane reruns.
-		const results: { ids: string[]; count: number }[] = [];
+		const results: { ids: string[]; count: number | undefined }[] = [];
 		const subscription = observeEngineQuery(createFakeEngine(database), {
 			collection: 'products',
 			search: 'shirt',
@@ -445,7 +443,11 @@ describe('observeEngineQuery', () => {
 				products: {
 					$: of(null),
 					schema: {
-						jsonSchema: fillWithDefaultSettings(engineSyncCollectionCreators().products.schema),
+						jsonSchema: fillWithDefaultSettings(
+							engineSyncCollectionCreators().products.schema as RxJsonSchema<
+								Record<string, unknown>
+							>
+						),
 					},
 					storageInstance: { query: () => Promise.reject(error) },
 				},
@@ -453,7 +455,7 @@ describe('observeEngineQuery', () => {
 		};
 		const engine = {
 			active: () => ({ database, scopeId: 'store-short-search' }),
-			db$: (listener) => {
+			db$: (listener: (value: typeof database) => void) => {
 				listener(database);
 				return () => undefined;
 			},
@@ -643,7 +645,7 @@ describe('observeEngineQuery', () => {
 		// Collection identity alone must not suppress the second database binding.
 		const firstDatabase = { collections: database.collections } as RxDatabase;
 		const secondDatabase = { collections: database.collections } as RxDatabase;
-		const counts: number[] = [];
+		const counts: (number | undefined)[] = [];
 		const results: unknown[] = [];
 		const subscription = observeEngineQuery(pending.engine, {
 			collection: 'products',
@@ -726,14 +728,16 @@ describe('observeEngineQuery across a store switch', () => {
 			engineProduct({ uuid: 'active-scope', id: 2, name: 'Incoming store' })
 		);
 		const engine = createFakeEngine(activeScopeDatabase);
+		// Preserve the stale-scope readiness fixture; the current public contract resolves void.
 		engine.ready = Promise.resolve({
 			identity: { site: 'https://test', storeId: '1', cashierId: '1' },
 			scopeId: 'boot-scope',
 			database: bootScope,
-		});
+		}) as unknown as Promise<void>;
 		engine.active = () => ({
 			identity: { site: 'https://test', storeId: '2', cashierId: '1' },
 			scopeId: 'active-scope',
+			barcodeSelectors: { products: [], variations: [] },
 			database: activeScopeDatabase,
 		});
 		engine.db$ = (listener: (database: RxDatabase | null) => void) => {

@@ -24,6 +24,8 @@ function row(mutationId: string, overrides: Partial<QueueRow> = {}): QueueRow {
 		collectionName: 'products',
 		operation: 'update',
 		payload: {},
+		baseRevision: null,
+		origin: 'existing',
 		queuedAt: '',
 		status: 'pending',
 		...overrides,

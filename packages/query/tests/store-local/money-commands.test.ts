@@ -256,7 +256,8 @@ it('deferEntry marks sent with no revision and releases the claim; nextClaimExpi
 // deferred record mid-re-send is in flight, then unanswered, and still marked.
 describe('the entry state and the reads over it', () => {
 	const T = 1_000_000;
-	const row = { id: 'row-1', amount: '1.00' };
+	// This journal fixture round-trips only identity and amount, not a complete payment.
+	const row = { id: 'row-1', amount: '1.00' } as import('@wcpos/order-math').PaymentRow;
 	const recordRoute = { orderUuid: 'order', kind: 'record', target: null, rowId: 'row-1' } as const;
 	const record: MoneyCommandEntry = {
 		...candidate('row-1'),

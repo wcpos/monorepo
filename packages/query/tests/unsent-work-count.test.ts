@@ -35,7 +35,7 @@ it('subtracts internal rows, rebinds on queue replacement, and tears down', asyn
 	expect(count).not.toHaveBeenCalled();
 	database.collections.recordMutations = {
 		count: jest.fn(() => ({ $: new BehaviorSubject(0), exec: async () => 0 })),
-		find: jest.fn(() => ({ $: new BehaviorSubject([]), exec: async () => [] })),
+		find: jest.fn(() => ({ $: new BehaviorSubject<typeof rows.value>([]), exec: async () => [] })),
 	};
 	databases.next(database);
 	expect(seen.slice(-2)).toEqual([null, 0]);

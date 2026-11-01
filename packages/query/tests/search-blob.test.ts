@@ -1,4 +1,4 @@
-import { fillWithDefaultSettings } from 'rxdb';
+import { fillWithDefaultSettings, type RxChangeEvent, type RxJsonSchema } from 'rxdb';
 import { firstValueFrom, skip, Subject } from 'rxjs';
 
 import { searchTerms } from '@wcpos/sync-core';
@@ -11,11 +11,13 @@ import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { searchBlobFor } from '../src/search-blob';
 
+import type { SearchableCollection } from '../src/search-shared';
 import type { EngineRxDocument } from '../src/engine-adapter/execute-query';
-import type { RxChangeEvent } from 'rxdb';
 
 const fields = ['name', 'sku', 'barcode'];
-const PRODUCT_SCHEMA = fillWithDefaultSettings(engineSyncCollectionCreators().products.schema);
+const PRODUCT_SCHEMA = fillWithDefaultSettings(
+	engineSyncCollectionCreators().products.schema as RxJsonSchema<Record<string, unknown>>
+);
 const snapshot = (document: EngineRxDocument) => document.toJSON();
 /** An engine-shaped row as the projection read returns it (the blob never sees an RxDocument). */
 const document = (uuid: string, name: string, sku = '', barcode = '') => ({
@@ -33,8 +35,8 @@ function fakeCollection(documents: Record<string, unknown>[] = []) {
 	const query = jest.fn(async () => ({ documents }));
 	return {
 		$: new Subject<RxChangeEvent<Record<string, unknown>>>(),
-		schema: { jsonSchema: PRODUCT_SCHEMA, primaryPath: 'uuid' },
-		storageInstance: { query },
+		schema: { jsonSchema: PRODUCT_SCHEMA, primaryPath: 'uuid' } as SearchableCollection['schema'],
+		storageInstance: { query } as unknown as SearchableCollection['storageInstance'],
 		database: {} as never,
 		onClose: [] as (() => void)[],
 		query,
@@ -42,7 +44,7 @@ function fakeCollection(documents: Record<string, unknown>[] = []) {
 }
 
 function change(operation: 'INSERT' | 'UPDATE' | 'DELETE', documentId: string, name: string) {
-	return { operation, documentId, documentData: { name } } as RxChangeEvent<
+	return { operation, documentId, documentData: { name } } as unknown as RxChangeEvent<
 		Record<string, unknown>
 	>;
 }
