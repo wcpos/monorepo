@@ -37,6 +37,7 @@ import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
 import { FigureTile } from './figure-tile';
 import { useNowMs } from '../../../../hooks/use-relative-time';
+import { ageLabel } from './register-bar.helpers';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -114,12 +115,6 @@ export function RegisterPanel({
 	const { heading, time } = useStoreDayLabel(store.id);
 	const { timezone } = useStoreDay();
 	const nowMs = useNowMs(60_000);
-	const ageLabel = (openedMs: number, nowMs: number) => {
-		const minutes = Math.max(0, Math.floor((nowMs - openedMs) / 60_000));
-		return minutes >= 60
-			? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
-			: t('register.age_m', { m: minutes });
-	};
 	// The closure pane is the owner's ledger (§ 7): a blind cashier's row is held, with its note.
 	const reportsDenied = blind;
 	// The register panel opens from the right on every screen, as the cashier sheet does; what it
@@ -232,7 +227,7 @@ export function RegisterPanel({
 			(session
 				? t('register.open_since', { time: openedTime })
 				: t('register.closed_at_time', { time: openedTime })),
-		session && openedDate && ageLabel(openedDate.getTime(), nowMs),
+		session && openedDate && ageLabel(t, openedDate.getTime(), nowMs),
 		session &&
 			(credentials.find((row) => row.id === session.opened_by)?.display_name ??
 				t('register.unknown_cashier')),

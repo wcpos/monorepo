@@ -22,6 +22,7 @@ import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/qu
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useNowMs } from '../../../../hooks/use-relative-time';
+import { ageLabel } from './register-bar.helpers';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { DrawerTile, SalesTile, useSalesToday } from './user-sheet';
@@ -115,15 +116,11 @@ export function SwitchConfirm({
 	const openedDate = session?.opened_at_gmt
 		? convertUTCStringToLocalDate(session.opened_at_gmt)
 		: undefined;
-	const minutes = openedDate ? Math.max(0, Math.floor((nowMs - openedDate.getTime()) / 60_000)) : 0;
 	const reportDescription = [
 		binding.registerName,
 		store.name,
 		openedDate && t('register.open_since', { time: time(openedDate) }),
-		openedDate &&
-			(minutes >= 60
-				? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
-				: t('register.age_m', { m: minutes })),
+		openedDate && ageLabel(t, openedDate.getTime(), nowMs),
 		credentials.find((row) => row.id === session?.opened_by)?.display_name ??
 			t('register.unknown_cashier'),
 	]

@@ -1,3 +1,13 @@
+import type { useT } from '../../../../contexts/translations';
+
+/** How long since `fromMs`, as the register panel, the hand-over confirm and the cashier sheet say it. */
+export function ageLabel(t: ReturnType<typeof useT>, fromMs: number, nowMs: number): string {
+	const minutes = Math.max(0, Math.floor((nowMs - fromMs) / 60_000));
+	return minutes >= 60
+		? t('register.age_h_m', { h: Math.floor(minutes / 60), m: minutes % 60 })
+		: t('register.age_m', { m: minutes });
+}
+
 export function describeRegisterBar({
 	registerName,
 	registerCount,

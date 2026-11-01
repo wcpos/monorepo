@@ -1,7 +1,15 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	renderHook,
+	screen,
+	waitFor,
+} from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { CarryAdoptionError } from '@wcpos/query/register-session';
@@ -209,6 +217,9 @@ jest.mock('@wcpos/query', () => ({
 	observeCashierSalesTotal: jest.fn(
 		jest.requireActual('../../../../../../query/src/reads/cashier-sales').observeCashierSalesTotal
 	),
+	observeOpenCartCount: jest.fn(
+		jest.requireActual('../../../../../../query/src/reads/open-cart-count').observeOpenCartCount
+	),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
@@ -232,8 +243,9 @@ let mockT: (key: string, options?: Record<string, unknown>) => string = (key) =>
 jest.mock('../../../../contexts/translations', () => ({ useT: () => mockT }));
 let mockAwaitingStore = 0;
 const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+const mockUseOpenOrdersHandle = jest.fn((..._args: unknown[]) => mockOpenOrdersHandle);
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
-	useOpenOrdersHandle: () => mockOpenOrdersHandle,
+	useOpenOrdersHandle: (...args: unknown[]) => mockUseOpenOrdersHandle(...args),
 }));
 jest.mock('../checkout/use-awaiting-store', () => ({
 	useAwaitingStoreCount: () => mockAwaitingStore,
@@ -738,14 +750,23 @@ describe('side and header', () => {
 		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 	});
-	it('describes the cashier by store, register and sign-in time', () => {
-		mockT = createTestT();
-		mockStoreTimezone = 'UTC';
-		render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
-		expect(screen.getByTestId('user-sheet-description').textContent).toBe(
-			'UK Store · Front counter · since 13:05'
-		);
-	});
+	it.each([
+		['2026-10-28T16:25:00Z', 'UK Store · Front counter · since 13:05 · 3 h 20 m'],
+		['2026-10-28T13:25:00Z', 'UK Store · Front counter · since 13:05 · 20 m'],
+	])(
+		'describes the cashier by store, register, sign-in time and time on the till (now %s)',
+		(now, line) => {
+			mockT = createTestT();
+			mockStoreTimezone = 'UTC';
+			jest.useFakeTimers({ now: new Date(now) });
+			try {
+				render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+				expect(screen.getByTestId('user-sheet-description').textContent).toBe(line);
+			} finally {
+				jest.useRealTimers();
+			}
+		}
+	);
 	it('drops the sign-in time when the credential carries an unreadable stamp', () => {
 		mockT = createTestT();
 		mockLastAccess = 'not a date';
@@ -933,6 +954,51 @@ it('lists other saved cashiers without a choice gutter and keeps the current cas
 	);
 });
 
+it("names each other cashier's open carts on this till, nothing when none", async () => {
+	const saved = mockCredentials.splice(1);
+	mockCredentials.push(
+		{ uuid: 'maria', id: 8, display_name: 'Maria' } as never,
+		{ uuid: 'sam', id: 9, display_name: 'Sam' } as never
+	);
+	const previousStore = mockStoreId;
+	mockStoreId = 2;
+	mockT = createTestT();
+	const defaultObserve = mockObserve.getMockImplementation()!;
+	mockObserve.mockImplementation((...args: unknown[]) => {
+		const { selector } = args[1] as { selector: { posUserId?: string } };
+		if (selector.posUserId === '8')
+			return of({ hits: Array(2).fill({ record: { payload: { total: '0' } } }) });
+		if (selector.posUserId === '9') return of({ hits: [] });
+		return defaultObserve(...args);
+	});
+	mockUseOpenOrdersHandle.mockClear();
+	const { observeOpenCartCount } = jest.requireMock('@wcpos/query');
+	observeOpenCartCount.mockClear();
+	try {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('user-sheet-user-maria').textContent).toContain('2 open carts')
+		);
+		expect(screen.getByTestId('user-sheet-user-sam').textContent).not.toContain('open cart');
+		expect(observeOpenCartCount).toHaveBeenCalledWith('engine', {
+			cashierId: 8,
+			storeId: 2,
+			registerId: 'A',
+		});
+		expect(observeOpenCartCount).toHaveBeenCalledWith('engine', {
+			cashierId: 9,
+			storeId: 2,
+			registerId: 'A',
+		});
+		for (const [cashierId] of mockUseOpenOrdersHandle.mock.calls) expect(cashierId).toBe(7);
+	} finally {
+		mockCredentials.splice(1, Infinity, ...saved);
+		mockStoreId = previousStore;
+		mockObserve.mockImplementation(defaultObserve);
+		mockT = (key) => key;
+	}
+});
+
 describe('register band', () => {
 	beforeEach(() => {
 		mockT = createTestT();
@@ -1031,6 +1097,30 @@ describe('register band', () => {
 		);
 		expect(screen.getByTestId('user-sheet-user-other').getAttribute('aria-disabled')).not.toBe(
 			'true'
+		);
+		// The pane says the reason once; every register row keeps its live state.
+		const attributedCart = mockCart;
+		mockCart = { payload: { meta_data: [] } };
+		cleanup();
+		const { rerender } = render(<UserSheet open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('user-sheet-register-switch'));
+		mockCart = attributedCart;
+		rerender(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.getAllByTestId('user-sheet-pane-reason')).toHaveLength(1);
+		expect(screen.getByTestId('user-sheet-pane-reason').textContent).toContain(
+			'Finish or park the current sale'
+		);
+		expect(screen.getByTestId('user-sheet-register-A').textContent).toContain(
+			'Open since 09:02 · Amy'
+		);
+		expect(screen.getByTestId('user-sheet-register-back').textContent).toContain(
+			'Closed · last closure #41'
+		);
+		expect(screen.getByTestId('user-sheet-register-back').getAttribute('aria-disabled')).toBe(
+			'true'
+		);
+		expect(screen.getByTestId('user-sheet-register-band').textContent).not.toContain(
+			'Finish or park the current sale'
 		);
 	});
 });
@@ -1158,6 +1248,21 @@ describe('switch confirmations and guards', () => {
 			expect(screen.getByTestId('switch-confirm')).toBeTruthy();
 			await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
 			expect(mockLogin).toHaveBeenCalledTimes(1);
+			// Going offline in the Switch store pane: the reason is said once, on the pane.
+			mockOnline = true;
+			cleanup();
+			const { rerender } = render(<UserSheet open onOpenChange={jest.fn()} />);
+			fireEvent.click(screen.getByTestId('user-sheet-store-switch'));
+			mockOnline = false;
+			rerender(<UserSheet open onOpenChange={jest.fn()} />);
+			expect(screen.getAllByTestId('user-sheet-pane-reason')).toHaveLength(1);
+			expect(screen.getByTestId('user-sheet-pane-reason').textContent).toBe(
+				'Needs the store to switch'
+			);
+			expect(screen.getByTestId('user-sheet-store-store-b').textContent).toBe('store-b');
+			expect(screen.getByTestId('user-sheet-store-store-b').getAttribute('aria-disabled')).toBe(
+				'true'
+			);
 		} finally {
 			mockOnline = previous;
 		}

@@ -1,4 +1,5 @@
-import { describeRegisterBar } from './register-bar.helpers';
+import { createTestT } from '../../../../../jest/translate';
+import { ageLabel, describeRegisterBar } from './register-bar.helpers';
 
 const base = {
 	registerName: 'Front',
@@ -77,4 +78,14 @@ it.each([
 	[{ awaitingStore: 1, sessionsOn: true, sessionStatus: null }, 'register.closed'],
 ] as const)('awaiting-store pill %j', (state, pill) => {
 	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
+});
+
+it.each([
+	[0, '0 m'],
+	[59, '59 m'],
+	[60, '1 h 0 m'],
+	[200, '3 h 20 m'],
+])('says %i minutes as %s', (minutes, label) => {
+	const t = createTestT() as unknown as Parameters<typeof ageLabel>[0];
+	expect(ageLabel(t, 0, minutes * 60_000)).toBe(label);
 });

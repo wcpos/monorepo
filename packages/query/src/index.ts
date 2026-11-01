@@ -130,3 +130,4 @@ export {
 export { readCouponCatalog } from './reads/coupon-catalog';
 
 export { observeCashierSalesTotal } from './reads/cashier-sales';
+export { observeOpenCartCount } from './reads/open-cart-count';

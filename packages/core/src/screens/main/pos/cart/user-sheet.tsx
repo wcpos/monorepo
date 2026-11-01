@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { format as formatDate } from 'date-fns/format';
 import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { defer, filter, firstValueFrom, repeat, startWith, switchMap, timer } from 'rxjs';
+import { defer, filter, firstValueFrom, of, repeat, startWith, switchMap, timer } from 'rxjs';
 
 import {
 	CarryAdoptionError,
@@ -40,12 +40,18 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
-import { observeCashierSalesTotal, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	observeCashierSalesTotal,
+	observeOpenCartCount,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { FigureTile } from './figure-tile';
+import { ageLabel } from './register-bar.helpers';
 import { SwitchConfirm, type SwitchRequest } from './switch-confirm';
 import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -57,6 +63,7 @@ import {
 	convertUTCStringToLocalDate,
 } from '../../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { useNowMs } from '../../../../hooks/use-relative-time';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -235,6 +242,51 @@ function AwaitingStore() {
 	);
 }
 
+// Local read only: the open-orders handle would declare a server fetch per cashier (line 51).
+function CashierRow({
+	credential,
+	disabled,
+	onChoose,
+}: {
+	credential: ReadonlyWpCredentialsRecord;
+	disabled: boolean;
+	onChoose: (request: SwitchRequest) => void;
+}) {
+	const runtime = useQueryRuntime();
+	const { store } = useStoreSession();
+	const registerId = useRegisterSession().binding.registerId;
+	const t = useT();
+	const count$ = React.useMemo(
+		() =>
+			credential.id === undefined
+				? of(0)
+				: observeOpenCartCount(runtime.engine, {
+						cashierId: credential.id,
+						storeId: store.id,
+						registerId,
+					}),
+		[runtime.engine, credential.id, store.id, registerId]
+	);
+	const count = useObservableState(count$, 0);
+	return (
+		<MenuRow
+			testID={`user-sheet-user-${credential.uuid}`}
+			disabled={disabled}
+			onPress={() => onChoose({ kind: 'cashier', credential })}
+			leading={
+				<RecordAvatar
+					record={credential}
+					avatarUrl={credential.avatar_url}
+					name={credential.display_name}
+					size="md"
+				/>
+			}
+			label={credential.display_name}
+			description={count > 0 ? t('register.open_carts_count', { count }) : undefined}
+		/>
+	);
+}
+
 function UserRows({
 	busy,
 	hold,
@@ -254,20 +306,11 @@ function UserRows({
 			{credentials
 				.filter((credential) => credential.uuid !== wpCredentials.uuid)
 				.map((credential) => (
-					<MenuRow
+					<CashierRow
 						key={credential.uuid}
-						testID={`user-sheet-user-${credential.uuid}`}
+						credential={credential}
 						disabled={busy || hold || counting}
-						onPress={() => onChoose({ kind: 'cashier', credential })}
-						leading={
-							<RecordAvatar
-								record={credential}
-								avatarUrl={credential.avatar_url}
-								name={credential.display_name}
-								size="md"
-							/>
-						}
-						label={credential.display_name}
+						onChoose={onChoose}
 					/>
 				))}
 		</>
@@ -287,7 +330,6 @@ function StoreRows({
 }) {
 	const { wpCredentials, store } = useStoreSession();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
-	const t = useT();
 	if (stores.length <= 1) return null;
 	return (
 		<View testID="user-sheet-store-band">
@@ -298,11 +340,6 @@ function StoreRows({
 					choice
 					selected={row.localID === store.localID}
 					disabled={row.localID === store.localID || busy || hold || !online}
-					description={
-						row.localID !== store.localID && !hold && !online
-							? t('register.needs_store_to_switch')
-							: undefined
-					}
 					onPress={
 						row.localID === store.localID || busy || hold || !online
 							? undefined
@@ -317,13 +354,11 @@ function StoreRows({
 
 function RegisterRows({
 	attributed,
-	reason,
 	busy,
 	hold,
 	onChoose,
 }: {
 	attributed: boolean;
-	reason: string;
 	busy: boolean;
 	hold: boolean;
 	onChoose: (request: SwitchRequest) => void;
@@ -378,7 +413,7 @@ function RegisterRows({
 						choice
 						selected={row.id === registerId}
 						label={row.name}
-						description={attributed && !hold ? reason : description}
+						description={description}
 						disabled={row.id === registerId || attributed || busy || hold}
 						onPress={
 							row.id === registerId || attributed || busy || hold
@@ -486,6 +521,7 @@ export function UserSheet({
 	const signedInAt = lastAccess ? new Date(lastAccess) : null;
 	const signedIn = signedInAt && !Number.isNaN(signedInAt.getTime()) ? signedInAt : null;
 	const storeName = useDocField(store, (value) => value.name);
+	const nowMs = useNowMs(60_000);
 	const { timezone } = useStoreDay();
 	const currentOrder = useCurrentOrderOptional();
 	// A page bar is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
@@ -606,9 +642,17 @@ export function UserSheet({
 								accessibilityLabel={t('common.back')}
 								onPress={() => setPane('sheet')}
 							/>
-							<DialogTitle>
-								{pane === 'store' ? t('register.switch_store') : t('register.switch_register')}
-							</DialogTitle>
+							<View className="min-w-0 flex-1">
+								<DialogTitle>
+									{pane === 'store' ? t('register.switch_store') : t('register.switch_register')}
+								</DialogTitle>
+								{/* A hold is said once, here; the rows keep their live state. */}
+								{!paying && (pane === 'store' ? !online : attributed) && (
+									<DialogDescription testID="user-sheet-pane-reason">
+										{pane === 'store' ? t('register.needs_store_to_switch') : reason}
+									</DialogDescription>
+								)}
+							</View>
 						</DialogHeader>
 					) : (
 						<DialogHeader className="flex-row items-center gap-3">
@@ -623,6 +667,7 @@ export function UserSheet({
 											t('register.on_the_till_since', {
 												time: formatDate(signedIn, 'HH:mm', zoneOptions(timezone)),
 											}),
+										signedIn && ageLabel(t, signedIn.getTime(), nowMs),
 									]
 										.filter(Boolean)
 										.join(' · ')}
@@ -716,7 +761,6 @@ export function UserSheet({
 								) : (
 									<RegisterRows
 										attributed={attributed}
-										reason={reason}
 										busy={busy}
 										hold={paying}
 										onChoose={setRequest}
