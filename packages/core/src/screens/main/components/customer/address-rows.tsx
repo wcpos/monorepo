@@ -189,6 +189,8 @@ export function TextPart(props: {
 	label?: string;
 	autoFocus?: boolean;
 	secureTextEntry?: boolean;
+	/** Keep a local draft and commit on blur or Enter: the autosaving edit form's password (#3167). */
+	commitOnBlur?: boolean;
 }) {
 	const { control } = useFormContext();
 	const value = useWatch({ control, name: props.name });
@@ -209,14 +211,14 @@ export function TextPart(props: {
 				<Item className="min-w-0 flex-1 gap-0">
 					<FormInput
 						{...field}
-						value={props.secureTextEntry ? draft : (field.value ?? '')}
-						onChange={props.secureTextEntry ? setDraft : field.onChange}
+						value={props.commitOnBlur ? draft : (field.value ?? '')}
+						onChange={props.commitOnBlur ? setDraft : field.onChange}
 						// Password commits on blur/Enter still use the ordinary debounced autosave.
 						onBlur={() => {
-							if (props.secureTextEntry) field.onChange(draft);
+							if (props.commitOnBlur) field.onChange(draft);
 							field.onBlur();
 						}}
-						onSubmitEditing={props.secureTextEntry ? () => field.onChange(draft) : undefined}
+						onSubmitEditing={props.commitOnBlur ? () => field.onChange(draft) : undefined}
 						placeholder={props.placeholder}
 						aria-label={props.label}
 						autoFocus={props.autoFocus}
