@@ -681,6 +681,33 @@ describe('store-zone chart ranges', () => {
 	});
 });
 
+describe('sales count on the day the money moved', () => {
+	const dateRange: DateRange = {
+		start: new Date('2026-10-18T00:00:00'),
+		end: new Date('2026-10-18T23:59:59.999'),
+	};
+	it('charts a cart started yesterday and paid today under today', () => {
+		const orders = [
+			{
+				date_created_gmt: '2026-10-17T22:15:00',
+				date_paid_gmt: '2026-10-18T09:40:00',
+				total: '579',
+			},
+			{ date_created_gmt: '2026-10-18T11:05:00', total: '20' },
+		] as OrderPayload[];
+		const data = aggregateData(orders, dateRange, undefined, zone);
+		expect(data.reduce((sum, b) => sum + b.total, 0)).toBe(599);
+		expect(data.find((b) => b.total === 579)).toMatchObject({ order_count: 1 });
+		expect(data.find((b) => b.total === 579)?.label).toMatch(/^09:/);
+	});
+	it('leaves an unpaid cart on its creation day', () => {
+		const orders = [{ date_created_gmt: '2026-10-17T22:15:00', total: '579' }] as OrderPayload[];
+		expect(
+			aggregateData(orders, dateRange, undefined, zone).reduce((sum, b) => sum + b.total, 0)
+		).toBe(0);
+	});
+});
+
 describe('instant buckets and comparison alignment', () => {
 	const london = 'Europe/London';
 	const range = (start: string, end: string): DateRange => ({

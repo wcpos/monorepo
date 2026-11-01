@@ -5,6 +5,7 @@ import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
+import { saleMomentOf } from '@wcpos/query/query-state';
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -61,7 +62,7 @@ export function DetailPanel() {
 	const { unselectedRowIds } = useReportsSelection();
 	const includedOrders = allOrders
 		.filter(included)
-		.sort((a, b) => (b.date_created_gmt ?? '').localeCompare(a.date_created_gmt ?? ''));
+		.sort((a, b) => (saleMomentOf(b) ?? '').localeCompare(saleMomentOf(a) ?? ''));
 	const leftOut = includedOrders.filter((order) => unselectedRowIds[order.uuid]).length;
 	const { dateRange, storeId, timezone } = useReportsPeriod(),
 		formats = useReportFormats(storeId);
@@ -148,10 +149,12 @@ export function DetailPanel() {
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,
-		orderTime: (order) =>
-			order.date_created_gmt
-				? formatDate(inZone(timezone, convertUTCStringToLocalDate(order.date_created_gmt)), 'HH:mm')
-				: t('common.unknown'),
+		orderTime: (order) => {
+			const moment = saleMomentOf(order);
+			return moment
+				? formatDate(inZone(timezone, convertUTCStringToLocalDate(moment)), 'HH:mm')
+				: t('common.unknown');
+		},
 		totals,
 		formats,
 		t,

@@ -10,6 +10,8 @@ import { format } from 'date-fns/format';
 import { isSameDay } from 'date-fns/isSameDay';
 import { subMonths } from 'date-fns/subMonths';
 
+import { saleMomentOf } from '@wcpos/query/query-state';
+
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
 
@@ -17,6 +19,12 @@ import type { Locale } from 'date-fns/locale';
 import type { DateRange, OrderPayload } from '../context';
 
 const dateFns = { endOfDay, startOfDay };
+
+/** The chart measures the same moment the hero does: when the money moved. */
+const saleDate = (order: OrderPayload) => {
+	const moment = saleMomentOf(order);
+	return moment ? convertUTCStringToLocalDate(moment) : null;
+};
 
 export type Interval = 'months' | 'days' | 'minutes';
 
@@ -83,8 +91,8 @@ export const getOrderTimeBounds = (
 	let latest: Date | null = null;
 
 	for (const order of orders) {
-		if (!order.date_created_gmt) continue;
-		const date = convertUTCStringToLocalDate(order.date_created_gmt);
+		const date = saleDate(order);
+		if (!date) continue;
 		if (!earliest || date < earliest) earliest = date;
 		if (!latest || date > latest) latest = date;
 	}
@@ -237,7 +245,7 @@ export const aggregateData = (
 	period?: 'day' | 'week' | 'month'
 ): AggregatedDataPoint[] => {
 	const valid = orders.filter((order) => {
-		const time = order.date_created_gmt && +convertUTCStringToLocalDate(order.date_created_gmt);
+		const time = saleDate(order)?.getTime();
 		return (
 			typeof time === 'number' &&
 			time >= +dateFns.startOfDay(dateRange.start, zoneOptions(zone)) &&
@@ -246,10 +254,11 @@ export const aggregateData = (
 	});
 	const offset = +dateRange.start - +(comparison?.range.start ?? dateRange.start);
 	const shifted = (comparison?.orders ?? []).flatMap((order) => {
-		const time =
-			order.date_created_gmt && +convertUTCStringToLocalDate(order.date_created_gmt) + offset;
+		const date = saleDate(order);
+		const time = date && +date + offset;
+		// date_paid_gmt wins in saleMomentOf, so the shifted copy's moment is the shifted instant.
 		return typeof time === 'number' && time >= +dateRange.start && time <= +dateRange.end
-			? [{ ...order, date_created_gmt: new Date(time).toISOString() }]
+			? [{ ...order, date_paid_gmt: new Date(time).toISOString() }]
 			: [];
 	});
 	const daily = isSameDay(dateRange.start, dateRange.end, zoneOptions(zone));
@@ -285,8 +294,9 @@ export const aggregateData = (
 function sumBuckets(orders: OrderPayload[], starts: (number | null)[], ends: number[]) {
 	const values = starts.map(() => ({ total: 0, order_count: 0 }));
 	for (const order of orders) {
-		if (!order.date_created_gmt) continue;
-		const time = +convertUTCStringToLocalDate(order.date_created_gmt);
+		const date = saleDate(order);
+		if (!date) continue;
+		const time = +date;
 		for (let i = starts.length - 1; i >= 0; i--) {
 			const start = starts[i];
 			if (start !== null && time >= start && time < ends[i]) {
