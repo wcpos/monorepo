@@ -130,6 +130,9 @@ const mockOrder = {
 		date_paid_gmt: null,
 		transaction_id: '',
 	},
+	getLatest() {
+		return this;
+	},
 };
 
 const cellProps = {
@@ -283,6 +286,8 @@ describe('Orders list action reports', () => {
 				},
 			},
 		} as unknown as typeof cellProps;
+		const paidRecord = paidProps.row.original.record;
+		expect(paidRecord.getLatest()).toBe(paidRecord);
 		const { getByTestId } = render(<Actions {...paidProps} />);
 
 		expect(getByTestId('order-reopen-menu-item')).toBeTruthy();
@@ -298,6 +303,32 @@ describe('Orders list action reports', () => {
 			toast: { title: 'orders.reopen_paid_refund_instead', type: 'warning' },
 			context: { orderId: 'order-1' },
 		});
+	});
+
+	it('refuses re-open when the row snapshot is unpaid but the latest resident is paid', async () => {
+		const paidResident = {
+			...mockOrder,
+			payload: { ...mockOrder.payload, date_paid_gmt: '2026-11-01T10:00:00' },
+		};
+		const staleRow = {
+			...cellProps,
+			row: {
+				...cellProps.row,
+				original: { record: { ...mockOrder, getLatest: () => paidResident } },
+			},
+		} as unknown as typeof cellProps;
+		render(<Actions {...staleRow} />);
+
+		await act(async () => {
+			await mockHandlers.get('order-reopen-menu-item')!();
+		});
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPush).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(
+			'Refused to re-open paid order',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 
 	it('toasts a failed refresh without a second row (the engine logged the require)', async () => {

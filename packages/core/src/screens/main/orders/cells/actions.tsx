@@ -103,7 +103,8 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 	 * - navigate to POS screen
 	 */
 	const handleOpen = React.useCallback(async () => {
-		const { date_paid_gmt, transaction_id } = order.payload;
+		// The row can hold a deferred snapshot; the payment check reads the resident the patch would write.
+		const { date_paid_gmt, transaction_id } = order.getLatest().payload;
 		if (
 			(typeof date_paid_gmt === 'string' && date_paid_gmt.length > 0) ||
 			(typeof transaction_id === 'string' && transaction_id.length > 0)
