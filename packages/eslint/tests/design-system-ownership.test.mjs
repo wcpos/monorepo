@@ -439,7 +439,7 @@ test('allows only the highlighted-row class pair, not generic tint boxes', async
 	assert.equal(restrictedSyntax(messages, NOTICE).length, 2);
 });
 
-const FIELD_SEGMENTS = "A field's SegmentedControl is FormSegmentedControl";
+const FIELD_CONTROL = 'the form draws the one label';
 
 test('rejects a bare SegmentedControl in a FormField render under the core and main configs', async () => {
 	// Walk 1 (2026-10-29): the hand-rolled field drew its label as body text beside muted form keys.
@@ -454,7 +454,7 @@ test('rejects a bare SegmentedControl in a FormField render under the core and m
 			base,
 			cwd
 		);
-		assert.equal(restrictedSyntax(messages, FIELD_SEGMENTS).length, 1);
+		assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 1);
 	}
 });
 
@@ -462,5 +462,23 @@ test('allows FormSegmentedControl in a FormField, and a SegmentedControl outside
 	const messages = await variantOwnership(
 		`export const Fine = () => <><FormField name="mode" render={({ field }) => <FormSegmentedControl label="Mode" segments={[]} {...field} />} /><SegmentedControl value="a" segments={[]} /></>;`
 	);
-	assert.equal(restrictedSyntax(messages, FIELD_SEGMENTS).length, 0);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 0);
+});
+
+test('rejects a bare Select in a FormField render', async () => {
+	const messages = await variantOwnership(
+		`export const Bad = () => <FormField name="type" render={({ field }) => <Select {...field} />} />;`
+	);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 1);
+});
+
+test('allows FormSelect and an accessible bare Select supplied as its customComponent', async () => {
+	const messages = await variantOwnership(`
+		const CustomSelect = (props) => <Select {...props} aria-labelledby="type-label" />;
+		export const Fine = () => <>
+			<FormField name="type" render={({ field }) => <FormSelect label="Type" {...field} />} />
+			<FormField name="custom" render={({ field }) => <FormSelect label="Type" customComponent={CustomSelect} {...field} />} />
+		</>;
+	`);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 0);
 });
