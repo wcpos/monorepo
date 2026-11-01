@@ -7,14 +7,14 @@ import {
 import { DATABASE_GENERATION } from './database-generation';
 
 /**
- * WCPOS 1.9.x used the v4/v5 databases. Bump the current generation for
- * cold resync on schema resets; never purge the platform's current names.
+ * 2.0 schema reset (2026-11-01): purge earlier generations after readiness;
+ * never purge the current generation, shared by every platform.
  */
 const USER_DATABASE_NAME = `wcposusers_${DATABASE_GENERATION}`;
 const STORE_DATABASE_PREFIX = `store_${DATABASE_GENERATION}_`;
 const FAST_STORE_DATABASE_PREFIX = `fast_store_${DATABASE_GENERATION}_`;
 
-const legacyEngineGenerations = ['v6', 'v7', 'v8'].filter(
+const legacyEngineGenerations = ['v6', 'v7', 'v8', 'v9'].filter(
 	(generation) => generation !== String(DATABASE_GENERATION)
 );
 

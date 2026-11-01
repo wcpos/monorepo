@@ -1,6 +1,6 @@
 export const taxRatesLiteral = {
 	title: 'WooCommerce Tax Rate schema',
-	version: 1,
+	version: 0,
 	description: 'WooCommerce Tax Rate schema',
 	type: 'object',
 	primaryKey: 'uuid',

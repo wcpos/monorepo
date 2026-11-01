@@ -6,8 +6,14 @@ const indexedDbNames = [
 	'store_v7_shop',
 	'fast_store_v7_shop',
 	'wcposusers_v8',
+	'wcposusers_v9',
+	'wcposusers_v10',
 	'store_v8_shop',
+	'store_v9_shop',
+	'store_v10_shop',
 	'fast_store_v8_shop',
+	'fast_store_v9_shop',
+	'fast_store_v10_shop',
 	'unrelated',
 ];
 const opfsNames = [
@@ -18,8 +24,14 @@ const opfsNames = [
 	'rxdb-store_v7_shop-products-0',
 	'rxdb-fast_store_v7_shop-orders-0',
 	'rxdb-wcposusers_v8-sites-0',
+	'rxdb-wcposusers_v9-sites-0',
+	'rxdb-wcposusers_v10-sites-0',
 	'rxdb-store_v8_shop-products-0',
+	'rxdb-store_v9_shop-products-0',
+	'rxdb-store_v10_shop-products-0',
 	'rxdb-fast_store_v8_shop-orders-0',
+	'rxdb-fast_store_v9_shop-orders-0',
+	'rxdb-fast_store_v10_shop-orders-0',
 	'unrelated',
 ];
 
@@ -108,8 +120,8 @@ describe('purgeLegacyDatabases web', () => {
 
 		await expect(purgeLegacyDatabases()).resolves.toEqual({
 			success: true,
-			message: 'Successfully purged 12 legacy database entries',
-			databasesDeleted: 12,
+			message: 'Successfully purged 24 legacy database entries',
+			databasesDeleted: 24,
 		});
 		expect(mockDeleteDatabase.mock.calls.map(([name]) => name)).toEqual([
 			'wcposusers_v4',
@@ -118,6 +130,12 @@ describe('purgeLegacyDatabases web', () => {
 			'wcposusers_v7',
 			'store_v7_shop',
 			'fast_store_v7_shop',
+			'wcposusers_v8',
+			'wcposusers_v9',
+			'store_v8_shop',
+			'store_v9_shop',
+			'fast_store_v8_shop',
+			'fast_store_v9_shop',
 		]);
 		expect(mockRemoveEntry.mock.calls).toEqual([
 			['rxdb-wcposusers_v4-sites-0', { recursive: true }],
@@ -126,6 +144,12 @@ describe('purgeLegacyDatabases web', () => {
 			['rxdb-wcposusers_v7-sites-0', { recursive: true }],
 			['rxdb-store_v7_shop-products-0', { recursive: true }],
 			['rxdb-fast_store_v7_shop-orders-0', { recursive: true }],
+			['rxdb-wcposusers_v8-sites-0', { recursive: true }],
+			['rxdb-wcposusers_v9-sites-0', { recursive: true }],
+			['rxdb-store_v8_shop-products-0', { recursive: true }],
+			['rxdb-store_v9_shop-products-0', { recursive: true }],
+			['rxdb-fast_store_v8_shop-orders-0', { recursive: true }],
+			['rxdb-fast_store_v9_shop-orders-0', { recursive: true }],
 		]);
 	});
 });

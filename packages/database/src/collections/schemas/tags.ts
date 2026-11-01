@@ -1,6 +1,6 @@
 export const tagsLiteral = {
 	title: 'WooCommerce Product Tag schema',
-	version: 1,
+	version: 0,
 	description: 'WooCommerce Product Tag schema',
 	type: 'object',
 	primaryKey: 'uuid',

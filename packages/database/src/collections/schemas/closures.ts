@@ -6,7 +6,7 @@ const money = { type: 'string' } as const;
 const tenders = { type: 'object', additionalProperties: money } as const;
 export const closuresLiteral = {
 	title: 'Register closures',
-	version: 2,
+	version: 0,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {

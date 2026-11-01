@@ -1,6 +1,6 @@
 export const logsLiteral = {
 	title: 'Log schema',
-	version: 3,
+	version: 0,
 	description: 'Logs events for debugging and user record',
 	type: 'object',
 	primaryKey: 'logId',
