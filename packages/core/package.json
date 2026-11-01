@@ -69,7 +69,7 @@
 		"clean": "shx rm -rf dist && rm -rf node_modules",
 		"test": "jest",
 		"clear-jest": "jest --clearCache",
-		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+		"lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint src --ext .js,.jsx,.ts,.tsx",
 		"lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
 		"typecheck": "tsc --noEmit"
 	},

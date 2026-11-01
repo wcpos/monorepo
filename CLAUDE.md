@@ -131,7 +131,7 @@ This repo has two permanent trunks:
 
 Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
 
-### Web bundle ref per lane (jsDelivr)
+### Web bundle ref per lane (cdn.wcpos.com, jsDelivr as fallback)
 
 The plugin's loader asks `https://cdn.wcpos.com/manifest?ref=<lane>&…` for a signed build descriptor and loads the page from `https://cdn.wcpos.com/b/<build_id>/build/` (monorepo #2623, 2026-10-17). jsDelivr `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<ref>/build/` is the **fallback** only, used when the manifest service fails. A publish is live only when the manifest answers with the new `build_id`: check `curl -s 'https://cdn.wcpos.com/manifest?ref=next&plugin=2.0.0&worker=17.6.0&pro=2.0.0&site=<uuid>'`, never the green run. A run whose job list lacks "☁️ Publish to cdn.wcpos.com" moved web-bundle but deployed nothing (2026-10-21: four `--ref main` dispatches left dev-next on a three-day-old build). There is exactly **one ref per lane, named after the lane** (owner ruling, 2026-09-04):
 
