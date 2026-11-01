@@ -5,6 +5,9 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
+import { Query } from 'mingo';
+
+import { compileQuery } from '@wcpos/query/query-state';
 
 import {
 	ReportsComparison,
@@ -363,7 +366,124 @@ describe('the readers suspend on unanswered handles', () => {
 	});
 });
 
-// Removing the device status set would include pending/cancelled orders in the default figure.
+// Everyone has no cashier filter; completed/processing still excludes session partials.
+it.each([
+	['completed', '2026-10-18T10:00:00', '2026-10-17T09:00:00', true],
+	['completed', null, '2026-10-17T09:00:00', true],
+	['pos-partial', '2026-10-18T10:00:00', '2026-10-17T09:00:00', false],
+	['pending', null, '2026-10-18T09:00:00', true],
+	['pending', null, '2026-10-17T09:00:00', false],
+])('Today uses the paid day (%s, paid %s, created %s)', (status, paid, created, included) => {
+	const dateRange = { from: '2026-10-18T00:00:00', to: '2026-10-18T23:59:59' };
+	const payments =
+		status === 'pending'
+			? []
+			: [
+					{
+						id: 'cash',
+						status: 'captured',
+						session_id: 'open-session',
+						captured_at_gmt: '2026-10-18T10:00:00',
+					},
+				];
+	const record = {
+		uuid: 'local-sale',
+		dateCreatedGmt: created,
+		payload: {
+			status,
+			total: '579',
+			date_created_gmt: created,
+			date_paid_gmt: paid,
+			meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments } }],
+		},
+	};
+	const { read } = compileQuery(
+		'orders',
+		{
+			search: '',
+			filters: { dateRange },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		},
+		{ id: 'reports', storeScope: 'sales' }
+	);
+	const hits = [record].filter((row) => new Query(read.prefilter).test(row) && read.residual(row));
+	render(
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={Number.MAX_SAFE_INTEGER}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			initialFilters={{ dateRange }}
+		>
+			<Provider handle={handleOf(hits.map((record) => ({ record })))}>
+				<Probe />
+			</Provider>
+		</QueryStateProvider>
+	);
+	expect(screen.getByTestId('selected-orders').textContent).toBe(
+		status === 'completed' ? 'local-sale' : ''
+	);
+	fireEvent.click(screen.getByTestId('all-statuses'));
+	expect(screen.getByTestId('selected-orders').textContent).toBe(included ? 'local-sale' : '');
+});
+
+// The comparison must cut off by payment clock time, not the earlier cart's clock time.
+it('cuts yesterday off at the paid moment, including the newest captured-row fallback', () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-10-18T12:00:00Z'));
+	const comparison = handleOf(
+		['before', 'after', 'ledger'].map((uuid) => ({
+			record: {
+				uuid,
+				payload: {
+					status: 'completed',
+					date_created_gmt: '2026-10-17T09:00:00Z',
+					date_paid_gmt:
+						uuid === 'ledger' ? null : `2026-10-17T${uuid === 'before' ? '11' : '13'}:00:00Z`,
+					meta_data: [
+						{
+							key: '_wcpos_payments',
+							value: {
+								schema: 1,
+								payments: [
+									{ id: 'new', status: 'captured', captured_at_gmt: '2026-10-17T13:00:00Z' },
+									{ id: 'old', status: 'captured', captured_at_gmt: '2026-10-17T10:00:00Z' },
+								],
+							},
+						},
+					],
+				},
+			},
+		}))
+	);
+	function Comparison() {
+		return (
+			<span data-testid="paid-comparison">
+				{useReportsData()
+					.comparisonOrders.map((o) => o.uuid)
+					.join(',')}
+			</span>
+		);
+	}
+	try {
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ dateRange: { from: '2026-10-18T00:00:00Z', to: '2026-10-18T23:59:59Z' } }}
+			>
+				<Provider handle={handleOf([])} comparisonHandle={comparison}>
+					<ReportsComparison>
+						<Comparison />
+					</ReportsComparison>
+				</Provider>
+			</QueryStateProvider>
+		);
+		expect(screen.getByTestId('paid-comparison').textContent).toBe('before');
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
 it('counts completed and processing, never pending or cancelled by default', () => {
 	const statusHandle = handleOf(
 		[

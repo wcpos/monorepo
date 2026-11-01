@@ -154,6 +154,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: online ? 'online-website-available' : 'offline' }),
 }));
 beforeEach(() => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T06:00:00Z'));
 	jest.clearAllMocks();
 	data = initialData();
 	size = 'lg';
@@ -165,6 +166,20 @@ beforeEach(() => {
 		})
 	);
 });
+afterEach(() => jest.useRealTimers());
+
+it.each([
+	['2026-09-17T14:00:00Z', 'Thu 23:00'],
+	['2026-09-17T16:00:00Z', '01:00'],
+])(
+	'dates the opening only when it precedes the current Tokyo store day (%s)',
+	(opened, expected) => {
+		jest.setSystemTime(new Date('2026-09-17T17:00:00Z'));
+		data.session!.opened_at_gmt = opened;
+		render(<TillStrip />);
+		expect(screen.getByTestId('till-since').textContent).toBe(`since ${expected} · Dylan`);
+	}
+);
 // Removing terms, date-zone formatting, or the protected equals group breaks the equation.
 it('shows four desktop terms with the expected result kept beside equals', () => {
 	render(<TillStrip onOpenClosures={jest.fn()} />);

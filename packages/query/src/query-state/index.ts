@@ -27,7 +27,7 @@ export type {
 	QueryStateOf,
 	QueryStateActions,
 } from './query-state-types';
-export { compileQuery, normalizeQuerySortField } from './query-state-translator';
+export { compileQuery, normalizeQuerySortField, saleMomentOf } from './query-state-translator';
 export { parseRemoteId } from './parse-remote-id';
 export { acquireSearchSelectHandle, SEARCH_SELECT_COLLECTIONS } from './search-select';
 export type { SearchSelectCollection } from './search-select';

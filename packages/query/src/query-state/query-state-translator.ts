@@ -3,6 +3,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
+import { readLedger } from '@wcpos/order-math';
 import {
 	identityColumnFilter,
 	isGatewayId,
@@ -28,6 +29,23 @@ import { parseRemoteId } from './parse-remote-id';
 
 import type { CompiledQueryRead, CompiledSortPart } from '../engine-adapter/execute-query';
 import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
+import type { PayloadOf } from '../records/engine-record';
+
+/** Sales follow captured money; an unpaid order keeps its creation day. */
+export function saleMomentOf(order: Partial<PayloadOf<'orders'>>) {
+	if (order.date_paid_gmt) return order.date_paid_gmt;
+	const captured = readLedger(order.meta_data).filter(
+		(row) => row.status === 'captured' && row.captured_at_gmt
+	);
+	const latest = captured.reduce<string | null>(
+		(latest, row) =>
+			!latest || orderRangeBoundSeconds(row.captured_at_gmt)! > orderRangeBoundSeconds(latest)!
+				? row.captured_at_gmt
+				: latest,
+		null
+	);
+	return latest || order.date_created_gmt;
+}
 
 type Operator =
 	| 'taxonomy-many'
@@ -35,6 +53,7 @@ type Operator =
 	| 'metadata'
 	| 'store'
 	| 'date-range'
+	| 'sale-date-range'
 	| 'numeric-range'
 	| 'all-match'
 	| 'payment-method';
@@ -205,6 +224,22 @@ function compileReadFilter(
 } {
 	const { mapping, operator } = entryValue;
 	const actual = (document: EngineDocument) => mappedValue(mapping, document);
+	if (operator === 'sale-date-range') {
+		const range = value as { from: string; to: string };
+		return {
+			// No creation-date prefilter: a locally held cart may have been paid on a later day.
+			matches: (document) => {
+				const moment = orderRangeBoundSeconds(
+					saleMomentOf(document.payload as PayloadOf<'orders'>)
+				);
+				return (
+					moment !== undefined &&
+					moment >= orderRangeBoundSeconds(range.from)! &&
+					moment <= orderRangeBoundSeconds(range.to)!
+				);
+			},
+		};
+	}
 	if (operator === 'numeric-range') {
 		const range = value as { min?: number; max?: number };
 		const min = Number.isFinite(range.min) ? range.min : undefined;
@@ -419,8 +454,16 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		collection === 'orders' &&
 		options.storeScope === 'sales' &&
 		!active.some(({ field }) => field === 'register');
-	const readFilters = active.map(({ translator, value }) =>
-		compileReadFilter(translator, value, salesStoreScope)
+	// Reports count a sale on the day the money moved; the Orders screen keeps creation dates.
+	const salesRead = collection === 'orders' && options.storeScope === 'sales';
+	const readFilters = active.map(({ field, translator, value }) =>
+		compileReadFilter(
+			salesRead && field === 'dateRange'
+				? { ...translator, operator: 'sale-date-range' }
+				: translator,
+			value,
+			salesStoreScope
+		)
 	);
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');

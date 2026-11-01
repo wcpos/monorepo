@@ -246,7 +246,10 @@ export function TillStrip({
 	const since =
 		open && liveSession
 			? t('reports.since_by', {
-					time: date(liveSession.opened_at_gmt, 'HH:mm'),
+					time: date(
+						liveSession.opened_at_gmt,
+						date(liveSession.opened_at_gmt, 'yyyy-MM-dd') < today ? 'EEE HH:mm' : 'HH:mm'
+					),
 					name:
 						cashiers.find((row) => row.id === liveSession.opened_by)?.display_name ??
 						t('register.unknown_cashier'),

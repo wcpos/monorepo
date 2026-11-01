@@ -13,6 +13,7 @@ import { useObservableState } from 'observable-hooks';
 import { startWith } from 'rxjs';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
+import { saleMomentOf } from '@wcpos/query/query-state';
 import type { EngineRecord } from '@wcpos/query';
 import { observeLocalRecordsById, useDocField, useQueryRuntime } from '@wcpos/query';
 
@@ -336,11 +337,10 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 		period === 'day' &&
 		isSameDay(data.dateRange.start, presets().today.from, zoneOptions(timezone));
 	const comparisonOrders = live
-		? wholeComparisonOrders.filter(
-				(order) =>
-					order.date_created_gmt &&
-					clock(convertUTCStringToLocalDate(order.date_created_gmt)) <= now
-			)
+		? wholeComparisonOrders.filter((order) => {
+				const moment = saleMomentOf(order);
+				return moment && clock(convertUTCStringToLocalDate(moment)) <= now;
+			})
 		: wholeComparisonOrders;
 	return (
 		<ReportsDataContext.Provider value={{ ...data, live, comparisonOrders, wholeComparisonOrders }}>

@@ -52,7 +52,9 @@ type Inputs = {
 	taxes: ReturnType<typeof taxesByRate>;
 	orders: ReportOrder[];
 	unselectedRowIds?: Record<string, boolean>;
-	orderTime?: (order: Pick<ReportOrder, 'date_created_gmt'>) => string;
+	orderTime?: (
+		order: Pick<ReportOrder, 'date_created_gmt' | 'date_paid_gmt' | 'meta_data'>
+	) => string;
 	totals: ReturnType<typeof calculateTotals>;
 	cashierNames: Record<string, string>;
 	formats: Pick<ReturnType<typeof useReportFormats>, 'money' | 'number' | 'quantity' | 'percent'>;
