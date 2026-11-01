@@ -3,6 +3,7 @@ import { Directory, Paths } from 'expo-file-system';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { NATIVE_SQLITE_ROOT } from './adapters/storage/sqlite-root';
 import { isLegacyAppDatabaseName } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'purge-legacy']);
@@ -16,10 +17,10 @@ export interface PurgeLegacyDBResult {
 	databasesDeleted: number;
 }
 
-const deleteLegacySQLiteDatabases = () => {
-	dbLogger.debug(`Checking SQLite database directory: ${LEGACY_SQLITE_DIRECTORY.uri}`);
+const deleteLegacySQLiteDatabases = (directory: Directory) => {
+	dbLogger.debug(`Checking SQLite database directory: ${directory.uri}`);
 
-	if (!LEGACY_SQLITE_DIRECTORY.exists) {
+	if (!directory.exists) {
 		dbLogger.debug('SQLite database directory does not exist');
 		return 0;
 	}
@@ -28,9 +29,9 @@ const deleteLegacySQLiteDatabases = () => {
 	// so name what goes: legacy WCPOS databases and their sidecars. Removing the
 	// directory wholesale also took anything else living there, and reported a
 	// flat 1 — which the cashier reads as "purged 1 legacy database entries".
-	const legacyEntries = LEGACY_SQLITE_DIRECTORY.list().filter((entry) =>
-		isLegacyAppDatabaseName(entry.name)
-	);
+	// The live root (`Documents/wcpos-sqlite`) gets the same by-name pass: since the
+	// 2.0 schema reset a retired generation (`v8`/`v9`) lives beside the current one.
+	const legacyEntries = directory.list().filter((entry) => isLegacyAppDatabaseName(entry.name));
 
 	for (const entry of legacyEntries) {
 		dbLogger.debug(`Deleting legacy SQLite database entry: ${entry.name}`);
@@ -62,7 +63,9 @@ const deleteLegacyFilesystemDatabases = () => {
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 	try {
 		dbLogger.debug('Starting to purge legacy application databases');
-		const deletedSQLiteDatabases = deleteLegacySQLiteDatabases();
+		const deletedSQLiteDatabases =
+			deleteLegacySQLiteDatabases(LEGACY_SQLITE_DIRECTORY) +
+			deleteLegacySQLiteDatabases(NATIVE_SQLITE_ROOT);
 		const deletedFilesystemDatabases = deleteLegacyFilesystemDatabases();
 		const databasesDeleted = deletedSQLiteDatabases + deletedFilesystemDatabases;
 		const message =
