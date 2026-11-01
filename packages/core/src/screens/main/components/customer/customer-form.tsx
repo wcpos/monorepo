@@ -132,6 +132,8 @@ export function CustomerForm(props: CustomerFormProps) {
 				label={label}
 				autoFocus={focus === id}
 				secureTextEntry={id === 'password'}
+				// A create form submits whole, so its footer must see the typed value at once.
+				commitOnBlur={id === 'password' && editing}
 				testID={`customer-${id.replace('_', '-')}-input`}
 			/>
 		);

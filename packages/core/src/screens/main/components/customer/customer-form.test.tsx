@@ -18,6 +18,8 @@ jest.mock('@wcpos/components/form', () => ({
 		testID,
 		value,
 		onChange,
+		onBlur,
+		onSubmitEditing,
 		placeholder,
 		secureTextEntry,
 		autoComplete,
@@ -25,6 +27,8 @@ jest.mock('@wcpos/components/form', () => ({
 		testID?: string;
 		value: string;
 		onChange: (value: string) => void;
+		onBlur?: () => void;
+		onSubmitEditing?: () => void;
 		placeholder?: string;
 		secureTextEntry?: boolean;
 		autoComplete?: string;
@@ -36,6 +40,8 @@ jest.mock('@wcpos/components/form', () => ({
 			placeholder={placeholder}
 			value={value}
 			onChange={(event) => onChange(event.target.value)}
+			onBlur={onBlur}
+			onKeyDown={(event) => event.key === 'Enter' && onSubmitEditing?.()}
 		/>
 	),
 	FormMessage: () => null,
@@ -182,6 +188,51 @@ describe('CustomerForm', () => {
 		fireEvent.click(screen.getByTestId('customer-add-password'));
 		expect(screen.getByTestId('customer-password-input').getAttribute('type')).toBe('password');
 		expect(adds()).not.toContain('customer-add-password');
+	});
+
+	it('keeps password typing out of the form change path until blur', () => {
+		render(<Harness values={{ id: 7, password: '' }} />);
+		fireEvent.click(screen.getByTestId('customer-add-password'));
+		const input = screen.getByTestId<HTMLInputElement>('customer-password-input');
+		const onChange = jest.fn();
+		const subscription = harness.form!.watch(onChange);
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: 'half' } });
+		fireEvent.change(input, { target: { value: 'half-finished-password' } });
+		expect(input.value).toBe('half-finished-password');
+		expect(value('password')).toBe('');
+		expect(onChange).not.toHaveBeenCalled();
+		subscription.unsubscribe();
+		fireEvent.change(screen.getByTestId('customer-first-name-input'), { target: { value: 'Ada' } });
+		expect(value('first_name')).toBe('Ada');
+	});
+
+	it.each(['blur', 'Enter'])('commits the full password once on %s', (event) => {
+		render(<Harness values={{ id: 7, password: '' }} />);
+		fireEvent.click(screen.getByTestId('customer-add-password'));
+		const input = screen.getByTestId<HTMLInputElement>('customer-password-input');
+		const onChange = jest.fn();
+		const subscription = harness.form!.watch((values) => onChange(values.password));
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: 'half' } });
+		fireEvent.change(input, { target: { value: 'half-finished-password' } });
+		if (event === 'blur') fireEvent.blur(input);
+		else fireEvent.keyDown(input, { key: 'Enter' });
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(onChange).toHaveBeenCalledWith('half-finished-password');
+		expect(value('password')).toBe('half-finished-password');
+		subscription.unsubscribe();
+	});
+
+	it('replaces the password draft when the form value is reset externally', () => {
+		render(<Harness values={{ id: 7, password: 'original' }} />);
+		const input = screen.getByTestId<HTMLInputElement>('customer-password-input');
+		fireEvent.focus(input);
+		fireEvent.change(input, { target: { value: 'unfinished' } });
+		act(() => harness.form!.reset({ password: 'reset-password' }));
+		expect(input.value).toBe('reset-password');
+		fireEvent.blur(input);
+		expect(value('password')).toBe('reset-password');
 	});
 
 	it('Remove on Company clears billing.company and returns its add button', () => {
