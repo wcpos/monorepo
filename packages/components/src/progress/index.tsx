@@ -100,7 +100,7 @@ type IndicatorProps = {
 };
 
 function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
-	const [svProgress, setSvProgress] = React.useState<number | undefined>(sharedValue?.value);
+	const [svProgress, setSvProgress] = React.useState<number | undefined>(() => sharedValue?.value);
 
 	useAnimatedReaction(
 		() => sharedValue?.value,

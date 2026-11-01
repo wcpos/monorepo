@@ -31,7 +31,7 @@ export function Splash() {
 		if (progress.value > 0) {
 			scheduleOnRN(hideSplash);
 		}
-	}, [progress.value, hideSplash]);
+	}, [progress, hideSplash]);
 
 	return (
 		<View className="bg-splash absolute inset-0 flex items-center justify-center">

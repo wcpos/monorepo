@@ -13,6 +13,7 @@ const mockDerived: { value: unknown; factory: () => unknown }[] = [];
 const mockTiming = jest.fn((toValue: number, config: unknown) => ({ toValue, config }));
 const mockRepeat = jest.fn((...args: unknown[]) => ({ args }));
 const mockCancel = jest.fn();
+const mockReaction = jest.fn();
 const mockRootProps: Record<string, unknown>[] = [];
 
 jest.mock('react-native', () => ({
@@ -41,7 +42,10 @@ jest.mock('@rn-primitives/progress', () => ({
 	},
 	Indicator: ({ className }: ViewProps) => <div data-testid="indicator" className={className} />,
 }));
-jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
+jest.mock('react-native-worklets', () => ({
+	scheduleOnRN: (callback: (value: number | undefined) => void, value: number | undefined) =>
+		callback(value),
+}));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
@@ -54,7 +58,7 @@ jest.mock('react-native-reanimated', () => ({
 	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => 'standard-easing' },
 	ReduceMotion: { Never: 'never' },
-	useAnimatedReaction: jest.fn(),
+	useAnimatedReaction: mockReaction,
 	useAnimatedStyle: (factory: () => object) => {
 		mockStyles.push(factory);
 		return factory();
@@ -80,6 +84,9 @@ import { TONE } from '../lib/tone';
 // eslint-disable-next-line import/first
 import { Progress } from './index';
 
+// eslint-disable-next-line import/first
+import type { SharedValue } from 'react-native-reanimated';
+
 beforeEach(() => {
 	mockPlatform.OS = 'web';
 	mockLayouts.length = 0;
@@ -96,6 +103,22 @@ it('renders the determinate muted track and indicator at the value', () => {
 	expect(getByTestId('indicator').parentElement).toHaveStyle({ transform: 'translateX(-40%)' });
 	expect(getByTestId('indicator')).toHaveClass('bg-success');
 	expect(getByTestId('indicator').parentElement).not.toHaveClass('bg-success');
+});
+
+it('reads the web shared value only on mount, not on reaction-driven renders', () => {
+	let reads = 0;
+	const sharedValue = {
+		get value() {
+			reads += 1;
+			return 20;
+		},
+	} as SharedValue<number>;
+	const { getByTestId } = render(<Progress sharedValue={sharedValue} />);
+	expect(getByTestId('indicator').parentElement).toHaveStyle({ transform: 'translateX(-80%)' });
+	expect(reads).toBe(1);
+	act(() => mockReaction.mock.calls[0][1](60, 20));
+	expect(getByTestId('indicator').parentElement).toHaveStyle({ transform: 'translateX(-40%)' });
+	expect(reads).toBe(1);
 });
 
 it.each(['ok', 'muted'] as const)('fills with a fixed tone from the tone map (%s)', (tone) => {
