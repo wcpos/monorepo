@@ -418,8 +418,9 @@ export const designSystemOwnershipSelectors = [
 		// A field's label is the form's (walk 1, 2026-10-29): a bare SegmentedControl in a
 		// FormField's render came with a hand-rolled body-text label above it.
 		selector:
-			'JSXOpeningElement:matches([name.name="FormField"],[name.property.name="FormField"]) > JSXAttribute[name.name="render"] JSXOpeningElement:matches([name.name="SegmentedControl"],[name.property.name="SegmentedControl"])',
-		message: "A field's SegmentedControl is FormSegmentedControl: the form draws the one label.",
+			'JSXOpeningElement:matches([name.name="FormField"],[name.property.name="FormField"]) > JSXAttribute[name.name="render"] JSXOpeningElement:matches([name.name=/^(Input|Select|Textarea|Combobox|TreeCombobox|Switch|Checkbox|SegmentedControl)$/],[name.property.name=/^(Input|Select|Textarea|Combobox|TreeCombobox|Switch|Checkbox|SegmentedControl)$/])',
+		message:
+			"A field's control is its Form* wrapper: the form draws the one label (use FormInput, FormSelect, …).",
 	},
 	{
 		// `>` (direct child) deliberately limits this to the STATIC form,
