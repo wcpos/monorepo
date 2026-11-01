@@ -8,7 +8,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout } from './checkout-mode';
 import { Checkout } from './checkout';
-import { handSheetToColumns, STANDALONE_CHECKOUT_PARAM } from './till-route';
+import { columnsCheckoutHref, leaveSheet, STANDALONE_CHECKOUT_PARAM } from './till-route';
 
 export function CheckoutScreen() {
 	const router = useRouter();
@@ -30,7 +30,7 @@ export function CheckoutScreen() {
 		React.useCallback(() => {
 			if (!redirectToColumns) return;
 			enterCheckout(orderId);
-			handSheetToColumns(router, orderId);
+			leaveSheet(router, columnsCheckoutHref(orderId));
 		}, [redirectToColumns, orderId, router])
 	);
 	if (redirectToColumns) return null;

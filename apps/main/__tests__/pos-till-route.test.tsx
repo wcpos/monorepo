@@ -5,7 +5,8 @@ import { Redirect, router, Slot, Stack, Tabs } from 'expo-router';
 import { act, renderRouter } from 'expo-router/testing-library';
 
 import {
-	handSheetToColumns,
+	columnsCheckoutHref,
+	leaveSheet,
 	returnToTill,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
 
@@ -158,12 +159,7 @@ describe('checkout returns to the wide till', () => {
 describe('a wide checkout sheet hands off to the columns cart', () => {
 	it('control: replacing the sheet with columns checkout leaves two POS routes', async () => {
 		const { view } = await renderCheckout(true);
-		await act(async () =>
-			router.replace({
-				pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-				params: { orderId: ['o1', 'checkout'] },
-			})
-		);
+		await act(async () => router.replace(columnsCheckoutHref('o1')));
 		expect(posStack(view)?.routes).toHaveLength(2);
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
 			'(columns)/cart/[...orderId]',
@@ -174,14 +170,14 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 	it('with the wide till beneath, pops to the original route', async () => {
 		const { view } = await renderCheckout(true);
 		const originalRoute = posStack(view)?.routes[0];
-		await act(async () => handSheetToColumns(router, 'o1'));
+		await act(async () => leaveSheet(router, columnsCheckoutHref('o1')));
 		expect(posStack(view)?.routes).toEqual([originalRoute]);
 		expect(view.getPathname()).toBe('/cart/o1');
 	});
 
 	it('with the phone tabs beneath, leaves only the tabs route', async () => {
 		const { view } = await renderCheckout(false);
-		await act(async () => handSheetToColumns(router, 'o1'));
+		await act(async () => leaveSheet(router, columnsCheckoutHref('o1')));
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(tabs)']);
 	});
 
@@ -193,7 +189,7 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 		]);
 		// The seeded stack is typeless (expo-router's canDismiss has a TODO for it), so the sheet
 		// cannot be popped; the replace keeps the unfocused anchor beneath, which renders nothing.
-		await act(async () => handSheetToColumns(router, 'o1'));
+		await act(async () => leaveSheet(router, columnsCheckoutHref('o1')));
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
 			'index',
 			'(columns)/cart/[...orderId]',

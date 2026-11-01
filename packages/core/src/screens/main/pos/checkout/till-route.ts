@@ -1,8 +1,6 @@
-import type { ImperativeRouter } from 'expo-router';
+import type { Href, ImperativeRouter } from 'expo-router';
 
 // From checkout, the /cart tie between (columns) and (tabs) resolves to (columns) (#2363).
-// Pop the sheet on every width; phones target (tabs) explicitly with dismissTo.
-// The wide replace survives only when nothing is beneath the sheet; the layout's `anchor` makes that rare.
 
 /** The phone tab checkout hands the cashier back to. */
 export type TillTab = 'products' | 'cart';
@@ -23,8 +21,7 @@ export function returnToTill(
 	tab: TillTab
 ): void {
 	if (compact) router.dismissTo(tillHref(true, tab));
-	else if (router.canDismiss()) router.dismiss();
-	else router.replace({ pathname: '/cart' });
+	else leaveSheet(router, { pathname: '/cart' });
 }
 
 /**
@@ -42,15 +39,23 @@ export function standaloneCheckoutHref(orderId: string) {
 	} as const;
 }
 
-/** Pops a wide checkout sheet onto the till beneath; a cold-loaded sheet, which cannot pop, replaces (#3148). */
-export function handSheetToColumns(
+/**
+ * Leaves a (pos) sheet for the till beneath it; a replace would stack a second POS screen
+ * (#3148). A cold-loaded sheet sits over the layout's anchor in a seeded, typeless stack that
+ * `canDismiss` cannot see (expo-router TODO ENG-22019), so it alone takes the fallback.
+ */
+export function leaveSheet(
 	router: Pick<ImperativeRouter, 'replace' | 'dismiss' | 'canDismiss'>,
-	orderId: string
+	fallback: Href
 ): void {
 	if (router.canDismiss()) router.dismiss();
-	else
-		router.replace({
-			pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-			params: { orderId: [orderId, 'checkout'] },
-		});
+	else router.replace(fallback);
+}
+
+/** The columns cart in checkout for one order: the wide host of the tender pane. */
+export function columnsCheckoutHref(orderId: string): Href {
+	return {
+		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+		params: { orderId: [orderId, 'checkout'] },
+	};
 }

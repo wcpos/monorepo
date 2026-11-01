@@ -1,4 +1,4 @@
-import { handSheetToColumns, returnToTill, tillHref } from './till-route';
+import { columnsCheckoutHref, leaveSheet, returnToTill, tillHref } from './till-route';
 
 it.each([
 	[true, 'products', '/(app)/(drawer)/(pos)/(tabs)'],
@@ -53,22 +53,26 @@ it.each(['products', 'cart'] as const)('replaces a wide deep link with the cart 
 	expect(router.dismiss).not.toHaveBeenCalled();
 });
 
-describe('handSheetToColumns', () => {
+describe('leaveSheet', () => {
 	it('pops a sheet with a till beneath without replacing', () => {
 		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
-		handSheetToColumns(router, 'o1');
+		leaveSheet(router, { pathname: '/cart' });
 		expect(router.dismiss).toHaveBeenCalledTimes(1);
 		expect(router.replace).not.toHaveBeenCalled();
 	});
 
-	it('replaces a deep link with nothing beneath with the columns checkout', () => {
+	it('replaces a deep link with nothing beneath with the supplied fallback', () => {
 		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => false };
-		handSheetToColumns(router, 'o1');
+		leaveSheet(router, { pathname: '/cart' });
 		expect(router.replace).toHaveBeenCalledTimes(1);
-		expect(router.replace).toHaveBeenCalledWith({
-			pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-			params: { orderId: ['o1', 'checkout'] },
-		});
+		expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
 		expect(router.dismiss).not.toHaveBeenCalled();
+	});
+});
+
+it('builds the columns checkout href for one order', () => {
+	expect(columnsCheckoutHref('o1')).toEqual({
+		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+		params: { orderId: ['o1', 'checkout'] },
 	});
 });
