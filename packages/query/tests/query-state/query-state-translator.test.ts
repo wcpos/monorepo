@@ -390,7 +390,6 @@ describe('query-state translator', () => {
 				{
 					posStoreId: '3',
 				},
-				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
 		});
 		expect(compiled.demand[0]).toMatchObject({
@@ -402,7 +401,7 @@ describe('query-state translator', () => {
 		});
 	});
 
-	it('keeps cashier, store, and date grid reads complete and pushable', () => {
+	it('pushes cashier and store filters but evaluates the sale date locally', () => {
 		const compiled = compileQuery(
 			'orders',
 			{
@@ -427,10 +426,9 @@ describe('query-state translator', () => {
 					{
 						posStoreId: '3',
 					},
-					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 				],
 			},
-			complete: true,
+			complete: false,
 			sortPushable: true,
 		});
 	});
