@@ -82,9 +82,16 @@ const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
 });
 
-// The embedded boot merges its payload into an existing credential document.
+// The embedded boot merges its payload into an existing credential document; the session
+// commit stamps its `last_access` when the cashier changes.
 const mergeable = <T extends object>(doc: T) =>
-	Object.assign(doc, { getLatest: () => doc, incrementalModify: jest.fn(async () => undefined) });
+	Object.assign(doc, {
+		getLatest: () => doc,
+		incrementalModify: jest.fn(async () => undefined),
+		incrementalPatch: jest.fn(async () => undefined),
+	});
+// A same-cashier store switch keeps a readable till stamp.
+const STAMPED = '2026-11-01T09:00:00.000Z';
 
 const pluginRegistrationsAtModuleLoad = mockRegisterPlugins.mock.calls.length;
 it('loads the database plugins with the hydration module, before executing any step', () => {
@@ -140,7 +147,7 @@ describe('switchUserSessionStore', () => {
 			set: jest.fn(async (_key: string, _updater: () => typeof current) => undefined),
 		};
 		const site = { uuid: 'site-1' };
-		const wpCredentials = { uuid: 'cred-1' };
+		const wpCredentials = { uuid: 'cred-1', last_access: STAMPED };
 		const store = { localID: 'store-2' };
 
 		const switching = switchUserSessionStore(
@@ -262,7 +269,7 @@ describe('switchUserSessionStore', () => {
 			{
 				states: { v2: appState },
 				sites: documentLookup({ uuid: 'site-1' }),
-				wp_credentials: documentLookup({ uuid: 'cred-1' }),
+				wp_credentials: documentLookup({ uuid: 'cred-1', last_access: STAMPED }),
 				stores: documentLookup(store),
 			} as any,
 			appState as any,
@@ -339,9 +346,9 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		}
 	);
 
-	it('hydrates and commits the processed store selection', async () => {
+	it('hydrates and commits the processed store selection, stamping the first cashier', async () => {
 		const site = { uuid: 'site-1' };
-		const credentials = { uuid: 'credentials-1' };
+		const credentials = mergeable({ uuid: 'credentials-1' });
 		const store = { localID: '0123456789' };
 		const appState = { get: jest.fn(() => ({ storeID: store.localID })), set: jest.fn() };
 		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
@@ -365,6 +372,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 			});
 		expect(createStoreDBMock).toHaveBeenCalledWith(store.localID);
 		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
+		expect(credentials.incrementalPatch).toHaveBeenCalledWith({ last_access: expect.any(String) });
 	});
 
 	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
@@ -439,6 +447,27 @@ describe('PROCESS_INITIAL_PROPS', () => {
 });
 
 describe('HYDRATE_USER_SESSION', () => {
+	it.each([
+		['an unreadable stamp takes the till now', '', 1],
+		['a readable stamp is kept', STAMPED, 0],
+	])('a reload with the same pointer, on every platform: %s', async (_case, lastAccess, stamps) => {
+		const credentials = mergeable({ uuid: 'credentials-1', last_access: lastAccess });
+		const site = { uuid: 'site-1' };
+		const store = { localID: '0123456789' };
+		const pointer = {
+			siteID: site.uuid,
+			wpCredentialsID: credentials.uuid,
+			storeID: store.localID,
+		};
+		const step = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
+		await step.execute({
+			userDB: { wp_credentials: documentLookup(credentials) },
+			appState: { get: () => pointer },
+			session: { site, wpCredentials: credentials, store, storeDB: {}, extraData: {} },
+		} as unknown as HydrationContext);
+		expect(credentials.incrementalPatch).toHaveBeenCalledTimes(stamps);
+	});
+
 	it.each([true, false])(
 		'refreshes cached documents after authorization sets flags to %s without a second open',
 		async (flag) => {

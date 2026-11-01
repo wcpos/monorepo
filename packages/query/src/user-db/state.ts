@@ -29,6 +29,10 @@ export async function commitSessionPointer(
 	await userDB.states.v2.set('current', () => ids);
 }
 
+export async function readSessionPointer(userDB: UserDatabase): Promise<CurrentSessionIDs | null> {
+	return (await userDB.states.v2.get('current')) ?? null;
+}
+
 export async function clearSessionPointer(userDB: UserDatabase): Promise<void> {
 	await userDB.states.v2.set('current', () => null);
 }

@@ -28,7 +28,11 @@ import {
 	saveLoginCredentials,
 	SiteIdentityClashError,
 } from '../../src/user-db';
-import { upsertEmbeddedCredentials } from '../../src/user-db/credentials';
+import {
+	clearTillAccess,
+	stampTillAccess,
+	upsertEmbeddedCredentials,
+} from '../../src/user-db/credentials';
 
 jest.mock('uuid', () => ({
 	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,
@@ -407,7 +411,9 @@ describe('auth write commands', () => {
 		await db.wp_credentials
 			.findOne(params.uuid)
 			.exec()
-			.then((doc) => doc!.incrementalPatch({ stores: ['saved-store'] }));
+			.then((doc) =>
+				doc!.incrementalPatch({ stores: ['saved-store'], last_access: '2026-11-01T09:00:00.000Z' })
+			);
 		const patched = await saveLoginCredentials(db, SITE_UUID, {
 			...params,
 			access_token: 'new-token',
@@ -415,6 +421,8 @@ describe('auth write commands', () => {
 		expect(patched).toMatchObject({ created: false, linked: false });
 		expect(patched.credentials.access_token).toBe('new-token');
 		expect(patched.credentials.stores).toEqual(['saved-store']);
+		// Re-auth renews the active cashier's token mid-shift: the till stamp is kept.
+		expect(patched.credentials.last_access).toBe('2026-11-01T09:00:00.000Z');
 		expect(site.getLatest().wp_credentials).toEqual(['cred-auth']);
 	});
 
@@ -560,10 +568,64 @@ describe('upsertEmbeddedCredentials', () => {
 		expect(doc.stores).toEqual(['store-a']);
 	});
 
+	it.each([
+		['an empty', ''],
+		['a server', '2026-11-01T08:00:00.000Z'],
+	])(
+		'leaves the local till stamp untouched when the payload carries %s last_access',
+		async (_case, serverValue) => {
+			await db.wp_credentials.insert(stored);
+			const doc = await upsertEmbeddedCredentials(db, embedded({ last_access: serverValue }));
+			expect(doc.getLatest().last_access).toBe(stored.last_access);
+		}
+	);
+
 	it('rejects a payload without a uuid', async () => {
 		await expect(upsertEmbeddedCredentials(db, {})).rejects.toThrow(
 			'Cannot save credentials without a uuid'
 		);
+	});
+});
+
+describe('stampTillAccess', () => {
+	const STAMP = '2026-11-01T09:00:00.000Z';
+	const stampOf = async () => (await db.wp_credentials.findOne('till').exec())!.last_access;
+
+	it.each([
+		['a new shift over a readable stamp', true, STAMP, true],
+		['the same shift keeps a readable stamp', false, STAMP, false],
+		['the same shift replaces an empty stamp', false, '', true],
+		['the same shift replaces an unreadable stamp', false, 'not a date', true],
+		['the same shift replaces a missing stamp', false, undefined, true],
+	])('%s', async (_case, newShift, stored, stamps) => {
+		await db.wp_credentials.insert(
+			stored === undefined ? { uuid: 'till' } : { uuid: 'till', last_access: stored }
+		);
+		await stampTillAccess(db, 'till', { newShift });
+		const after = await stampOf();
+		if (stamps) {
+			expect(after).not.toBe(stored);
+			expect(new Date(after!).toISOString()).toBe(after);
+		} else {
+			expect(after).toBe(stored);
+		}
+	});
+
+	it('never throws: a missing credential, no id, or a failed write is a no-op', async () => {
+		await expect(stampTillAccess(db, 'absent', { newShift: true })).resolves.toBeUndefined();
+		await expect(stampTillAccess(db, undefined, { newShift: true })).resolves.toBeUndefined();
+		const failing = {
+			wp_credentials: { findOne: () => ({ exec: async () => Promise.reject(new Error('down')) }) },
+		} as never;
+		await expect(stampTillAccess(failing, 'till', { newShift: true })).resolves.toBeUndefined();
+	});
+
+	it('clearTillAccess empties the stamp, so the next boot takes the till anew', async () => {
+		await db.wp_credentials.insert({ uuid: 'till', last_access: STAMP });
+		await clearTillAccess(db, 'till');
+		expect(await stampOf()).toBe('');
+		await stampTillAccess(db, 'till', { newShift: false });
+		expect(await stampOf()).not.toBe('');
 	});
 });
 

@@ -106,6 +106,8 @@ reads **place · register · when · who**, dropping whatever the title already 
 | Closure pane   | ‹ when pushed, then the result's ToneDisc | `Closure 12` (`Closure 12 written` only on the moment) | `UK Store · Front counter · 09:02–18:02 · **Amy Okafor**` (the closer; the opener sits on the Float row) |
 | Count pane     | ‹, the register disc                      | `Close Front counter`                                  | as the register panel                                                                                    |
 
+_2026-11-01 (Paul): the cashier sheet's `since` is this device's stamp (`last_access`), set when a cashier takes the till here or the cashier changes, kept across reloads and re-auth, reset by the web logout, never the server's value._
+
 The register's 40 pt `AmountFigure` leaves the title and becomes the first figure tile.
 
 ### 4.3 The cashier sheet

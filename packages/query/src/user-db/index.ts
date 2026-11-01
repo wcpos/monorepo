@@ -1,8 +1,10 @@
 export {
+	clearTillAccess,
 	credentialsTokenOwner,
 	recordCashierProfile,
 	removeCredentials,
 	saveLoginCredentials,
+	stampTillAccess,
 } from './credentials';
 export {
 	observeCredentialStores,
@@ -35,6 +37,7 @@ export {
 	cacheTranslations,
 	clearSessionPointer,
 	commitSessionPointer,
+	readSessionPointer,
 	setExtraData,
 	type CurrentSessionIDs,
 	type ExtraDataSlot,
