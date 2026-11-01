@@ -4,6 +4,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import * as TooltipPrimitive from '@rn-primitives/tooltip';
 import Animated from 'react-native-reanimated';
 
+import { useTitleBarStrip } from '../edge-surface';
 import { OVERLAY_MOTION } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text/context';
@@ -18,7 +19,18 @@ function Tooltip({ children, delayDuration, className }: TooltipProps) {
 	);
 }
 
-function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: TooltipContentProps) {
+function TooltipContent({
+	className,
+	sideOffset = 4,
+	portalHost,
+	insets,
+	...props
+}: TooltipContentProps) {
+	const { height: stripHeight } = useTitleBarStrip();
+	const collision = React.useMemo(() => {
+		if (stripHeight <= 0) return insets;
+		return { ...insets, top: Math.max(stripHeight, insets?.top ?? 0) };
+	}, [insets, stripHeight]);
 	return (
 		<TooltipPrimitive.Portal hostName={portalHost}>
 			<TooltipPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
@@ -29,6 +41,7 @@ function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: Too
 					<TextClassContext.Provider value="text-sm text-popover-foreground">
 						<TooltipPrimitive.Content
 							sideOffset={sideOffset}
+							insets={collision}
 							className={cn(
 								// The anchored panel's look and entrance (lib/overlay): hairline border, no shadow.
 								OVERLAY_MOTION.anchored.enter,

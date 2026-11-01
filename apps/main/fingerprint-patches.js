@@ -11,6 +11,7 @@ const JS_ONLY_PATCHES = Object.freeze({
 	'expo@58.0.14.patch': 'TypeScript declarations only',
 	'@rn-primitives__popover@1.5.2.patch': 'Platform.web files, never in a native bundle',
 	'@rn-primitives__select@1.5.2.patch': 'Platform.web files, never in a native bundle',
+	'@rn-primitives__tooltip@1.5.2.patch': 'Platform.web files, never in a native bundle',
 	'react-native-drawer-layout@4.2.10.patch':
 		'Drawer.native.js is a Metro platform file, runtime JS',
 	'rxdb@17.6.0.patch': 'RxDB runtime JS bundled by Metro',
