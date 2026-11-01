@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
+import { focusFirstControl, FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import {
 	TreeCombobox,
 	TreeComboboxContent,
@@ -42,7 +43,13 @@ export function FormTreeCombobox({
 	portalHost,
 	...treeProps
 }: FormTreeComboboxProps & { children?: React.ReactNode }) {
-	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const controlRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const handleOnLabelPress = () => focusFirstControl(controlRef);
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	const selected = value ?? [];
 	const hasValue = selected.length > 0;
@@ -54,29 +61,35 @@ export function FormTreeCombobox({
 
 	return (
 		<FormItem nativeID={itemNativeID}>
-			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
-			<TreeCombobox
-				options={options}
-				multiple
-				value={selected}
-				onValueChange={onChange}
-				{...ariaProps}
-				{...treeProps}
-			>
-				<TreeComboboxTrigger>
-					<TreeComboboxValue hasValue={hasValue}>{displayText}</TreeComboboxValue>
-				</TreeComboboxTrigger>
-				<TreeComboboxContent
-					matchWidth
-					searchPlaceholder={searchPlaceholder}
-					emptyMessage={emptyMessage}
-					estimatedItemSize={estimatedItemSize}
-					renderItem={renderItem}
-					portalHost={portalHost}
+			{!!label && (
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
+					{label}
+				</FormLabel>
+			)}
+			<View ref={controlRef}>
+				<TreeCombobox
+					options={options}
+					multiple
+					value={selected}
+					onValueChange={onChange}
+					{...ariaProps}
+					{...treeProps}
 				>
-					{children}
-				</TreeComboboxContent>
-			</TreeCombobox>
+					<TreeComboboxTrigger>
+						<TreeComboboxValue hasValue={hasValue}>{displayText}</TreeComboboxValue>
+					</TreeComboboxTrigger>
+					<TreeComboboxContent
+						matchWidth
+						searchPlaceholder={searchPlaceholder}
+						emptyMessage={emptyMessage}
+						estimatedItemSize={estimatedItemSize}
+						renderItem={renderItem}
+						portalHost={portalHost}
+					>
+						{children}
+					</TreeComboboxContent>
+				</TreeCombobox>
+			</View>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>
