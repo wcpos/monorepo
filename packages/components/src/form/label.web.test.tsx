@@ -155,7 +155,7 @@ describe('web form labels', () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
-	it('focuses the first segment when its own label is clicked', () => {
+	it("focuses the selected segment, the group's tab stop, when its own label is clicked", () => {
 		render(
 			<Harness>
 				<FormSegmentedControl
@@ -172,10 +172,31 @@ describe('web form labels', () => {
 			</Harness>
 		);
 
-		const firstSegment = screen.getAllByRole('radio')[0];
-		expect(document.activeElement).not.toBe(firstSegment);
+		const selected = screen.getAllByRole('radio')[1];
+		expect(document.activeElement).not.toBe(selected);
 		fireEvent.click(labelRoot('Discount type'));
-		expect(document.activeElement).toBe(firstSegment);
+		expect(document.activeElement).toBe(selected);
+	});
+
+	it('never lands on a disabled segment: the first enabled one takes the press', () => {
+		render(
+			<Harness>
+				<FormSegmentedControl
+					name="field"
+					label="Discount type"
+					value="percent"
+					segments={[
+						{ label: 'Percentage', value: 'percent', disabled: true },
+						{ label: 'Amount', value: 'amount' },
+					]}
+					onChange={jest.fn()}
+					onBlur={jest.fn()}
+				/>
+			</Harness>
+		);
+
+		fireEvent.click(labelRoot('Discount type'));
+		expect(document.activeElement).toBe(screen.getAllByRole('radio')[1]);
 	});
 
 	/**
