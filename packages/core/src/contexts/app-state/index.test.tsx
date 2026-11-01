@@ -4,10 +4,12 @@ import * as React from 'react';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-import { hydrateUserSession } from '@wcpos/query/user-db';
+import { clearTillAccess, hydrateUserSession, stampTillAccess } from '@wcpos/query/user-db';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+// Mutable so the embedded (WordPress) logout can be exercised on web.
+const mockPlatform = { isWeb: false };
 // Mutable so each test installs the session the provider hydrates into.
 const mockHydration: { context: Record<string, unknown> } = { context: {} };
 
@@ -25,6 +27,8 @@ jest.mock('./use-hydration-suspense', () => ({
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	hydrateUserSession: jest.fn(),
+	clearTillAccess: jest.fn(async () => undefined),
+	stampTillAccess: jest.fn(async () => undefined),
 }));
 
 jest.mock('@wcpos/query/user-db/bootstrap', () => ({}));
@@ -35,7 +39,7 @@ jest.mock('./hydration-steps', () => ({
 }));
 
 jest.mock('@wcpos/utils/platform', () => ({
-	Platform: { isWeb: false },
+	Platform: mockPlatform,
 }));
 
 // eslint-disable-next-line import/first
@@ -57,7 +61,7 @@ import {
 const logger = getLogger(['wcpos', 'app-state', 'session']);
 
 const site = { localID: 'site-1' };
-const wpCredentials = { localID: 'creds-1' };
+const wpCredentials = { localID: 'creds-1', uuid: 'creds-1' };
 const store = { localID: 'store-1' };
 const storeDB = { name: 'store-db', collections: { logs: { name: 'logs' } } };
 const extraData = { get: jest.fn() };
@@ -228,7 +232,31 @@ describe('login', () => {
 		});
 
 		expect(base.appState.set).toHaveBeenCalledTimes(1);
+		// No previous pointer: a new shift on the till.
+		expect(stampTillAccess).toHaveBeenCalledWith(base.userDB, 'creds-1', { newShift: true });
 		await waitFor(() => expect(hasStoreSession(result.current)).toBe(true));
+	});
+});
+
+describe('logout', () => {
+	afterEach(() => {
+		mockPlatform.isWeb = false;
+		delete (globalThis as { initialProps?: unknown }).initialProps;
+	});
+
+	it('embedded web logout resets the till stamp and keeps the pointer (the store is remembered)', async () => {
+		mockPlatform.isWeb = true;
+		(globalThis as { initialProps?: unknown }).initialProps = { logout_url: 'about:blank#logout' };
+		const base = sessionBase();
+		mockHydration.context = { ...base, storeDB, store, site, wpCredentials, extraData };
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+
+		await act(async () => {
+			await result.current.logout();
+		});
+
+		expect(clearTillAccess).toHaveBeenCalledWith(base.userDB, 'creds-1');
+		expect(base.appState.set).not.toHaveBeenCalled();
 	});
 });
 

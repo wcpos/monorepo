@@ -172,6 +172,21 @@ it('records cashier fields and clears omitted capabilities when merging stores',
 	expect(credentials.getLatest().capabilities).toEqual(['read']);
 });
 
+it('never copies the server last_access over the local till stamp', async () => {
+	const credentials = await db.wp_credentials.insert({
+		uuid: 'cashier',
+		last_access: '2026-10-01T00:00:00.000Z',
+	});
+	await recordCashierProfile(
+		db,
+		credentials,
+		{ display_name: 'Cashier', last_access: '' },
+		{ userUuid: 'user', siteUuid: 'site' }
+	);
+	expect(credentials.getLatest().display_name).toBe('Cashier');
+	expect(credentials.getLatest().last_access).toBe('2026-10-01T00:00:00.000Z');
+});
+
 it('keeps token methods bound to the live credentials document', async () => {
 	const credentials = await db.wp_credentials.insert({
 		uuid: 'cashier',

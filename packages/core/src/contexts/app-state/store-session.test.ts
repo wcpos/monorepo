@@ -9,25 +9,37 @@ import {
 } from './store-session';
 
 const ids = { siteID: 'site-1', wpCredentialsID: 'credentials-1', storeID: 'store-2' };
+const STAMP = '2026-11-01T09:00:00.000Z';
+const incrementalPatch = jest.fn(async (_patch: { last_access: string }) => undefined);
+// The stored credential `stampTillAccess` reads by uuid; its stamp is readable, so only the
+// session fact (a new shift) decides whether it is written.
+const credentials = { uuid: ids.wpCredentialsID, last_access: STAMP, incrementalPatch };
 const session = {
 	site: { uuid: ids.siteID },
-	wpCredentials: { uuid: ids.wpCredentialsID },
+	wpCredentials: credentials,
 	store: { localID: ids.storeID },
 	storeDB: {},
 	extraData: {},
-} as HydratedStoreSession;
+} as unknown as HydratedStoreSession;
 
-function pointerState() {
-	let current: CurrentSessionIDs | null = { ...ids, storeID: 'store-1' };
+function pointerState(initial: CurrentSessionIDs | null = { ...ids, storeID: 'store-1' }) {
+	let current: CurrentSessionIDs | null = initial;
 	const set = jest.fn(async (_key: string, update: () => CurrentSessionIDs | null) => {
 		current = update();
 	});
+	// RxState.get is synchronous.
+	const get = jest.fn(() => current);
 	return {
-		userDB: { states: { v2: { set } } } as unknown as UserDatabase,
+		userDB: {
+			states: { v2: { get, set } },
+			wp_credentials: { findOne: () => ({ exec: async () => credentials }) },
+		} as unknown as UserDatabase,
 		set,
 		current: () => current,
 	};
 }
+
+beforeEach(() => incrementalPatch.mockClear());
 
 afterEach(() => registerEngineScopeSwitcher(null));
 
@@ -54,6 +66,8 @@ describe('commitStoreSession', () => {
 		);
 		registerEngineScopeSwitcher(switchEngineScope);
 		const committing = commitStoreSession(state.userDB, { ids, session });
+		// The previous pointer is read before the engine moves; let that read settle.
+		for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
 		expect(switchEngineScope).toHaveBeenCalledWith(session);
 		expect(state.set).not.toHaveBeenCalled();
 		resolveEngine();
@@ -68,9 +82,43 @@ describe('commitStoreSession', () => {
 		registerEngineScopeSwitcher(async () => {
 			throw error;
 		});
-		await expect(commitStoreSession(state.userDB, { ids, session })).rejects.toBe(error);
+		const cashierSwitch = { ids: { ...ids, wpCredentialsID: 'credentials-2' }, session };
+		await expect(commitStoreSession(state.userDB, cashierSwitch)).rejects.toBe(error);
 		expect(state.set).not.toHaveBeenCalled();
 		expect(state.current()).toBe(previous);
+		expect(incrementalPatch).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['no previous pointer stamps', null, 1],
+		['a different cashier stamps', { ...ids, wpCredentialsID: 'credentials-0' }, 1],
+		['the same cashier keeps the stamp', { ...ids, storeID: 'store-1' }, 0],
+	])('the till stamp follows the pointer: %s', async (_case, previous, stamps) => {
+		const state = pointerState(previous);
+		await expect(commitStoreSession(state.userDB, { ids, session })).resolves.toBe(session);
+		expect(state.current()).toEqual(ids);
+		expect(incrementalPatch).toHaveBeenCalledTimes(stamps);
+	});
+
+	it('a failed stamp never fails the commit: the pointer is written and the session returned', async () => {
+		const state = pointerState(null);
+		incrementalPatch.mockRejectedValueOnce(new Error('stamp rejected'));
+		await expect(commitStoreSession(state.userDB, { ids, session })).resolves.toBe(session);
+		expect(incrementalPatch).toHaveBeenCalledTimes(1);
+		expect(state.current()).toEqual(ids);
+	});
+
+	it('a commit for a different cashier stamps last_access; the same cashier keeps it', async () => {
+		const state = pointerState({ ...ids, wpCredentialsID: 'credentials-0' });
+		await commitStoreSession(state.userDB, { ids, session });
+		expect(incrementalPatch).toHaveBeenCalledTimes(1);
+		const { last_access } = incrementalPatch.mock.calls[0][0];
+		expect(new Date(last_access).toISOString()).toBe(last_access);
+		expect(last_access).not.toBe(STAMP);
+
+		incrementalPatch.mockClear();
+		await commitStoreSession(state.userDB, { ids: { ...ids, storeID: 'store-3' }, session });
+		expect(incrementalPatch).not.toHaveBeenCalled();
 	});
 
 	it('persistence rejection does not return a publishable session', async () => {

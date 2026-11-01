@@ -3,6 +3,8 @@ import {
 	commitSessionPointer,
 	type CurrentSessionIDs,
 	type HydratedStoreSession,
+	readSessionPointer,
+	stampTillAccess,
 	type UserDatabase,
 } from '@wcpos/query/user-db';
 
@@ -78,8 +80,13 @@ export async function commitStoreSession(
 	next: { ids: CurrentSessionIDs; session: HydratedStoreSession }
 ): Promise<HydratedStoreSession> {
 	assertStoreSession(next.session);
+	const previous = await readSessionPointer(userDB);
 	await getEngineScopeSwitcher()?.(next.session);
 	await commitSessionPointer(userDB, next.ids);
+	// A different cashier (or the first) is a new shift on the till (Paul 2026-11-01).
+	await stampTillAccess(userDB, next.ids.wpCredentialsID, {
+		newShift: previous?.wpCredentialsID !== next.ids.wpCredentialsID,
+	});
 	return next.session;
 }
 

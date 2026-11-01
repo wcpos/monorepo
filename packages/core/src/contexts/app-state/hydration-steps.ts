@@ -17,6 +17,7 @@ import {
 	readSiteTransportInputs,
 	recordSiteTransport,
 	type SessionAppState,
+	stampTillAccess,
 	type StoreDatabase,
 	type TranslationsState,
 	type UserDatabase,
@@ -309,6 +310,8 @@ const hydrateUserSessionStep: HydrationStep = {
 			throw new Error('Missing userDB or appState in hydration context');
 		}
 		const current = await context.appState.get('current');
+		// Every platform heals an unreadable till stamp; a readable one is the same shift.
+		await stampTillAccess(context.userDB, current?.wpCredentialsID, { newShift: false });
 		const { session } = context;
 		if (
 			session &&

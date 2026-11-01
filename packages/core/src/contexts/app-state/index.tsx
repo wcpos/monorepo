@@ -12,7 +12,7 @@ import type {
 	TranslationsState,
 	UserDatabase,
 } from '@wcpos/query/user-db';
-import { bindSurvivingStoreLogs, hydrateUserSession } from '@wcpos/query/user-db';
+import { bindSurvivingStoreLogs, clearTillAccess, hydrateUserSession } from '@wcpos/query/user-db';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
@@ -172,6 +172,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			const initialProps = (globalThis as any).initialProps;
 			if (initialProps?.logout_url) {
 				// WordPress embedded mode - redirect to WordPress logout URL
+				// The pointer keeps the store; the next sign-in here is a new shift (Paul 2026-11-01).
+				await clearTillAccess(state.userDB!, state.wpCredentials?.uuid).catch((error) =>
+					sessionLogger.warn('Could not reset the till time', {
+						context: { error: getErrorMessage(error) },
+					})
+				);
 				navigateToUrl(initialProps.logout_url);
 				return;
 			}
@@ -180,7 +186,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		await clearStoreSession();
-	}, [clearStoreSession]);
+	}, [clearStoreSession, state.userDB, state.wpCredentials]);
 
 	const switchStore = React.useCallback(
 		async (store: ReadonlyStoreRecord): Promise<void> => {

@@ -64,7 +64,7 @@ export async function saveLoginCredentials(
 				refresh_token: credentialsData.refresh_token,
 				expires_at: credentialsData.expires_at,
 				display_name: credentialsData.display_name,
-				last_access: credentialsData.last_access,
+				// No `last_access`: re-auth renews the active cashier's token mid-shift.
 				date_modified_gmt: credentialsData.date_modified_gmt,
 			})
 		);
@@ -97,6 +97,8 @@ export async function upsertEmbeddedCredentials(
 	if (!patch.uuid) throw new Error('Cannot save credentials without a uuid');
 	// `stores` holds local store ids the step links afterwards (as LOCAL_ONLY_SITE_FIELDS).
 	delete patch.stores;
+	// `last_access` is this device's till stamp, never the server's (Paul 2026-11-01).
+	delete patch.last_access;
 	return mergeIntoDocument(
 		userDB.wp_credentials,
 		patch.uuid,
@@ -108,6 +110,33 @@ export async function upsertEmbeddedCredentials(
 		},
 		() => patch
 	);
+}
+
+const isReadableStamp = (stamp: string | undefined) =>
+	!!stamp && !Number.isNaN(new Date(stamp).getTime());
+
+/** This device's till stamp (Paul 2026-11-01): a new shift, or over an unreadable one only. */
+export async function stampTillAccess(
+	userDB: UserDatabase,
+	wpCredentialsID: string | undefined,
+	{ newShift }: { newShift: boolean }
+): Promise<void> {
+	try {
+		const credentials =
+			wpCredentialsID && (await userDB.wp_credentials.findOne(wpCredentialsID).exec());
+		if (!credentials || (!newShift && isReadableStamp(credentials.last_access))) return;
+		await credentials.incrementalPatch({ last_access: new Date().toISOString() });
+	} catch (error) {
+		// The stamp never fails a session commit or a boot.
+		appLogger.warn('Could not stamp the till time', { context: { error: getErrorMessage(error) } });
+	}
+}
+
+/** Web logout: the next sign-in on this device is a new shift (Paul 2026-11-01). */
+export async function clearTillAccess(userDB: UserDatabase, wpCredentialsID: string | undefined) {
+	if (!wpCredentialsID) return;
+	const credentials = await userDB.wp_credentials.findOne(wpCredentialsID).exec();
+	await credentials?.incrementalPatch({ last_access: '' });
 }
 
 export async function removeCredentials(
@@ -156,7 +185,7 @@ export async function recordCashierProfile(
 			'display_name',
 			'email',
 			'first_name',
-			'last_access',
+			// No `last_access`: it is this device's till stamp (Paul 2026-11-01).
 			'last_name',
 			'nice_name',
 			'username',

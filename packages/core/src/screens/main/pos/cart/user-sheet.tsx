@@ -521,7 +521,7 @@ export function UserSheet({
 	const side = 'right';
 	const { registers, registerName, status, bind } = useRegisterBinding();
 	const lastAccess = useDocField(wpCredentials, (value) => value.last_access);
-	// The credential copies `last_access` as the server sent it; an unreadable stamp drops the time.
+	// `last_access` is this device's till stamp (see `stampTillAccess`); an unreadable one drops the time.
 	const signedInAt = lastAccess ? new Date(lastAccess) : null;
 	const signedIn = signedInAt && !Number.isNaN(signedInAt.getTime()) ? signedInAt : null;
 	const storeName = useDocField(store, (value) => value.name);
