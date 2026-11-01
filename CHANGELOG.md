@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tax exempt switch in the Order details sheet: turns off tax for every line, fee and shipping line on the order and saves WooCommerce's `is_vat_exempt` flag with it. Tax-exclusive stores only for now.
+
 ### Changed
 - Typed product and variation search requires every typed word to match, in any order and in any of name, SKU, or barcode, short words included; pairs with the companion WCPOS plugin release.
 
