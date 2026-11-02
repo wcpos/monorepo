@@ -668,9 +668,10 @@ it('names All stores in the summary print scope', () => {
 	try {
 		setup({ store: 'woocommerce-pos' });
 		const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
-		expect(useReceiptDocument.mock.calls.at(-1)[0].localReport.report.scope.label).toContain(
-			'All stores'
-		);
+		const report = useReceiptDocument.mock.calls.at(-1)[0].localReport.report;
+		expect(report.scope.label).toContain('All stores');
+		// The paper breaks down by store: the bound directory cannot name other stores' registers.
+		expect(JSON.stringify(report.groups)).toContain('"Stores"');
 	} finally {
 		mockStores.next([{ id: 9, name: 'Shop' }]);
 	}

@@ -548,9 +548,13 @@ it('does not offer All stores on a single-store site', () => {
 		.spyOn(session.wpCredentials, 'populate$')
 		.mockReturnValue(of([{ id: 1, name: 'Shop' }]));
 	try {
-		render(<Bar room="sales" scope={scope} onScopeChange={change} onBack={room} />);
+		render(
+			<Bar room="sales" scope={{ ...scope, storeId: 0 }} onScopeChange={change} onBack={room} />
+		);
 		fireEvent.click(screen.getByTestId('reports-scope'));
 		expect(screen.queryByTestId('reports-store-all')).toBeNull();
+		// Store 0 is this install's own id, not All stores: its registers stay on offer.
+		expect(screen.getAllByTestId(/^reports-register-/).length).toBeGreaterThan(1);
 	} finally {
 		spy.mockRestore();
 	}

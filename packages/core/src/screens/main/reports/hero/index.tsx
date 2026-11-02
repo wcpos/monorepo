@@ -29,6 +29,7 @@ import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryHandleFields, useQueryState, useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
+import { stores as storeRows } from '../cards/aggregate';
 import {
 	ReportsComparison,
 	useIncludedStatus,
@@ -260,6 +261,9 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const storeDirectory = useObservableState(storesSource);
 	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
 	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
+	const storeNames = Object.fromEntries(
+		(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
+	);
 	const register = allStores
 		? t('reports.all_stores')
 		: registerId
@@ -283,6 +287,9 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 			orders: selectedOrders.length,
 			periodRefunds,
 			registerNames: names,
+			stores: allStores
+				? { rows: storeRows(selectedOrders, totals), names: storeNames }
+				: undefined,
 			cashierNames: Object.fromEntries(
 				(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
 			),
@@ -333,7 +340,8 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 			!!formats.store &&
 			cashier.ready &&
 			(totals.userStoreArray.length < 2 || !!directory) &&
-			(namesLoaded ||
+			(allStores ||
+				namesLoaded ||
 				!online ||
 				totals.registerArray.length < 2 ||
 				totals.registerArray.every(({ registerId }) => !!names[registerId])),

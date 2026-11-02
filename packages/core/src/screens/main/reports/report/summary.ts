@@ -13,10 +13,15 @@ type Inputs = {
 	periodRefunds?: RefundRow[];
 	registerNames: Record<string, string>;
 	cashierNames: Record<string, string>;
+	/** Under All stores: the period by store, in place of registers the bound directory cannot name. */
+	stores?: {
+		rows: { key: string; orders: number; amount: number }[];
+		names: Record<string, string>;
+	};
 	num_decimals?: number;
 };
 export function summarySpec(
-	{ totals, orders, periodRefunds, registerNames, cashierNames, num_decimals }: Inputs,
+	{ totals, orders, periodRefunds, registerNames, cashierNames, stores, num_decimals }: Inputs,
 	t: (key: string) => string,
 	{
 		money,
@@ -90,7 +95,25 @@ export function summarySpec(
 			),
 			row('total', t('common.total'), '', sumBy(totals.shippingTotalsArray, 'total'))
 		);
-	if (totals.registerArray.length > 1)
+	if (stores)
+		group(
+			'stores',
+			t('reports.panel_stores'),
+			stores.rows.map((store) =>
+				row(
+					store.key,
+					store.key === 'online'
+						? t('common.online')
+						: store.key === 'unassigned'
+							? t('reports.no_store_row')
+							: stores.names[store.key] || t('common.unknown'),
+					store.orders,
+					store.amount
+				)
+			),
+			row('total', t('common.total'), sumBy(stores.rows, 'orders'), sumBy(stores.rows, 'amount'))
+		);
+	else if (totals.registerArray.length > 1)
 		group(
 			'registers',
 			t('reports.panel_registers'),

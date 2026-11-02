@@ -78,7 +78,8 @@ export function Bar({
 		[wpCredentials]
 	);
 	const stores = useObservableState(source, []);
-	const allStores = room === 'sales' && scope.storeId === 0;
+	// Store 0 is also a single-store install's own id: All stores only with stores to choose from.
+	const allStores = room === 'sales' && scope.storeId === 0 && stores.length > 1;
 	const directory = useRegisterDirectory(
 		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
 	);
