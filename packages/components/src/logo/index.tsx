@@ -9,19 +9,24 @@ interface Props extends SvgProps {
 export function Logo({ animate, width = 100, height = 100, ...props }: Props) {
 	return (
 		<Svg viewBox="0 0 1260 1260" width={width} height={height} {...props}>
-			{/* The mark (Paul, 2026-10-31): indigo body oklch(0.30 0.11 280), a crimson-and-gold awning (oklch(0.52 0.21 15),
-			    oklch(0.84 0.13 85)) and the word in Quicksand 600 as outlines. The same three fills as the SVG assets in
-			    packages/core/src/assets; react-native-svg takes hex, so these are the sRGB values of those oklch colours. */}
+			{/* The mark (Paul, 2026-11-02): slate wall oklch(0.29 0.05 260), a crimson-and-off-white awning (oklch(0.52 0.21 15),
+			    oklch(0.94 0.012 85)) that throws a shadow oklch(0.235 0.05 260) 40 units down the wall, and the word in
+			    Quicksand 600 as outlines. The same fills as the SVG assets in packages/core/src/assets; react-native-svg takes
+			    hex, so these are the sRGB values of those oklch colours (gamut-mapped with culori). */}
 			<Path
 				d="M0,90 Q0,0 90,0 L1170,0 Q1260,0 1260,90 L1260,900 Q1260,990 1170,990 L360,990 L0,1260 Z"
-				fill="#262263"
+				fill="#1C2B44"
+			/>
+			<Path
+				fill="#0F1E35"
+				d="M0,270 H1260 V310 A90,90 0 1 1 1080,310 A90,90 0 1 1 900,310 A90,90 0 1 1 720,310 A90,90 0 1 1 540,310 A90,90 0 1 1 360,310 A90,90 0 1 1 180,310 A90,90 0 1 1 0,310 Z"
 			/>
 			<Path
 				fill="#C40040"
 				d="M0,90 Q0,0 90,0 L180,0 L180,270 A90,90 0 1 1 0,270 Z M360,0 H540 V270 A90,90 0 1 1 360,270 Z M720,0 H900 V270 A90,90 0 1 1 720,270 Z M1080,0 H1170 Q1260,0 1260,90 L1260,270 A90,90 0 1 1 1080,270 Z"
 			/>
 			<Path
-				fill="#F1C45E"
+				fill="#EFEBE2"
 				d="M180,0 H360 V270 A90,90 0 1 1 180,270 Z M540,0 H720 V270 A90,90 0 1 1 540,270 Z M900,0 H1080 V270 A90,90 0 1 1 900,270 Z"
 			/>
 			<Path
