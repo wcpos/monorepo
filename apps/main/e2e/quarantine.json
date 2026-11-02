@@ -3,12 +3,6 @@
 	"entries": [
 		{
 			"project": "free-authenticated",
-			"file": "orders.spec.ts",
-			"title": "Orders Page (Pro) › should navigate to Orders page and see order list",
-			"group": "G2"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-variations.spec.ts",
 			"title": "POS Variations › should render the variation image the server sent",
 			"group": "G2"
@@ -18,42 +12,6 @@
 			"file": "pos-variations.spec.ts",
 			"title": "POS Variations › should render the variation image the server sent",
 			"group": "G2"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 24128) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 24129) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-checkout.spec.ts",
-			"title": "POS Cart - coupon checkout (live store — store 24128) › paying a couponed order applies the paid snapshot and clears its cart tab",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-checkout.spec.ts",
-			"title": "POS Cart - coupon checkout (live store — store 24129) › paying a couponed order applies the paid snapshot and clears its cart tab",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-coupon-checkout.spec.ts",
-			"title": "POS Cart - coupon checkout (live store — store 578) › paying a couponed order applies the paid snapshot and clears its cart tab",
-			"group": "G3"
 		},
 		{
 			"project": "free-authenticated",
