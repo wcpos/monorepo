@@ -487,8 +487,9 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chart-toggle-hour').click();
 	await expect(page.getByTestId('hero-chart-toggle-hour')).toHaveAttribute('aria-checked', 'true');
 	await expect(page.getByTestId('hero-chart-comparison-total')).toHaveCount(0);
-	await expect(page.getByTestId('reports-period-title')).toBeVisible();
-	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
+	// #3098 put one scope strip above every card and dropped the period title; the
+	// period section is the anchor now (cards/index.test.tsx pins the title's absence).
+	await expect(page.getByTestId('reports-period-section')).toBeVisible();
 	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
 	// The refund amount is zero regardless of store currency or locale.
