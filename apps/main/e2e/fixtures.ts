@@ -680,12 +680,14 @@ export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise
 	// A production bundle (the main-push E2E target, or a local `build:web`) carries no
 	// ledger, so no line can come: fall back to network silence, the pre-ledger settle
 	// check, and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
-	// The fallback gets the SAME allowance as the ledger path. 2.0's startup drain on
-	// dev-free runs past 30 s: PR runs (ledger on, 60 s) pass search-walk and
-	// search-latency; main's push runs (production bundle, this branch) failed both,
-	// every attempt, on a lone run (41536443936, 2026-11-02) — a 30 s cap read the drain
-	// as "never settles". Once drained, the steady state is the change-signal cadence
-	// (tens of seconds between polls, cadence-controller.ts), so 1.5 s of silence comes.
+	// The fallback gets the SAME allowance as the ledger path (60 s), so a slow startup
+	// drain reads the same on a production bundle as on a ledger one. On 2026-11-02 the
+	// two paths disagreed: PR runs (ledger, 60 s) passed search-walk and search-latency,
+	// main's push runs (production, 30 s cap) failed both every attempt on a lone run
+	// (41536443936) — the drain was paging 4,068 coupons, 3,990 of them leaked E2E probes
+	// (swept 2026-11-03; #3212 adds the sweep). Once drained, the steady state is the
+	// change-signal cadence (tens of seconds between polls, cadence-controller.ts), so
+	// 1.5 s of silence comes.
 	const ledgerOn = await page
 		.evaluate(
 			() => (globalThis as { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger === true
