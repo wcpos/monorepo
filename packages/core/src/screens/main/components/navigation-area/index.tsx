@@ -11,7 +11,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
 
 import { ManagementBar } from '../management-bar';
-import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
+import { SessionHoldBanner } from '../session-hold-banner';
 
 import type { Href } from 'expo-router';
 
@@ -58,7 +58,6 @@ export function NavigationAreaLayout({
 	testID,
 	screenTestID,
 	barTestID,
-	barNotice,
 	leafPagesCarryTitle = false,
 	children,
 }: {
@@ -69,7 +68,6 @@ export function NavigationAreaLayout({
 	screenTestID?: string;
 	/** The phone's page bar; `lg` has none, so the rail, list and page column sit on `bg-background`. */
 	barTestID: string;
-	barNotice?: React.ReactNode;
 	/**
 	 * The area's leaf pages render their own large heading (`AreaPage`), so on a phone the
 	 * bar shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
@@ -83,7 +81,6 @@ export function NavigationAreaLayout({
 	const pathname = usePathname();
 	const router = useRouter();
 	const current = items.find((item) => pathname === item.href);
-	const held = useSessionHeld();
 	if (phone) {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
@@ -102,7 +99,6 @@ export function NavigationAreaLayout({
 							: undefined
 					}
 				/>
-				{barNotice}
 				{children}
 			</View>
 		);
@@ -110,14 +106,10 @@ export function NavigationAreaLayout({
 
 	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title, and
 	// the page carries neither the bell nor the avatar (Paul, 2026-10-30; the POS and the list
-	// pages keep theirs). What the bar held besides stays: the top inset, the held-session banner
-	// and the upgrade notice.
+	// pages keep theirs). What the bar held besides stays: the top inset and held-session banner.
 	return (
 		<EdgeSurface edges={TOP} className="bg-background flex-1">
 			<SessionHoldBanner />
-			{/* First row of the column: flush with the top it pads; after the hold banner it is the
-			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
-			{barNotice != null && <View className={held ? ground.mt : undefined}>{barNotice}</View>}
 			<View testID={testID} className="flex-1 flex-row">
 				<View
 					testID={`${testID}-rail`}

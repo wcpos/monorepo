@@ -51,6 +51,15 @@ jest.mock('../text', () => {
 });
 
 describe('Button variants', () => {
+	it('outlines on-warning in the warning ink without a card or primary fill', () => {
+		const classes = buttonVariants({ variant: 'on-warning' });
+		expect(classes.split(' ')).toContain('border');
+		expect(classes).toContain('border-warning-foreground/60');
+		expect(classes).not.toContain('bg-card');
+		expect(classes).not.toContain('bg-primary');
+		expect(buttonTextVariants({ variant: 'on-warning' })).toContain('text-warning-foreground');
+	});
+
 	// Three sizes by role (ruled 2026-10-16). The default rides the floored
 	// control token (roadmap#357), so Compact on a finger still gets 44; sm and
 	// lg ride the spacing unit, so they scale with the density step too.

@@ -8,9 +8,6 @@ import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
 
 import { useT } from '../../../contexts/translations';
-import { useAppInfo } from '../../../hooks/use-app-info';
-import { UpgradeNotice } from '../components/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { ManagementBar } from '../components/management-bar';
 import { adjustForPadding } from './adjust-for-padding';
 import Discord from './discord';
@@ -19,8 +16,6 @@ const BOTTOM = ['bottom'] as const;
 
 export function Support() {
 	const t = useT();
-	const { license } = useAppInfo();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	// The frame's padding (the ground's gutter) in px at the live step, so the widget fills
 	// the frame exactly.
 	const ground = useGround();
@@ -45,7 +40,6 @@ export function Support() {
 	return (
 		<EdgeSurface testID="screen-support" edges={BOTTOM} className="bg-background flex-1">
 			<ManagementBar title={t('common.support')} testID="support-bar" controls="phone" />
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 			<View
 				testID="support-frame"
 				className={cn('min-h-0 flex-1', ground.p)}

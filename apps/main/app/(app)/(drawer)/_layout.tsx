@@ -6,6 +6,8 @@ import { useIsFocused } from 'expo-router/react-navigation';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
+import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { cn } from '@wcpos/components/lib/utils';
 import { isLightTheme } from '@wcpos/components/lib/themes';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
@@ -23,7 +25,10 @@ import {
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { SessionHoldProvider } from '@wcpos/core/screens/main/components/session-hold-banner';
 import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
+import {
+	UpgradeNotice,
+	upgradeNoticeGround,
+} from '@wcpos/core/screens/main/components/upgrade-notice';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
@@ -168,9 +173,13 @@ function Scene({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function ThemedSystemBars() {
+const STRIP = ['strip'] as const;
+const TOP = ['top'] as const;
+const NONE = [] as const;
+
+function ThemedSystemBars({ stripShown }: { stripShown: boolean }) {
 	const { theme } = useUniwind();
-	return <SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />;
+	return <SystemBars style={stripShown || isLightTheme(theme) ? 'dark' : 'light'} />;
 }
 
 function DrawerLayoutContent() {
@@ -189,21 +198,33 @@ function DrawerLayoutContent() {
 		setPrevIsPro(isPro);
 		setShowUpgrade(!isPro);
 	}
+	const stripShown = showUpgrade && !isPro;
+	const { theme } = useUniwind();
+	const light = isLightTheme(theme);
 	const unreadErrorCount = useUnreadLogsCount();
 
 	return (
-		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
-			{/* One owner for the held-session state; each bar renders its own banner. */}
-			<SessionHoldProvider>
-				<View className="bg-background flex-1">
-					<ThemedSystemBars />
-					<RestartLockOverlay />
-					{/* The desktop title bar's one owner, beside the rail: the same on every page. */}
-					<TitleBarStripContent />
-					<ThemedDrawer phone={phone} t={t} unreadErrorCount={unreadErrorCount} />
-				</View>
-			</SessionHoldProvider>
-		</UpgradeNoticeContext.Provider>
+		// One owner for the held-session state; each bar renders its own banner.
+		<SessionHoldProvider>
+			{/* The strip is the app's topmost row on every page, above the rail (Paul, 2026-11-02).
+			    With it showing, the root takes the desktop title-bar strip in the page colour and
+			    the strip takes the status bar in its own; nothing below pads the top edge again
+			    (EdgeSurface's PaddedEdges). */}
+			<EdgeSurface edges={stripShown ? STRIP : NONE} className="bg-background flex-1">
+				<ThemedSystemBars stripShown={stripShown} />
+				<RestartLockOverlay />
+				<TitleBarStripContent />
+				<EdgeSurface
+					edges={stripShown ? TOP : NONE}
+					className={cn('flex-1', stripShown && upgradeNoticeGround(light))}
+				>
+					{stripShown && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+					<View className="bg-background flex-1">
+						<ThemedDrawer phone={phone} t={t} unreadErrorCount={unreadErrorCount} />
+					</View>
+				</EdgeSurface>
+			</EdgeSurface>
+		</SessionHoldProvider>
 	);
 }
 

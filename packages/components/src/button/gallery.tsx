@@ -4,11 +4,12 @@ import { Button } from './index';
 
 type Props = React.ComponentProps<typeof Button>;
 
-// The seven kept variants and three sizes (CODING_STANDARDS § Design, Buttons; ruled
+// The eight kept variants and three sizes (CODING_STANDARDS § Design, Buttons; ruled
 // 2026-10-16): one story per variant × size, so a change to any cell of the table shows.
 const VARIANTS = [
 	'default',
 	'outline',
+	'on-warning',
 	'ghost',
 	'link',
 	'outline-destructive',

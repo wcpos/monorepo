@@ -43,6 +43,10 @@ const buttonVariants = cva(
 				 */
 				// The outline IS the variant, so it stays 1 px in every theme: Bold money's 0 px control
 				// outline is for fields and chips, and would make this button vanish on a card (CodeRabbit, #3139).
+				// The Free strip stays yellow on dark themes, where every primary is too light
+				// to stand on the amber: outline the action in the ground's own ink.
+				'on-warning':
+					'border-warning-foreground/60 web:hover:bg-warning-foreground/10 active:bg-warning-foreground/10 border',
 				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
 				'outline-destructive':
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
@@ -108,6 +112,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors font-ui te
 			/**
 			 * Outline buttons
 			 */
+			'on-warning': 'text-warning-foreground',
 			outline: '',
 			'outline-destructive': '',
 

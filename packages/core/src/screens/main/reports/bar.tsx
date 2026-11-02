@@ -28,8 +28,6 @@ import {
 	useRegisterDirectory,
 } from '../../../services/register/use-register-binding';
 import { ManagementBar } from '../components/management-bar';
-import { UpgradeNotice } from '../components/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 import { MenuChip } from './menu-chip';
 
@@ -66,7 +64,6 @@ export function Bar({
 }: ScopeProps & { room: 'sales' | 'closures'; onBack: () => void }) {
 	const t = useT();
 	const phone = useIsPhone();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
@@ -232,7 +229,6 @@ export function Bar({
 					</>
 				}
 			/>
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />}
 		</>
 	);
 }
