@@ -6,7 +6,11 @@ import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import { saleMomentOf } from '@wcpos/query/query-state';
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import {
+	observeCredentialStores,
+	observeSiteCredentials,
+	PENDING_USER_DB_READ,
+} from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
@@ -27,6 +31,7 @@ import {
 	categories,
 	channels,
 	registers,
+	stores,
 	taxesByRate,
 	tenders,
 	topProducts,
@@ -76,16 +81,28 @@ export function DetailPanel() {
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const registerId = useQueryState<'orders'>().filters.register;
+	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
 	const names = useRegisterNames(storeId),
 		registerNamesReady = useRegisterNamesReady(storeId),
 		binding = useRegisterBinding();
-	const register = registerId
-		? names[registerId] ||
-			(binding.registerId === registerId ? binding.registerName : '') ||
-			t('common.unknown')
-		: t('reports.all_registers');
-	const { site } = useStoreSession();
+	const { site, wpCredentials } = useStoreSession();
+	const storesSource = React.useMemo(
+		() =>
+			observeCredentialStores(wpCredentials).pipe(
+				filter((value) => value !== PENDING_USER_DB_READ)
+			),
+		[wpCredentials]
+	);
+	const storeDirectory = useObservableState(storesSource);
+	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
+	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
+	const register = allStores
+		? t('reports.all_stores')
+		: registerId
+			? names[registerId] ||
+				(binding.registerId === registerId ? binding.registerName : '') ||
+				t('common.unknown')
+			: t('reports.all_registers');
 	const source = React.useMemo(
 		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
 		[site]
@@ -119,7 +136,8 @@ export function DetailPanel() {
 		(!grouped || products) &&
 		(detail !== 'categories' || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
-		(detail !== 'registers' || registerNamesReady);
+		(detail !== 'registers' || registerNamesReady) &&
+		(detail !== 'stores' || !!storeDirectory);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
 		cogs:
@@ -146,6 +164,10 @@ export function DetailPanel() {
 		channels: channels(selectedOrders, totals),
 		registers: registers(selectedOrders, totals),
 		registerNames: names,
+		stores: stores(selectedOrders, totals),
+		storeNames: Object.fromEntries(
+			(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
+		),
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,
@@ -173,6 +195,7 @@ export function DetailPanel() {
 		refunds: t('reports.panel_refunds'),
 		channels: t('reports.panel_channels'),
 		registers: t('reports.panel_registers'),
+		stores: t('reports.panel_stores'),
 	};
 	const title = titles[detail ?? 'orders'];
 	const scopeLine = t('reports.panel_scope', { period, register });

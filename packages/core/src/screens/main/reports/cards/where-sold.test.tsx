@@ -1,14 +1,19 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { mockState, setOrders } from './test-utils';
+import { mockState, mockStores, setOrders } from './test-utils';
 import { WhereSoldCard } from './where-sold';
 
 import type { ReportOrder } from '../context';
 
 beforeEach(() => {
+	mockState.storeFilter = '9';
+	mockStores.next([
+		{ id: 7, name: 'Front shop' },
+		{ id: 9, name: 'Back shop' },
+	]);
 	// The till's orders carry their register; the online order (ruling A admits it) has none.
 	setOrders([
 		{
@@ -110,4 +115,68 @@ it('opening the head opens the panel of the current view', () => {
 	} finally {
 		spy.mockRestore();
 	}
+});
+
+it('offers Stores only for All stores on a multi-store site, never Registers there', () => {
+	const view = render(<WhereSoldCard />);
+	expect(screen.queryByTestId('card-where-sold-view-segment-stores')).toBeNull();
+	mockState.storeFilter = 'woocommerce-pos';
+	view.rerender(<WhereSoldCard />);
+	expect(screen.getByTestId('card-where-sold-view-segment-stores')).toBeTruthy();
+	expect(screen.queryByTestId('card-where-sold-view-segment-registers')).toBeNull();
+	act(() => mockStores.next([{ id: 7, name: 'Only shop' }]));
+	expect(screen.queryByTestId('card-where-sold-view-segment-stores')).toBeNull();
+});
+it('names store rows and remainders, counts only stores, and opens the Stores panel', () => {
+	mockState.storeFilter = 'woocommerce-pos';
+	setOrders([
+		{ total: '6', created_via: 'woocommerce-pos', meta_data: [{ key: '_pos_store', value: '7' }] },
+		{ total: '3', created_via: 'woocommerce-pos', meta_data: [{ key: '_pos_store', value: '99' }] },
+		{ total: '4', created_via: 'checkout' },
+		{ total: '2', created_via: 'woocommerce-pos' },
+	] as ReportOrder[]);
+	const context = jest.requireMock<typeof import('../context')>('../context');
+	const setDetail = jest.fn();
+	const spy = jest
+		.spyOn(context, 'useReportsScope')
+		.mockReturnValue({ ...context.useReportsScope(), setDetail });
+	try {
+		const view = render(<WhereSoldCard />);
+		fireEvent.click(screen.getByTestId('card-where-sold-view-segment-stores'));
+		for (const [key, name] of [
+			['7', 'Front shop'],
+			['99', 'Unknown'],
+			['online', 'Online'],
+			['unassigned', 'No store'],
+		]) {
+			expect(screen.getByTestId(`card-where-sold-donut-row-${key}`).textContent).toContain(name);
+		}
+		expect(screen.getByTestId('card-where-sold-donut').textContent).toContain('2 stores');
+		expect(screen.getByTestId('card-where-sold-figure').textContent).toBe('£15.00');
+		fireEvent.click(screen.getByTestId('card-where-sold-open'));
+		expect(setDetail).toHaveBeenLastCalledWith('stores');
+		mockState.storeFilter = '7';
+		view.rerender(<WhereSoldCard />);
+		fireEvent.click(screen.getByTestId('card-where-sold-open'));
+		expect(setDetail).toHaveBeenLastCalledWith('channels');
+	} finally {
+		spy.mockRestore();
+	}
+});
+it('shows line skeletons while the All stores directory has not emitted', () => {
+	mockState.storeFilter = 'woocommerce-pos';
+	mockStores.next(undefined);
+	render(<WhereSoldCard />);
+	expect(screen.queryByTestId('card-where-sold-donut')).toBeNull();
+	expect(
+		screen.getByTestId('card-where-sold').querySelectorAll('[aria-busy]').length
+	).toBeGreaterThan(0);
+	act(() =>
+		mockStores.next([
+			{ id: 7, name: 'Front shop' },
+			{ id: 9, name: 'Back shop' },
+		])
+	);
+	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-stores'));
+	expect(screen.getByTestId('card-where-sold-donut')).toBeTruthy();
 });

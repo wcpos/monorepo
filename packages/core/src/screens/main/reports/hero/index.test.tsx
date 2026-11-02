@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { Hero, SalesScope } from './index';
 import {
@@ -26,6 +26,7 @@ let mockCashiersPending = false;
 let mockPhone = true;
 const mockPendingCashiers = new Promise(() => {});
 const mockCashiers = of([{ id: 7, display_name: 'Priya' }]);
+const mockStores = new BehaviorSubject([{ id: 9, name: 'Shop' }]);
 const mockStore = {
 	id: 9,
 	timezone: 'America/New_York',
@@ -55,6 +56,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 				return mockCashiers;
 			},
 		},
+		wpCredentials: { populate$: () => mockStores },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
@@ -258,6 +260,7 @@ function setup({
 	probe = true,
 	settled = true,
 	cashier = undefined as string | undefined,
+	store = '9',
 } = {}) {
 	return render(
 		<QueryStateProvider
@@ -265,7 +268,7 @@ function setup({
 			initialPageSize={Number.MAX_SAFE_INTEGER}
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 			initialFilters={{
-				store: '9',
+				store,
 				cashier,
 				dateRange: {
 					from: '2026-07-15T04:00:00',
@@ -655,4 +658,29 @@ it.each([true, false])('renders unsettled scope without report data (phone: %s)'
 	expect(screen.getByTestId('hero-chip-status').textContent).toBe('Completed & processing');
 	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	expect(screen.getByRole('button', { name: 'Print summary' }).hasAttribute('disabled')).toBe(true);
+});
+
+it('names All stores in the summary print scope', () => {
+	mockStores.next([
+		{ id: 9, name: 'Shop' },
+		{ id: 10, name: 'Annex' },
+	]);
+	try {
+		setup({ store: 'woocommerce-pos' });
+		const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+		const report = useReceiptDocument.mock.calls.at(-1)[0].localReport.report;
+		expect(report.scope.label).toContain('All stores');
+		// The paper breaks down by store: the bound directory cannot name other stores' registers.
+		expect(JSON.stringify(report.groups)).toContain('"Stores"');
+	} finally {
+		mockStores.next([{ id: 9, name: 'Shop' }]);
+	}
+});
+// Store 0's own scope is the same sentinel: a single-store till never prints "All stores".
+it('a single-store install keeps All registers under the sentinel', () => {
+	setup({ store: 'woocommerce-pos' });
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	const label = useReceiptDocument.mock.calls.at(-1)[0].localReport.report.scope.label;
+	expect(label).toContain('All registers');
+	expect(label).not.toContain('All stores');
 });

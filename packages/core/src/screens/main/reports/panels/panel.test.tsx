@@ -2,7 +2,15 @@
 
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
-import { mockCredentials, mockProducts, mockState, setOrders } from '../cards/test-utils';
+import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+
+import {
+	mockCredentials,
+	mockProducts,
+	mockState,
+	mockStores,
+	setOrders,
+} from '../cards/test-utils';
 import {
 	mockPrintDocument,
 	mockRefundsHandle,
@@ -16,6 +24,8 @@ import type * as Context from '../context';
 
 beforeEach(() => {
 	preparePanel();
+	mockState.storeFilter = '9';
+	mockStores.next([]);
 	mockSalesHandle.set({ ready: true, laneProgress: null });
 	mockRefundsHandle.set({ ready: true, laneProgress: null });
 	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
@@ -352,4 +362,37 @@ it('clears an old export error when a new print attempt starts', async () => {
 	await waitFor(() =>
 		expect(screen.getByTestId('print-sheet-error').textContent).toBe('Could not print. Try again.')
 	);
+});
+
+it("a single-store install's sentinel scope is not All stores", () => {
+	mockState.storeFilter = 'woocommerce-pos';
+	mockStores.next([{ id: 9, name: 'Shop' }]);
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');
+});
+it('the Stores panel waits for store names before Export and Print', () => {
+	mockState.storeFilter = 'woocommerce-pos';
+	mockState.register = undefined;
+	mockStores.next([
+		{ id: 7, name: 'Front shop' },
+		{ id: 9, name: 'Back shop' },
+	]);
+	room();
+	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-stores'));
+	// The card has names; the newly mounted panel must wait for its own directory read.
+	act(() => mockStores.next(PENDING_USER_DB_READ));
+	fireEvent.click(screen.getByTestId('card-where-sold-open'));
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
+	act(() =>
+		mockStores.next([
+			{ id: 7, name: 'Front shop' },
+			{ id: 9, name: 'Back shop' },
+		])
+	);
+	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('detail-panel-scope').textContent).toContain('All stores');
 });

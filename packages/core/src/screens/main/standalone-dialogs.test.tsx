@@ -210,6 +210,7 @@ jest.mock('./reports/cards/aggregate', () =>
 			'categories',
 			'channels',
 			'registers',
+			'stores',
 			'taxesByRate',
 			'tenders',
 			'topProducts',

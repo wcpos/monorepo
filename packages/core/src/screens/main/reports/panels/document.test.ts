@@ -36,6 +36,8 @@ const inputs = {
 	channels: channels(orders, totals),
 	registers: registers(orders, totals),
 	registerNames: {},
+	stores: [],
+	storeNames: {},
 	taxes: taxesByRate(orders, totals),
 	cashierNames: {},
 	formats: {

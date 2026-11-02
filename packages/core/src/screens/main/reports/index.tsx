@@ -149,6 +149,9 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		[wpCredentials]
 	);
 	const stores = useObservableState(storesSource, []);
+	// The sentinel is also store 0's own scope: All stores only with stores to choose from. The
+	// day, zone and formats stay the bound till's (`useStoreDay(0)` could pick a directory store 0).
+	const allStores = state.filters.store === 'woocommerce-pos' && stores.length > 1;
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
@@ -160,13 +163,13 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		from: day(range?.from, presets().today.from),
 		to: day(range?.to, presets().today.to),
 		registerId: state.filters.register ?? '',
-		storeId,
+		storeId: allStores ? 0 : storeId,
 		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
 	};
 	const select = (next: ClosureScope) => {
 		const nextStoreId = next.storeId ?? storeId;
 		const nextStore =
-			nextStoreId === undefined || nextStoreId === store?.id
+			nextStoreId === undefined || nextStoreId === 0 || nextStoreId === store?.id
 				? store
 				: stores.find((row) => row.id === nextStoreId);
 		// A store switch must use the new zone before the query rerenders useStoreDay.
@@ -190,7 +193,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		<DateButton
 			scope={scope}
 			onScopeChange={select}
-			storeId={scope.storeId}
+			storeId={storeId}
 			lockedScopeName={t('reports.earlier_days')}
 		/>
 	);

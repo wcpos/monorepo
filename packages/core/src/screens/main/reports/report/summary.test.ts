@@ -55,6 +55,37 @@ it('includes both register names only for multiple registers', () => {
 		['Back', '1', '£12.00'],
 	]);
 });
+it('prints the period by store under All stores, in place of the registers', () => {
+	const input = inputs();
+	input.totals.registerArray = [
+		{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
+		{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
+	];
+	const spec = summarySpec(
+		{
+			...input,
+			stores: {
+				rows: [
+					{ key: '1', orders: 1, amount: 12 },
+					{ key: 'online', orders: 1, amount: 12 },
+					{ key: 'unassigned', orders: 1, amount: 3 },
+				],
+				names: { '1': 'Front shop' },
+			},
+		},
+		t,
+		formats
+	);
+	expect(spec.groups?.find((group) => group.key === 'registers')).toBeUndefined();
+	const group = spec.groups?.find((group) => group.key === 'stores');
+	expect(group?.label).toBe('Stores');
+	expect(group?.rows.map((row) => row.cells)).toEqual([
+		['Front shop', '1', '£12.00'],
+		['Online', '1', '£12.00'],
+		['No store', '1', '£3.00'],
+	]);
+	expect(group?.totalRaw).toEqual(['Total', 3, 27]);
+});
 it('uses known period refunds, otherwise embedded refunds, and omits zero refunds', () => {
 	const input = inputs();
 	input.totals.refundTotal = 9;
