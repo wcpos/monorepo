@@ -1,6 +1,10 @@
 import { expect } from '@playwright/test';
 
-import { protocolHeadersSupported, SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
+import {
+	customHeadersReachServer,
+	protocolHeadersSupported,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 
 import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixtures';
 
@@ -64,18 +68,25 @@ test('every sync request uses the protocol transport proven by the store echo', 
 	syncRequests,
 }, testInfo) => {
 	const storeUrl = getStoreUrl(testInfo);
-	// The same predicate the app gates on. Mirror the app's transport ladder:
+	// The same predicates the app gates on. Mirror the app's transport ladder:
 	// a plain-permalink store can only prove capability through the
 	// `?rest_route=` echo form, so try it when the path form proves nothing.
+	// The probe carries the X-WCPOS marker the app's own echo sends: a host
+	// whose edge strips custom headers (dev-free) reports it unreceived, and
+	// the app then keeps the query twins.
 	const fetchEcho = async (echoUrl: string) =>
-		(await (await request.get(echoUrl)).json().catch(() => null)) as Parameters<
-			typeof protocolHeadersSupported
-		>[0];
-	let supportsProtocolHeaders = protocolHeadersSupported(
+		(await (
+			await request.get(echoUrl, { headers: { 'X-WCPOS': '1' } })
+		)
+			.json()
+			.catch(() => null)) as Parameters<typeof protocolHeadersSupported>[0];
+	const proven = (echo: Parameters<typeof protocolHeadersSupported>[0]) =>
+		protocolHeadersSupported(echo) && customHeadersReachServer(echo);
+	let supportsProtocolHeaders = proven(
 		await fetchEcho(new URL('/wp-json/wcpos/v2/echo', storeUrl).toString())
 	);
 	if (!supportsProtocolHeaders) {
-		supportsProtocolHeaders = protocolHeadersSupported(
+		supportsProtocolHeaders = proven(
 			await fetchEcho(new URL('/?rest_route=/wcpos/v2/echo', storeUrl).toString())
 		);
 	}
