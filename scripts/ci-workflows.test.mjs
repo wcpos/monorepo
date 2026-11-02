@@ -631,16 +631,21 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 	// next-target PR and both aggregators report that as a legitimate skip
 	// (an unexplained skip is still a gate failure).
 	const deploy = readWorkflow('deploy.yml');
-	assert.match(deploy.jobs.e2e.if, /github\.base_ref != 'next'/);
+	assert.match(deploy.jobs.e2e.if, /github\.base_ref != 'next' && github\.base_ref != '1\.11\.x'/);
 	const e2eGate = findStep(deploy, 'e2e-gate', 'Check shard results');
 	assert.equal(e2eGate.env.BASE_REF, '${{ github.base_ref }}');
 	assert.match(e2eGate.run, /"\$\{BASE_REF:-\}" = "next"/);
+	assert.match(e2eGate.run, /"\$\{BASE_REF:-\}" = "1\.11\.x"/);
 
 	const native = readWorkflow('e2e-native.yml');
-	assert.match(native.jobs.build.if, /github\.base_ref != 'next'/);
+	assert.match(
+		native.jobs.build.if,
+		/github\.base_ref != 'next' && github\.base_ref != '1\.11\.x'/
+	);
 	const nativeGate = findStep(native, 'native-gate', 'Check native results');
 	assert.equal(nativeGate.env.BASE_REF, '${{ github.base_ref }}');
 	assert.match(nativeGate.run, /"\$\{BASE_REF:-\}" = "next"/);
+	assert.match(nativeGate.run, /"\$\{BASE_REF:-\}" = "1\.11\.x"/);
 	// The exemption must be evaluated BEFORE the build-result check, or a
 	// skipped build reads as a failed dev-client resolution.
 	assert.ok(
@@ -663,6 +668,10 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 	const nextTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'next' } });
 	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
 	assert.match(nextTarget.stdout, /targeting next/);
+	// 1.11.x has no dev site (owner ruling 2026-11-01): same exemption as next.
+	const lane111Target = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: '1.11.x' } });
+	assert.equal(lane111Target.status, 0, lane111Target.stdout + lane111Target.stderr);
+	assert.match(lane111Target.stdout, /targeting 1\.11\.x/);
 	const nextDeployFailed = runShell(e2eGate.run, {
 		env: { ...webEnv, BASE_REF: 'next', DEPLOY_RESULT: 'failure', DEPLOY_URL: '' },
 	});
@@ -1172,6 +1181,15 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 	});
 	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
 	assert.match(nextTarget.stdout + nextTarget.stderr, /targeting next/);
+	// 1.11.x has no dev site (owner ruling 2026-11-01): same exemption as next.
+	const lane111Target = runGate({
+		BASE_REF: '1.11.x',
+		BUILD_RESULT: 'skipped',
+		ANDROID_RESULT: 'skipped',
+		IOS_RESULT: 'skipped',
+	});
+	assert.equal(lane111Target.status, 0, lane111Target.stdout + lane111Target.stderr);
+	assert.match(lane111Target.stdout + lane111Target.stderr, /targeting 1\.11\.x/);
 	const mainTargetSkipped = runGate({
 		BASE_REF: 'main',
 		BUILD_RESULT: 'skipped',

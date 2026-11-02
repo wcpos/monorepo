@@ -195,7 +195,7 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && github.base_ref != '1.11.x'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -572,9 +572,10 @@ jobs:
             exit 1
           fi
 
-          # PRs to the dev trunk are exempt (see the e2e job's comment).
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
-            echo "⏭️ E2E skipped: PRs targeting next are exempt from the web suite (owner ruling 2026-09-03)"
+          # PRs to the dev trunk are exempt (see the e2e job's comment); so are
+          # PRs to 1.11.x, which has no dev site (owner ruling 2026-11-01).
+          if [ "$EVENT_NAME" = "pull_request" ] && { [ "${BASE_REF:-}" = "next" ] || [ "${BASE_REF:-}" = "1.11.x" ]; }; then
+            echo "⏭️ E2E skipped: PRs targeting ${BASE_REF} are exempt from the web suite (owner rulings 2026-09-03, 2026-11-01)"
             exit 0
           fi
 
