@@ -11,6 +11,7 @@ import type {
 	categories,
 	channels,
 	registers,
+	stores,
 	taxesByRate,
 	tenders,
 	topProducts,
@@ -45,6 +46,8 @@ type Inputs = {
 	channels: ReturnType<typeof channels>;
 	registers: ReturnType<typeof registers>;
 	registerNames: Record<string, string>;
+	stores: ReturnType<typeof stores>;
+	storeNames: Record<string, string>;
 	payments: ReturnType<typeof tenders>;
 	products: ReturnType<typeof topProducts>;
 	categories: ReturnType<typeof categories>;
@@ -96,6 +99,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		category: t('common.category'),
 		channel: t('common.channel'),
 		register: t('common.register'),
+		store: t('common.store'),
 		avgOrder: t('reports.col_avg_order'),
 		rate: t('common.rate'),
 		net: t('reports.document.net'),
@@ -110,6 +114,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 	const keys = {
 		channels: ['channel', 'orders', 'amount', 'share'],
 		registers: ['register', 'orders', 'avg_order', 'amount'],
+		stores: ['store', 'orders', 'avg_order', 'amount'],
 		payments: ['method', 'orders', 'amount', 'share'],
 		products: ['product', 'qty', 'amount'],
 		categories: ['category', 'qty', 'amount', 'share'],
@@ -310,16 +315,18 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 			);
 		}
 		case 'channels':
-		case 'registers': {
+		case 'registers':
+		case 'stores': {
 			const byChannel = id === 'channels';
-			const rows = byChannel ? inputs.channels : inputs.registers;
+			const rows = byChannel ? inputs.channels : id === 'stores' ? inputs.stores : inputs.registers;
+			const names = id === 'stores' ? inputs.storeNames : inputs.registerNames;
 			const n = rows.reduce((sum, row) => sum + row.orders, 0);
 			const sum = rows.reduce((sum, row) => sum + row.amount, 0);
 			const totalShare = rows.reduce((sum, row) => sum + row.share, 0);
 			return spec(
 				byChannel
 					? [col.channel, col.orders, col.amount, col.share]
-					: [col.register, col.orders, col.avgOrder, col.amount],
+					: [id === 'stores' ? col.store : col.register, col.orders, col.avgOrder, col.amount],
 				rows.map((row) => {
 					const name = byChannel
 						? row.key === 'store'
@@ -329,7 +336,9 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 							? t('common.online')
 							: row.key === 'unregistered'
 								? t('reports.no_register_row')
-								: inputs.registerNames[row.key] || unknown;
+								: row.key === 'unassigned'
+									? t('reports.no_store_row')
+									: names[row.key] || unknown;
 					const average = row.orders ? row.amount / row.orders : 0;
 					return {
 						key: row.key,

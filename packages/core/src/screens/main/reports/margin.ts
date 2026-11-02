@@ -57,7 +57,7 @@ export function cogsEnabled(orders: { cost_of_goods_sold?: unknown }[], products
 }
 export type LocalCategory = { id: number; name?: string; parent?: number };
 export type CategoryTree = Map<number, LocalCategory>;
-function categoryChain(id: number, tree: CategoryTree) {
+export function categoryChain(id: number, tree: CategoryTree) {
 	const chain: LocalCategory[] = [];
 	for (let step = 0; id && step < 10; step++) {
 		const node = tree.get(id);

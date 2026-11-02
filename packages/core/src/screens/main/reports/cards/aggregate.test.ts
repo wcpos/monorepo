@@ -6,6 +6,7 @@ import {
 	refundsSummary,
 	registers,
 	statusCounts,
+	stores,
 	taxesByRate,
 	tenders,
 	topProducts,
@@ -465,4 +466,29 @@ it("a refund made today for last week's order counts today", () => {
 			totals([])
 		)
 	).toMatchObject({ refunded: 15, ordersWithRefunds: 1 });
+});
+
+it('stores partitions every order, including online stamps and unstamped POS remainders', () => {
+	const rows = orders([
+		{ total: '6', created_via: 'woocommerce-pos', meta_data: [{ key: '_pos_store', value: '7' }] },
+		{ total: '4', created_via: 'woocommerce-pos', meta_data: [{ key: '_pos_store', value: '7' }] },
+		{ total: '3', created_via: 'woocommerce-pos', meta_data: [{ key: '_pos_store', value: '9' }] },
+		{ total: '2', created_via: 'checkout', meta_data: [{ key: '_pos_store', value: '7' }] },
+		{ total: '1' },
+		{ total: '4', created_via: 'woocommerce-pos' },
+	]);
+	const result = stores(rows, totals(rows));
+	expect(result).toEqual([
+		{ key: '7', amount: 10, orders: 2, share: 0.5 },
+		{ key: 'unassigned', amount: 4, orders: 1, share: 0.2 },
+		{ key: '9', amount: 3, orders: 1, share: 0.15 },
+		{ key: 'online', amount: 3, orders: 2, share: 0.15 },
+	]);
+	expect(result.reduce((sum, row) => sum + row.amount, 0)).toBe(totals(rows).total);
+	expect(result.reduce((sum, row) => sum + row.share, 0)).toBeCloseTo(1);
+	expect(stores([], totals([]))).toEqual([]);
+	const zero = orders([{ created_via: 'woocommerce-pos' }]);
+	expect(stores(zero, totals(zero))).toEqual([
+		{ key: 'unassigned', amount: 0, orders: 1, share: 0 },
+	]);
 });

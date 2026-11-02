@@ -81,7 +81,8 @@ export type DetailId =
 	| 'taxes'
 	| 'refunds'
 	| 'channels'
-	| 'registers';
+	| 'registers'
+	| 'stores';
 
 export interface ReportsScope {
 	detail: DetailId | null;

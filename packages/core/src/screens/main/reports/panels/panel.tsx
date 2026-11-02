@@ -6,7 +6,11 @@ import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 
 import { saleMomentOf } from '@wcpos/query/query-state';
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import {
+	observeCredentialStores,
+	observeSiteCredentials,
+	PENDING_USER_DB_READ,
+} from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
@@ -27,6 +31,7 @@ import {
 	categories,
 	channels,
 	registers,
+	stores,
 	taxesByRate,
 	tenders,
 	topProducts,
@@ -46,6 +51,8 @@ import { useLocalCategories } from '../cards/use-local-categories';
 import { periodLabel } from '../date-button';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
+import { MenuChip } from '../menu-chip';
+import { brandChoices, categoryChoices, filterLines } from './line-filters';
 import { panelCsv } from './export-csv';
 import { panelSpec } from './specs';
 import { usePrintWaiting } from './use-print-waiting';
@@ -56,6 +63,11 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet, PrintSheetInner } from '../../receipt/print-sheet';
 
 export function DetailPanel() {
+	const { detail } = useReportsScope();
+	return <DetailPanelContent key={detail} />;
+}
+
+function DetailPanelContent() {
 	const { detail, setDetail } = useReportsScope(),
 		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
 	const included = useIncludedStatus();
@@ -76,16 +88,28 @@ export function DetailPanel() {
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const registerId = useQueryState<'orders'>().filters.register;
+	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
 	const names = useRegisterNames(storeId),
 		registerNamesReady = useRegisterNamesReady(storeId),
 		binding = useRegisterBinding();
-	const register = registerId
-		? names[registerId] ||
-			(binding.registerId === registerId ? binding.registerName : '') ||
-			t('common.unknown')
-		: t('reports.all_registers');
-	const { site } = useStoreSession();
+	const { site, wpCredentials } = useStoreSession();
+	const storesSource = React.useMemo(
+		() =>
+			observeCredentialStores(wpCredentials).pipe(
+				filter((value) => value !== PENDING_USER_DB_READ)
+			),
+		[wpCredentials]
+	);
+	const storeDirectory = useObservableState(storesSource);
+	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
+	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
+	const register = allStores
+		? t('reports.all_stores')
+		: registerId
+			? names[registerId] ||
+				(binding.registerId === registerId ? binding.registerName : '') ||
+				t('common.unknown')
+			: t('reports.all_registers');
 	const source = React.useMemo(
 		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
 		[site]
@@ -97,7 +121,7 @@ export function DetailPanel() {
 	const grouped = detail === 'products' || detail === 'categories' || detail === 'brands';
 	const products = useLocalProducts(grouped ? ids : []);
 	const tree = useLocalCategories(
-		detail === 'categories'
+		detail === 'categories' || detail === 'products'
 			? (products ?? []).flatMap((product) =>
 					(product.categories ?? []).flatMap((category) =>
 						category.id == null ? [] : [category.id]
@@ -105,6 +129,27 @@ export function DetailPanel() {
 				)
 			: []
 	);
+	const [categoryId, setCategoryId] = React.useState('all');
+	const [brandId, setBrandId] = React.useState('all');
+	const categoryOptions = categoryChoices(
+		products ?? [],
+		tree ?? new Map(),
+		t('reports.chain_separator'),
+		t('common.unknown')
+	);
+	const brandOptions = brandChoices(products ?? []);
+	const filters = {
+		categoryId: detail === 'products' && categoryId !== 'all' ? categoryId : undefined,
+		brandId: detail === 'products' && brandId !== 'all' ? brandId : undefined,
+	};
+	const filteredOrders = filterLines(selectedOrders, products ?? [], tree ?? new Map(), filters);
+	const filteredRefunds = filterLines(
+		periodRefunds ?? [],
+		products ?? [],
+		tree ?? new Map(),
+		filters
+	);
+	const filtering = filters.categoryId !== undefined || filters.brandId !== undefined;
 	const [error, setError] = React.useState('');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
@@ -117,9 +162,10 @@ export function DetailPanel() {
 		formats.store &&
 		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
-		(detail !== 'categories' || tree) &&
+		((detail !== 'categories' && detail !== 'products') || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
-		(detail !== 'registers' || registerNamesReady);
+		(detail !== 'registers' || registerNamesReady) &&
+		(detail !== 'stores' || !!storeDirectory);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
 		cogs:
@@ -132,7 +178,7 @@ export function DetailPanel() {
 		periodRefunds,
 		brands: brands(selectedOrders, products ?? [], totals, decimals, periodRefunds),
 		payments: tenders(selectedOrders, totals, decimals),
-		products: topProducts(selectedOrders, totals, decimals, periodRefunds, products),
+		products: topProducts(filteredOrders, totals, decimals, filteredRefunds, products),
 		categories: categories(
 			selectedOrders,
 			products ?? [],
@@ -146,6 +192,10 @@ export function DetailPanel() {
 		channels: channels(selectedOrders, totals),
 		registers: registers(selectedOrders, totals),
 		registerNames: names,
+		stores: stores(selectedOrders, totals),
+		storeNames: Object.fromEntries(
+			(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
+		),
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,
@@ -173,9 +223,16 @@ export function DetailPanel() {
 		refunds: t('reports.panel_refunds'),
 		channels: t('reports.panel_channels'),
 		registers: t('reports.panel_registers'),
+		stores: t('reports.panel_stores'),
 	};
 	const title = titles[detail ?? 'orders'];
-	const scopeLine = t('reports.panel_scope', { period, register });
+	const scopeLine = [
+		t('reports.panel_scope', { period, register }),
+		categoryOptions.find((row) => row.value === filters.categoryId)?.label,
+		brandOptions.find((row) => row.value === filters.brandId)?.label,
+	]
+		.filter(Boolean)
+		.join(' · ');
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
 		spec,
@@ -231,6 +288,15 @@ export function DetailPanel() {
 		count: formats.quantity(selectedOrders.length),
 		total: formats.money(totals.total),
 	};
+	// Read only while a filter is on: a spec a test stubs without rows must not throw here.
+	const productStatus = filtering
+		? {
+				n: formats.quantity(spec.rows.length),
+				total: spec.total[spec.keys.indexOf('amount')],
+				k: status.n,
+				m: status.m,
+			}
+		: status;
 	const exportCsv = async () => {
 		if (busy) return;
 		setBusy(true);
@@ -268,6 +334,44 @@ export function DetailPanel() {
 			<Text testID="detail-panel-scope" className="text-muted-foreground">
 				{scopeLine}
 			</Text>
+			{detail === 'products' && (
+				<View testID="detail-panel-filters" className="flex-row flex-wrap gap-2">
+					{categoryOptions.length > 0 && (
+						<MenuChip
+							name="category"
+							icon="category"
+							value={categoryId}
+							defaultValue="all"
+							onChange={setCategoryId}
+							choices={[{ value: 'all', label: t('reports.all_categories') }, ...categoryOptions]}
+							scroll
+							ids={{
+								trigger: 'detail-panel-category',
+								menu: 'detail-panel-category-menu',
+								row: (value) => `detail-panel-category-${value}`,
+								clear: 'detail-panel-category-clear',
+							}}
+						/>
+					)}
+					{brandOptions.length > 0 && (
+						<MenuChip
+							name="brand"
+							icon="tags"
+							value={brandId}
+							defaultValue="all"
+							onChange={setBrandId}
+							choices={[{ value: 'all', label: t('reports.all_brands') }, ...brandOptions]}
+							scroll
+							ids={{
+								trigger: 'detail-panel-brand',
+								menu: 'detail-panel-brand-menu',
+								row: (value) => `detail-panel-brand-${value}`,
+								clear: 'detail-panel-brand-clear',
+							}}
+						/>
+					)}
+				</View>
+			)}
 		</DialogHeader>
 	);
 	const exportError = !!error && (
@@ -282,9 +386,13 @@ export function DetailPanel() {
 				? leftOut
 					? t('reports.orders_counted_left_out', counted)
 					: t('reports.orders_counted', counted)
-				: spec.missing
-					? t('reports.cost_missing_status', status)
-					: t('reports.panel_status', status)}
+				: filtering
+					? spec.missing
+						? t('reports.products_cost_missing_status', productStatus)
+						: t('reports.products_status', productStatus)
+					: spec.missing
+						? t('reports.cost_missing_status', status)
+						: t('reports.panel_status', status)}
 		</Text>
 	);
 	const secondary = !!ready && {
