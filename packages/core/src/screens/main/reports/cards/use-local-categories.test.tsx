@@ -4,8 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import { mockCategories } from './test-utils';
 import { useLocalCategories } from './use-local-categories';
 
-// Querying just the assigned ids, going past three rounds, or retaining the old period breaks these.
-it('reads ancestors locally for at most three rounds and observes their changes', () => {
+// Querying just the assigned ids, stopping short of the root, or retaining the old period breaks these.
+it('reads the whole ancestor chain locally and observes its changes', () => {
 	mockCategories.next([
 		{ id: 4, name: 'Leaf', parent: 3 },
 		{ id: 3, name: 'Parent', parent: 2 },
@@ -15,7 +15,7 @@ it('reads ancestors locally for at most three rounds and observes their changes'
 	const { result, rerender } = renderHook(({ ids }) => useLocalCategories(ids), {
 		initialProps: { ids: [4, 4] },
 	});
-	expect([...result.current!.keys()]).toEqual([4, 3, 2]);
+	expect([...result.current!.keys()]).toEqual([4, 3, 2, 1]);
 	act(() =>
 		mockCategories.next([
 			{ id: 4, name: 'Leaf', parent: 1 },
