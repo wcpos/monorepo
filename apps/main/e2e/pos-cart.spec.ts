@@ -2,6 +2,15 @@ import { expect, type Page } from '@playwright/test';
 
 import { ensureRegisterOpen, openOrderSheet, waitForCadenceStart } from './fixtures';
 import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
+
+/**
+ * DOM add intent → quantity in the DOM. 1.11 held 300 ms. On the 2.0 web build the quiet-store reading is
+ * 313–518 ms (free) and 360–471 ms (pro), eight samples on 2026-11-02 (Deploy run 41472588456 attempt 2),
+ * so the gate tripped on every main run after the 2.0 promotion. Paul, 2026-11-02: "Just lift for the
+ * moment, it's a fucking beta." 600 covers the reading with margin and nothing more; the 300 ms target
+ * returns with the interaction-freeze work before GA.
+ */
+const CART_ADD_BUDGET_MS = 600;
 import {
 	addCheckoutProbeProduct,
 	checkoutProbeAddControl,
@@ -52,7 +61,7 @@ test.describe('POS Cart', () => {
 		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
 		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
-		await expectCartAddMeasurement(page, testInfo, 300);
+		await expectCartAddMeasurement(page, testInfo, CART_ADD_BUDGET_MS);
 	});
 
 	test('should absorb twenty rapid adds and paint the exact quantity', async ({
