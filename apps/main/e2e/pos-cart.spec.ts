@@ -21,6 +21,17 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 
+/**
+ * DOM add intent → quantity in the DOM: 300 ms, the 1.11 target, unchanged. On the 2.0 web build it reads
+ * 313–518 ms (free) / 360–471 ms (pro) with the dev stores quiet and 350–1120 ms with four or five Deploy
+ * runs sharing them (2026-11-02, Deploy runs 41472588456 attempt 2 and 41520135664), so the gate tripped on
+ * every main run after the 2.0 promotion. Paul, 2026-11-02: "Just lift for the moment, it's a fucking
+ * beta." The lift is the quarantine of this test and the burst test in e2e/quarantine.json (group G7), the
+ * repo's own park (owner's ruling on #2284: quarantine, never shorten or widen); the weekly run reports when
+ * they pass again, and the interaction-freeze work owns bringing the add back under this number before GA.
+ */
+const CART_ADD_BUDGET_MS = 300;
+
 /** Add the run-private simple product, or the shared-SKU fallback on secretless forks. */
 async function addFirstProductToCart(page: Page) {
 	await addCheckoutProbeProduct(page);
@@ -52,7 +63,7 @@ test.describe('POS Cart', () => {
 		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
 		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
-		await expectCartAddMeasurement(page, testInfo, 300);
+		await expectCartAddMeasurement(page, testInfo, CART_ADD_BUDGET_MS);
 	});
 
 	test('should absorb twenty rapid adds and paint the exact quantity', async ({
