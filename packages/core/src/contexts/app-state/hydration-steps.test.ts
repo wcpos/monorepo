@@ -543,7 +543,13 @@ describe('HYDRATE_USER_SESSION', () => {
 				ok: !flag || String(url).includes('rest_route'),
 				json: async () => ({
 					v: 1,
-					headers: { authorization: { received: !flag, length: 12 } },
+					headers: {
+						authorization: { received: !flag, length: 12 },
+						// The plain marker the probe sends. Since e26ad379f the header verdict
+						// also needs it to have REACHED PHP: an edge that strips custom headers
+						// reports it unreceived and the query twins stay on.
+						'x-wcpos': { received: flag, length: 1 },
+					},
 					cors: { reflects_request_headers: flag },
 					params: { authorization: true, wcpos: true, store_id: true },
 				}),
@@ -715,6 +721,9 @@ describe('TEST_AUTHORIZATION', () => {
 				v: 1,
 				headers: {
 					authorization: { received: true, length: 12 },
+					// The plain marker the probe sends, received: custom headers reach PHP
+					// on this store (e26ad379f gates the header verdict on it).
+					'x-wcpos': { received: true, length: 1 },
 					// Floor keys the probe never sends: they prove header capability
 					// and must NOT read as dead headers.
 					'x-wcpos-protocol': { received: false, length: 0 },
