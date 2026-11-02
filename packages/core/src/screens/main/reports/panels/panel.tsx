@@ -51,6 +51,8 @@ import { useLocalCategories } from '../cards/use-local-categories';
 import { periodLabel } from '../date-button';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
+import { MenuChip } from '../menu-chip';
+import { brandChoices, categoryChoices, filterLines } from './line-filters';
 import { panelCsv } from './export-csv';
 import { panelSpec } from './specs';
 import { usePrintWaiting } from './use-print-waiting';
@@ -61,6 +63,11 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet, PrintSheetInner } from '../../receipt/print-sheet';
 
 export function DetailPanel() {
+	const { detail } = useReportsScope();
+	return <DetailPanelContent key={detail} />;
+}
+
+function DetailPanelContent() {
 	const { detail, setDetail } = useReportsScope(),
 		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
 	const included = useIncludedStatus();
@@ -114,7 +121,7 @@ export function DetailPanel() {
 	const grouped = detail === 'products' || detail === 'categories' || detail === 'brands';
 	const products = useLocalProducts(grouped ? ids : []);
 	const tree = useLocalCategories(
-		detail === 'categories'
+		detail === 'categories' || detail === 'products'
 			? (products ?? []).flatMap((product) =>
 					(product.categories ?? []).flatMap((category) =>
 						category.id == null ? [] : [category.id]
@@ -122,6 +129,27 @@ export function DetailPanel() {
 				)
 			: []
 	);
+	const [categoryId, setCategoryId] = React.useState('all');
+	const [brandId, setBrandId] = React.useState('all');
+	const categoryOptions = categoryChoices(
+		products ?? [],
+		tree ?? new Map(),
+		t('reports.chain_separator'),
+		t('common.unknown')
+	);
+	const brandOptions = brandChoices(products ?? []);
+	const filters = {
+		categoryId: detail === 'products' && categoryId !== 'all' ? categoryId : undefined,
+		brandId: detail === 'products' && brandId !== 'all' ? brandId : undefined,
+	};
+	const filteredOrders = filterLines(selectedOrders, products ?? [], tree ?? new Map(), filters);
+	const filteredRefunds = filterLines(
+		periodRefunds ?? [],
+		products ?? [],
+		tree ?? new Map(),
+		filters
+	);
+	const filtering = filters.categoryId !== undefined || filters.brandId !== undefined;
 	const [error, setError] = React.useState('');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
@@ -134,7 +162,7 @@ export function DetailPanel() {
 		formats.store &&
 		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
-		(detail !== 'categories' || tree) &&
+		((detail !== 'categories' && detail !== 'products') || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
 		(detail !== 'registers' || registerNamesReady) &&
 		(detail !== 'stores' || !!storeDirectory);
@@ -150,7 +178,7 @@ export function DetailPanel() {
 		periodRefunds,
 		brands: brands(selectedOrders, products ?? [], totals, decimals, periodRefunds),
 		payments: tenders(selectedOrders, totals, decimals),
-		products: topProducts(selectedOrders, totals, decimals, periodRefunds, products),
+		products: topProducts(filteredOrders, totals, decimals, filteredRefunds, products),
 		categories: categories(
 			selectedOrders,
 			products ?? [],
@@ -198,7 +226,13 @@ export function DetailPanel() {
 		stores: t('reports.panel_stores'),
 	};
 	const title = titles[detail ?? 'orders'];
-	const scopeLine = t('reports.panel_scope', { period, register });
+	const scopeLine = [
+		t('reports.panel_scope', { period, register }),
+		categoryOptions.find((row) => row.value === filters.categoryId)?.label,
+		brandOptions.find((row) => row.value === filters.brandId)?.label,
+	]
+		.filter(Boolean)
+		.join(' · ');
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
 		spec,
@@ -254,6 +288,12 @@ export function DetailPanel() {
 		count: formats.quantity(selectedOrders.length),
 		total: formats.money(totals.total),
 	};
+	const productStatus = {
+		n: formats.quantity(spec.rows.length),
+		total: spec.total[spec.keys.indexOf('amount')],
+		k: status.n,
+		m: status.m,
+	};
 	const exportCsv = async () => {
 		if (busy) return;
 		setBusy(true);
@@ -291,6 +331,44 @@ export function DetailPanel() {
 			<Text testID="detail-panel-scope" className="text-muted-foreground">
 				{scopeLine}
 			</Text>
+			{detail === 'products' && (
+				<View testID="detail-panel-filters" className="flex-row flex-wrap gap-2">
+					{categoryOptions.length > 0 && (
+						<MenuChip
+							name="category"
+							icon="category"
+							value={categoryId}
+							defaultValue="all"
+							onChange={setCategoryId}
+							choices={[{ value: 'all', label: t('reports.all_categories') }, ...categoryOptions]}
+							scroll
+							ids={{
+								trigger: 'detail-panel-category',
+								menu: 'detail-panel-category-menu',
+								row: (value) => `detail-panel-category-${value}`,
+								clear: 'detail-panel-category-clear',
+							}}
+						/>
+					)}
+					{brandOptions.length > 0 && (
+						<MenuChip
+							name="brand"
+							icon="tags"
+							value={brandId}
+							defaultValue="all"
+							onChange={setBrandId}
+							choices={[{ value: 'all', label: t('reports.all_brands') }, ...brandOptions]}
+							scroll
+							ids={{
+								trigger: 'detail-panel-brand',
+								menu: 'detail-panel-brand-menu',
+								row: (value) => `detail-panel-brand-${value}`,
+								clear: 'detail-panel-brand-clear',
+							}}
+						/>
+					)}
+				</View>
+			)}
 		</DialogHeader>
 	);
 	const exportError = !!error && (
@@ -305,9 +383,13 @@ export function DetailPanel() {
 				? leftOut
 					? t('reports.orders_counted_left_out', counted)
 					: t('reports.orders_counted', counted)
-				: spec.missing
-					? t('reports.cost_missing_status', status)
-					: t('reports.panel_status', status)}
+				: filtering
+					? spec.missing
+						? t('reports.products_cost_missing_status', productStatus)
+						: t('reports.products_status', productStatus)
+					: spec.missing
+						? t('reports.cost_missing_status', status)
+						: t('reports.panel_status', status)}
 		</Text>
 	);
 	const secondary = !!ready && {

@@ -1,10 +1,13 @@
 /** @jest-environment jsdom */
 
+import * as React from 'react';
+
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 
 import {
+	mockCategories,
 	mockCredentials,
 	mockProducts,
 	mockState,
@@ -19,13 +22,24 @@ import {
 	room,
 } from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
+import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
+import type { buildReportDocument } from './document';
 import type * as Context from '../context';
+
+const mockPopover = jest.requireMock<typeof import('@wcpos/components/popover')>(
+	'@wcpos/components/popover'
+);
 
 beforeEach(() => {
 	preparePanel();
 	mockState.storeFilter = '9';
 	mockStores.next([]);
+	// Expose menus at the existing native-popover boundary; MenuChip and rows stay real.
+	jest
+		.spyOn(mockPopover, 'PopoverContent')
+		.mockImplementation(({ children, testID }) => <div data-testid={testID}>{children}</div>);
+	mockCategories.next([]);
 	mockSalesHandle.set({ ready: true, laneProgress: null });
 	mockRefundsHandle.set({ ready: true, laneProgress: null });
 	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
@@ -395,4 +409,116 @@ it('the Stores panel waits for store names before Export and Print', () => {
 	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('detail-panel-scope').textContent).toContain('All stores');
+});
+function productsFixture(withBrands = true) {
+	mockProducts.next([
+		{ id: 1, categories: [{ id: 11 }], brands: withBrands ? [{ id: 7, name: 'Acme' }] : [] },
+		{ id: 2, categories: [{ id: 12 }] },
+	]);
+	mockCategories.next([
+		{ id: 10, name: 'Clothes', parent: 0 },
+		{ id: 11, name: 'Shirts', parent: 10 },
+		{ id: 12, name: 'Hats', parent: 10 },
+	]);
+	setOrders([
+		{
+			uuid: 'a',
+			status: 'completed',
+			total: '36',
+			line_items: [
+				{ product_id: 1, name: 'Shirt', total: '10', total_tax: '2', quantity: 1 },
+				{ product_id: 2, name: 'Hat', total: '20', total_tax: '4', quantity: 2 },
+			],
+		},
+	] as Context.ReportOrder[]);
+}
+function reportDocument() {
+	return jest.mocked(useReceiptDocument).mock.calls.at(-1)![0].localReport!.report as ReturnType<
+		typeof buildReportDocument
+	>['report'];
+}
+it.each(['products', 'categories', 'payments'])(
+	'only Products has the panel filter row: %s',
+	(panel) => {
+		productsFixture();
+		room();
+		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
+		expect(!!screen.queryByTestId('detail-panel-filters')).toBe(panel === 'products');
+		if (panel === 'products') expect(screen.getByTestId('detail-panel-brand')).toBeTruthy();
+	}
+);
+it('omits the Brand chip when no joined product has a brand', () => {
+	productsFixture(false);
+	room();
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	expect(screen.getByTestId('detail-panel-category')).toBeTruthy();
+	expect(screen.queryByTestId('detail-panel-brand')).toBeNull();
+});
+it('filters product rows, scope, footer and CSV through the category menu, then clears', async () => {
+	productsFixture();
+	room();
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	expect(reportDocument().rows.map((row) => row.label)).toEqual(['Hat', 'Shirt']);
+	fireEvent.click(screen.getByTestId('detail-panel-category'));
+	fireEvent.click(screen.getByTestId('detail-panel-category-11'));
+	expect(reportDocument().rows.map((row) => row.label)).toEqual(['Shirt']);
+	expect(screen.getByTestId('detail-panel-footer').textContent).toContain('1 products · £12.00');
+	expect(screen.getByTestId('detail-panel-scope').textContent).toBe(
+		'Today · Wed 15 Jul · Front · Clothes › Shirts'
+	);
+	expect(reportDocument().scope.label).toBe('Today · Wed 15 Jul · Front · Clothes › Shirts');
+	fireEvent.click(screen.getByTestId('detail-panel-export'));
+	await waitFor(() =>
+		expect(saveOrShareCsv).toHaveBeenCalledWith(
+			'"Product","Qty","Amount"\r\n"Shirt","1","£12.00"\r\n"All products","1","£12.00"',
+			'sales-products-2026-07-15-2026-07-15.csv'
+		)
+	);
+	fireEvent.click(screen.getByTestId('detail-panel-category-clear'));
+	expect(reportDocument().rows.map((row) => row.label)).toEqual(['Hat', 'Shirt']);
+	expect(screen.getByTestId('detail-panel-footer').textContent).toContain('1 orders · £36.00');
+	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');
+});
+it('intersects Brand with Category, nets refunds and counts only filtered missing costs', () => {
+	productsFixture();
+	mockState.data.allOrders[0].cost_of_goods_sold = {};
+	mockState.data.periodRefunds = [
+		{
+			id: 9,
+			parent_id: 1,
+			date_created_gmt: '2026-07-15T12:00:00',
+			line_items: [
+				{ product_id: 1, name: 'Shirt', total: '-5', total_tax: '-1', quantity: -0.5 },
+				{ product_id: 2, name: 'Hat', total: '-10', total_tax: '-2', quantity: -1 },
+			],
+		},
+	];
+	room();
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	fireEvent.click(screen.getByTestId('detail-panel-category-10'));
+	fireEvent.click(screen.getByTestId('detail-panel-brand-7'));
+	expect(reportDocument().rows.map((row) => row.label)).toEqual(['Shirt']);
+	expect(screen.getByTestId('detail-panel-cost-missing').textContent).toBe(
+		'1 products · £6.00 · cost missing on 1.5 of 1.5 items'
+	);
+	expect(reportDocument().scope.label).toBe('Today · Wed 15 Jul · Front · Clothes · Acme');
+	fireEvent.click(screen.getByTestId('detail-panel-close'));
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect(screen.getByTestId('detail-panel-footer').textContent).toContain('1 orders · £36.00');
+	fireEvent.click(screen.getByTestId('detail-panel-close'));
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	expect(reportDocument().rows).toHaveLength(2);
+	expect(screen.queryByTestId('detail-panel-category-clear')).toBeNull();
+	expect(screen.queryByTestId('detail-panel-brand-clear')).toBeNull();
+});
+it('waits for the category tree before exporting or printing Products', async () => {
+	productsFixture();
+	mockCategories.next(undefined);
+	room();
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+	await act(async () => mockCategories.next([{ id: 11, name: 'Shirts', parent: 0 }]));
+	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 });

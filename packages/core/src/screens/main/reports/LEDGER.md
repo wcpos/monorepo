@@ -60,6 +60,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 41. All stores is a Pro scope on multi-store sites in Sales only: `storeId: 0` writes the `'woocommerce-pos'` sentinel, the whole site under the sales store scope. It uses the bound till’s day, zone and currency formats (stores in different zones share that day); the register group collapses to All registers — evidence: this PR, Paul 2026-11-02 “what would the cashier expect to see”.
 
+42. The Products panel’s Category and Brand chips match the first category / first brand; a parent includes its sub-categories. They narrow the products rows, total, margin footer, CSV and print only; the filters are device state, reset on open — evidence: this PR, Paul 2026-11-02 “what would the cashier expect to see” — platform: all.
+
 ## Retired orders ledger lines
 
 - Orders 3: ~~Pass selection through FlashList `extraData` — checkbox changes must repaint recycled rows~~ — **struck** (wcpos/roadmap#332 PR 3d): no FlashList. Original evidence: `reports/orders/index.tsx:181`, “Extra data is needed to force a re-render of FlashList when the selection state changes” — platform: native FlashList path.
