@@ -116,9 +116,10 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeVisible();
-			// A reader is a Chip; the selected one draws its border in primary (no aria-selected).
+			// A reader is a Chip; the selected one is a tinted block, `bg-selected border-selected`
+			// (#3068, Paul 2026-10-29), with no aria-selected.
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(
-				/\bborder-primary\b/
+				/\bborder-selected\b/
 			);
 			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 			await expect
@@ -190,7 +191,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				.toBe(balance);
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-decline')).toHaveClass(
-				/\bborder-primary\b/
+				/\bborder-selected\b/
 			);
 			await page.getByTestId('checkout-reader-sim-approve').click();
 			await takeTerminal(page, orderId, 'sim-approve');
