@@ -5,12 +5,14 @@
 import * as React from 'react';
 
 import { act, render, renderHook } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
 
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
 import { getPagingVerdict, useGuardedExtendLimit } from './use-guarded-extend-limit';
 
-import type { QueryBinding } from './query-bindings';
+import type { EngineOpinion } from './use-guarded-extend-limit';
+
+/** No declaration in flight and no opinion from the engine: the short-page rule stands. */
+const NO_OPINION: EngineOpinion = { pending: false, exhausted: null };
 
 describe('getPagingVerdict', () => {
 	it.each`
@@ -62,31 +64,30 @@ describe('paging callback identity', () => {
 		);
 	}
 
-	it('retains the callback for unchanged primitives and a recreated binding wrapper', () => {
+	it('retains the callback for unchanged primitives and a recreated opinion object', () => {
 		const extendLimit = jest.fn();
-		const binding = { pending$: of(false), exhausted$: of(true) };
+		const engine: EngineOpinion = { pending: false, exhausted: true };
 		const { result, rerender } = renderHook(
-			(props) => useGuardedExtendLimit(extendLimit, 10, props.binding),
-			{ initialProps: { binding }, wrapper }
+			(props) => useGuardedExtendLimit(extendLimit, 10, props.engine),
+			{ initialProps: { engine }, wrapper }
 		);
 		const initial = result.current;
-		rerender({ binding });
+		rerender({ engine });
 		expect(result.current).toBe(initial);
-		rerender({ binding: { ...binding } });
+		rerender({ engine: { ...engine } });
 		expect(result.current).toBe(initial);
 	});
 
 	it('re-arms a pending empty search when it settles and extends once', () => {
 		const extendLimit = jest.fn();
-		const pending$ = new BehaviorSubject(true);
-		const binding = { pending$, exhausted$: of(false) };
-		const { result } = renderHook(() => useGuardedExtendLimit(extendLimit, 0, binding), {
-			wrapper,
-		});
+		const { result, rerender } = renderHook(
+			(props) => useGuardedExtendLimit(extendLimit, 0, props.engine),
+			{ initialProps: { engine: { pending: true, exhausted: false } as EngineOpinion }, wrapper }
+		);
 		const pending = result.current;
 		act(() => pending());
 		expect(extendLimit).not.toHaveBeenCalled();
-		act(() => pending$.next(false));
+		rerender({ engine: { pending: false, exhausted: false } });
 		expect(result.current).not.toBe(pending);
 		act(() => {
 			result.current();
@@ -97,9 +98,9 @@ describe('paging callback identity', () => {
 
 	it('changes identity from full to overfull even when permission is unchanged', () => {
 		const extendLimit = jest.fn();
-		const binding = { pending$: of(false), exhausted$: of(true) };
+		const engine: EngineOpinion = { pending: false, exhausted: true };
 		const { result, rerender } = renderHook(
-			({ count }) => useGuardedExtendLimit(extendLimit, count, binding),
+			({ count }) => useGuardedExtendLimit(extendLimit, count, engine),
 			{ initialProps: { count: 10 }, wrapper }
 		);
 		const full = result.current;
@@ -113,25 +114,33 @@ describe('paging callback identity', () => {
 describe('useGuardedExtendLimit (#1221)', () => {
 	let fire: (() => void) | undefined;
 	let limit: number | undefined;
-	type EngineBinding = Pick<QueryBinding, 'pending$' | 'exhausted$'>;
-
-	function Probe({ resultCount, binding }: { resultCount: number; binding?: EngineBinding }) {
+	function Probe({
+		resultCount,
+		engine = NO_OPINION,
+	}: {
+		resultCount: number;
+		engine?: EngineOpinion;
+	}) {
 		limit = useQueryState<'products', number>((state) => state.limit);
 		const actions = useQueryStateActions<'products'>();
-		fire = useGuardedExtendLimit(actions.extendLimit, resultCount, binding);
+		fire = useGuardedExtendLimit(actions.extendLimit, resultCount, engine);
 		return null;
 	}
 
-	function renderProbe(resultCount: number, binding?: EngineBinding) {
-		return render(
+	function probeTree(resultCount: number, engine?: EngineOpinion) {
+		return (
 			<QueryStateProvider
 				collection="products"
 				initialPageSize={10}
 				initialSort={{ field: 'name', direction: 'asc' }}
 			>
-				<Probe resultCount={resultCount} binding={binding} />
+				<Probe resultCount={resultCount} engine={engine} />
 			</QueryStateProvider>
 		);
+	}
+
+	function renderProbe(resultCount: number, engine?: EngineOpinion) {
+		return render(probeTree(resultCount, engine));
 	}
 
 	afterEach(() => {
@@ -174,27 +183,19 @@ describe('useGuardedExtendLimit (#1221)', () => {
 		expect(limit).toBe(20);
 
 		// The fetch lands a full window: the next end-reached extends again.
-		view.rerender(
-			<QueryStateProvider
-				collection="products"
-				initialPageSize={10}
-				initialSort={{ field: 'name', direction: 'asc' }}
-			>
-				<Probe resultCount={20} />
-			</QueryStateProvider>
-		);
+		view.rerender(probeTree(20));
 		act(() => fire!());
 		expect(limit).toBe(30);
 	});
 
 	it('extends a short local result when the engine says more may exist', () => {
-		renderProbe(4, { pending$: of(false), exhausted$: of(false) });
+		renderProbe(4, { pending: false, exhausted: false });
 		act(() => fire!());
 		expect(limit).toBe(20);
 	});
 
 	it('does not extend a short read when the engine says the search is exhausted', () => {
-		renderProbe(4, { pending$: of(false), exhausted$: of(true) });
+		renderProbe(4, { pending: false, exhausted: true });
 		act(() => fire!());
 		expect(limit).toBe(10);
 	});
@@ -203,37 +204,28 @@ describe('useGuardedExtendLimit (#1221)', () => {
 		// The walk over-fetches a dial-sized page and persists every row, so a complete lane can
 		// hold more than the limit: 13 hits on a limit-10 screen read as exhausted while three
 		// resident rows sat past the clip (1.10.14 Products page, 2026-09-15).
-		const view = renderProbe(10, { pending$: of(false), exhausted$: of(true) });
+		const view = renderProbe(10, { pending: false, exhausted: true });
 		act(() => fire!());
 		expect(limit).toBe(20);
 
-		view.rerender(
-			<QueryStateProvider
-				collection="products"
-				initialPageSize={10}
-				initialSort={{ field: 'name', direction: 'asc' }}
-			>
-				<Probe resultCount={13} binding={{ pending$: of(false), exhausted$: of(true) }} />
-			</QueryStateProvider>
-		);
+		view.rerender(probeTree(13, { pending: false, exhausted: true }));
 		act(() => fire!());
 		act(() => fire!());
 		expect(limit).toBe(20);
 	});
 
 	it('waits for a pending extension to settle before extending again', () => {
-		const pending$ = new BehaviorSubject(true);
-		renderProbe(10, { pending$, exhausted$: of(false) });
+		const view = renderProbe(10, { pending: true, exhausted: false });
 		act(() => fire!());
 		expect(limit).toBe(10);
 
-		act(() => pending$.next(false));
+		view.rerender(probeTree(10, { pending: false, exhausted: false }));
 		act(() => fire!());
 		expect(limit).toBe(20);
 	});
 
 	it('keeps the short-page heuristic when the engine has no opinion', () => {
-		renderProbe(4, { pending$: of(false), exhausted$: of(null) });
+		renderProbe(4, { pending: false, exhausted: null });
 		act(() => fire!());
 		expect(limit).toBe(10);
 	});

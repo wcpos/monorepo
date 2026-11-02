@@ -15,11 +15,10 @@ jest.mock('@wcpos/query', () => ({
 		select: (value: Record<string, unknown>) => unknown
 	) => select(record),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
-		<button onClick={onPress}>{children}</button>
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({ label, onPress }: { label: string; onPress?: () => void }) => (
+		<button onClick={onPress}>{label}</button>
 	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
@@ -78,3 +77,24 @@ describe('coupon filter cells', () => {
 		);
 	});
 });
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+
+// The library Button pulls in uniwind's ESM; the cell needs only its press and its label.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		accessibilityLabel,
+		onPress,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		accessibilityLabel?: string;
+		onPress?: () => void;
+	}) => (
+		<button data-testid={testID} aria-label={accessibilityLabel} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));

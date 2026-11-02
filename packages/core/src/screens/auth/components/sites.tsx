@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	Accordion,
 	AccordionContent,
@@ -11,8 +12,6 @@ import {
 } from '@wcpos/components/accordion';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -21,34 +20,54 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { VStack } from '@wcpos/components/vstack';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import type { SiteDocument, UserDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { siteListResource } from '../../../hooks/user-db-list-resources';
 import { Site, SiteContent, SiteHeader } from './site';
+import { SiteSelectionProvider } from './site-selection';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
 import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { useT } from '../../../contexts/translations';
 
 interface SitesProps {
-	user: UserDocument;
+	user: ReadonlyUserRecord;
+	/**
+	 * Fold every site to its header row (the page's connect form is open).
+	 * Display-only: the remembered expansion is kept and returns when this clears.
+	 */
+	collapsed?: boolean;
+	/** A site was expanded by the user — the page closes its connect form. */
+	onExpand?: () => void;
 }
 
-export function Sites({ user }: SitesProps) {
-	const t = useT();
-	const sites = useObservableSuspense(
-		(
-			user as unknown as {
-				populateResource: (
-					key: string
-				) => import('observable-hooks').ObservableResource<SiteDocument[]>;
-			}
-		).populateResource('sites')
+/**
+ * The selection provider sits at one fixed position above both layouts, so a
+ * fold (which unmounts WPUsers, and swaps a lone site's layout) keeps the picks.
+ */
+export function Sites(props: SitesProps) {
+	return (
+		<SiteSelectionProvider>
+			<SitesContent {...props} />
+		</SiteSelectionProvider>
 	);
+}
+
+function SitesContent({ user, collapsed = false, onExpand }: SitesProps) {
+	const t = useT();
+	const sites = useObservableSuspense(siteListResource(user));
 
 	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
 	const [accordionState, setAccordionState] = React.useState(() => {
@@ -72,10 +91,13 @@ export function Sites({ user }: SitesProps) {
 		return null;
 	}
 
-	// Single site: render directly without accordion
-	if (sites.length === 1) {
+	const expandedSiteUuid = collapsed ? '' : nextAccordionState.expandedSiteUuid;
+
+	// Single site: render directly without accordion. Folded, it takes the
+	// accordion row below so its header (with chevron) is the way back in.
+	if (sites.length === 1 && !collapsed) {
 		return (
-			<Card className="w-full" testID="logged-in-users-label">
+			<Card className="w-full p-3" testID="logged-in-users-label">
 				<ErrorBoundary>
 					<Site user={user} site={sites[0]} />
 				</ErrorBoundary>
@@ -83,27 +105,31 @@ export function Sites({ user }: SitesProps) {
 		);
 	}
 
-	// Multiple sites: use accordion
+	// Multiple sites (or a folded single site): use accordion
 	return (
-		<Card className="w-full" testID="logged-in-users-label">
-			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
-				{t('auth.your_sites', { _tags: 'core' })}
-			</Text>
+		<VStack className="w-full gap-2" testID="logged-in-users-label">
+			{sites.length > 1 && (
+				<Text className="text-sm font-semibold">
+					{t('auth.your_sites_heading', { _tags: 'core' })}
+				</Text>
+			)}
 			<Accordion
+				className="gap-2"
 				type="single"
 				collapsible
-				value={nextAccordionState.expandedSiteUuid}
-				onValueChange={(value) =>
-					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
-				}
+				value={expandedSiteUuid}
+				onValueChange={(value) => {
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }));
+					if (value) onExpand?.();
+				}}
 			>
-				{sites.map((site, index) => (
+				{sites.map((site) => (
 					<ErrorBoundary key={site.uuid}>
-						<AccordionSite user={user} site={site} isFirst={index === 0} />
+						<AccordionSite user={user} site={site} />
 					</ErrorBoundary>
 				))}
 			</Accordion>
-		</Card>
+		</VStack>
 	);
 }
 
@@ -112,29 +138,15 @@ export function Sites({ user }: SitesProps) {
  * - Chevron on the left (via AccordionTrigger default)
  * - Site header in the center
  * - Remove button on the right
- * - Separator between items
+ * - Each item has its own card
  */
-function AccordionSite({
-	user,
-	site,
-	isFirst,
-}: {
-	user: UserDocument;
-	site: SiteDocument;
-	isFirst: boolean;
-}) {
+function AccordionSite({ user, site }: { user: ReadonlyUserRecord; site: ReadonlySiteRecord }) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}
@@ -145,35 +157,55 @@ function AccordionSite({
 
 	return (
 		<>
-			{!isFirst && <View className="border-border border-t" />}
-			<AccordionItem value={site.uuid ?? ''} className="border-b-0 px-4">
-				<HStack className="items-center gap-2">
-					<AccordionTrigger headerClassName="flex-1" className="gap-3 py-3" chevronPosition="left">
-						<View className="flex-1 flex-row items-center gap-3">
-							<SiteHeader site={site} />
-							{userCount > 0 && (
-								<StatusBadge
-									label={`${userCount} ${userCount === 1 ? t('auth.user', { _tags: 'core' }) : t('auth.users', { _tags: 'core' })}`}
-									variant="info"
+			<Card className="w-full p-3">
+				<AccordionItem value={site.uuid ?? ''} className="border-b-0">
+					<HStack className="items-center gap-2">
+						<AccordionTrigger
+							testID={`auth-site-trigger-${site.uuid}`}
+							headerClassName="flex-1"
+							className="min-h-row gap-3 py-2"
+							chevronPosition="left"
+						>
+							<View className="flex-1 flex-row items-center gap-3">
+								<SiteHeader site={site} />
+								{userCount > 0 && (
+									<StatusBadge
+										label={`${userCount} ${userCount === 1 ? t('auth.user', { _tags: 'core' }) : t('auth.users', { _tags: 'core' })}`}
+										variant="info"
+									/>
+								)}
+							</View>
+						</AccordionTrigger>
+						{/* Removing a site loses its users on this device: the last, red row of a ⋮ menu. */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<IconButton
+									name="more"
+									testID={`auth-site-menu-${site.uuid}`}
+									accessibilityLabel={t('common.actions')}
 								/>
-							)}
-						</View>
-					</AccordionTrigger>
-					<IconButton
-						name="circleXmark"
-						size="lg"
-						variant="destructive"
-						onPress={() => setDeleteDialogOpened(true)}
-					/>
-				</HStack>
-				<AccordionContent>
-					<ErrorBoundary>
-						<Suspense>
-							<AccordionSiteContent site={site} />
-						</Suspense>
-					</ErrorBoundary>
-				</AccordionContent>
-			</AccordionItem>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem
+									variant="destructive"
+									testID={`auth-site-remove-${site.uuid}`}
+									onPress={() => setDeleteDialogOpened(true)}
+								>
+									<Icon name="delete" className="fill-destructive" />
+									<Text>{t('auth.remove_site')}</Text>
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</HStack>
+					<AccordionContent>
+						<ErrorBoundary>
+							<Suspense>
+								<AccordionSiteContent site={site} />
+							</Suspense>
+						</ErrorBoundary>
+					</AccordionContent>
+				</AccordionItem>
+			</Card>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
@@ -183,12 +215,14 @@ function AccordionSite({
 							{t('auth.remove_store_and_associated_users')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('auth.remove')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('auth.remove'),
+							destructive: true,
+							onPress: () => void handleRemoveSite(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>
@@ -198,6 +232,6 @@ function AccordionSite({
 /**
  * Content inside an accordion item — needs Suspense boundary above it
  */
-export function AccordionSiteContent({ site }: { site: SiteDocument }) {
+export function AccordionSiteContent({ site }: { site: ReadonlySiteRecord }) {
 	return <SiteContent site={site} />;
 }

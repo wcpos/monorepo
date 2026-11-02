@@ -13,10 +13,7 @@ import { remoteId } from '../testing';
 
 import type { RxDatabase } from 'rxdb';
 
-async function fixture(
-	assertUsable: () => void = () => undefined,
-	isWritePlaneOwner: () => boolean = () => true
-) {
+async function fixture(assertUsable: () => void = () => undefined) {
 	const database = {} as RxDatabase;
 	const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 	const queuePort = vi.fn(() => queue);
@@ -30,6 +27,9 @@ async function fixture(
 		settled,
 		manager,
 		databaseFor: () => database,
+		drainRequest: async () => {
+			throw new Error('not called');
+		},
 		fetcher: async () => {
 			throw new Error('not called');
 		},
@@ -39,7 +39,6 @@ async function fixture(
 		diagnostics: () => undefined,
 		onStatusChanged: () => undefined,
 		connectivity: () => 'online',
-		isWritePlaneOwner,
 		emitWriteEvent: () => undefined,
 		persistOrderRepull: async () => undefined,
 		repullOrdersNow: async () => undefined,
@@ -89,6 +88,9 @@ describe('write-plane queue identity', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},
@@ -98,7 +100,6 @@ describe('write-plane queue identity', () => {
 			diagnostics: () => undefined,
 			onStatusChanged: () => undefined,
 			connectivity: () => 'online',
-			isWritePlaneOwner: () => true,
 			emitWriteEvent: () => undefined,
 			persistOrderRepull: async () => undefined,
 			repullOrdersNow: async () => undefined,
@@ -114,17 +115,6 @@ describe('write-plane queue identity', () => {
 		expect((await queueFor(database).pending()).map(({ mutationId }) => mutationId)).toEqual([
 			'module-queue-write',
 		]);
-	});
-});
-
-describe('write-plane ownership', () => {
-	it('returns the exact no-op drain report for a follower', async () => {
-		const { plane } = await fixture(
-			() => undefined,
-			() => false
-		);
-
-		expect(await plane.tick()).toStrictEqual({ lane: 'write-drain', status: 'ran', pushed: 0 });
 	});
 });
 
@@ -146,7 +136,7 @@ describe('write-plane status notifications', () => {
 			collections: { orders: { findOne: () => ({ exec: async () => resident }) } },
 			listCollections: () => [],
 			resetCollection: async () => undefined,
-			pendingMutationCount: async () => 0,
+			pendingMutationIds: async () => [],
 			close: async () => undefined,
 		} as unknown as RxDatabase & ScopeDatabase;
 		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
@@ -169,6 +159,9 @@ describe('write-plane status notifications', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},
@@ -178,7 +171,6 @@ describe('write-plane status notifications', () => {
 			diagnostics: () => undefined,
 			onStatusChanged,
 			connectivity: () => 'online',
-			isWritePlaneOwner: () => true,
 			emitWriteEvent: () => undefined,
 			persistOrderRepull: async () => undefined,
 			repullOrdersNow: async () => void (await manager.closeScope('scope-1')),
@@ -243,6 +235,9 @@ describe('write-plane resolution after a scope switch', () => {
 			settled: async () => undefined,
 			manager,
 			databaseFor: () => database,
+			drainRequest: async () => {
+				throw new Error('not called');
+			},
 			fetcher: async () => {
 				throw new Error('not called');
 			},
@@ -252,7 +247,6 @@ describe('write-plane resolution after a scope switch', () => {
 			diagnostics: (event) => diagnostics.push(event),
 			onStatusChanged: () => undefined,
 			connectivity: () => 'online',
-			isWritePlaneOwner: () => true,
 			emitWriteEvent: () => undefined,
 			persistOrderRepull: async () => undefined,
 			repullOrdersNow: async () => hooks.repull?.(manager),
@@ -274,20 +268,6 @@ describe('write-plane resolution after a scope switch', () => {
 			'queue.write.discard-repull-deferred'
 		);
 		expect(diagnostics.map((event) => event.type)).not.toContain('queue.write.resolve');
-	});
-
-	it('logs nothing into the SAME scope reactivated by a switch away and back (A→B→A)', async () => {
-		const { manager, diagnostics } = await orderDiscard({
-			repull: async (scopes) => {
-				await scopes.switchTo('scope-2');
-				await scopes.switchTo('scope-1');
-				throw new Error('scope moved');
-			},
-		});
-		expect(manager.activeScope).toBe('scope-1');
-		const types = diagnostics.map((event) => event.type);
-		expect(types).not.toContain('queue.write.discard-repull-deferred');
-		expect(types).not.toContain('queue.write.resolve');
 	});
 
 	it('logs no failed claim release into the incoming scope', async () => {

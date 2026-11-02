@@ -39,6 +39,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	hasPosRefundStamp,
 	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
@@ -54,17 +55,14 @@ import type {
 	StoreScopeIdentity,
 	SyncObserver,
 } from '@wcpos/sync-core';
-import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
-import { createFailureStreak, type FailureStreak } from './failure-streak';
-import { AUTO_REVERT_COLLECTIONS } from './write-path/auto-revert-collections';
-import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
+import { MUTATION_QUEUE_RXDB_COLLECTION } from './collections/engine-collections';
+import { createEngineTransport } from './transport/engine-transport';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
-	MUTATION_QUEUE_RXDB_COLLECTION,
 	resetEngineCollection,
 	type ResettableCollectionName,
 	SYNC_COLLECTION_NAMES,
@@ -76,9 +74,6 @@ import {
 } from './change-signal/change-signal-lane';
 import {
 	createServerPressureMonitor,
-	parseRetryAfterMs,
-	parseServerLoad1m,
-	parseServerPressure,
 	type PressureSignal,
 	type ServerPressure,
 } from './change-signal/server-pressure';
@@ -88,10 +83,6 @@ import {
 	createScopeBarcodeSelectors,
 	type ScopeBarcodeSelectors,
 } from './materialization/barcode-selectors';
-import {
-	hydrateResponse,
-	type ResponseEnvelopeTransportState,
-} from './transport/response-envelope';
 import {
 	createRequirePlane,
 	type EngineRequirement,
@@ -103,7 +94,8 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
-	QUERY_TOTAL_LEASE_FOR_MS,
+	QUERY_TOTAL_REQUEST_DEADLINE_MS,
+	type QueryTotalWooRequest,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -130,7 +122,9 @@ import {
 	createWritePlane,
 	type WriteIntent,
 } from './write-path/write-plane';
+import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { createOrderRevisionDoor, type OrderRevisionDoor } from './write-path/order-revision';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
 import { createAutomaticTickGate } from './automatic-tick-gate';
@@ -152,7 +146,8 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
-import type { WriteOutcomeBridge } from './write-path/write-outcome-bridge';
+import type { UpdateRequiredDetails } from './update-required';
+import type { QueueRow } from './queue-rows';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -161,6 +156,7 @@ export type {
 	CustomerBrowseDimensions,
 	EngineRequirement,
 	OrderBrowseDimensions,
+	RefundBrowseDimensions,
 	ProductBrowseDimensions,
 	RequirementHandle,
 } from './require-plane';
@@ -288,20 +284,6 @@ export type RxdbSyncEnginePorts = {
 	 * propagation via BroadcastChannel). Default false; apps/main selects the
 	 * value for its current platform. */
 	multiInstance?: boolean;
-	/** Web multi-tab: true only while this engine owns the write plane. Followers
-	 * still read, but do not drain or mutate existing queue rows. Default true. */
-	writePlaneOwner?: () => boolean;
-	/**
-	 * Web multi-tab: the cross-tab write-outcome bridge (#1209). Since #1057 only
-	 * the leader drains, and engine events are in-process — so without this a
-	 * FOLLOWER tab's `awaitWriteOutcome` waits on an event that can only fire in
-	 * the leader's window and every outcome-dependent behaviour degrades to
-	 * optimistic-only off-leader. With it, each outcome the leader emits is
-	 * republished to peers and re-emitted there. Feedback plumbing ONLY: the
-	 * leader stays the sole writer. Absent (native, Electron, a degraded
-	 * single-writer web context) ⇒ in-process events exactly as before.
-	 */
-	writeOutcomeBridge?: WriteOutcomeBridge;
 	intervals?: Partial<EngineIntervals>;
 	/** Host-executed query-total fetch. The query-total retry lane arms ONLY
 	 * when this port is provided (the engine cannot guess the host's total
@@ -335,18 +317,6 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
 	/** Collection census cache freshness window. Default 15min. */
 	censusFreshForMs: number;
 };
-
-/**
- * How long an in-flight request must have been running before a cancellation is
- * read as the SERVER failing to answer rather than the app changing its mind.
- * Matches the barcode lookup's own deadline (the fastest deadline any caller
- * imposes on hostTransport) and is five times the sustained-slowness threshold.
- */
-const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
-// Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
-const ENGINE_REQUEST_DEADLINE_MS = 60_000;
-// Release the probe five seconds before its claim can be acquired again.
-const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -438,6 +408,18 @@ export type EngineEvent =
 			recordId: string;
 			mutationId: string;
 	  }
+	// A pending mutation REPLACED at enqueue by a same-record coalesce: its row is
+	// gone under `replacedBy`, and no terminal event will ever name the old id.
+	// NOT terminal — a waiter re-binds and keeps waiting. Replayable like the
+	// terminal outcomes, so a waiter that subscribes after the coalesce still learns
+	// which id to follow.
+	| {
+			type: 'write-superseded';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			replacedBy: string;
+	  }
 	// Fresh query totals persisted by the retry lane — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
@@ -478,14 +460,8 @@ export type EngineEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
-			/**
-			 * True when the rejected mutation is a CREATE with no local or queued
-			 * remote id and the rejection does not imply a matching server record.
-			 * These are exempt from the #1082 auto-revert (there is no server
-			 * truth to restore; discard would destroy the only copy) and stay
-			 * parked on `conflicts()` like an order's dead letter.
-			 */
-			bornLocalCreate?: boolean;
+			/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+			data?: Record<string, unknown>;
 	  }
 	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
 	// its money is not the money that was pushed: WooCommerce's calculation is the
@@ -591,10 +567,18 @@ export type RxdbSyncEngine = {
 	 */
 	whenActive(): Promise<ActiveScope>;
 	adoptOrderSnapshot(payload: unknown): Promise<'applied' | 'protected' | 'invalid'>;
+	/** The money poster's door to an order resident's revision: a status poll's naked stamp, which
+	 * the next order push goes out under, and the proven readopt (ADR 0040 §1.3; order-revision.ts). */
+	orderRevision: OrderRevisionDoor;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
 	db$(cb: (db: RxDatabase | null) => void): Unsubscribe;
+	/** Live non-internal queue; null means no active scope. Errors remain distinguishable from empty. */
+	queueRows$(
+		listener: (rows: readonly QueueRow[] | null) => void,
+		onError?: (error: unknown) => void
+	): Unsubscribe;
 	scope: {
 		/** Pause/resume; serialized; works offline. Same-site only. */
 		switch(identity: StoreScopeIdentity): Promise<ActiveScope>;
@@ -612,15 +596,16 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5).
-	 *
-	 * On web these outcomes cross tabs when the host supplies `writeOutcomeBridge`
-	 * (#1209): the LEADER drains, and every peer re-emits what it publishes, so an
-	 * `awaitWriteOutcome` caller in a follower tab settles with the leader's real
-	 * verdict instead of timing out. */
-	write(
-		intent: WriteIntent
-	): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }>;
+	 * write facet (orders today) — anything else throws (invariant 5). */
+	write(intent: WriteIntent): Promise<{
+		mutationId: string;
+		recordId: string;
+		annihilated?: boolean;
+		/** Set when this enqueue coalesced into and replaced a pending row; a
+		 * `write-superseded` event names that row's id with this receipt's as
+		 * `replacedBy`, so a waiter on the old id can re-bind. */
+		supersededMutationId?: string;
+	}>;
 	/**
 	 * The terminal write entries awaiting an explicit caller decision — there
 	 * is NO auto-resolution, with ONE ruled exception.
@@ -696,6 +681,8 @@ export type RxdbSyncEngine = {
 	 * Throws for an unknown/non-terminal mutationId, for 'retry-with-server-base'
 	 * on a rejected row, or for 'requeue-rebuilt' on anything but a rejected row.
 	 */
+	/** Credentials were saved: release the session hold and kick the write drain. */
+	sessionRestored(): void;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
 	/** Component-declared data requirement (CONTEXT.md): coverage-aware ready
 	 * (serve-local without a fetch when every record is resident), priority
@@ -760,7 +747,6 @@ export function createRxdbSyncEngine(
 ): RxdbSyncEngine {
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
-	const writePlaneOwner = ports.writePlaneOwner ?? (() => true);
 	// A ledger rebuild replaces the derivable collections, and live coverage
 	// subscriptions hold handles to the dropped ones (coverage-changes.ts opens
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
@@ -786,24 +772,6 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(key);
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
-		}
-		// A refused catalogue change is reverted to server truth right after it
-		// dead-letters (see emitWriteEvent below), and the verdict is emitted where
-		// that outcome is known: `queue.write.auto-reverted` when the revert lands,
-		// a `push.rejected` marked `revertFailed` when it does not, or marked
-		// `revertSkipped` for a born-local create (which never reverts — it parks
-		// for Store health). This dead letter is stamped `revertPending` so the log
-		// keeps it an uncoded attempt. If the tick throws before write-rejected (so
-		// no revert runs) — later in the drain or in the post-drain cleanup — the
-		// write drain emits the verdict itself (`revertSkipped`) on its way out.
-		if (
-			event.type === 'push.rejected' &&
-			event.collection !== undefined &&
-			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
-			event.fields?.revertFailed !== true &&
-			event.fields?.revertSkipped !== true
-		) {
-			event = { ...event, fields: { ...event.fields, revertPending: true } };
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
@@ -836,284 +804,9 @@ export function createRxdbSyncEngine(
 	// fetches are human-bounded — a cashier can only ask so fast — and delaying
 	// one would trade the merchant's server load for the merchant's queue.
 	const serverPressure = createServerPressureMonitor();
-	const responseEnvelopeTransport: ResponseEnvelopeTransportState = {
-		responseHeadersReadable: true,
-	};
 	// Assigned below, once the change-signal timer exists — a transition observed
 	// before then (there is no transport before `ready`) is simply dropped.
 	let cadence: CadenceController | null = null;
-	const rawFetcher: EngineFetcher = ports.fetcher;
-	// The protocol-gate latch (wcpos/woocommerce-pos#1752). Instance state on
-	// purpose: a fresh engine (restart, reload, reconnect) always re-probes, and
-	// the latch never leaks across sites the way module state would (the same
-	// trap as runtime 429 counters). Once set, every lane sees a local replay of
-	// the refusal — uniform downstream error handling, zero network.
-	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const createRequestObservation = (startedAtMs: number, callerSignal?: AbortSignal | null) => {
-		let observed = false;
-		// The age that decides whether an abort was a timeout is measured at the ABORT, not at
-		// the moment a transport that ignored the signal finally rejects (which can be at the
-		// deadline, long after a young cancellation).
-		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
-		const onAbort = () => {
-			abortedAtMs ??= nowMs();
-		};
-		callerSignal?.addEventListener('abort', onAbort, { once: true });
-		// A lane signal is reused across many requests; drop the listener when this one ends.
-		const release = () => callerSignal?.removeEventListener('abort', onAbort);
-		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
-		const observe = (
-			status: number,
-			retryAfter?: string | null,
-			pressure?: ServerPressure,
-			serverLoad1m?: number
-		): void => {
-			if (observed) return;
-			observed = true;
-			const atMs = nowMs();
-			const reportedBefore = serverPressure.reported();
-			const signalBefore = serverPressure.signal();
-			const transition = serverPressure.observe({
-				atMs,
-				status,
-				durationMs: atMs - startedAtMs,
-				offline: readConnectivity() === 'offline',
-				...(retryAfter === undefined ? {} : { retryAfter }),
-				...(pressure === undefined ? {} : { pressure }),
-				...(serverLoad1m === undefined ? {} : { serverLoad1m }),
-			});
-			if (transition !== null) cadence?.onServerPressureTransition(transition);
-			// A header that moved without crossing a back-off threshold, or a
-			// signal re-labelled at the ladder's ceiling, changes the status
-			// read-out without a transition; subscribers were promised a snapshot
-			// when status changes, so tell them.
-			if (
-				serverPressure.reported() !== reportedBefore ||
-				serverPressure.signal() !== signalBefore
-			) {
-				scheduleStatusChange();
-			}
-		};
-		return { observe, abortAgeMs, release };
-	};
-	const transportFetcher = async (
-		url: string,
-		init: Parameters<EngineFetcher>[1],
-		{ observe, abortAgeMs }: ReturnType<typeof createRequestObservation>
-	) => {
-		if (updateRequiredRefusal !== null) {
-			return new Response(updateRequiredRefusal.body, {
-				status: updateRequiredRefusal.status,
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
-		const headers = new Headers(init?.headers);
-		const installId = await ports.getInstanceId?.();
-		if (installId !== undefined || headers.has('X-WCPOS-Instance')) {
-			headers.delete('X-WCPOS-Instance');
-			if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
-			init = { ...init, headers };
-		}
-		let response: Response;
-		try {
-			response = await rawFetcher(url, init);
-		} catch (error) {
-			// Aborts are ambiguous, and BOTH readings are real:
-			//  - a scope switch, disposal or superseded search cancels in-flight work,
-			//    often several requests at once — counting those would invent a
-			//    three-strike burst out of nothing and hand the incoming scope a
-			//    phantom back-off;
-			//  - a deadline abort (the barcode lookup gives the server 10s before it
-			//    gives up, via hostTransport's fetcher) means the server genuinely
-			//    never answered, which is exactly the timeout signal we want.
-			// The honest discriminator is not WHO pulled the plug but HOW LONG the
-			// request had already been running: a cancellation that young says nothing
-			// about the server, while a request still unanswered after the barcode
-			// deadline was not going to be answered promptly whoever cancelled it.
-			// Everything else that throws here (network timeout, DNS, TLS, connection
-			// reset) is an unambiguous transport failure and reports as status 0, the
-			// spelling the rest of the stack uses (see apps/main transport.request).
-			// Detect the abort from the signal as well as the name: expo's native
-			// fetch rejects an aborted request with a plain Error wrapping
-			// FetchRequestCanceledException, never an AbortError (#1672), and the
-			// engine must not depend on the host's fetcher renaming it first.
-			const aborted =
-				(error as { name?: unknown } | null)?.name === 'AbortError' ||
-				init?.signal?.aborted === true;
-			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
-			if (!abortedYoung) observe(0);
-			throw error;
-		}
-		// Plain permalinks carry the REST route in ?rest_route= with pathname '/',
-		// so the push exemption must classify from the route, not the path.
-		const requestRoute = (() => {
-			try {
-				const parsed = new URL(url);
-				return parsed.searchParams.get('rest_route') ?? parsed.pathname;
-			} catch {
-				return url.split(/[?#]/, 1)[0] ?? '';
-			}
-		})();
-		response = await hydrateResponse(response, {
-			envelopeRequested: !requestRoute.split('/').includes('push'),
-			signal: init?.signal,
-			transportState: responseEnvelopeTransport,
-			onDiagnostic: (kind) =>
-				diagnostics({
-					type: 'transport.request',
-					level: 'debug',
-					message: `Response envelope metadata is ${kind}`,
-					fields: {
-						status: response.status,
-						responseHeadersReadable: responseEnvelopeTransport.responseHeadersReadable,
-					},
-				}),
-		});
-		let retryAfter: string | null = null;
-		let pressure: ServerPressure | undefined;
-		let serverLoad1m: number | undefined;
-		try {
-			retryAfter = response.headers.get('retry-after');
-			pressure = parseServerPressure(response.headers.get('x-wcpos-pressure'));
-			serverLoad1m = parseServerLoad1m(response.headers.get('x-server-load'));
-		} catch {
-			// A host fetch stub may hand back a header-less object; never let
-			// telemetry break a real response.
-		}
-		// clone() first: on an unhydrated response (push lane) it leaves the real
-		// body untouched downstream. On a hydrated response the original body is
-		// already consumed and clone() throws, so the proxy's memoized json() is
-		// the safe read.
-		let body: unknown;
-		let cloned: Response | null = null;
-		try {
-			cloned = response.clone();
-		} catch {
-			cloned = null;
-		}
-		try {
-			body = cloned ? await cloned.json() : await response.json();
-		} catch {
-			body = undefined;
-		}
-		// B10 (wcpos-infra#72): hostile hosts strip Access-Control-Expose-Headers,
-		// blinding web clients to Retry-After even when the wire carries it. The
-		// plugin mirrors the delay into the error body as data.retry_after_seconds
-		// (free#1649) — read it only when the header is absent or unparseable, so
-		// a readable, valid header always wins on disagreement.
-		if (response.status >= 400) {
-			if (parseRetryAfterMs(retryAfter, nowMs()) === null) {
-				const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
-					?.data?.retry_after_seconds;
-				if (typeof seconds === 'number' && Number.isSafeInteger(seconds) && seconds >= 0) {
-					retryAfter = String(seconds);
-				}
-			}
-		}
-		// The deliberate upgrade refusal is keyed on the body code; status is
-		// advisory because middleboxes may rewrite it. The null re-check keeps
-		// latch-and-notify exactly-once for concurrent in-flight refusals.
-		const refusal = parseUpdateRequiredBody(body);
-		if (refusal !== null && updateRequiredRefusal === null) {
-			updateRequiredRefusal = { status: response.status, body: JSON.stringify(body) };
-			ports.onUpdateRequired?.({ ...refusal, status: response.status });
-		}
-		observe(response.status, retryAfter, pressure, serverLoad1m);
-		return response;
-	};
-	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
-	// answer is retried by the next tick, so the log alarms only on a streak.
-	// Keyed by lane AND request path (query stripped): a lane issues several
-	// requests, and a healthy `/changes/tick` probe must not reset the streak of
-	// a `/changes/sequence-log` that keeps timing out beside it. Any answer on
-	// that path — whatever its status — ends its streak. Like the lane streaks,
-	// the instances are dropped on every scope activation (see the 'switched'
-	// handler) and each request settles the instance it started with.
-	const consecutiveDeadlines = new Map<string, FailureStreak>();
-	const deadlineStreakFor = (lane: string, url: string): FailureStreak => {
-		const key = `${lane} ${url.split(/[?#]/, 1)[0] ?? url}`;
-		let streak = consecutiveDeadlines.get(key);
-		if (streak === undefined) {
-			streak = createFailureStreak();
-			consecutiveDeadlines.set(key, streak);
-		}
-		return streak;
-	};
-	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
-		const startedAtMs = nowMs();
-		const deadlineStreak = deadlineStreakFor(lane, url);
-		const observation = createRequestObservation(startedAtMs, init?.signal);
-		const deadlineFetcher = withRequestTimeout(
-			(url, init) => transportFetcher(url, init, observation),
-			ENGINE_REQUEST_DEADLINE_MS,
-			timers
-		);
-		try {
-			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
-			deadlineStreak.reset();
-			return response;
-		} catch (error) {
-			if (error instanceof RequestTimeoutError) {
-				observation.observe(0);
-				diagnostics({
-					type: 'engine.request.deadline',
-					level: 'warn',
-					fields: {
-						lane,
-						elapsedMs: nowMs() - startedAtMs,
-						consecutiveDeadlines: deadlineStreak.fail(),
-					},
-				});
-			}
-			throw error;
-		} finally {
-			observation.release();
-		}
-	};
-	const rawQueryTotal = ports.queryTotal;
-	const queryTotal =
-		rawQueryTotal === undefined
-			? undefined
-			: {
-					fetchWooQueryTotal: async (
-						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
-					): Promise<number | null> => {
-						if (updateRequiredRefusal !== null) return null;
-						const startedAtMs = nowMs();
-						const deadlineStreak = deadlineStreakFor('query-total-retry', input.request.endpoint);
-						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
-						try {
-							const total = await withRequestTimeout(
-								(_url, init) =>
-									rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
-								QUERY_TOTAL_REQUEST_DEADLINE_MS,
-								timers
-							)(input.request.endpoint, { signal: input.signal });
-							deadlineStreak.reset();
-							return total;
-						} catch (error) {
-							if (error instanceof RequestTimeoutError) {
-								observe(0);
-								diagnostics({
-									type: 'engine.request.deadline',
-									level: 'warn',
-									fields: {
-										lane: 'query-total-retry',
-										elapsedMs: nowMs() - startedAtMs,
-										consecutiveDeadlines: deadlineStreak.fail(),
-									},
-								});
-							}
-							throw error;
-						} finally {
-							release();
-						}
-					},
-				};
-	const hostTransport: EngineHostTransport = Object.freeze({
-		syncBaseUrl: ports.site.syncBaseUrl,
-		fetcher,
-	});
 	const uuid = ports.uuid ?? webCryptoUuid;
 	const initialSiteKey = canonicalSiteKey(initialScope.site);
 
@@ -1146,6 +839,39 @@ export function createRxdbSyncEngine(
 			}
 		});
 	};
+	const transport = createEngineTransport({
+		fetcher: ports.fetcher,
+		pressure: serverPressure,
+		getInstanceId: ports.getInstanceId,
+		onUpdateRequired: ports.onUpdateRequired,
+		diagnostics,
+		now: nowMs,
+		timers,
+		connectivity: readConnectivity,
+		onPressureTransition: (transition) => cadence?.onServerPressureTransition(transition),
+		onPressureReadoutChanged: scheduleStatusChange,
+	});
+	// No lane given: the host-transport lane.
+	const fetcher: EngineFetcher = (url, init) => transport.request(url, init);
+	// The host's query-total probe runs on its own request: its lane's label and its
+	// one deadline, so a black-holed probe is one pressure strike. A latched upgrade
+	// refusal answers "unsupported" without even a local replay (woocommerce-pos#1752).
+	const queryTotalRequest: EngineFetcher = (url, init) =>
+		transport.request(url, init, {
+			lane: 'query-total-retry',
+			deadlineMs: QUERY_TOTAL_REQUEST_DEADLINE_MS,
+		});
+	const hostQueryTotal = ports.queryTotal;
+	const queryTotal = hostQueryTotal && {
+		fetchWooQueryTotal: async (input: { request: QueryTotalWooRequest; signal?: AbortSignal }) =>
+			transport.updateRequired()
+				? null
+				: hostQueryTotal.fetchWooQueryTotal({ ...input, engineRequest: queryTotalRequest }),
+	};
+	const hostTransport: EngineHostTransport = Object.freeze({
+		syncBaseUrl: ports.site.syncBaseUrl,
+		fetcher,
+	});
 	let disposed = false;
 	const collectionActivity = new Map<SyncCollectionName, number>(
 		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
@@ -1276,6 +1002,15 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(engineCollectionCreators() as never);
+			try {
+				await queueFor(db, { now: nowMs, observe: diagnostics }).clearExpiredAnnihilation(nowMs());
+			} catch (error) {
+				diagnostics({
+					type: 'engine.guard',
+					level: 'warn',
+					message: `Expired void cleanup failed: ${String(error)}`,
+				});
+			}
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
@@ -1308,7 +1043,8 @@ export function createRxdbSyncEngine(
 			const coverage = createLocalCoverage({
 				database: db as never,
 				manifest: {
-					fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
+					fetcher: (url, init) =>
+						transport.request(url, init?.signal ? { signal: init.signal } : undefined),
 					syncBaseUrl: ports.site.syncBaseUrl,
 					pruneDeleted: {
 						product: (wooIds) => pruneTargeted('existenceManifest', 'products', 'remoteId', wooIds),
@@ -1350,7 +1086,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: () => db.collections[MUTATION_QUEUE_RXDB_COLLECTION].count().exec(),
+				pendingMutationIds: async () => queueFor(db).pendingResetIds(nowMs()),
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);
@@ -1490,9 +1226,10 @@ export function createRxdbSyncEngine(
 	}
 
 	const emitEngineEvent = (event: EngineEvent): void => {
-		// Recorded at the fan-out, so a BRIDGED peer outcome (which enters here, not
-		// at emitWriteEvent — see below) is replayable in the follower too.
-		if (TERMINAL_WRITE_EVENT_TYPES.has(event.type) && 'mutationId' in event) {
+		if (
+			(TERMINAL_WRITE_EVENT_TYPES.has(event.type) || event.type === 'write-superseded') &&
+			'mutationId' in event
+		) {
 			const { mutationId } = event;
 			// Re-insert to move it to the back of the insertion order, so eviction
 			// drops the genuinely oldest outcome.
@@ -1516,16 +1253,6 @@ export function createRxdbSyncEngine(
 		}
 		if (event.type === 'query-total-cache') censusPublisher.publish();
 	};
-
-	// CROSS-TAB WRITE OUTCOMES (#1209). A peer's outcome enters at the subscriber
-	// fan-out, NOT at `emitWriteEvent`: that funnel carries #1082's auto-revert,
-	// which must run once and only in the leader (a follower's `resolveConflict`
-	// refuses outright). Entering here also makes an echo impossible — a received
-	// event is never re-published.
-	const unsubscribeWriteOutcomeBridge = ports.writeOutcomeBridge?.subscribe((event) => {
-		if (disposed) return;
-		emitEngineEvent(event);
-	});
 
 	// `activeDatabase` is read lazily: the hub outlives every scope, and a reset re-emits the
 	// SAME database with fresh collections, so it must resolve through the accessor each time.
@@ -1583,7 +1310,7 @@ export function createRxdbSyncEngine(
 			case 'switched': {
 				// Every deadline streak belongs to the outgoing scope: drop them all,
 				// so requests started from here on count from zero.
-				consecutiveDeadlines.clear();
+				transport.scopeActivated();
 				for (const collection of SYNC_COLLECTION_NAMES) {
 					collectionCoverageGeneration.set(
 						collection,
@@ -1851,7 +1578,7 @@ export function createRxdbSyncEngine(
 		needsPrime: (scopeId) => !bootstrappedScopes.has(scopeId),
 		timers,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher: (url, init) => fetcher(url, init, 'change-signal'),
+		fetcher: (url, init) => transport.request(url, init, { lane: 'change-signal' }),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
 		writeBlob,
@@ -1870,13 +1597,14 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const requirePlane = createRequirePlane({
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
 		admitted: () => changeSignalLane.admitted(),
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
-		fetcher: (url, init) => fetcher(url, init, 'require'),
+		fetcher: (url, init) => transport.request(url, init, { lane: 'require' }),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
@@ -1915,7 +1643,9 @@ export function createRxdbSyncEngine(
 		},
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher: (url, init) => fetcher(url, init, 'write-drain'),
+		drainRequest: (url, init, options) =>
+			transport.request(url, init, { ...options, lane: 'write-drain' }),
+		fetcher: (url, init) => transport.request(url, init, { lane: 'conflict-resolution' }),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		mintUuid: uuid,
 		now: nowMs,
@@ -1928,94 +1658,7 @@ export function createRxdbSyncEngine(
 				return 'offline';
 			}
 		},
-		isWritePlaneOwner: writePlaneOwner,
-		emitWriteEvent: (event) => {
-			emitEngineEvent(event);
-			// #1209: the same outcome, to the other tabs. AFTER the local emit, so a
-			// slow or broken channel can never delay this window's own feedback, and
-			// only for outcomes THIS instance produced — a bridged event never comes
-			// back through here.
-			if (event.type !== 'write-deferred') ports.writeOutcomeBridge?.publish(event);
-			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
-				return;
-			}
-			// A refused BORN-LOCAL CREATE never auto-discards: #1082's revert means
-			// "restore server truth", and a record the server refused to create has
-			// none — `discard` would DESTROY the only copy of what the cashier typed
-			// (#832 R7b is scoped to the cashier-confirmed Store health dialog, which
-			// warns before deleting). It dead-letters like an order instead: Store
-			// health lists the rejected row and "Send again" rebuilds the payload
-			// from the kept resident.
-			// The dead-letter verdict the stamped push.rejected deferred to, emitted
-			// here because this is where the change's outcome is known.
-			const rejectionVerdict = (marker: 'revertFailed' | 'revertSkipped') =>
-				diagnostics({
-					type: 'push.rejected',
-					level: 'error',
-					collection: event.collection,
-					fields: {
-						recordId: event.recordId,
-						mutationId: event.mutationId,
-						...(event.status !== undefined ? { status: event.status } : {}),
-						...(event.reason !== undefined ? { reason: event.reason } : {}),
-						...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-						[marker]: true,
-					},
-				});
-			if (event.bornLocalCreate === true) {
-				rejectionVerdict('revertSkipped');
-				return;
-			}
-			// Reactive revert (#1082): a rejected catalog change is settled for the
-			// cashier by restoring server truth, through the SAME discard machinery
-			// Store Health uses — claim serialization, in-guard successor overlay
-			// (a newer queued edit's resident value survives the restore; see the
-			// `successors` merge in conflict-resolution.ts), barcode selectors,
-			// tombstone when the server no longer has the record. A write() landing
-			// exactly between that overlay's read and its upsert can still flash
-			// server truth for a beat — accepted: the newer mutation's queue row
-			// survives and the next drain re-decides the record either way.
-			// The scope this revert belongs to: a revert cut short by a store or
-			// cashier switch is stale, not failed — its verdict would land in the
-			// incoming scope's log. The change stays parked for Store health.
-			// Bound to the scope's EPOCH, not its id: after a switch away and back
-			// (A→B→A) the id matches again, but this revert's verdict is still stale.
-			let revertIsCurrent = (): boolean => false;
-			try {
-				void manager.runGuarded(async (bound) => {
-					revertIsCurrent = () => bound.isCurrent();
-				});
-			} catch {
-				// No active scope: no log this verdict could belong to.
-			}
-			void (async () => {
-				try {
-					await writePlane.resolveConflict(event.mutationId, 'discard');
-					// The discard can commit and the switch land before it returns: the
-					// diagnostics observer then belongs to the incoming scope, so the
-					// verdict is stale either way, success or failure.
-					if (!revertIsCurrent()) return;
-					diagnostics({
-						type: 'queue.write.auto-reverted',
-						level: 'error',
-						collection: event.collection,
-						message:
-							event.serverMessage ?? event.reason ?? 'Rejected change reverted to server truth',
-						fields: {
-							collection: event.collection,
-							recordId: event.recordId,
-							mutationId: event.mutationId,
-							...(event.status !== undefined ? { status: event.status } : {}),
-							...(event.reason !== undefined ? { reason: event.reason } : {}),
-							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-						},
-					});
-				} catch {
-					// The revert failed: the rejected row stays parked for Store Health.
-					if (revertIsCurrent()) rejectionVerdict('revertFailed');
-				}
-			})();
-		},
+		emitWriteEvent: emitEngineEvent,
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
 		persistOrderRepull: async ({ database, remoteIds, nowMs: repullNowMs }) => {
@@ -2042,13 +1685,14 @@ export function createRxdbSyncEngine(
 	// --- The maintenance lanes --------------------------------------
 	let maintenanceOwnerId: string | null = null;
 	const maintenanceLanes = createMaintenanceLanes({
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
 		syncBaseUrl: ports.site.syncBaseUrl,
-		fetcher,
+		fetcher: transport.request,
 		connectivity: () => {
 			try {
 				return connectivity();
@@ -2086,7 +1730,6 @@ export function createRxdbSyncEngine(
 			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
 			: {}),
 		currentCustomerBrowseWindowKey: requirePlane.lastCustomerBrowseQueryKey,
-		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
 			: {}),
@@ -2311,14 +1954,6 @@ export function createRxdbSyncEngine(
 		enabled: () => mode === 'auto' && !disposed,
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
-	// A FOLLOWER tab's enqueue arrives here (see write() below) — only the
-	// leader's drain tick does work, so only the leader spends the nudge. A
-	// follower receiving a peer's nudge stays quiet: its own tick would no-op,
-	// and if leadership later moves here the interval timer still backstops.
-	const unsubscribeDrainNudgeBridge = ports.writeOutcomeBridge?.subscribeDrainNudge(() => {
-		if (disposed || !writePlaneOwner()) return;
-		writeDrainNudge.nudge();
-	});
 
 	const cadenceController = createCadenceController({
 		mode,
@@ -2461,6 +2096,10 @@ export function createRxdbSyncEngine(
 			const { database } = await engine.whenActive();
 			return adoptActiveOrderSnapshot(database as unknown as SchedulerDrainDatabase, payload);
 		},
+		orderRevision: createOrderRevisionDoor({
+			resolveDatabase: async () => (await engine.whenActive()).database,
+			require: (requirement) => engine.require(requirement),
+		}),
 		hostTransport: () => hostTransport,
 		reconfigure: (config) => cadenceController.reconfigure(config),
 		db$: (cb) => {
@@ -2473,6 +2112,36 @@ export function createRxdbSyncEngine(
 			}
 			return () => {
 				dbSubscribers.delete(cb);
+			};
+		},
+		queueRows$: (listener, onError) => {
+			let subscription: { unsubscribe(): void } | undefined;
+			const stop = engine.db$((database) => {
+				subscription?.unsubscribe();
+				if (!database) {
+					listener(null);
+					return;
+				}
+				try {
+					subscription = database.collections[MUTATION_QUEUE_RXDB_COLLECTION].find().$.subscribe({
+						next: (documents) =>
+							listener(
+								documents.flatMap((document) => {
+									const row = document.toJSON() as QueuedMutation;
+									return row.status === 'internal'
+										? []
+										: [{ ...row, status: row.status ?? 'pending' }];
+								})
+							),
+						error: onError,
+					});
+				} catch (error) {
+					onError?.(error);
+				}
+			});
+			return () => {
+				stop();
+				subscription?.unsubscribe();
 			};
 		},
 		scope: {
@@ -2495,14 +2164,43 @@ export function createRxdbSyncEngine(
 						);
 					}
 					const beforeDrop = opts?.beforeDrop;
-					return manager.resetCollection(scopeId, name, {
+					const outcome = await manager.resetCollection(scopeId, name, {
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
-						...(beforeDrop !== undefined
-							? { beforeDrop: () => beforeDrop(activeScopeOf(scopeId)) }
-							: {}),
+						beforeDrop: async () => {
+							await beforeDrop?.(activeScopeOf(scopeId));
+						},
 					});
+					if (name === 'orders' && outcome === 'reset') {
+						// No parents survive a reset. Repeating this after a failed cascade
+						// needs no pre-drop ids; independently POS-stamped refunds stay held.
+						const refunds = activeScopeOf(scopeId).database.collections.refunds;
+						const held = await findAllUncached(refunds);
+						const orphanIds = held
+							.filter((doc) => !hasPosRefundStamp(doc.toJSON().payload.meta_data))
+							.map((doc) => doc.toJSON().uuid);
+						if (orphanIds.length > 0)
+							assertBulkSuccess(await refunds.bulkRemove(orphanIds), 'orders reset refund cascade');
+						if (disposed) return outcome;
+						const handle = engine.require({
+							id: 'orders-reset:refund-history',
+							kind: 'refresh',
+							collection: 'refunds',
+							forceRefresh: true,
+						});
+						void handle.ready
+							.catch((error) => {
+								diagnostics({
+									type: 'engine.guard',
+									level: 'warn',
+									collection: 'refunds',
+									message: `Orders reset refund history refresh failed: ${String(error)}`,
+								});
+							})
+							.finally(() => handle.release());
+					}
+					return outcome;
 				});
 			},
 		},
@@ -2511,15 +2209,13 @@ export function createRxdbSyncEngine(
 			// An annihilated delete never enqueued anything — nothing to drain.
 			if (!receipt.annihilated) {
 				writeDrainNudge.nudge();
-				// A follower's drain tick is a no-op (write-plane.ts leader gate), so
-				// the LEADER must hear about this enqueue or the shared queue waits
-				// out the leader's interval. In auto mode, the local nudge stays armed
-				// regardless — leadership can move to this tab before the timer fires.
-				if (mode === 'auto' && !writePlaneOwner()) {
-					ports.writeOutcomeBridge?.publishDrainNudge();
-				}
 			}
 			return receipt;
+		},
+		sessionRestored: () => {
+			assertNotDisposed();
+			writePlane.sessionRestored();
+			writeDrainNudge.nudge();
 		},
 		conflicts: () => writePlane.conflicts(),
 		resolveConflict: (mutationId, resolution) => writePlane.resolveConflict(mutationId, resolution),
@@ -2565,6 +2261,33 @@ export function createRxdbSyncEngine(
 				changeStartedAt
 			);
 			const reports = [censusReport, changeReport];
+			if (name === 'refunds' && !options?.signal?.aborted) {
+				const handle = engine.require({
+					id: 'check-collection:refunds',
+					kind: 'refresh',
+					collection: 'refunds',
+					forceRefresh: true,
+				});
+				const release = () => handle.release();
+				options?.signal?.addEventListener('abort', release, { once: true });
+				try {
+					const result = await handle.ready;
+					reports.push({
+						lane: 'scheduler-drain',
+						status:
+							result.action === 'released' || result.action === 'serve-local' ? 'skipped' : 'ran',
+					});
+				} catch (error) {
+					reports.push({
+						lane: 'scheduler-drain',
+						status: 'error',
+						error: error instanceof Error ? error.message : String(error),
+					});
+				} finally {
+					options?.signal?.removeEventListener('abort', release);
+					release();
+				}
+			}
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)
 				: reports.some((report) => report.status === 'ran')
@@ -2712,12 +2435,6 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			changeSignalLane.stopActivation();
-			// Detach from the cross-tab bridge synchronously (#1209): the host owns
-			// the channel and may keep it for the successor engine, so a stale
-			// subscription would fan a peer's outcome into a disposed instance's
-			// subscribers.
-			unsubscribeWriteOutcomeBridge?.();
-			unsubscribeDrainNudgeBridge?.();
 			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			writeDrainNudge.dispose();

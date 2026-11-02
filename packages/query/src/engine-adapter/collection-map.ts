@@ -1,8 +1,9 @@
-import { normalizeVariationAttributes } from '@wcpos/sync-engine';
+import { normalizeVariationAttributes, promotedVariationColumns } from '@wcpos/sync-engine';
 import {
 	promotedOrderColumns,
 	promotedProductColumns,
 	remoteIdOrNull,
+	remoteKeyFor,
 	wooIdOf,
 	wooMetaCarrier,
 	type WooOrderPayload,
@@ -26,42 +27,14 @@ export type LegacyCollectionName =
 	| 'products/categories'
 	| 'products/tags'
 	| 'products/brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 export type EngineCollectionName = SyncCollectionName;
-
-export const LEGACY_SEARCH_FIELDS = {
-	products: ['name', 'sku', 'barcode'],
-	variations: ['sku', 'barcode'],
-	orders: [
-		'number',
-		'billing.first_name',
-		'billing.last_name',
-		'billing.email',
-		'billing.company',
-		'billing.phone',
-	],
-	customers: [
-		'first_name',
-		'last_name',
-		'email',
-		'username',
-		'billing.first_name',
-		'billing.last_name',
-		'billing.email',
-		'billing.company',
-		'billing.phone',
-	],
-	'products/categories': ['name'],
-	'products/tags': ['name'],
-	'products/brands': ['name'],
-	coupons: ['code', 'description'],
-} as const satisfies Partial<Record<LegacyCollectionName, readonly string[]>>;
 
 type CollectionVocabularyEntry = {
 	legacyName: LegacyCollectionName;
 	telemetryName: string;
-	labelKey: string;
 	censusRoute: string | null;
 	writeable: boolean;
 };
@@ -107,24 +80,27 @@ type CollectionVocabularyEntry = {
  * page (wc/v3) reported different totals for the same catalogue.
  */
 export const COLLECTION_VOCABULARY = {
+	refunds: {
+		legacyName: 'refunds',
+		telemetryName: 'refunds',
+		censusRoute: 'wcpos/v2/refunds',
+		writeable: false,
+	},
 	orders: {
 		legacyName: 'orders',
 		telemetryName: 'orders',
-		labelKey: 'common.orders',
 		censusRoute: 'wcpos/v2/orders',
 		writeable: true,
 	},
 	products: {
 		legacyName: 'products',
 		telemetryName: 'products',
-		labelKey: 'common.products',
 		censusRoute: 'wcpos/v2/products',
 		writeable: true,
 	},
 	variations: {
 		legacyName: 'variations',
 		telemetryName: 'variations',
-		labelKey: 'common.variations',
 		// Woo core exposes variations only beneath a specific product, but the
 		// WCPOS plugin's cross-parent route (the 1.9 barcode-search route) is a
 		// plain post_type=product_variation query that emits X-WP-Total, and it
@@ -135,14 +111,12 @@ export const COLLECTION_VOCABULARY = {
 	customers: {
 		legacyName: 'customers',
 		telemetryName: 'customers',
-		labelKey: 'common.customers',
 		censusRoute: 'wcpos/v2/customers',
 		writeable: true,
 	},
 	taxRates: {
 		legacyName: 'taxes',
 		telemetryName: 'tax_rates',
-		labelKey: 'common.tax_rates',
 		// The first route moved off wc/v3 (raw wc/v3/taxes requires
 		// `manage_woocommerce`, which cashier-tier POS users don't have, so every
 		// probe 403'd) — now the rule for the whole table, see above.
@@ -152,28 +126,24 @@ export const COLLECTION_VOCABULARY = {
 	categories: {
 		legacyName: 'products/categories',
 		telemetryName: 'categories',
-		labelKey: 'common.categories',
 		censusRoute: 'wcpos/v2/products/categories',
 		writeable: false,
 	},
 	brands: {
 		legacyName: 'products/brands',
 		telemetryName: 'brands',
-		labelKey: 'common.brands',
 		censusRoute: 'wcpos/v2/products/brands',
 		writeable: false,
 	},
 	tags: {
 		legacyName: 'products/tags',
 		telemetryName: 'tags',
-		labelKey: 'common.tags',
 		censusRoute: 'wcpos/v2/products/tags',
 		writeable: false,
 	},
 	coupons: {
 		legacyName: 'coupons',
 		telemetryName: 'coupons',
-		labelKey: 'common.coupons',
 		censusRoute: 'wcpos/v2/coupons',
 		writeable: true,
 	},
@@ -290,9 +260,31 @@ export function sanitizeVariationAttributesRead(value: unknown): unknown {
  * `readEnginePath` preserves a legacy result type when its promoted query column is lossy.
  */
 export const collectionMap = {
+	refunds: {
+		engineCollection: 'refunds',
+		fields: {
+			date_created_gmt: {
+				legacy: 'date_created_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_created_gmt',
+				wireFace: 'dimension',
+			},
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
+			session_id: { legacy: 'session_id', kind: 'payload', enginePath: 'sessionId' },
+			id: { legacy: 'id', kind: 'identifier', enginePath: 'remoteId', read: readRemoteId },
+		},
+	},
 	products: {
 		engineCollection: 'products',
 		fields: {
+			// The storage spelling of the `name` sort (folded, indexed, #2242); on the wire it is
+			// still Woo's `title`, so the boot browse-window seed derives the same orderby.
+			sortName: {
+				legacy: 'sortName',
+				kind: 'promoted',
+				enginePath: 'sortName',
+				sort: { wooOrderby: 'title', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			sku: {
 				legacy: 'sku',
@@ -318,10 +310,7 @@ export const collectionMap = {
 				legacy: 'name',
 				kind: 'payload',
 				enginePath: 'payload.name',
-				// The id tiebreak keeps tied titles in Woo-id order on every till —
-				// without it the local sort falls through to client-minted uuids,
-				// a different order per device (Paul's 2026-08-19 name-asc default).
-				sort: { wooOrderby: 'title', tiebreak: ['id'] },
+				sort: { wooOrderby: 'title', uiAlias: 'sortName', tiebreak: ['uuid'] },
 			},
 			// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are
 			// common, so the Woo id tiebreak is part of the sort rather than an engine detail.
@@ -376,7 +365,14 @@ export const collectionMap = {
 				notes: 'Selectors use numeric membership; reads preserve Woo category objects.',
 				wireFace: 'dimension',
 			},
-			tags: queryPayloadField('tags', 'dimension'),
+			tags: {
+				legacy: 'tags',
+				kind: 'promoted',
+				enginePath: 'tagIds',
+				readEnginePath: 'payload.tags',
+				notes: 'Selectors use numeric membership; reads preserve Woo tag objects.',
+				wireFace: 'dimension',
+			},
 			brands: {
 				legacy: 'brands',
 				kind: 'promoted',
@@ -402,6 +398,7 @@ export const collectionMap = {
 				legacy: 'type',
 				kind: 'promoted',
 				enginePath: 'type',
+				wireFace: 'dimension',
 			},
 			stock_quantity: {
 				legacy: 'stock_quantity',
@@ -424,6 +421,7 @@ export const collectionMap = {
 				enginePath: 'price',
 				readEnginePath: 'payload.price',
 				numeric: true,
+				wireFace: 'dimension',
 				notes: 'Promoted price is numeric cents precision; reads preserve the Woo string.',
 				sort: { uiAlias: 'sortable_price', wooOrderby: 'price' },
 			},
@@ -432,6 +430,13 @@ export const collectionMap = {
 	variations: {
 		engineCollection: 'variations',
 		fields: {
+			sortName: { legacy: 'sortName', kind: 'promoted', enginePath: 'sortName' },
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { uiAlias: 'sortName', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			// Variations share the product catalog-order contract (#871).
 			menu_order: {
@@ -485,15 +490,18 @@ export const collectionMap = {
 			parent_id: {
 				legacy: 'parent_id',
 				kind: 'promoted',
-				enginePath: 'parentRemoteId',
+				enginePath: 'parentRemoteKey',
+				readEnginePath: 'parentRemoteId',
 				read: readRemoteId,
-				write: remoteIdOrNull,
+				write: (value) => remoteKeyFor(remoteIdOrNull(value)),
 			},
 		},
 	},
 	orders: {
 		engineCollection: 'orders',
 		fields: {
+			posUserId: { legacy: 'posUserId', kind: 'promoted', enginePath: 'posUserId' },
+			posStoreId: { legacy: 'posStoreId', kind: 'promoted', enginePath: 'posStoreId' },
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
@@ -554,6 +562,7 @@ export const collectionMap = {
 				legacy: 'payment_method',
 				kind: 'payload',
 				enginePath: 'payload.payment_method',
+				wireFace: 'dimension',
 				sort: { wooOrderby: 'payment_method' },
 			},
 			cashier: {
@@ -569,6 +578,23 @@ export const collectionMap = {
 								? (metadata as Parameters<typeof wooMetaCarrier.readIdentity>[0])
 								: undefined
 						).cashierId ?? undefined
+					);
+				},
+				wireFace: 'dimension',
+			},
+			register: {
+				legacy: 'register',
+				kind: 'computed',
+				enginePath: 'payload.meta_data',
+				notes: 'Value of the _wcpos_register metadata entry.',
+				compute: (document) => {
+					const metadata = valueAtPath(document, 'payload.meta_data');
+					return (
+						wooMetaCarrier.readIdentity(
+							Array.isArray(metadata)
+								? (metadata as Parameters<typeof wooMetaCarrier.readIdentity>[0])
+								: undefined
+						).registerId ?? undefined
 					);
 				},
 				wireFace: 'dimension',
@@ -836,13 +862,15 @@ export function promotedColumnsFor(
 	collection: LegacyCollectionName,
 	legacyPayload: Record<string, unknown>
 ): Record<string, unknown> {
-	// Products and orders delegate to the sync-core projectors — the single source of the
-	// promotion mapping (the storage boundary uses the same functions), so the local write
-	// path and materialization cannot drift. Ruled 2026-08-19: no negative-price clamp;
-	// bare-number taxonomy ids are accepted. Collections without a sync-core projector
-	// (variations carry the map-only parentRemoteId promotion) keep the map-driven path.
+	// Share the storage projectors so pull materialization and local writes cannot drift.
 	if (collection === 'products') {
 		return { ...promotedProductColumns(legacyPayload as unknown as WooProductPayload) };
+	}
+	if (collection === 'variations') {
+		return {
+			...promotedVariationColumns(legacyPayload),
+			parentRemoteId: remoteIdOrNull(legacyPayload.parent_id),
+		};
 	}
 	if (collection === 'orders') {
 		return { ...promotedOrderColumns(legacyPayload as unknown as WooOrderPayload) };

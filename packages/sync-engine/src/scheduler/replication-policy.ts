@@ -28,6 +28,7 @@ export function pullRequestLimit(task: FetchTask, configured?: () => number | un
 }
 
 export type FetchTaskResult = {
+	appliedRecordIds?: string[];
 	taskId: string;
 	documentCount: number;
 	requestCount: number;

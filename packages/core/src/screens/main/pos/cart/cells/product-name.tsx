@@ -4,36 +4,39 @@ import { View } from 'react-native';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
-import { EditCartItemButton } from './edit-cart-item-button';
-import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
-import { EditableField } from '../../../components/editable-field';
+import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrder } from '../../contexts/current-order';
-
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+import { readOnlyLineKey, useCartTableReadOnly } from './read-only';
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;
 	type: 'line_items';
 }
-
-/**
- *
- */
 export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
+	const readOnly = useCartTableReadOnly();
+	const paidBy = readOnly?.paidBy?.[readOnlyLineKey(uuid, item)];
 	const { currentOrderRecord } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
-
+	const unmet = useCartUnmet().find((condition) => condition.lineUuid === uuid);
+	const scrollRef = React.useMemo(
+		() => lineRef(uuid, 'scroll', () => table.options.meta?.scrollToRow?.(uuid)),
+		[uuid, table]
+	);
 	/**
 	 * Highlight lines the server rejected at checkout, until the quantity no
 	 * longer exceeds what the server said was available (self-clearing).
@@ -50,7 +53,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			}),
 		[stockRejection, currentOrderRecord.uuid, table.options.data, item]
 	);
-
+	const stockMark = unmet ?? rejectedItem;
 	/**
 	 * filter out the private meta data
 	 */
@@ -64,55 +67,73 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			}),
 		[item.meta_data]
 	);
-
-	/**
-	 *
-	 */
 	return (
-		<VStack className="w-full">
-			<HStack className="gap-0">
-				<View className="flex-1">
+		<VStack className="w-full gap-0">
+			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
+			{/* Read-only (checkout, receipt): the name the field shows, nothing to press, and no
+			    scroll target — the stilled cart never scrolls to a row. */}
+			<View className="w-full" ref={readOnly ? undefined : scrollRef}>
+				{/* Two lines: the name is what the cashier reads, and the amount columns hold
+				    their width at every scale step, so a long name wraps rather than truncates. */}
+				{readOnly ? (
+					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{item.name ?? ''}
+					</Text>
+				) : (
 					<EditableField
+						variant="ghost"
+						bold={false}
+						numberOfLines={2}
 						value={item.name}
-						onChangeText={(name) => updateLineItem(uuid, { name })}
+						onChangeText={(name) => updateCartLine('line_items', uuid, { name })}
 					/>
-				</View>
-				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
-					<EditLineItem uuid={uuid} item={item} />
-				</EditCartItemButton>
-			</HStack>
-
-			{rejectedItem && (
-				<Text className="text-destructive text-xs font-semibold">
-					{rejectedItem.available === null
-						? t('common.out_of_stock')
-						: t('pos_cart.n_available', { quantity: rejectedItem.available })}
-				</Text>
+				)}
+			</View>
+			{paidBy ? (
+				<StatusBadge
+					variant="ok"
+					label={t('pos_checkout.line_paid_by', { methods: paidBy.join(' + ') })}
+				/>
+			) : null}
+			{stockMark && (
+				// Attention, not destructive (rule 7); dark words on the amber tint (the amber is ~2.5:1 as text).
+				<HStack
+					className="bg-attention/15 items-center gap-1 self-start rounded px-1"
+					testID="cart-line-stock-mark"
+				>
+					<Icon name="product" size="xs" variant="attention" />
+					<Text className="text-foreground text-xs font-semibold">
+						{(stockMark.available ?? 0) > 0
+							? t('pos_cart.n_available', { quantity: stockMark.available! })
+							: t('common.out_of_stock')}
+					</Text>
+				</HStack>
 			)}
-
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
-
 			{metaData.length > 0 && (
-				<VStack space="xs">
-					{metaData.map((meta: any) => (
-						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
+				/* Native merges nested Text, so Maestro sees only the outer testID. */
+				<Text variant="key" className="leading-tight" numberOfLines={2} testID="cart-line-meta">
+					{metaData.map((meta, index) => (
+						<React.Fragment key={meta.id || meta.key || meta.display_key}>
+							{index > 0 && ' · '}
 							<Text
-								className="text-muted-foreground text-xs"
+								variant="key"
+								className="leading-tight"
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
-							{/* testID keyed by the attribute so E2E can assert this VALUE node
-							    (id + text must sit on one node: key and value are separate
-							    Texts, so no single node contains "Size: Small"). */}
+							{/* Keep the per-key id on the value for unit tests; native E2E uses the outer
+							    cart-line-meta because native merges nested Text. */}
 							<Text
-								className="text-xs"
+								variant="key"
+								className="leading-tight"
 								decodeHtml
 								testID={`cart-line-meta-${meta.display_key || meta.key}`}
 							>
 								{formatMetaDataValue(meta.display_value || meta.value)}
 							</Text>
-						</HStack>
+						</React.Fragment>
 					))}
-				</VStack>
+				</Text>
 			)}
 		</VStack>
 	);

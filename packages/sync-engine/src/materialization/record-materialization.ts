@@ -6,8 +6,10 @@ import {
 	normalizeCheckpoint,
 	type OrderDocument,
 	promotedProductColumns,
+	refundDocumentId,
 	type RemoteId,
 	remoteIdOrNull,
+	remoteKeyFor,
 	taxRateDocumentId,
 	wooIdOf,
 	type WooOrderPayload,
@@ -26,6 +28,7 @@ import {
 } from '../collections/variation-schema';
 import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
 
+import type { LocalRefundDocument, WooRefundPayload } from '../collections/refund-schema';
 import type {
 	LocalReferenceDocument,
 	WooReferencePayload,
@@ -94,11 +97,9 @@ export function materializeTargeted(
 							''
 					)
 			: () =>
-					typeof raw.date_modified_gmt === 'string'
+					collection !== 'variations' && typeof raw.date_modified_gmt === 'string'
 						? raw.date_modified_gmt
-						: collection === 'variations'
-							? remoteId
-							: '';
+						: '';
 	const adopted = adoptStampedRevision(raw, legacy);
 	const manifestRow = digest(adopted.payload, remoteId, label);
 	const barcode =
@@ -118,6 +119,7 @@ export function materializeTargeted(
 			{
 				...common,
 				remoteId,
+				remoteKey: remoteKeyFor(remoteId),
 				...promotedProductColumns(identified.payload as WooProductPayload),
 				local: { dirty: false, pendingMutationIds: [] },
 			},
@@ -128,6 +130,7 @@ export function materializeTargeted(
 			{
 				...common,
 				remoteId,
+				remoteKey: remoteKeyFor(remoteId),
 				parentRemoteId: remoteIdOrNull(identified.payload.parent_id),
 				...promotedVariationColumns(identified.payload as WooVariationPayload),
 				local: { dirty: false, pendingMutationIds: [] },
@@ -138,6 +141,7 @@ export function materializeTargeted(
 		{
 			...common,
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			local: { dirty: false, pendingMutationIds: [] },
 		} satisfies LocalCustomerDocument,
 		manifestRow
@@ -154,6 +158,7 @@ export function materializeGreedyPrunable(
 		storedDocument: {
 			uuid: identified.uuid,
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			payload: identified.payload,
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -170,6 +175,7 @@ export function materializeUpsertRefresh(
 		storedDocument: {
 			uuid: taxRateDocumentId(remoteId),
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			payload: stripDigest(adopted.payload),
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 		},
@@ -203,9 +209,26 @@ export function materializeLocalOnly(
 	const document = {
 		uuid: envelope?.uuid ?? identified.uuid,
 		remoteId,
+		remoteKey: remoteKeyFor(remoteId),
 		payload: identified.payload,
 		sync,
 		local: envelope?.local ?? { dirty: false, pendingMutationIds: [] },
 	} as OrderDocument;
 	return result(document, manifestRow);
+}
+
+export function materializeRefund(raw: WooRefundPayload): Materialized<LocalRefundDocument> {
+	const remoteId = mintRemoteId(raw.id, 'Woo REST refund response id');
+	const sessionId = raw.meta_data?.find(({ key }) => key === '_wcpos_session')?.value;
+	const adopted = adoptStampedRevision(raw, () => String(raw.date_modified_gmt ?? ''));
+	return {
+		storedDocument: {
+			uuid: refundDocumentId(remoteId),
+			remoteId,
+			sessionId: typeof sessionId === 'string' ? sessionId : '',
+			payload: stripDigest(adopted.payload),
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
+		},
+	};
 }

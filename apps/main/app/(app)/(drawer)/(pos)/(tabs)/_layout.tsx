@@ -1,44 +1,33 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Tabs } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCSSVariable } from 'uniwind';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Icon } from '@wcpos/components/icon';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
-import { Suspense } from '@wcpos/components/suspense';
-import { useTheme } from '@wcpos/core/contexts/theme';
-import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
-import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { useT } from '@wcpos/core/contexts/translations';
+import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 
+import { POSNavigatorTabBar } from '../../../../../components/pos-phone-tab-bar';
 import { useNavigationBackground } from '../../../../../components/use-navigation-background';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'index',
+	anchor: 'index',
 };
 
 /**
- * Tabs navigator wrapper subscribing to theme-aware colors via
- * `useNavigationBackground` and `useCSSVariable`. Isolation here keeps the
- * parent `TabsLayout` from subscribing to theme changes, re-rendering the
+ * Tabs navigator wrapper subscribing to the theme-aware background via `useNavigationBackground`.
+ * Isolation here keeps the parent `TabsLayout` from subscribing to theme changes, re-rendering the
  * entire navigator, and canceling Uniwind's theme transition.
  */
-function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+function ThemedTabs() {
+	const t = useT();
 	const screenBackgroundColor = useNavigationBackground();
-	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
-		'--color-card',
-		'--color-primary',
-		'--color-muted-foreground',
-		'--color-border',
-	]) as string[];
-
 	return (
 		<Tabs
+			// The one phone tab bar, which the (columns) fallback draws too.
+			tabBar={(props) => <POSNavigatorTabBar {...props} />}
 			screenOptions={{
 				headerShown: false,
 				// Mount both tabs immediately: POSProducts owns the barcode scan
@@ -46,102 +35,37 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				// products tab would leave a direct /cart entry with no scan handler.
 				lazy: false,
 				sceneStyle: { backgroundColor: screenBackgroundColor },
-				tabBarStyle: {
-					backgroundColor: cardColor,
-					borderTopColor: borderColor,
-				},
-				tabBarActiveTintColor: primaryColor,
-				tabBarInactiveTintColor: mutedForeground,
 			}}
 		>
-			<Tabs.Screen
-				name="index"
-				listeners={tabPressListener}
-				options={{
-					title: 'Products',
-					tabBarButtonTestID: 'pos-tab-products',
-					tabBarIcon: ({ focused }) => (
-						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="cart"
-				listeners={tabPressListener}
-				options={{
-					title: 'Cart',
-					tabBarButtonTestID: 'pos-tab-cart',
-					tabBarIcon: ({ focused }) => (
-						<Icon
-							name="cartShopping"
-							className={focused ? 'text-primary' : 'text-muted-foreground'}
-						/>
-					),
-				}}
-			/>
+			{/* The titles name the screen (the web document title); the bar draws its own labels. */}
+			<Tabs.Screen name="index" options={{ title: t('common.products') }} />
+			<Tabs.Screen name="cart" options={{ title: t('pos_cart.tab_cart') }} />
 		</Tabs>
 	);
 }
 
-export default function TabsLayout() {
-	const { screenSize } = useTheme();
-	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const { bottom } = useSafeAreaInsets();
+const TOP = ['top'] as const;
 
-	const tabPressListener = React.useMemo(
-		() => ({
-			tabPress: () => {
-				if (Platform.OS !== 'web') {
-					void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				}
-			},
-		}),
-		[]
-	);
+export default function TabsLayout() {
+	const phone = useIsPhone();
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
-	if (screenSize !== 'sm') {
+	if (!phone) {
+		// The columns run edge to edge; each pads its own insets.
 		return (
-			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
-				<PanelGroup
-					onLayoutChanged={([productsWidth], { isUserInteraction }) => {
-						if (isUserInteraction) void patchUI({ width: productsWidth });
-					}}
-					direction="horizontal"
-				>
-					<Panel
-						testID="pos-products-panel"
-						defaultSize={uiSettings.width}
-						minSize={25}
-						id="products"
-					>
-						<Suspense>
-							<ErrorBoundary>
-								<POSProducts isColumn />
-							</ErrorBoundary>
-						</Suspense>
-					</Panel>
-					<PanelResizeHandle testID="pos-resize-handle" />
-					{/* Complementary defaultSize — see (columns)/index.tsx: an unsized
-					    panel beside a sized one renders flexGrow 60:1 (a cart sliver)
-					    until the group layout lands, and on slow devices that
-					    pre-layout style can stick. */}
-					<Panel defaultSize={100 - uiSettings.width} minSize={25} id="cart">
-						<Suspense>
-							<ErrorBoundary>
-								<OpenOrders isColumn />
-							</ErrorBoundary>
-						</Suspense>
-					</Panel>
-				</PanelGroup>
+			<View testID="screen-pos" style={{ flex: 1 }}>
+				<POSColumns />
 			</View>
 		);
 	}
 
+	// Both tab screens sit on `bg-background` at the top (the register bar has no fill of its
+	// own), so the container pads the status bar in that same colour: no band. The tab bar pads
+	// the home indicator inside its own card colour.
 	return (
-		<View testID="screen-pos" className="bg-background flex-1">
-			<ThemedTabs tabPressListener={tabPressListener} />
-		</View>
+		<EdgeSurface testID="screen-pos" edges={TOP} className="bg-background flex-1">
+			<ThemedTabs />
+		</EdgeSurface>
 	);
 }

@@ -7,17 +7,15 @@ import * as z from 'zod';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose } from '@wcpos/components/modal';
+import { Form, FormField, FormTextarea } from '@wcpos/components/form';
+import { MoneyList } from '@wcpos/components/money-list';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Table,
 	TableBody,
@@ -26,6 +24,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -39,10 +38,10 @@ import {
 	formatLineItemRefundWithTax,
 	formatRefundUnitPrice,
 } from './calculate-refund';
-import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
+import { FormAmountField } from '../../components/amount-field';
 import { useT } from '../../../../contexts/translations';
 import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
@@ -435,17 +434,21 @@ export function RefundOrderForm({ order }: Props) {
 
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
-				<HStack className="justify-between">
-					<Text className="text-muted-foreground">
-						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
-					</Text>
+			<DialogBody contentContainerClassName="gap-4">
+				<MoneyList>
+					<MoneyList.Row
+						testID="refund-order-total"
+						label={t('common.total')}
+						amount={format(parseFloat(orderData.total || '0'))}
+					/>
 					{previousRefundTotal > 0 && (
-						<Text className="text-muted-foreground">
-							{t('orders.previously_refunded')}: {format(-previousRefundTotal)}
-						</Text>
+						<MoneyList.Row
+							testID="refund-previously-refunded"
+							label={t('orders.previously_refunded')}
+							amount={format(-previousRefundTotal)}
+						/>
 					)}
-				</HStack>
+				</MoneyList>
 
 				<Table>
 					<TableHeader>
@@ -494,7 +497,9 @@ export function RefundOrderForm({ order }: Props) {
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => <FormInput type="numeric" {...qtyField} />}
+											render={({ field: qtyField }) => (
+												<FormAmountField kind="count" live {...qtyField} />
+											)}
 										/>
 									</TableCell>
 									<TableCell className="flex-1">
@@ -510,7 +515,11 @@ export function RefundOrderForm({ order }: Props) {
 					control={form.control}
 					name="custom_amount"
 					render={({ field }) => (
-						<FormInput
+						<FormAmountField
+							kind="money"
+							live
+							// Typed to the places it is validated to, which need not be the store's.
+							places={dp}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}
@@ -534,31 +543,32 @@ export function RefundOrderForm({ order }: Props) {
 				{!isPosCash ? (
 					<VStack space="sm">
 						<Text>{t('orders.refund_destination')}</Text>
-						<RefundDestinationRadioGroup
+						<SegmentedControl
 							value={refundDestination}
 							onValueChange={(next) =>
-								form.setValue('refund_destination', next, { shouldDirty: true })
+								form.setValue('refund_destination', next as RefundDestination, {
+									shouldDirty: true,
+								})
 							}
-							options={[
+							segments={[
 								{
 									value: 'original_method',
 									label: t('orders.refund_to_original_method', {
 										gateway: orderData.payment_method_title || orderData.payment_method || '',
 									}),
-									description: refundOptions[0].enabled
-										? undefined
-										: t('orders.original_method_refund_unavailable'),
-									enabled: refundOptions[0].enabled,
+									disabled: !refundOptions[0].enabled,
 									testID: 'refund-destination-original_method',
 								},
 								{
-									value: 'cash' as const,
+									value: 'cash',
 									label: t('orders.refund_to_cash'),
-									enabled: true,
 									testID: 'refund-destination-cash',
 								},
 							]}
 						/>
+						{refundOptions[0].enabled ? null : (
+							<Text variant="help">{t('orders.original_method_refund_unavailable')}</Text>
+						)}
 					</VStack>
 				) : null}
 
@@ -568,23 +578,18 @@ export function RefundOrderForm({ order }: Props) {
 					</Text>
 				) : null}
 
-				<HStack className="items-center justify-between border-t pt-4">
-					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
-					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
-				</HStack>
-
-				<HStack className="justify-end">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction
-						testID="process-refund-button"
-						loading={loading || awaitingGateway}
-						disabled={!isValid || storageDegraded || awaitingGateway}
-						onPress={() => setConfirmOpen(true)}
-					>
-						{t('orders.process_refund')}
-					</ModalAction>
-				</HStack>
-			</VStack>
+				<MoneyList.Total label={t('orders.refund_total')} amount={formattedRefundTotal} />
+			</DialogBody>
+			<DialogFooter
+				close
+				intent={{
+					label: t('orders.process_refund'),
+					testID: 'process-refund-button',
+					disabled: !isValid || storageDegraded || awaitingGateway,
+					onPress: () => setConfirmOpen(true),
+					loading: loading || awaitingGateway,
+				}}
+			/>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>
@@ -597,17 +602,15 @@ export function RefundOrderForm({ order }: Props) {
 							})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="confirm-process-refund-button"
-							onPress={handleSubmit}
-							disabled={loading || storageDegraded || awaitingGateway}
-						>
-							{t('orders.process_refund')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						confirm={{
+							destructive: true,
+							label: t('orders.process_refund'),
+							testID: 'confirm-process-refund-button',
+							onPress: () => void handleSubmit(),
+							disabled: loading || storageDegraded || awaitingGateway,
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</Form>

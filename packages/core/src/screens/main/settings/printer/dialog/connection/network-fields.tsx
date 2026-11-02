@@ -1,16 +1,20 @@
 import * as React from 'react';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput } from '@wcpos/components/form';
+import { FormField, FormInput, FormItem, FormLabel } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { PropertyRow } from '@wcpos/components/property-row';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { FormPortField } from '../../port-field';
 import { DEFAULT_FORM_VALUES } from '../../schema';
 
 import type { UseFormReturn } from 'react-hook-form';
@@ -73,40 +77,57 @@ export function NetworkFields({
 
 	return (
 		<VStack className="gap-1">
-			<HStack className="items-start gap-3">
-				<VStack className="min-w-0 flex-1">
-					<FormField
-						control={form.control}
-						name="address"
-						render={({ field }) => (
-							<FormInput
-								testID="add-printer-ip-input"
-								label={t('settings.printer_address')}
-								placeholder="192.168.1.100"
-								{...field}
+			<PropertyRow
+				prefix="printer"
+				id="address"
+				label={t('settings.printer_address')}
+				name={['address', 'port']}
+				verb={
+					onScan && (
+						<Button
+							testID="add-printer-scan-button"
+							variant="outline"
+							size="sm"
+							onPress={onScan}
+							loading={scanning}
+						>
+							<HStack className="items-center gap-1">
+								<Icon name="search" size="sm" />
+								<Text>{t('settings.scan_network')}</Text>
+							</HStack>
+						</Button>
+					)
+				}
+			>
+				<HStack className="items-start gap-3">
+					<VStack className="min-w-0 flex-1">
+						<FormField
+							control={form.control}
+							name="address"
+							render={({ field }) => (
+								<FormInput testID="add-printer-ip-input" placeholder="192.168.1.100" {...field} />
+							)}
+						/>
+					</VStack>
+					{/* The port is its own fact in the row (the board's "· port 9100"): its own form item,
+					    so its label, message and aria wiring are not the address's (Codex, #2978). */}
+					<FormItem nativeID="printer-port">
+						<HStack className="items-center gap-2">
+							<FormLabel className="text-muted-foreground text-xs">
+								{t('settings.printer_port')}
+							</FormLabel>
+							<FormField
+								control={form.control}
+								name="port"
+								render={({ field }) => (
+									<FormPortField testID="add-printer-port-input" className="w-20" {...field} />
+								)}
 							/>
-						)}
-					/>
-				</VStack>
-				<VStack className="w-24 shrink-0">
-					<FormField
-						control={form.control}
-						name="port"
-						render={({ field: { value, ...rest } }) => (
-							<FormInput
-								testID="add-printer-port-input"
-								label={t('settings.printer_port')}
-								type="numeric"
-								value={value != null ? String(value) : undefined}
-								{...rest}
-							/>
-						)}
-					/>
-				</VStack>
-			</HStack>
-			{probing && (
-				<Text className="text-muted-foreground text-xs">{t('settings.detecting_printer')}</Text>
-			)}
+						</HStack>
+					</FormItem>
+				</HStack>
+			</PropertyRow>
+			{probing && <Text variant="help">{t('settings.detecting_printer')}</Text>}
 			{!probing && detectedVendor && (
 				<Text className="text-xs text-green-600">
 					{t('settings.detected_vendor').replace('%s', detectedVendorLabel)}
@@ -114,42 +135,24 @@ export function NetworkFields({
 			)}
 			{endpointHint && (
 				<VStack className="bg-muted/50 gap-0.5 rounded-md p-2">
-					<Text className="text-muted-foreground text-xs font-medium">
+					<Text variant="help" className="font-medium">
 						{t('settings.web_print_endpoint')}
 					</Text>
 					<Text testID="add-printer-endpoint-hint" className="text-xs">
 						{endpointHint}
 					</Text>
 					{endpointExplanation && (
-						<Text
-							testID="add-printer-endpoint-explanation"
-							className="text-muted-foreground text-xs"
-						>
+						<Text testID="add-printer-endpoint-explanation" variant="help">
 							{endpointExplanation}
 						</Text>
 					)}
 				</VStack>
 			)}
-			{onScan && (
-				<Button
-					testID="add-printer-scan-button"
-					variant="outline"
-					size="sm"
-					className="self-start"
-					onPress={onScan}
-					loading={scanning}
-				>
-					<HStack className="items-center gap-1">
-						<Icon name="magnifyingGlass" size="sm" />
-						<Text>{t('settings.scan_network')}</Text>
-					</HStack>
-				</Button>
-			)}
 			{scanCandidates.length > 0 && (
 				<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="add-printer-scan-candidates">
 					{scanning ? (
 						<VStack className="gap-1.5">
-							<Text className="text-muted-foreground text-xs font-medium">
+							<Text variant="help" className="font-medium">
 								{t('settings.scan_candidates_progress')
 									.replace('%s', String(scanProgress.tested))
 									.replace('%s', String(scanProgress.total))}
@@ -164,7 +167,7 @@ export function NetworkFields({
 					) : (
 						<Collapsible>
 							<CollapsibleTrigger testID="add-printer-scan-candidates-toggle">
-								<Text className="text-muted-foreground text-xs font-medium">
+								<Text variant="help" className="font-medium">
 									{t('settings.scan_candidates_done').replace(
 										'%s',
 										String(scanProgress.total || scanCandidates.length)
@@ -172,24 +175,25 @@ export function NetworkFields({
 								</Text>
 							</CollapsibleTrigger>
 							<CollapsibleContent>
-								<Text className="text-muted-foreground text-xs">{scanCandidates.join(', ')}</Text>
+								<Text variant="help">{scanCandidates.join(', ')}</Text>
 							</CollapsibleContent>
 						</Collapsible>
 					)}
-					<Text className="text-muted-foreground text-xs">
-						{t('settings.scan_candidates_hint')}
-					</Text>
+					<Text variant="help">{t('settings.scan_candidates_hint')}</Text>
 				</VStack>
 			)}
 			{scanning && (
-				<Text testID="add-printer-network-searching" className="text-muted-foreground text-xs">
+				<Text testID="add-printer-network-searching" variant="help">
 					{t('settings.searching_for_printers')}
 				</Text>
 			)}
 			{!scanning && networkPrinters.length === 0 && onScan && (
-				<Text testID="add-printer-network-none-found" className="text-muted-foreground text-xs">
-					{t('settings.no_printers_found')}
-				</Text>
+				<EmptyState
+					testID="add-printer-network-none-found"
+					kind="empty"
+					size="inline"
+					title={t('settings.no_printers_found')}
+				/>
 			)}
 			{networkPrinters.length > 0 && (
 				<VStack testID="add-printer-network-results" className="gap-2 pt-1">
@@ -197,11 +201,9 @@ export function NetworkFields({
 						const endpoint = resultEndpoint?.(printer);
 						const discoveredAt = `${printer.address}${printer.port ? `:${printer.port}` : ''}`;
 						return (
-							<Button
+							<ListItem
 								key={printer.id}
 								testID={`add-printer-network-result-${printer.id}`}
-								variant="outline"
-								className="h-auto items-start justify-start py-2"
 								onPress={() => {
 									form.setValue('connectionType', 'network');
 									form.setValue('address', printer.address, { shouldValidate: true });
@@ -224,35 +226,27 @@ export function NetworkFields({
 									}
 								}}
 							>
-								<VStack className="flex-1 items-start gap-0.5">
-									<Text className="text-sm font-medium">{printer.name}</Text>
-									<Text className="text-muted-foreground text-xs">
-										{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
+								<Text variant="subheading">{printer.name}</Text>
+								<Text variant="help">
+									{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
+								</Text>
+								{endpoint && (
+									<Text testID={`add-printer-network-result-endpoint-${printer.id}`} variant="help">
+										{t('settings.web_print_will_use').replace('%s', endpoint)}
 									</Text>
-									{endpoint && (
-										<Text
-											testID={`add-printer-network-result-endpoint-${printer.id}`}
-											className="text-muted-foreground text-xs"
-										>
-											{t('settings.web_print_will_use').replace('%s', endpoint)}
-										</Text>
-									)}
-									{resultEndpoint && printer.port === 9100 && (
-										<Text
-											testID={`add-printer-network-result-raw-tcp-${printer.id}`}
-											className="text-muted-foreground text-xs"
-										>
-											{t('settings.raw_tcp_not_supported_on_web')}
-										</Text>
-									)}
-									<HStack className="items-center gap-1 pt-1">
-										<Icon name="circlePlus" size="sm" className="text-primary" />
-										<Text className="text-primary text-xs font-semibold">
-											{t('settings.use_this_printer')}
-										</Text>
-									</HStack>
-								</VStack>
-							</Button>
+								)}
+								{resultEndpoint && printer.port === 9100 && (
+									<Text testID={`add-printer-network-result-raw-tcp-${printer.id}`} variant="help">
+										{t('settings.raw_tcp_not_supported_on_web')}
+									</Text>
+								)}
+								<HStack className="items-center gap-1 pt-1">
+									<Icon name="increment" size="sm" className="text-primary" />
+									<Text className="text-primary text-xs font-semibold">
+										{t('settings.use_this_printer')}
+									</Text>
+								</HStack>
+							</ListItem>
 						);
 					})}
 				</VStack>

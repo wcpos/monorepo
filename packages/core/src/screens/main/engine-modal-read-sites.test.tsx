@@ -5,9 +5,8 @@ import { render } from '@testing-library/react';
 
 import { EditCouponScreen } from './coupons/edit';
 import { EditCustomerScreen } from './customers/edit';
-import { EditOrderScreen } from './orders/edit';
+import { OrderScreen } from './orders/edit';
 import { RefundOrderScreen } from './orders/refund';
-import { ViewOrderScreen } from './orders/view';
 import { CheckoutScreen } from './pos/checkout';
 import { EditProductScreen } from './products/edit/product';
 import { EditVariationScreen } from './products/edit/variation';
@@ -18,10 +17,12 @@ const mockUseEngineRecord = jest.fn((_collection: unknown, _uuid: unknown) => mo
 let mockRouteParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
+	useFocusEffect: (effect: () => void) => jest.requireActual('react').useEffect(effect, [effect]),
 	useLocalSearchParams: () => mockRouteParams,
+	useRouter: () => ({ canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() }),
 }));
 
-jest.mock('./hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecord: (collection: unknown, uuid: unknown) => mockUseEngineRecord(collection, uuid),
 }));
 
@@ -31,13 +32,23 @@ jest.mock('@wcpos/components/suspense', () => ({
 
 jest.mock('./coupons/edit/edit-coupon', () => ({ EditCoupon: () => null }));
 jest.mock('./customers/edit/edit-customer', () => ({ EditCustomer: () => null }));
-jest.mock('./orders/edit/modal', () => ({ EditOrderModal: () => null }));
+jest.mock('./orders/edit/modal', () => ({ OrderModal: () => null }));
 jest.mock('./orders/refund/modal', () => ({ RefundOrderModal: () => null }));
-jest.mock('./orders/view/modal', () => ({ ViewOrderModal: () => null }));
 jest.mock('./pos/checkout/checkout', () => ({ Checkout: () => null }));
+// The checkout route decides between the modal and the in-column redirect from the payment
+// methods and the breakpoint; neither is under test here, and the real hooks drag app-state
+// (expo-crypto, ESM) into this jsdom suite.
+jest.mock('./hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
 jest.mock('./products/edit/product/modal', () => ({ EditProductModal: () => null }));
 jest.mock('./products/edit/variation/modal', () => ({ EditVariationModal: () => null }));
 jest.mock('./receipt/receipt', () => ({ Receipt: () => null }));
+jest.mock('./pos/contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 
 describe('engine modal/detail reads', () => {
 	beforeEach(() => {
@@ -47,9 +58,8 @@ describe('engine modal/detail reads', () => {
 	it.each([
 		['coupon', EditCouponScreen, 'couponId', 'coupon-uuid', 'coupons'],
 		['customer', EditCustomerScreen, 'customerId', 'customer-uuid', 'customers'],
-		['order edit', EditOrderScreen, 'orderId', 'edit-order-uuid', 'orders'],
+		['order', OrderScreen, 'orderId', 'edit-order-uuid', 'orders'],
 		['order refund', RefundOrderScreen, 'orderId', 'refund-order-uuid', 'orders'],
-		['order view', ViewOrderScreen, 'orderId', 'view-order-uuid', 'orders'],
 		['checkout', CheckoutScreen, 'orderId', 'checkout-order-uuid', 'orders'],
 		['product', EditProductScreen, 'productId', 'product-uuid', 'products'],
 		['variation', EditVariationScreen, 'variationId', 'variation-uuid', 'variations'],

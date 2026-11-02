@@ -6,7 +6,7 @@ import type { QueuedMutation, RxRecordMutationCollection } from './recordMutatio
  * without a real RxDatabase.
  *
  * It models the ONE property the revision-checked writes depend on (task 43): a
- * monotonic `_rev` per row, and NON-incremental `patch`/`remove` that fail closed
+ * monotonic `_rev` per row, and NON-incremental `modify`/`remove` that fail closed
  * with a native 409 CONFLICT when the stored `_rev` has moved since the document
  * was fetched. That is exactly RxDB's optimistic-concurrency contract, so a test
  * built on this fake exercises the same cross-process guard the real storage does.
@@ -27,10 +27,10 @@ export function createFakeMutationCollection(): RxRecordMutationCollection & {
 			get revision() {
 				return store.get(mutationId)?.rev ?? '';
 			},
-			patch: async (changes: Partial<QueuedMutation>) => {
+			modify: async (change: (row: QueuedMutation) => QueuedMutation) => {
 				const current = store.get(mutationId);
 				if (!current || current.rev !== captured.rev) throw conflict();
-				store.set(mutationId, { mutation: { ...current.mutation, ...changes }, rev: nextRev() });
+				store.set(mutationId, { mutation: change(current.mutation), rev: nextRev() });
 			},
 			remove: async () => {
 				const current = store.get(mutationId);

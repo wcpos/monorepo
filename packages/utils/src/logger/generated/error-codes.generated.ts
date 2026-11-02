@@ -24,10 +24,17 @@ export type ErrorCode =
 	| 'CHECKOUT211'
 	| 'CHECKOUT301'
 	| 'PAYMENT101'
+	| 'PAYMENT111'
+	| 'PAYMENT113'
+	| 'PAYMENT121'
 	| 'PAYMENT201'
+	| 'PAYMENT211'
+	| 'PAYMENT212'
+	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT311'
 	| 'PAYMENT401'
+	| 'PAYMENT501'
 	| 'PRINT101'
 	| 'PRINT201'
 	| 'PRINT301'
@@ -46,6 +53,7 @@ export type ErrorCode =
 	| 'SYNC999'
 	| 'AUTH999'
 	| 'CHECKOUT999'
+	| 'PAYMENT511'
 	| 'PAYMENT999'
 	| 'PRINT999'
 	| 'PRODUCT999'
@@ -63,6 +71,7 @@ export type ErrorCode =
 	| 'AUTH121'
 	| 'AUTH321'
 	| 'AUTH331'
+	| 'AUTH341'
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
@@ -90,12 +99,31 @@ export type ErrorCode =
 	| 'CLIENT144'
 	| 'CHECKOUT411'
 	| 'CHECKOUT421'
+	| 'DISPLAY101'
+	| 'REGISTER101'
+	| 'REGISTER111'
+	| 'REGISTER201'
+	| 'REGISTER211'
+	| 'REGISTER212'
+	| 'REGISTER221'
+	| 'REGISTER301'
 	| 'CLIENT151'
 	| 'CLIENT181'
 	| 'CLIENT171'
-	| 'AUTH131';
+	| 'AUTH131'
+	| 'CLIENT161';
 export type ErrorDomain =
-	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
+	| 'AUTH'
+	| 'SYNC'
+	| 'CHECKOUT'
+	| 'PAYMENT'
+	| 'PRINT'
+	| 'PRODUCT'
+	| 'LICENSE'
+	| 'CLIENT'
+	| 'HOST'
+	| 'DISPLAY'
+	| 'REGISTER';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
 export type DataSafety =
 	'no-impact' | 'local-only' | 'order-safe' | 'money-moved' | 'outcome-unknown' | 'data-at-risk';
@@ -239,9 +267,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			'Update WCPOS (on the web, reload the page), then reopen. Unsent sales stay on this device and send after the update.',
+			'The WCPOS plugin on your WordPress site is newer than this app. On the web, reload the page; on a phone, tablet or desktop, install the WCPOS app update and reopen it (the installation guide links each channel). Unsent sales stay on this device and send after the update.',
 		dataSafety: 'no-impact',
-		summary: 'This store now requires a newer version of the POS app.',
+		summary: 'Update the POS app on this device.',
 	},
 	AUTH101: {
 		code: 'AUTH101',
@@ -337,6 +365,33 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'money-moved',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
 	},
+	PAYMENT111: {
+		code: 'PAYMENT111',
+		symbol: 'PAYMENT_RECORDED_NOT_MIRRORED',
+		domain: 'PAYMENT',
+		severity: 'warn',
+		actionHint: 'No action needed — the store has the payment; this till is catching up.',
+		dataSafety: 'money-moved',
+		summary: 'The store recorded this payment, but the till could not save its own copy.',
+	},
+	PAYMENT113: {
+		code: 'PAYMENT113',
+		symbol: 'PAYMENT_INVOICE_NOT_MIRRORED',
+		domain: 'PAYMENT',
+		severity: 'warn',
+		actionHint: "Nothing to do: the till's copy of the order catches up on the next sync.",
+		dataSafety: 'no-impact',
+		summary: 'The store sent or cancelled the invoice, but this till could not save its copy.',
+	},
+	PAYMENT121: {
+		code: 'PAYMENT121',
+		symbol: 'PAYMENT_CAPTURED_ORDER_UNFINISHED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Do not charge again — reload the app and the till finishes the order.',
+		dataSafety: 'money-moved',
+		summary: 'The card was charged, but the order did not finish.',
+	},
 	PAYMENT201: {
 		code: 'PAYMENT201',
 		symbol: 'PAYMENT_OUTCOME_UNKNOWN',
@@ -345,6 +400,33 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Check the terminal and provider dashboard before re-charging.',
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS could not confirm whether the terminal charged the payment.',
+	},
+	PAYMENT211: {
+		code: 'PAYMENT211',
+		symbol: 'PAYMENT_TERMINAL_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Ask for another card or take a different payment method.',
+		dataSafety: 'no-impact',
+		summary: 'The terminal did not take this payment.',
+	},
+	PAYMENT212: {
+		code: 'PAYMENT212',
+		symbol: 'PAYMENT_GATEWAY_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Correct the details and send again, or take a different payment method.',
+		dataSafety: 'no-impact',
+		summary: 'The gateway did not accept this payment.',
+	},
+	PAYMENT221: {
+		code: 'PAYMENT221',
+		symbol: 'PAYMENT_VOID_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Refund the named payments from the order — the money is still held.',
+		dataSafety: 'money-moved',
+		summary: 'A payment could not be voided, so that money is still held.',
 	},
 	PAYMENT301: {
 		code: 'PAYMENT301',
@@ -373,6 +455,17 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Wake the terminal, check its connection, and re-pair.',
 		dataSafety: 'no-impact',
 		summary: 'The payment terminal did not finish pairing with WCPOS.',
+	},
+	PAYMENT501: {
+		code: 'PAYMENT501',
+		symbol: 'PAYMENT_ALREADY_PAID_ONLINE',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Refund the additional payment taken at the till — the order was already paid online.',
+		dataSafety: 'money-moved',
+		summary:
+			'The order was already paid online, so an additional payment was also taken at the till.',
 	},
 	PRINT101: {
 		code: 'PRINT101',
@@ -543,6 +636,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'outcome-unknown',
 		summary: 'Checkout hit an unexpected problem.',
 	},
+	PAYMENT511: {
+		code: 'PAYMENT511',
+		symbol: 'PAYMENT_EXCEEDS_BALANCE',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Record the balance owed from the money taken, then refund the difference.',
+		dataSafety: 'money-moved',
+		summary: 'More was taken at the till than the order still owed.',
+	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
 		symbol: 'PAYMENT_UNEXPECTED',
@@ -704,12 +806,22 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: "This store's WCPOS plugin is too old for this version of the app.",
 	},
+	AUTH341: {
+		code: 'AUTH341',
+		symbol: 'SITE_IDENTITY_CLASH',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint: 'Update the WCPOS plugin on the copy, or remove the saved store first.',
+		dataSafety: 'no-impact',
+		summary: 'This store reports the same identity as a store already saved on this device.',
+	},
 	AUTH411: {
 		code: 'AUTH411',
 		symbol: 'STORE_URL_INVALID',
 		domain: 'AUTH',
 		severity: 'error',
-		actionHint: 'Check the store address for typos.',
+		actionHint:
+			'Enter the store address; if it is already filled in, ask the site admin to update WCPOS.',
 		dataSafety: 'no-impact',
 		summary: 'The store address is missing or not a valid URL.',
 	},
@@ -961,6 +1073,87 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'This order refers to a tax rate your store no longer has, so its tax may be wrong.',
 	},
+	DISPLAY101: {
+		code: 'DISPLAY101',
+		symbol: 'CUSTOMER_DISPLAY_SNAPSHOT_FAILED',
+		domain: 'DISPLAY',
+		severity: 'error',
+		actionHint: 'Keep using the till; the display retries on the next cart change.',
+		dataSafety: 'no-impact',
+		summary:
+			'The customer display could not build the cart snapshot; the display shows the idle screen until the next change.',
+	},
+	REGISTER101: {
+		code: 'REGISTER101',
+		symbol: 'CASH_MOVEMENT_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint:
+			'The cash is in the drawer but not in your store — retry it from the register panel before you count.',
+		dataSafety: 'money-moved',
+		summary:
+			'Your store refused a paid in, paid out or no sale that the till has already recorded.',
+	},
+	REGISTER111: {
+		code: 'REGISTER111',
+		symbol: 'CASH_MOVEMENT_VOID_REFUSED',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint:
+			'The original movement still stands in your store — check it before recording anything else.',
+		dataSafety: 'local-only',
+		summary: 'Your store would not reverse a cash movement, so the original one still counts.',
+	},
+	REGISTER201: {
+		code: 'REGISTER201',
+		symbol: 'REGISTER_OPEN_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint:
+			'Sales are still safe, but they are not attached to a till session — reopen the register.',
+		dataSafety: 'local-only',
+		summary:
+			'Your store refused to open this register session, so nothing is being counted against it.',
+	},
+	REGISTER211: {
+		code: 'REGISTER211',
+		symbol: 'REGISTER_CLOSE_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint: 'Write the counted figures down before reopening — the till does not keep them.',
+		dataSafety: 'local-only',
+		summary: "Your store refused this register's count, so the session is still open there.",
+	},
+	REGISTER212: {
+		code: 'REGISTER212',
+		symbol: 'REGISTER_CARRY_FAILED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint: 'Check both registers before trying to carry the drawer again.',
+		dataSafety: 'outcome-unknown',
+		summary: 'The drawer carry did not complete on this device. The store was not switched.',
+	},
+	REGISTER221: {
+		code: 'REGISTER221',
+		symbol: 'REGISTER_TAKEN_OVER',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint:
+			'Another device holds this register — check which drawer you are actually counting.',
+		dataSafety: 'local-only',
+		summary:
+			'Another device already had this register open, so this till joined that session instead of starting its own.',
+	},
+	REGISTER301: {
+		code: 'REGISTER301',
+		symbol: 'REGISTER_APPROVAL_REFUSED',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint: 'Ask a different manager to approve the count, then close again.',
+		dataSafety: 'no-impact',
+		summary:
+			'Your store would not accept the manager approval for this count, so the register is still open.',
+	},
 	CLIENT151: {
 		code: 'CLIENT151',
 		symbol: 'SCREEN_RENDER_FAILED',
@@ -999,6 +1192,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'local-only',
 		summary: 'The saved store session was incomplete, so WCPOS returned to the store list.',
 	},
+	CLIENT161: {
+		code: 'CLIENT161',
+		symbol: 'REGISTER_TAB_NOT_OWNED',
+		domain: 'CLIENT',
+		severity: 'info',
+		actionHint: 'Follow the instructions on the register screen before continuing.',
+		dataSafety: 'no-impact',
+		summary:
+			'This tab does not currently run the register, so it did not send a new payment request.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -1025,10 +1228,17 @@ export const ERROR_CODES = {
 	CHECKOUT_EMPTY_RESPONSE: 'CHECKOUT211',
 	SKU_DUPLICATE: 'CHECKOUT301',
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
+	PAYMENT_RECORDED_NOT_MIRRORED: 'PAYMENT111',
+	PAYMENT_INVOICE_NOT_MIRRORED: 'PAYMENT113',
+	PAYMENT_CAPTURED_ORDER_UNFINISHED: 'PAYMENT121',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
+	PAYMENT_TERMINAL_REFUSED: 'PAYMENT211',
+	PAYMENT_GATEWAY_REFUSED: 'PAYMENT212',
+	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
+	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',
 	PRINT_JOB_FAILED: 'PRINT201',
 	PRINTER_UNREACHABLE: 'PRINT301',
@@ -1047,6 +1257,7 @@ export const ERROR_CODES = {
 	SYNC_UNEXPECTED: 'SYNC999',
 	AUTH_UNEXPECTED: 'AUTH999',
 	CHECKOUT_UNEXPECTED: 'CHECKOUT999',
+	PAYMENT_EXCEEDS_BALANCE: 'PAYMENT511',
 	PAYMENT_UNEXPECTED: 'PAYMENT999',
 	PRINT_UNEXPECTED: 'PRINT999',
 	PRODUCT_UNEXPECTED: 'PRODUCT999',
@@ -1064,6 +1275,7 @@ export const ERROR_CODES = {
 	SIGNED_IN_AS_WRONG_USER: 'AUTH121',
 	WOOCOMMERCE_MISSING: 'AUTH321',
 	WCPOS_PLUGIN_OUTDATED: 'AUTH331',
+	SITE_IDENTITY_CLASH: 'AUTH341',
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',
@@ -1091,8 +1303,17 @@ export const ERROR_CODES = {
 	SEARCH_INDEX_REBUILD_FAILED: 'CLIENT144',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
+	CUSTOMER_DISPLAY_SNAPSHOT_FAILED: 'DISPLAY101',
+	CASH_MOVEMENT_REFUSED: 'REGISTER101',
+	CASH_MOVEMENT_VOID_REFUSED: 'REGISTER111',
+	REGISTER_OPEN_REFUSED: 'REGISTER201',
+	REGISTER_CLOSE_REFUSED: 'REGISTER211',
+	REGISTER_CARRY_FAILED: 'REGISTER212',
+	REGISTER_TAKEN_OVER: 'REGISTER221',
+	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
 	STORE_SWITCH_FAILED: 'CLIENT181',
 	CLOCK_OUT_OF_SYNC: 'CLIENT171',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
+	REGISTER_TAB_NOT_OWNED: 'CLIENT161',
 } as const satisfies Record<string, ErrorCode>;

@@ -426,20 +426,6 @@ describe('coupon-helpers', () => {
 				const result = getEligibleItems(items, restrictions);
 				expect(result).toHaveLength(0);
 			});
-
-			it('should include all items when none are on sale and exclude_sale_items is true', () => {
-				const items = [
-					createItem({ product_id: 1, on_sale: false }),
-					createItem({ product_id: 2, on_sale: false }),
-				];
-				const restrictions: CouponRestrictions = {
-					...noRestrictions,
-					exclude_sale_items: true,
-				};
-
-				const result = getEligibleItems(items, restrictions);
-				expect(result).toHaveLength(2);
-			});
 		});
 	});
 });

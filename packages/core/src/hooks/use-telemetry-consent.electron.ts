@@ -8,7 +8,11 @@ import { useAppState } from '@wcpos/core/contexts/app-state';
 import { type TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
 import { setTelemetryConsent, type TelemetryConsent } from '@wcpos/utils/logger/sentry-sink';
 
-export function useTelemetryConsent(): void {
+/**
+ * Returns the preference it applied so a second telemetry client owned by the
+ * app can follow the same answer: `null` at boot, before the session has restored.
+ */
+export function useTelemetryConsent(): TelemetryConsent | null {
 	const { store } = useAppState();
 	// Two different "no store" situations:
 	// - Boot, before the session has restored: no opinion (`null`). Sending
@@ -39,4 +43,6 @@ export function useTelemetryConsent(): void {
 				: (window as unknown as { ipcRenderer?: Pick<TypedIpcRenderer, 'send'> }).ipcRenderer;
 		if (ipcRenderer) ipcRenderer.send('telemetry-consent', consent);
 	}, [consent]);
+
+	return consent ?? null;
 }

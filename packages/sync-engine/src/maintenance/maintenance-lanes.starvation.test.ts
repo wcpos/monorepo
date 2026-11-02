@@ -29,7 +29,7 @@ async function starvationHarness(censusDatabase?: object) {
 	const database = {
 		listCollections: () => [],
 		resetCollection: async () => undefined,
-		pendingMutationCount: async () => 0,
+		pendingMutationIds: async () => [],
 		close: async () => undefined,
 	};
 	const manager = new StoreScopeManager({ createDatabase: async () => database });
@@ -70,7 +70,6 @@ async function starvationHarness(censusDatabase?: object) {
 		}),
 		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
-		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => nowMs,
 		isServerBackingOff: () => pressure || retryAfterActive,
@@ -96,7 +95,7 @@ async function starvationHarness(censusDatabase?: object) {
 }
 
 describe('maintenance lane starvation ceiling (mono#1159)', () => {
-	it('runs all nine census probes on a starvation tick, but not a tenth due request', async () => {
+	it('runs all ten census probes on a starvation tick, but not an eleventh due request', async () => {
 		const { engine } = await createEngineHarness({ mode: 'manual' });
 		await engine.ready;
 		try {
@@ -134,6 +133,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 				'census:customers',
 				'census:orders',
 				'census:products',
+				'census:refunds',
 				'census:tags',
 				'census:taxRates',
 				'census:variations',

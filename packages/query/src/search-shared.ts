@@ -1,98 +1,21 @@
-import { BehaviorSubject } from 'rxjs';
-
 import { getLogger } from '@wcpos/utils/logger';
 
-import type { EngineRxDocument } from './engine-adapter/execute-query';
+import type { ProjectionCollection } from './projection-read';
 import type { Observable } from 'rxjs';
 
-export type SearchInstance = {
-	collection: { $: Observable<unknown> };
-	find(term: string, options?: { limit?: number }): Promise<EngineRxDocument[]>;
-};
-
-export type SearchableCollection = {
+/** The slice of a collection the search blob needs: a projection read, a change stream, and close hooks. */
+export type SearchableCollection = ProjectionCollection & {
 	onClose?: (() => void | Promise<unknown>)[];
 	$: Observable<unknown>;
 	options?: { searchFields?: string[] };
-	find(query?: Record<string, unknown>): { exec(): Promise<EngineRxDocument[]> };
-	count?(): { exec(): Promise<number> };
-	initSearch(
-		locale: string,
-		options: {
-			searchFields?: string[];
-			documentSnapshot(document: EngineRxDocument): Record<string, unknown>;
-		}
-	): Promise<SearchInstance | null>;
-	recreateSearch?(locale: string): Promise<unknown>;
 };
 
 export const searchLogger = getLogger(['wcpos', 'query', 'search']);
 
-/**
- * Collapse re-runs while sync churn streams source-collection events: the
- * document scan lanes and the catalogue blob both re-answer on this cadence.
- */
+/** Collapse re-answers while sync churn streams source-collection events into the blob. */
 export const SEARCH_SCAN_RETHROTTLE_MS = 500;
 
-/**
- * One rebuild per collection:locale per session, shared by every path that can
- * order one (the divergence self-check and the false-miss audit). A rebuild
- * cannot cure a deterministic cause — the same defect would order the same
- * rebuild forever — so recurrences after the one attempt are logged, not acted on.
- */
-export const rebuiltSearchIndexes = new Set<string>();
-
-/**
- * The rebuilds that actually COMPLETED. `rebuiltSearchIndexes` is set the moment a
- * rebuild starts (it is the in-flight guard), so a second subscription spotting the
- * same divergence while that rebuild is pending has checked no rebuilt index yet: only
- * a divergence found after completion is the error "a rebuild did not cure it".
- */
-const completedSearchRebuilds = new WeakMap<object, Set<string>>();
-
-/**
- * Keyed by the COLLECTION INSTANCE (one per store database), not by name: a store
- * switch opens a new database whose index was never rebuilt, and must not inherit the
- * previous store's "already rebuilt" verdict. A dropped database drops its record.
- */
-export function markSearchRebuildCompleted(collection: object, locale: string): void {
-	let locales = completedSearchRebuilds.get(collection);
-	if (!locales) {
-		locales = new Set<string>();
-		completedSearchRebuilds.set(collection, locales);
-	}
-	locales.add(locale);
-}
-
-export function searchRebuildCompleted(collection: object, locale: string): boolean {
-	return completedSearchRebuilds.get(collection)?.has(locale) ?? false;
-}
-
-/**
- * One subject per collection:locale, shared by every active subscription, so a
- * rebuild rebinds ALL of them — `recreateSearch` destroys the instance the
- * others still hold. Entries are never deleted: the population is bounded by
- * collections × locales, and a live subject must outlast any one subscription.
- */
-const searchInstanceSubjects = new Map<string, BehaviorSubject<SearchInstance>>();
-
-export function sharedSearchInstances(
-	key: string,
-	instance: SearchInstance
-): BehaviorSubject<SearchInstance> {
-	const existing = searchInstanceSubjects.get(key);
-	if (!existing) {
-		const subject = new BehaviorSubject(instance);
-		searchInstanceSubjects.set(key, subject);
-		return subject;
-	}
-	// A newer instance (fresh initSearch after a database swap or rebuild) supersedes the held one.
-	if (existing.value !== instance) existing.next(instance);
-	return existing;
-}
-
-// Folding note: every plane that matches text — the index's encoder, the scan
-// fallback, the false-hit verifier, and the audit's token probes — must use
-// the ONE shared `foldSearchText`/`FLEXSEARCH_TOKEN_BOUNDARY` from
-// `@wcpos/sync-core` (#1732). A plane that folds differently makes results
-// appear from one path and vanish when another takes over.
+// Folding note: every plane that matches text — the blob's row fold, the term split, the
+// logs scan selector and the server's SQL — must use the ONE shared `foldSearchText` /
+// `SEARCH_TOKEN_BOUNDARY` from `@wcpos/sync-core` (#1732). A plane that folds differently
+// makes results appear from one path and vanish when another takes over.

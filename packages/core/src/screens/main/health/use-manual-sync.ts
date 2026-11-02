@@ -62,7 +62,7 @@ function showReportToast(
  * swallows the outcome entirely.
  */
 export function useManualSync() {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const t = useT();
 	// `useObservableEagerState`, not `useObservableState(subject$, subject$.getValue())`:
 	// the seed of `useObservableState` is the INITIAL state, read once on the first
@@ -80,7 +80,7 @@ export function useManualSync() {
 		if (manualSyncInFlight$.getValue() || collectionCheckInFlight$.getValue() !== null) return;
 		manualSyncInFlight$.next(true);
 		try {
-			const report = await engine.sync();
+			const report = await runtime.engine.sync();
 			showReportToast(report, t);
 		} catch (error) {
 			// Thrown before the engine wrote any row (e.g. disposed mid-switch): this is
@@ -97,13 +97,13 @@ export function useManualSync() {
 		} finally {
 			manualSyncInFlight$.next(false);
 		}
-	}, [engine, t]);
+	}, [runtime.engine, t]);
 
 	return { syncing, busy, sync };
 }
 
 export function useCollectionCheck() {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const t = useT();
 	const checking = useObservableEagerState(collectionCheckInFlight$);
 
@@ -112,7 +112,7 @@ export function useCollectionCheck() {
 			if (manualSyncInFlight$.getValue() || collectionCheckInFlight$.getValue() !== null) return;
 			collectionCheckInFlight$.next(name);
 			try {
-				showReportToast(await engine.checkCollection(name), t);
+				showReportToast(await runtime.engine.checkCollection(name), t);
 			} catch (error) {
 				manualSyncLogger.error('Collection check threw', {
 					code: ERROR_CODES.UNEXPECTED_ERROR,
@@ -127,7 +127,7 @@ export function useCollectionCheck() {
 				collectionCheckInFlight$.next(null);
 			}
 		},
-		[engine, t]
+		[runtime.engine, t]
 	);
 
 	return { checking, check };

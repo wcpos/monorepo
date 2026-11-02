@@ -9,8 +9,9 @@ const SENSITIVE_KEYS = new Set([
 	'authorization',
 ]);
 
+// Keep the scheme when a Basic credential has already been scrubbed below.
 const CREDENTIAL_PAIR =
-	/(\b(?:access[_-]?token|refresh[_-]?token|jwt[_-]?token|license[_-]?key|authorization|token|password|secret)\b["']?\s*[:=]\s*["']?)[^"'\s,;&#]+/gi;
+	/(\b(?:access[_-]?token|refresh[_-]?token|jwt[_-]?token|license[_-]?key|authorization|token|password|secret)\b["']?\s*[:=]\s*["']?(?:Basic\s+(?=\[REDACTED\]))?)[^"'\s,;&#]+/gi;
 
 /**
  * Mask a string value: show first 6 + last 5 chars, or [REDACTED] if too short.
@@ -20,10 +21,63 @@ function maskValue(value: string): string {
 	return `${value.slice(0, 6)}...${value.slice(-5)}`;
 }
 
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Decode a standard or URL-safe base64 token without Buffer/atob (neither is
+ * guaranteed on every runtime this logger runs in). Returns null when the token
+ * is not well-formed base64.
+ */
+function decodeBase64(token: string): string | null {
+	const normalized = token.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+	if (normalized.length % 4 === 1) return null;
+	let bits = 0;
+	let buffer = 0;
+	let out = '';
+	for (const char of normalized) {
+		const index = BASE64_ALPHABET.indexOf(char);
+		if (index < 0) return null;
+		buffer = (buffer << 6) | index;
+		bits += 6;
+		if (bits >= 8) {
+			bits -= 8;
+			out += String.fromCharCode((buffer >> bits) & 0xff);
+		}
+	}
+	return out;
+}
+
+/**
+ * A Basic credential is `base64(user:password)`: redact a candidate only when it
+ * decodes to printable text with a colon, so `Basic YTpi` (a:b) is scrubbed while
+ * prose such as "Basic authentication failed" is left readable.
+ */
+function isBasicCredential(token: string): boolean {
+	const decoded = decodeBase64(token);
+	// user:password with a non-empty user made of printable, non-space characters; a
+	// bare colon or a leading colon (`Only` decodes to `:yr`) is prose, not a credential.
+	// The decoder yields one character per byte, so 0x80–0xFF are UTF-8 lead and
+	// continuation bytes (RFC 7617 allows UTF-8 credentials), not control characters.
+	return (
+		decoded !== null &&
+		// RFC 7617 allows any printable text in the user-id except a colon, spaces included
+		// (`Firstname Lastname:secret`); the user part must be non-empty and not start with
+		// a space, which keeps `Only` (`:yr`) prose.
+		/^[\x21-\x39\x3b-\x7e\u0080-\u00ff][\x20-\x39\x3b-\x7e\u0080-\u00ff]*:[\x20-\x7e\u0080-\u00ff]*$/.test(
+			decoded
+		)
+	);
+}
+
 export function redactSensitiveText(value: string): string {
 	return value
 		.replace(/(https?:\/\/)[^/\s@]+@/gi, '$1[REDACTED]@')
 		.replace(/\bBearer\s+[^\s,;"']+/gi, 'Bearer [REDACTED]')
+		.replace(
+			/\b(Basic)\s+([A-Za-z0-9+/_-]{4,}={0,2})/gi,
+			(match, _scheme: string, token: string) =>
+				isBasicCredential(token) ? `Basic [REDACTED]` : match
+		)
 		.replace(CREDENTIAL_PAIR, '$1[REDACTED]');
 }
 

@@ -1,8 +1,10 @@
+import { readServerSentence } from './serverSentence';
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { isNonRetryable } from './drainMutationQueue';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
 import { mapCouponExpiryToPayload } from './couponWirePayload';
+import { toOrderWirePayload } from './woo/orderWriteContract';
 import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
 import type { RecordMutation } from './recordMutation';
@@ -75,6 +77,14 @@ export type PushResult = {
 	currentRevision: string | null;
 	/** Present only on a 409 conflict — the server's current state to drive resolution. */
 	conflict?: { current: ServerDocument | null; currentRevision: string | null };
+	/**
+	 * The top-level payload fields that were actually ON THE WIRE (absent for a delete
+	 * or a drain-synthesized result). The outbound sanitizers (`toOrderWirePayload`,
+	 * the barcode and coupon maps) can drop fields the queue row still carries — a
+	 * refused `status: 'completed'` never leaves the till — so anything judging what
+	 * the server accepted reads this, never `mutation.payload`.
+	 */
+	sentFields?: readonly string[];
 };
 
 export class RecordPushError extends Error {
@@ -97,12 +107,15 @@ export class RecordPushError extends Error {
 	 * (#832); nothing branches on it.
 	 */
 	public readonly serverMessage?: string;
+	/** The error body's `data`, whole: a refusal can name what it refused (ADR 0040's leg). */
+	public readonly data?: Record<string, unknown>;
 	public constructor(
 		mutation: RecordMutation,
 		status: number,
 		reason?: string,
 		permanent = false,
-		serverMessage?: string
+		serverMessage?: string,
+		data?: Record<string, unknown>
 	) {
 		super(
 			`push ${mutation.operation} ${mutation.collectionName}/${mutation.recordId} failed: ${status}${reason ? ` (${reason})` : ''}`
@@ -113,6 +126,7 @@ export class RecordPushError extends Error {
 		this.reason = reason;
 		this.permanent = permanent;
 		this.serverMessage = serverMessage;
+		if (data !== undefined) this.data = data;
 	}
 }
 
@@ -194,6 +208,10 @@ export async function pushRecordMutation(input: {
 			envelope.payload = mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? []);
 		} else if (mutation.collectionName === 'coupons') {
 			envelope.payload = mapCouponExpiryToPayload(mutation.payload);
+		} else if (mutation.collectionName === 'orders') {
+			// The second seam (ADR 0040): a row queued before the strip, or one that slipped
+			// past the enqueue sanitizer, still carries no money and no refused status.
+			envelope.payload = toOrderWirePayload(mutation.payload);
 		} else {
 			envelope.payload = mutation.payload;
 		}
@@ -278,7 +296,7 @@ export async function pushRecordMutation(input: {
 				409,
 				'identity-ambiguous',
 				true,
-				readServerMessage(body, 409)
+				readServerSentence(body, 409)
 			);
 			emit({
 				type: 'push.error',
@@ -323,7 +341,7 @@ export async function pushRecordMutation(input: {
 			428,
 			typeof body?.code === 'string' ? body.code : 'precondition-required',
 			false,
-			readServerMessage(body, 428)
+			readServerSentence(body, 428)
 		);
 		emit({
 			type: 'push.error',
@@ -342,13 +360,17 @@ export async function pushRecordMutation(input: {
 	if (!response.ok) {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
-		const serverMessage = readServerMessage(body, response.status);
+		const serverMessage = readServerSentence(body, response.status);
+		const data = body?.data;
 		const error = new RecordPushError(
 			mutation,
 			response.status,
 			reason,
 			reason === WOO_REST_CANNOT_DELETE,
-			serverMessage
+			serverMessage,
+			data && typeof data === 'object' && !Array.isArray(data)
+				? (data as Record<string, unknown>)
+				: undefined
 		);
 		emit({
 			type: 'push.error',
@@ -452,7 +474,16 @@ export async function pushRecordMutation(input: {
 		collection: mutation.collectionName,
 		fields: { ...baseFields, outcome },
 	});
-	return { outcome, mutation, httpStatus: response.status, document, currentRevision };
+	return {
+		outcome,
+		mutation,
+		httpStatus: response.status,
+		document,
+		currentRevision,
+		...(envelope.payload !== undefined
+			? { sentFields: Object.keys(envelope.payload as Record<string, unknown>) }
+			: {}),
+	};
 }
 
 async function safeJson(response: Response): Promise<Record<string, unknown> | null> {
@@ -461,164 +492,6 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
 	} catch {
 		return null;
 	}
-}
-
-/**
- * The server's own sentence for a refused push, read from a WP REST error body.
- *
- * A WordPress fatal (memory exhausted, a plugin's uncaught exception) answers
- * 500 as `{ code: 'internal_server_error', message: '<p>There has been a
- * critical error on this website.</p>…' }` — the top-level `message` is the
- * localized boilerplate and names nothing. When the site exposes error details,
- * the PHP error itself rides in `data.error` in the `error_get_last()` shape
- * `{ type, message, file, line }`, and THAT sentence ("Allowed memory size of
- * 134217728 bytes exhausted") is the answer support needs, so it wins over the
- * boilerplate with `file:line` appended the way PHP reports a fatal. Sites that
- * hide error details send no `data.error`, so the top-level message stays the
- * fallback (#2439). `readWpFatalDetail` in `@wcpos/hooks` parse-wp-error reads
- * the same shape for the axios lanes; sync-core stays dependency-free, so the
- * two are kept in step by hand.
- */
-export function readServerMessage(
-	body: Record<string, unknown> | null,
-	status: number
-): string | undefined {
-	if (body === null) return undefined;
-	// Only a 5xx is a fatal. A 4xx may carry a caller-defined `data.error` object
-	// of its own (a gateway diagnostic under a validation message), and there the
-	// top-level message is the one written for the cashier.
-	const fatal = status >= 500 ? readWpFatalDetail(body.data) : undefined;
-	if (fatal !== undefined) return fatal;
-	if (typeof body.message !== 'string') return undefined;
-	const message = stripTags(body.message);
-	if (message.length === 0) return undefined;
-	const params = body.code === 'rest_invalid_param' ? readInvalidParams(body.data) : undefined;
-	return params ?? message;
-}
-
-/**
- * WordPress's `rest_invalid_param` message only lists the failing keys; WHY each failed is in
- * `data.params` (`{ email: 'Invalid email address.' }`). Each entry names its key, so it
- * replaces the message rather than trailing it: the ledger's 200-character cap cuts from the
- * end, which is where the reasons would sit.
- */
-function readInvalidParams(data: unknown): string | undefined {
-	if (typeof data !== 'object' || data === null) return undefined;
-	const params = (data as Record<string, unknown>).params;
-	if (typeof params !== 'object' || params === null) return undefined;
-	const entries = Object.entries(params)
-		.filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-		.map(([key, reason]) => `${key}: ${stripTags(reason)}`);
-	return entries.length > 0 ? entries.join('; ') : undefined;
-}
-
-/**
- * The ledger observer (`sanitizeReason`) caps a quoted sentence at 200
- * characters, cutting from the END — exactly where the location is appended.
- * The whole sentence is therefore built to fit under it: the location is sized
- * first (shortened to its file name when even the WordPress-relative path is
- * long), and the PHP message takes whatever is left. A fatal's first line is a
- * sentence, but an uncaught exception's `message` runs on into a stack trace,
- * so only the first line is quoted.
- */
-const QUOTE_CAP = 200;
-/** The location may not squeeze the message below this; past it the path drops to its file name. */
-const MIN_MESSAGE_CHARS = 80;
-
-function readWpFatalDetail(data: unknown): string | undefined {
-	if (data === null || typeof data !== 'object') return undefined;
-	const error = (data as Record<string, unknown>).error;
-	if (error === null || typeof error !== 'object') return undefined;
-	const { message: raw, file, line } = error as Record<string, unknown>;
-	if (typeof raw !== 'string') return undefined;
-	const firstLine = stripTags(raw.split('\n')[0] ?? '');
-	if (firstLine === '') return undefined;
-	const location = typeof file === 'string' && file !== '' ? fatalLocation(file, line) : '';
-	const budget = Math.max(QUOTE_CAP - location.length, MIN_MESSAGE_CHARS);
-	const message = firstLine.length > budget ? `${firstLine.slice(0, budget - 1)}…` : firstLine;
-	return `${message}${location}`;
-}
-
-/**
- * ` in wp-includes/class-wpdb.php:2324`. Everything before the WordPress root
- * (`/home/u123/domains/shop.example/public_html/`) is the host's directory
- * layout, which says nothing about the fault and eats the quote budget, so the
- * path starts at `wp-content/`, `wp-includes/` or `wp-admin/`; a path outside
- * those roots, or one still too long to leave the message its minimum, keeps
- * only its file name — the line number always survives.
- */
-function fatalLocation(file: string, line: unknown): string {
-	const suffix =
-		typeof line === 'number' || (typeof line === 'string' && line !== '') ? `:${line}` : '';
-	// A Windows host reports `C:\inetpub\wwwroot\wp-includes\class-wpdb.php`.
-	const path = file.split('\\').join('/');
-	const slash = path.lastIndexOf('/');
-	const fileName = slash === -1 ? path : path.slice(slash + 1);
-	const maxLocation = QUOTE_CAP - MIN_MESSAGE_CHARS;
-	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
-		const at = path.indexOf(root);
-		if (at === -1) continue;
-		const location = ` in ${path.slice(at + 1)}${suffix}`;
-		if (location.length <= maxLocation) return location;
-		break;
-	}
-	const location = ` in ${fileName}${suffix}`;
-	if (location.length <= maxLocation) return location;
-	// Even the file name is absurd: keep its tail (extension) and the line number.
-	const room = maxLocation - ` in …${suffix}`.length;
-	return ` in …${fileName.slice(fileName.length - room)}${suffix}`;
-}
-
-/**
- * WordPress ships its error copy as HTML — the critical-error boilerplate is
- * `<p>…</p><p><a href="…">Learn more…</a></p>` — and the sentence is quoted on a
- * ledger row and in toasts, where tags would render literally. Entities are left
- * alone: the renderer decodes them.
- */
-// Longest tag WordPress error copy emits is the troubleshooting link (~90 chars).
-const TAG_MAX = 256;
-const TAG_START = /[A-Za-z/!]/;
-// Tag names WordPress and WooCommerce put in error copy, plus HTML comments.
-// Attributes must be `name=value`: `and`/`z` are bare attribute names in HTML too, so
-// `x<a and z>2` would otherwise read as an `<a>` tag and lose the sentence's middle.
-const KNOWN_TAG =
-	/^(?:\/?(?:p|a|br|b|strong|i|em|u|code|pre|span|div|ul|ol|li|h[1-6])(?:\s+[A-Za-z_:][A-Za-z0-9:._-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=`]+))*\s*\/?|!--[\s\S]*--|!\[CDATA\[[\s\S]*\]\])$/i;
-
-function stripTags(html: string): string {
-	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
-	// regex is polynomial on a run of `<` (CodeQL js/polynomial-redos), and the
-	// scan keeps a lone `<` with no closing `>` as the literal it is.
-	let text = '';
-	let cursor = 0;
-	while (cursor < html.length) {
-		const open = html.indexOf('<', cursor);
-		if (open === -1) {
-			text += html.slice(cursor);
-			break;
-		}
-		// Only tag syntax opens a tag: `<p`, `</p>`, `<!-- -->`. A `<` before a space,
-		// a digit, another `<` or the end of the text is a comparison operator in a
-		// PHP sentence ("Expected x < 5 and y > 2") and is kept, with its `>`.
-		if (!TAG_START.test(html.charAt(open + 1))) {
-			text += html.slice(cursor, open + 1);
-			cursor = open + 1;
-			continue;
-		}
-		// Look for the closing `>` only within TAG_MAX chars, so a crafted body of
-		// `<a<a<a…>` costs a bounded window per `<` and the scan stays linear.
-		const window = html.slice(open + 1, open + 1 + TAG_MAX);
-		const closeInWindow = window.indexOf('>');
-		// The run between `<` and `>` must be one of the tags WordPress's error copy
-		// uses (or a comment); `x<y and z>2` is a sentence, not markup, and is kept.
-		if (closeInWindow === -1 || !KNOWN_TAG.test(window.slice(0, closeInWindow))) {
-			text += html.slice(cursor, open + 1);
-			cursor = open + 1;
-			continue;
-		}
-		text += `${html.slice(cursor, open)} `;
-		cursor = open + 1 + closeInWindow + 1;
-	}
-	return text.replace(/\s+/g, ' ').trim();
 }
 
 /**

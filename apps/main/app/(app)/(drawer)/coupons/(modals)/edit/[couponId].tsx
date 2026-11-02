@@ -1,3 +1,13 @@
-import { EditCouponScreen } from '@wcpos/core/screens/main/coupons/edit';
+import * as React from 'react';
 
-export default EditCouponScreen;
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.EditCouponScreen);
+
+export default function EditCouponRoute() {
+	return (
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
+	);
+}

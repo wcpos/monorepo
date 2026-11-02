@@ -3,14 +3,19 @@ import { ScrollView, View } from 'react-native';
 
 import { Redirect, usePathname, useRouter } from 'expo-router';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon, type IconName } from '@wcpos/components/icon';
+import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { type IconName } from '@wcpos/components/icon';
+import { NavItem } from '@wcpos/components/nav-item';
 import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { useTheme } from '../../../../contexts/theme';
+import { ManagementBar } from '../management-bar';
+import { SessionHoldBanner, useSessionHeld } from '../session-hold-banner';
 
 import type { Href } from 'expo-router';
+
+export { AreaPage, type AreaPageMode } from './area-page';
 
 export type NavigationAreaItem = {
 	href: Extract<Href, string>;
@@ -30,39 +35,21 @@ function NavigationItems({
 	const pathname = usePathname();
 	const router = useRouter();
 
-	return items.map((item) => {
-		const selected = pathname === item.href;
-
-		return (
-			<Button
-				key={item.href}
-				variant="ghost"
-				testID={item.testID}
-				onPress={() => router.push(item.href)}
-				accessibilityState={{ selected }}
-				className={cn(
-					'h-10 w-full justify-start px-3',
-					selected && 'bg-primary/10 web:hover:bg-primary/10'
-				)}
-			>
-				<HStack className="w-full flex-1 items-center justify-between gap-3">
-					{item.icon ? (
-						<Icon
-							name={item.icon}
-							size="sm"
-							className={selected ? 'text-primary' : 'text-muted-foreground'}
-						/>
-					) : null}
-					<ButtonText className={cn('flex-1', selected && 'text-primary font-semibold')}>
-						{item.label}
-					</ButtonText>
-					{item.badge ? <View className="relative h-5 w-5">{item.badge}</View> : null}
-					{showChevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
-				</HStack>
-			</Button>
-		);
-	});
+	return items.map((item) => (
+		<NavItem
+			key={item.href}
+			testID={item.testID}
+			selected={pathname === item.href}
+			icon={item.icon}
+			label={item.label}
+			badge={item.badge}
+			chevron={showChevron}
+			onPress={() => router.push(item.href)}
+		/>
+	));
 }
+
+const TOP = ['top'] as const;
 
 export function NavigationAreaLayout({
 	items,
@@ -70,6 +57,9 @@ export function NavigationAreaLayout({
 	areaLabel,
 	testID,
 	screenTestID,
+	barTestID,
+	barNotice,
+	leafPagesCarryTitle = false,
 	children,
 }: {
 	items: NavigationAreaItem[];
@@ -77,49 +67,71 @@ export function NavigationAreaLayout({
 	areaLabel: string;
 	testID: string;
 	screenTestID?: string;
+	/** The phone's page bar; `lg` has none, so the rail, list and page column sit on `bg-background`. */
+	barTestID: string;
+	barNotice?: React.ReactNode;
+	/**
+	 * The area's leaf pages render their own large heading (`AreaPage`), so on a phone the
+	 * bar shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
+	 * An area whose pages carry no heading keeps the bar title.
+	 */
+	leafPagesCarryTitle?: boolean;
 	children: React.ReactNode;
 }) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
+	const ground = useGround();
 	const pathname = usePathname();
 	const router = useRouter();
-
-	if (screenSize === 'sm') {
+	const current = items.find((item) => pathname === item.href);
+	const held = useSessionHeld();
+	if (phone) {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
-		const current = items.find((item) => pathname === item.href);
 		return (
-			<View testID={screenTestID} className="bg-card flex-1">
-				{current ? (
-					<HStack
-						testID={`${testID}-back`}
-						className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
-					>
-						<Button variant="link" onPress={() => router.navigate(indexHref)}>
-							<HStack className="items-center gap-1">
-								<Icon name="chevronLeft" className="text-primary" />
-								<ButtonText>{areaLabel}</ButtonText>
-							</HStack>
-						</Button>
-						<ButtonText className="font-semibold">{current.label}</ButtonText>
-					</HStack>
-				) : null}
+			<View testID={screenTestID} className="bg-background flex-1">
+				<ManagementBar
+					testID={barTestID}
+					title={current ? (leafPagesCarryTitle ? undefined : current.label) : areaLabel}
+					back={
+						current
+							? {
+									label: areaLabel,
+									onPress: () => router.navigate(indexHref),
+									testID: `${testID}-back`,
+								}
+							: undefined
+					}
+				/>
+				{barNotice}
 				{children}
 			</View>
 		);
 	}
 
+	// No bar on `lg` (owner, 2026-10-18): the page's own heading (`AreaPage`) is the title, and
+	// the page carries neither the bell nor the avatar (Paul, 2026-10-30; the POS and the list
+	// pages keep theirs). What the bar held besides stays: the top inset, the held-session banner
+	// and the upgrade notice.
 	return (
-		<View testID={testID} className="flex-1 flex-row">
-			<View
-				testID={`${testID}-rail`}
-				className="border-border/50 bg-card w-56 shrink-0 gap-0.5 border-r p-3"
-			>
-				<NavigationItems items={items} showChevron={false} />
+		<EdgeSurface edges={TOP} className="bg-background flex-1">
+			<SessionHoldBanner />
+			{/* First row of the column: flush with the top it pads; after the hold banner it is the
+			    next row, one page gutter down (CODING_STANDARDS § Design, Gutters). */}
+			{barNotice != null && <View className={held ? ground.mt : undefined}>{barNotice}</View>}
+			<View testID={testID} className="flex-1 flex-row">
+				<View
+					testID={`${testID}-rail`}
+					className={cn('border-border/50 bg-background w-56 shrink-0 gap-0.5 border-r', ground.p)}
+				>
+					<NavigationItems items={items} showChevron={false} />
+				</View>
+				{/* The page ground, like the rail: each page is one card on it (`AreaPage`), so the
+				    rail's selected row (`bg-card`) and the page card read as the same surface. */}
+				<View testID={screenTestID} className="bg-background min-w-0 flex-1">
+					{children}
+				</View>
 			</View>
-			<View testID={screenTestID} className="bg-card min-w-0 flex-1">
-				{children}
-			</View>
-		</View>
+		</EdgeSurface>
 	);
 }
 
@@ -132,15 +144,16 @@ export function NavigationAreaIndex({
 	defaultHref: Extract<Href, string>;
 	testID: string;
 }) {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
+	const ground = useGround();
 
-	if (screenSize !== 'sm') {
+	if (!phone) {
 		return <Redirect href={defaultHref} />;
 	}
 
 	return (
-		<ScrollView testID={testID} className="bg-card flex-1">
-			<View className="gap-1 p-4">
+		<ScrollView testID={testID} className="bg-background flex-1">
+			<View className={cn('gap-1', ground.p)}>
 				<NavigationItems items={items} showChevron />
 			</View>
 		</ScrollView>

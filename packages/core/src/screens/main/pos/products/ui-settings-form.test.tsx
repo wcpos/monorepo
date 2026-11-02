@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import '@testing-library/jest-dom';
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -9,11 +10,14 @@ import { BehaviorSubject } from 'rxjs';
 import type { FormItemProps } from '@wcpos/components/form';
 
 import { UISettingsForm } from './ui-settings-form';
+import { useBrowseCounts } from './browse/use-browse-terms';
+import { SORT_FIELD_VALUES } from './filter-bar/filter-bar-layout';
 
 import type { ControllerProps, FieldValues } from 'react-hook-form';
 
 type Settings = {
 	viewMode: 'grid' | 'table';
+	filterBar: { id: string; type: string; show: boolean }[];
 	showOutOfStock: boolean;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
@@ -25,6 +29,7 @@ type Settings = {
 
 const initialSettings: Settings = {
 	viewMode: 'table',
+	filterBar: [],
 	showOutOfStock: false,
 	sortBy: 'name',
 	sortDirection: 'asc',
@@ -47,7 +52,20 @@ const initialSettings: Settings = {
 const settings$ = new BehaviorSubject<Settings>(initialSettings);
 const mockUISettings = { $: settings$, get: () => settings$.getValue() };
 const patchSpy = jest.fn();
+const pushSpy = jest.fn();
+const closeSpy = jest.fn();
+jest.mock('@wcpos/components/dialog', () => ({ useDialog: () => ({ close: closeSpy }) }));
 
+// uuid ships ESM only; the house pattern is to stub it per suite.
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: pushSpy }) }));
+
+// The label primitive needs a native host; the form's label names its control by this id.
+jest.mock('@wcpos/components/label', () => ({
+	Label: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<label id={nativeID}>{children}</label>
+	),
+}));
 jest.mock('@wcpos/components/form', () => {
 	const { Controller, FormProvider } = jest.requireActual('react-hook-form');
 	const { useFormChangeHandler } = jest.requireActual(
@@ -82,71 +100,83 @@ jest.mock('@wcpos/components/form', () => {
 			</>
 		);
 	}
-	return { Form: FormProvider, FormField, FormSwitch, useFormChangeHandler };
-});
-
-/**
- * The Select and ToggleGroup doubles keep the production prop contracts (`onValueChange`
- * receives an Option / a string) and render each choice as a plain button, so a click
- * goes through the same field `onChange` the real popovers call.
- */
-jest.mock('@wcpos/components/select', () => {
-	type SelectOption = { value: string; label: string };
-	type OnValueChange = (option: SelectOption | undefined) => void;
-	const SelectCtx = React.createContext<OnValueChange>(() => {});
-	function Select({
-		onValueChange,
-		children,
-	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
-		return <SelectCtx.Provider value={onValueChange ?? (() => {})}>{children}</SelectCtx.Provider>;
-	}
-	function PassThrough({ children }: React.PropsWithChildren) {
-		return <>{children}</>;
-	}
-	function SelectItem({ value, label }: SelectOption) {
-		const onValueChange = React.useContext(SelectCtx);
-		return (
+	// The real field: its label is the form's, and its segments keep `${testID}-${value}`.
+	const { FormSegmentedControl } = jest.requireActual(
+		'../../../../../../components/src/form/segmented-control'
+	);
+	/** Each option a plain button, so a click goes through the field `onChange` the list calls. */
+	function FormSelect({
+		options,
+		onChange,
+	}: FormItemProps<string> & { options: { value: string; label: string }[] }) {
+		return options.map((option) => (
 			<button
+				key={option.value}
 				type="button"
-				data-testid={`option-${value}`}
-				onClick={() => onValueChange({ value, label })}
+				data-testid={`option-${option.value}`}
+				onClick={() => onChange?.(option.value)}
 			>
-				{label}
+				{option.label}
 			</button>
-		);
+		));
 	}
+	const { FormDescription, FormItem, FormLabel } = jest.requireActual(
+		'../../../../../../components/src/form/common'
+	);
 	return {
-		Select,
-		SelectTrigger: PassThrough,
-		SelectValue: () => null,
-		SelectContent: PassThrough,
-		SelectGroup: PassThrough,
-		SelectItem,
+		Form: FormProvider,
+		FormDescription,
+		FormField,
+		FormItem,
+		FormLabel,
+		FormSegmentedControl,
+		FormSelect,
+		FormSwitch,
+		useFormChangeHandler,
 	};
 });
 
-jest.mock('@wcpos/components/toggle-group', () => {
-	type OnValueChange = (value: string | undefined) => void;
-	const ToggleCtx = React.createContext<OnValueChange>(() => {});
-	function ToggleGroup({
-		onValueChange,
+jest.mock('@wcpos/components/button', () => {
+	function Button({
 		children,
-	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
-		return <ToggleCtx.Provider value={onValueChange ?? (() => {})}>{children}</ToggleCtx.Provider>;
-	}
-	function ToggleGroupItem({
-		value,
+		onPress,
+		disabled,
 		testID,
-		children,
-	}: React.PropsWithChildren<{ value: string; testID?: string }>) {
-		const onValueChange = React.useContext(ToggleCtx);
+	}: React.PropsWithChildren<{ onPress?: () => void; disabled?: boolean; testID?: string }>) {
 		return (
-			<button type="button" data-testid={testID} onClick={() => onValueChange(value)}>
+			<button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>
 				{children}
 			</button>
 		);
 	}
-	return { ToggleGroup, ToggleGroupItem };
+	function ButtonText({ children }: React.PropsWithChildren) {
+		return <span>{children}</span>;
+	}
+	return { Button, ButtonText };
+});
+
+jest.mock('@wcpos/components/input', () => {
+	function Input({
+		value,
+		onChangeText,
+		editable = true,
+		testID,
+	}: {
+		value: string;
+		onChangeText: (value: string) => void;
+		editable?: boolean;
+		testID?: string;
+	}) {
+		return (
+			<input
+				data-testid={testID}
+				value={value}
+				disabled={!editable}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
+		);
+	}
+	return { Input };
 });
 
 jest.mock('@wcpos/components/slider', () => {
@@ -182,7 +212,12 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
 jest.mock('./meta-data-keys-field', () => ({ MetaDataKeysField: () => null }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string, vars?: { count?: number }) =>
+		vars?.count !== undefined ? `${vars.count} ${key}` : key,
+}));
+// The counts come from the term handles; the row's states are what is tested here.
+jest.mock('./browse/use-browse-terms', () => ({ useBrowseCounts: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('../../../../../../query/src/records/use-record-field')
 		.useDocField,
@@ -208,9 +243,12 @@ jest.mock('../../contexts/ui-settings', () => ({
 	}),
 }));
 
+const mockUseBrowseCounts = useBrowseCounts as jest.MockedFunction<typeof useBrowseCounts>;
+
 beforeEach(() => {
 	jest.useFakeTimers();
 	patchSpy.mockClear();
+	mockUseBrowseCounts.mockReturnValue({ categories: 5, tags: 3, brands: 2, shortcuts: 1 });
 	settings$.next(initialSettings);
 });
 
@@ -229,6 +267,8 @@ it('persists a switch change immediately (control)', async () => {
 
 	fireEvent.click(screen.getByLabelText('showOutOfStock'));
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ showOutOfStock: true });
 	await settle();
 });
@@ -236,13 +276,105 @@ it('persists a switch change immediately (control)', async () => {
 it('persists a View Mode selection', async () => {
 	render(<UISettingsForm />);
 
-	fireEvent.click(screen.getByTestId('option-grid'));
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
 	act(() => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ viewMode: 'grid' });
 	await settle();
+});
+
+it('names the inline Variations style after the view: expanded rows under a table, a popover on a tile', () => {
+	render(<UISettingsForm />);
+	const inline = () => screen.getByTestId('products-variations-style-inline');
+	expect(inline().textContent).toBe('pos_products.variations_expanded_rows');
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
+	expect(inline().textContent).toBe('pos_products.variations_popover');
+});
+
+it('persists the inline Variations selection', async () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('products-variations-style-inline'));
+	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
+	expect(patchSpy).toHaveBeenCalledWith({ variationsStyle: 'inline' });
+	await settle();
+});
+
+it('offers Browse by with All products first and dims a source with nothing to show', async () => {
+	mockUseBrowseCounts.mockReturnValue({ categories: 5, tags: undefined, brands: 0, shortcuts: 2 });
+	render(<UISettingsForm />);
+
+	// The segmented controls are radios too; this field's are the browse-by ones, in order.
+	const options = screen
+		.getAllByRole('radio')
+		.map((node) => node.getAttribute('data-testid'))
+		.filter((id) => id?.startsWith('ui-settings-browse-by-'));
+	expect(options).toEqual([
+		'ui-settings-browse-by-all',
+		'ui-settings-browse-by-categories',
+		'ui-settings-browse-by-tags',
+		'ui-settings-browse-by-brands',
+		'ui-settings-browse-by-shortcuts',
+	]);
+	// No stored value reads as the default, Categories; All products is offered, not chosen.
+	expect(screen.getByTestId('ui-settings-browse-by-categories')).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+	expect(screen.getByTestId('ui-settings-browse-by-all')).toHaveAttribute('aria-checked', 'false');
+
+	// Answered with terms: enabled, with its count.
+	const categories = screen.getByTestId('ui-settings-browse-by-categories');
+	expect(categories).not.toHaveAttribute('aria-disabled', 'true');
+	expect(categories).toHaveTextContent('5 pos_products.n_categories');
+
+	// Still loading: a choice, with no count and no empty reason.
+	const tags = screen.getByTestId('ui-settings-browse-by-tags');
+	expect(tags).not.toHaveAttribute('aria-disabled', 'true');
+	expect(tags).not.toHaveTextContent('pos_products.n_tags');
+	expect(tags).not.toHaveTextContent('pos_products.no_tags_yet');
+
+	// Answered empty: dimmed, disabled, saying why.
+	const brands = screen.getByTestId('ui-settings-browse-by-brands');
+	expect(brands).toHaveAttribute('aria-disabled', 'true');
+	expect(brands).toHaveTextContent('pos_products.no_brands_yet');
+	fireEvent.click(brands);
+	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
+	expect(patchSpy).not.toHaveBeenCalled();
+
+	fireEvent.click(tags);
+	act(() => jest.advanceTimersByTime(1000));
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
+	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'tags' });
+	await settle();
+	expect(screen.getByTestId('ui-settings-browse-by-tags')).toHaveAttribute('aria-checked', 'true');
+});
+
+it('labels each segmented field with the form label that names its radiogroup', () => {
+	render(<UISettingsForm />);
+	for (const [name, segment] of [
+		['viewMode', 'view-mode-grid'],
+		['pos_products.variations_style', 'products-variations-style-drill'],
+		['sortDirection', 'sort-direction-asc'],
+	]) {
+		expect(screen.getByRole('radiogroup', { name })).toContainElement(screen.getByTestId(segment));
+	}
+});
+
+it('draws every other field label as the form label, never body text', () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
+	for (const label of ['pos_products.browse_by', 'gridColumns', 'metaDataKeys']) {
+		expect(screen.getByText(label).tagName).toBe('LABEL');
+	}
 });
 
 it('persists a Sort By selection', async () => {
@@ -253,8 +385,18 @@ it('persists a Sort By selection', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortBy: 'sku' });
 	await settle();
+});
+
+it('labels every Sort By option (the product-type sort once rendered blank)', () => {
+	render(<UISettingsForm />);
+	for (const value of SORT_FIELD_VALUES) {
+		expect(screen.getByTestId(`option-${value}`).textContent).not.toBe('');
+	}
+	expect(screen.getByTestId('option-type')).toHaveTextContent('common.type');
 });
 
 it('persists a Sort Direction toggle', async () => {
@@ -265,6 +407,18 @@ it('persists a Sort Direction toggle', async () => {
 		jest.advanceTimersByTime(1000);
 	});
 
+	// The write lands after the change handler has validated the field (a microtask).
+	await settle();
 	expect(patchSpy).toHaveBeenCalledWith({ sortDirection: 'desc' });
 	await settle();
 });
+
+it('closes its settings panel before opening filter-bar customisation', () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('customize-filter-bar'));
+	expect(pushSpy).toHaveBeenCalledWith('/(app)/(modals)/filter-bar');
+	expect(closeSpy).toHaveBeenCalledTimes(1);
+	expect(closeSpy.mock.invocationCallOrder[0]).toBeLessThan(pushSpy.mock.invocationCallOrder[0]);
+});
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

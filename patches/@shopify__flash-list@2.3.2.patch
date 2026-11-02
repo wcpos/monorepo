@@ -1,0 +1,171 @@
+diff --git a/dist/recyclerview/RecyclerView.js b/dist/recyclerview/RecyclerView.js
+index 6799c8a..c1c2345 100644
+--- a/dist/recyclerview/RecyclerView.js
++++ b/dist/recyclerview/RecyclerView.js
+@@ -241,7 +241,14 @@ const RecyclerViewComponent = (props, ref) => {
+      */
+     const validateItemSize = useCallback((index, size) => {
+         var _a, _b, _c, _d;
+-        const layout = recyclerViewManager.getLayout(index);
++        // A ViewHolder can report its size after the layout table has already
++        // shrunk past the index it was rendered with. There is nothing left to
++        // validate the measurement against, so drop it. (Backport of
++        // Shopify/flash-list#2460 for #2291/#2440.)
++        const layout = recyclerViewManager.tryGetLayout(index);
++        if (layout === undefined) {
++            return;
++        }
+         const width = Math.max(Math.min(layout.width, (_a = layout.maxWidth) !== null && _a !== void 0 ? _a : Infinity), (_b = layout.minWidth) !== null && _b !== void 0 ? _b : 0);
+         const height = Math.max(Math.min(layout.height, (_c = layout.maxHeight) !== null && _c !== void 0 ? _c : Infinity), (_d = layout.minHeight) !== null && _d !== void 0 ? _d : 0);
+         if (areDimensionsNotEqual(width, size.width) ||
+@@ -359,7 +366,7 @@ const RecyclerViewComponent = (props, ref) => {
+                 isHorizontalRTL && viewToMeasureBoundedSize,
+                 renderHeader,
+                 !isHorizontalRTL && viewToMeasureBoundedSize,
+-                React.createElement(ViewHolderCollection, { viewHolderCollectionRef: viewHolderCollectionRef, data: data, horizontal: horizontal, renderStack: recyclerViewManager.getRenderStack(), getLayout: (index) => recyclerViewManager.getLayout(index), getAdjustmentMargin: () => {
++                React.createElement(ViewHolderCollection, { viewHolderCollectionRef: viewHolderCollectionRef, data: data, horizontal: horizontal, renderStack: recyclerViewManager.getRenderStack(), getLayout: (index) => recyclerViewManager.tryGetLayout(index), getAdjustmentMargin: () => {
+                         if (!shouldRenderFromBottom || !recyclerViewManager.hasLayout()) {
+                             return 0;
+                         }
+diff --git a/dist/recyclerview/ViewHolderCollection.js b/dist/recyclerview/ViewHolderCollection.js
+index 8e3db51..a7b978d 100644
+--- a/dist/recyclerview/ViewHolderCollection.js
++++ b/dist/recyclerview/ViewHolderCollection.js
+@@ -75,6 +75,14 @@ export const ViewHolderCollection = (props) => {
+     return (React.createElement(CompatView, { style: hasData && containerStyle }, containerLayout &&
+         hasData &&
+         Array.from(renderStack.entries(), ([reactKey, { index }]) => {
++            const layout = getLayout(index);
++            if (layout === undefined) {
++                // The layout table was truncated past this index while the render
++                // stack still held its key, so the item it points at is gone. The
++                // key is reused on the next render stack sync. (Backport of
++                // Shopify/flash-list#2460 for #2440.)
++                return null;
++            }
+             const item = data[index];
+             // Suppress separators for items in the last row to prevent
+             // height mismatch. The last data item has no separator (no
+@@ -83,7 +91,7 @@ export const ViewHolderCollection = (props) => {
+                 ? data[index + 1]
+                 : undefined;
+             return (React.createElement(ViewHolder, { key: reactKey, index: index, item: item, trailingItem: trailingItem, layout: {
+-                    ...getLayout(index),
++                    ...layout,
+                 }, refHolder: refHolder, onSizeChanged: onSizeChanged, target: "Cell", renderItem: renderItem, extraData: extraData, CellRendererComponent: CellRendererComponent, ItemSeparatorComponent: ItemSeparatorComponent, horizontal: horizontal, hidden: hideStickyHeaderRelatedCell && currentStickyIndex === index, inverted: inverted }));
+         })));
+ };
+diff --git a/dist/recyclerview/layout-managers/LayoutManager.js b/dist/recyclerview/layout-managers/LayoutManager.js
+index aa37225..4d1040f 100644
+--- a/dist/recyclerview/layout-managers/LayoutManager.js
++++ b/dist/recyclerview/layout-managers/LayoutManager.js
+@@ -113,14 +113,14 @@ export class RVLayoutManager {
+         var _a;
+         this.maxItemsToProcess = Math.max(this.maxItemsToProcess, layoutInfo.length * 10);
+         let minRecomputeIndex = Number.MAX_VALUE;
++        // wcpos: processDataUpdate can trim the layouts before stale ViewHolder
++        // measurements arrive. Filter on every call, not only while shrinking.
++        // eslint-disable-next-line no-param-reassign
++        layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
+         if (this.layouts.length > totalItemCount) {
+             this.layouts.length = totalItemCount;
+             this.spanTracker.length = totalItemCount;
+             minRecomputeIndex = totalItemCount - 1; // <0 gets skipped so it's safe to set to totalItemCount - 1
+-            // layoutInfo may contain stale indices from ViewHolders that were rendered
+-            // before the data shrunk. Filter out any indices that are now out of bounds.
+-            // eslint-disable-next-line no-param-reassign
+-            layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
+         }
+         // update average windows
+         minRecomputeIndex = Math.min(minRecomputeIndex, this.computeEstimatesAndMinMaxChangedLayout(layoutInfo));
+diff --git a/src/recyclerview/RecyclerView.tsx b/src/recyclerview/RecyclerView.tsx
+index 3c25e7e..aba502c 100644
+--- a/src/recyclerview/RecyclerView.tsx
++++ b/src/recyclerview/RecyclerView.tsx
+@@ -374,7 +374,14 @@ const RecyclerViewComponent = <T,>(
+    */
+   const validateItemSize = useCallback(
+     (index: number, size: RVDimension) => {
+-      const layout = recyclerViewManager.getLayout(index);
++      // A ViewHolder can report its size after the layout table has already
++      // shrunk past the index it was rendered with. There is nothing left to
++      // validate the measurement against, so drop it. (Backport of
++      // Shopify/flash-list#2460 for #2291/#2440.)
++      const layout = recyclerViewManager.tryGetLayout(index);
++      if (layout === undefined) {
++        return;
++      }
+       const width = Math.max(
+         Math.min(layout.width, layout.maxWidth ?? Infinity),
+         layout.minWidth ?? 0
+@@ -586,7 +593,7 @@ const RecyclerViewComponent = <T,>(
+             data={data}
+             horizontal={horizontal}
+             renderStack={recyclerViewManager.getRenderStack()}
+-            getLayout={(index) => recyclerViewManager.getLayout(index)}
++            getLayout={(index) => recyclerViewManager.tryGetLayout(index)}
+             getAdjustmentMargin={() => {
+               if (!shouldRenderFromBottom || !recyclerViewManager.hasLayout()) {
+                 return 0;
+diff --git a/src/recyclerview/ViewHolderCollection.tsx b/src/recyclerview/ViewHolderCollection.tsx
+index a652beb..80e3cab 100644
+--- a/src/recyclerview/ViewHolderCollection.tsx
++++ b/src/recyclerview/ViewHolderCollection.tsx
+@@ -23,7 +23,9 @@ export interface ViewHolderCollectionProps<TItem> {
+   /** Map of indices to React keys for each rendered item */
+   renderStack: Map<string, { index: number }>;
+   /** Function to get layout information for a specific index */
+-  getLayout: (index: number) => RVLayout;
++  // Undefined when the index is no longer in the layout table. A render stack
++  // entry can outlive a layout table shrink, and reading it must not throw.
++  getLayout: (index: number) => RVLayout | undefined;
+   /** Ref to control layout updates from parent components */
+   viewHolderCollectionRef: React.Ref<ViewHolderCollectionRef>;
+   /** Map to store refs for each ViewHolder instance */
+@@ -176,6 +178,14 @@ export const ViewHolderCollection = <TItem,>(
+       {containerLayout &&
+         hasData &&
+         Array.from(renderStack.entries(), ([reactKey, { index }]) => {
++          const layout = getLayout(index);
++          if (layout === undefined) {
++            // The layout table was truncated past this index while the render
++            // stack still held its key, so the item it points at is gone. The
++            // key is reused on the next render stack sync. (Backport of
++            // Shopify/flash-list#2460 for #2440.)
++            return null;
++          }
+           const item = data[index];
+           // Suppress separators for items in the last row to prevent
+           // height mismatch. The last data item has no separator (no
+@@ -192,7 +202,7 @@ export const ViewHolderCollection = <TItem,>(
+               item={item}
+               trailingItem={trailingItem}
+               layout={{
+-                ...getLayout(index),
++                ...layout,
+               }}
+               refHolder={refHolder}
+               onSizeChanged={onSizeChanged}
+diff --git a/src/recyclerview/layout-managers/LayoutManager.ts b/src/recyclerview/layout-managers/LayoutManager.ts
+index fc73c91..1b920c9 100644
+--- a/src/recyclerview/layout-managers/LayoutManager.ts
++++ b/src/recyclerview/layout-managers/LayoutManager.ts
+@@ -178,14 +178,14 @@ export abstract class RVLayoutManager {
+     );
+     let minRecomputeIndex = Number.MAX_VALUE;
+ 
++    // wcpos: processDataUpdate can trim the layouts before stale ViewHolder
++    // measurements arrive. Filter on every call, not only while shrinking.
++    // eslint-disable-next-line no-param-reassign
++    layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
+     if (this.layouts.length > totalItemCount) {
+       this.layouts.length = totalItemCount;
+       this.spanTracker.length = totalItemCount;
+       minRecomputeIndex = totalItemCount - 1; // <0 gets skipped so it's safe to set to totalItemCount - 1
+-      // layoutInfo may contain stale indices from ViewHolders that were rendered
+-      // before the data shrunk. Filter out any indices that are now out of bounds.
+-      // eslint-disable-next-line no-param-reassign
+-      layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
+     }
+     // update average windows
+     minRecomputeIndex = Math.min(

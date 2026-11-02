@@ -21,12 +21,11 @@ jest.mock('../../settings/printer/use-available-printer-profiles', () => ({
 }));
 
 // One stable storeDB: the hook memoises its overrides stream on it, and a fresh object per
-// render would resubscribe every render.
+// render would resubscribe every render. The named read hands back the stream under test.
 const overrides$ = new BehaviorSubject<unknown[]>([]);
-let overrideStream: Observable<unknown[]> = overrides$;
-const storeDB = {
-	collections: { template_printer_overrides: { find: () => ({ $: overrideStream }) } },
-};
+let mockOverrideStream: Observable<unknown[]> = overrides$;
+const storeDB = {};
+jest.mock('@wcpos/query', () => ({ observeTemplatePrinterOverrides: () => mockOverrideStream }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB }),
 }));
@@ -89,7 +88,7 @@ describe('useResolvedPrinter mismatch', () => {
 	it('gives no verdict while the overrides stream has not emitted, even with no printers', () => {
 		// Printers loaded and empty would read as "will print its preview"; the overrides
 		// are the other half of routing and must have answered too.
-		overrideStream = new Subject<unknown[]>();
+		mockOverrideStream = new Subject<unknown[]>();
 		try {
 			mockAvailable.mockReturnValue(none);
 			const { result } = renderHook(() => useResolvedPrinter({ template: thermalTemplate }));
@@ -97,7 +96,7 @@ describe('useResolvedPrinter mismatch', () => {
 			expect(result.current.isResolving).toBe(true);
 			expect(result.current.mismatch).toBeNull();
 		} finally {
-			overrideStream = overrides$;
+			mockOverrideStream = overrides$;
 		}
 	});
 

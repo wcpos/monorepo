@@ -117,9 +117,18 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 				? Number(src.id)
 				: 0;
 
+	const priceDecimals =
+		typeof src.price_decimals === 'number' &&
+		Number.isInteger(src.price_decimals) &&
+		src.price_decimals >= 0
+			? src.price_decimals
+			: undefined;
+
 	return {
 		id: Math.trunc(numericId),
 		name: toStr(src.name),
+		// Money precision from the store record; the formatter falls back to the currency default when absent.
+		...(priceDecimals === undefined ? {} : { price_decimals: priceDecimals }),
 		address_lines: addressLines,
 		...(taxIds.length > 0 ? { tax_ids: taxIds } : {}),
 		phone: toStr(src.phone),
@@ -172,9 +181,13 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 	if (taxIds.length === 0 && scalarTaxId) {
 		taxIds.push({ type: 'other', value: scalarTaxId });
 	}
+	// null/0 = guest (schema). Pass a real id through so display templates can
+	// greet a known customer without guessing from the name.
+	const id = Number(src.id) || 0;
 	return {
-		id: 0,
+		id: id > 0 ? id : null,
 		name: toStr(src.name),
+		first_name: toStr(src.first_name),
 		billing_address: {},
 		shipping_address: {},
 		tax_ids: taxIds,
@@ -666,6 +679,24 @@ function mapRefund(src: Record<string, any>): ReceiptRefund {
 	return refund;
 }
 
+function mapIdentityBlocks(src: Partial<ReceiptData>): Partial<ReceiptData> {
+	return {
+		...(src.software
+			? {
+					software: {
+						name: toStr(src.software.name ?? 'WCPOS'),
+						plugin_version: toStr(src.software.plugin_version),
+						app_version: toStr(src.software.app_version),
+						app_build: toStr(src.software.app_build),
+					},
+				}
+			: {}),
+		...(src.register
+			? { register: { id: toStr(src.register.id), name: toStr(src.register.name) } }
+			: {}),
+	};
+}
+
 function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 	const fiscal: ReceiptFiscal = {
 		immutable_id: toStr(src.immutable_id ?? src.fiscal_id) || undefined,
@@ -676,6 +707,21 @@ function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 		tax_agency_code: toStr(src.tax_agency_code) || undefined,
 		signed_at: toStr(src.signed_at) || undefined,
 	};
+	for (const key of ['sale_time', 'received_at'] as const) {
+		if (key in src)
+			fiscal[key] =
+				src[key] == null
+					? null
+					: (Object.fromEntries(
+							Object.keys(emptyReceiptDate()).map((field) => [field, toStr(src[key][field])])
+						) as ReceiptFiscal['sale_time']);
+	}
+	fiscal.is_refund_document =
+		src.is_refund_document == null ? src.document_type === 'refund' : !!src.is_refund_document;
+	if ('document_type' in src) fiscal.document_type = src.document_type || 'sale';
+	if ('sale_tz' in src) fiscal.sale_tz = toStr(src.sale_tz);
+	if ('sale_counter' in src) fiscal.sale_counter = toNullableNum(src.sale_counter);
+	if ('corrects' in src) fiscal.corrects = toStr(src.corrects);
 	if ('signature_excerpt' in src && src.signature_excerpt != null) {
 		fiscal.signature_excerpt = toStr(src.signature_excerpt);
 	}
@@ -852,6 +898,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	const canonicalTax = mapTaxSection((data as Record<string, any>).tax, displayTax);
 
 	const result: ReceiptData = {
+		...mapIdentityBlocks(data),
 		order: {
 			...base.order,
 			...order,
@@ -938,6 +985,12 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		return emptyReceiptData();
 	}
 
+	// Session reports are already formatted, orderless envelopes. Preserve them on every print pass.
+	if (data.closure && typeof data.closure === 'object') return { ...emptyReceiptData(), ...data };
+
+	// Tabular reports are already formatted, orderless envelopes; keep their columns and rows.
+	if (data.report && typeof data.report === 'object') return { ...emptyReceiptData(), ...data };
+
 	// Pass through data that already matches the canonical shape.
 	if (isCanonicalShape(data)) {
 		return normalizeCanonicalReceiptData(data as Partial<ReceiptData>);
@@ -985,6 +1038,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const offlineTax = mapTaxSection(data.tax, displayTax);
 
 	const result: ReceiptData = {
+		...mapIdentityBlocks(data),
 		order: {
 			id: 0,
 			number: toStr(data.order_number),

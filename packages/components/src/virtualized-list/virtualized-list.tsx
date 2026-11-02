@@ -32,6 +32,7 @@ function List<T>({
 	getItemType,
 	ListFooterComponent,
 	renderScrollComponent,
+	nestedScrollEnabled,
 }: ListProps<T>) {
 	const flashRef = React.useRef<FlashListRef<T>>(null);
 
@@ -79,6 +80,7 @@ function List<T>({
 				ref={flashRef}
 				data={data}
 				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
+				{...(nestedScrollEnabled ? { nestedScrollEnabled: true } : {})}
 				style={{ flex: 1 }}
 				keyExtractor={keyExtractor}
 				renderItem={renderItemWithContext}

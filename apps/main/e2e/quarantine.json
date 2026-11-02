@@ -1,0 +1,119 @@
+{
+	"issue": "https://github.com/wcpos/monorepo/issues/2284",
+	"entries": [
+		{
+			"project": "free-authenticated",
+			"file": "orders.spec.ts",
+			"title": "Orders Page (Pro) › should navigate to Orders page and see order list",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 24128) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 24129) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 24128) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 24129) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 578) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "finds a product when the typed words are reordered or separated",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "preserves MY in cold and warm Georgian all-term searches",
+			"group": "G4"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "finds a product when the typed words are reordered or separated",
+			"group": "G4"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "preserves MY in cold and warm Georgian all-term searches",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-filter-bar.spec.ts",
+			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
+			"group": "G6"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-filter-bar.spec.ts",
+			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
+			"group": "G6"
+		}
+	]
+}

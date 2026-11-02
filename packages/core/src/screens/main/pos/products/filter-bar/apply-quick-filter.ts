@@ -1,0 +1,120 @@
+import type { FiltersOf, QueryStateOf } from '@wcpos/query/query-state';
+
+import { quickFilterConditionSchema, quickFilterSortSchema } from './filter-bar-layout';
+
+import type { QuickFilter, QuickFilterCondition, QuickFilterSort } from './filter-bar-layout';
+
+export function quickFilterToQueryPatch(quickFilter: QuickFilter): {
+	filters: Partial<FiltersOf<'products'>>;
+	search: string;
+} {
+	const filters: Partial<FiltersOf<'products'>> = {};
+	let search = '';
+	for (const condition of quickFilter.conditions) {
+		if (condition.field === 'search') search = condition.value;
+		else Object.assign(filters, { [condition.field]: condition.value });
+	}
+	return { filters, search };
+}
+
+function equalNumberSets(left: number[] | undefined, right: number[]): boolean {
+	return !!left && left.length === right.length && right.every((value) => left.includes(value));
+}
+
+/**
+ * Whether the quick filter's OWN conditions still stand in the query — its search and each
+ * filter it writes — whatever else the cashier has added beside them. A browse level opened
+ * on a shortcut holds while this does: a pill pressed inside it narrows the level, and only
+ * moving one of the shortcut's own conditions (or typing another search) leaves it. The chip's
+ * lit state is the stricter `isQuickFilterActive`.
+ */
+export function quickFilterHolds(
+	quickFilter: QuickFilter,
+	state: { search: string; filters: FiltersOf<'products'> }
+): boolean {
+	const patch = quickFilterToQueryPatch(quickFilter);
+	if (state.search.trim() !== patch.search.trim()) return false;
+	return Object.keys(patch.filters).every((field) => {
+		const key = field as keyof FiltersOf<'products'>;
+		const expected = patch.filters[key];
+		const actual = state.filters[key];
+		if (Array.isArray(expected)) return equalNumberSets(actual as number[] | undefined, expected);
+		if (key === 'price')
+			return (
+				state.filters.price?.min === patch.filters.price?.min &&
+				state.filters.price?.max === patch.filters.price?.max
+			);
+		return actual === expected;
+	});
+}
+
+/**
+ * A quick filter is active only while the complete state it would produce after reset is present.
+ */
+export function isQuickFilterActive(
+	quickFilter: QuickFilter,
+	state: { search: string; filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] },
+	resetState: { filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] }
+): boolean {
+	const patch = quickFilterToQueryPatch(quickFilter);
+	const expectedFilters = { ...resetState.filters, ...patch.filters };
+	const expectedSort = quickFilter.sort ?? resetState.sort;
+	if (
+		state.search !== patch.search ||
+		state.sort.field !== expectedSort.field ||
+		state.sort.direction !== expectedSort.direction ||
+		Object.keys(state.filters).length !== Object.keys(expectedFilters).length
+	) {
+		return false;
+	}
+	return Object.keys(expectedFilters).every((field) => {
+		const key = field as keyof FiltersOf<'products'>;
+		const expected = expectedFilters[key];
+		const actual = state.filters[key];
+		if (Array.isArray(expected)) {
+			return equalNumberSets(actual as number[] | undefined, expected);
+		}
+		if (field === 'price') {
+			return (
+				state.filters.price?.min === expectedFilters.price?.min &&
+				state.filters.price?.max === expectedFilters.price?.max
+			);
+		}
+		return actual === expected;
+	});
+}
+
+export function captureQuickFilter(
+	state: { search: string; filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] },
+	baseline: Partial<FiltersOf<'products'>>,
+	settingsSort: QueryStateOf<'products'>['sort']
+): { conditions: QuickFilterCondition[]; sort?: QuickFilterSort } {
+	const conditions: QuickFilterCondition[] = [];
+	for (const schema of quickFilterConditionSchema.options) {
+		const field = schema.shape.field.value;
+		if (field === 'search') continue;
+		let value = state.filters[field];
+		if (field === 'price') {
+			value = Object.fromEntries(
+				Object.entries(state.filters.price ?? {}).filter(
+					([, bound]) => typeof bound === 'number' && Number.isFinite(bound)
+				)
+			);
+			if (!Object.keys(value).length) continue;
+		}
+		if (value === undefined || value === null) continue;
+		if (Array.isArray(value) && !value.length) continue;
+		if (JSON.stringify(value) !== JSON.stringify(baseline[field]))
+			conditions.push({ field, value } as QuickFilterCondition);
+	}
+	const search = state.search.trim();
+	if (search) conditions.push({ field: 'search', value: search });
+	const sort = quickFilterSortSchema.safeParse(state.sort);
+	return {
+		conditions,
+		...(sort.success &&
+		(state.sort.field !== settingsSort.field || state.sort.direction !== settingsSort.direction)
+			? { sort: sort.data }
+			: {}),
+	};
+}

@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import type { ScannerProfileDocument } from '@wcpos/database';
+import {
+	readScannerProfiles,
+	saveScannerProfile,
+	type ScannerProfile,
+} from '@wcpos/query/store-local';
 import {
 	createScanSession,
 	decodeHidPosReport,
@@ -13,7 +17,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { useCollection } from '../../hooks/use-collection';
 import { isChooserCancel } from './chooser-cancel';
 
 import type { UseHidScanResult } from './use-hid-scan';
@@ -66,8 +69,7 @@ function dataViewToBytes(view: DataView): number[] {
  * and emit `hid-pos` ScanEvents onto the device scan bus.
  */
 export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
-	const { store } = useAppState();
-	const { collection } = useCollection('scanner_profiles');
+	const { store, storeDB } = useAppState();
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 
 	const [connected, setConnected] = React.useState(false);
@@ -171,7 +173,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 			if (attached && save) {
 				// Upsert on the canonical key: re-connecting an already-registered
 				// scanner refreshes it instead of adding a second row.
-				await collection.upsert({
+				await saveScannerProfile(storeDB, {
 					deviceKey: scannerDeviceKey({
 						connectionType: 'hid-pos',
 						vendorId: device.vendorId,
@@ -186,7 +188,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 				});
 			}
 		},
-		[collection, getSession, detach]
+		[storeDB, getSession, detach]
 	);
 
 	const connect = React.useCallback(async () => {
@@ -220,14 +222,12 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		(async () => {
 			const [devices, profiles] = await Promise.all([
 				hid.getDevices(),
-				collection.find({ selector: { connectionType: 'hid-pos' } }).exec(),
+				readScannerProfiles(storeDB, ['hid-pos']),
 			]);
 			if (cancelled) {
 				return;
 			}
-			const savedKeys = new Set(
-				profiles.map((profile: ScannerProfileDocument) => profile.deviceKey)
-			);
+			const savedKeys = new Set(profiles.map((profile: ScannerProfile) => profile.deviceKey));
 			const match = devices.find((device) =>
 				savedKeys.has(
 					scannerDeviceKey({
@@ -247,7 +247,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		return () => {
 			cancelled = true;
 		};
-	}, [collection, attachDevice]);
+	}, [storeDB, attachDevice]);
 
 	const disconnect = React.useCallback(async () => {
 		attachRequestRef.current += 1;

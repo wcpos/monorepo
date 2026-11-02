@@ -7,6 +7,7 @@
  * with recalculateCoupons, percent fees on the post-replay basis, idempotence
  * + `changed`, the tombstone law, and the validate option.
  */
+import { calculateCartLine } from './cart-line';
 import { createCartConfig } from './config';
 import { calculateOrderTotals } from './internal/order-totals';
 import { recalculateCoupons } from './internal/coupons/recalculate';
@@ -538,7 +539,7 @@ describe('settleCart', () => {
 		 * The fixed point, asserted as the property rather than as byte-equality of the
 		 * two patches. The second settle omits `fee_lines`, because on the applied
 		 * snapshot the percent fee recomputes to what it already holds — and an
-		 * unchanged line array must not ride along: `use-cart-settlement` writes the
+		 * unchanged line array must not ride along: the settlement coordinator writes the
 		 * patch as a whole field, and `fee_lines[].total` is cashier intent the server
 		 * keeps, so attaching it turns a local-only money settle into a server push.
 		 *
@@ -863,3 +864,139 @@ describe('settleAggregate', () => {
 		expect(settleAggregate(settled, makeConfig()).changed).toBe(false);
 	});
 });
+
+describe('VAT-exempt settlement', () => {
+	const rates = [
+		{
+			id: 1,
+			name: 'Tax',
+			rate: '20',
+			compound: false,
+			order: 1,
+			class: 'standard',
+			shipping: true,
+		},
+	];
+	const config = makeConfig({ rates, allRates: rates, vatExempt: true });
+	it('keeps the stored net when settling inclusive-entered shipping', () => {
+		const result = settleAggregate(
+			{
+				shipping_lines: [
+					{
+						method_id: 'flat_rate',
+						total: '10',
+						total_tax: '2',
+						taxes: [{ id: 1, total: '2' }],
+						meta_data: [
+							{ key: '_woocommerce_pos_data', value: { amount: 12, prices_include_tax: true } },
+						],
+					},
+				],
+			},
+			config
+		);
+		expect(result.patch).toMatchObject({ shipping_total: '10', shipping_tax: '0' });
+	});
+	it('aggregates exempt lines with no tax lines', () => {
+		const line = calculateCartLine(
+			{ kind: 'line_item', line: makePosLineItem(1, 100) },
+			config
+		).line;
+		const result = settleAggregate(
+			{ line_items: [line], shipping_lines: [{ total: '12.37' }], fee_lines: [makePercentFee(5)] },
+			config
+		);
+		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0' });
+	});
+	it('replays coupons without restoring line or discount taxes', () => {
+		const snapshot = {
+			line_items: [
+				{
+					...makePosLineItem(1, 100),
+					subtotal_tax: '20',
+					total_tax: '20',
+					taxes: [{ id: 1, total: '20', subtotal: '20' }],
+				},
+			],
+			coupon_lines: [makeCouponLine('ten')],
+		};
+		const result = settleCart(snapshot, config, {
+			coupons: makeCouponContext([makeCouponInput({ code: 'ten' })]),
+		});
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error('settlement failed');
+		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0', discount_tax: '0' });
+	});
+});
+
+it.each(['', undefined])(
+	'ignores absent money and key order in tax lines: subtotal=%s',
+	(subtotal) => {
+		const config = makeConfig();
+		const snapshot = {
+			line_items: [
+				{
+					...makePosLineItem(1, 10),
+					total_tax: '1',
+					subtotal_tax: '1',
+					taxes: [{ id: 1, total: '1', subtotal: '1' }],
+				},
+			],
+		};
+		const first = settleAggregate(snapshot, config);
+		expect(first.patch.tax_lines).toHaveLength(1);
+		const applied = {
+			...snapshot,
+			...first.patch,
+			tax_lines: first.patch.tax_lines?.map((line) => ({
+				...Object.fromEntries(Object.entries(line).reverse()),
+				subtotal,
+			})),
+		};
+		expect(settleAggregate(applied, config).changed).toBe(false);
+		expect(settleAggregate({ ...applied, total: undefined }, config).changed).toBe(true);
+	}
+);
+
+it('forwards catalog tax status through coupon replay', () => {
+	const rate = { id: 1, rate: '10', compound: false, order: 1, class: 'standard' };
+	const result = settleCart(
+		{
+			line_items: [{ ...makePosLineItem(1, 10), meta_data: [] }],
+			coupon_lines: [makeCouponLine('ten')],
+		},
+		makeConfig({ rates: [rate], allRates: [rate] }),
+		{
+			coupons: makeCouponContext([makeCouponInput({ code: 'ten' })]),
+			taxStatusFor: () => 'none',
+		}
+	);
+	expect(result).toMatchObject({
+		ok: true,
+		patch: { line_items: [{ total_tax: '0' }], discount_tax: '0' },
+	});
+});
+
+it.each([undefined, 'taxable'] as const)(
+	'uses context tax status unless overridden: %s',
+	(override) => {
+		const rate = { id: 1, rate: '10', compound: false, order: 1, class: 'standard' };
+		const result = settleCart(
+			{
+				line_items: [{ ...makePosLineItem(1, 10), meta_data: [] }],
+				coupon_lines: [makeCouponLine('ten')],
+			},
+			makeConfig({ rates: [rate], allRates: [rate] }),
+			{
+				coupons: {
+					...makeCouponContext([makeCouponInput({ code: 'ten' })]),
+					taxStatusFor: () => 'none',
+				},
+				...(override && { taxStatusFor: () => override }),
+			}
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error('settlement failed');
+		expect(Number(result.patch.line_items?.[0].total_tax)).toBe(override ? 0.9 : 0);
+	}
+);

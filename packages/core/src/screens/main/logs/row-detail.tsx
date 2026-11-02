@@ -4,9 +4,11 @@ import { Platform, Share, View } from 'react-native';
 import { type Href, useRouter } from 'expo-router';
 import { decode } from 'html-entities';
 
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -19,10 +21,10 @@ import {
 	ERROR_CATALOGUE,
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type KVEntry, KVGrid } from '@wcpos/components/kv-grid';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
 import { useRecordEditRoute } from '../health/record-edit-route';
 import { useRecordLabel } from '../health/use-record-label';
 import { translateErrorAction } from './generated/error-actions.generated';
@@ -31,6 +33,7 @@ import { translateEventDescription } from './generated/event-titles.generated';
 import {
 	buildLogEntryReport,
 	eventTypeOf,
+	type LevelKind,
 	type LogRow,
 	recordRefOf,
 	rowDetailData,
@@ -71,7 +74,7 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 			break;
 	}
 
-	const action = translateErrorAction((key) => t(key), entry.code);
+	const action = translateErrorAction(t, entry.code);
 
 	const guidance = [risk, action].filter(Boolean).join(' ');
 	return guidance.length > 0 ? guidance : null;
@@ -115,14 +118,16 @@ function EventCode({ row, eventType, logId }: { row: LogRow; eventType: string; 
 
 	return (
 		<HStack className="items-center gap-3">
-			<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_event_code')}</Text>
+			<Text variant="help" className="w-24">
+				{t('health.logs.kv_event_code')}
+			</Text>
 			<Text selectable className="flex-1 font-mono text-xs">
 				{eventType}
 			</Text>
 			{canShare || canCopy ? (
 				<Button
 					variant="ghost"
-					size="xs"
+					size="sm"
 					testID={`logs-copy-event-${logId}`}
 					onPress={() => void handleCopy()}
 				>
@@ -219,6 +224,7 @@ function RowActions({
  */
 export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; title?: string }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { formatDate } = useLocalDate();
 	const entry = catalogueFor(row.code);
 	const detail = rowDetailData(row);
@@ -229,7 +235,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// SAY nothing is needed, or the row is a title with no meaning.
 	const showsGuidance = isProblem || entry !== null;
 	const record = recordRefOf(row);
-	const recordLabel = useRecordLabel(record?.collection, record?.recordId);
+	const recordLabel = useRecordLabel(record?.collectionName, record?.recordId);
 	const editRoute = useRecordEditRoute();
 	// Only once the record is FOUND: a tap while the read is in flight must not
 	// open an edit screen for a record this device may not hold. The route is
@@ -237,7 +243,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// is null for a user who may not edit this kind of record.
 	const fixRoute =
 		record && recordLabel?.status === 'found'
-			? editRoute(record.collection, recordLabel.uuid)
+			? editRoute(record.collectionName, recordLabel.uuid)
 			: null;
 	const context = row.context ?? {};
 	// Only a row about a record or a queued change has anything on the Database
@@ -259,7 +265,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const eventType = eventTypeOf(row);
 	const description =
 		!showsGuidance && eventType !== undefined && isSyncEventType(eventType)
-			? translateEventDescription((key) => t(key), eventType)
+			? translateEventDescription(t, eventType)
 			: undefined;
 
 	const entries: KVEntry[] = [];
@@ -296,7 +302,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	if (detail.attempts) {
 		entries.push({
 			label: t('health.logs.kv_attempts'),
-			value: `${detail.attempts.count} · ${formatDate(new Date(detail.attempts.firstSeen), 'p')} → ${formatDate(
+			value: `${detail.attempts.times} · ${formatDate(new Date(detail.attempts.firstSeen), 'p')} → ${formatDate(
 				new Date(detail.attempts.lastSeen),
 				'p'
 			)}`,
@@ -331,7 +337,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		? serverSaid !== null
 			? t('health.logs.server_said', { reason: serverSaid })
 			: entry
-				? translateErrorSummary((key) => t(key), entry.code)
+				? translateErrorSummary(t, entry.code)
 				: reason
 		: null;
 	// A code-carrying row with no registered event type is now TITLED from that
@@ -371,12 +377,21 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const hasFacts = Boolean(eventType || entries.length > 0);
 
 	return (
-		<VStack testID={`logs-detail-${row.logId}`} className="relative py-2 pl-4 md:ml-42 md:pl-0">
+		<VStack
+			testID={`logs-detail-${row.logId}`}
+			className={cn('relative py-2', phone ? 'pl-4' : 'ml-42')}
+		>
+			{/* The row's occurrence count on its own: the logger folds repeats within a window
+			    into one row, so an exactly-once assertion must read this, not the row count. */}
+			<Text testID={`logs-attempts-${row.logId}`} className="hidden">
+				{detail.attempts?.times ?? 1}
+			</Text>
 			{isProblem ? (
 				<View
 					className={cn(
-						'absolute top-2 bottom-2 left-0 w-[3px] rounded-full md:-left-4',
-						kind === 'error' ? 'bg-destructive' : 'bg-warning'
+						'absolute top-2 bottom-2 w-[3px] rounded-full',
+						phone ? 'left-0' : '-left-4',
+						kind === 'error' ? 'bg-bad' : 'bg-warning'
 					)}
 				/>
 			) : null}
@@ -392,19 +407,15 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 									{lead}
 								</Text>
 							) : null}
-							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
-							{narration ? (
-								<Text className="text-muted-foreground text-xs">{narration}</Text>
-							) : null}
+							{guidance ? <Text variant="subheading">{guidance}</Text> : null}
+							{narration ? <Text variant="help">{narration}</Text> : null}
 							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>
 					) : (
 						<>
 							{description ? <Text className="text-sm">{description}</Text> : null}
-							{narration ? (
-								<Text className="text-muted-foreground text-xs">{narration}</Text>
-							) : null}
+							{narration ? <Text variant="help">{narration}</Text> : null}
 							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 						</>
 					)}
@@ -418,14 +429,16 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			) : null}
 			{hasContext ? (
 				<HStack className="items-baseline gap-3">
-					<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_details')}</Text>
+					<Text variant="help" className="w-24">
+						{t('health.logs.kv_details')}
+					</Text>
 					<View className="flex-1">
 						<Tree value={context} collapsed />
 					</View>
 				</HStack>
 			) : null}
 			{!hasProse && !hasFacts && !hasContext ? (
-				<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('health.logs.no_detail')} />
 			) : null}
 		</VStack>
 	);

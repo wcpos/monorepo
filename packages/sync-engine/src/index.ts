@@ -14,6 +14,7 @@ export {
 	type EngineStatus,
 	type CustomerBrowseDimensions,
 	type OrderBrowseDimensions,
+	type RefundBrowseDimensions,
 	type ProductBrowseDimensions,
 	type RequirementHandle,
 	type RxdbSyncEngine,
@@ -21,6 +22,12 @@ export {
 	type SyncCollectionName,
 	TERMINAL_WRITE_EVENT_TYPES,
 } from './create-rxdb-sync-engine';
+export {
+	setSyncEngineLogger,
+	type SyncEngineLogger,
+	type SyncEngineLogMeta,
+} from './engine-logger';
+export type { UpdateRequiredDetails } from './update-required';
 export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
@@ -32,16 +39,19 @@ export {
 	markTransportFailure,
 	requestStatusOf,
 } from './transport-failure';
-/** Web multi-tab write-outcome feedback (#1209) — the host opens the channel
- * (named per scope database, re-pointed on a scope switch) and injects it as the
- * `writeOutcomeBridge` port. */
 export {
-	createWriteOutcomeBridge,
-	type ScopedWriteOutcomeBridge,
-	type WriteOutcomeBridge,
-	writeOutcomeChannelName,
-} from './write-path/write-outcome-bridge';
-export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
+	discardConsequence,
+	rejectionSuggestsServerRecord,
+} from './write-path/conflict-resolution';
+/** A scope generation bump strands the previous generation's unsent sales in its old
+ * database: the host drains it through this before anything removes it. */
+export {
+	drainLegacyScopeDatabase,
+	type LegacyScopeDatabaseFiles,
+	type LegacyScopeDrainOutcome,
+	type LegacyScopeDrainPorts,
+	WRITTEN_BEFORE_PROTOCOL_3,
+} from './write-path/legacy-scope-drain';
 /** The open-cart hold (see the module essay): the drain wiring and the health
  * counters must decide "is this row held?" by the same rule, never by two. The
  * per-row predicate stays inside — the door exposes the set-level answer the
@@ -69,3 +79,22 @@ export type { QueryTotalWooRequest } from './scheduler';
 /** The reference-lane wire sort vocabulary (#1347) — what a `refresh`
  * requirement's `orderby` may spell for terms and coupons. */
 export type { CouponReferenceOrderby, TermReferenceOrderby } from './scheduler';
+
+export type { WooRefundPayload, LocalRefundDocument } from './collections/refund-schema';
+
+export { hasPendingLocalWork } from './write-path/local-work-guard';
+
+export { mergeProtectedOrderMeta } from './write-path/merge-protected-order-meta';
+
+export { residentRevision } from './write-path/order-revision';
+
+export { sanitizeOutboundOrderPayload } from './materialization/sanitize-outbound-order-payload';
+export {
+	type QueueRow,
+	type QueueRowStatus,
+	QUEUE_ROW_STATUSES,
+	TERMINAL_QUEUE_STATUSES,
+	PARKED_QUEUE_STATUSES,
+	BACKLOG_QUEUE_STATUSES,
+	REJECTED_QUEUE_STATUSES,
+} from './queue-rows';

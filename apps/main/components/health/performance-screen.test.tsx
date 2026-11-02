@@ -62,8 +62,8 @@ jest.mock('@wcpos/core/contexts/translations', () => {
 		},
 	};
 });
-jest.mock('@wcpos/core/screens/main/hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: jest.fn() }),
+jest.mock('@wcpos/query/user-db', () => ({
+	patchStoreSettings: jest.fn(),
 }));
 const idlePressure = () => ({
 	multiplier: 1,
@@ -84,7 +84,7 @@ jest.mock('@wcpos/core/screens/main/hooks/use-engine-monitor', () => ({
 jest.mock('@wcpos/core/screens/main/logs/logs-logic', () => ({
 	formatCadence: () => null,
 }));
-jest.mock('@wcpos/core/screens/main/health/components', () => {
+jest.mock('@wcpos/components/section', () => {
 	const { View } = jest.requireActual('react-native');
 	return {
 		Section: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -104,6 +104,18 @@ jest.mock('@wcpos/components/hstack', () => {
 	return { HStack: View };
 });
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+// AreaPage reads the device for its ground's gutter (`useGround`); the real hook needs the
+// window, which this harness's react-native does not drive.
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => false,
+	usePointer: () => 'fine',
+}));
 jest.mock('@wcpos/components/label', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Label: Text };
@@ -172,9 +184,27 @@ describe('PerformanceScreen · server over time', () => {
 		jest.useRealTimers();
 	});
 
-	it('shows a normal pace with no warning on a quiet server', () => {
+	it('renders quiet-server defaults, layout and controls', () => {
 		const renderer = renderScreen([]);
-		expect(paceText(renderer)).toBe('✓ Normal pace');
+		expect(paceText(renderer)).toBe('Normal pace');
+
+		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
+
+		expect(screen.findAll((node) => node.props.role === 'heading').length).toBeGreaterThan(0);
+
+		const card = renderer.root.findByProps({ testID: 'preset-eco' });
+		expect(card.props.onPress).toBeUndefined();
+
+		expect(mockTranslationKeys).toEqual(
+			expect.arrayContaining([
+				'health.performance.seconds_short',
+				'health.performance.minutes_short',
+			])
+		);
+
+		const mathLine = renderer.root.findByProps({ testID: 'settings-math-line' });
+		// Default 60 s interval → 60 requests/hour, rendered from the shipped en catalogue.
+		expect(String(mathLine.props.children)).toContain('~60 requests per hour');
 	});
 
 	it('says the advisory high header is being overruled, still as a normal pace', () => {
@@ -184,21 +214,22 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), reported: 'high' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'✓ Normal pace — your server reports high load; the till only slows down if its answers do'
+			'Normal pace — your server reports high load; the till only slows down if its answers do'
 		);
-		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
-			'text-muted-foreground'
-		);
+		// The key rank is muted; only an easing-off pace adds the warning face.
+		const pace = renderer.root.findByProps({ testID: 'server-pace' }).props;
+		expect(pace.variant).toBe('key');
+		expect(pace.className).not.toContain('text-warning-text');
 	});
 
 	it('warns when the till is easing off and names the reason', () => {
 		mockServerPressure = { ...idlePressure(), multiplier: 4, signal: 'rate-limited' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'⚠ Easing off — checking 4× less often: your server asked the POS to slow down'
+			'Easing off — checking 4× less often: your server asked the POS to slow down'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
-			'text-warning'
+			'text-warning-text'
 		);
 	});
 
@@ -210,15 +241,6 @@ describe('PerformanceScreen · server over time', () => {
 		expect(trend('pos-requests-trend')?.points).toEqual([]);
 		expect(trend('server-load-trend')?.points).toEqual([]);
 		expect(loadUnavailableShown(renderer)).toBe(false);
-	});
-
-	it('keeps the wider health layout with the shared screen spacing', () => {
-		const renderer = renderScreen([]);
-		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
-
-		expect(screen.props.className).toBe(
-			'mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8'
-		);
 	});
 
 	it('says the server does not report load once it has been asked and stayed silent', () => {
@@ -246,22 +268,6 @@ describe('PerformanceScreen · server over time', () => {
 		expect(loadUnavailableShown(renderer)).toBe(false);
 	});
 
-	it('exposes each preset card as only its labeled radio control', () => {
-		const renderer = renderScreen([]);
-		const card = renderer.root.findByProps({ testID: 'preset-eco' });
-		expect(card.props.onPress).toBeUndefined();
-	});
-
-	it('routes check-frequency endpoint labels through translations', () => {
-		renderScreen([]);
-		expect(mockTranslationKeys).toEqual(
-			expect.arrayContaining([
-				'health.performance.seconds_short',
-				'health.performance.minutes_short',
-			])
-		);
-	});
-
 	it('keeps low-volume request-axis labels distinct', () => {
 		renderScreen([bucket(2, 0), bucket(1, 1)]);
 		const formatValue = trend('pos-requests-trend')?.formatValue;
@@ -274,12 +280,5 @@ describe('PerformanceScreen · server over time', () => {
 		const formatValue = trend('server-load-trend')?.formatValue;
 		expect(formatValue).toBeDefined();
 		expect([1, 14].map((value) => formatValue?.(value))).toEqual(['1.0', '14.0']);
-	});
-
-	it('states the request budget per hour, not per day', () => {
-		const renderer = renderScreen([]);
-		const mathLine = renderer.root.findByProps({ testID: 'settings-math-line' });
-		// Default 60 s interval → 60 requests/hour, rendered from the shipped en catalogue.
-		expect(String(mathLine.props.children)).toContain('~60 requests per hour');
 	});
 });

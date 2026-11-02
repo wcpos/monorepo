@@ -1,0 +1,63 @@
+import { readFileSync } from 'node:fs';
+
+import { parseRegistryEntries, REGISTRY_PATH } from '../gallery/inventory';
+
+// Match the source-only app tests: clear Expo's lazy native runtime after setup.
+jest.resetModules();
+
+// A folder with a `gallery.tsx` that is not registered has no cells, and the
+// definition of done (landing order, DoD C) fails it silently at the shoot.
+// Reading the source keeps this test free of the gallery's native imports.
+const registered = [
+	'popover',
+	"'dropdown-menu': dropdownMenu",
+	"'alert-dialog': alertDialog",
+	'tabs',
+	'panels',
+	'table',
+	"'list-item': listItem",
+	"'list-row': listRow",
+	"'menu-row': menuRow",
+	'tile',
+	'badge',
+	'avatar',
+	'loader',
+	'progress',
+	"'sort-icon': sortIcon",
+	"'status-badge': statusBadge",
+	"'docs-link': docsLink",
+	'card',
+	'label',
+	'form',
+	'calendar',
+	"'tree-combobox': treeCombobox",
+	'slider',
+	'switch: switchStories',
+	"'radio-group': radioGroup",
+	'checkbox',
+	'textarea',
+	"'icon-button': iconButton",
+	'skeleton',
+	"'empty-state': emptyState",
+	'notice',
+	"'gate-screen': gateScreen",
+	'breadcrumb',
+	"'browse-tiles': browseTiles",
+	"'page-bar': pageBar",
+	"'pane-stack': paneStack",
+	"'slide-over': slideOver",
+	"'v2-dialog': dialogV2",
+	'chip',
+	'keypad',
+	"'segmented-control': segmentedControl",
+	"'step-progress': stepProgress",
+	'derivation',
+	"'log-view': logView",
+	'tooltip',
+	"'poster-tile': posterTile",
+];
+
+it('registers every new primitive before the gallery shoot', () => {
+	const names = parseRegistryEntries(readFileSync(REGISTRY_PATH, 'utf8'));
+	for (const name of registered) expect(names).toContain(name);
+});

@@ -78,7 +78,7 @@ describe('createSyncLogObserver', () => {
 			code: 'SYNC121',
 			terminal: { outcome: 'failed' },
 		});
-		expect(rows[0].message).toMatch(/deadline/i);
+		expect(rows[0].message).toMatch(/deadline.*60000/i);
 	});
 
 	it('keeps a deadline the next tick retries at info until the lane has timed out 3 times', () => {
@@ -1199,16 +1199,6 @@ describe('createSyncLogObserver', () => {
 				scopeId: 'scope-1',
 			},
 			terminal: { operationType: 'sync.coverage', outcome: 'unknown' },
-		});
-	});
-
-	it('records degraded write leadership as a visible info row, not CLIENT121', () => {
-		observer.observe(event({ type: 'engine.write-leader.degraded', level: 'warn' }));
-
-		expect(rows[0]).toMatchObject({
-			level: 'info',
-			code: undefined,
-			terminal: { operationType: 'sync.lifecycle', outcome: 'unknown' },
 		});
 	});
 

@@ -5,50 +5,73 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../../components/currency-input';
+import { AmountField } from '../../../components/amount-field';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
-
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;
 	type: 'line_items';
 }
+export function Price(props: CellContext<Props, 'price'>) {
+	return useCartTableReadOnly() ? <ReadOnlyPrice {...props} /> : <EditablePrice {...props} />;
+}
 
-/**
- *
- */
-export function Price({ row, column }: CellContext<Props, 'price'>) {
+/** The unit price the input shows, as muted text in the order's currency. */
+function ReadOnlyPrice({ row, column }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
-	const { updateLineItem } = useUpdateLineItem();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price } = getLineItemData(item);
-	const { format } = useCurrencyFormat();
-	const isOnSale = price !== regular_price;
+	const { format } = useCurrentOrderCurrencyFormat();
+	return (
+		<VStack space="xs">
+			{price !== regular_price && column.columnDef.meta?.show?.('on_sale') && (
+				<Text className="text-muted-foreground text-right tabular-nums line-through">
+					{format(regular_price || 0)}
+				</Text>
+			)}
+			<Text
+				testID={readOnlyTestID('price', readOnlyLineKey(uuid, item))}
+				className="text-muted-foreground text-right tabular-nums"
+			>
+				{format(Number(price ?? 0))}
+			</Text>
+		</VStack>
+	);
+}
 
+function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
+	const { item, uuid } = row.original;
+	const { updateCartLine } = useUpdateCartLine();
+	const { getLineItemData } = useLineItemData();
+	const { price, regular_price } = getLineItemData(item);
+	const { format } = useCurrentOrderCurrencyFormat();
+	const isOnSale = price !== regular_price;
 	/**
 	 * Discounts
 	 */
 	const { uiSettings } = useUISettings('pos-cart');
 	const quickDiscounts = useDocField(uiSettings, (settings) => settings.quickDiscounts);
-
-	/**
-	 *
-	 */
 	return (
-		<VStack space="xs">
+		// The cell's width, not its content's: the price's tint reaches past its text.
+		<VStack space="xs" className="self-stretch">
 			{isOnSale && column.columnDef.meta?.show?.('on_sale') && (
-				<Text className="text-muted-foreground text-right line-through">
+				<Text className="text-muted-foreground text-right tabular-nums line-through">
 					{format(regular_price || 0)}
 				</Text>
 			)}
-			<CurrencyInput
+			<AmountField
+				kind="money"
+				look="quiet"
+				testID="cart-price"
 				value={price}
-				onChangeText={(price) => updateLineItem(uuid, { price })}
+				textClassName="text-muted-foreground text-right"
+				onCommit={(price) => updateCartLine('line_items', uuid, { price })}
 				discounts={ensureNumberArray(quickDiscounts)}
 			/>
 		</VStack>

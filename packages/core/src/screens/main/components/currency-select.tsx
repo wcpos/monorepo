@@ -2,18 +2,8 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxEmpty,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxItemText,
-	ComboboxList,
-	type ComboboxSingleRootProps,
-	ComboboxTrigger,
-	ComboboxValue,
-} from '@wcpos/components/combobox';
+import { OptionsCombobox } from '@wcpos/components/combobox';
+import type { OptionSelectProps } from '@wcpos/components/select';
 
 import { CurrenciesProvider, useCurrencies } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';
@@ -21,7 +11,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-function CurrencySelectBase({ value, ...props }: ComboboxSingleRootProps) {
+function CurrencySelectBase(props: Omit<OptionSelectProps, 'options' | 'placeholder'>) {
 	const t = useT();
 	const allCurrencies = useCurrencies();
 
@@ -37,43 +27,22 @@ function CurrencySelectBase({ value, ...props }: ComboboxSingleRootProps) {
 		[allCurrencies]
 	);
 
-	/**
-	 *
-	 */
-	const label = React.useMemo(() => {
-		const selected = options.find((option) => option.value === value?.value);
-		return selected?.label;
-	}, [options, value]);
-
-	/**
-	 *
-	 */
 	return (
-		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger testID="currency-select-trigger">
-				<ComboboxValue placeholder={t('common.select_currency')} />
-			</ComboboxTrigger>
-			<ComboboxContent>
-				<ComboboxInput placeholder={t('common.search_currencies')} />
-				<ComboboxList
-					data={options}
-					renderItem={({ item }) => (
-						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
-							<ComboboxItemText />
-						</ComboboxItem>
-					)}
-					estimatedItemSize={44}
-					ListEmptyComponent={<ComboboxEmpty>{t('common.no_currency_found')}</ComboboxEmpty>}
-				/>
-			</ComboboxContent>
-		</Combobox>
+		<OptionsCombobox
+			options={options}
+			placeholder={t('common.select_currency')}
+			searchPlaceholder={t('common.search_currencies')}
+			emptyLabel={t('common.no_currency_found')}
+			triggerTestID="currency-select"
+			{...props}
+		/>
 	);
 }
 
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CurrencySelect(props: ComboboxSingleRootProps) {
+export function CurrencySelect(props: Omit<OptionSelectProps, 'options' | 'placeholder'>) {
 	return (
 		<CurrenciesProvider>
 			<CurrencySelectBase {...props} />

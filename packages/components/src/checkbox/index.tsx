@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import * as CheckboxPrimitive from '@rn-primitives/checkbox';
 
 import { Icon } from '../icon';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 
 type CheckboxProps = React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & {
@@ -14,22 +15,22 @@ function Checkbox({ className, indeterminate, ...props }: CheckboxProps) {
 	return (
 		<CheckboxPrimitive.Root
 			className={cn(
-				'web:peer native:h-[20] native:w-[20] native:rounded web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 border-border h-4 w-4 shrink-0 rounded-sm border disabled:cursor-not-allowed disabled:opacity-50',
-				props.checked && 'bg-primary',
-				indeterminate && 'bg-primary',
+				'web:peer border-border bg-card size-5 shrink-0 rounded-sm border disabled:cursor-not-allowed disabled:opacity-45',
+				(props.checked || indeterminate) && 'bg-primary border-primary',
 				className
 			)}
 			{...props}
 		>
 			{indeterminate ? (
 				<View className={cn('h-full w-full items-center justify-center')}>
-					<Icon name="minus" className="text-primary-foreground h-3 w-3" />
+					<Icon name="minus" className="text-primary-foreground size-3" />
 				</View>
 			) : (
 				<CheckboxPrimitive.Indicator className={cn('h-full w-full items-center justify-center')}>
-					<Icon name="check" className="text-primary-foreground h-3 w-3" />
+					<Icon name="check" className="text-primary-foreground size-3" />
 				</CheckboxPrimitive.Indicator>
 			)}
+			<MinTargetBand square />
 		</CheckboxPrimitive.Root>
 	);
 }

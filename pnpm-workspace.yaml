@@ -43,25 +43,26 @@ minimumReleaseAgeExclude:
   - "@react-native/virtualized-lists"
   - "@expo/config-types"
 overrides:
-  "expo": "~57.0.13"
-  "@expo/dom-webview": "57.0.1"
+  "expo": "~58.0.14"
+  "expo-modules-core": "~58.0.22"
+  "@expo/dom-webview": "~58.0.2"
   "lightningcss": "1.30.1"
-  "uniwind": "1.10.1"
-  "react": "19.2.3"
-  "react-dom": "19.2.3"
-  "react-native": "0.86.2"
-  # Expo SDK 57 prescribes 4.5.1. Held at 4.5.5 (same 4.5 line, same worklets 0.10.x peer): 4.5.3
-  # ships software-mansion/react-native-reanimated#9527, which stops a settled animation reverting
-  # to a stale value after a JS-thread stall (#9965) - the drawer-reappears-at-open class (#1691,
-  # #1797). 4.6.x needs worklets 0.12, outside expo-modules-core 57's peer range; do not float there.
-  # Keep transitive auto-installed peers on the same native runtime.
-  "react-native-reanimated": "4.5.5"
+  # react-native-web 0.21.4 (SDK 58.0.8) exports InputAccessoryView from its index; uniwind's web
+  # resolver redirects every supported react-native-web component to uniwind/components/<name>,
+  # and 1.11.0 listed InputAccessoryView without shipping it, so the web bundle died at
+  # "Unable to resolve ./exports/InputAccessoryView". 1.12.2 ships it.
+  "uniwind": "1.12.2"
+  "react": "19.3.0"
+  "react-dom": "19.3.0"
+  "react-native": "0.88.0"
+  # Keep transitive auto-installed peers on the SDK native runtime.
+  "react-native-reanimated": "4.7.1"
   # expo-router floats ^4.2.2; pin so the patch below has one target. 4.2.10 carries upstream's
   # useLayoutEffect toggle (react-navigation#13186) and the accessibility-hiding animated props.
   "react-native-drawer-layout": "4.2.10"
   "react-native-edge-to-edge": "^1.6.2"
-  "react-native-gesture-handler": "~2.32.0"
-  "react-native-safe-area-context": "~5.7.0"
+  "react-native-gesture-handler": "~3.3.0"
+  "react-native-safe-area-context": "~5.10.1"
   # react-native-calendars lists moment as an OPTIONAL dependency and requires it
   # inside a try/catch, which Metro treats as an optional require: absent, it is
   # skipped; present, it is bundled. The lock had never resolved it, and every
@@ -120,10 +121,18 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
+  # Arrived with jest 30.5 (jest-haste-map now depends on it). Its postinstall only compiles
+  # a native binding when no prebuild matches; the per-platform @parcel/watcher-* packages
+  # cover every platform we build on, and jest only reaches for it in watch mode, which CI
+  # never runs (--ci). Stays unapproved like @firebase/util.
+  "@parcel/watcher": false
   # sentry-cli's postinstall downloads its platform binary; without approval the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
   "@sentry/cli": true
   "@shopify/react-native-skia": true
+  # Its postinstall only prunes a stray @types/minimatch inside its own folder; nothing we
+  # consume depends on it, so it stays unapproved like @firebase/util.
+  "@stripe/stripe-terminal-react-native": false
   "@tailwindcss/oxide": true
   "core-js": true
   "eccrypto": false
@@ -145,27 +154,27 @@ patchedDependencies:
   # manifest request then took 3.6-15 s against its hard 10 s timeout — iOS relaunches died
   # on "There was a problem loading the project" (apps/main/.maestro/README.md §4). The
   # patch reads a string runtime from the already-evaluated config; policy objects (local
-  # dev, `fingerprint`) still go through the CLI. Drop when @expo/cli does this itself;
-  # @expo/cli 58 on `next` has the same per-request spawn, so a main->next sync must port
-  # the patch to that version (pinned by scripts/expo-cli-manifest-runtime.test.mjs).
-  "@expo/cli@57.0.16": "patches/@expo__cli@57.0.16.patch"
-  # Backport of flash-list 2.2.2's guard in RVLayoutManager.modifyLayout: when the data
-  # array shrinks, `layoutInfo` still carries the indices of ViewHolders measured before
-  # the shrink, and the unguarded `this.layouts[index].width = ...` in processLayoutInfo
-  # throws "Cannot set property 'width' of undefined" — the POS product grid dropping into
-  # the error boundary mid-search (#1671). Expo SDK 57 prescribes exactly 2.0.2
-  # (expo/bundledNativeModules.json), so we patch instead of upgrading; drop this patch
-  # when the SDK moves flash-list to >= 2.2.2.
-  #
-  # Second hunk (2026-08-30): backport of Shopify/flash-list#2460 (open, fixes upstream
-  # #2440 / #2291, still present in 2.3.2). The render stack can outlive a layout-table
-  # shrink, and `ViewHolderCollection` read it through the throwing `getLayout(index)`
-  # ("index out of bounds, not enough layouts") — the POS products grid fell into its
-  # error boundary the moment the tablet's products column was dragged narrower (iPad,
-  # flow 09) and on Android mid-search (run 33280466971). `tryGetLayout` returns undefined
-  # for a dropped index; the render path skips that key and `validateItemSize` drops the
-  # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
-  "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
+  # dev, `fingerprint`) still go through the CLI. Ported from main's @expo/cli@57.0.16
+  # patch (#2532); 58.1.11 has the same per-request spawn. Drop when @expo/cli does this
+  # itself (pinned by scripts/expo-cli-manifest-runtime.test.mjs).
+  "@expo/cli@58.1.11": "patches/@expo__cli@58.1.11.patch"
+  # FlashList 2.3.2 filters stale measurements only while truncating the layout table.
+  # processDataUpdate can truncate it first, so move the guard outside that branch to
+  # cover late ViewHolder measurements too (#1671). The 2.2.2 fix alone is insufficient.
+  # Also keep the Shopify/flash-list#2460 backport: use tryGetLayout and skip stale render
+  # keys/measurements rather than throwing after a table shrink (#2440 / #2291).
+  # Both gaps remain in 2.3.2; drop each hunk when its full fix lands upstream.
+  "@shopify/flash-list@2.3.2": "patches/@shopify__flash-list@2.3.2.patch"
+  # Removes the web ViewStyle/TextStyle augmentation and the PressableProps.style
+  # redeclaration from expo's `types/react-native-web.d.ts`: under RN 0.88's Strict API the
+  # style interfaces cannot be extended, so every `StyleProp<ViewStyle>` stops being
+  # assignable to a View's `style` (expo/expo#50504 and #50524). The file enters the program
+  # through the CLI-generated, gitignored `apps/main/expo-env.d.ts`, which `expo start`
+  # rewrites, so it cannot be fixed there. Our sources use no web-only style key; className
+  # and `hovered` are kept. Exact key on purpose: pnpm fails loudly when a patch becomes
+  # unused at a version bump. Still needed in 58.0.14; drop when Expo's file no longer
+  # augments the style interfaces.
+  "expo@58.0.14": "patches/expo@58.0.14.patch"
   # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
   # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
   # then on close() delete the original, read the whole swap back and rewrite it. The
@@ -176,7 +185,6 @@ patchedDependencies:
   # synchronous copySync()/moveSync(), so the swap is a native copy and the commit an
   # atomic rename — the April 2026 fix (5e691a9df4, rxdb#8290) that the July engine
   # migration dropped. Drop this patch when expo-opfs does the same upstream.
-  expo-opfs@1.0.9: patches/expo-opfs@1.0.9.patch
   # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
   # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
   # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the
@@ -188,16 +196,38 @@ patchedDependencies:
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  # storage-sqlite's sqliteTransaction kept a REJECTED link in its per-database promise chain
+  # after a failed handler, so every later write replayed that error until the process died
+  # (the till could not save an order for a whole session on the Pixel, 2026-10-06). The patch
+  # rolls back and keeps the chain alive; rxdb 17.6.0 still lacks it. Guarded by
+  # packages/database/src/adapters/storage/sqlite-transaction-queue.test.ts.
+  # (The IncrementalWriteQueue try/finally this file also carried shipped upstream in 17.6.0.)
+  # This file also carries:
   # rxdb 17.6.0 caches the events of every change-event bulk in a module-level Map keyed by
   # the bulk (EVENT_BULK_CACHE, rx-change-event.js) and never clears it. Anything that reads
-  # `collection.$` / `db.$` feeds it (e.g. packages/query/src/catalogue-search-blob.ts), so
+  # `collection.$` / `db.$` feeds it (e.g. packages/query/src/search-blob.ts), so
   # every products bulk (~150 KB) stays on the heap: +5.6 of +8.6 MB in the last hour of a
   # 2 h idle sync-on soak (#2502). The patch makes it a WeakMap: subscribers of the same
   # bulk still share one events array, and a bulk nobody holds is collected. Drop when
   # upstream rxdb fixes EVENT_BULK_CACHE; scripts/rxdb-event-bulk-cache.test.mjs fails if a
   # bump drops the patch.
-  "rxdb@17.6.0": "patches/rxdb@17.6.0.patch"
+  rxdb@17.6.0: patches/rxdb@17.6.0.patch
+  # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
+  # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
+  # Skia 2.14.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
+  # Drop when Skia stops deep-importing react-native on web.
+  "@shopify/react-native-skia@2.14.0": "patches/@shopify__react-native-skia@2.14.0.patch"
+  # Android shared-object registry: synchronize lookups and released-id validation on
+  # the same registry monitor as writes (d0afac0a6); 58.0.22 still reads the mutable map
+  # without that lock in these three paths. Drop when all three use the writers' monitor.
+  expo-modules-core@58.0.22: patches/expo-modules-core@58.0.22.patch
+  # The web Content of popover, select and tooltip drops `insets`, the primitives' name for Radix's
+  # collisionPadding (dropdown-menu forwards it). AnchoredOverlay passes the desktop title bar's
+  # height there, so a menu never slides over the title bar. Drop when upstream forwards it.
+  "@rn-primitives/popover@1.5.2": "patches/@rn-primitives__popover@1.5.2.patch"
+  "@rn-primitives/select@1.5.2": "patches/@rn-primitives__select@1.5.2.patch"
+  "@rn-primitives/tooltip@1.5.2": "patches/@rn-primitives__tooltip@1.5.2.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
-  # The resurrection-index-leak fix for it lives in
-  # scripts/patch-rxdb-premium-resurrection-leak.mjs (root postinstall).
+  # The SQLite query-translation fix for it lives in
+  # scripts/patch-rxdb-premium-sqlite-query-translation.mjs (root postinstall).

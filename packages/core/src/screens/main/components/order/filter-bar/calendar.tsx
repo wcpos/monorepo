@@ -1,22 +1,16 @@
 import * as React from 'react';
 
-import { endOfDay } from 'date-fns/endOfDay';
-import { endOfMonth } from 'date-fns/endOfMonth';
-import { endOfWeek } from 'date-fns/endOfWeek';
 import { format } from 'date-fns/format';
-import { startOfDay } from 'date-fns/startOfDay';
-import { startOfMonth } from 'date-fns/startOfMonth';
-import { startOfWeek } from 'date-fns/startOfWeek';
-import { subDays } from 'date-fns/subDays';
-import { subMonths } from 'date-fns/subMonths';
-import { subWeeks } from 'date-fns/subWeeks';
+import { parseISO } from 'date-fns/parseISO';
 
-import { Button, ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, DateRange } from '@wcpos/components/calendar';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 
+import { useStoreDay, zoneOptions } from '../../../../../hooks/use-store-day';
 import { useT } from '../../../../../contexts/translations';
 
 interface Props {
@@ -37,74 +31,31 @@ const isDateRangeEqual = (range1: DateRange | undefined, range2: DateRange) => {
  */
 export function DateRangeCalendar({ onSelect }: Props) {
 	const t = useT();
-	const today = React.useMemo(() => new Date(), []);
+	const { timezone, presets } = useStoreDay();
 	const { shortCode } = useLocale();
-	const [date, setDate] = React.useState<DateRange | undefined>({
-		from: startOfDay(today),
-		to: endOfDay(today),
-	});
-
-	// Array of date range options for buttons
-	const dateRanges: { label: string; range: DateRange; action: () => void }[] =
-		React.useMemo(() => {
-			return [
-				{
-					label: t('common.today'),
-					range: { from: startOfDay(today), to: endOfDay(today) },
-					action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
-				},
-				{
-					label: t('common.yesterday'),
-					range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
-					action: () =>
-						setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
-				},
-				{
-					label: t('common.this_week'),
-					range: {
-						from: startOfWeek(today, { weekStartsOn: 1 }),
-						to: endOfWeek(today, { weekStartsOn: 1 }),
-					},
-					action: () =>
-						setDate({
-							from: startOfWeek(today, { weekStartsOn: 1 }),
-							to: endOfWeek(today, { weekStartsOn: 1 }),
-						}),
-				},
-				{
-					label: t('common.last_week'),
-					range: {
-						from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-						to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-					},
-					action: () =>
-						setDate({
-							from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-							to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-						}),
-				},
-				{
-					label: t('common.this_month'),
-					range: {
-						from: startOfMonth(today),
-						to: endOfMonth(today),
-					},
-					action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
-				},
-				{
-					label: t('common.last_month'),
-					range: {
-						from: startOfMonth(subMonths(today, 1)),
-						to: endOfMonth(subMonths(today, 1)),
-					},
-					action: () =>
-						setDate({
-							from: startOfMonth(subMonths(today, 1)),
-							to: endOfMonth(subMonths(today, 1)),
-						}),
-				},
-			];
-		}, [t, today]);
+	// The picker and its consumers exchange device-local calendar dates, not instants.
+	const ranges = React.useMemo(
+		() =>
+			Object.values(presets()).map(({ from, to }) => ({
+				from: parseISO(format(from, 'yyyy-MM-dd', zoneOptions(timezone))),
+				to: parseISO(format(to, 'yyyy-MM-dd', zoneOptions(timezone))),
+			})),
+		[presets, timezone]
+	);
+	const [date, setDate] = React.useState<DateRange | undefined>(ranges[0]);
+	const labels = [
+		t('common.today'),
+		t('common.yesterday'),
+		t('common.this_week'),
+		t('common.last_week'),
+		t('common.this_month'),
+		t('common.last_month'),
+	];
+	const dateRanges = ranges.map((range, index) => ({
+		label: labels[index],
+		range,
+		action: () => setDate(range),
+	}));
 
 	/**
 	 * Handle date range change from the Calendar component
@@ -118,25 +69,18 @@ export function DateRangeCalendar({ onSelect }: Props) {
 			<HStack className="items-start">
 				<VStack>
 					{dateRanges.map(({ label, range, action }) => (
-						<ButtonPill
-							key={label}
-							onPress={action}
-							size="xs"
-							variant={isDateRangeEqual(date, range) ? undefined : 'ghost-primary'}
-						>
-							<ButtonText>{label}</ButtonText>
-						</ButtonPill>
+						<Chip key={label} label={label} on={isDateRangeEqual(date, range)} onPress={action} />
 					))}
 				</VStack>
 				<Calendar
-					maxDate={format(today, 'yyyy-MM-dd')}
+					maxDate={format(ranges[0].from, 'yyyy-MM-dd')}
 					dateRange={date}
 					onDateRangeChange={handleDateRangeChange}
 					locale={shortCode}
 				/>
 			</HStack>
 			<HStack className="justify-end">
-				<Button onPress={() => date && onSelect(date)}>
+				<Button testID="order-filter-date-done" onPress={() => date && onSelect(date)}>
 					<ButtonText>{t('common.done')}</ButtonText>
 				</Button>
 			</HStack>

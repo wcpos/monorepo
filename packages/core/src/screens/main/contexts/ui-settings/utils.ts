@@ -1,7 +1,14 @@
 import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 
+import type { StoreState } from '@wcpos/query/store-local';
+
 import initialSettings from './initial-settings.json';
+import {
+	DEFAULT_FILTER_BAR,
+	migrateLegacyQuickFilters,
+} from '../../pos/products/filter-bar/filter-bar-layout';
+import { BROWSE_BY } from '../../pos/products/browse/browse-source';
 
 // Define a type for the keys of initialSettings
 type InitialSettingsKey = keyof typeof initialSettings;
@@ -10,7 +17,25 @@ type InitialSettingsKey = keyof typeof initialSettings;
 export type UISettingID = InitialSettingsKey;
 
 export type UISettingSchema<T extends UISettingID> = (typeof initialSettings)[T];
-export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISettingSchema<T>>;
+export type UISettingState<T extends UISettingID> = StoreState<UISettingSchema<T>>;
+
+/**
+ * Enum-valued settings, keyed by the vocabulary the UI can actually render.
+ *
+ * The merge below only fills in keys that are MISSING, so a persisted value that has
+ * fallen outside its enum — a state doc written by a build with a different
+ * vocabulary, or hand-edited — would survive forever and reach the settings form as a
+ * toggle with no matching option. Anything not in the list here is reset to the
+ * authored default. Add an entry when a new enum setting lands.
+ */
+const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly string[]>>> = {
+	'pos-products': { browseBy: BROWSE_BY },
+	'pos-cart': { position: ['left', 'right'], openOrdersPosition: ['top', 'bottom'] },
+};
+
+// A 1.11 profile stored the PRODUCTS side; the cart sits opposite.
+export const cartPositionFromProductsPosition = (value: unknown): 'left' | 'right' | undefined =>
+	value === 'right' ? 'left' : value === 'left' ? 'right' : undefined;
 
 /**
  * @TODO - this handles the first depth of the schema, but not nested values
@@ -18,7 +43,9 @@ export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISet
  */
 export const mergeWithInitalValues = async (
 	id: UISettingID,
-	state: UISettingState<UISettingID>
+	state: UISettingState<UISettingID>,
+	// Seeds missing keys for the products→cart move of position (2026-10-30).
+	seed?: Partial<Record<string, unknown>>
 ) => {
 	const initial = initialSettings[id];
 	const current = state.get();
@@ -30,7 +57,20 @@ export const mergeWithInitalValues = async (
 		const initialValue = initial[typedKey];
 
 		if (currentValue === undefined) {
-			await state.set(typedKey, (val) => initial[typedKey]);
+			const legacy = (current as Record<string, unknown>).quickFilters;
+			const value =
+				seed?.[key] !== undefined
+					? seed[key]
+					: id === 'pos-products' && key === 'filterBar' && Array.isArray(legacy)
+						? [...DEFAULT_FILTER_BAR, ...migrateLegacyQuickFilters(legacy)]
+						: initial[typedKey];
+			await state.set(typedKey, () => value as UISettingSchema<typeof id>[typeof typedKey]);
+			continue;
+		}
+
+		const vocabulary = ENUM_VOCABULARIES[id]?.[key];
+		if (vocabulary && !vocabulary.includes(currentValue as string)) {
+			await state.set(typedKey, () => initial[typedKey]);
 			continue;
 		}
 
@@ -136,5 +176,15 @@ export const patchState = async <T extends UISettingID>(
 			}
 		});
 	}
+	return state;
+};
+
+export const modifyState = async <T extends UISettingID, K extends keyof UISettingSchema<T>>(
+	state: UISettingState<T>,
+	key: K,
+	modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+) => {
+	// @ts-expect-error: RxState.set path type is too narrow for dynamic keys
+	await state.set(key, (old: UISettingSchema<T>[K] | undefined) => modifier(old));
 	return state;
 };

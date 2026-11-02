@@ -3,14 +3,17 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { refreshOrderRefunds, refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'orders', 'refund']);
+// Follow a competing parent's release without keeping a successful money operation waiting forever.
+const REFUND_RECORD_REFRESH_ATTEMPTS = 3;
 
 interface RefundLineItem {
 	id?: number;
@@ -25,6 +28,8 @@ interface BuildRefundPayloadArgs {
 	reason: string;
 	lineItems: RefundLineItem[];
 	refundDestination: RefundDestination;
+	registerId?: string | null;
+	sessionId?: string | null;
 }
 
 interface RefundMutationArgs extends BuildRefundPayloadArgs {
@@ -39,6 +44,8 @@ export function buildRefundPayload({
 	reason,
 	lineItems,
 	refundDestination,
+	registerId,
+	sessionId,
 }: BuildRefundPayloadArgs) {
 	const payload: Record<string, unknown> = {
 		amount,
@@ -46,6 +53,11 @@ export function buildRefundPayload({
 		refund_destination: refundDestination,
 		api_refund: refundDestination === 'original_method',
 	};
+	const metaData = Object.entries({
+		...(registerId ? { _wcpos_register: registerId } : {}),
+		...(sessionId ? { _wcpos_session: sessionId } : {}),
+	}).map(([key, value]) => ({ key, value }));
+	if (metaData.length > 0) payload.meta_data = metaData;
 
 	if (lineItems.length > 0) {
 		payload.line_items = lineItems.map((item) => ({
@@ -72,6 +84,9 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
+	const { binding, session } = useRegisterSession();
+	const sessionId =
+		session?.status === 'open' || session?.status === 'counting' ? session.id : null;
 	const runtime = useQueryRuntime();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 
@@ -95,6 +110,8 @@ export function useRefundMutation() {
 				reason,
 				lineItems,
 				refundDestination,
+				registerId: binding.registerId,
+				sessionId,
 			});
 
 			const response = await http.post(`orders/${orderId}/refunds`, payload, {
@@ -103,16 +120,12 @@ export function useRefundMutation() {
 				},
 			});
 
-			let handle;
 			try {
-				handle = runtime.engine.require({
+				await refreshRecordByWooId(runtime.engine, {
 					id: `refund:order-refresh:${orderId}`,
 					collection: 'orders',
-					kind: 'targeted-records',
-					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
+					wooId: orderId,
 				});
-				await handle.ready;
 			} catch (error) {
 				// The refund POST already succeeded — money has moved. A failed local
 				// refresh must never reject the mutation: the error toast would invite
@@ -127,12 +140,31 @@ export function useRefundMutation() {
 						error: getErrorMessage(error),
 					},
 				});
-			} finally {
-				handle?.release();
+			}
+
+			for (let attempt = 0; attempt < REFUND_RECORD_REFRESH_ATTEMPTS; attempt += 1) {
+				try {
+					const result = await refreshOrderRefunds(runtime.engine, {
+						id: `refund:record-refresh:${orderId}`,
+						orderId,
+					});
+					if (result !== 'released') break;
+					if (attempt === REFUND_RECORD_REFRESH_ATTEMPTS - 1) {
+						refundLogger.warn('Refund succeeded but the local refund record refresh was released', {
+							context: { orderId, attempts: REFUND_RECORD_REFRESH_ATTEMPTS },
+						});
+					}
+				} catch (error) {
+					// As with the parent refresh, the money has already moved; never invite a retry.
+					refundLogger.warn('Refund succeeded but the local refund record refresh failed', {
+						context: { orderId, error: getErrorMessage(error) },
+					});
+					break;
+				}
 			}
 
 			return response?.data;
 		},
-		[blockIfDegraded, http, runtime]
+		[binding.registerId, blockIfDegraded, http, runtime, sessionId]
 	);
 }

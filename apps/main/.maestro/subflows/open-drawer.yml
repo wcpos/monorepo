@@ -29,13 +29,61 @@ appId: com.wcpos.main.dev
           notVisible:
             id: "drawer-item-pos"
           timeout: 10000
+# Which button opens the drawer depends on the screen and the lane. `main`
+# has one header hamburger (drawer-open-button) on every screen. `next` hides
+# that header (drawer `_layout.tsx`, headerShown: false) and gives each screen
+# its own: the POS register bar's pos-drawer-open-button, and the page bar's
+# `<bar>-menu` on Products, Orders and Customers (page-bar/index.tsx builds
+# it from the bar's testID, so the ids are written `<bar>(-menu)`: Maestro
+# full-matches the regex and the testID lint checks the bar). Run 36898140001,
+# iOS phone, flow 05: the header tap was skipped and the drawer never opened.
+# At most one is on screen; once the drawer is open, drawer-item-pos stops
+# the rest.
 - runFlow:
     when:
       visible:
         id: "drawer-open-button"
+      notVisible:
+        id: "drawer-item-pos"
     commands:
       - tapOn:
           id: "drawer-open-button"
+- runFlow:
+    when:
+      visible:
+        id: "pos-drawer-open-button"
+      notVisible:
+        id: "drawer-item-pos"
+    commands:
+      - tapOn:
+          id: "pos-drawer-open-button"
+- runFlow:
+    when:
+      visible:
+        id: "products-bar(-menu)"
+      notVisible:
+        id: "drawer-item-pos"
+    commands:
+      - tapOn:
+          id: "products-bar(-menu)"
+- runFlow:
+    when:
+      visible:
+        id: "orders-bar(-menu)"
+      notVisible:
+        id: "drawer-item-pos"
+    commands:
+      - tapOn:
+          id: "orders-bar(-menu)"
+- runFlow:
+    when:
+      visible:
+        id: "customers-bar(-menu)"
+      notVisible:
+        id: "drawer-item-pos"
+    commands:
+      - tapOn:
+          id: "customers-bar(-menu)"
 - extendedWaitUntil:
     visible:
       id: "drawer-item-pos"

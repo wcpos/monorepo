@@ -1,3 +1,8 @@
+import * as React from 'react';
+import { useWindowDimensions } from 'react-native';
+
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+
 const NATIVE_POPOVER_MAX_HEIGHT = 300;
 const NATIVE_POPOVER_VERTICAL_PADDING = 16;
 const NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN = 48;
@@ -7,12 +12,55 @@ const NATIVE_LIST_MAX_HEIGHT =
 	NATIVE_POPOVER_VERTICAL_PADDING -
 	NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN;
 
-function getNativeListHeight(itemCount: number, estimatedItemSize: number) {
+// A phone bottom sheet takes at most this fraction of the viewport; the list inside it
+// gets what is left after the search input, sheet padding and the bottom safe-area inset,
+// capped so a tall phone does not turn the sheet into a full-screen list.
+const PHONE_SHEET_VIEWPORT_FRACTION = 0.7;
+const PHONE_SHEET_LIST_MAX_HEIGHT = 420;
+
+function getPhoneSheetMaxHeight(viewportHeight: number) {
+	return Math.round(viewportHeight * PHONE_SHEET_VIEWPORT_FRACTION);
+}
+
+function getPhoneSheetListMaxHeight(viewportHeight: number, bottomInset: number) {
+	const available =
+		getPhoneSheetMaxHeight(viewportHeight) -
+		NATIVE_POPOVER_VERTICAL_PADDING -
+		NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN -
+		bottomInset;
+	return Math.max(NATIVE_LIST_MIN_ITEM_HEIGHT, Math.min(PHONE_SHEET_LIST_MAX_HEIGHT, available));
+}
+
+/**
+ * Phone bottom-sheet geometry. The insets context is read directly (not via
+ * `useSafeAreaInsets`) so the component still renders where no SafeAreaProvider
+ * is mounted, such as component tests and web.
+ */
+function usePhoneSheetMetrics() {
+	const { height } = useWindowDimensions();
+	const insets = React.useContext(SafeAreaInsetsContext);
+	const bottomInset = insets?.bottom ?? 0;
+	return {
+		maxHeight: getPhoneSheetMaxHeight(height),
+		bottomInset,
+		listMaxHeight: getPhoneSheetListMaxHeight(height, bottomInset),
+	};
+}
+
+function getNativeListHeight(
+	itemCount: number,
+	estimatedItemSize: number,
+	maxHeight = NATIVE_LIST_MAX_HEIGHT
+) {
 	const itemHeight = Math.max(estimatedItemSize, NATIVE_LIST_MIN_ITEM_HEIGHT);
-	return Math.min(itemCount * itemHeight, NATIVE_LIST_MAX_HEIGHT);
+	return Math.min(itemCount * itemHeight, maxHeight);
 }
 
 export {
+	usePhoneSheetMetrics,
+	getPhoneSheetListMaxHeight,
+	getPhoneSheetMaxHeight,
+	PHONE_SHEET_LIST_MAX_HEIGHT,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_LIST_MIN_ITEM_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,

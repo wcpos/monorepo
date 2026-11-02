@@ -23,7 +23,10 @@ const mockAddListener = jest.fn((_event: string, listener: (payload: WedgeKeyPay
 	capturedListener = listener;
 	return { remove: mockRemove };
 });
-const mockInsert = jest.fn();
+const mockUpsert = jest.fn();
+const mockStoreDB = {
+	collections: { scanner_profiles: { upsert: (...args: unknown[]) => mockUpsert(...args) } },
+};
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -40,19 +43,13 @@ jest.mock('./use-attributed-wedge', () => ({
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
+		storeDB: mockStoreDB,
 		store: {
 			barcode_scanning_avg_time_input_threshold$: of(24),
 			barcode_scanning_min_chars$: of(8),
 		},
 	}),
 }));
-
-jest.mock('../use-collection', () => ({
-	useCollection: () => ({ collection: { insert: (...args: unknown[]) => mockInsert(...args) } }),
-}));
-
-// uuid ships ESM that ts-jest won't transform; only save() uses it (not exercised here).
-jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 const SCANNER = { deviceId: 5, deviceName: 'Honeywell', vendorId: 0x0c2e, productId: 0x0b61 };
 const KEYBOARD = { deviceId: 7, deviceName: 'Apple Keyboard', vendorId: 0x05ac, productId: 0x024f };
@@ -163,4 +160,21 @@ describe('useScannerRegistration', () => {
 
 		expect(result.current.candidate).toBeNull();
 	});
+});
+
+it('registers a captured keyboard profile through the real store-local command', async () => {
+	const { result } = renderHook(() => useScannerRegistration());
+	act(() => result.current.start());
+	act(() => feed(SCANNER, '12345678', 8));
+	await act(() => result.current.register('Front counter'));
+	expect(mockUpsert).toHaveBeenCalledWith({
+		deviceKey: 'keyboard:3118:2913:honeywell',
+		name: 'Front counter',
+		connectionType: 'keyboard',
+		deviceName: 'Honeywell',
+		vendorId: 3118,
+		productId: 2913,
+		createdAt: expect.any(String),
+	});
+	expect(result.current.candidate).toBeNull();
 });

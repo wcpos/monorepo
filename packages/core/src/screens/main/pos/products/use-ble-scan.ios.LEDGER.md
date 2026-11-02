@@ -1,0 +1,17 @@
+# Behaviour ledger: `pos/products/use-ble-scan.ios.ts`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md` on `research/composed-ledger` (wcpos/roadmap#341) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** Connect supported iOS vendor-GATT scanners and register their notification stream with ScanHub.
+
+**Composes:** None directly.
+
+## Lines
+
+1. BLE is iOS-only, lazily loads the native module and limits discovery to three documented Netum service families — unsupported platforms/builds must remain inert rather than loading unavailable native code — evidence: `6643e57b02 2026-08-22 feat(core,scanner): iOS BLE scanner source — first ScanHub registerSource consumer`, refs #1461 — platform: iOS; inert elsewhere.
+2. Discovery connects the first allowlisted scanner; notifications pass through streaming UTF-8, line framing and dedup — split BLE notifications must reconstruct one barcode without duplicate events — evidence: `6643e57b02 2026-08-22 feat(core,scanner): iOS BLE scanner source — first ScanHub registerSource consumer`; test name: `use-ble-scan.ios.test.tsx`, “decodes split base64 notifications and deduplicates a rapid repeat” — platform: iOS.
+3. Bluetooth readiness has a ten-second bound and discovery a thirty-second bound — denied permission or an absent scanner must not leave Connect pending forever — evidence: `5ab1d05b30 2026-08-22 fix(core): harden iOS BLE scanner lifecycle`; `bde694a297 2026-08-22 fix(core): bound the PoweredOn wait and release guard-3 stale BLE connections`, refs #1461 — platform: iOS.
+4. Teardown settles outstanding readiness/discovery waits; late module loading cannot create a manager after unmount — prevents pending gestures and leaked native managers — evidence: `4f4cbf9e15 2026-08-22 fix(core): settle the discovery wait from teardown; guard manager creation after unmount`, refs #1461 — platform: iOS.
+5. Stale connected peripherals are explicitly released, including after service discovery — a connected peripheral stops advertising and could otherwise become undiscoverable — evidence: `bde694a297 2026-08-22 fix(core): bound the PoweredOn wait and release guard-3 stale BLE connections`; `use-ble-scan.ios.ts:282–284` — platform: iOS.
+6. Silent reconnect requires exactly one saved profile with a recognized service; store-collection replacement restarts this process — avoids choosing arbitrarily or retaining the previous store’s scanner state — evidence: `6643e57b02 2026-08-22 feat(core,scanner): iOS BLE scanner source — first ScanHub registerSource consumer`; `5ab1d05b30 2026-08-22 fix(core): harden iOS BLE scanner lifecycle` — platform: iOS.
+7. Monitor errors unregister the source and disconnect; peripheral-keyed profiles and normalized UUID matching expose the actual live device — failed streams must not remain presented as connected — evidence: `dfdcbd8e0c 2026-08-24 refactor(scanner)!: one canonical device key, and a scanner section that stays quiet (#1531)`; test name: `use-ble-scan.ios.test.tsx`, “disconnects state and unregisters the source after a monitor error” — platform: iOS.

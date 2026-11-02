@@ -4,8 +4,8 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
-import { EditableField } from '../../components/editable-field';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
 import { GroupedNames } from '../../components/product/grouped-names';
@@ -27,12 +27,7 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = caps.canEditProducts;
-	const meta = props.table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'products'>;
-			changes: Record<string, unknown>;
-		}) => void;
-	};
+	const commit = props.table.options.meta?.commit;
 
 	/**
 	 *
@@ -45,7 +40,7 @@ export function ProductName(props: CellContext<{ record: EngineRecord<'products'
 					onChangeText={
 						readOnly || !canEdit
 							? undefined
-							: (name) => meta.onChange({ document: record, changes: { name } })
+							: (name) => commit?.({ document: record, changes: { name } })
 					}
 					editable={!readOnly && canEdit}
 				/>

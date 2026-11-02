@@ -4,45 +4,46 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
-import { Form } from '@wcpos/components/form';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { Form, SavedFieldProvider } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
+import {
+	PropertyAdd,
+	PropertyAddRow,
+	PropertyList,
+	PropertyRow,
+	PropertyVerb,
+} from '@wcpos/components/property-row';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
+import { useRecordField } from '@wcpos/query';
+import { isGuestCustomer } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
-import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
-import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
+import {
+	ADDRESS_FACTS,
+	asShipping,
+	TextPart,
+	useAddressFacts,
+} from '../../components/customer/address-rows';
+import {
+	TaxIdsForm,
+	taxIdsFormSchema,
+	useNewTaxIdRow,
+} from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
-import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useMutation } from '../../hooks/mutations/use-mutation';
+import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
+import { useFieldPresence } from '../../components/use-field-presence';
+import { useRecordAutosave } from '../../components/use-record-autosave';
+import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
+import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
-type QueryManager = ReturnType<typeof useQueryRuntime>;
-
-async function findCustomerByWooId(
-	runtime: QueryManager,
-	wooCustomerId: number
-): Promise<EngineRecord<'customers'> | null> {
-	const scope = await runtime.engine.whenActive();
-	const collection = scope.database.collections.customers;
-	if (!collection) return null;
-	const document = await collection
-		.findOne({ selector: { remoteId: remoteIdOrNull(wooCustomerId) } })
-		.exec();
-	return document;
-}
-
 /**
  *
  */
@@ -52,10 +53,27 @@ const formSchema = z.object({
 	tax_ids: taxIdsFormSchema,
 });
 
+type Verb = [id: string, label: string, onPress: () => void];
+const verb = ([id, label, onPress]: Verb) => (
+	<PropertyVerb key={id} testID={`cart-address-${id}`} onPress={onPress}>
+		{label}
+	</PropertyVerb>
+);
+
 /**
  * RxDocument .billing$ and .shipping$ emit Proxy(Object) which can't be used in react-hook-form
  */
 export function EditCartCustomerForm() {
+	return (
+		<SavedFieldProvider>
+			<CountriesProvider>
+				<EditCartCustomerFields />
+			</CountriesProvider>
+		</SavedFieldProvider>
+	);
+}
+
+function EditCartCustomerFields() {
 	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
 	const customerID = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
@@ -68,59 +86,66 @@ export function EditCartCustomerForm() {
 		() => (Array.isArray(taxIdsProxy) ? JSON.parse(JSON.stringify(taxIdsProxy)) : []),
 		[taxIdsProxy]
 	);
-	const { localPatch } = useLocalMutation();
-	const { patch } = useMutation({ collectionName: 'customers', showSuccessToast: false });
-	const runtime = useQueryRuntime();
-	const { onOpenChange } = useRootContext();
+	const setCartCustomer = useSetCartCustomer();
+	const { saveCustomerAddresses } = useCartCustomerRecord();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const { caps } = useUserCapabilities();
 
 	/**
-	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
-	 * This makes the form reactive to external data changes (react-hook-form best practice).
+	 * This form writes what it shows: reactive values would reset the draft when a write lands.
+	 * The caller keys it by order UUID so switching orders remounts it with fresh defaults.
 	 */
 	type FormValues = z.infer<typeof formSchema>;
 
 	const form = useForm<FormValues, unknown, FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: { billing, shipping, tax_ids },
+		defaultValues: { billing, shipping, tax_ids },
 	});
+	const newTaxIdRow = useNewTaxIdRow(form.control);
+	const { linked, focus, labels, ...address } = useAddressFacts(form, 'cart-address');
 
-	/**
-	 *
-	 */
-	const saveToOrder = async (data: FormValues): Promise<boolean> => {
-		const patched = await localPatch({
-			document: currentOrderRecord,
-			data: {
-				billing: data.billing,
-				shipping: data.shipping,
-				tax_ids: data.tax_ids ?? [],
-			},
-		});
-		// localPatch already reported a failed write; keep the dialog (and the edits) open.
-		if (!patched) return false;
-		onOpenChange(false);
-		return true;
+	// While linked, a write carries billing as shipping; a verb's own shipping write lands as set.
+	const shippingOf = (values: FormValues) =>
+		linked ? asShipping(values.billing) : values.shipping;
+	// The writer takes the whole address set. The changed root has been validated; a sibling rides
+	// as its draft only while that draft is valid (unknown keys stripped), otherwise as the order
+	// holds it, so an invalid field elsewhere neither blocks this edit nor enters with it.
+	const part = <K extends keyof FormValues>(key: K) => {
+		const parsed = formSchema.shape[key].safeParse(form.getValues(key));
+		return (
+			parsed.success ? parsed.data : currentOrderRecord.getLatest().payload[key]
+		) as FormValues[K];
 	};
-
-	const handleSaveToOrder = async (data: FormValues) => {
-		await saveToOrder(data);
-	};
+	useRecordAutosave<FormValues, FormValues>({
+		form,
+		compose: (root) => ({
+			billing: part('billing'),
+			shipping: root === 'shipping' || !linked ? part('shipping') : asShipping(part('billing')),
+			tax_ids: part('tax_ids'),
+		}),
+		// A tax-id row the cashier has only just added (no value yet) is not an edit.
+		persist: ({ billing, shipping, tax_ids }) =>
+			setCartCustomer(currentOrderRecord, {
+				billing,
+				shipping,
+				taxIds: (tax_ids ?? []).filter((row) => String(row?.value ?? '') !== ''),
+			}),
+	});
 
 	/**
 	 * We need to get the customer document and patch it with the new address
 	 */
-	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
+	const handleUpdateCustomer = async (data: FormValues) => {
 		const wooCustomerId = Number(customerID ?? 0);
-		// Never say "Saved to the order" (below) for an order write that failed.
-		if (!(await saveToOrder(data))) return;
 		setLoading(true);
 		try {
-			const customer = await findCustomerByWooId(runtime, wooCustomerId);
-			if (!customer) {
-				// The order's address is already saved above; only the profile copy could
+			const result = await saveCustomerAddresses(wooCustomerId, {
+				...data,
+				shipping: shippingOf(data),
+			});
+			if (result.status === 'not-found') {
+				// The order's address saves independently; only the profile copy could
 				// not be made, because the customer record is not on this device.
 				cartLogger.info('Customer record is not on this device; profile not updated', {
 					showToast: true,
@@ -131,16 +156,8 @@ export function EditCartCustomerForm() {
 				});
 				return;
 			}
-			const savedDoc = await patch({
-				document: customer,
-				data: {
-					billing: data.billing,
-					shipping: data.shipping,
-					tax_ids: data.tax_ids ?? [],
-				},
-			});
-			if (savedDoc) {
-				const saved = customer.getLatest().payload;
+			if (result.status === 'saved') {
+				const saved = result.customer.getLatest().payload;
 				cartLogger.success(t('common.saved', { name: format(saved) }), {
 					showToast: true,
 					context: {
@@ -149,7 +166,6 @@ export function EditCartCustomerForm() {
 					},
 				});
 			}
-			onOpenChange(false);
 		} catch (error) {
 			// patch() and localPatch report their own failures (a scope that moved twice).
 			if (isErrorReported(error)) return;
@@ -168,65 +184,100 @@ export function EditCartCustomerForm() {
 		}
 	};
 
-	/**
-	 *
-	 */
-	const handleCopyBillingToShipping = React.useCallback(() => {
-		const billingAddress = form.getValues().billing;
-		form.setValue('shipping', billingAddress);
-	}, [form]);
+	const presence = useFieldPresence(ADDRESS_FACTS, address.isEmpty, address.clear);
+	const has = (name: string) => presence.present.includes(name as never);
+	const { offered, rows } = address.layout(presence);
+	const add = (name: (typeof offered)[number]) => {
+		presence.add(name);
+		address.added(name);
+	};
 
 	/**
 	 * Form submission handlers that include validation
 	 */
-	const onSaveToOrder = form.handleSubmit(handleSaveToOrder);
-	const onSaveToOrderAndCustomer = form.handleSubmit(handleSaveToOrderAndToCustomer);
+	const onUpdateCustomer = form.handleSubmit(handleUpdateCustomer);
 
-	/**
-	 * Form doesn't have a ref? What else should I use?
-	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
-				<FormErrors />
-				<Collapsible defaultOpen={true}>
-					<CollapsibleTrigger>
-						<Text>{t('common.billing_address')}</Text>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<BillingAddressForm />
-					</CollapsibleContent>
-				</Collapsible>
-				<Collapsible>
-					<HStack>
-						<CollapsibleTrigger>
-							<Text>{t('common.shipping_address')}</Text>
-						</CollapsibleTrigger>
-					</HStack>
-					<CollapsibleContent>
-						<VStack className="gap-4">
-							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
-							</Button>
-							<ShippingAddressForm />
-						</VStack>
-					</CollapsibleContent>
-				</Collapsible>
-				<TaxIdsForm />
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.close')}</DialogClose>
-					{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
-						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
-						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
-							{t('pos_cart.save_to_order_customer')}
-						</DialogAction>
-					)}
-					{/* @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps */}
-					<DialogAction onPress={onSaveToOrder} loading={loading}>
-						{t('pos_cart.save_to_order')}
-					</DialogAction>
-				</DialogFooter>
-			</VStack>
+			<DialogBody>
+				<VStack className="gap-4">
+					<FormErrors />
+					<PropertyList prefix="billing">
+						<PropertyRow
+							testID="cart-address-row-name"
+							label={t('common.name')}
+							id="first_name"
+							name="billing"
+						>
+							<HStack className="gap-2">
+								{(['first_name', 'last_name'] as const).map((name) => (
+									<TextPart
+										key={name}
+										name={`billing.${name}`}
+										placeholder={labels[name]}
+										label={name === 'last_name' ? labels[name] : undefined}
+										testID={`cart-address-field-billing-${name}`}
+									/>
+								))}
+							</HStack>
+						</PropertyRow>
+						{(['email', 'phone', 'company'] as const).map(
+							(name) =>
+								(name !== 'company' || has(name)) && (
+									<PropertyRow
+										key={name}
+										testID={`cart-address-row-${name}`}
+										label={labels[name]}
+										id={name}
+										verb={
+											name === 'company' &&
+											verb(['remove-company', t('common.remove'), () => presence.withdraw(name)])
+										}
+									>
+										<TextPart
+											name={`billing.${name}`}
+											placeholder={t('common.add_value', { label: labels[name] })}
+											autoFocus={focus === name}
+											testID={`cart-address-field-billing-${name}`}
+										/>
+									</PropertyRow>
+								)
+						)}
+						{rows}
+						<TaxIdsForm testID="cart-address" />
+						<PropertyAddRow>
+							{offered.map((name) => (
+								<PropertyAdd
+									key={name}
+									testID={`cart-address-add-${name}`}
+									label={labels[name]}
+									onPress={() => add(name)}
+								/>
+							))}
+							<PropertyAdd
+								testID="cart-address-add-tax_id"
+								label={t('tax_id.tax_id')}
+								onPress={() =>
+									form.setValue('tax_ids', [...(form.getValues().tax_ids ?? []), newTaxIdRow()])
+								}
+							/>
+						</PropertyAddRow>
+					</PropertyList>
+				</VStack>
+			</DialogBody>
+			<DialogFooter
+				close
+				secondary={
+					customerID != null &&
+					!isGuestCustomer(customerID) &&
+					caps.canEditCustomers && {
+						label: t('pos_cart.update_customer_too'),
+						testID: 'cart-address-update-customer',
+						onPress: () => void onUpdateCustomer(),
+						loading,
+					}
+				}
+			/>
 		</Form>
 	);
 }

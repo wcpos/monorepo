@@ -1,8 +1,11 @@
 import * as React from 'react';
 
+import { filter, firstValueFrom } from 'rxjs';
+
+import { observeUserSites, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
-import { Loader } from '@wcpos/components/loader';
+import { Toast } from '@wcpos/components/toast';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -21,9 +24,10 @@ export const DEMO_CLAIM_KEY = 'demo';
 export function DemoButton() {
 	const { user } = useAppState();
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
-	const [connectedSite, setConnectedSite] = React.useState<
-		import('@wcpos/database').SiteDocument | null
-	>(null);
+	const [connectedSite, setConnectedSite] = React.useState<Pick<
+		ReadonlySiteRecord,
+		'uuid' | 'name' | 'wcpos_login_url'
+	> | null>(null);
 	const t = useT();
 
 	// Track which response we've already processed to prevent double-execution
@@ -56,7 +60,9 @@ export function DemoButton() {
 
 		void (async () => {
 			try {
-				const sites: import('@wcpos/database').SiteDocument[] = await user.populate('sites');
+				const sites: NonNullable<typeof connectedSite>[] = await firstValueFrom(
+					observeUserSites(user).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+				);
 				if (cancelled) return;
 				const site = sites.find((site) => site.wcpos_login_url === claim.loginUrl);
 				if (!site) {
@@ -100,6 +106,20 @@ export function DemoButton() {
 			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
 			void handleLoginSuccess({ params: response.params } as any).catch(() => undefined);
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Demo login did not complete', {
+					context: { errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
@@ -108,7 +128,7 @@ export function DemoButton() {
 			// Also mark processed on error to prevent retry.
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, connectedSite, handleLoginSuccess]);
+	}, [response, connectedSite, handleLoginSuccess, t]);
 
 	const handleDemoLogin = async () => {
 		// Reset auth state for new login attempt
@@ -159,17 +179,11 @@ export function DemoButton() {
 			testID="enter-demo-store-button"
 			onPress={handleDemoLogin}
 			disabled={loading}
-			variant="muted"
+			variant="ghost"
 			size="sm"
-			rightIcon={
-				loading ? (
-					<Loader variant="muted" size="xs" />
-				) : (
-					<Icon variant="muted" size="xs" name="arrowRight" />
-				)
-			}
+			loading={loading}
 		>
-			<ButtonText>{t('auth.enter_demo_store')}</ButtonText>
+			<ButtonText>{t('auth.try_the_demo_store')}</ButtonText>
 		</Button>
 	);
 }

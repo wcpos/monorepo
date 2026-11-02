@@ -18,6 +18,11 @@ export interface QueryResult<TCollection = RxCollection> {
 	 */
 	searchState?: 'pending' | 'answered';
 	count?: number;
+	/**
+	 * The parent ids a relation named from matching children, resident or not; an owner's
+	 * targeted demand, never the read's. Present only on a relational read with a search term.
+	 */
+	relatedIds?: number[];
 	hits: {
 		id: string;
 		record: DocumentType<TCollection>;

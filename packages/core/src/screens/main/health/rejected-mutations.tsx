@@ -3,26 +3,35 @@ import { View } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
+import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { collectionLabel } from './collection-label';
 import { useT } from '../../../contexts/translations';
 import { classifyResolutionError } from './resolution-error';
-import { Callout, Pill } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type RejectedMutation, useRejectedMutations } from './use-rejected-mutations';
 
@@ -50,7 +59,7 @@ const logger = getLogger(['wcpos', 'health', 'deadLetters']);
  */
 export function RejectedMutationsPanel() {
 	const t = useT();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { rows, readError } = useRejectedMutations();
 	const nowMs = useNowMs(30_000);
 	const relative = useRelativeTime();
@@ -63,16 +72,12 @@ export function RejectedMutationsPanel() {
 	// device (cashier-full-information ruling, 2026-08-07).
 	if (readError) {
 		return (
-			<Callout tone="destructive" testID="db-rejected-read-error">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.rejected.read_error_title')}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.rejected.read_error_body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-rejected-read-error"
+				title={t('health.database.rejected.read_error_title')}
+				description={t('health.database.rejected.read_error_body')}
+			/>
 		);
 	}
 
@@ -81,7 +86,7 @@ export function RejectedMutationsPanel() {
 	const settle = async (row: RejectedMutation, resolution: 'requeue-rebuilt' | 'discard') => {
 		setBusyId(row.mutationId);
 		try {
-			await engine.resolveConflict(row.mutationId, resolution);
+			await resolveQueuedChange(runtime.engine, row.mutationId, resolution);
 			logger.info('dead letter resolved', {
 				context: {
 					mutationId: row.mutationId,
@@ -149,18 +154,12 @@ export function RejectedMutationsPanel() {
 
 	return (
 		<VStack testID="db-rejected" className="gap-2">
-			<Callout tone="destructive" testID="db-rejected-callout">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.rejected.title', {
-							count: rows.length,
-						})}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.rejected.body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-rejected-callout"
+				title={t('health.database.rejected.title', { count: rows.length })}
+				description={t('health.database.rejected.body')}
+			/>
 
 			<VStack className="gap-0">
 				{rows.map((row) => (
@@ -175,23 +174,23 @@ export function RejectedMutationsPanel() {
 								{/* A rejected DELETE must never look like a rejected edit: requeuing
 								    it destroys the record on the server (#1093 audit, Q2). */}
 								{row.operation === 'delete' ? (
-									<Pill tone="destructive" testID={`db-rejected-delete-${row.mutationId}`}>
+									<Badge variant="bad" testID={`db-rejected-delete-${row.mutationId}`}>
 										{t('health.database.rejected.delete_pill')}
-									</Pill>
+									</Badge>
 								) : null}
 								{row.requeueCount > 0 ? (
-									<Pill tone="warning" testID={`db-rejected-tries-${row.mutationId}`}>
+									<Badge variant="warning" testID={`db-rejected-tries-${row.mutationId}`}>
 										{t('health.database.rejected.tries', {
 											count: row.requeueCount,
 										})}
-									</Pill>
+									</Badge>
 								) : null}
 							</HStack>
 							{/* The server's own sentence arrives HTML-encoded — WordPress ships
 							    its REST error copy with entities baked in ("vous n&rsquo;etes
 							    pas autorise"). Rendered raw it puts markup in front of the
 							    cashier, so decode it like every other server-supplied string. */}
-							<Text className="text-muted-foreground text-xs" decodeHtml>
+							<Text variant="help" decodeHtml>
 								{describeReason(row, t)}
 							</Text>
 							{row.rejectedAt ? (
@@ -213,8 +212,9 @@ export function RejectedMutationsPanel() {
 							) : null}
 						</View>
 						<HStack className="items-center gap-2">
+							{/* The row's one constructive action; discarding loses the change, so it is the
+							    last, red row of the row's ⋮ menu (CODING_STANDARDS § Design, Buttons). */}
 							<Button
-								variant="outline"
 								size="sm"
 								testID={`db-rejected-requeue-${row.mutationId}`}
 								disabled={busyId !== null || row.residentMissing}
@@ -228,20 +228,31 @@ export function RejectedMutationsPanel() {
 							>
 								<ButtonText>{t('health.database.rejected.requeue')}</ButtonText>
 							</Button>
-							<Button
-								variant="ghost-destructive"
-								size="sm"
-								testID={`db-rejected-discard-${row.mutationId}`}
-								// A failed resident read leaves the destructive outcome UNKNOWN
-								// (PR #1016 review): the record may or may not be deleted, so
-								// every confirm we could show might be describing the wrong one.
-								// Wait for a read that succeeds rather than guess — the feed
-								// re-renders on the next queue emission.
-								disabled={busyId !== null || row.residentUnknown}
-								onPress={() => setDiscarding(row)}
-							>
-								<ButtonText>{t('health.database.rejected.discard')}</ButtonText>
-							</Button>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<IconButton
+										name="more"
+										testID={`db-rejected-menu-${row.mutationId}`}
+										accessibilityLabel={t('common.actions')}
+									/>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem
+										variant="destructive"
+										testID={`db-rejected-discard-${row.mutationId}`}
+										// A failed resident read leaves the destructive outcome UNKNOWN
+										// (PR #1016 review): the record may or may not be deleted, so
+										// every confirm we could show might be describing the wrong one.
+										// Wait for a read that succeeds rather than guess — the feed
+										// re-renders on the next queue emission.
+										disabled={busyId !== null || row.residentUnknown}
+										onPress={() => setDiscarding(row)}
+									>
+										<Icon name="delete" className="fill-destructive" />
+										<Text>{t('health.database.rejected.discard')}</Text>
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
 						</HStack>
 					</HStack>
 				))}
@@ -266,22 +277,19 @@ export function RejectedMutationsPanel() {
 								: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-rejected-requeue-delete-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-rejected-requeue-delete-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-rejected-requeue-delete-cancel' }}
+						confirm={{
+							label: t('health.database.rejected.requeue_delete_confirm'),
+							destructive: true,
+							testID: 'db-rejected-requeue-delete-confirm',
+							onPress: () => {
 								const row = requeueingDelete;
 								setRequeueingDelete(null);
 								if (row) void settle(row, 'requeue-rebuilt');
-							}}
-						>
-							<Text>{t('health.database.rejected.requeue_delete_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 
@@ -321,26 +329,21 @@ export function RejectedMutationsPanel() {
 									: t('health.database.rejected.discard_body')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-rejected-discard-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-rejected-discard-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-rejected-discard-cancel' }}
+						confirm={{
+							label: discarding?.destroysRecord
+								? t('health.database.rejected.discard_destroy_confirm')
+								: t('health.database.rejected.discard_confirm'),
+							destructive: true,
+							testID: 'db-rejected-discard-confirm',
+							onPress: () => {
 								const row = discarding;
 								setDiscarding(null);
 								if (row) void settle(row, 'discard');
-							}}
-						>
-							<Text>
-								{discarding?.destroysRecord
-									? t('health.database.rejected.discard_destroy_confirm')
-									: t('health.database.rejected.discard_confirm')}
-							</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</VStack>
@@ -351,10 +354,7 @@ type Translate = ReturnType<typeof useT>;
 
 /** "Orders · #1042 · 25.00" — never a bare uuid when anything better exists. */
 function describeRecord(row: RejectedMutation, t: Translate): string {
-	const labelKey = (COLLECTION_VOCABULARY as Record<string, { labelKey?: string } | undefined>)[
-		row.collectionName
-	]?.labelKey;
-	const collection = labelKey ? t(labelKey) : row.collectionName;
+	const collection = collectionLabel(row.collectionName, t);
 	return row.label ? `${collection} · ${row.label}` : `${collection} · ${row.recordId.slice(0, 8)}`;
 }
 

@@ -30,9 +30,11 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 
 import {
 	customerDocumentId,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	promotedOrderColumns,
 	promotedProductColumns,
 	referenceDocumentId,
+	SCOPE_DATABASE_GENERATION,
 	taxRateDocumentId,
 } from '@wcpos/sync-core';
 import {
@@ -44,10 +46,16 @@ import {
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
+import {
+	DRAINABLE_SCHEMAS_GENERATION,
+	drainableGenerationCollectionCreators,
+} from './drainable-generation';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
+import { refundSchema } from './refund-schema';
+import { materializeRefund } from '../materialization/record-materialization';
 import {
 	brandSchema,
 	categorySchema,
@@ -120,6 +128,7 @@ const PRODUCT_PAYLOAD = {
 	stock_status: 'instock',
 	type: 'simple',
 	categories: [{ id: 3 }, { id: 5 }],
+	tags: [{ id: 4 }],
 	brands: [{ id: 11 }],
 	on_sale: true,
 	featured: false,
@@ -128,6 +137,7 @@ const PRODUCT_PAYLOAD = {
 
 const VARIATION_PAYLOAD = {
 	id: 77,
+	parent_id: 9,
 	price: '4.20',
 	stock_status: 'instock',
 	attributes: [{ id: 1, name: 'Size', option: 'L' }],
@@ -141,6 +151,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'order-uuid-42',
 				remoteId: '42',
+				remoteKey: '42',
 				...promotedOrderColumns(ORDER_PAYLOAD),
 				payload: ORDER_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -155,6 +166,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'product-uuid-9',
 				remoteId: '9',
+				remoteKey: '9',
 				...promotedProductColumns(PRODUCT_PAYLOAD),
 				payload: PRODUCT_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -169,6 +181,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'variation-uuid-77',
 				remoteId: '77',
+				remoteKey: '77',
 				parentRemoteId: '9',
 				...promotedVariationColumns(VARIATION_PAYLOAD),
 				payload: VARIATION_PAYLOAD,
@@ -185,11 +198,62 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: customerDocumentId(remoteId(42)),
 				remoteId: '42',
+				remoteKey: '42',
 				payload: { id: 42, date_modified_gmt: '2026-07-01T10:00:00' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 		});
+	});
+
+	it('refunds preserve details and can query their indexed parent and creation date', async () => {
+		const document = materializeRefund({
+			id: 17,
+			parent_id: 3,
+			date_created_gmt: '2026-09-16T12:00:00',
+			amount: '20.00',
+			meta_data: [{ key: '_wcpos_session', value: { nested: true } }],
+			line_items: [{ id: 2, quantity: -1, total: '-20.00' }],
+		}).storedDocument;
+		await expectRoundTrip({ schema: refundSchema, document });
+		const { db, collection } = await openCollection({ schema: refundSchema });
+		try {
+			await collection.insert(document);
+			const rows = await collection
+				.find({
+					selector: { 'payload.parent_id': 3, 'payload.date_created_gmt': { $gte: '2026-09-01' } },
+				})
+				.exec();
+			expect(rows.map((row) => row.primary)).toEqual(['woo-refund:17']);
+			expect(rows[0].toJSON()).toMatchObject({ local: { dirty: false, pendingMutationIds: [] } });
+		} finally {
+			await db.close();
+		}
+	});
+
+	// Revert the promoted indexes: session/id queries no longer have indexed columns.
+	it('queries refunds through their session and remote id indexes', async () => {
+		expect(refundSchema.indexes).toEqual(expect.arrayContaining(['sessionId', 'remoteId']));
+		const { db, collection } = await openCollection({ schema: refundSchema });
+		try {
+			await collection.insert(
+				materializeRefund({
+					id: 17,
+					parent_id: 3,
+					date_created_gmt: '2026-09-16',
+					meta_data: [{ key: '_wcpos_session', value: 'B' }],
+				}).storedDocument
+			);
+			for (const [field, value] of [
+				['sessionId', 'B'],
+				['remoteId', '17'],
+			]) {
+				const rows = await collection.find({ selector: { [field]: value }, index: field }).exec();
+				expect(rows.map((row) => row.primary)).toEqual(['woo-refund:17']);
+			}
+		} finally {
+			await db.close();
+		}
 	});
 
 	it('taxRates', async () => {
@@ -199,6 +263,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: taxRateDocumentId(remoteId(7)),
 				remoteId: '7',
+				remoteKey: '7',
 				payload: { id: 7, rate: '10.0' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 			},
@@ -216,6 +281,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: referenceDocumentId(prefix, remoteId(3)),
 				remoteId: '3',
+				remoteKey: '3',
 				payload: { id: 3, name: 'Ref' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -424,7 +490,9 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	 * fresh-database test, so the schemas are pinned here on purpose.
 	 *
 	 * To change a schema: bump its `version`, add the migration strategy, and update the
-	 * digest below in the same commit. The friction IS the guard.
+	 * digest below in the same commit. The friction IS the guard. Pre-GA the version stays at
+	 * 0 and the scope database GENERATION moves instead (see `productSchema`): update the
+	 * digest AND `PINNED_SCOPE_GENERATION` together.
 	 */
 	function canonicalJson(value: unknown): string {
 		if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -444,17 +512,19 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	};
 
 	const PINNED_DIGESTS: Record<string, string> = {
-		orders: '72d3cd3ea083c10c',
-		products: '914ff9bc836d2f03',
-		variations: '478a682482d83df3',
+		orders: 'bc0b35ca7829dad7',
+		// tagIds promoted at scope generation 6.
+		products: 'dc0ab793f15f4e7a',
+		variations: 'df92c9203ba108c1',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
-		customers: '85e1373e0643f472',
-		taxRates: 'faea838bf1991ead',
-		categories: '85e1373e0643f472',
-		brands: '85e1373e0643f472',
-		tags: '85e1373e0643f472',
-		coupons: '85e1373e0643f472',
+		customers: 'ac922ffdb0538886',
+		taxRates: '7573745a31add62b',
+		refunds: 'd78bcc1758dcf4ab',
+		categories: 'ac922ffdb0538886',
+		brands: 'ac922ffdb0538886',
+		tags: 'ac922ffdb0538886',
+		coupons: 'ac922ffdb0538886',
 		schedulerTaskStates: '3fbf7c70726dec3c',
 		coverageRecords: '3022569cc18cc7df',
 		coverageLanes: '12a1f38d36ffc0d0',
@@ -466,10 +536,13 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		existenceManifestCustomers: '107bac24876b267a',
 		existenceManifestOrders: '107bac24876b267a',
 		syncCheckpoints: '13a461c616ee12b9',
-		recordMutations: '94c4fd4e440dbdd7',
+		recordMutations: 'd6da9686455ba784',
 		engineKv: 'a8d94dc8495e36cc',
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
+
+	/** The scope database generation the pinned digests above ship under. */
+	const PINNED_SCOPE_GENERATION = 7;
 
 	it('every engine collection schema matches its pinned digest', () => {
 		const creators = engineCollectionCreators();
@@ -479,18 +552,114 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		expect(actual).toEqual(PINNED_DIGESTS);
 	});
 
-	it('every versioned schema ships the migration strategies its version needs', () => {
-		const creators = engineCollectionCreators();
-		for (const [name, creator] of Object.entries(creators)) {
-			const version = (creator.schema as { version: number }).version;
-			if (version > 0) {
-				expect(
-					creator.migrationStrategies,
-					`${name} is at v${version} but declares no migrationStrategies — RxDB cannot open an existing database without them`
-				).toBeDefined();
+	it('a moved digest moved the scope database generation with it (no in-place edit reaches a resident database)', () => {
+		expect(SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION);
+		expect(productSchema.version).toBe(0);
+		expect(productSchema.properties.tagIds).toEqual({ type: 'array', items: { type: 'number' } });
+		expect(productSchema.required).toContain('tagIds');
+	});
+
+	/**
+	 * The DRAINABLE generation's schemas (`drainable-generation.ts`) are what that generation
+	 * shipped: every digest it pinned, written out IN FULL — a map derived from
+	 * `PINNED_DIGESTS` would move with the current schemas, so a bump that forgot
+	 * `drainable-generation.ts` would still pass. A wrong digest throws DB6 on the very
+	 * database the drain exists to send, so the drain could never send it.
+	 */
+	const PINNED_DRAINABLE_DIGESTS: Record<string, string> = {
+		// Generation 6 shipped today's schemas (control: no schema moved at 6 -> 7).
+		orders: 'bc0b35ca7829dad7',
+		products: 'dc0ab793f15f4e7a',
+		variations: 'df92c9203ba108c1',
+		customers: 'ac922ffdb0538886',
+		taxRates: '7573745a31add62b',
+		refunds: 'd78bcc1758dcf4ab',
+		categories: 'ac922ffdb0538886',
+		brands: 'ac922ffdb0538886',
+		tags: 'ac922ffdb0538886',
+		coupons: 'ac922ffdb0538886',
+		schedulerTaskStates: '3fbf7c70726dec3c',
+		coverageRecords: '3022569cc18cc7df',
+		coverageLanes: '12a1f38d36ffc0d0',
+		coverageCompactionLeases: '6b31b2aca59dab39',
+		coverageCompactionFailures: '7bd215537ecdb03d',
+		queryTotalCacheEntries: '00db9dffbd396f3c',
+		queryTotalRequestStates: '184b47e2c3aae0bf',
+		existenceManifest: '107bac24876b267a',
+		existenceManifestCustomers: '107bac24876b267a',
+		existenceManifestOrders: '107bac24876b267a',
+		syncCheckpoints: '13a461c616ee12b9',
+		recordMutations: 'd6da9686455ba784',
+		engineKv: 'a8d94dc8495e36cc',
+		changeSignalStates: 'f53de19b6c426c6a',
+	};
+
+	/**
+	 * One digest per scope-database GENERATION: the digest of that generation's whole
+	 * digest map. A bump adds a row here; the current recipe must hash to the current
+	 * generation's row and `drainable-generation.ts` to the previous one's, so moving the
+	 * generation without rewriting the drainable recipe fails here, by generation.
+	 */
+	const PINNED_GENERATION_DIGESTS: Record<number, string> = {
+		5: '24cd32cfac8830f7',
+		// The versioned queue migrates in place; scope-generation schemas stay unchanged.
+		6: '08d63cbb728d6f94',
+		// Protocol 3 (ADR 0040): the bump parks a protocol-2 queue; no schema moved.
+		7: '08d63cbb728d6f94',
+	};
+
+	const digestOfDigests = (digests: Record<string, string>) =>
+		createHash('sha256').update(canonicalJson(digests)).digest('hex').slice(0, 16);
+
+	const drainableDigests = () =>
+		Object.fromEntries(
+			Object.entries(drainableGenerationCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+
+	it('the drainable generation opens with the schemas it shipped', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
+		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
+	});
+
+	it('drainable-generation.ts reproduces exactly the generation before the current one', () => {
+		expect(DRAINABLE_SCHEMAS_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(digestOfDigests(PINNED_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION]
+		);
+		expect(digestOfDigests(PINNED_DRAINABLE_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION - 1]
+		);
+		const current = Object.fromEntries(
+			Object.entries(engineCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+		expect(digestOfDigests(current)).toBe(PINNED_GENERATION_DIGESTS[SCOPE_DATABASE_GENERATION]);
+		expect(digestOfDigests(drainableDigests())).toBe(
+			PINNED_GENERATION_DIGESTS[DRAINABLE_SCHEMAS_GENERATION]
+		);
+	});
+
+	it.each([engineCollectionCreators, drainableGenerationCollectionCreators])(
+		'every versioned schema ships exactly the migration strategies its version needs: %s',
+		(recipe) => {
+			const creators = recipe();
+			for (const [name, creator] of Object.entries(creators)) {
+				const version = (creator.schema as { version: number }).version;
+				if (version > 0) {
+					expect(
+						creator.migrationStrategies,
+						`${name} is at v${version} but declares no migrationStrategies — RxDB cannot open an existing database without them`
+					).toBeDefined();
+					expect(Object.keys(creator.migrationStrategies!)).toHaveLength(version);
+				}
 			}
 		}
-	});
+	);
 });
 
 describe('reference schema identity — a recorded decision, not an accident (ADR 0019)', () => {

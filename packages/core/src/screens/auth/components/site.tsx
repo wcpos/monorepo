@@ -1,9 +1,8 @@
 import * as React from 'react';
 
+import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
@@ -12,8 +11,16 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -24,12 +31,12 @@ import { WPUsers } from './wp-users';
 import { UpdateRequiredNotice } from '../../../components/update-required-notice';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
+import { useAppInfo } from '../../../hooks/use-app-info';
 import { useUpdateRequired } from '../../../hooks/use-update-required';
-import { useVersionCheck } from '../../../hooks/use-version-check';
 
 interface Props {
-	user: import('@wcpos/database').UserDocument;
-	site: import('@wcpos/database').SiteDocument;
+	user: ReadonlyUserRecord;
+	site: ReadonlySiteRecord;
 }
 
 function getUrlWithoutProtocol(url: string) {
@@ -39,19 +46,19 @@ function getUrlWithoutProtocol(url: string) {
 /**
  * Site header — avatar, name, URL
  */
-export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocument }) {
+export function SiteHeader({ site }: { site: Pick<ReadonlySiteRecord, 'name' | 'url'> }) {
 	return (
 		<HStack space="md" className="flex-1 items-center">
 			<Avatar
 				source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url ?? '')}`}
 				fallback={getInitials(site.name ?? site.url ?? '')}
-				size="lg"
+				size="md"
 				shape="rounded"
 				variant="muted"
 			/>
 			<VStack className="flex-1 gap-0.5">
-				<Text className="leading-tight font-bold">{site.name}</Text>
-				<Text className="text-muted-foreground text-xs leading-tight">{site.url}</Text>
+				<Text className="text-base font-semibold">{site.name}</Text>
+				<Text variant="key">{site.url}</Text>
 			</VStack>
 		</HStack>
 	);
@@ -63,9 +70,10 @@ export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocum
  * too old (the older, cheaper check), then app too old (the server's
  * wcpos_update_required refusal), then the users list.
  */
-export function SiteContent({ site }: { site: import('@wcpos/database').SiteDocument }) {
+export function SiteContent({ site }: { site: ReadonlySiteRecord }) {
 	const t = useT();
-	const { wcposVersionPass } = useVersionCheck({ site });
+	const { compatibility } = useAppInfo({ site });
+	const wcposVersionPass = compatibility?.wcposVersionPass ?? false;
 
 	useSiteInfo({ site });
 
@@ -81,12 +89,11 @@ export function SiteContent({ site }: { site: import('@wcpos/database').SiteDocu
 
 	if (!wcposVersionPass) {
 		return (
-			<HStack space="sm" className="items-center">
-				<Icon name="triangleExclamation" className="fill-warning" />
-				<Text className="text-warning">
-					{t('common.please_update_your_woocommerce_pos_plugin')}
-				</Text>
-			</HStack>
+			<Notice
+				tone="warning"
+				title={t('auth.update_plugin_to_continue')}
+				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
+			/>
 		);
 	}
 
@@ -120,13 +127,7 @@ export function Site({ user, site }: Props) {
 
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			const latest = site.getLatest();
-			await latest.remove();
-			await user.incrementalUpdate({
-				$pullAll: {
-					sites: [latest.uuid],
-				},
-			});
+			await removeSite(user, site.uuid);
 		} catch (err) {
 			throw err;
 		}
@@ -134,16 +135,30 @@ export function Site({ user, site }: Props) {
 
 	return (
 		<>
-			<VStack space="md" className="p-4">
+			<VStack className="gap-3">
 				{/* Site Header */}
 				<HStack space="md" className="items-center">
 					<SiteHeader site={site} />
-					<IconButton
-						name="circleXmark"
-						size="lg"
-						variant="destructive"
-						onPress={() => setDeleteDialogOpened(true)}
-					/>
+					{/* Removing a site loses its users on this device: the last, red row of a ⋮ menu. */}
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								name="more"
+								testID={`auth-site-menu-${site.uuid}`}
+								accessibilityLabel={t('common.actions')}
+							/>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								variant="destructive"
+								testID={`auth-site-remove-${site.uuid}`}
+								onPress={() => setDeleteDialogOpened(true)}
+							>
+								<Icon name="delete" className="fill-destructive" />
+								<Text>{t('auth.remove_site')}</Text>
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</HStack>
 
 				<SiteContent site={site} />
@@ -157,12 +172,14 @@ export function Site({ user, site }: Props) {
 							{t('auth.remove_store_and_associated_users')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('auth.remove')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('auth.remove'),
+							destructive: true,
+							onPress: () => void handleRemoveSite(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>

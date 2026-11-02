@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -8,9 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
-import type { QueryStateActions } from '../../../../query';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
+import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
 
 /**
  *
@@ -20,32 +18,26 @@ export function Customer({
 	row,
 	column,
 }: CellContext<{ record: EngineRecord<'orders'> }, 'customer_id'>) {
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 	const { format } = useCustomerNameFormat();
 	const { customerID, billing, shipping } = useRecordField(row.original.record, ({ payload }) => ({
 		customerID: payload.customer_id,
 		billing: payload.billing,
 		shipping: payload.shipping,
 	}));
-	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
+	const show = column.columnDef.meta?.show;
 
 	return (
 		<VStack className="max-w-full">
-			<ButtonPill
-				variant="ghost-primary"
-				size="xs"
-				onPress={() => actions?.setFilter('customer_id', customerID)}
-			>
-				{format({
+			<Chip
+				size="sm"
+				label={format({
 					billing,
 					shipping,
 					id: customerID,
-				} as unknown as CustomerDocument)}
-			</ButtonPill>
+				} as unknown as CustomerData)}
+				onPress={() => actions?.setFilter('customer_id', customerID)}
+			/>
 			{show?.('billing') && (
 				<FormatAddress
 					address={billing as React.ComponentProps<typeof FormatAddress>['address']}

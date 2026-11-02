@@ -1,0 +1,351 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { PayButton } from './pay';
+import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../checkout/checkout-mode';
+import { refusedWireOf } from '../../checkout/refused-wire';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
+
+let mockSize = 'lg';
+let mockLoaded = true;
+let mockUnsupported = false;
+const mockPush = jest.fn();
+const mockEnter = jest.fn();
+const mockSave = jest.fn();
+let mockSaveState: { kind: string; [field: string]: unknown } | null = null;
+const mockLegacySave = jest.fn();
+const mockRefusal = jest.fn();
+const mockLeave = jest.fn();
+const mockMarkSaving = jest.fn();
+const mockClearSaving = jest.fn();
+const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
+const mockDismissTo = jest.fn();
+const mockOrder = { isNew: false, uuid: 'order-1', payload: { total: '10.00', line_items: [] } };
+let mockUnmet: { id: string; lineUuid: string }[] = [];
+const mockScrollToLine = jest.fn();
+const mockInfo = jest.fn();
+jest.mock('../../conditions/use-cart-conditions', () => ({
+	useCartUnmet: () => mockUnmet,
+	scrollToLine: (uuid: string) => mockScrollToLine(uuid),
+}));
+jest.mock('@wcpos/utils/logger', () => {
+	const logger = {
+		info: (...args: unknown[]) => mockInfo(...args),
+		error: jest.fn(),
+		with: () => logger,
+	};
+	return { ...jest.requireActual('@wcpos/utils/logger'), getLogger: () => logger };
+});
+jest.mock('expo-router', () => ({
+	useRouter: () => ({
+		push: mockPush,
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockSize === 'sm',
+}));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
+}));
+jest.mock('../../checkout/checkout-mode', () => ({
+	...jest.requireActual('../../checkout/checkout-mode'),
+	enterCheckout: (id: string) => {
+		mockEnter(id);
+		jest.requireActual('../../checkout/checkout-mode').enterCheckout(id);
+	},
+	leaveCheckout: (id: string) => mockLeave(id),
+	markOrderSaving: (id: string, options?: { retry?: boolean }) => mockMarkSaving(id, options),
+	clearOrderSaving: (id: string) => mockClearSaving(id),
+	getOrderSaveState: () => mockSaveState,
+	useOrderSaveState: () => mockSaveState,
+}));
+jest.mock('../../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+}));
+jest.mock('../../../contexts/use-push-document', () => ({ usePushDocument: () => mockLegacySave }));
+jest.mock('../../../hooks/use-current-order-currency-format', () => ({
+	useCurrentOrderCurrencyFormat: () => ({ format: String }),
+}));
+jest.mock('../../../hooks/use-storage-health', () => ({
+	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: () => false }),
+}));
+jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		testID: string;
+		onPress: () => void;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('../../checkout/hooks/use-checkout-save', () => ({ useCheckoutSave: () => mockSave }));
+jest.mock('../../checkout/refusal-toast', () => ({
+	showOrderRefusedToast: (...args: unknown[]) => mockRefusal(...args),
+}));
+beforeEach(() => {
+	resetCheckoutMode();
+	jest.clearAllMocks();
+	mockUnmet = [];
+	mockSaveState = null;
+	mockOrder.isNew = false;
+	mockSize = 'lg';
+	mockLoaded = true;
+	mockUnsupported = false;
+	mockSave.mockResolvedValue({ outcome: 'saved', resident: mockOrder });
+	mockLegacySave.mockResolvedValue(mockOrder);
+});
+it.each([false, true])('enters wide checkout immediately (draft: %s)', async (isNew) => {
+	mockOrder.isNew = isNew;
+	mockSave.mockResolvedValue({ outcome: 'saved', resident: { ...mockOrder, isNew: false } });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockEnter).toHaveBeenCalledWith('order-1'));
+	expect(mockPush).not.toHaveBeenCalled();
+});
+it.each(['phone', 'legacy', 'unsupported'])('retains the modal for %s', async (lane) => {
+	if (lane === 'phone') mockSize = 'sm';
+	if (lane === 'legacy') mockLoaded = false;
+	if (lane === 'unsupported') mockUnsupported = true;
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() =>
+		expect(mockPush).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+			params: { orderId: 'order-1' },
+		})
+	);
+	if (lane === 'phone') {
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	} else expect(mockEnter).not.toHaveBeenCalled();
+});
+it('leaves checkout on an unsuccessful push', async () => {
+	mockLoaded = false;
+	mockLegacySave.mockResolvedValue(null);
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
+	expect(mockClearSaving).toHaveBeenCalledWith('order-1');
+	expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('enters checkout before the push resolves', () => {
+	mockSave.mockReturnValue(new Promise(() => {}));
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: false });
+	expect(mockEnter).toHaveBeenCalledWith('order-1');
+	expect(mockClearSaving).not.toHaveBeenCalled();
+});
+it.each(['lg', 'sm'])(
+	'a failed save leaves checkout (the save hook owns clearing) (%s)',
+	async (size) => {
+		mockSize = size;
+		mockSave.mockRejectedValue(new Error('save failed'));
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
+		expect(mockClearSaving).not.toHaveBeenCalled();
+		if (size === 'sm')
+			expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)/cart');
+		else expect(mockDismissTo).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['lg', 'sm'])('re-enters checkout without a second save while saving (%s)', (size) => {
+	mockSize = size;
+	mockSaveState = { kind: 'saving' };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockSave).not.toHaveBeenCalled();
+	expect(mockMarkSaving).not.toHaveBeenCalled();
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	if (size === 'sm')
+		expect(mockPush).toHaveBeenCalledWith(
+			expect.objectContaining({ params: { orderId: 'order-1' } })
+		);
+});
+
+const rejection = { status: 403, reason: 'refused', message: 'No permission' };
+it('leaves checkout and shows the refusal once', async () => {
+	mockSave.mockResolvedValue({ outcome: 'rejected', rejection });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockRefusal).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+	expect(mockLeave).toHaveBeenCalledWith('order-1');
+});
+it('keeps queued-offline checkout open without clearing the save entry', async () => {
+	mockSave.mockResolvedValue({ outcome: 'queued-offline' });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockSave).toHaveBeenCalled());
+	expect(mockLeave).not.toHaveBeenCalled();
+	expect(mockClearSaving).not.toHaveBeenCalled();
+});
+it('retries a held order whose refused payload is unknown', async () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: null };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: true });
+	await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).not.toHaveBeenCalled();
+});
+it('refuses again while the order is still the one the store refused', () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: refusedWireOf(mockOrder.payload) };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockRefusal).toHaveBeenCalledTimes(1);
+	// The refused payload (billing included) stays out of the toast and the log context.
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+	expect(mockSave).not.toHaveBeenCalled();
+	expect(mockMarkSaving).not.toHaveBeenCalled();
+});
+it('keeps the hold on a parked (conflicted) order even when the cart changed', () => {
+	mockSaveState = { kind: 'rejected', ...rejection, refused: {}, parked: true };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockRefusal).toHaveBeenCalledTimes(1);
+	expect(mockSave).not.toHaveBeenCalled();
+	expect(mockMarkSaving).not.toHaveBeenCalled();
+});
+it('retries a refused order whose cart changed since the refusal', async () => {
+	mockSaveState = {
+		kind: 'rejected',
+		...rejection,
+		refused: refusedWireOf({ ...mockOrder.payload, line_items: [{ product_id: 1, quantity: 2 }] }),
+	};
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: true });
+	await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith('Checkout retries a refused save', {
+		context: { orderId: 'order-1', refusedStatus: 403, refusedReason: 'refused' },
+	});
+});
+it.each(['lg', 'sm'])(
+	'releases checkout and toasts a late refusal without navigating (%s)',
+	async (size) => {
+		mockSize = size;
+		mockSave.mockResolvedValue({ outcome: 'queued-offline' });
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockSave).toHaveBeenCalled());
+		mockSave.mock.calls[0][1].onLateRejected(rejection);
+		expect(mockLeave).toHaveBeenCalledWith('order-1');
+		expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+		// The cashier may be on another order by now: a late outcome never moves the screen.
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
+	}
+);
+
+describe('a checkout condition is unmet (roadmap#62)', () => {
+	const unmet = [
+		{ id: 'stock', lineUuid: 'belt' },
+		{ id: 'stock', lineUuid: 'beanie' },
+	];
+	it.each(['lg', 'sm'])(
+		'the press shows the first line and never saves or enters checkout (%s)',
+		(size) => {
+			mockSize = size;
+			mockUnmet = unmet;
+			render(<PayButton />);
+			fireEvent.click(screen.getByTestId('checkout-button'));
+			expect(mockScrollToLine).toHaveBeenCalledWith('belt');
+			expect(mockMarkSaving).not.toHaveBeenCalled();
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockLegacySave).not.toHaveBeenCalled();
+			expect(mockEnter).not.toHaveBeenCalled();
+			expect(mockPush).not.toHaveBeenCalled();
+			expect(mockRefusal).not.toHaveBeenCalled();
+			// One info row, no toast: the notice is already on screen.
+			expect(mockInfo).toHaveBeenCalledTimes(1);
+			expect(mockInfo).toHaveBeenCalledWith('pos_cart.checkout_blocked', {
+				context: {
+					orderId: 'order-1',
+					unmet: [
+						['stock', 'belt'],
+						['stock', 'beanie'],
+					],
+				},
+			});
+		}
+	);
+
+	it('keeps its label, dims, and returns to full when the last condition clears', async () => {
+		mockUnmet = unmet;
+		const { rerender } = render(<PayButton />);
+		expect(screen.getByTestId('checkout-button').textContent).toBe('pos_cart.checkout');
+		expect(screen.getByTestId('checkout-button-frame').style.opacity).toBe('0.38');
+		mockUnmet = [];
+		rerender(<PayButton />);
+		expect(screen.getByTestId('checkout-button-frame').style.opacity).toBe('1');
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockEnter).toHaveBeenCalledWith('order-1'));
+		expect(mockScrollToLine).not.toHaveBeenCalled();
+	});
+});
+
+it('registers its pay path as the checkout surface while mounted (roadmap#428)', async () => {
+	const { unmount } = render(<PayButton />);
+	await act(() => invokeSurface('pay'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1', { retry: false });
+	expect(mockEnter).toHaveBeenCalledWith('order-1');
+	unmount();
+	await expect(invokeSurface('pay')).rejects.toBeInstanceOf(SurfaceNotMountedError);
+});
+
+let mockSessionStatus = 'open';
+jest.mock('../../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: { status: mockSessionStatus } }),
+}));
+it.each(['counting', 'closed'])(
+	'holds Pay for a %s session, including the keyboard command',
+	async (status) => {
+		const previous = mockSessionStatus;
+		mockSessionStatus = status;
+		try {
+			const view = render(<PayButton />);
+			expect((screen.getByTestId('checkout-button') as HTMLButtonElement).disabled).toBe(true);
+			expect(screen.getByTestId('checkout-button').textContent).toBe(
+				'register.counting_the_drawer'
+			);
+			fireEvent.click(screen.getByTestId('checkout-button'));
+			await act(async () => {
+				await invokeSurface('pay');
+			});
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockLegacySave).not.toHaveBeenCalled();
+			expect(mockEnter).not.toHaveBeenCalled();
+			expect(mockPush).not.toHaveBeenCalled();
+			mockSessionStatus = 'open';
+			view.rerender(<PayButton />);
+			expect((screen.getByTestId('checkout-button') as HTMLButtonElement).disabled).toBe(false);
+		} finally {
+			mockSessionStatus = previous;
+		}
+	}
+);

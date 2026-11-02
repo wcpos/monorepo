@@ -28,6 +28,7 @@ export function Receipt({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			<TooltipTrigger asChild>
 				<IconButton
 					name="receipt"
+					accessibilityLabel={t('common.receipt')}
 					onPress={() =>
 						router.push({
 							pathname: '/(app)/(drawer)/orders/(modals)/receipt/[orderId]',

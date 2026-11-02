@@ -23,22 +23,35 @@ import {
 import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
+import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
+import { scopeDatabaseFiles } from '@wcpos/database/scope-database-files';
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reportNetworkResponse } from '@wcpos/hooks';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
-import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
+import {
+	composeObservers,
+	containsDrainableScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isScopeDatabaseName,
+	scopeDatabaseName,
+	type SyncEvent,
+} from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
-	createWriteOutcomeBridge,
-	writeOutcomeChannelName,
+	drainLegacyScopeDatabase,
+	type LegacyScopeDrainOutcome,
+	type LegacyScopeDrainPorts,
+	type RxdbSyncEngine,
+	setSyncEngineLogger,
+	type StoreScopeIdentity,
+	WRITTEN_BEFORE_PROTOCOL_3,
 } from '@wcpos/sync-engine';
-import type {
-	RxdbSyncEngine,
-	ScopedWriteOutcomeBridge,
-	StoreScopeIdentity,
-} from '@wcpos/sync-engine';
+import {
+	REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE,
+	WEB_STORAGE_ENGINE,
+} from '@wcpos/database/adapters/storage/storage-engines';
 // Deep import ON PURPOSE: the ui-settings barrel carries the React provider
 // graph, which jest-expo's winter runtime refuses to require from this host
 // module. The helper file itself is dependency-light (JSON + @wcpos/query).
@@ -48,6 +61,11 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { hostIsVisible, onHostVisibilityChange } from '@wcpos/utils/host-visibility';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
+import {
+	legacyDrainMarked,
+	markLegacyDrainPending,
+	rememberLegacyUnsentChanges,
+} from '@wcpos/utils/unsent-changes';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
@@ -63,9 +81,15 @@ import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 import { clearUpdateRequired, reportUpdateRequired } from './update-required-gate';
-import { electWriteLeader } from './web-write-leader';
+
+import type { LegacyScopeHistory } from './legacy-scope-history';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+// The engine is published without @wcpos/utils, so it no longer imports the app
+// logger itself; route its process-wide warnings to the category it used before.
+setSyncEngineLogger({
+	warn: (message, meta) => getLogger(['wcpos', 'sync', 'orders']).warn(message, meta),
+});
 const isWeb = Platform.isWeb;
 // Below the successor's 15s readiness-watchdog first report; orders of magnitude above a healthy close.
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
@@ -101,7 +125,7 @@ export interface CreateAppSyncEngineOptions {
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	/** The initial store/cashier scope. */
 	scope: StoreScopeIdentity;
-	/** Non-web RxDB override. Web selects this from Web Locks support. */
+	/** Non-web RxDB override. Web uses the storage engine’s required value. */
 	multiInstance?: boolean;
 }
 
@@ -126,11 +150,6 @@ type MutableFetcherOptions = Pick<
 	| 'useProtocolHeaders'
 	| 'useInstanceHeader'
 >;
-type WriteLeaderState = {
-	current: ReturnType<typeof electWriteLeader> | null;
-	onUnavailable: () => void;
-};
-
 type CachedEngine = {
 	renderKey: string | null;
 	site: string;
@@ -150,33 +169,206 @@ type CachedEngine = {
 	fetcherScope: EngineFetcherScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
-	writeLeader?: WriteLeaderState;
-	/** Web multi-tab write-outcome feedback (#1209) — re-pointed at the new
-	 * scope's channel on every switch, exactly like the write lock. */
-	writeOutcomeBridge?: ScopedWriteOutcomeBridge;
+	/** Drain the scope's previous-generation database once it is this engine's active scope. */
+	drainLegacyScope: (scope: StoreScopeIdentity) => Promise<void>;
 };
 
 let cachedEngine: CachedEngine | null = null;
+let legacyPurgeStarted = false;
 /**
  * Bumped each time the cashier's render intent moves to a new scope on an entry, so a
  * failing switch can tell whether it is still the switch the cashier asked for (a
  * rejected latest request rewinds `renderKey`, so the key alone cannot say).
  */
 const renderIntentSeq = new WeakMap<CachedEngine, number>();
-const pendingDisposals = new Map<string, Promise<void>>();
 
-function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
-	// The outcome bridge is namespaced by the same scope database as the lock, so
-	// it moves on the same beat: a tab left listening on the previous store's
-	// channel would hear outcomes for records it no longer holds.
-	entry.writeOutcomeBridge?.moveTo(writeOutcomeChannelName(databaseName));
-	if (!entry.writeLeader) return;
-	const previous = entry.writeLeader.current;
-	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`, {
-		onUnavailable: entry.writeLeader.onUnavailable,
+/** Scopes whose drain this process started; every outcome is final until the next app start. */
+const legacyDrainsStarted = new Set<string>();
+
+/**
+ * Previous-generation databases the till may hold, besides the ones it visits. "Clear all local
+ * data" deletes every one of them, so the reset count stays UNKNOWN until each has reported
+ * (drained, absent, or kept with a count). How they are found differs by platform:
+ *  - NATIVE lists `Documents/wcpos-sqlite` (`scopeDatabaseFiles.list()`): every drainable
+ *    `pos_v6_…` file there is marked pending at boot, and only a visit (its drain) reports it.
+ *  - WEB and ELECTRON cannot list their files (the sahpool worker / the main process own them).
+ *    They read the till's SCOPE HISTORY (`legacy-scope-history.ts`, in the user database's local
+ *    documents): every scope database name opened from this build on, plus the store registry.
+ *    Removing a site keeps its scope databases (and its history entry), so the registry alone
+ *    would miss them. Every name not yet CLEARED (reported nothing kept on an earlier boot) is
+ *    marked pending at boot; the history is SETTLED (later boots count exactly) while it is
+ *    complete and every name is cleared — opening a new scope un-settles it until that name reports.
+ *    A history is complete only when it began with the app database — an install whose app
+ *    database already existed at this build's first boot started its history late, may hold a
+ *    pos_v6 nothing names, and so is never settled: its reset count reads unknown for the life
+ *    of that install (`LEGACY_HISTORY_INCOMPLETE`).
+ */
+const LEGACY_HISTORY_INCOMPLETE = 'previous-version databases from before this build';
+/**
+ * The store registry holds a reference with no document behind it (a credential still naming a
+ * store reconciliation removed): a scope the inventory cannot name, so — like an incomplete
+ * history — the count is unknown while one exists.
+ */
+const LEGACY_REGISTRY_UNRESOLVED = 'previous-version databases behind unresolved store references';
+let legacyRegistryUnresolvedWarned = false;
+/**
+ * The OVERALL inventory: pending from engine construction until discovery completes (the reset
+ * count is unknown meanwhile — a confirm opened before discovery would otherwise state an exact
+ * count from the active scope alone), and failed for the process when discovery cannot read.
+ */
+const LEGACY_INVENTORY_PENDING = 'previous-version database inventory (not yet run)';
+const LEGACY_INVENTORY_FAILED = 'previous-version database inventory (failed)';
+let legacyInventoryCompleted = false;
+let legacyInventoryFailed = false;
+let legacyInventoryFailureWarned = false;
+/** Set while the latest inventory saw an unresolved registry reference. */
+let legacyRegistryIncomplete = false;
+/** Names the boot inventory marked; a web/Electron history records each one that clears. */
+const legacyInventory = new Set<string>();
+/** Names this process has a drain report for: a later inventory must not re-mark them pending. */
+const legacyReported = new Set<string>();
+/** The web/Electron scope history the inventory read, when it read one. */
+let legacyHistory: LegacyScopeHistory | null = null;
+
+/** Names this process saw report nothing kept (drained or absent). */
+const legacyReportedEmpty = new Set<string>();
+/** Names this process already recorded as cleared in the history. */
+const legacyClearedRecorded = new Set<string>();
+
+/**
+ * Web/Electron: record in the history every inventoried name that reported nothing kept. The
+ * history is settled (later boots count exactly) once it is complete and every name is cleared;
+ * a scope opened later adds an uncleared name and un-settles it until that one reports.
+ */
+function clearLegacyHistory(): void {
+	const history = legacyHistory;
+	if (history === null) return;
+	const names = [...legacyReportedEmpty].filter(
+		(name) =>
+			legacyInventory.has(name) &&
+			!history.cleared.includes(name) &&
+			!legacyClearedRecorded.has(name)
+	);
+	if (names.length === 0) return;
+	for (const name of names) legacyClearedRecorded.add(name);
+	void history.markCleared(names).catch(() => {
+		// Best effort: an unrecorded clear only means the next boot inventories that name again.
 	});
-	previous?.dispose();
 }
+
+function reportLegacyDrain(
+	databaseName: string,
+	count: number | null,
+	orderUuids?: readonly string[]
+): void {
+	legacyReported.add(databaseName);
+	if (count === 0) legacyReportedEmpty.add(databaseName);
+	else legacyReportedEmpty.delete(databaseName);
+	rememberLegacyUnsentChanges(databaseName, count, orderUuids);
+	clearLegacyHistory();
+}
+
+/**
+ * The boot inventory of previous-generation databases (see `LEGACY_HISTORY_INCOMPLETE`): mark
+ * every one this till may hold pending, so the reset count reads unknown until each reports.
+ * `registry` is every scope the app's user database knows; `history` is the web/Electron scope
+ * history (ignored where the platform lists its files).
+ */
+export async function inventoryLegacyScopeDatabases(input: {
+	registry: readonly StoreScopeIdentity[];
+	/** Registry references with no document behind them (see `LEGACY_REGISTRY_UNRESOLVED`). */
+	unresolvedReferences?: readonly string[];
+	history?: LegacyScopeHistory;
+}): Promise<void> {
+	// Only where the registry IS the inventory (web/Electron). On native the SQLite file listing
+	// is authoritative: a dangling registry reference cannot hide a pos_v6 file from it.
+	const unresolved = scopeDatabaseFiles === null ? (input.unresolvedReferences ?? []) : [];
+	legacyRegistryIncomplete = unresolved.length > 0;
+	// Re-read every inventory: a reference resolved since the last one no longer blocks.
+	rememberLegacyUnsentChanges(LEGACY_REGISTRY_UNRESOLVED, legacyRegistryIncomplete ? null : 0);
+	if (legacyRegistryIncomplete) {
+		if (!legacyRegistryUnresolvedWarned) {
+			legacyRegistryUnresolvedWarned = true;
+			engineLogger.warn(
+				'The store registry names records that are missing; unsent changes from the previous database version cannot be ruled out',
+				{ context: { unresolved: [...unresolved] } }
+			);
+		}
+	}
+	let names: string[];
+	if (scopeDatabaseFiles !== null) {
+		names = (await scopeDatabaseFiles.list()).filter(
+			(name) => isScopeDatabaseName(name) && containsDrainableScopeDatabaseName(name)
+		);
+	} else if (input.history?.settled) {
+		names = [];
+	} else {
+		// A cleared name reported nothing kept on an earlier boot: its pos_v6 is gone for good.
+		const cleared = new Set(input.history?.cleared ?? []);
+		names = [
+			...new Set([
+				...(input.history?.names ?? []),
+				...input.registry.map((scope) =>
+					scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+				),
+			]),
+		].filter((name) => !cleared.has(name));
+		legacyHistory = input.history ?? null;
+		if (!input.history?.complete) {
+			// A pos_v6 nothing names may exist: the count is unknown for the life of this install.
+			rememberLegacyUnsentChanges(LEGACY_HISTORY_INCOMPLETE, null);
+		}
+	}
+	for (const name of names) {
+		legacyInventory.add(name);
+		if (!legacyReported.has(name) && !legacyDrainMarked(name)) markLegacyDrainPending(name);
+	}
+	// Discovery is complete: every database it found is marked (or reported) by name.
+	legacyInventoryCompleted = true;
+	if (!legacyInventoryFailed) rememberLegacyUnsentChanges(LEGACY_INVENTORY_PENDING, 0);
+	clearLegacyHistory();
+}
+
+/**
+ * Discovery itself, as the layout runs it after boot: `read` loads the registry and the history
+ * from the user database. Until it completes, `LEGACY_INVENTORY_PENDING` (marked at engine
+ * construction) keeps the reset count unknown. A read that fails leaves the count unknown for
+ * the process (`LEGACY_INVENTORY_FAILED`, warned once) — except on native, whose inventory is
+ * its file listing and needs no registry, so it still runs.
+ */
+export async function runLegacyInventory(
+	read: () => Promise<Parameters<typeof inventoryLegacyScopeDatabases>[0]>
+): Promise<void> {
+	let input: Parameters<typeof inventoryLegacyScopeDatabases>[0];
+	try {
+		input = await read();
+	} catch (error) {
+		if (scopeDatabaseFiles === null) {
+			failLegacyInventory(error);
+			return;
+		}
+		input = { registry: [] };
+	}
+	try {
+		await inventoryLegacyScopeDatabases(input);
+	} catch (error) {
+		failLegacyInventory(error);
+	}
+}
+
+function failLegacyInventory(error: unknown): void {
+	legacyInventoryFailed = true;
+	rememberLegacyUnsentChanges(LEGACY_INVENTORY_PENDING, 0);
+	rememberLegacyUnsentChanges(LEGACY_INVENTORY_FAILED, null);
+	if (legacyInventoryFailureWarned) return;
+	legacyInventoryFailureWarned = true;
+	engineLogger.warn(
+		"Could not list the previous database version's scope databases; unsent changes from it cannot be ruled out",
+		{ context: { error: error instanceof Error ? error.message : String(error) } }
+	);
+}
+
+const pendingDisposals = new Map<string, Promise<void>>();
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
@@ -268,6 +460,123 @@ async function requestScope(
 			entry.renderKey = active ? scopeCacheKey(active.identity) : null;
 		}
 	}
+	// Maintenance, not part of the switch: the awaited store-switch flow never waits on it.
+	void entry.drainLegacyScope(scope);
+}
+
+/**
+ * One line per drain outcome; a quiet debug line when there was nothing to
+ * drain. A parked database errors once per start; a failed print-count carry warns once per start.
+ */
+function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome): void {
+	if (outcome.status === 'absent') {
+		engineLogger.debug('No previous-version database to drain', {
+			context: { databaseName: outcome.databaseName },
+		});
+		return;
+	}
+	if (outcome.status === 'failed') {
+		engineLogger.error('Could not open the previous database version', {
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+			context: { databaseName: outcome.databaseName, error: outcome.error },
+		});
+		return;
+	}
+	if (outcome.status === 'kept') {
+		// ADR 0040: a protocol-2 queue is parked, never sent. It sits in Store health's log, at
+		// error once per start, naming what was never sent; a failed carry does not hide it.
+		const unsent = outcome.remaining;
+		if (unsent > 0)
+			engineLogger.error(
+				`${unsent} changes from before this update were never sent and will not be`,
+				{
+					code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					context: {
+						databaseName: outcome.databaseName,
+						reason: WRITTEN_BEFORE_PROTOCOL_3,
+						unsent,
+						orders: outcome.keptOrderUuids,
+					},
+				}
+			);
+		if (outcome.carryError !== null)
+			engineLogger.warn(
+				'The previous database version is kept until its receipt print counts can be carried over',
+				{ context: { databaseName: outcome.databaseName, error: outcome.carryError } }
+			);
+		return;
+	}
+	engineLogger.info(
+		outcome.fileRemoved
+			? 'Removed the previous database version: nothing in it was left to send'
+			: 'Dropped the previous database version: nothing in it was left to send (its file remains)',
+		{
+			context: {
+				databaseName: outcome.databaseName,
+				fileRemoved: outcome.fileRemoved,
+			},
+		}
+	);
+}
+
+/** Report a marked-but-not-drained database as uncountable, so nothing waits on it. */
+function releaseLegacyDrainMark(databaseName: string): void {
+	if (legacyDrainMarked(databaseName)) reportLegacyDrain(databaseName, null);
+}
+
+/**
+ * True while `engine` is still the app's engine and `scope` its active scope — when a line about
+ * that scope's previous-version database belongs in the log the app is writing to now. A store
+ * or site switch rebinds that log to the NEW store's database; a late line about the old scope
+ * would land in the new store's Health log, so it is dropped instead (as `diagnostics` does for a
+ * superseded engine).
+ */
+function stillLoggingFor(engine: RxdbSyncEngine, scope: StoreScopeIdentity): boolean {
+	if (cachedEngine?.engine !== engine) return false;
+	const active = engine.active();
+	return active !== null && scopeCacheKey(active.identity) === scopeCacheKey(scope);
+}
+
+async function drainLegacyScopeOnce(
+	engine: RxdbSyncEngine,
+	scope: StoreScopeIdentity,
+	ports: () => LegacyScopeDrainPorts
+): Promise<void> {
+	const key = scopeCacheKey(scope);
+	if (legacyDrainsStarted.has(key)) return;
+	const databaseName = scopeDatabaseName(scope, {
+		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+	});
+	const active = engine.active();
+	if (!active || scopeCacheKey(active.identity) !== key) {
+		// Not draining it now (switched away first): a mark must not outlive a drain that will not
+		// run — release its waiters as "uncountable". Returning to the scope drains and re-marks.
+		releaseLegacyDrainMark(databaseName);
+		return;
+	}
+	// Until the drain reports, a previous-generation database MAY hold unsent work (usually
+	// already marked at engine construction; a switched-to scope is marked here).
+	markLegacyDrainPending(databaseName);
+	legacyDrainsStarted.add(key);
+	try {
+		const outcome = await drainLegacyScopeDatabase(ports(), scope);
+		if (stillLoggingFor(engine, scope)) logLegacyDrainOutcome(outcome);
+		if (outcome.status === 'absent' || outcome.status === 'drained') {
+			reportLegacyDrain(databaseName, 0);
+		} else if (outcome.status === 'failed') {
+			// Reported, but uncountable: a wipe stays "unknown", and nothing waits on it any longer.
+			reportLegacyDrain(databaseName, null);
+		} else {
+			reportLegacyDrain(databaseName, outcome.remaining, outcome.keptOrderUuids);
+		}
+	} catch (error) {
+		// The drain itself never throws; this is the host failing to build its ports.
+		reportLegacyDrain(databaseName, null);
+		engineLogger.error('Failed to start draining the previous database version', {
+			code: ERROR_CODES.SYNC_UNEXPECTED,
+			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },
+		});
+	}
 }
 
 function disposeCachedEngine(entry: CachedEngine): void {
@@ -328,12 +637,18 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	});
 	for (const key of disposalKeys) pendingDisposals.set(key, bounded);
 	void bounded.then(() => {
-		entry.writeLeader?.current?.dispose();
-		entry.writeOutcomeBridge?.close();
 		for (const key of disposalKeys) {
 			if (pendingDisposals.get(key) === bounded) pendingDisposals.delete(key);
 		}
 	});
+}
+
+/** Reuse the existing bounded disposal before the live-tab owner closes its pool. */
+export async function disposeAppSyncEngine(): Promise<void> {
+	const entry = cachedEngine;
+	cachedEngine = null;
+	if (entry) disposeCachedEngine(entry);
+	await Promise.all(pendingDisposals.values());
 }
 
 /**
@@ -459,8 +774,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
 	const e2eEngineLedgerObserver = createE2eEngineLedgerObserver();
-	const webLocksAvailable =
-		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
 
 	const emitTransport = (event: SyncEvent, durable = true): void => {
 		if (event.type === 'transport.request') {
@@ -534,37 +847,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		syncStatusObserver(event);
 	};
 
-	// When Web Locks cannot arbitrate leadership (absent, or a rejected request in
-	// a sandboxed/opaque/WebView context) the tab degrades to single-writer so it
-	// never becomes a follower that enqueues sales it can never drain. Surface it
-	// so a genuinely wedged multi-tab context is visible rather than silent.
-	const onWriteLeaderUnavailable = () =>
-		composeObservers(
-			appMetricsObserver,
-			guardedDiagnostics,
-			e2eEngineLedgerObserver
-		)({
-			type: 'engine.write-leader.degraded',
-			level: 'warn',
-			message:
-				'Web Locks unavailable; falling back to single-writer (multi-tab coherence disabled for this browser context)',
-		});
-	// #1209: web-only, for the same reason the write lock is — a single-window
-	// host (native, Electron) has no peer to tell, and its engine events already
-	// reach every consumer in-process.
-	const writeOutcomeBridge: ScopedWriteOutcomeBridge | undefined = isWeb
-		? createWriteOutcomeBridge()
-		: undefined;
-	writeOutcomeBridge?.moveTo(writeOutcomeChannelName(scopeDatabaseName(options.scope)));
-	const writeLeader: WriteLeaderState | undefined = isWeb
-		? {
-				current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`, {
-					onUnavailable: onWriteLeaderUnavailable,
-				}),
-				onUnavailable: onWriteLeaderUnavailable,
-			}
-		: undefined;
-
 	if (supersedesCachedEngine) {
 		// Defer the sync-status wipe instead of doing it now: this construction runs
 		// during render, but the outgoing store's persistence bridge flushes its final
@@ -577,11 +859,26 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		markSyncStatusStale();
 	}
 
+	const multiInstance = isWeb
+		? REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE[WEB_STORAGE_ENGINE]
+		: (options.multiInstance ?? false);
 	const hostDefaultProductBrowseSort = defaultProductBrowseSort();
 	// A fresh engine re-probes the store, so its construction clears any
 	// standing update-required gate for the site (the latch itself lives on the
 	// engine instance and died with the previous one).
 	clearUpdateRequired(options.scope.site);
+	// Marked now, during render — before any readiness callback or store-session effect — so a
+	// reader that waits on the drain's report (the completion journal) can never ask before the
+	// drain is known to be coming.
+	if (!legacyDrainsStarted.has(cacheKey)) {
+		markLegacyDrainPending(
+			scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+		);
+	}
+	// …and the inventory of every other one, until its discovery completes.
+	if (!legacyInventoryCompleted && !legacyInventoryFailed) {
+		markLegacyDrainPending(LEGACY_INVENTORY_PENDING);
+	}
 	const engine = createRxdbSyncEngine(
 		{
 			site: {
@@ -601,8 +898,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			},
 			queryTotal: {
-				fetchWooQueryTotal: (input) =>
-					fetchWooQueryTotal(input, engine.hostTransport().fetcher, site.wpJsonRoot),
+				// The engine's request carries the query-total lane and its one deadline.
+				fetchWooQueryTotal: ({ engineRequest, ...input }) =>
+					fetchWooQueryTotal(input, engineRequest, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
 			holdAutomaticTicks: () =>
@@ -623,14 +921,48 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				guardedDiagnostics,
 				e2eEngineLedgerObserver
 			),
-			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
-			...(writeLeader ? { writePlaneOwner: () => writeLeader.current?.isLeader() ?? false } : {}),
-			...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
+			multiInstance,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
 	);
 	engineSelf = engine;
+	const legacyDrainPorts = (): LegacyScopeDrainPorts => {
+		return {
+			storage: defaultConfig.storage,
+			multiInstance,
+			// Native lists and deletes files; web and Electron cannot (null): open-to-check there.
+			databaseFiles: scopeDatabaseFiles,
+			liveEngine: engine,
+		};
+	};
+	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>
+		drainLegacyScopeOnce(engine, scope, legacyDrainPorts);
+	// Draining and purging are session maintenance, not part of opening a store.
+	// Failed opens leave legacy data alone; neither ever rejects engine.ready.
+	void engine.ready.then(
+		async () => {
+			await drainLegacyScope(options.scope);
+			if (legacyPurgeStarted) return;
+			legacyPurgeStarted = true;
+			try {
+				await purgeLegacyDatabases();
+			} catch (error) {
+				engineLogger.error('Failed to purge legacy databases', {
+					code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
+			}
+		},
+		() => {
+			// The scope never opened, so its drain never runs: release the construction-time mark.
+			if (!legacyDrainsStarted.has(cacheKey)) {
+				releaseLegacyDrainMark(
+					scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+				);
+			}
+		}
+	);
 	// The store header follows the ENGINE's active scope, never the app's
 	// intent. The engine flips scopes after it has aborted the outgoing scope's
 	// ticket and before the incoming open's barcode hydrate, bootstrap seed and
@@ -648,8 +980,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		fetcherOptions,
 		fetcherScope,
 		clockSkew,
-		...(writeLeader ? { writeLeader } : {}),
-		...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
+		drainLegacyScope,
 	};
 	cachedEngine = entry;
 	let publishedKey: string | null = cacheKey;
@@ -667,7 +998,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		fetcherScope.storeId = active?.identity.storeId ?? null;
 		clockSkew.generation += 1;
 		clockSkew.evaluated = false;
-		if (active) moveWriteLeader(entry, scopeDatabaseName(active.identity));
 		publishedKey = key;
 	});
 	return engine;

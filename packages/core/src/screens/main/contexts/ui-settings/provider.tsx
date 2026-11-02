@@ -4,12 +4,15 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
+import { openStoreState } from '@wcpos/query/store-local';
 import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useUILabel } from './use-ui-label';
 import {
+	cartPositionFromProductsPosition,
 	mergeWithInitalValues,
+	modifyState,
 	patchState,
 	resetToInitialValues,
 	UISettingID,
@@ -36,9 +39,14 @@ export interface UISettingsContextValue {
 	};
 	getLabel: (id: string, key: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
-	patch: <T extends UISettingID>(
+	patchSettings: <T extends UISettingID>(
 		id: T,
 		data: Partial<UISettingSchema<T>>
+	) => Promise<UISettingState<T>>;
+	modifySettings: <T extends UISettingID, K extends keyof UISettingSchema<T>>(
+		id: T,
+		key: K,
+		modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
 	) => Promise<UISettingState<T>>;
 }
 
@@ -56,7 +64,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	 */
 	const reset = React.useCallback(
 		async (id: UISettingID) => {
-			const state = await storeDB.addState(`${id}_v2`);
+			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
 			await resetToInitialValues(id, state);
 		},
 		[storeDB]
@@ -65,12 +73,42 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	/**
 	 * Patch UI Settings
 	 */
-	const patch = React.useCallback(
-		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
-			const state = await storeDB.addState(`${id}_v2`);
-			return patchState(state, data) as Promise<UISettingState<T>>;
+	const writeSettings = React.useCallback(
+		async <T extends UISettingID>(
+			id: T,
+			keys: string[],
+			write: (state: UISettingState<T>) => Promise<UISettingState<T>>
+		) => {
+			const state = await openStoreState<UISettingSchema<typeof id>>(storeDB, `${id}_v2`);
+			try {
+				return await write(state);
+			} catch (error) {
+				// Every caller fires this and moves on (`void patchUI(...)`), so a lost device
+				// setting was silent: reported here once, then rethrown for the caller that waits.
+				uiLogger.error(`Failed to save the ${id} settings`, {
+					showToast: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					context: { settingsId: id, keys, error: String(error) },
+				});
+				markErrorReported(error);
+				throw error;
+			}
 		},
 		[storeDB]
+	);
+
+	const patchSettings = React.useCallback(
+		<T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) =>
+			writeSettings(id, Object.keys(data), (state) => patchState(state, data)),
+		[writeSettings]
+	);
+	const modifySettings = React.useCallback(
+		<T extends UISettingID, K extends keyof UISettingSchema<T>>(
+			id: T,
+			key: K,
+			modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+		) => writeSettings(id, [String(key)], (state) => modifyState(state, key, modifier)),
+		[writeSettings]
 	);
 
 	/**
@@ -87,7 +125,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	const createUIResource = React.useCallback(
 		<T extends UISettingID>(id: T) => {
 			// Add timeout detection for potential hangs
-			const addStatePromise = storeDB.addState(`${id}_v2`);
+			const addStatePromise = openStoreState(storeDB, `${id}_v2`);
 			const timeoutId = setTimeout(() => {
 				// SYNC181: the outcome is not known yet, and its hint says what to do if a
 				// screen stays stuck.
@@ -96,17 +134,25 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 					context: { settingsId: id },
 				});
 			}, 5000);
-			// Settled either way — a rejection must not leave the stall row to fire later.
-			void addStatePromise.then(
-				() => clearTimeout(timeoutId),
-				() => clearTimeout(timeoutId)
-			);
 
-			const observable$ = from(addStatePromise).pipe(
+			// Settled either way (`finally`) — a rejection must not leave the stall row to fire later.
+			const observable$ = from(addStatePromise.finally(() => clearTimeout(timeoutId))).pipe(
 				switchMap(async (state) => {
-					clearTimeout(timeoutId);
 					try {
-						await mergeWithInitalValues(id, state as UISettingState<UISettingID>);
+						// The panel side moved from the products doc to the cart doc (2026-10-30): a profile
+						// that chose a products side before the move keeps its layout.
+						let seed: { position: 'left' | 'right' | undefined } | undefined;
+						if (
+							id === 'pos-cart' &&
+							(state.get() as { position?: unknown }).position === undefined
+						) {
+							const products = await openStoreState<{ position?: unknown }>(
+								storeDB,
+								'pos-products_v2'
+							);
+							seed = { position: cartPositionFromProductsPosition(products.get().position) };
+						}
+						await mergeWithInitalValues(id, state as UISettingState<UISettingID>, seed);
 						return state as UISettingState<T>;
 					} catch (error) {
 						uiLogger.error(`Failed to merge initial values for ${id}`, {
@@ -149,9 +195,10 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			resources,
 			getLabel,
 			reset,
-			patch,
+			patchSettings,
+			modifySettings,
 		}),
-		[resources, getLabel, reset, patch]
+		[resources, getLabel, reset, patchSettings, modifySettings]
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;

@@ -32,10 +32,20 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			/>
 			<Tooltip showOnNative>
 				<TooltipTrigger asChild>
+					{/* The caption row's one control, at the row's height: 6 units (24 at Regular,
+					    the `fine` pointer floor in scale.ts; WCAG 2.2 target minimum); its press band
+					    keeps the 44 touch target past the row (icon-button ledger line 7; owner,
+					    2026-10-23: the band under the card). */}
 					<IconButton
-						name="arrowRotateRight"
-						size="sm"
-						loading={active}
+						name="refresh"
+						size="xs"
+						// The refresh glyph turns while the engine pulls and rests upright when it is done:
+						// the glyph is the motion, so swapping it for the Loader's arc jarred on every
+						// sync (owner, 2026-10-23).
+						spin={active}
+						accessibilityLabel={
+							clearAndSync ? t('common.press_to_sync_long_press_for') : t('common.sync')
+						}
 						onLongPress={clearAndSync ? () => triggerRef.current?.open?.() : undefined}
 						onPress={() => {
 							void sync();
@@ -48,14 +58,14 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 			</Tooltip>
 			<DropdownMenuContent side="top" align="end">
 				<DropdownMenuItem onPress={sync}>
-					<Icon name="arrowRotateRight" />
+					<Icon name="refresh" />
 					<Text>{t('common.sync')}</Text>
 				</DropdownMenuItem>
 				{clearAndSync && (
 					<>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
-							<Icon name="trash" />
+							<Icon name="delete" />
 							<Text>{t('common.clear_and_refresh')}</Text>
 						</DropdownMenuItem>
 					</>

@@ -1,13 +1,12 @@
 import * as React from 'react';
-
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { ScrollView } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
@@ -20,19 +19,27 @@ import {
 	removeVariationMatch,
 	setVariationMatch,
 } from '../../../../components/product/variation-matches';
-import { useQueryState, useQueryStateActions } from '../../../../../../query';
+import {
+	useDrawnHandle,
+	useQueryHandleFields,
+	useQuerySnapshot,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
+import type { SnapshotFields } from '../../../../../../query';
+
+type LineItem = import('@wcpos/query').OrderLineItem;
+
+// The readers re-render for the answer; the syncing hint alone follows `active`.
+const ANSWER_ONLY: SnapshotFields = [];
+const ACTIVE_FIELD: SnapshotFields = ['active'];
 
 interface VariationPopoverProps {
-	binding: Pick<
-		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
-		'resource' | 'active$'
-	>;
-	allVariationsResource?: ReturnType<
-		typeof import('../../../../../../query').useCollectionBinding<'variations'>
-	>['resource'];
+	/** The variations matching the picked attributes. */
+	handle: QueryHandle;
+	/** Every variation of the parent, for greying out options; `handle` when omitted. */
+	allVariationsHandle?: QueryHandle;
 	parent: EngineRecord<'products'>;
 	addToCart: (
 		variation: EngineRecord<'variations'>,
@@ -46,24 +53,35 @@ interface VariationPopoverProps {
  *
  */
 export function Variations({
-	binding,
-	allVariationsResource,
+	handle,
+	allVariationsHandle,
 	parent,
 	addToCart,
 	stockStatus,
 }: VariationPopoverProps) {
-	const result = useObservableSuspense(binding.resource);
-	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
+	// A pick is a new query: the previous answer stays drawn while it answers, never the
+	// popover's empty fallback (which React would hold for 300 ms) on every tap.
+	const shown = useDrawnHandle(handle);
+	// The drawn answer belongs to the previous pick while the new one settles.
+	const settling = shown !== handle;
+	const result = useQuerySnapshot(shown, ANSWER_ONLY).result;
+	const allVariationsResult = useQuerySnapshot(
+		useDrawnHandle(allVariationsHandle ?? handle),
+		ANSWER_ONLY
+	).result;
 	const hits = result.hits as { record: EngineRecord<'variations'> }[];
 	const allVariationHits = allVariationsResult.hits as { record: EngineRecord<'variations'> }[];
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const loading = useObservableEagerState(binding.active$);
+	const { active: loading } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const selectedAttributes = useQueryState<
 		'variations',
 		import('../../../../../../query').VariationMatch[]
 	>((state) => state.filters.attributeMatches);
 	const actions = useQueryStateActions<'variations'>();
-	const selectedVariation = result.count === 1 && hits[0].record;
+	// The variation on show is the drawn answer's match. It is not the one to add while the pick
+	// settles: that would add the previous match under the new pick's attribute meta. The
+	// button stays in place (no jump per tap), disabled until the pick's own answer lands.
+	const matchedVariation = result.count === 1 && hits[0].record;
+	const selectedVariation = !settling && matchedVariation;
 	const parentAttributes = useRecordField(parent, (record) => record.payload.attributes);
 	const t = useT();
 	// The add is a local write that normally settles in milliseconds, but the
@@ -120,61 +138,69 @@ export function Variations({
 		}
 	}, [addToCart, adding, attributeOptions, selectedVariation]);
 
-	/**
-	 *
-	 */
+	// The options scroll inside the panel and the outcome (add to cart, or why not) stays pinned
+	// under them: on the phone sheet a product with several attributes ran past the panel's bottom,
+	// and its last row of options sat under the tab bar (Pixel, 2026-10-06, shot 4c). `min-h-0` lets
+	// the panel's height bound the list; anchored on a tablet it is simply the options' height.
 	return (
-		<VStack className="min-w-52">
-			{attributeOptions.map(({ attribute, optionCounts, selected }) => {
-				const disabledOptions = getDisabledVariationOptions(
-					attribute,
-					selectedAttributes,
-					allVariationHits,
-					stockStatus
-				);
-				return (
-					<VStack key={attribute.name} space="xs">
-						{/* Attribute names and options are catalogue strings — the same pair the
+		<VStack className="min-h-0 min-w-52 shrink">
+			<ScrollView
+				className="shrink grow-0"
+				testID="variation-popover-options"
+				keyboardShouldPersistTaps="handled"
+			>
+				<VStack>
+					{attributeOptions.map(({ attribute, optionCounts, selected }) => {
+						const disabledOptions = getDisabledVariationOptions(
+							attribute,
+							selectedAttributes,
+							allVariationHits,
+							stockStatus
+						);
+						return (
+							<VStack key={attribute.name} space="xs">
+								{/* Attribute names and options are catalogue strings — the same pair the
 					    cart's meta lines decode once the variation is added. */}
-						<Text decodeHtml>{attribute.name}</Text>
-						{attribute.characterCount < 15 ? (
-							<VariationButtons
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-								optionCounts={optionCounts}
-								disabledOptions={disabledOptions}
-							/>
-						) : (
-							<VariationSelect
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-								disabledOptions={disabledOptions}
-							/>
-						)}
-					</VStack>
-				);
-			})}
-			{selectedVariation ? (
+								<Text decodeHtml>{attribute.name}</Text>
+								{attribute.characterCount < 15 ? (
+									<VariationButtons
+										attribute={attribute}
+										onSelect={handleSelect}
+										selected={selected?.option}
+										optionCounts={optionCounts}
+										disabledOptions={disabledOptions}
+									/>
+								) : (
+									<VariationSelect
+										attribute={attribute}
+										onSelect={handleSelect}
+										selected={selected?.option}
+										disabledOptions={disabledOptions}
+									/>
+								)}
+							</VStack>
+						);
+					})}
+				</VStack>
+			</ScrollView>
+			{matchedVariation ? (
 				<VariationAddToCart
-					variation={selectedVariation}
+					variation={matchedVariation}
 					parent={parent}
 					adding={adding}
+					settling={settling}
 					onAddToCart={handleAddToCart}
 				/>
 			) : result.count === 0 ? (
 				loading ? (
 					<HStack testID="variation-popover-syncing" space="xs" className="justify-center">
-						<Icon name="arrowRotateRight" loading size="sm" />
-						<Text className="text-muted-foreground text-xs">{t('pos_products.syncing')}</Text>
+						<Icon name="refresh" loading size="sm" />
+						<Text variant="help">{t('pos_products.syncing')}</Text>
 					</HStack>
 				) : (
 					<HStack testID="variation-popover-unavailable" space="xs" className="justify-center">
-						<Icon name="circleExclamation" size="sm" />
-						<Text className="text-muted-foreground text-xs">
-							{t('pos_products.combination_unavailable')}
-						</Text>
+						<Icon name="alert" size="sm" />
+						<Text variant="help">{t('pos_products.combination_unavailable')}</Text>
 					</HStack>
 				)
 			) : null}
@@ -187,7 +213,7 @@ export function Variations({
  *
  * The button refuses an unsellable variation ONLY while the store's "Avoid
  * overselling" setting is on — the same gate the cart applies to every line
- * (`useCartStockGuard` bypasses its check when `prevent_overselling` is off).
+ * (the stock guard on `cart.line.add` skips when `prevent_overselling` is off).
  * A simple product's Add to Cart never disables on stock, so with the setting
  * off a cashier could sell an out-of-stock simple product but not an
  * out-of-stock variation (reported by two stores, 2026-09-16). The badge still
@@ -202,11 +228,14 @@ function VariationAddToCart({
 	variation,
 	parent,
 	adding,
+	settling,
 	onAddToCart,
 }: {
 	variation: EngineRecord<'variations'>;
 	parent: EngineRecord<'products'>;
 	adding: boolean;
+	/** The pick's own answer has not landed: `variation` is the previous pick's match. */
+	settling: boolean;
 	onAddToCart: () => void;
 }) {
 	const stock = useVariationStock(variation, parent);
@@ -223,7 +252,7 @@ function VariationAddToCart({
 				testID="variation-popover-add-to-cart"
 				onPress={onAddToCart}
 				loading={adding}
-				disabled={preventOverselling === true && !stock.sellable}
+				disabled={settling || (preventOverselling === true && !stock.sellable)}
 			>
 				<ButtonText>{t('common.add_to_cart') + ': ' + format(Number(price ?? 0))}</ButtonText>
 			</Button>

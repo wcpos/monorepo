@@ -72,14 +72,21 @@ export function PrinterSwitcher({
 				}
 			}}
 		>
-			<SelectTrigger>
+			<SelectTrigger testID="receipt-printer-select" className="min-h-12">
 				<SelectValue placeholder={t('receipt.select_printer')} />
 			</SelectTrigger>
 			<SelectContent>
 				<SelectGroup>
-					<SelectItem value={AUTO_VALUE} label={t('common.auto')} />
+					<SelectItem
+						testID="receipt-printer-auto"
+						className="min-h-12"
+						value={AUTO_VALUE}
+						label={t('common.auto')}
+					/>
 					{printers.map((printer) => (
 						<SelectItem
+							testID={`receipt-printer-${printer.id}`}
+							className="min-h-12"
 							key={printer.id}
 							value={printer.id}
 							label={printer.name?.trim() || printer.id}

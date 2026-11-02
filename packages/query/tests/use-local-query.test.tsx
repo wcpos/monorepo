@@ -11,12 +11,26 @@ import { firstValueFrom, Observable } from 'rxjs';
 import { buildScanSearchSelector, foldSearchText } from '@wcpos/sync-core';
 
 import { QueryProvider } from '../src/provider';
-import { useLocalQuery } from '../src/use-local-query';
+import { useLocalQuery$ } from '../src/use-local-query';
 import { createStoreDatabase } from './helpers/db';
 import { logsLiteral } from './helpers/schemas/logs';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
+import type { QueryResult } from '../src/query-result';
 import type { RxCollection, RxDatabase } from 'rxdb';
+
+/** The local query as a reader holds it: its streams, and the latest answer while mounted. */
+function useLocalQueryProbe(options: Parameters<typeof useLocalQuery$>[0]) {
+	const query = useLocalQuery$(options);
+	const [latest, setLatest] = React.useState<QueryResult<RxCollection> | undefined>(undefined);
+	React.useEffect(() => {
+		const subscription = query.result$.subscribe((result) =>
+			setLatest(result as unknown as QueryResult<RxCollection>)
+		);
+		return () => subscription.unsubscribe();
+	}, [query.result$]);
+	return { ...query, latest };
+}
 
 function localCollectionHarness(ids: string[]) {
 	let activeSubscriptions = 0;
@@ -36,23 +50,13 @@ function localCollectionHarness(ids: string[]) {
 	return { collection, activeSubscriptions: () => activeSubscriptions };
 }
 
-describe('useLocalQuery', () => {
+describe('useLocalQuery$', () => {
 	let localDB: RxDatabase;
 	let engineDB: RxDatabase;
 
 	beforeEach(async () => {
 		localDB = await createStoreDatabase();
 		engineDB = await createEngineDatabase();
-		const logs = localDB.collections.logs as RxCollection;
-		(logs as unknown as { initSearch: () => Promise<unknown> }).initSearch = async () => ({
-			collection: logs,
-			find: async (term: string) => {
-				const documents = await logs.find().exec();
-				return documents.filter((document) =>
-					JSON.stringify(document.toJSON()).toLowerCase().includes(term.toLowerCase())
-				);
-			},
-		});
 	});
 
 	afterEach(async () => {
@@ -75,7 +79,7 @@ describe('useLocalQuery', () => {
 		);
 		const { result, rerender } = renderHook(
 			({ search }) =>
-				useLocalQuery({
+				useLocalQueryProbe({
 					collectionName: 'logs',
 					selector: search ? {} : { level: { $in: ['error'] } },
 					sort: [{ timestamp: 'desc' }],
@@ -85,16 +89,41 @@ describe('useLocalQuery', () => {
 			{ wrapper, initialProps: { search: '' } }
 		);
 
-		await waitFor(() =>
-			expect(result.current.resource.valueRef$$.value?.current?.hits).toHaveLength(1)
-		);
+		await waitFor(() => expect(result.current.latest?.hits).toHaveLength(1));
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(2);
 
 		rerender({ search: 'three' });
-		await waitFor(() =>
-			expect(result.current.resource.valueRef$$.value?.current?.hits[0]?.record.code).toBe('C')
-		);
+		await waitFor(() => expect(result.current.latest?.hits[0]?.record.code).toBe('C'));
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(1);
+	});
+
+	it('opens one read per reader across a Strict Mode replay, and none after unmount', async () => {
+		const harness = localCollectionHarness(['only']);
+		const database = { collections: { logs: harness.collection } } as unknown as RxDatabase;
+		const engine = createFakeEngine(engineDB);
+		let latest: ReturnType<typeof useLocalQueryProbe>['latest'];
+		function Probe() {
+			const query = useLocalQueryProbe({ collectionName: 'logs' });
+			React.useEffect(() => {
+				// The test probe exposes the answer after React commits it.
+				latest = query.latest;
+			}, [query.latest]);
+			return null;
+		}
+		// Strict Mode runs the reader's effect cleanup and setup again: the replay must hand the
+		// read over, not leave the first subscription (or a second) behind.
+		const view = render(
+			<React.StrictMode>
+				<QueryProvider localDB={database} engine={engine} locale="en">
+					<Probe />
+				</QueryProvider>
+			</React.StrictMode>
+		);
+		await waitFor(() => expect(latest?.hits[0]?.id).toBe('only'));
+		// One reader: the documents and the count, once each.
+		expect(harness.activeSubscriptions()).toBe(2);
+		view.unmount();
+		expect(harness.activeSubscriptions()).toBe(0);
 	});
 
 	it('returns an empty result when the logs collection is unavailable', async () => {
@@ -104,7 +133,9 @@ describe('useLocalQuery', () => {
 				{children}
 			</QueryProvider>
 		);
-		const { result } = renderHook(() => useLocalQuery({ collectionName: 'logs' }), { wrapper });
+		const { result } = renderHook(() => useLocalQueryProbe({ collectionName: 'logs' }), {
+			wrapper,
+		});
 
 		await expect(firstValueFrom(result.current.result$)).resolves.toEqual({
 			searchActive: false,
@@ -113,66 +144,15 @@ describe('useLocalQuery', () => {
 		});
 	});
 
-	it('rebinds locale-sensitive search and releases the previous search subscription', async () => {
-		await localDB.collections.logs.bulkInsert([
-			{ logId: 'en', timestamp: 1, code: 'EN', level: 'info', message: 'English' },
-			{ logId: 'fr', timestamp: 2, code: 'FR', level: 'info', message: 'French' },
-		]);
-		const logs = localDB.collections.logs as RxCollection;
-		const released: string[] = [];
-		const initSearch = jest.spyOn(logs, 'initSearch').mockImplementation(
-			async (locale: string) =>
-				({
-					collection: {
-						$: new Observable<void>((subscriber) => {
-							subscriber.next();
-							return () => released.push(locale);
-						}),
-					},
-					find: async () => {
-						const document = await logs.findOne(locale).exec();
-						return document ? [document] : [];
-					},
-				}) as never
-		);
-		const engine = createFakeEngine(engineDB);
-		let query: ReturnType<typeof useLocalQuery> | undefined;
-		function Probe() {
-			const currentQuery = useLocalQuery({ collectionName: 'logs', search: 'localized' });
-			React.useEffect(() => {
-				// The test probe exposes the hook result after React commits it.
-				query = currentQuery;
-			}, [currentQuery]);
-			return null;
-		}
-		const view = render(
-			<QueryProvider localDB={localDB} engine={engine} locale="en">
-				<Probe />
-			</QueryProvider>
-		);
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('en'));
-
-		view.rerender(
-			<QueryProvider localDB={localDB} engine={engine} locale="fr">
-				<Probe />
-			</QueryProvider>
-		);
-
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('fr'));
-		expect(initSearch.mock.calls.map(([locale]) => locale)).toEqual(['en', 'fr']);
-		expect(released).toContain('en');
-		expect(released).not.toContain('fr');
-	});
-
 	it('releases old subscriptions and reads results from a swapped localDB', async () => {
 		const first = localCollectionHarness(['old']);
 		const second = localCollectionHarness(['new']);
 		const firstDB = { collections: { logs: first.collection } } as unknown as RxDatabase;
 		const secondDB = { collections: { logs: second.collection } } as unknown as RxDatabase;
 		const engine = createFakeEngine(engineDB);
-		let query: ReturnType<typeof useLocalQuery> | undefined;
+		let query: ReturnType<typeof useLocalQueryProbe> | undefined;
 		function Probe() {
-			const currentQuery = useLocalQuery({ collectionName: 'logs' });
+			const currentQuery = useLocalQueryProbe({ collectionName: 'logs' });
 			React.useEffect(() => {
 				// The test probe exposes the hook result after React commits it.
 				query = currentQuery;
@@ -184,7 +164,7 @@ describe('useLocalQuery', () => {
 				<Probe />
 			</QueryProvider>
 		);
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('old'));
+		await waitFor(() => expect(query?.latest?.hits[0]?.id).toBe('old'));
 		expect(first.activeSubscriptions()).toBe(2);
 
 		view.rerender(
@@ -193,7 +173,7 @@ describe('useLocalQuery', () => {
 			</QueryProvider>
 		);
 
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('new'));
+		await waitFor(() => expect(query?.latest?.hits[0]?.id).toBe('new'));
 		expect(first.activeSubscriptions()).toBe(0);
 		expect(second.activeSubscriptions()).toBe(2);
 	});
@@ -204,9 +184,9 @@ describe('useLocalQuery', () => {
 		const collections = { logs: beforeReset.collection };
 		const database = { collections } as unknown as RxDatabase;
 		const engine = createFakeEngine(engineDB);
-		let query: ReturnType<typeof useLocalQuery> | undefined;
+		let query: ReturnType<typeof useLocalQueryProbe> | undefined;
 		function Probe() {
-			const currentQuery = useLocalQuery({ collectionName: 'logs' });
+			const currentQuery = useLocalQueryProbe({ collectionName: 'logs' });
 			React.useEffect(() => {
 				// The test probe exposes the hook result after React commits it.
 				query = currentQuery;
@@ -218,7 +198,7 @@ describe('useLocalQuery', () => {
 				<Probe />
 			</QueryProvider>
 		);
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.count).toBe(2));
+		await waitFor(() => expect(query?.latest?.count).toBe(2));
 		await expect(firstValueFrom(query!.total$)).resolves.toBe(2);
 
 		collections.logs = afterReset.collection;
@@ -228,7 +208,7 @@ describe('useLocalQuery', () => {
 			</QueryProvider>
 		);
 
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.count).toBe(1));
+		await waitFor(() => expect(query?.latest?.count).toBe(1));
 		await expect(firstValueFrom(query!.total$)).resolves.toBe(1);
 		expect(beforeReset.activeSubscriptions()).toBe(0);
 		expect(afterReset.activeSubscriptions()).toBe(2);
@@ -240,9 +220,9 @@ describe('useLocalQuery', () => {
 		]);
 
 		const engine = createFakeEngine(engineDB);
-		let query: ReturnType<typeof useLocalQuery> | undefined;
+		let query: ReturnType<typeof useLocalQueryProbe> | undefined;
 		function Probe() {
-			const currentQuery = useLocalQuery({
+			const currentQuery = useLocalQueryProbe({
 				collectionName: 'logs',
 				sort: [{ timestamp: 'desc' }],
 			});
@@ -258,9 +238,7 @@ describe('useLocalQuery', () => {
 			</QueryProvider>
 		);
 
-		await waitFor(() =>
-			expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('before')
-		);
+		await waitFor(() => expect(query?.latest?.hits[0]?.id).toBe('before'));
 
 		// --- the store switch: reset-collection removes and re-creates `logs` ---
 		await localDB.collections.logs.remove();
@@ -283,14 +261,11 @@ describe('useLocalQuery', () => {
 		expect(await recreated.logs.count().exec()).toBe(1);
 
 		// ...so the mounted table must surface it too. This is the user's symptom.
-		await waitFor(
-			() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('after'),
-			{ timeout: 3000 }
-		);
+		await waitFor(() => expect(query?.latest?.hits[0]?.id).toBe('after'), { timeout: 3000 });
 	});
 });
 
-describe('useLocalQuery scan search (collections that refuse an index)', () => {
+describe('useLocalQuery$ scan search (collections that refuse an index)', () => {
 	// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer and
 	// crashed the tab (2026-09-15). A collection with `searchIndex: false` is
 	// searched by a bounded, storage-evaluated scan of its FOLDED field (written
@@ -392,7 +367,7 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 		);
 		return renderHook(
 			({ term }) =>
-				useLocalQuery({
+				useLocalQueryProbe({
 					collectionName: 'logs',
 					selector,
 					sort: [{ timestamp: 'desc' }],
@@ -403,8 +378,8 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 		);
 	}
 
-	const hitIds = (result: { current: ReturnType<typeof useLocalQuery> }) =>
-		result.current.resource.valueRef$$.value?.current?.hits.map((hit) => hit.id);
+	const hitIds = (result: { current: ReturnType<typeof useLocalQueryProbe> }) =>
+		result.current.latest?.hits.map((hit) => hit.id);
 
 	it('matches case-insensitively, AND across tokens, without the index', async () => {
 		const { result } = mount('ESCALATION 992915');
@@ -469,7 +444,7 @@ describe('buildScanSearchSelector', () => {
 	});
 
 	it('drops terms under the index minimum, as the index did', () => {
-		// "pull x" meant "pull" to FlexSearch (minlength 3); "x" alone found nothing.
+		// "pull x" means "pull" to the scan (SCAN_MIN_TERM_LENGTH 3); "x" alone finds nothing.
 		expect(clauses('pull x')).toHaveLength(1);
 		expect(buildScanSearchSelector({ rawFields: ['message'], search: 'x' })).toBeNull();
 	});

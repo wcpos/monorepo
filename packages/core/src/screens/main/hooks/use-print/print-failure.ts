@@ -6,7 +6,10 @@ import {
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ExtendedLogger } from '@wcpos/utils/logger';
 
-import { describePrinterError } from '../../settings/printer/describe-printer-error';
+import {
+	describePrinterError,
+	printerErrorText,
+} from '../../settings/printer/describe-printer-error';
 
 type PrintLogger = Pick<ExtendedLogger, 'debug' | 'warn' | 'error'>;
 type Translate = (key: string) => string;
@@ -86,7 +89,7 @@ export function reportPrintFailure(
 		showToast: true,
 		code: failure.code,
 		// The generic line adds nothing to the code's own hint; a specific one does.
-		...(key !== 'settings.setup_err_generic' ? { toast: { text2: t(key) } } : {}),
+		...(key !== 'settings.setup_err_generic' ? { toast: { text2: printerErrorText(key, t) } } : {}),
 		context: fullContext,
 	});
 }

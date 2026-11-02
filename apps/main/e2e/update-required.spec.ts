@@ -4,7 +4,7 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 
 /**
  * The server's protocol-gate refusal (wcpos/woocommerce-pos#1752; client
- * mono#1599): a store whose plugin has crossed the 1.11.0 boundary answers
+ * mono#1599): a store whose plugin has crossed the 2.0.0 boundary answers
  * every sync request with a deliberate 426 `wcpos_update_required` envelope.
  * The client must render the blocking update screen and — the politeness
  * half — latch sync shut instead of hammering a store that will refuse
@@ -17,7 +17,7 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 const REFUSAL_BODY = JSON.stringify({
 	code: 'wcpos_update_required',
 	message: 'This store requires a newer version of WCPOS.',
-	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '1.11.0' },
+	data: { status: 426, min_protocol: 3, server_protocol: 3, plugin_version: '2.0.0' },
 });
 
 const test = authenticatedTest.extend({
@@ -94,6 +94,8 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	await expect(page.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
 	// Web offers the reload CTA (the web bundle auto-updates on reload).
 	await expect(page.getByTestId('update-required-reload')).toBeVisible();
+	// Logout is offered on every platform, stacked under the primary.
+	await expect(page.getByTestId('update-required-logout')).toBeVisible();
 
 	// Politeness: the transport latch replays the refusal locally, so once the
 	// screen is up the store must see (almost) no further sync traffic. A

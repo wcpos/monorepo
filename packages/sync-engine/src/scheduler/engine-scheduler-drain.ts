@@ -1,15 +1,16 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
-import type { SyncObserver } from '@wcpos/sync-core';
 /** The persisted scheduler drain for apps/main. One context serves every supported
  * collection; this module owns the registry and its task-support predicates. */
 
+import { assertBulkSuccess } from '@wcpos/sync-core';
+import type { SyncObserver } from '@wcpos/sync-core';
+
+import { parseRefundBrowserSchedulerDescriptor } from './refund-browser-scheduler-descriptor';
 import {
 	ledgerRebuiltSchedulerTaskRunnerResult,
 	type PersistedSchedulerTaskRunnerResult,
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
 import {
-	markLedgerReconciliationRefusalError,
 	withLedgerRecovery,
 	withSchedulerDrainLedgerRecovery,
 } from '../local-coverage/ledger-storage-recovery';
@@ -39,17 +40,15 @@ import {
 	createReferenceCollectionFetcher,
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
+import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
+import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import {
 	createOrderHeldRowDiscarder,
 	createOrderPendingMutationIds,
 } from '../write-path/order-pull-guard';
-import {
-	hasPendingLocalWork,
-	withoutLocallyProtected,
-	withoutUnchanged,
-} from '../write-path/local-work-guard';
+import { hasPendingLocalWork, partitionPulledRows } from '../write-path/local-work-guard';
 import {
 	type ManifestCollection,
 	upsertManifestRows,
@@ -63,6 +62,7 @@ import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descripto
 import { censusCollectionFromQueryKey } from './census';
 import { type CacheQueryTotals, QUERY_TOTAL_FRESH_FOR_MS } from './query-total-requests';
 
+import type { LocalRefundDocument } from '../collections/refund-schema';
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { FetchTask, FetchTaskResult } from './replication-policy';
@@ -70,6 +70,9 @@ import type { FetchTask, FetchTaskResult } from './replication-policy';
 export const ORDER_SCHEDULER_LEASE_FOR_MS = 30 * 1_000;
 export const ORDER_SCHEDULER_RETRY_AFTER_MS = 30 * 1_000;
 export const ORDER_SCHEDULER_MAX_REQUESTS = 100;
+// 200,000 refunds at 100 a page: a walk that long is a misbehaving server.
+// The runner marks it failed so the walk-stopped diagnostic fires.
+export const REFUND_WALK_MAX_REQUESTS = 2_000;
 export const ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 
 // ---------------------------------------------------------------------------
@@ -196,9 +199,7 @@ export function collectionSchedulerRepository<T extends { uuid: string }>(
 	return {
 		async upsertMany(documents: T[]): Promise<T[]> {
 			if (documents.length === 0) return [];
-			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();
-			const applicable = await withoutLocallyProtected(collection, documents, stored);
-			const changed = withoutUnchanged(collection, stored, applicable);
+			const { applicable, changed } = await partitionPulledRows(collection, documents);
 			if (changed.length > 0)
 				assertBulkSuccess(await collection.bulkUpsert(changed), 'engine-scheduler-drain upsert');
 			// Applied means server truth is resident, including rows that needed no write.
@@ -222,6 +223,7 @@ export function collectionSchedulerRepository<T extends { uuid: string }>(
 /** Structural: the collections the drain touches (superset of the repos it builds). */
 export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 	SchedulerTaskStateDatabase & {
+		refunds: BulkUpsertCollection<LocalRefundDocument>;
 		products: BulkUpsertCollection<{ uuid: string }>;
 		variations: BulkUpsertCollection<{ uuid: string }>;
 		customers: BulkUpsertCollection<{ uuid: string }>;
@@ -275,6 +277,7 @@ export function adoptOrderSnapshot(
 }
 
 export type RunEngineSchedulerDrainInput = {
+	scope?: { storeId?: string | number };
 	db: SchedulerDrainDatabase;
 	coverage: LocalCoverage;
 	baseUrl: string;
@@ -331,6 +334,7 @@ export type RunEngineSchedulerDrainInput = {
 
 export type RunEngineSchedulerTaskInput = Pick<
 	RunEngineSchedulerDrainInput,
+	| 'scope'
 	| 'db'
 	| 'coverage'
 	| 'baseUrl'
@@ -347,6 +351,7 @@ export type RunEngineSchedulerTaskInput = Pick<
 function createEngineSchedulerFetcherRegistry(
 	input: Pick<
 		RunEngineSchedulerDrainInput,
+		| 'scope'
 		| 'db'
 		| 'coverage'
 		| 'baseUrl'
@@ -389,16 +394,12 @@ function createEngineSchedulerFetcherRegistry(
 				censusCollectionFromQueryKey(queryKey) === null
 					? QUERY_TOTAL_FRESH_FOR_MS
 					: (input.censusFreshForMs ?? QUERY_TOTAL_FRESH_FOR_MS);
-			try {
-				await queryTotalRepository.upsert({
-					queryKey,
-					totalMatchingRecords,
-					updatedAtMs,
-					freshUntilMs: updatedAtMs + freshForMs,
-				});
-			} catch (error) {
-				throw markLedgerReconciliationRefusalError(error);
-			}
+			await queryTotalRepository.upsert({
+				queryKey,
+				totalMatchingRecords,
+				updatedAtMs,
+				freshUntilMs: updatedAtMs + freshForMs,
+			});
 		}
 	};
 	const coverageRepository = {
@@ -435,6 +436,42 @@ function createEngineSchedulerFetcherRegistry(
 	};
 
 	return createSchedulerFetcherRegistry([
+		{
+			name: 'refunds',
+			supportsTask: (task) =>
+				task.collection === 'refunds' &&
+				hasNoTargetedIds(task) &&
+				((task.mode === 'greedy' && parseRefundLaneQueryKey(task.queryKey) !== null) ||
+					(parseRefundBrowserSchedulerDescriptor(task.queryKey) !== null &&
+						task.mode ===
+							(parseRefundBrowserSchedulerDescriptor(task.queryKey)!.complete
+								? 'greedy'
+								: 'windowed'))),
+			fetcher: createRefundsSchedulerFetcher({
+				scope: input.scope,
+				...shared,
+				repository: collectionSchedulerRepository(db.refunds),
+				heldParentIds: async (ids) => {
+					const parents = await db.orders
+						.find({ selector: { remoteKey: { $in: ids.map(String) } } })
+						.exec();
+					return new Map<number, number[] | null>(
+						parents.map((parent) => {
+							const order = parent.toJSON() as {
+								remoteId: string;
+								payload: { refunds?: { id: number }[] };
+							};
+							return [
+								Number(order.remoteId),
+								!hasPendingLocalWork(order) && Array.isArray(order.payload.refunds)
+									? order.payload.refunds.map((refund) => refund.id)
+									: null,
+							];
+						})
+					);
+				},
+			}),
+		},
 		{
 			name: 'orders',
 			supportsTask: isSupportedOrderSchedulerTask,
@@ -533,7 +570,7 @@ export async function runEngineSchedulerDrain(
 	return withSchedulerDrainLedgerRecovery({
 		database: db,
 		aborted: ledgerRebuiltSchedulerTaskRunnerResult,
-		run: () => {
+		run: async () => {
 			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input, 'propagate-refusal');
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
@@ -549,7 +586,7 @@ export async function runEngineSchedulerDrain(
 								),
 						};
 
-			return runPersistedSchedulerTasks({
+			const result = await runPersistedSchedulerTasks({
 				repository,
 				fetcher: fetcherRegistry.fetcher,
 				...(input.withCollectionActivity !== undefined
@@ -563,10 +600,28 @@ export async function runEngineSchedulerDrain(
 				getNowMs,
 				leaseForMs: ORDER_SCHEDULER_LEASE_FOR_MS,
 				retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
+				// Refund limits count invocations: pages for history/parent, ranged passes for browse.
+				maxRequestsForTask: (task) =>
+					task.collection === 'refunds'
+						? (input.maxRequestsPerTask ?? REFUND_WALK_MAX_REQUESTS)
+						: undefined,
 				maxRequestsPerTask: input.maxRequestsPerTask ?? ORDER_SCHEDULER_MAX_REQUESTS,
 				...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
 				...(input.signal !== undefined ? { signal: input.signal } : {}),
 			});
+			for (const task of result.tasks) {
+				if (task.collection === 'refunds' && task.kind !== 'succeeded') {
+					input.diagnostics?.({
+						type: 'engine.guard',
+						level: 'warn',
+						collection: 'refunds',
+						message:
+							'refunds.walk-stopped: Refund walk stopped before completion; resident refunds retained',
+						fields: { queryKey: task.queryKey, outcome: task.kind },
+					});
+				}
+			}
+			return result;
 		},
 	});
 }

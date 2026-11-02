@@ -21,6 +21,12 @@ export {
 } from './rx-order-scheduler-task-seeder';
 export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 export {
+	parseRefundLaneQueryKey,
+	refundHistoryQueryKey,
+	refundParentQueryKey,
+} from './refund-lane-descriptor';
+export { seedRefundParentLane, seedRefundWindowLane } from './rx-refund-scheduler-task-seeder';
+export {
 	type CouponReferenceOrderby,
 	isCouponReferenceOrderby,
 	isTermReferenceOrderby,
@@ -96,6 +102,7 @@ export {
 export {
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
+	QUERY_TOTAL_REQUEST_DEADLINE_MS,
 	QUERY_TOTAL_RETRY_AFTER_MS,
 	type QueryTotalCacheEntry,
 	type QueryTotalWooRequest,
@@ -139,3 +146,9 @@ export {
 	schedulerTaskStateSchema,
 	type SchedulerTaskStateDocument,
 } from './scheduler-task-state-schema';
+
+export {
+	refundBrowserQueryKey,
+	parseRefundBrowserSchedulerDescriptor,
+} from './refund-browser-scheduler-descriptor';
+export { seedRefundBrowseSchedulerTask } from './rx-refund-scheduler-task-seeder';

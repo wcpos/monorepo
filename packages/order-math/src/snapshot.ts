@@ -1,3 +1,5 @@
+import { extractFeeLineData } from './internal/lines/pos-data';
+
 import type { CouponLineInput, FeeLineInput, LineItemInput, ShippingLineInput } from './types';
 
 export interface CartSnapshot {
@@ -74,6 +76,11 @@ export function isActiveLineItem(item: LineItemInput): boolean {
  */
 export function isActiveFeeLine(item: FeeLineInput): boolean {
 	return item.name !== null;
+}
+
+export function isFixedFeeLine(line: FeeLineInput, pricesIncludeTax: boolean): boolean {
+	return !extractFeeLineData(line as Parameters<typeof extractFeeLineData>[0], pricesIncludeTax)
+		.percent;
 }
 
 /**

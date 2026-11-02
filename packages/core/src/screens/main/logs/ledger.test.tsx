@@ -3,9 +3,9 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { Ledger, LedgerFooter } from './ledger';
+import { Ledger, LedgerFooter, LedgerPane } from './ledger';
 
 const row = {
 	logId: 'log-1',
@@ -30,6 +30,13 @@ const recordRow = {
 	context: { collection: 'orders', recordId: 'ae263330-fbff-4834-8798-3f52ff650c79' },
 };
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,
@@ -52,16 +59,28 @@ jest.mock('react-native', () => ({
 		<div className={className}>{children}</div>
 	),
 }));
-jest.mock('observable-hooks', () => ({
-	useObservableState: () => 2,
-	useObservableSuspense: () => ({
-		hits: [
-			{ record: { toJSON: () => row } },
-			{ record: { toJSON: () => quietRow } },
-			{ record: { toJSON: () => recordRow } },
-		],
-	}),
-}));
+// The logs handle as the ledger draws it (one answered snapshot).
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle & {
+		set(partial: Record<string, unknown>): void;
+	};
+};
+const logsHandle = () =>
+	fakeQueryHandle({
+		result: {
+			hits: [
+				{ record: { toJSON: () => row } },
+				{ record: { toJSON: () => quietRow } },
+				{ record: { toJSON: () => recordRow } },
+			],
+		},
+	});
+jest.mock('../../../query', () => {
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
+	);
+	return { useDrawnHandle: handles.useDrawnHandle, useQuerySnapshot: handles.useQuerySnapshot };
+});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -78,6 +97,37 @@ jest.mock('@wcpos/components/hstack', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({
+	Loader: () => <span data-testid="ledger-loading" />,
+}));
+jest.mock('@wcpos/components/suspense', () => ({
+	Suspense: jest.requireActual('react').Suspense,
+}));
+// The real boundary with a reset control: the pane wires `onReset` to the handle's retry.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="ledger-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
+	};
+});
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<span data-testid={testID}>{children}</span>
@@ -88,17 +138,21 @@ jest.mock('@wcpos/components/vstack', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
-jest.mock('../health/components', () => ({
+jest.mock('@wcpos/components/code-chip', () => ({
 	CodeChip: ({ code, onPress, testID }: { code: string; onPress: () => void; testID: string }) => (
 		<button data-testid={testID} onClick={onPress}>
 			{code}
 		</button>
 	),
-	HairlineHeaderCell: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	HairlineHeaderRow: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	LevelIndicator: () => <span />,
-	RepeatChip: () => <span />,
 }));
+jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => <span /> }));
+// The shared table pulls the pulse row's worklets into jest; the heads are plain here.
+jest.mock('@wcpos/components/table', () => {
+	function Head({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
+		return <div data-testid={testID}>{children}</div>;
+	}
+	return { TableHead: Head, TableHeader: Head, TableRow: Head };
+});
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
@@ -122,10 +176,36 @@ jest.mock('./row-detail', () => ({
 	RowDetail: () => <div data-testid="logs-row-detail" />,
 }));
 
+describe('LedgerPane', () => {
+	it('throws a failed read to its boundary, whose reset asks the handle again and draws its answer', async () => {
+		const failed = fakeQueryHandle({ ready: false, error: new Error('logs read failed') });
+		const retry = jest.fn(() => failed.set({ error: null, ready: false }));
+		failed.retry = retry;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(<LedgerPane handle={failed} activeKind={undefined} onKindPress={jest.fn()} />);
+			expect(screen.getByTestId('ledger-error-reset')).toBeTruthy();
+			// The reset retries through the handle; the ledger suspends on the retry…
+			act(() => {
+				fireEvent.click(screen.getByTestId('ledger-error-reset'));
+			});
+			expect(retry).toHaveBeenCalledTimes(1);
+			expect(screen.getByTestId('ledger-loading')).toBeTruthy();
+			// …and draws its answer.
+			await act(async () =>
+				failed.set({ ready: true, result: { hits: [{ record: { toJSON: () => row } }] } })
+			);
+			expect(screen.getByTestId('logs-row-log-1')).toBeTruthy();
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+});
+
 describe('Ledger (layout B2)', () => {
 	const renderLedger = (props: Partial<React.ComponentProps<typeof Ledger>> = {}) =>
 		render(
-			<Ledger resource={null as never} activeKind={undefined} onKindPress={jest.fn()} {...props} />
+			<Ledger handle={logsHandle()} activeKind={undefined} onKindPress={jest.fn()} {...props} />
 		);
 
 	it('never nests a button inside a button', () => {

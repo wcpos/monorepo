@@ -10,9 +10,12 @@
  * each attempt re-stamps its baseRevision from the record's CURRENT
  * sync.revision (the `currentRevision` port below reads it) so an edit queued
  * behind an in-flight ack pushes against the re-anchored base; a 409
- * stale-revision conflict transitions the row to durable 'conflicted' (server
- * truth stored on it — the facade's conflicts()/resolveConflict surface) and
- * LEAVES the drain, holding later edits to the record; an unrecoverable 428
+ * stale-revision conflict on an order is recovered once (the SAME intent
+ * re-pushed under the 409's currentRevision, `autoRecoverConflict` below,
+ * #1204); any other 409, or an order's second, transitions the row to durable
+ * 'conflicted' (server truth stored on it — the facade's
+ * conflicts()/resolveConflict surface) and LEAVES the drain, holding later
+ * edits to the record; an unrecoverable 428
  * (the revision refresh below finds nothing) parks
  * as durable 'needs-revision' on the same surface (#516 item 4 — resolution
  * refreshes the revision first, never a same-base retry); a 428 that persists
@@ -54,12 +57,12 @@ import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { scopeBoundFailureStreak } from '../failure-streak';
-import { AUTO_REVERT_COLLECTIONS } from './auto-revert-collections';
+import { deadLetterOutcomesForTick } from './dead-letter-outcome';
 import { fetchOrderServerRevision } from './order-server-revision';
-import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
+import { residentRevision, type ResidentSync, stampedSync } from './order-revision';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
-import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
+import type { EngineRequest } from '../transport/engine-transport';
 import type { RxDatabase } from 'rxdb';
 
 // Transitional re-export: callers should migrate to order-server-revision.
@@ -69,6 +72,8 @@ export { fetchOrderServerRevision } from './order-server-revision';
 const SESSION_PROBE_BASE_MS = 30_000;
 // Cap the interval between probes for the plugin's no-user-logged-in 401 at five minutes.
 const SESSION_PROBE_MAX_MS = 300_000;
+/** Below the 60 s claim lease, but allows a slow store's order create to finish. */
+const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known
@@ -231,15 +236,8 @@ export type WriteOutcomeEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
-			/**
-			 * True when the rejected mutation is a CREATE with no local or queued
-			 * remote id and the rejection does not imply a matching server record.
-			 * The #1082 auto-revert must never `discard` these — discard DESTROYS
-			 * a born-local resident (#832 R7b, designed for the cashier-confirmed
-			 * Store health dialog) and there is no server truth to revert to.
-			 * They dead-letter for Store health instead, like orders.
-			 */
-			bornLocalCreate?: boolean;
+			/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+			data?: Record<string, unknown>;
 	  }
 	/**
 	 * R1: the server ACKED an order the POS built, but the money it returned is not
@@ -275,6 +273,22 @@ export type WriteAnnihilatedEvent = {
 	mutationId: string;
 };
 
+/**
+ * A pending mutation was REPLACED at enqueue by a same-record coalesce
+ * (`write-intents`): its queue row is gone under a FRESH mutationId, so no
+ * terminal event will ever name the old id. NOT terminal — a waiter re-binds
+ * to `replacedBy` and keeps waiting. Without it a checkout that waits on
+ * events rather than a clock (roadmap#171) would wedge on the first cart edit
+ * made while its save was still queued.
+ */
+export type WriteSupersededEvent = {
+	type: 'write-superseded';
+	collection: string;
+	recordId: string;
+	mutationId: string;
+	replacedBy: string;
+};
+
 export type WriteDrainReport = {
 	lane: 'write-drain';
 	status: 'ran' | 'skipped' | 'error';
@@ -294,13 +308,15 @@ export type WriteDrainReport = {
 export type WriteDrainLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
-	fetcher: EngineSourceFetcher;
+	request: EngineRequest;
 	/** Configured versioned WCPOS sync base used by pushes and targeted revision refreshes. */
 	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	/** Restore server truth for a refused catalogue change (#1082): Store health's discard. */
+	revert: (mutationId: string) => Promise<void>;
 	mintUuid: () => string;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	drainInstanceIdFor: () => string;
@@ -315,6 +331,7 @@ export type WriteDrainLaneDeps = {
 };
 
 export type WriteDrainLane = {
+	sessionRestored(): void;
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
 };
 
@@ -324,6 +341,7 @@ export type WriteDrainLane = {
  * see `open-cart-hold.ts`). Leader-only, so a follower window never drains.
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
+	let restoredScope: string | null = null;
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
 	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
 	// re-runs the drain, so the log treats one crash as an attempt and only a
@@ -352,12 +370,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
 		const tickStreak = tickFailureStreaks();
-		// Catalogue dead letters this tick has not yet handed to the engine's revert
-		// (via write-rejected). Their push.rejected was only a stamped attempt, so if
-		// anything later in the tick fails first — the rest of the drain or the
-		// post-drain processing — the verdict is owed here: the row is no longer
-		// pending, and no later drain would ever revisit it.
-		let verdictsOwed: Awaited<ReturnType<typeof drainMutationQueue>>['rejected'] = [];
+		// This tick's dead-letter log outcomes (one per catalogue dead letter, scope-bound).
+		const outcomes = deadLetterOutcomesForTick({
+			diagnostics: deps.diagnostics,
+			revert: deps.revert,
+		});
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -407,17 +424,20 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						ticketSignal?.addEventListener('abort', abort, { once: true });
 						tickAbort.signal.addEventListener('abort', abort, { once: true });
 					}
+					// A request that never answers would hold the lane and every checkout
+					// queued behind it: the drain's deadline is the transport's one layer.
 					try {
-						return await (deps.fetcher as Fetcher)(url, { ...init, signal: combined.signal });
+						return await deps.request(
+							url,
+							{ ...init, signal: combined.signal },
+							{ deadlineMs: WRITE_DRAIN_REQUEST_TIMEOUT_MS }
+						);
 					} finally {
 						ticketSignal?.removeEventListener('abort', abort);
 						tickAbort.signal.removeEventListener('abort', abort);
 					}
 				};
-				// A request that never answers would hold the lane and every checkout queued behind it.
-				const rawBoundFetch = bound.bindFetch(
-					withRequestTimeout(tickFetcher, WRITE_DRAIN_REQUEST_TIMEOUT_MS)
-				);
+				const rawBoundFetch = bound.bindFetch(tickFetcher);
 				// Pull helpers thread the tick signal for between-request cancellation,
 				// but a scope-bound fetcher must not receive it: scopedFetch would use
 				// AbortSignal.any, which RN/Expo does not provide. tickFetcher already
@@ -452,7 +472,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				const wrote = await bound
 					.guardWrite(async () => {
 						const now = deps.now !== undefined ? deps.now() : Date.now();
+						const retryImmediately = restoredScope === bound.scopeId;
+						if (retryImmediately) restoredScope = null;
 						const result = await drainMutationQueue({
+							retryImmediately,
 							queue,
 							signal: tickAbort.signal,
 							...(sessionHold?.scopeId === bound.scopeId && now < sessionHold.probeAt
@@ -473,26 +496,39 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const row = doc?.toJSON() as { status?: unknown } | undefined;
 								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
+							hasServerIdentity: async (mutation) => {
+								const facet = writeFacetFor(mutation.collectionName);
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								return !!facet && remoteIdOrNull(doc?.toJSON()[facet.remoteIdField]) !== null;
+							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
 									.exec();
-								const row = doc?.toJSON() as { sync?: { revision?: string } } | undefined;
-								return row?.sync?.revision;
+								return residentRevision(doc?.toJSON()).revision ?? undefined;
 							},
-							// LEADER-SIDE ANNIHILATION (#1059): drop the local resident when the
+							// DRAIN-TIME ANNIHILATION (#1059): drop the local resident when the
 							// drain cancels a never-pushed create→delete chain. `onDeleteAck` is
 							// exactly "the record is gone, remove the local doc" (it does one
 							// `doc.remove()`, no server round-trip) — the same net local effect as
-							// enqueue-time annihilation's `resident.remove()`. Only runs on the
-							// leader: this lane ticks only when writePlaneOwner() is true.
+							// enqueue-time annihilation's `resident.remove()`.
 							removeResident: async (mutation, signal) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) return; // enqueue guards this; nothing to remove otherwise
 								await facet.onDeleteAck(
 									database,
 									{ mutationId: mutation.mutationId, recordId: mutation.recordId },
-									signal
+									signal,
+									(error) =>
+										deps.diagnostics({
+											type: 'void.cleanup-failed',
+											level: 'error',
+											collection: mutation.collectionName,
+											message: String(error instanceof Error ? error.message : error),
+											fields: { recordId: mutation.recordId, step: 'refunds' },
+										})
 								);
 							},
 							// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the
@@ -548,7 +584,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								if (!revision) return null;
 								await doc?.incrementalModify((data: Record<string, unknown>) => ({
 									...data,
-									sync: { ...((data.sync ?? {}) as object), revision },
+									sync: stampedSync((data.sync ?? {}) as ResidentSync, revision),
 								}));
 								return revision;
 							},
@@ -631,7 +667,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										}
 										await facet.upsertServerDocument(
 											database,
-											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors())
+											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors()),
+											{ source: 'ack', mutationId: mutation.mutationId, recordId }
 										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',
@@ -729,16 +766,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}),
 							// Owed AS the drain makes it, not from the return value: a step
 							// later in this drain can throw after the dead letter is durable.
-							onRejected: (rejection) => {
-								if (AUTO_REVERT_COLLECTIONS.has(rejection.mutation.collectionName))
-									verdictsOwed.push(rejection);
-							},
-							observe: deps.diagnostics,
+							onRejected: (rejection) => outcomes.owe(bound, rejection),
+							observe: outcomes.observe,
 							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
-						if (result.sessionExpired) {
+						if (result.sessionExpired && restoredScope !== bound.scopeId) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
 								? Math.min(SESSION_PROBE_MAX_MS, previous.delayMs * 2)
@@ -807,6 +841,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								recordId: cancelled.recordId,
 								mutationId: cancelled.mutationId,
 							});
+							if (cancelled.status === 'internal') await queue.acknowledge([cancelled.mutationId]);
 						}
 						for (const conflict of result.conflicts) {
 							// A parked conflict is a terminal verdict of its own: a later
@@ -820,7 +855,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								currentRevision: conflict.currentRevision,
 							});
 						}
-						for (const { mutation: dead, status, reason, serverMessage } of result.rejected) {
+						for (const { mutation: dead, status, reason, serverMessage, data } of result.rejected) {
 							// A dead letter never pushes again: its push streak goes with it.
 							pushFailures.delete(dead.mutationId);
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
@@ -856,6 +891,14 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									? doc.toJSON()[rejectedFacet.remoteIdField]
 									: undefined;
 							const rejectedPayloadId = dead.payload.id;
+							const bornLocalCreate =
+								dead.operation === 'create' &&
+								doc !== null &&
+								// A zero or non-numeric id is no server identity (the #2693 class):
+								// counting it would discard the only copy of a born-local record.
+								remoteIdOrNull(rejectedRemoteId) === null &&
+								remoteIdOrNull(rejectedPayloadId) === null &&
+								!rejectionSuggestsServerRecord(reason);
 							deps.emitWriteEvent({
 								type: 'write-rejected',
 								collection: dead.collectionName,
@@ -864,14 +907,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								status,
 								reason,
 								serverMessage,
-								bornLocalCreate:
-									dead.operation === 'create' &&
-									doc !== null &&
-									typeof rejectedRemoteId !== 'number' &&
-									typeof rejectedPayloadId !== 'number' &&
-									!rejectionSuggestsServerRecord(reason),
+								...(data ? { data } : {}),
 							});
-							verdictsOwed = verdictsOwed.filter((owed) => owed.mutation !== dead);
+							outcomes.settle(dead.mutationId, { bornLocalCreate });
 						}
 						deps.setQueueDepth(stillPending.size);
 						report = {
@@ -905,22 +943,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			if (tickReport.status === 'ran') tickStreak.reset();
 			return tickReport;
 		} catch (error) {
-			for (const { mutation: dead, status, reason, serverMessage } of verdictsOwed) {
-				deps.diagnostics({
-					type: 'push.rejected',
-					level: 'error',
-					collection: dead.collectionName,
-					fields: {
-						op: dead.operation,
-						recordId: dead.recordId,
-						mutationId: dead.mutationId,
-						...(status !== undefined ? { status } : {}),
-						...(reason !== undefined ? { reason } : {}),
-						...(serverMessage !== undefined ? { serverMessage } : {}),
-						revertSkipped: true,
-					},
-				});
-			}
+			outcomes.abandon();
 			if (signal?.aborted) {
 				deps.setLastError(null);
 				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
@@ -938,5 +961,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 	}
 
-	return { tick: runTick };
+	return {
+		tick: runTick,
+		sessionRestored: () => {
+			restoredScope = deps.manager.activeScope;
+			sessionHold = null;
+			deps.setSessionHeld?.(null);
+		},
+	};
 }

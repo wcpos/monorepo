@@ -13,16 +13,25 @@ import {
 	type WriteAnnihilatedEvent,
 	type WriteDrainReport,
 	type WriteOutcomeEvent,
+	type WriteSupersededEvent,
 } from './write-drain-lane';
 import { queueFor as defaultQueueFor, enqueueWriteIntent, type WriteIntent } from './write-intents';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
+import type { EngineRequest } from '../transport/engine-transport';
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
 
 export type { ConflictResolutionChoice, WriteIntent };
-export type WriteReceipt = { mutationId: string; recordId: string; annihilated?: boolean };
+export type WriteReceipt = {
+	mutationId: string;
+	recordId: string;
+	annihilated?: boolean;
+	annihilatedMutationIds?: string[];
+	supersededMutationId?: string;
+};
 export type WritePlane = {
+	sessionRestored(): void;
 	write(intent: WriteIntent): Promise<WriteReceipt>;
 	conflicts(): Promise<QueuedMutation[]>;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
@@ -36,6 +45,9 @@ type WritePlaneDeps = {
 	settled: (kind: 'read' | 'write') => Promise<void>;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	/** The write-drain lane's requests. */
+	drainRequest: EngineRequest;
+	/** Conflict resolution's requests. */
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	syncBaseUrl: string;
 	mintUuid: () => string;
@@ -43,8 +55,7 @@ type WritePlaneDeps = {
 	diagnostics: SyncObserver;
 	onStatusChanged: () => void;
 	connectivity: () => 'online' | 'offline' | 'degraded';
-	isWritePlaneOwner: () => boolean;
-	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent | WriteSupersededEvent) => void;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	persistOrderRepull: (input: {
@@ -91,11 +102,12 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	const drainLane = createWriteDrainLane({
 		manager: deps.manager,
 		databaseFor: deps.databaseFor,
-		fetcher: deps.fetcher,
+		request: deps.drainRequest,
 		syncBaseUrl: deps.syncBaseUrl,
 		connectivity: deps.connectivity,
 		diagnostics: deps.diagnostics,
 		emitWriteEvent: deps.emitWriteEvent,
+		revert: (mutationId) => conflictResolution.resolveConflict(mutationId, 'discard'),
 		mintUuid: deps.mintUuid,
 		queueFor,
 		drainInstanceIdFor: () => (drainInstanceIdOnce ??= deps.mintUuid()),
@@ -151,7 +163,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						mintUuid: deps.mintUuid,
 						now: () => new Date(deps.now()).toISOString(),
 						observe: deps.diagnostics,
-						canCoalesce: deps.isWritePlaneOwner(),
+						canCoalesce: true,
 					});
 					await onQueueChanged(database);
 				});
@@ -162,14 +174,17 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 				if (receipt.annihilated) {
 					// The honest terminal contract (gate2 #516 item 3): the delete was
 					// satisfied locally (chain cancelled, resident row removed) — ONE
-					// terminal event for the receipt mutationId, and no 'enqueued'
+					// terminal event per chain id, then the receipt id, and no 'enqueued'
 					// diagnostics (nothing was enqueued).
-					deps.emitWriteEvent({
+					const event = {
 						type: 'write-annihilated',
 						collection: intent.collection,
 						recordId: receipt.recordId,
 						mutationId: receipt.mutationId,
-					});
+					} as const;
+					for (const mutationId of receipt.annihilatedMutationIds ?? [])
+						deps.emitWriteEvent({ ...event, mutationId });
+					deps.emitWriteEvent(event);
 					return receipt;
 				}
 				deps.diagnostics({
@@ -182,24 +197,24 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						queueDepth,
 					},
 				});
+				// The coalesce orphaned the prior row's id: tell its waiter which id to
+				// follow now. AFTER the enqueue diagnostics, so the replacement is already
+				// durably queued when a re-bound waiter asks for its replay.
+				if (receipt.supersededMutationId !== undefined) {
+					deps.emitWriteEvent({
+						type: 'write-superseded',
+						collection: intent.collection,
+						recordId: receipt.recordId,
+						mutationId: receipt.supersededMutationId,
+						replacedBy: receipt.mutationId,
+					});
+				}
 				return receipt;
 			});
 		},
 		conflicts: conflictResolution.conflicts,
-		resolveConflict: (mutationId, resolution) => {
-			if (!deps.isWritePlaneOwner()) {
-				const error = new Error(
-					'resolveConflict: another tab is the active window completing this — switch to it, or wait for it to finish'
-				);
-				error.name = 'WritePlaneFollowerError';
-				return Promise.reject(error);
-			}
-			return conflictResolution.resolveConflict(mutationId, resolution);
-		},
+		resolveConflict: conflictResolution.resolveConflict,
 		tick: (signal) => {
-			if (!deps.isWritePlaneOwner()) {
-				return Promise.resolve({ lane: 'write-drain', status: 'ran', pushed: 0 });
-			}
 			const run = drainChain.then(
 				() => drainLane.tick(signal),
 				() => drainLane.tick(signal)
@@ -209,6 +224,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		},
 		lastError: () => lastError,
 		queueDepth: () => queueDepth,
+		sessionRestored: drainLane.sessionRestored,
 		sessionHeld: () => sessionHeldScope !== null && sessionHeldScope === deps.manager.activeScope,
 	};
 }

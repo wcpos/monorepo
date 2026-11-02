@@ -1,0 +1,441 @@
+/**
+ * Ledger tests protect typed-meta preservation and deterministic manual payment rows.
+ */
+
+import {
+	hasLiveSettlementLeg,
+	isFailedPaymentStatus,
+	isFinalPaymentStatus,
+	isInMotionPaymentStatus,
+	isLivePaymentStatus,
+	isOfflineDeviceAuthorization,
+	isSettledPaymentRow,
+	mintDevicePayment,
+	mintManualPayment,
+	mintServerPayment,
+	OFFLINE_DEVICE_AUTHORIZATION,
+	partitionVoidableRows,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from './ledger';
+
+import type { MetaDataEntry, MintManualPaymentInput } from './ledger';
+import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
+
+function row(overrides: Partial<PaymentRow> = {}): PaymentRow {
+	// Compact fixture plumbing preserves the explicit test-line budget.
+	// prettier-ignore
+	return {
+		id: 'abc', source: 'app', order_id: 0, method_id: 'pos_cash', provider: null,
+		kind: 'cash', capture_mode: 'manual', transport: null, recorded_offline: false,
+		amount: '42.50', currency: 'USD', tendered: null, change: null, tip: null,
+		status: 'captured', failure_reason: null, refunded_amount: '0.00', refunds: [],
+		provider_refs: {}, receipt: {}, cashier_id: 1, store_id: null,
+		created_at_gmt: '2026-01-01T00:00:00Z',
+		captured_at_gmt: '2026-01-01T00:00:00Z',
+		updated_at_gmt: '2026-01-01T00:00:00Z',
+		...overrides,
+	};
+}
+
+function method(kind: PaymentKind, mode: CaptureMode, change = false): PaymentMethodDescriptor {
+	// Compact fixture plumbing preserves the explicit test-line budget.
+	// prettier-ignore
+	return {
+		schema: 1, id: `pos_${kind}`, title: kind, kind, pos_enabled: true, order: 0,
+		capture: { mode, provider: 'provider', hardware: null, webview_available: false },
+		capabilities: { amount: { partial: true }, change, refunds: { via: 'manual', partial: true },
+			tips: 'none', offline: 'record', void: true },
+		defaults: { order_status: 'completed', rounding: null, open_drawer: false },
+		provider_data: {},
+	};
+}
+
+describe('ledger meta', () => {
+	it('reads object and legacy JSON ledgers', () => {
+		const payment = row();
+		expect(
+			readLedger([{ key: '_wcpos_payments', value: { schema: 1, payments: [payment] } }])
+		).toEqual([payment]);
+		expect(
+			readLedger([
+				{ key: '_wcpos_payments', value: JSON.stringify({ schema: 1, payments: [payment] }) },
+			])
+		).toEqual([payment]);
+	});
+
+	it.each([
+		[[{ key: '_wcpos_payments', value: { schema: 2, payments: [] } }]],
+		[[]],
+		[[{ key: '_wcpos_payments', value: '{bad' }]],
+		[[{ key: '_wcpos_payments', value: { schema: 1, payments: {} } }]],
+		[[{ key: '_wcpos_payments', value: { schema: 1, payments: [{}] } }]],
+	] as const)('returns empty for absent or invalid ledger data', (meta) => {
+		expect(readLedger(meta as readonly MetaDataEntry[])).toEqual([]);
+	});
+
+	it('replaces in place, preserves the id and neighbours, and does not mutate input', () => {
+		const input: MetaDataEntry[] = [
+			{ key: 'before', value: 1 },
+			{ id: 77, key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+			{ key: 'after', value: 2 },
+		];
+		const output = withLedger(input, [row()]);
+		expect(output.map(({ key }) => key)).toEqual([
+			'before',
+			'_wcpos_payments',
+			'after',
+			'_wcpos_payment_method',
+		]);
+		expect(output[1]).toMatchObject({ id: 77, value: { schema: 1, payments: [row()] } });
+		expect(typeof output[1].value).toBe('object');
+		expect(input[1].value).toEqual({ schema: 1, payments: [] });
+	});
+
+	it('replaces stale method indexes with distinct live methods, preserving other metadata', () => {
+		const input: MetaDataEntry[] = [
+			{ key: 'before', value: { untouched: true } },
+			{ id: 77, key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+			{ id: 78, key: '_wcpos_payment_method', value: 'old' },
+			{ key: 'after', value: 2 },
+			{ id: 79, key: '_wcpos_payment_method', value: 'gift' },
+		];
+		const original = structuredClone(input);
+		const rows = [
+			row({ id: 'cash-1', status: 'pending' }),
+			row({ id: 'cash-2', status: 'authorized' }),
+			row({ id: 'card', method_id: 'stripe', status: 'captured' }),
+			row({ id: 'gift', method_id: 'gift', status: 'voided' }),
+		];
+		const ledgerBytes = JSON.stringify({ schema: 1, payments: rows });
+		const output = withLedger(input, rows);
+
+		expect(output.filter(({ key }) => key === '_wcpos_payment_method')).toEqual([
+			{ key: '_wcpos_payment_method', value: 'pos_cash' },
+			{ key: '_wcpos_payment_method', value: 'stripe' },
+		]);
+		expect(output.slice(0, 3)).toEqual([
+			input[0],
+			{ ...input[1], value: { schema: 1, payments: rows } },
+			input[3],
+		]);
+		expect(output).toHaveLength(5);
+		expect(JSON.stringify(output[1].value)).toBe(ledgerBytes);
+		expect(input).toEqual(original);
+	});
+
+	it('appends to absent or undefined metadata', () => {
+		expect(withLedger([{ key: 'other' }], []).map(({ key }) => key)).toEqual([
+			'other',
+			'_wcpos_payments',
+		]);
+		expect(withLedger(undefined, [])).toEqual([
+			{ key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+		]);
+	});
+});
+
+describe('upsertPaymentRow', () => {
+	it('replaces case-insensitively or appends without mutating', () => {
+		const original = [row({ id: 'ABC', amount: '1.00' })];
+		const replaced = upsertPaymentRow(original, row({ id: 'abc', amount: '2.00' }));
+		expect(replaced).toEqual([row({ id: 'abc', amount: '2.00' })]);
+		expect(upsertPaymentRow(original, row({ id: 'new' }))).toHaveLength(2);
+		expect(original).toEqual([row({ id: 'ABC', amount: '1.00' })]);
+	});
+});
+
+describe('mintManualPayment', () => {
+	const clock = '2026-02-03T04:05:06Z';
+	function input(overrides: Partial<MintManualPaymentInput> = {}): MintManualPaymentInput {
+		// Compact fixture plumbing preserves the explicit test-line budget.
+		// prettier-ignore
+		return {
+			method: method('cash', 'manual', true), amount: '42.50', tendered: '50', currency: 'USD',
+			orderId: null, cashierId: 9, storeId: 4, registerId: null, recordedOffline: true,
+			now: () => clock, uuid: () => 'ABC-DEF',
+			...overrides,
+		};
+	}
+
+	it('mints a normalized captured cash row using injected identity and time', () => {
+		const result = mintManualPayment(input());
+		expect(result).toEqual({
+			ok: true,
+			row: expect.objectContaining({
+				id: 'abc-def',
+				order_id: 0,
+				amount: '42.50',
+				tendered: '50.00',
+				change: '7.50',
+				status: 'captured',
+				recorded_offline: true,
+				created_at_gmt: clock,
+				captured_at_gmt: clock,
+				updated_at_gmt: clock,
+			}),
+		});
+	});
+
+	it.each([
+		['card tendered', { method: method('card', 'manual'), tendered: '50' }, 'tendered_not_allowed'],
+		['cash tendered below amount', { tendered: '40' }, 'tendered_below_amount'],
+		['zero amount', { amount: 0, tendered: null }, 'amount_not_positive'],
+		['device method', { method: method('card', 'device'), tendered: null }, 'not_manual'],
+	] as const)('rejects %s', (_name, overrides, reason) => {
+		expect(mintManualPayment(input(overrides))).toEqual({ ok: false, reason });
+	});
+});
+
+describe('mintServerPayment', () => {
+	const input = {
+		method: method('card', 'server'),
+		amount: '12.345',
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 9,
+		storeId: 4,
+		registerId: null,
+		now: () => '2026-01-01T00:00:00Z',
+		uuid: () => 'ABC',
+	};
+	it('mints an online pending row with server fields and formatted amounts', () => {
+		const result = mintServerPayment({ ...input, dp: 3 });
+		expect(result).toEqual({
+			ok: true,
+			row: {
+				...row(),
+				id: 'abc',
+				order_id: 42,
+				method_id: 'pos_card',
+				provider: 'provider',
+				kind: 'card',
+				capture_mode: 'server',
+				amount: '12.345',
+				status: 'pending',
+				refunded_amount: '0.000',
+				cashier_id: 9,
+				store_id: 4,
+				register_id: null,
+				session_id: null,
+				captured_at_gmt: null,
+				expires_at: null,
+				events: [],
+				void_requested_at: null,
+			},
+		});
+	});
+	it.each([
+		[{ method: method('cash', 'manual') }, 'not_server'],
+		[{ amount: 0 }, 'amount_not_positive'],
+		[{ amount: -1 }, 'amount_not_positive'],
+		[{ orderId: null }, 'no_order_id'],
+		[{ orderId: 0 }, 'no_order_id'],
+		[{ orderId: 1.5 }, 'no_order_id'],
+	] as const)('rejects invalid server input %o', (override, reason) => {
+		expect(mintServerPayment({ ...input, ...override })).toEqual({ ok: false, reason });
+	});
+	it('defaults to two decimals and old rows remain readable without new fields', () => {
+		expect(mintServerPayment(input)).toMatchObject({ row: { amount: '12.35' } });
+		expect(readLedger(withLedger([], [row()]))).toEqual([row()]);
+	});
+});
+
+describe('mintDevicePayment', () => {
+	const input = {
+		method: method('card', 'device'),
+		amount: '12.345',
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 9,
+		storeId: 4,
+		registerId: null,
+		now: () => '2026-01-01T00:00:00Z',
+		uuid: () => 'ABC',
+		transport: 'bluetooth' as const,
+		recordedOffline: false,
+	};
+	it('mints pending device rows without claiming a capture', () => {
+		expect(mintDevicePayment({ ...input, dp: 3 })).toMatchObject({
+			ok: true,
+			row: {
+				id: 'abc',
+				capture_mode: 'device',
+				status: 'pending',
+				transport: 'bluetooth',
+				amount: '12.345',
+				recorded_offline: false,
+				provider_refs: {},
+				captured_at_gmt: null,
+			},
+		});
+	});
+	it.each([
+		['serial-123', { reader: 'serial-123' }],
+		[undefined, {}],
+		[null, {}],
+	] as const)('keeps the connected reader identity %s on the row', (readerId, refs) => {
+		const minted = mintDevicePayment({ ...input, readerId });
+		expect(minted.ok).toBe(true);
+		if (!minted.ok) throw new Error(minted.reason);
+		expect(minted.row.provider_refs).toEqual(refs);
+	});
+	it('allows unsaved orders only offline', () => {
+		expect(mintDevicePayment({ ...input, orderId: null, recordedOffline: true })).toMatchObject({
+			ok: true,
+			row: { order_id: 0, recorded_offline: true },
+		});
+		expect(mintDevicePayment({ ...input, orderId: null })).toEqual({
+			ok: false,
+			reason: 'no_order_id',
+		});
+	});
+	it('refuses another capture mode or nonpositive amounts', () => {
+		expect(mintDevicePayment({ ...input, method: method('card', 'server') })).toEqual({
+			ok: false,
+			reason: 'not_device',
+		});
+		expect(mintDevicePayment({ ...input, amount: 0 })).toEqual({
+			ok: false,
+			reason: 'amount_not_positive',
+		});
+	});
+});
+
+it.each(['manual', 'server', 'device'] as const)('mints %s provenance fields', (mode) => {
+	const input = {
+		method: method('card', mode),
+		amount: 1,
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 1,
+		storeId: null,
+		registerId: 'register',
+		sessionId: 'session',
+		recordedOffline: false,
+		transport: 'bluetooth' as const,
+		now: () => 'now',
+		uuid: () => 'id',
+	};
+	const mint =
+		mode === 'manual'
+			? mintManualPayment
+			: mode === 'server'
+				? mintServerPayment
+				: mintDevicePayment;
+	expect(mint(input)).toMatchObject({ row: { register_id: 'register', session_id: 'session' } });
+	expect(mint({ ...input, registerId: null, sessionId: undefined })).toMatchObject({
+		row: { register_id: null, session_id: null },
+	});
+});
+
+it('recognizes only pending, authorized, and captured as live payment statuses', () => {
+	expect(
+		['pending', 'authorized', 'captured', 'voided', 'failed', 'refunded', ''].map(
+			isLivePaymentStatus
+		)
+	).toEqual([true, true, true, false, false, false, false]);
+});
+
+it.each(['pending', 'authorized', 'captured', 'failed', 'voided'] as const)(
+	'settlement live leg is exactly pending or authorized: %s',
+	(status) => {
+		expect(hasLiveSettlementLeg(withLedger([], [row({ status })]))).toBe(
+			['pending', 'authorized'].includes(status)
+		);
+	}
+);
+
+it('an offline authorization is settled, so it is not a live settlement leg', () => {
+	expect(
+		hasLiveSettlementLeg(withLedger([], [row({ status: 'authorized', recorded_offline: true })]))
+	).toBe(false);
+});
+
+it('recognizes only pending and authorized as money in motion', () => {
+	expect(
+		['pending', 'authorized', 'captured', 'failed', 'voided', 'refunded', ''].map(
+			isInMotionPaymentStatus
+		)
+	).toEqual([true, true, false, false, false, false, false]);
+});
+
+// Settled money includes offline authorizations; terminal finality does not.
+it.each([
+	['captured', false, true, true, false],
+	['authorized', true, true, false, false],
+	['authorized', false, false, false, false],
+	['pending', false, false, false, false],
+	['failed', false, false, true, true],
+	['voided', false, false, true, true],
+] as const)('classifies %s (offline %s)', (status, offline, settled, final, failed) => {
+	expect(isSettledPaymentRow(row({ status, recorded_offline: offline }))).toBe(settled);
+	expect(isFinalPaymentStatus(status)).toBe(final);
+	expect(isFailedPaymentStatus(status)).toBe(failed);
+});
+
+// One table for every row state (C6, ADR 0033 item 8). The states overlap on purpose: an offline
+// device authorization is in motion (a cancel must void it) and settled (the sale counts it).
+const STATES = ['pending', 'authorized', 'captured', 'failed', 'voided'] as const;
+it.each(
+	(['manual', 'server', 'device'] as const).flatMap((capture_mode) =>
+		STATES.flatMap((status) =>
+			[false, true].map((recorded_offline) => [capture_mode, status, recorded_offline] as const)
+		)
+	)
+)('row state %s %s offline=%s', (capture_mode, status, recorded_offline) => {
+	const payment = row({ capture_mode, status, recorded_offline });
+	const inMotion = status === 'pending' || status === 'authorized';
+	expect(isInMotionPaymentStatus(status)).toBe(inMotion);
+	expect(isOfflineDeviceAuthorization(payment)).toBe(
+		capture_mode === 'device' && recorded_offline && status === 'authorized'
+	);
+	expect(isLivePaymentStatus(status)).toBe(inMotion || status === 'captured');
+	expect(isSettledPaymentRow(payment)).toBe(
+		status === 'captured' || (status === 'authorized' && recorded_offline)
+	);
+	expect(isFinalPaymentStatus(status)).toBe(!inMotion);
+});
+
+it('the offline device authorization literal is the predicate, field for field', () => {
+	expect(isOfflineDeviceAuthorization(row({ ...OFFLINE_DEVICE_AUTHORIZATION }))).toBe(true);
+	for (const changed of [
+		{ capture_mode: 'server' },
+		{ recorded_offline: false },
+		{ status: 'pending' },
+	] as const)
+		expect(isOfflineDeviceAuthorization(row({ ...OFFLINE_DEVICE_AUTHORIZATION, ...changed }))).toBe(
+			false
+		);
+});
+
+// Ledger invariant §3.4 rule 2: a cancel voids what the store would void, and keeps for a refund
+// a captured non-manual row or a captured row a completion counted.
+it.each([
+	['device', 'pending', false, 'voidable'],
+	['device', 'authorized', false, 'voidable'],
+	['server', 'authorized', false, 'voidable'],
+	['manual', 'captured', false, 'voidable'],
+	['manual', 'captured', true, 'retained'],
+	['server', 'captured', false, 'retained'],
+	['device', 'captured', false, 'retained'],
+	['manual', 'failed', false, 'neither'],
+	['device', 'voided', false, 'neither'],
+] as const)('partitions %s %s (counted %s) as %s', (capture_mode, status, counted, expected) => {
+	const payment = row({ id: 'leg', capture_mode, status });
+	const completions = counted ? [{ payment_ids: ['leg'] }] : [];
+	for (const value of [completions, JSON.stringify(completions)]) {
+		const { voidable, retained } = partitionVoidableRows([
+			...withLedger([], [payment]),
+			{ key: '_wcpos_completions', value },
+		]);
+		expect({
+			voidable: voidable.map(({ id }) => id),
+			retained: retained.map(({ id }) => id),
+		}).toEqual({
+			voidable: expected === 'voidable' ? ['leg'] : [],
+			retained: expected === 'retained' ? ['leg'] : [],
+		});
+	}
+});

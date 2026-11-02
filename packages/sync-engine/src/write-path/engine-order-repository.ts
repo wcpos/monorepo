@@ -3,9 +3,10 @@
 
 import {
 	assertBulkSuccess,
+	hasPosRefundStamp,
 	normalizeCheckpoint,
 	type OrderDocument,
-	POS_META_KEYS,
+	reconcileRefundIds,
 	type RemoteId,
 	type SyncCheckpoint,
 	withOrderColumns,
@@ -13,29 +14,60 @@ import {
 } from '@wcpos/sync-core';
 
 import { findAllUncached } from '../collections/find-all-uncached';
+import { engineWarn } from '../engine-logger';
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
+import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
+import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
+import { adoptedSync, carriedFacts, readoptRequested, residentRevision } from './order-revision';
+import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
+// Direct import: the scheduler index evaluates the drain and the descriptors, which read this
+// module's constants while it is still initialising (see package-seam.test.ts).
+import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { LocalRefundDocument } from '../collections/refund-schema';
+export { POS_ORDER_IDENTITY_META_KEYS } from './merge-protected-order-meta';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
+/**
+ * The orders collection's local document holding receipt print counts for orders not resident
+ * yet: `upsertMany` (the pull's materialisation) applies an entry when its order lands, then
+ * deletes it. A resync stashes counts here before clearing orders; the previous-generation drain
+ * stashes the counts its database held for orders the current one does not hold yet.
+ */
+export const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
 
-/** POS identity metadata whose resident values must survive server adoption. */
-export const POS_ORDER_IDENTITY_META_KEYS = [
-	POS_META_KEYS.user,
-	POS_META_KEYS.store,
-	POS_META_KEYS.taxBasedOn,
-] as const;
+type StoredOrderDoc = {
+	toJSON(): unknown;
+	/** rxdb's write queue: the modifier runs against the CURRENT document when the write lands. */
+	incrementalModify?(
+		modifier: (
+			data: Record<string, unknown>
+		) => Record<string, unknown> | Promise<Record<string, unknown>>
+	): Promise<unknown>;
+};
 
-type StoredOrderDoc = { toJSON(): unknown };
+type PrintCountStash = { counts: Record<string, number> };
 
 type OrdersCollection = {
+	getLocal(id: string): Promise<{
+		get(key: 'counts'): Record<string, number>;
+		remove(): Promise<unknown>;
+		/** rxdb's write queue: the modifier re-runs on the LATEST data until it lands. */
+		incrementalModify(
+			modifier: (data: PrintCountStash) => PrintCountStash | Promise<PrintCountStash>
+		): Promise<unknown>;
+	} | null>;
+	insertLocal(id: string, data: PrintCountStash): Promise<unknown>;
+	upsertLocal(id: string, data: PrintCountStash): Promise<unknown>;
+	bulkInsert(docs: unknown[]): Promise<{ error: { status: number; documentId: string }[] }>;
 	bulkUpsert(docs: unknown[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): { exec(): Promise<Map<string, StoredOrderDoc>> };
@@ -55,11 +87,179 @@ type SyncCheckpointsCollection = {
 
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
+	recordMutations?: unknown;
 	orders: OrdersCollection;
+	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
 	syncCheckpoints: SyncCheckpointsCollection;
 	close(): Promise<unknown>; // RxDatabase.close() resolves boolean; the repository only awaits it
 };
+
+/**
+ * Change the print-count stash ATOMICALLY: the modifier runs inside rxdb's incremental write of
+ * the latest local document (re-run on a conflict), never against a snapshot read earlier — the
+ * pull and the previous-generation drain both write it, and a read-modify-write from a stale copy
+ * would drop the other's entries.
+ */
+export async function modifyStashedPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
+	modify: (
+		counts: Record<string, number>
+	) => Record<string, number> | Promise<Record<string, number>>,
+	options: { createIfMissing: boolean }
+): Promise<void> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const doc = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		if (doc) {
+			await doc.incrementalModify(async (data) => ({
+				...data,
+				counts: await modify({ ...data?.counts }),
+			}));
+			return;
+		}
+		if (!options.createIfMissing) return;
+		try {
+			await orders.insertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts: await modify({}) });
+			return;
+		} catch (error) {
+			// Another writer created it first: modify theirs on the next turn.
+			if (attempt > 0) throw error;
+		}
+	}
+}
+
+/** The larger of two receipt print counts; undefined only when neither has one. */
+function largerPrintCount(a: unknown, b: unknown): number | undefined {
+	const counts = [a, b].filter((value): value is number => typeof value === 'number');
+	return counts.length === 0 ? undefined : Math.max(...counts);
+}
+
+/** `next` as written over `current`, keeping the larger receipt print count of the two. */
+function withPreservedPrintCount(
+	current: Record<string, unknown>,
+	next: Record<string, unknown>
+): Record<string, unknown> {
+	const count = largerPrintCount(
+		(current.local as { receiptPrintCount?: unknown } | undefined)?.receiptPrintCount,
+		(next.local as { receiptPrintCount?: unknown } | undefined)?.receiptPrintCount
+	);
+	if (count === undefined) return next;
+	return { ...next, local: { ...(next.local as object), receiptPrintCount: count } };
+}
+
+/**
+ * THE one way a stashed receipt print count reaches an order: for each stashed uuid (of `uuids`,
+ * when given) whose order is resident, raise its count through the order's OWN incremental write
+ * (read inside the write turn — never lowered), then retire the entry, unless it was raised again
+ * meanwhile. The pull calls it after every commit; the previous-generation drain calls it right
+ * after stashing. Whichever runs last applies the entry, so it is never left behind.
+ */
+export async function applyStashedPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal' | 'findByIds'>,
+	uuids?: readonly string[]
+): Promise<void> {
+	const stash = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+	if (!stash) return;
+	const counts = { ...stash.get('counts') };
+	const wanted = Object.keys(counts).filter((uuid) => uuids === undefined || uuids.includes(uuid));
+	if (wanted.length === 0) return;
+	const applied: Record<string, number> = {};
+	for (const [uuid, doc] of await orders.findByIds(wanted).exec()) {
+		const count = counts[uuid]!;
+		await doc.incrementalModify?.((data) =>
+			withPreservedPrintCount(data, {
+				...data,
+				local: { ...(data.local as object), receiptPrintCount: count },
+			})
+		);
+		applied[uuid] = count;
+	}
+	await retireAppliedPrintCounts(orders, applied);
+}
+
+/**
+ * Retire stash entries that reached their order, each only if it was not raised since (a larger
+ * count stashed meanwhile stays for the next apply). An emptied stash goes, conditionally.
+ */
+async function retireAppliedPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal' | 'findByIds'>,
+	applied: Readonly<Record<string, number>>
+): Promise<void> {
+	if (Object.keys(applied).length === 0) return;
+	await modifyStashedPrintCounts(
+		orders,
+		async (current) => {
+			// Verified INSIDE the stash's write turn: an entry goes only while the order it was
+			// applied to is still resident and still holds at least that count. A reset-for-resync
+			// that removed the order meanwhile (keeping the entry for the repull) keeps it here too.
+			const residents = await orders.findByIds(Object.keys(applied)).exec();
+			for (const uuid of Object.keys(applied)) {
+				const resident = residents.get(uuid)?.toJSON() as
+					{ local?: { receiptPrintCount?: unknown } } | undefined;
+				const held = resident?.local?.receiptPrintCount;
+				if (resident && typeof held === 'number' && held >= (current[uuid] ?? 0)) {
+					delete current[uuid];
+				}
+			}
+			return current;
+		},
+		{ createIfMissing: false }
+	);
+	const latest = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+	if (latest && Object.keys(latest.get('counts') ?? {}).length === 0) {
+		await latest.remove().catch(() => undefined);
+	}
+}
+
+/** Drop applied entries from the print-count stash (atomically — see `modifyStashedPrintCounts`). */
+export async function retireStashedPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
+	uuids: readonly string[]
+): Promise<void> {
+	await modifyStashedPrintCounts(
+		orders,
+		(counts) => {
+			for (const uuid of uuids) delete counts[uuid];
+			return counts;
+		},
+		{ createIfMissing: false }
+	);
+	// An emptied stash goes — but only if it is STILL empty: the removal is conditional on the
+	// revision just read, so a concurrent stash landing first makes it refuse, and the entry stays.
+	const latest = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+	if (latest && Object.keys(latest.get('counts') ?? {}).length === 0) {
+		await latest.remove().catch(() => undefined);
+	}
+}
+
+/**
+ * THE merge rule for the print-count stash, for every writer: an entry keeps the LARGER of the
+ * stashed count and the incoming one — a receipt count only ever goes up.
+ */
+function mergePrintCounts(
+	stashed: Record<string, number>,
+	incoming: Readonly<Record<string, number>>
+): Record<string, number> {
+	for (const [uuid, count] of Object.entries(incoming)) {
+		stashed[uuid] = Math.max(stashed[uuid] ?? 0, count);
+	}
+	return stashed;
+}
+
+/** Add entries to the print-count stash (atomically, by `mergePrintCounts`). */
+export function stashPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
+	entries: Readonly<Record<string, number>>
+): Promise<void> {
+	return modifyStashedPrintCounts(orders, (counts) => mergePrintCounts(counts, entries), {
+		createIfMissing: true,
+	});
+}
+
+export type OrderIngestionContext =
+	| { source: 'ack'; mutationId: string; recordId: string }
+	/** `requestedAt`: when the pull's request went out, read before the fetch. */
+	| { source: 'pull'; requestedAt: number };
 
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
@@ -67,11 +267,14 @@ export class EngineOrderRepository {
 	/** Returns the subset the storage guard actually applied, so the ingest site can
 	 * record manifest rows for exactly those documents (the guard-skipped-manifest class,
 	 * Greptile P1 on this PR — same contract as `collectionSchedulerRepository`). */
-	async upsertMany(documents: OrderDocument[]): Promise<readonly OrderDocument[]> {
+	async upsertMany(
+		documents: OrderDocument[],
+		context?: OrderIngestionContext
+	): Promise<readonly OrderDocument[]> {
 		if (documents.length === 0) return [];
 		// Offline-first guard: a pulled server row must never clobber a local edit that hasn't drained
-		// yet. `upsertMany` is only ever the pull-apply path (every incoming order is server truth with
-		// `local.dirty === false`), so dropping any incoming id whose ALREADY-STORED counterpart carries
+		// yet. Pull ingestion carries server truth with
+		// `local.dirty === false`, so dropping any incoming id whose ALREADY-STORED counterpart carries
 		// un-drained local work protects the edit at the storage boundary in its own right — independent
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
@@ -79,8 +282,25 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
-		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		const ack = context?.source === 'ack' ? context : undefined;
+		// A pull requested BEFORE the resident was adopted whole answers with an older document.
+		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
+		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
+		// times during one create (before totals, taxes, total, status), so a read between those
+		// saves is a half-made order; `date_modified_gmt` cannot tell them apart (the saves can
+		// share one second). Cost: a change another till made inside that window waits for the
+		// next pull or the change signal; it is never lost.
+		const holdsNewerDocument = (resident: unknown) =>
+			context?.source === 'pull' &&
+			residentRevision(resident as { sync?: unknown }).adoptedAfter(context.requestedAt);
+		const keepsResident = (id: string, resident: unknown) =>
+			(id !== ack?.recordId && hasPendingLocalWork(resident)) || holdsNewerDocument(resident);
+		let applicable = documents.filter(
+			(document) => !keepsResident(document.uuid, residents.get(document.uuid)?.toJSON())
+		);
 		if (applicable.length === 0) return [];
+		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		const counts = { ...stash?.get('counts') };
 		// Leg-3 (ADR 0015): the order existence manifest is seeded by the INGEST SITE, which holds the
 		// `Materialized` envelope and knows which documents it applied (ADR 0028 rider) — see
 		// `upsertManifestRows` below. This boundary only guarantees no `_rxdb_digest` reaches storage.
@@ -89,20 +309,35 @@ export class EngineOrderRepository {
 		}));
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
-				{ payload?: Record<string, unknown> } | undefined;
+				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
+			// Pulls replace sync bookkeeping, but must not reset prints observed by this till. A stashed
+			// count applies even over a resident: a writer that stashed it may have raced this order's
+			// first materialisation, and the larger count is the one the till printed.
+			const residentCount = resident?.local?.receiptPrintCount;
+			const stashedCount = counts[entry.storedDocument.uuid];
+			const receiptPrintCount =
+				residentCount === undefined
+					? stashedCount
+					: stashedCount === undefined
+						? residentCount
+						: Math.max(residentCount, stashedCount);
+			if (receiptPrintCount !== undefined) {
+				const local = {
+					...entry.storedDocument.local,
+					receiptPrintCount,
+				};
+				entry.storedDocument = { ...entry.storedDocument, local };
+			}
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
-			const serverMeta = Array.isArray(entry.storedDocument.payload.meta_data)
-				? [...entry.storedDocument.payload.meta_data]
-				: [];
-			for (const key of POS_ORDER_IDENTITY_META_KEYS) {
-				const localEntry = localMeta.find((meta) => meta?.key === key);
-				if (!localEntry) continue;
-				const index = serverMeta.findIndex((meta) => meta?.key === key);
-				if (index === -1) serverMeta.push(localEntry);
-				else serverMeta[index] = localEntry;
-			}
+			const serverMeta = mergeProtectedOrderMeta(
+				localMeta,
+				Array.isArray(entry.storedDocument.payload.meta_data)
+					? entry.storedDocument.payload.meta_data
+					: []
+			);
+
 			if (serverMeta.length > 0) {
 				entry.storedDocument = {
 					...entry.storedDocument,
@@ -112,13 +347,189 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		const changed = withoutUnchanged(
-			this.db.orders,
-			residents,
-			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
+		// The resident's own revision facts ride the comparison, so an unchanged pull stays
+		// skipped; a document actually written is stamped as adopted now. A corrective refresh
+		// (`readopt`) writes even under an equal stamp (ADR 0040 §1.3).
+		const pulled = materialized.map(({ storedDocument }) => {
+			const document = withOrderColumns(storedDocument);
+			const resident = residents.get(document.uuid)?.toJSON();
+			return { ...document, sync: carriedFacts(document.sync, resident) };
+		});
+		const readopt = (document: { remoteId: unknown }) =>
+			readoptRequested(this.db, document.remoteId);
+		const adoptedAt = Date.now();
+		let changed = [
+			...withoutUnchanged(
+				this.db.orders,
+				residents,
+				pulled.filter((document) => !readopt(document))
+			),
+			...pulled.filter(readopt),
+		].map((document) => ({ ...document, sync: adoptedSync(document.sync, adoptedAt) }));
+		// A new order is inserted in bulk. An order already resident is written through its OWN
+		// incremental write, whose modifier reads the document CURRENT at the write — so a receipt
+		// count raised since the residency read above (a receipt printed, the previous-generation
+		// drain carrying one) is kept, never overwritten by this pull's older snapshot. (rxdb's
+		// bulkUpsert updates an existing document the same way, one queued write per document, but
+		// with a modifier that ignores the current data.)
+		const skipped = new Set<string>();
+		const heldIds = this.db.recordMutations
+			? createOrderPendingMutationIds(this.db.recordMutations, ack?.mutationId)
+			: async () => new Set<string>();
+		const currentResidents =
+			changed.length > 0
+				? await this.db.orders.findByIds(changed.map((document) => document.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		for (const [uuid, resident] of currentResidents) residents.set(uuid, resident);
+		const held = await heldIds();
+		changed = changed.filter((document) => {
+			if (
+				held.has(document.uuid) ||
+				keepsResident(document.uuid, currentResidents.get(document.uuid)?.toJSON())
+			) {
+				skipped.add(document.uuid);
+				return false;
+			}
+			return true;
+		});
+		const inserts = changed.filter((document) => !residents.has(document.uuid));
+		const updates = changed.filter((document) => residents.has(document.uuid));
+		if (inserts.length > 0) {
+			const result = await this.db.orders.bulkInsert(inserts);
+			assertBulkSuccess(
+				{ error: result.error.filter((error) => error.status !== 409) },
+				'order insert'
+			);
+			const conflicts = new Set(result.error.map((error) => error.documentId));
+			const winners = conflicts.size
+				? await this.db.orders.findByIds([...conflicts]).exec()
+				: new Map<string, StoredOrderDoc>();
+			for (const document of inserts.filter((row) => conflicts.has(row.uuid))) {
+				const winner = winners.get(document.uuid);
+				if (!winner) skipped.add(document.uuid);
+				else {
+					residents.set(document.uuid, winner);
+					updates.push(document);
+				}
+			}
+		}
+		for (const document of updates) {
+			const resident = residents.get(document.uuid)!;
+			if (resident.incrementalModify) {
+				await resident.incrementalModify(async (current) => {
+					// Re-run inside RxDB's per-record write queue, including on conflict retry.
+					if (keepsResident(document.uuid, current) || (await heldIds()).has(document.uuid)) {
+						skipped.add(document.uuid);
+						return current;
+					}
+					skipped.delete(document.uuid);
+					// A hint may have landed and drained since the early residency snapshot.
+					const localMeta = (current.payload as Record<string, unknown> | undefined)?.meta_data;
+					return withPreservedPrintCount(current, {
+						...document,
+						// A stamp that landed after this pull's snapshot is newer than its document.
+						sync: carriedFacts(document.sync, current, adoptedAt),
+						payload: {
+							...document.payload,
+							meta_data: mergeProtectedOrderMeta(
+								Array.isArray(localMeta) ? localMeta : [],
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+							),
+						},
+					});
+				});
+			} else {
+				assertBulkSuccess(
+					await this.db.orders.bulkUpsert([document]),
+					'engine-order-repository upsert'
+				);
+			}
+		}
+		changed = changed.filter((document) => !skipped.has(document.uuid));
+		applicable = applicable.filter((document) => !skipped.has(document.uuid));
+		// Stash entries this commit wrote into its documents are retired; anything stashed since this
+		// pull read the stash lands now.
+		const written: Record<string, number> = {};
+		for (const document of changed) {
+			const stashed = counts[document.uuid];
+			if (stashed !== undefined) written[document.uuid] = stashed;
+		}
+		await retireAppliedPrintCounts(this.db.orders, written);
+		if (changed.length > 0) {
+			await applyStashedPrintCounts(
+				this.db.orders,
+				changed.map((document) => document.uuid)
+			);
+		}
+		const parents = applicable.filter(
+			(order) => order.remoteId !== null && Array.isArray(order.payload.refunds)
 		);
-		if (changed.length > 0)
-			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
+		const heldByParent = new Map<number, LocalRefundDocument[]>();
+		if (parents.length > 0) {
+			const held = await this.db.refunds
+				.find({
+					selector: {
+						'payload.parent_id': { $in: parents.map((order) => wooIdOf(order.remoteId!)) },
+					},
+				})
+				.exec();
+			for (const doc of held) {
+				const refund = doc.toJSON();
+				const group = heldByParent.get(refund.payload.parent_id) ?? [];
+				group.push(refund);
+				heldByParent.set(refund.payload.parent_id, group);
+			}
+		}
+		const candidates = new Set<string>();
+		for (const order of parents) {
+			if (order.remoteId === null || !Array.isArray(order.payload.refunds)) continue;
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
+			const { remove } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			for (const doc of held) {
+				if (remove.includes(doc.payload.id)) candidates.add(doc.uuid);
+			}
+		}
+		// Another upsert may have stored a newer summary during the child lookup.
+		// Only current stored authority can confirm deletions or request missing children.
+		const currentParents =
+			parents.length > 0
+				? await this.db.orders.findByIds(parents.map((order) => order.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		const removeIds: string[] = [];
+		const missingParents: RemoteId[] = [];
+		for (const stored of currentParents.values()) {
+			const order = stored.toJSON() as OrderDocument;
+			if (order.remoteId === null) continue;
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
+			const { remove, missing } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			removeIds.push(
+				...held
+					.filter((doc) => candidates.has(doc.uuid) && remove.includes(doc.payload.id))
+					.map((doc) => doc.uuid)
+			);
+			if (missing.length > 0) missingParents.push(order.remoteId);
+		}
+		if (removeIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(removeIds),
+				'engine-order-repository refund reconciliation'
+			);
+		for (const parentRemoteId of missingParents) {
+			try {
+				// A summary can announce a refund after an active walk's last request.
+				await seedRefundParentLane({ database: this.db, parentRemoteId, coalesceInFlight: true });
+			} catch (error) {
+				engineWarn('Refund parent seed failed after order ingestion', {
+					context: { parentRemoteId, error: String(error) },
+				});
+			}
+		}
 		return applicable;
 	}
 
@@ -162,6 +573,10 @@ export class EngineOrderRepository {
 				await this.db.orders.bulkRemove(storageIds),
 				'engine-order-repository remove'
 			);
+		await removeRefundChildren(
+			this.db.refunds,
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId))
+		);
 		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted remoteIds from the order
 		// manifest — except the ones whose document we just declined to remove.
 		await removeManifestByWooIds(
@@ -178,10 +593,56 @@ export class EngineOrderRepository {
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
-		if (removable.length > 0)
-			assertBulkSuccess(
+		const counts: Record<string, number> = {};
+		for (const document of removable) {
+			const local = document.local as typeof document.local & { receiptPrintCount?: number };
+			if (local?.receiptPrintCount !== undefined) counts[document.uuid] = local.receiptPrintCount;
+		}
+		// Persist before deleting orders: the next pull batch uses a new repository. Atomic: the
+		// previous-generation drain may be stashing at the same time.
+		if (Object.keys(counts).length > 0) {
+			await stashPrintCounts(this.db.orders, counts);
+		}
+		if (removable.length > 0) {
+			const removal = assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
+			) as { success?: { toJSON?(): unknown }[] } | undefined;
+			// …and again from what was actually removed: a count raised on a resident after the read
+			// above (an apply of a stashed count) must not be lost with it. Larger wins.
+			const removedCounts: Record<string, number> = {};
+			for (const doc of removal?.success ?? []) {
+				const row = doc.toJSON?.() as
+					{ uuid?: string; local?: { receiptPrintCount?: unknown } } | undefined;
+				const count = row?.local?.receiptPrintCount;
+				if (row?.uuid && typeof count === 'number') removedCounts[row.uuid] = count;
+			}
+			if (Object.keys(removedCounts).length > 0) {
+				await stashPrintCounts(this.db.orders, removedCounts);
+			}
+		}
+		// A retry may find the parents already gone. Sweep against current residency,
+		// retaining POS-stamped history even when its parent is not held locally.
+		const held = (await findAllUncached(this.db.refunds, { selector: {} })).map((doc) =>
+			doc.toJSON()
+		);
+		if (held.length === 0) return;
+		const parents = await this.db.orders
+			.find({
+				selector: { 'payload.id': { $in: [...new Set(held.map((doc) => doc.payload.parent_id))] } },
+			})
+			.exec();
+		const residentIds = new Set(parents.map((doc) => (doc.toJSON() as OrderDocument).payload.id));
+		const orphanIds = held
+			.filter(
+				(doc) =>
+					!residentIds.has(doc.payload.parent_id) && !hasPosRefundStamp(doc.payload.meta_data)
+			)
+			.map((doc) => doc.uuid);
+		if (orphanIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(orphanIds),
+				'orders resync refund cascade'
 			);
 	}
 

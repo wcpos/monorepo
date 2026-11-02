@@ -52,43 +52,22 @@ async function assertRunPrivateProductSearch(page: Page, probe: SearchProbe) {
  * and table views, as well as toggling between them.
  */
 test.describe('Products in POS', () => {
-	test('should display product tiles in grid view by default', async ({ posPage: page }) => {
+	test('product view-mode round trip', async ({ posPage: page }) => {
 		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
 		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
 
 		const tileCount = await tiles.count();
 		expect(tileCount).toBeGreaterThanOrEqual(1);
 		await expect(page.getByTestId('data-table-count')).toBeVisible();
-	});
 
-	test('should display the view mode toggle button', async ({ posPage: page }) => {
 		await expect(page.getByTestId('view-mode-toggle')).toBeVisible();
-	});
 
-	test('should switch from grid view to table view', async ({ posPage: page }) => {
-		// Default is grid — verify tiles are showing
-		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
-		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
-
-		// Click toggle to switch to table view
 		await page.getByTestId('view-mode-toggle').click();
-
-		// Table view should show column headers
 		const columnheaders = page.getByRole('columnheader');
 		await expect(columnheaders.first()).toBeVisible({ timeout: 15_000 });
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(2);
-	});
 
-	test('should switch from table view back to grid view', async ({ posPage: page }) => {
-		// Switch to table first
 		await page.getByTestId('view-mode-toggle').click();
-		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
-
-		// Switch back to grid
-		await page.getByTestId('view-mode-toggle').click();
-
-		// Tiles should reappear
-		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
 		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
 	});
 
@@ -124,13 +103,6 @@ test.describe('Products in POS', () => {
 			await addCheckoutProbeProduct(page);
 		}
 	);
-
-	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
-		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
-
-		const variableTiles = page.getByTestId('variable-product-tile');
-		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
-	});
 
 	test('should open variation popover when clicking variable product tile', async ({
 		posPage: page,

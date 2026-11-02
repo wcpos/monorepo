@@ -19,7 +19,6 @@ import { type RemoteId, type SyncObserver, wooIdOf } from '@wcpos/sync-core';
 import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
-import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
 	parseReferenceLaneQueryKey,
 	type ReferenceLaneDescriptor,
@@ -27,6 +26,7 @@ import {
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { CacheQueryTotals } from './query-total-requests';
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { Materialized } from '../materialization/record-materialization';
@@ -150,7 +150,8 @@ export async function recordCoverage(
 	task: FetchTask,
 	coverageRecordIds: readonly string[],
 	complete: boolean,
-	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry']
+	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry'],
+	expectedRecordIds?: string[]
 ): Promise<void> {
 	if (!input.coverageRepository) return;
 	await input.coverageRepository.recordQueryResult({
@@ -161,6 +162,7 @@ export async function recordCoverage(
 		nowMs: input.nowMs?.() ?? Date.now(),
 		freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
 		...(prefixAncestry ? { prefixAncestry } : {}),
+		...(expectedRecordIds ? { expectedRecordIds } : {}),
 	});
 }
 /**

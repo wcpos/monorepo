@@ -1,3 +1,6 @@
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
+import { addDays } from 'date-fns/addDays';
 import { addMinutes } from 'date-fns/addMinutes';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { differenceInMinutes } from 'date-fns/differenceInMinutes';
@@ -5,14 +8,23 @@ import { eachDayOfInterval } from 'date-fns/eachDayOfInterval';
 import { eachMonthOfInterval } from 'date-fns/eachMonthOfInterval';
 import { format } from 'date-fns/format';
 import { isSameDay } from 'date-fns/isSameDay';
-import { startOfDay } from 'date-fns/startOfDay';
-import { startOfHour } from 'date-fns/startOfHour';
-import { startOfMonth } from 'date-fns/startOfMonth';
+import { subMonths } from 'date-fns/subMonths';
+
+import { saleMomentOf } from '@wcpos/query/query-state';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
 
 import type { Locale } from 'date-fns/locale';
 import type { DateRange, OrderPayload } from '../context';
+
+const dateFns = { endOfDay, startOfDay };
+
+/** The chart measures the same moment the hero does: when the money moved. */
+const saleDate = (order: OrderPayload) => {
+	const moment = saleMomentOf(order);
+	return moment ? convertUTCStringToLocalDate(moment) : null;
+};
 
 export type Interval = 'months' | 'days' | 'minutes';
 
@@ -24,13 +36,10 @@ export interface IntervalConfig {
 }
 
 export interface AggregatedDataPoint {
-	key: string; // Unique identifier for data aggregation
+	key: number; // The instant is the identity; repeated wall-clock labels remain distinct.
 	label: string; // Display label for x-axis
 	total: number; // Order total (includes tax)
-	total_tax: number; // Tax portion
-	subtotal: number; // Total minus tax (for stacked bar display)
 	order_count: number;
-	refund_total: number;
 	dateObj: Date;
 }
 
@@ -71,20 +80,6 @@ export const getNiceMinuteInterval = (
 };
 
 /**
- * Get the start of a minute-based interval for a given date.
- * @param date - The date to align to interval boundary
- * @param minuteStep - The interval size in minutes (30, 60, 90, etc.)
- * @returns The start of the interval containing the date
- */
-export const getStartOfMinuteInterval = (date: Date, minuteStep: number): Date => {
-	const totalMinutes = date.getHours() * 60 + date.getMinutes();
-	const intervalStartMinutes = Math.floor(totalMinutes / minuteStep) * minuteStep;
-	const hours = Math.floor(intervalStartMinutes / 60);
-	const minutes = intervalStartMinutes % 60;
-	return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, 0, 0);
-};
-
-/**
  * Find the earliest and latest order times from a list of orders.
  * @param orders - The orders to scan
  * @returns Object with earliest and latest dates, or null if no valid orders
@@ -96,8 +91,8 @@ export const getOrderTimeBounds = (
 	let latest: Date | null = null;
 
 	for (const order of orders) {
-		if (!order.date_created_gmt) continue;
-		const date = convertUTCStringToLocalDate(order.date_created_gmt);
+		const date = saleDate(order);
+		if (!date) continue;
 		if (!earliest || date < earliest) earliest = date;
 		if (!latest || date > latest) latest = date;
 	}
@@ -167,24 +162,25 @@ export const generateAllDates = (
 	startDate: Date,
 	endDate: Date,
 	interval: Interval,
-	minuteStep?: number
+	minuteStep: number | undefined,
+	zone: string
 ): Date[] => {
 	if (interval === 'months') {
-		return eachMonthOfInterval({
-			start: startOfMonth(startDate),
-			end: endDate,
-		});
+		return eachMonthOfInterval({ start: startDate, end: endDate }, zoneOptions(zone));
 	} else if (interval === 'days') {
-		return eachDayOfInterval({ start: startOfDay(startDate), end: endDate });
+		return eachDayOfInterval({ start: startDate, end: endDate }, zoneOptions(zone));
 	} else {
 		// Minute-based intervals
 		const step = minuteStep ?? 60; // Default to 1 hour if not specified
 		const dates: Date[] = [];
-		let date = getStartOfMinuteInterval(startDate, step);
+		const midnight = dateFns.startOfDay(startDate, zoneOptions(zone)).getTime();
+		let date = new Date(
+			midnight + Math.floor((+startDate - midnight) / (step * 60_000)) * step * 60_000
+		);
 		// Use < instead of <= to avoid generating an empty interval at the exact end time
 		while (date < endDate) {
 			dates.push(date);
-			date = addMinutes(date, step);
+			date = addMinutes(date.getTime(), step);
 		}
 		return dates;
 	}
@@ -201,29 +197,30 @@ export const generateAllDates = (
  */
 export const getEffectiveDailyRange = (
 	dateRange: DateRange,
-	orders: OrderPayload[]
+	orders: OrderPayload[],
+	zone: string
 ): { start: Date; end: Date } => {
 	const bounds = getOrderTimeBounds(orders);
 
 	if (!bounds) {
 		// No orders - use full day with reasonable business hours fallback
 		return {
-			start: startOfDay(dateRange.start),
-			end: new Date(
-				dateRange.start.getFullYear(),
-				dateRange.start.getMonth(),
-				dateRange.start.getDate(),
-				23,
-				59,
-				59
-			),
+			start: dateFns.startOfDay(dateRange.start, zoneOptions(zone)),
+			end: dateFns.endOfDay(dateRange.start, zoneOptions(zone)),
 		};
 	}
 
 	// Expand to interval boundaries (start of hour for earliest, end of hour for latest)
-	const start = startOfHour(bounds.earliest);
+	// Subtract the wall-clock minute offset from the instant; setting hours loses the second fold.
+	const hour = (date: Date) => {
+		const wall = inZone(zone, date);
+		return new Date(
+			+date - ((wall.getMinutes() * 60 + wall.getSeconds()) * 1000 + wall.getMilliseconds())
+		);
+	};
+	const start = hour(bounds.earliest);
 	// Add 1 hour to include the hour containing the last sale
-	const end = addMinutes(startOfHour(bounds.latest), 60);
+	const end = addMinutes(+hour(bounds.latest), 60);
 
 	return { start, end };
 };
@@ -242,77 +239,119 @@ export const getEffectiveDailyRange = (
 export const aggregateData = (
 	orders: OrderPayload[],
 	dateRange: DateRange,
-	locale?: Locale
+	locale: Locale | undefined,
+	zone: string,
+	comparison?: { orders: OrderPayload[]; range: DateRange },
+	period?: 'day' | 'week' | 'month'
 ): AggregatedDataPoint[] => {
-	const { start: originalStart, end: originalEnd } = dateRange;
-
-	let effectiveStart = originalStart;
-	let effectiveEnd = originalEnd;
-
-	// For single-day reports, trim to order bounds and use minute-based intervals
-	// Use isSameDay for explicit calendar day comparison (avoids edge cases with time ranges)
-	if (isSameDay(originalStart, originalEnd)) {
-		const effectiveRange = getEffectiveDailyRange(dateRange, orders);
-		effectiveStart = effectiveRange.start;
-		effectiveEnd = effectiveRange.end;
-	}
-
-	const { keyFormat, labelFormat, interval, minuteStep } = determineInterval(
-		effectiveStart,
-		effectiveEnd
+	const valid = orders.filter((order) => {
+		const time = saleDate(order)?.getTime();
+		return (
+			typeof time === 'number' &&
+			time >= +dateFns.startOfDay(dateRange.start, zoneOptions(zone)) &&
+			time <= +dateFns.endOfDay(dateRange.end, zoneOptions(zone))
+		);
+	});
+	const offset = +dateRange.start - +(comparison?.range.start ?? dateRange.start);
+	const shifted = (comparison?.orders ?? []).flatMap((order) => {
+		const date = saleDate(order);
+		const time = date && +date + offset;
+		// date_paid_gmt wins in saleMomentOf, so the shifted copy's moment is the shifted instant.
+		return typeof time === 'number' && time >= +dateRange.start && time <= +dateRange.end
+			? [{ ...order, date_paid_gmt: new Date(time).toISOString() }]
+			: [];
+	});
+	const daily = isSameDay(dateRange.start, dateRange.end, zoneOptions(zone));
+	const effective = daily
+		? getEffectiveDailyRange(dateRange, [...valid, ...shifted], zone)
+		: dateRange;
+	const config = determineInterval(inZone(zone, effective.start), inZone(zone, effective.end));
+	// Calendar equality, not elapsed hours, decides whether a DST day is a day.
+	const interval = daily
+		? 'minutes'
+		: period || config.interval === 'minutes'
+			? 'days'
+			: config.interval;
+	const dates = generateAllDates(effective.start, effective.end, interval, config.minuteStep, zone);
+	const values = sumBuckets(
+		valid,
+		dates.map(Number),
+		dates.map((_, i) => +(dates[i + 1] ?? dateRange.end) + (i === dates.length - 1 ? 1 : 0))
 	);
-	const dateIntervals = generateAllDates(effectiveStart, effectiveEnd, interval, minuteStep);
-
-	const dataMap: { [key: string]: AggregatedDataPoint } = {};
-
-	// Initialize all intervals with zero values
-	dateIntervals.forEach((date) => {
-		const key = format(date, keyFormat);
-		const label = format(date, labelFormat, { locale });
-		dataMap[key] = {
-			key,
-			label,
-			total: 0,
-			total_tax: 0,
-			subtotal: 0,
-			order_count: 0,
-			refund_total: 0,
-			dateObj: date,
-		};
-	});
-
-	// Aggregate orders into the appropriate intervals
-	orders.forEach((order) => {
-		const { date_created_gmt, total, total_tax } = order;
-
-		// Skip orders without a valid date
-		if (!date_created_gmt) return;
-
-		let date = convertUTCStringToLocalDate(date_created_gmt);
-
-		// Bucket the date into the appropriate interval
-		if (interval === 'minutes' && minuteStep) {
-			date = getStartOfMinuteInterval(date, minuteStep);
-		}
-		// For 'days' and 'months', the format itself handles the bucketing
-
-		const key = format(date, keyFormat);
-
-		// Only add if the key exists in our intervals (within the date range)
-		if (dataMap[key]) {
-			const orderTotal = parseFloat(total || '0');
-			const orderTax = parseFloat(total_tax || '0');
-			dataMap[key].total += orderTotal;
-			dataMap[key].total_tax += orderTax;
-			dataMap[key].subtotal += orderTotal - orderTax;
-			dataMap[key].order_count += 1;
-			const orderRefunds = (order.refunds || []).reduce(
-				(sum, r) => sum + Math.abs(parseFloat(r.total || '0')),
-				0
-			);
-			dataMap[key].refund_total += orderRefunds;
-		}
-	});
-
-	return Object.values(dataMap).sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+	return dates.map((date, i) => ({
+		key: +date,
+		label: format(
+			inZone(zone, date),
+			interval === 'days' && config.interval !== 'days' ? 'EEE d' : config.labelFormat,
+			{ locale }
+		),
+		...values[i],
+		dateObj: date,
+	}));
 };
+
+/** Assign to the greatest boundary not after the instant, bounded by that interval's end. */
+function sumBuckets(orders: OrderPayload[], starts: (number | null)[], ends: number[]) {
+	const values = starts.map(() => ({ total: 0, order_count: 0 }));
+	for (const order of orders) {
+		const date = saleDate(order);
+		if (!date) continue;
+		const time = +date;
+		for (let i = starts.length - 1; i >= 0; i--) {
+			const start = starts[i];
+			if (start !== null && time >= start && time < ends[i]) {
+				values[i].total += Number(order.total || 0);
+				values[i].order_count++;
+				break;
+			}
+		}
+	}
+	return values;
+}
+
+/** The period owns the grid. Missing counterparts are null, never invented zero sales. */
+export function aggregateComparison(
+	orders: OrderPayload[],
+	comparisonRange: DateRange,
+	buckets: AggregatedDataPoint[],
+	dateRange: DateRange,
+	period: 'day' | 'week' | 'month',
+	zone: string
+) {
+	const offset = +dateRange.start - +comparisonRange.start;
+	const dates = buckets.map((bucket) =>
+		period === 'month'
+			? subMonths(bucket.dateObj, 1, zoneOptions(zone))
+			: new Date(bucket.key - offset)
+	);
+	const starts = dates.map((date, i) => {
+		const matches =
+			period !== 'month' ||
+			inZone(zone, date).getDate() === inZone(zone, buckets[i].dateObj).getDate();
+		return matches && +date >= +comparisonRange.start && +date <= +comparisonRange.end
+			? +date
+			: null;
+	});
+	const last = buckets.at(-1);
+	const gridEnd =
+		period === 'day' && last
+			? Math.min(
+					+dateRange.end + 1,
+					last.key + (last.key - (buckets.at(-2)?.key ?? last.key - 30 * 60_000))
+				)
+			: +dateRange.end + 1;
+	const ends = dates.map((date, i) =>
+		Math.min(
+			+comparisonRange.end + 1,
+			period === 'month'
+				? +addDays(date, 1, zoneOptions(zone))
+				: (buckets[i + 1]?.key ?? gridEnd) - offset
+		)
+	);
+	const values = sumBuckets(orders, starts, ends);
+	return buckets.map((bucket, i) => ({
+		...bucket,
+		...values[i],
+		total: starts[i] === null ? null : values[i].total,
+	}));
+}

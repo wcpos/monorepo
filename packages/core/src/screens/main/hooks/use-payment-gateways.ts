@@ -26,13 +26,17 @@ function isCancellation(error: unknown): boolean {
 	);
 }
 
-export function usePaymentGateways(selectedGatewayId?: string | null) {
+/**
+ * @deprecated Payments contract v1 (wcpos/roadmap#97): read descriptors from usePaymentMethods(); this hook serves the legacy /payment-gateways checkout contract until the two-pane checkout lands (#143).
+ */
+export function usePaymentGateways(selectedGatewayId?: string | null, enabled = true) {
 	const http = useRestHttpClient();
 	const [gateways, setGateways] = React.useState<PaymentGatewayContract[]>([]);
 	// True until a load SETTLES (success, or a failure that is not a cancellation): a
 	// cancelled load is not a result, so checkout must not fall back to the legacy
-	// webview, nor the refund form default to cash, while it is retried.
-	const [loading, setLoading] = React.useState(true);
+	// webview, nor the refund form default to cash, while it is retried. A disabled
+	// hook never loads.
+	const [loading, setLoading] = React.useState(enabled);
 	const [error, setError] = React.useState<string | null>(null);
 	const gatewaysRef = React.useRef<PaymentGatewayContract[]>([]);
 	const awaitingRetryRef = React.useRef(false);
@@ -45,6 +49,8 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	}, [gateways]);
 
 	const fetchGateways = React.useCallback(async (): Promise<PaymentGatewayContract[]> => {
+		// Not enabled: the caller has no gateway to look up and the request is spared.
+		if (!enabled) return gatewaysRef.current;
 		if (retryTimerRef.current) {
 			clearTimeout(retryTimerRef.current);
 			retryTimerRef.current = null;
@@ -95,7 +101,7 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			setLoading(false);
 			return gatewaysRef.current;
 		}
-	}, [http]);
+	}, [http, enabled]);
 	// Effect: keeps the delayed retry pointed at the current loader (not read during render).
 	React.useEffect(() => {
 		fetchGatewaysRef.current = fetchGateways;

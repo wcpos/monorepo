@@ -122,7 +122,11 @@ describe('mergeAvailablePrinterProfiles', () => {
 });
 
 const mockProfiles$ = new Subject<PrinterProfile[]>();
-const mockStoreDB = { collections: { printer_profiles: { find: () => ({ $: mockProfiles$ }) } } };
+const mockStoreDB = {};
+const mockObservePrinterProfiles = jest.fn((_database: unknown) => mockProfiles$);
+jest.mock('@wcpos/query', () => ({
+	observePrinterProfiles: (database: unknown) => mockObservePrinterProfiles(database),
+}));
 // The cloud request settles immediately so the loading state is driven by the local query.
 const settledAtOnce = (): Promise<unknown> => Promise.resolve({ data: null });
 const mockHttp = { get: jest.fn(settledAtOnce) };
@@ -147,6 +151,15 @@ it.each<[PrinterProfile[]]>([[[]], [[localPrinter]]])(
 		);
 	}
 );
+
+it('renders profile rows from the named read', async () => {
+	const { result } = renderHook(() => useAvailablePrinterProfiles());
+	await act(async () => {
+		mockProfiles$.next([localPrinter]);
+	});
+	expect(result.current.printers.map((p) => p.id)).toEqual(['local-1', 'system']);
+	expect(mockObservePrinterProfiles).toHaveBeenCalledWith(mockStoreDB);
+});
 
 describe('cloudPending', () => {
 	let settle: { resolve: (value: unknown) => void; reject: (error: unknown) => void };

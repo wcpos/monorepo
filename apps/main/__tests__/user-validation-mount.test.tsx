@@ -5,6 +5,10 @@ import { act, create } from 'react-test-renderer';
 
 import AppLayout from '../app/(app)/_layout';
 import { createSessionFetcherOptions } from '../lib/create-app-engine';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	credentialsTokenOwner: (credentials: unknown) => credentials,
+}));
 
 // Avoid jest-expo's winter runtime resolving lazy globals between tests.
 jest.resetModules();
@@ -44,6 +48,27 @@ jest.mock('@wcpos/core/hooks/use-site-info', () => ({ useSiteInfo: jest.fn() }))
 jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 	ReceiptEmailQueueBridge: () => null,
 }));
+jest.mock('@wcpos/core/screens/main/pos/checkout/completion-journal-bridge', () => ({
+	SaleCompletionBridge: () => null,
+}));
+jest.mock('@wcpos/core/screens/main/pos/cart/new-customer-link-bridge', () => ({
+	NewCustomerLinkBridge: () => null,
+}));
+jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge', () => ({
+	TerminalPaymentsBridge: () => null,
+}));
+// The register-session bridge drains the session outbox through the REST client; not this test's concern.
+jest.mock('@wcpos/core/services/register-session/bridge', () => ({
+	RegisterSessionBridge: () => null,
+}));
+// The customer-display service talks to the store through the REST client; not this test's concern.
+jest.mock('@wcpos/core/screens/main/pos/customer-display/use-customer-display-service', () => ({
+	useCustomerDisplayService: () => undefined,
+}));
+// The card-reader driver registration mounts a native SDK bridge; not this test's concern.
+jest.mock('../lib/payment-drivers', () => ({
+	StripeTerminalDriverRegistration: () => null,
+}));
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	UISettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -52,9 +77,6 @@ jest.mock('@wcpos/core/screens/main/hooks/barcodes/scan-hub-context', () => ({
 }));
 jest.mock('@wcpos/core/screens/main/update-required', () => ({ UpdateRequired: () => null }));
 jest.mock('@wcpos/core/screens/main/upgrade-required', () => ({ UpgradeRequired: () => null }));
-jest.mock('@wcpos/core/screens/main/hooks/use-collection', () => ({
-	useCollection: () => ({ collection: {} }),
-}));
 jest.mock('@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client', () => ({
 	createRefreshHttpClient: jest.fn(),
 }));
@@ -75,6 +97,7 @@ jest.mock('@wcpos/printer', () => ({
 	RasterizeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 jest.mock('@wcpos/query', () => ({
+	useFollowedCollection: () => ({}),
 	QueryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	// Field-hook passthrough: reads the plain fixture field synchronously.
 	useDocField: (source: Record<string, unknown>, select: (value: unknown) => unknown) =>
@@ -93,6 +116,7 @@ jest.mock('../lib/connectivity', () => ({ setAppOnlineStatus: jest.fn() }));
 jest.mock('../lib/create-app-engine', () => ({
 	createAppSyncEngine: jest.fn(),
 	createSessionFetcherOptions: jest.fn(() => ({})),
+	runLegacyInventory: jest.fn(),
 	switchAppEngineScope: jest.fn(),
 }));
 jest.mock('../lib/metrics', () => ({

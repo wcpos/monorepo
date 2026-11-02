@@ -136,6 +136,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			'brands',
 			'tags',
 			'coupons',
+			'refunds',
 		]);
 		const initialGeneration = engine.status().collections.products.coverageGeneration;
 		expect(engine.status().collections.products).toEqual({
@@ -269,8 +270,11 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		if (!active) throw new Error('expected an active scope');
 		const orderId = '10000000-0000-4000-8000-000000000001';
 		await active.database.collections.orders.insert({
+			posUserId: '',
+			posStoreId: '',
 			uuid: orderId,
 			remoteId: null,
+			remoteKey: '',
 			number: '',
 			dateCreatedGmt: '2026-07-16T00:00:00',
 			status: 'pos-open',
@@ -739,7 +743,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			const engine = engineWith({
 				fetcher: async (url) => {
 					urls.push(url);
-					return new Response(JSON.stringify({ documents: [], checkpoint, hasMore: false }), {
+					return new Response(JSON.stringify({ documents: [], checkpoint, complete: true }), {
 						status: 200,
 						headers: { 'content-type': 'application/json' },
 					});

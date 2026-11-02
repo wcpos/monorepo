@@ -92,6 +92,7 @@ describe('per-task drain outcomes', () => {
 		expect(result.tasks).toEqual([
 			{
 				taskId: 'orders:browser:windowed',
+				appliedRecordIds: [],
 				requirementId: 'orders.open',
 				collection: 'orders',
 				queryKey: 'orders:browser',
@@ -103,6 +104,7 @@ describe('per-task drain outcomes', () => {
 			},
 			{
 				taskId: 'products:browse:windowed',
+				appliedRecordIds: [],
 				requirementId: 'orders.open',
 				collection: 'products',
 				queryKey: 'products:browse',
@@ -278,6 +280,7 @@ describe('runPersistedSchedulerTasks', () => {
 			tasks: [
 				{
 					taskId: 'orders:orders:open:windowed',
+					appliedRecordIds: [],
 					requirementId: 'orders.open',
 					collection: 'orders',
 					queryKey: 'orders:open',
@@ -677,11 +680,11 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(result.failed).toBe(1);
 	});
 
-	it('marks a primary-collection reconciliation refusal failed with retry backoff', async () => {
+	it('marks a primary-collection JSON error failed with retry backoff', async () => {
 		const runnable = state();
 		const repository = createRepository([runnable]);
 		const fetcher = vi.fn(async () => {
-			throw new SyntaxError('index reconciliation refused: unsorted-primary');
+			throw new SyntaxError('Unexpected token in document JSON');
 		});
 
 		const result = await runPersistedSchedulerTasks({

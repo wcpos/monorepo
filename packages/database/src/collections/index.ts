@@ -1,16 +1,18 @@
 import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
+import { closuresLiteral } from './schemas/closures';
 import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { couponsLiteral } from './schemas/coupons';
 import { customersLiteral } from './schemas/customers';
-// import { gatewaysLiteral } from './schemas/gateways';
-// import { logsLiteral } from './schemas/logs';
 import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
+import { refundsLiteral } from './schemas/refunds';
 import { productsLiteral } from './schemas/products';
+import { registerSessionsLiteral } from './schemas/register-sessions';
+import { cashMovementsLiteral } from './schemas/cash-movements';
 import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
@@ -22,7 +24,6 @@ import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { scannerProfilesLiteral } from './schemas/scanner-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
-import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
 
@@ -58,38 +59,6 @@ export type SiteDocument = RxDocument<SiteDocumentType>;
 export type SiteCollection = RxCollection<SiteDocumentType>;
 const sites: RxCollectionCreator<SiteDocumentType> = {
 	schema: siteSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			oldDoc.use_jwt_as_param = false;
-			return oldDoc;
-		},
-		2(oldDoc) {
-			return oldDoc;
-		},
-		3(oldDoc) {
-			// v3 adds the optional `locale` property; existing documents need no change.
-			return oldDoc;
-		},
-		4(oldDoc) {
-			// v4 adds the optional `use_rest_route_param` flag; absent reads as
-			// path transport, so existing documents need no change.
-			return oldDoc;
-		},
-		5(oldDoc) {
-			// v5 adds the optional `use_protocol_headers` flag; absent reads as
-			// query transport, so existing documents need no change.
-			return oldDoc;
-		},
-		6(oldDoc) {
-			// v6 adds the optional `use_cache_buster` flag; absent reads as
-			// no cache key, so existing documents need no change.
-			return oldDoc;
-		},
-		7(oldDoc) {
-			// Optional instance-header verdict: absent keeps web sends disabled until probed.
-			return oldDoc;
-		},
-	},
 };
 
 /**
@@ -101,118 +70,6 @@ export type StoreDocument = RxDocument<StoreDocumentType>;
 export type StoreCollection = RxCollection<StoreDocumentType>;
 const stores: RxCollectionCreator<StoreDocumentType> = {
 	schema: storeSchema,
-	migrationStrategies: {
-		1(oldDoc: StoreDocumentType) {
-			oldDoc.barcode_scanning_avg_time_input_threshold = 24;
-			oldDoc.thousands_group_style = 'thousand';
-			const [country, state] = ((oldDoc as any).default_country || '').split(':');
-			oldDoc.store_country = country;
-			oldDoc.store_state = state;
-			return oldDoc;
-		},
-		2(oldDoc: StoreDocumentType) {
-			oldDoc.tax_address = {
-				country: oldDoc.store_country,
-				state: oldDoc.store_state,
-				postcode: oldDoc.store_postcode,
-				city: oldDoc.store_city,
-			};
-			return oldDoc;
-		},
-		3(oldDoc: StoreDocumentType) {
-			// Add theme field with default 'system'
-			oldDoc.theme = 'system';
-			return oldDoc;
-		},
-		4(oldDoc: StoreDocumentType) {
-			oldDoc.woocommerce_calc_discounts_sequentially = 'no';
-			return oldDoc;
-		},
-		5(oldDoc: StoreDocumentType) {
-			oldDoc.active_templates = Array.isArray(oldDoc.active_templates)
-				? oldDoc.active_templates
-				: [];
-			return oldDoc;
-		},
-		6(oldDoc: StoreDocumentType) {
-			// Initialize wc_price_decimals from the existing price_num_decimals
-			// (best available value until next server sync)
-			oldDoc.wc_price_decimals = oldDoc.price_num_decimals ?? 2;
-			return oldDoc;
-		},
-		7(oldDoc: any) {
-			// opening_hours: pre-v1.9.0 plugin emitted a freeform string;
-			// v1.9.0+ emits an array (inner shape varies across stores, so no
-			// item-level constraint — see schema comment). Move the legacy
-			// string into opening_hours_notes so user-visible content isn't
-			// lost, then normalize opening_hours to [].
-			const legacyNotes =
-				typeof oldDoc.opening_hours_notes === 'string' ? oldDoc.opening_hours_notes : '';
-			if (typeof oldDoc.opening_hours === 'string') {
-				const legacyText = oldDoc.opening_hours;
-				oldDoc.opening_hours_notes = legacyNotes ? `${legacyNotes}\n\n${legacyText}` : legacyText;
-			} else {
-				oldDoc.opening_hours_notes = legacyNotes;
-			}
-			oldDoc.opening_hours = [];
-			return oldDoc;
-		},
-		8(oldDoc: any) {
-			// Schema 1.4.0 introduced structured store.tax_ids[]. Older RxDB rows
-			// don't have it; default to an empty array. The next server sync will
-			// populate the real values when the plugin emits them.
-			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
-			return oldDoc;
-		},
-		9(oldDoc: any) {
-			// Empty string means inherit the WordPress site's timezone.
-			oldDoc.timezone = typeof oldDoc.timezone === 'string' ? oldDoc.timezone : '';
-			return oldDoc;
-		},
-		10(oldDoc: any) {
-			// #559 knob contract: per-store sync tuning, Balanced defaults.
-			// Amended pre-release by the #908 re-tune (Balanced = 60 s / 50): this
-			// migration has never shipped, so it writes the final default directly
-			// instead of stacking a corrective migration on an unreleased one.
-			oldDoc.sync_check_interval_ms = 60_000;
-			oldDoc.sync_pull_batch_size = 50;
-			return oldDoc;
-		},
-		11(oldDoc: StoreDocumentType) {
-			oldDoc.prevent_overselling = false;
-			return oldDoc;
-		},
-		12(oldDoc: StoreDocumentType) {
-			// Scan sounds are opt-in per station (#717): default off so quiet
-			// counters stay quiet until a cashier turns feedback on. Amended
-			// pre-release with the theme/volume/per-event fields — schema v12 has
-			// never shipped, so the defaults are written here directly instead of
-			// stacking a migration on an unreleased version.
-			oldDoc.barcode_scanning_sound_enabled = false;
-			oldDoc.barcode_scanning_sound_theme = 'classic';
-			oldDoc.barcode_scanning_sound_volume = 0.15;
-			oldDoc.barcode_scanning_sound_success_enabled = true;
-			oldDoc.barcode_scanning_sound_failure_enabled = true;
-			oldDoc.barcode_scanning_sound_haptic_enabled = true;
-			return oldDoc;
-		},
-		13(oldDoc: StoreDocumentType) {
-			// The next server sync populates the real receipt label dictionary.
-			oldDoc.receipt_i18n = {};
-			return oldDoc;
-		},
-		14(oldDoc: StoreDocumentType) {
-			// v14 only widens shipping_tax_class: the enum of WooCommerce's four
-			// built-in classes is gone, because merchant-defined tax classes are
-			// selectable and were being rejected. Widening never invalidates a
-			// value that already validated, so existing documents pass through.
-			return oldDoc;
-		},
-		15(oldDoc: StoreDocumentType) {
-			// v15 adds optional tracking consent; the next server sync populates it.
-			return oldDoc;
-		},
-	},
 };
 
 /**
@@ -226,39 +83,7 @@ export type WPCredentialsDocument = RxDocument<WPCredentialsDocumentType>;
 export type WPCredentialsCollection = RxCollection<WPCredentialsDocumentType>;
 const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 	schema: wpCredentialsSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			return oldDoc;
-		},
-		2(oldDoc) {
-			// Added optional `role` field — no transformation needed.
-			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
-		},
-		3(oldDoc) {
-			// `role` (string) → `roles` (string[]) and strip fields outside
-			// the strict schema, including OAuth metadata like `token_type`.
-			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
-		},
-		4(oldDoc) {
-			// v3 rows may already contain token_type/unknown fields from earlier
-			// builds, so force one more migration pass to sanitize them.
-			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
-		},
-		5(oldDoc) {
-			// Added optional `capabilities`; absence deliberately means unknown.
-			return oldDoc;
-		},
-	},
 };
-
-/**
- * Logs
- */
-// const logsTyped = toTypedRxJsonSchema(logsLiteral);
-// export const LogSchema: RxJsonSchema<LogDocument> = logsLiteral;
-// export type LogDocument = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsTyped>;
-// export type LogCollection = RxCollection<LogDocument>;
-// const logs: RxCollectionCreator<LogDocument> = { schema: logsLiteral };
 
 /**
  * Products
@@ -369,21 +194,19 @@ type CouponDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof coupon
 export type CouponDocument = RxDocument<CouponDocumentType>;
 export type CouponCollection = RxCollection<CouponDocumentType>;
 
+export type RefundDocumentType = WithNestedJsonMetaData<
+	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof refundsLiteral>>,
+	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines'
+>;
+export type RefundDocument = RxDocument<RefundDocumentType>;
+export type RefundCollection = RxCollection<RefundDocumentType>;
+
 /**
  * Taxes
  */
 type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxRatesLiteral>;
 export type TaxRateDocument = RxDocument<TaxRateDocumentType>;
 export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
-
-/**
- * Gateways
- */
-// const gatewaysTyped = toTypedRxJsonSchema(gatewaysLiteral);
-// export const GatewaySchema: RxJsonSchema<GatewayDocument> = gatewaysLiteral;
-// export type GatewayDocument = ExtractDocumentTypeFromTypedRxJsonSchema<typeof gatewaysTyped>;
-// export type GatewayCollection = RxCollection<GatewayDocument>;
-// const payment_gateways: RxCollectionCreator<GatewayDocument> = { schema: gatewaysLiteral };
 
 /**
  * Logs
@@ -394,63 +217,20 @@ export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = {
 	schema: logSchema,
-	migrationStrategies: {
-		1: (oldDoc: any) => {
-			oldDoc.level = String(oldDoc.level ?? 'info').slice(0, 16);
-			return oldDoc;
-		}, // v0→v1 only adds indexes; documents are unchanged
-		2: (oldDoc: any) => {
-			const level = String(oldDoc.level ?? 'info');
-			const errorCode = oldDoc.context?.errorCode;
-
-			if (typeof errorCode === 'string') oldDoc.code = errorCode;
-			if (level === 'success') {
-				oldDoc.level = 'info';
-				oldDoc.outcome = 'ok';
-			} else if (level === 'audit') {
-				oldDoc.level = 'info';
-				oldDoc.category = 'db.audit';
-			} else {
-				oldDoc.level = ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'info';
-			}
-
-			oldDoc.count = 1;
-			oldDoc.firstSeen = oldDoc.timestamp;
-			oldDoc.lastSeen = oldDoc.timestamp;
-			if (typeof oldDoc.sizeBytes !== 'number') {
-				try {
-					oldDoc.sizeBytes = 0;
-					let sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
-					while (oldDoc.sizeBytes !== sizeBytes) {
-						oldDoc.sizeBytes = sizeBytes;
-						sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
-					}
-				} catch {
-					delete oldDoc.sizeBytes;
-					// leave unset; retention serializes rows without sizeBytes
-				}
-			}
-			return oldDoc;
-		},
-		// v2→v3 only widens the `outcome` enum (adds 'recovered'); documents are unchanged.
-		3: (oldDoc: any) => oldDoc,
-	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
-		// NO FlexSearch index for logs — the Logs screen searches these fields with a
-		// bounded substring scan instead (use-local-query). Measured 2026-09-15 on a
-		// 46k-row day (an overnight escalation storm on a merchant store): building the
-		// premium index in the renderer took 21.5 s of blocked main thread and ~350 MB
-		// of heap, and the tokenizer/field choice moved nothing (forward 19.4 s, strict
-		// 18.8 s, message-only 19.6 s) — the cost is the pipeline's per-row index
-		// persistence, ~0.4 ms and ~7 KB a row. The same rows regex-scan in 40 ms,
-		// and on the web that scan runs in the storage worker. Logs are the one
-		// searched collection that churns without bound (retention is bytes, not
-		// rows), so an index sized for a catalogue is the wrong structure here.
+		// NO in-memory search structure for logs — the Logs screen searches these
+		// fields with a bounded substring scan instead (use-local-query). Measured
+		// 2026-09-15 on a 46k-row day (an overnight escalation storm on a merchant
+		// store): mirroring every row in the renderer cost 21.5 s of blocked main
+		// thread and ~350 MB of heap, while the same rows regex-scan in 40 ms, and on
+		// the web that scan runs in the storage worker. Logs are the one searched
+		// collection that churns without bound (retention is bytes, not rows), so a
+		// structure sized for a catalogue is the wrong shape here (#2411 keeps this).
 		searchIndex: false,
 		// The logger writes the fold of the searched fields here (foldLogSearchText),
 		// so the scan is an exact fold-space match — any script, any normal form —
-		// exactly the parity the folding index had. The raw searchFields above are
+		// the same fold the search blob applies. The raw searchFields above are
 		// the fallback for rows written before this field existed.
 		searchFoldedField: 'context.fold',
 	},
@@ -478,12 +258,6 @@ export type TemplateDocument = RxDocument<TemplateDocumentType>;
 export type TemplateCollection = RxCollection<TemplateDocumentType>;
 const templates: RxCollectionCreator<TemplateDocumentType> = {
 	schema: templateSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			// v1: Added output_type and paper_width fields — populated on next sync
-			return oldDoc;
-		},
-	},
 };
 
 /**
@@ -495,9 +269,6 @@ type ScannerProfileDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
 >;
 export type ScannerProfileDocument = RxDocument<ScannerProfileDocumentType>;
 export type ScannerProfileCollection = RxCollection<ScannerProfileDocumentType>;
-// No migrationStrategies: this collection has never shipped in a released
-// build, so the only shape that exists anywhere is the current one. The version
-// history it used to carry described states no install has ever held.
 const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
 	schema: scannerProfileSchema,
 };
@@ -513,49 +284,6 @@ export type PrinterProfileDocument = RxDocument<PrinterProfileDocumentType>;
 export type PrinterProfileCollection = RxCollection<PrinterProfileDocumentType>;
 const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 	schema: printerProfileSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			// v1: Added isBuiltIn field for platform-provided printers
-			oldDoc.isBuiltIn = false;
-			return oldDoc;
-		},
-		2(oldDoc) {
-			// v2: Added nativeInterfaceType for vendor-native transports
-			return oldDoc;
-		},
-		3(oldDoc) {
-			// v3: Changed the default columns metadata from 48 to 42.
-			// Preserve explicit existing profile values.
-			return oldDoc;
-		},
-		4(oldDoc) {
-			// v4: Added emitEscPrintMode to control ESC ! / GS ! dual size emission.
-			// Default to true so existing profiles get the broader compatibility behavior.
-			oldDoc.emitEscPrintMode = true;
-			return oldDoc;
-		},
-		5(oldDoc) {
-			// v5: removed the dead `autoPrint` field; added `fullReceiptRaster` (default off).
-			delete oldDoc.autoPrint;
-			oldDoc.fullReceiptRaster = false;
-			return oldDoc;
-		},
-		6(oldDoc) {
-			// v6: added the optional `cloudPrinterId` field and the `cloud` connectionType.
-			// Existing profiles need no change — the new field is optional.
-			return oldDoc;
-		},
-		7(oldDoc) {
-			// v7: added the optional `cloudProvider` field (server-side print provider).
-			// Existing profiles need no change — the new field is optional.
-			return oldDoc;
-		},
-		8(oldDoc) {
-			// v8: added drawerConnector. Preserve valid pin5, default everything else to pin2.
-			oldDoc.drawerConnector = oldDoc.drawerConnector === 'pin5' ? 'pin5' : 'pin2';
-			return oldDoc;
-		},
-	},
 };
 
 /**
@@ -570,13 +298,6 @@ export type TemplatePrinterOverrideDocument = RxDocument<TemplatePrinterOverride
 export type TemplatePrinterOverrideCollection = RxCollection<TemplatePrinterOverrideDocumentType>;
 const template_printer_overrides: RxCollectionCreator<TemplatePrinterOverrideDocumentType> = {
 	schema: templatePrinterOverrideSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			// v1: widened printer_profile_id into a generic printer target id.
-			// Existing local printer profile ids and `system` targets need no change.
-			return oldDoc;
-		},
-	},
 };
 
 /**
@@ -591,6 +312,28 @@ export type ReceiptEmailQueueDocument = RxDocument<ReceiptEmailQueueDocumentType
 export type ReceiptEmailQueueCollection = RxCollection<ReceiptEmailQueueDocumentType>;
 const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = {
 	schema: receiptEmailQueueSchema,
+};
+
+export type ClosureRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof closuresLiteral>;
+export type ClosureDocument = RxDocument<ClosureRow>;
+export type ClosureCollection = RxCollection<ClosureRow>;
+const closures: RxCollectionCreator<ClosureRow> = {
+	schema: closuresLiteral,
+};
+
+export type RegisterSessionRow = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof registerSessionsLiteral
+>;
+export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
+export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
+const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
+	schema: registerSessionsLiteral,
+};
+export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
+export type CashMovementDocument = RxDocument<CashMovementRow>;
+export type CashMovementCollection = RxCollection<CashMovementRow>;
+const cash_movements: RxCollectionCreator<CashMovementRow> = {
+	schema: cashMovementsLiteral,
 };
 
 export type UserCollections = {
@@ -609,6 +352,9 @@ export type StoreCollections = {
 	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
 	receipt_email_queue: ReceiptEmailQueueCollection;
+	closures: ClosureCollection;
+	register_sessions: RegisterSessionCollection;
+	cash_movements: CashMovementCollection;
 };
 
 export type TemporaryCollections = {
@@ -635,6 +381,9 @@ export const storeCollections = {
 	scanner_profiles,
 	template_printer_overrides,
 	receipt_email_queue,
+	closures,
+	register_sessions,
+	cash_movements,
 };
 
 export const temporaryCollections = {

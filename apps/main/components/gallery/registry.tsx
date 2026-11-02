@@ -1,0 +1,193 @@
+import * as React from 'react';
+import { ScrollView, View } from 'react-native';
+
+import { Link, Stack, useLocalSearchParams, useSegments } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Uniwind } from 'uniwind';
+
+import { stories as popover } from '@wcpos/components/popover/gallery';
+import { stories as dropdownMenu } from '@wcpos/components/dropdown-menu/gallery';
+import { stories as alertDialog } from '@wcpos/components/alert-dialog/gallery';
+import { stories as label } from '@wcpos/components/label/gallery';
+import { stories as form } from '@wcpos/components/form/gallery';
+import { stories as calendar } from '@wcpos/components/calendar/gallery';
+import { stories as treeCombobox } from '@wcpos/components/tree-combobox/gallery';
+import { stories as slider } from '@wcpos/components/slider/gallery';
+import { stories as switchStories } from '@wcpos/components/switch/gallery';
+import { stories as radioGroup } from '@wcpos/components/radio-group/gallery';
+import { stories as checkbox } from '@wcpos/components/checkbox/gallery';
+import { stories as textarea } from '@wcpos/components/textarea/gallery';
+import { stories as iconButton } from '@wcpos/components/icon-button/gallery';
+import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
+import { stories as browseTiles } from '@wcpos/core/screens/main/pos/products/browse/gallery';
+import { stories as button } from '@wcpos/components/button/gallery';
+import { stories as chip } from '@wcpos/components/chip/gallery';
+import { stories as keypad } from '@wcpos/components/keypad/gallery';
+import { stories as segmentedControl } from '@wcpos/components/segmented-control/gallery';
+import { stories as combobox } from '@wcpos/components/combobox/gallery';
+import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
+import { stories as notice } from '@wcpos/components/notice/gallery';
+import { stories as gateScreen } from '@wcpos/components/gate-screen/gallery';
+import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
+import { stories as icon } from '@wcpos/components/icon/gallery';
+import { stories as input } from '@wcpos/components/input/gallery';
+import { stories as navItem } from '@wcpos/components/nav-item/gallery';
+import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
+import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
+import { PortalHost } from '@wcpos/components/portal';
+import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
+import { stories as select } from '@wcpos/components/select/gallery';
+import { Text } from '@wcpos/components/text';
+import { stories as text } from '@wcpos/components/text/gallery';
+import { stories as dialogV2 } from '@wcpos/components/dialog/gallery';
+import { stories as badge } from '@wcpos/components/badge/gallery';
+import { stories as avatar } from '@wcpos/components/avatar/gallery';
+import { stories as loader } from '@wcpos/components/loader/gallery';
+import { stories as progress } from '@wcpos/components/progress/gallery';
+import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
+import { stories as statusBadge } from '@wcpos/components/status-badge/gallery';
+import { stories as stepProgress } from '@wcpos/components/step-progress/gallery';
+import { stories as derivation } from '@wcpos/components/derivation/gallery';
+import { stories as logView } from '@wcpos/components/log-view/gallery';
+import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
+import { stories as card } from '@wcpos/components/card/gallery';
+import { stories as tabs } from '@wcpos/components/tabs/gallery';
+import { stories as panels } from '@wcpos/components/panels/gallery';
+import { stories as table } from '@wcpos/components/table/gallery';
+import { stories as listItem } from '@wcpos/components/list-item/gallery';
+import { stories as menuRow } from '@wcpos/components/menu-row/gallery';
+import { stories as listRow } from '@wcpos/components/list-row/gallery';
+import { stories as tile } from '@wcpos/components/tile/gallery';
+import { stories as tooltip } from '@wcpos/components/tooltip/gallery';
+import { stories as posterTile } from '@wcpos/components/poster-tile/gallery';
+
+import NotFound from '../../app/+not-found';
+import { GalleryCells, type Story } from './cells';
+
+const registry: Record<string, Story[]> = {
+	'alert-dialog': alertDialog,
+	'dropdown-menu': dropdownMenu,
+	popover,
+	tabs,
+	panels,
+	table,
+	'list-item': listItem,
+	'list-row': listRow,
+	'menu-row': menuRow,
+	tile,
+	tooltip,
+	'poster-tile': posterTile,
+	badge,
+	avatar,
+	loader,
+	progress,
+	'sort-icon': sortIcon,
+	'status-badge': statusBadge,
+	'step-progress': stepProgress,
+	derivation,
+	'log-view': logView,
+	'docs-link': docsLink,
+	card,
+	label,
+	form,
+	calendar,
+	'tree-combobox': treeCombobox,
+	slider,
+	switch: switchStories,
+	'radio-group': radioGroup,
+	checkbox,
+	textarea,
+	'icon-button': iconButton,
+	chip,
+	keypad,
+	'segmented-control': segmentedControl,
+	input,
+	button,
+	select,
+	combobox,
+	text,
+	icon,
+	skeleton,
+	'empty-state': emptyState,
+	notice,
+	'gate-screen': gateScreen,
+	breadcrumb,
+	'browse-tiles': browseTiles,
+	'nav-item': navItem,
+	'page-bar': pageBar,
+	'pane-stack': paneStack,
+	'slide-over': slideOver,
+	'v2-dialog': dialogV2,
+};
+
+// The gallery shoots the five original themes; the personality themes are not baselined (Paul decides after his pass, 2026-10-30).
+const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome'] as const;
+type Theme = (typeof THEMES)[number];
+const isTheme = (theme: string | undefined): theme is Theme =>
+	(THEMES as readonly string[]).includes(theme ?? '');
+
+function GalleryPage({ children }: React.PropsWithChildren) {
+	const { theme } = useLocalSearchParams<{ theme?: string }>();
+	// Sync the URL's external theme selection before painting the cells.
+	React.useLayoutEffect(() => {
+		Uniwind.setTheme(isTheme(theme) ? theme : 'light');
+	}, [theme]);
+	return (
+		<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
+			{children}
+			<PortalHost />
+		</ScrollView>
+	);
+}
+
+export function GalleryIndex() {
+	return (
+		<GalleryPage>
+			{Object.entries(registry)
+				.filter(([, stories]) => stories.length)
+				.map(([name]) => (
+					<Link
+						key={name}
+						href={{ pathname: '/gallery/[component]', params: { component: name } }}
+						testID={`gallery-link-${name}`}
+						{...{ dataSet: { galleryComponent: name } }}
+						className="p-3"
+					>
+						<Text>{name}</Text>
+					</Link>
+				))}
+		</GalleryPage>
+	);
+}
+
+export function GalleryComponent() {
+	const { component, cell } = useLocalSearchParams<{ component: string; cell?: string }>();
+	const stories = Object.hasOwn(registry, component) ? registry[component] : undefined;
+	if (!stories?.length) return <NotFound />;
+	return (
+		<GalleryPage>
+			<View className={cell ? 'w-full' : 'web:grid web:grid-cols-2 gap-4'}>
+				<GalleryCells component={component} stories={stories} cell={cell} />
+			</View>
+		</GalleryPage>
+	);
+}
+
+export const IS_GALLERY_BUILD = true;
+
+/**
+ * The gallery build's root: the developer route gets a bare stack (no store
+ * hydration, no sync, no merchant toasts); every other route gets the merchant root.
+ */
+export function GalleryRootLayout({ merchant: Merchant }: { merchant: React.ComponentType }) {
+	const segments = useSegments();
+	if (segments[0] !== '(gallery)') return <Merchant />;
+	return (
+		<SafeAreaProvider>
+			<GestureHandlerRootView style={{ flex: 1 }}>
+				<Stack screenOptions={{ headerShown: false }} />
+			</GestureHandlerRootView>
+		</SafeAreaProvider>
+	);
+}

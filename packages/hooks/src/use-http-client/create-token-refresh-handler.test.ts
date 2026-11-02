@@ -1,6 +1,8 @@
 import 'whatwg-fetch';
 
-import { createTokenRefreshHandler } from './create-token-refresh-handler';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
+
+import { createTokenRefreshHandler, refreshAccessToken } from './create-token-refresh-handler';
 import { resetRefreshCooldown } from './refresh-access-token';
 import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
 
@@ -90,6 +92,23 @@ describe('createTokenRefreshHandler', () => {
 		resetRefreshCooldown();
 		mockPost = jest.fn();
 		getHttpClient = () => ({ post: mockPost });
+	});
+
+	it('exports the refresher used by the handler, resolving and persisting the new token', async () => {
+		const wpUser = makeWpUser();
+		mockPost.mockResolvedValue({ data: { access_token: 'fresh-token', expires_at: 12345 } });
+		(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (refresh) => {
+			const token = await refresh();
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue(token);
+		});
+
+		await expect(refreshAccessToken({ site: makeSite(), wpUser, getHttpClient })).resolves.toBe(
+			'fresh-token'
+		);
+		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({
+			access_token: 'fresh-token',
+			expires_at: 12345,
+		});
 	});
 
 	describe('canHandle', () => {
@@ -190,7 +209,7 @@ describe('createTokenRefreshHandler', () => {
 			await handler.handle(ctx);
 
 			expect(mockPost).toHaveBeenCalledWith(
-				'https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
+				`https://example.com/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
 				expect.any(Object),
 				expect.any(Object)
 			);

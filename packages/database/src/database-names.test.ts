@@ -15,21 +15,54 @@ import { isKnownAppIndexedDbDatabase, isKnownAppOpfsEntry } from './clear-all-db
 
 describe('database name helpers', () => {
 	it('returns the current database names', () => {
-		expect(getUserDatabaseName()).toBe('wcposusers_v6');
-		expect(getStoreDatabaseName('abc123')).toBe('store_v6_abc123');
+		expect(getUserDatabaseName()).toBe('wcposusers_v10');
+		expect(getStoreDatabaseName('abc123')).toBe('store_v10_abc123');
 	});
 
 	it('exposes the exact legacy database generations', () => {
-		expect(LEGACY_USER_DATABASE_NAMES).toEqual(['wcposusers_v2', 'wcposusers_v3', 'wcposusers_v4']);
-		expect(LEGACY_STORE_PREFIXES).toEqual(['store_v2_', 'store_v3_', 'store_v4_']);
+		expect(LEGACY_USER_DATABASE_NAMES).toEqual([
+			'wcposusers_v2',
+			'wcposusers_v3',
+			'wcposusers_v4',
+			'wcposusers_v6',
+			'wcposusers_v7',
+			'wcposusers_v8',
+			'wcposusers_v9',
+		]);
+		expect(LEGACY_STORE_PREFIXES).toEqual([
+			'store_v2_',
+			'store_v3_',
+			'store_v4_',
+			'store_v6_',
+			'store_v7_',
+			'store_v8_',
+			'store_v9_',
+		]);
 		expect(LEGACY_FAST_STORE_PREFIXES).toEqual([
 			'fast_store_v3_',
 			'fast_store_v4_',
 			'fast_store_v5_',
+			'fast_store_v6_',
+			'fast_store_v7_',
+			'fast_store_v8_',
+			'fast_store_v9_',
 		]);
 	});
 
 	it.each([
+		'wcposusers_v8',
+		'wcposusers_v8-sites-0',
+		'store_v8_abc123',
+		'fast_store_v8_abc123',
+		'wcposusers_v9',
+		'store_v9_abc123',
+		'fast_store_v9_abc123',
+		'wcposusers_v7',
+		'store_v7_abc123',
+		'fast_store_v7_abc123',
+		'wcposusers_v6',
+		'store_v6_abc123',
+		'fast_store_v6_abc123',
 		'wcposusers_v2',
 		'wcposusers_v3-sites-0',
 		'wcposusers_v4',
@@ -39,15 +72,27 @@ describe('database name helpers', () => {
 		'fast_store_v3_abc123',
 		'fast_store_v4_abc123',
 		'fast_store_v5_abc123',
+		// Scope databases of an older generation, including rxdb's derived store names.
+		'pos_v4_0123456789ab_s1_c2',
+		'rxdb-pos_v4_0123456789ab_s1_c2--0--orders',
+		'pos_v5_0123456789ab_s1_c2',
+		'rxdb-pos_v5_0123456789ab_s1_c2--0--orders',
+		'pos_v3_0123456789ab_s1_c2_run7',
 	])('classifies %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(true);
 	});
 
 	it.each([
-		'wcposusers_v6',
-		'wcposusers_v6-sites-0',
-		'store_v6_abc123',
-		'fast_store_v6_abc123',
+		'wcposusers_v10',
+		'wcposusers_v10-sites-0',
+		'store_v10_abc123',
+		'fast_store_v10_abc123',
+		'pos_v7_0123456789ab_s1_c2',
+		'rxdb-pos_v7_0123456789ab_s1_c2--0--orders',
+		// The DRAINABLE generation: it may hold unsent sales, and only the drain removes it.
+		'pos_v6_0123456789ab_s1_c2',
+		'rxdb-pos_v6_0123456789ab_s1_c2--0--orders',
+		'pos_v6_0123456789ab_s1_c2-wal',
 		'temporary',
 	])('does not classify %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(false);
@@ -57,29 +102,29 @@ describe('database name helpers', () => {
 		expect(isStoreDatabaseName('store_v2_abc123')).toBe(true);
 		expect(isStoreDatabaseName('store_v3_abc123')).toBe(true);
 		expect(isStoreDatabaseName('store_v4_abc123')).toBe(true);
-		expect(isStoreDatabaseName('store_v6_abc123')).toBe(true);
+		expect(isStoreDatabaseName('store_v10_abc123')).toBe(true);
 		expect(isStoreDatabaseName('fast_store_v3_abc123')).toBe(false);
 
 		expect(isFastStoreDatabaseName('fast_store_v3_abc123')).toBe(true);
 		expect(isFastStoreDatabaseName('fast_store_v4_abc123')).toBe(true);
 		expect(isFastStoreDatabaseName('fast_store_v5_abc123')).toBe(true);
-		expect(isFastStoreDatabaseName('fast_store_v6_abc123')).toBe(true);
+		expect(isFastStoreDatabaseName('fast_store_v10_abc123')).toBe(true);
 		expect(isFastStoreDatabaseName('store_v2_abc123')).toBe(false);
 	});
 
 	it('keeps clear-all coverage for every database generation', () => {
 		const knownNames = [
 			...LEGACY_USER_DATABASE_NAMES,
-			'wcposusers_v6',
+			'wcposusers_v10',
 			...LEGACY_STORE_PREFIXES.map((prefix) => `${prefix}abc123`),
-			'store_v6_abc123',
+			'store_v10_abc123',
 			...LEGACY_FAST_STORE_PREFIXES.map((prefix) => `${prefix}abc123`),
-			'fast_store_v6_abc123',
+			'fast_store_v10_abc123',
 		];
 
 		expect(knownNames.every(isKnownAppDatabaseName)).toBe(true);
 		expect(APP_DATABASE_PREFIXES).toEqual(
-			expect.arrayContaining(['wcposusers_', 'store_v6_', 'fast_store_v6_'])
+			expect.arrayContaining(['wcposusers_', 'store_v10_', 'fast_store_v10_'])
 		);
 		expect(isKnownAppDatabaseName('temporary')).toBe(false);
 	});

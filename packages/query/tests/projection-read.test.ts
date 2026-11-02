@@ -1,0 +1,70 @@
+/** @jest-environment node */
+import { createRxDatabase } from 'rxdb';
+
+import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
+
+import { searchBlobFor } from '../src/search-blob';
+import { legacySearchSnapshot } from '../src/engine-adapter/search-snapshot';
+import { resolveLegacyField } from '../src/engine-adapter/collection-map';
+import { SEARCH_FIELDS } from '../src/search-fields';
+import { readLiveProjection } from '../src/projection-read';
+import { engineProduct } from '../src/testing';
+import { storages } from './helpers/storages';
+
+import type { RxCollectionCreator, RxDatabase } from 'rxdb';
+
+describe.each(storages)('%s projection reads', (_name, storage) => {
+	let database: RxDatabase;
+	beforeEach(async () => {
+		database = await createRxDatabase({
+			name: `projection-${crypto.randomUUID()}`,
+			storage,
+			multiInstance: false,
+		});
+		await database.addCollections({
+			products: engineSyncCollectionCreators().products as RxCollectionCreator<
+				Record<string, unknown>
+			>,
+		});
+		await database.products.bulkInsert([
+			engineProduct({ uuid: 'coffee', name: 'Coffee', sku: 'C1' }),
+			engineProduct({ uuid: 'tea', name: 'Tea', sku: 'T1' }),
+			engineProduct({ uuid: 'deleted', name: 'Gone', sku: 'D1' }),
+		]);
+		await database.products.bulkRemove(['deleted']);
+	});
+	afterEach(async () => {
+		await database.close();
+	});
+	it('reads only live ids and requested values without building RxDocuments', async () => {
+		const rows = await readLiveProjection(database.products, ['payload.name', 'payload.sku']);
+		expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+			{ id: 'coffee', values: ['Coffee', 'C1'] },
+			{ id: 'tea', values: ['Tea', 'T1'] },
+		]);
+	});
+	it('builds the catalogue index without collection.find', async () => {
+		const find = jest.spyOn(database.products, 'find');
+		const blob = searchBlobFor(
+			database.products,
+			['name', 'sku'],
+			(doc) => legacySearchSnapshot('products', doc),
+			'products'
+		);
+		await blob.ready;
+		expect(blob.search(['coffee'])).toEqual(['coffee']);
+		expect(find).not.toHaveBeenCalled();
+		blob.dispose();
+	});
+});
+
+it('all configured search fields are plain engine paths', () => {
+	for (const [collection, fields] of Object.entries(SEARCH_FIELDS)) {
+		for (const field of fields) {
+			const mapping = resolveLegacyField(collection as keyof typeof SEARCH_FIELDS, field);
+			expect(mapping.compute).toBeUndefined();
+			expect(mapping.read).toBeUndefined();
+			expect(mapping.readEnginePath).toBeUndefined();
+		}
+	}
+});

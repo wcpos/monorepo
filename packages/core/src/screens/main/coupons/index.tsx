@@ -1,19 +1,14 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, CardContent, CardHeader } from '@wcpos/components/card';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
-import type { CellContext } from '@wcpos/core/table-types';
+import type { EngineRecord } from '@wcpos/query';
+import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { Actions } from './cells/actions';
 import { Active } from './cells/active';
@@ -25,38 +20,29 @@ import { EditableDescription } from './cells/editable-description';
 import { Status } from './cells/status';
 import { Usage } from './cells/usage';
 import { FilterBar } from './filter-bar';
-import { UISettingsForm } from './ui-settings-form';
+import { DisplayOptions } from '../components/display-options';
+import { CouponRow as CoarseRow } from './row';
+import { DateCell } from './cells/date';
+import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
-import { useProAccess } from '../contexts/pro-access';
+import { useAppInfo } from '../../../hooks/use-app-info';
+import { ListColumn, ListPage } from '../components/list-frame';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
+import { DataTableRow } from '../components/data-table/rows';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
+import { useProAccess } from '../contexts/pro-access';
 import { useUISettings } from '../contexts/ui-settings';
-import { useDateFormat } from '../hooks/use-date-format';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCouponRecord } from './commands/use-coupon-record';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
-import {
-	QueryStateProvider,
-	useCollectionBinding,
-	useQueryState,
-	useQueryStateActions,
-} from '../../../query';
+import { QueryStateProvider, useCollectionQueryHandle, useQueryState } from '../../../query';
 
-import type { QueryStateActions, QueryStateOf } from '../../../query';
-import type { SortFieldsByCollection } from '../../../query/query-state-types';
+import type { QueryStateOf } from '../../../query';
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
 
 type CouponRow = { record: EngineRecord<'coupons'> };
-
-function RecordDateCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
-	const key = (column.id.endsWith('_gmt') ? column.id : `${column.id}_gmt`) as
-		'date_created_gmt' | 'date_modified_gmt';
-	const dateGmt = useRecordField(row.original.record, ({ payload }) => payload[key]);
-	const dateFormatted = useDateFormat(dateGmt);
-
-	return <Text>{dateFormatted}</Text>;
-}
 
 const cells = {
 	active: Active,
@@ -68,8 +54,8 @@ const cells = {
 	usage_count: Usage,
 	actions: Actions,
 	date_expires_gmt: EditableDate,
-	date_created_gmt: RecordDateCell,
-	date_modified_gmt: RecordDateCell,
+	date_created_gmt: DateCell,
+	date_modified_gmt: DateCell,
 };
 
 const COUPONS_PAGE_SIZE = 10;
@@ -101,111 +87,133 @@ function getInitialCouponSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function CouponsScreenContent() {
+/** The list's column: the part of the page the Free preview overlay covers. */
+function CouponsColumn() {
 	const state = useQueryState<'coupons'>();
-	const actions = useQueryStateActions<'coupons'>();
-	const binding = useCollectionBinding('coupons', state);
-	const tableActions = React.useMemo<
-		Pick<QueryStateActions<'coupons'>, 'setSort' | 'extendLimit' | 'setFilter'>
-	>(
-		() => ({
-			setSort: actions.setSort,
-			extendLimit: actions.extendLimit,
-			setFilter: actions.setFilter,
-		}),
-		[actions]
-	);
+	const handle = useCollectionQueryHandle('coupons', state);
 	const t = useT();
 	const router = useRouter();
-	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const { patch } = useMutation({ collectionName: 'coupons' });
+	// The caret opens the coupon; the row only while the Actions column is hidden.
+	const editable = !readOnly && caps.canEditCoupons;
+	const open = (uuid: string) =>
+		router.push({ pathname: '/coupons/edit/[couponId]', params: { couponId: uuid } });
+	const { saveCouponChange } = useCouponRecord();
 
 	const tableConfig = React.useMemo(
 		() => ({
 			meta: {
-				onChange: ({
+				commit: ({
 					document,
 					changes,
 				}: {
 					document: EngineRecord<'coupons'>;
 					changes: Record<string, unknown>;
 				}) => {
-					void patch({ document, data: changes });
+					void saveCouponChange(document, changes);
 				},
 			},
 		}),
-		[patch]
+		[saveCouponChange]
 	);
 
 	return (
-		<View
-			testID="screen-coupons"
-			className="h-full p-2"
-			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+		<ListColumn
+			testID="coupons-body"
+			id="coupons"
+			chips={<FilterBar />}
+			handle={handle}
+			skeleton={<DataTableSkeleton id="coupons" />}
+			renderRow={{
+				coarse: ({ item }: { item: Row<CouponRow, DataTableFeatures> }) => (
+					<VirtualizedList.Item>
+						<View testID={`data-table-row-${item.original.record.uuid}`}>
+							<CoarseRow record={item.original.record} />
+						</View>
+					</VirtualizedList.Item>
+				),
+				fine: ({ item }) => (
+					<VirtualizedList.Item>
+						<DataTableRow
+							item={item}
+							pressWhenActionsHidden={editable ? () => open(item.original.record.uuid) : undefined}
+						/>
+					</VirtualizedList.Item>
+				),
+			}}
+			narrowed={!!state.search || Object.keys(state.filters).length > 0}
+			empty={{
+				title: t('coupons.no_coupons_yet'),
+				description: t('coupons.no_coupons_yet_description'),
+			}}
+			noResults={{ title: t('coupons.nothing_matches_filters'), clear: t('coupons.clear_filters') }}
 		>
-			<Card className="flex-1">
-				<CardHeader className="bg-card-header p-2">
-					<VStack>
-						<HStack>
-							<QuerySearchInput
-								collectionName="coupons"
-								placeholder={t('common.search_coupons')}
-								className="flex-1"
-								testID="search-coupons"
+			{(table) => (
+				<DataTable<CouponRow>
+					id="coupons"
+					collectionName="coupons"
+					handle={handle}
+					sort={state.sort}
+					cells={cells}
+					estimatedItemSize={56}
+					tableConfig={tableConfig}
+					{...table}
+				/>
+			)}
+		</ListColumn>
+	);
+}
+
+function CouponsScreenContent() {
+	const t = useT();
+	const router = useRouter();
+	// The bar sits outside the guard, so it reads the licence itself.
+	const { license } = useAppInfo();
+	const readOnly = !(license?.isPro ?? false);
+	const { caps } = useUserCapabilities();
+	return (
+		<ListPage
+			testID="screen-coupons"
+			pro="coupons"
+			bar={
+				<ManagementBar
+					// No title: the search's placeholder names the page and the rail marks it (owner, 2026-10-18).
+					testID="coupons-bar"
+					search={
+						<QuerySearchInput
+							collectionName="coupons"
+							placeholder={t('common.search_coupons')}
+							testID="search-coupons"
+						/>
+					}
+				>
+					<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
+						<CapabilityTooltipTrigger>
+							<IconButton
+								testID="coupons-add-button"
+								name="plus"
+								accessibilityLabel={t('coupons.add_coupon')}
+								onPress={() => router.push({ pathname: '/coupons/add' })}
+								disabled={readOnly || !caps.canCreateCoupons}
 							/>
-							<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
-								<CapabilityTooltipTrigger>
-									<IconButton
-										testID="coupons-add-button"
-										name="plus"
-										onPress={() => router.push({ pathname: '/coupons/add' })}
-										disabled={readOnly || !caps.canCreateCoupons}
-									/>
-								</CapabilityTooltipTrigger>
-								<TooltipContent>
-									<Text>
-										{readOnly
-											? t('common.upgrade_to_pro')
-											: !caps.canCreateCoupons
-												? t('capability_hints.create_coupons_admin_path')
-												: t('coupons.add_coupon')}
-									</Text>
-								</TooltipContent>
-							</Tooltip>
-							<UISettingsDialog title={t('coupons.coupon_settings')}>
-								<UISettingsForm />
-							</UISettingsDialog>
-						</HStack>
-						<ErrorBoundary>
-							<FilterBar />
-						</ErrorBoundary>
-					</VStack>
-				</CardHeader>
-				<CardContent className="border-border flex-1 border-t p-0">
-					<ErrorBoundary>
-						<Suspense fallback={<DataTableSkeleton id="coupons" />}>
-							<DataTable<CouponRow>
-								id="coupons"
-								collectionName="coupons"
-								binding={binding}
-								resource={binding.resource}
-								sort={state.sort}
-								actions={tableActions}
-								active$={binding.active$}
-								total$={binding.total$}
-								sync={binding.sync}
-								cells={cells}
-								noDataMessage={t('common.no_coupons_found')}
-								estimatedItemSize={100}
-								tableConfig={tableConfig}
-							/>
-						</Suspense>
-					</ErrorBoundary>
-				</CardContent>
-			</Card>
-		</View>
+						</CapabilityTooltipTrigger>
+						<TooltipContent>
+							<Text>
+								{readOnly
+									? t('common.upgrade_to_pro')
+									: !caps.canCreateCoupons
+										? t('capability_hints.create_coupons_admin_path')
+										: t('coupons.add_coupon')}
+							</Text>
+						</TooltipContent>
+					</Tooltip>
+					<DisplayOptions id="coupons" />
+				</ManagementBar>
+			}
+		>
+			<CouponsColumn />
+		</ListPage>
 	);
 }
 

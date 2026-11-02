@@ -1,85 +1,12 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxEmpty,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxItemText,
-	ComboboxList,
-	ComboboxTrigger,
-	ComboboxValue,
-} from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
-import { useT } from '@wcpos/core/contexts/translations';
-import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { HierarchicalOption } from '@wcpos/components/tree-combobox';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useAllCategoriesBinding, useGuardedExtension, useSearchSelect } from '../../../../query';
+import { useAllCategoriesHandle, useQuerySnapshot } from '../../../../query';
 
-import type { SearchSelectBinding } from '../../../../query';
-
-/**
- *
- */
-function CategoryList({ binding }: { binding: SearchSelectBinding }) {
-	const result = useObservableSuspense(binding.resource) as {
-		hits: { id: string; record: EngineRecord<'categories'> }[];
-	};
-	const handleEndReached = useGuardedExtension(
-		binding.extendLimit,
-		result.hits.length,
-		binding.limit
-	);
-	const t = useT();
-
-	const data = result.hits.map(({ record }) => ({
-		value: String(record.payload.id),
-		label: record.payload.name ?? '',
-	}));
-
-	return (
-		<ComboboxList
-			data={data}
-			renderItem={({ item }) => (
-				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
-					<ComboboxItemText />
-				</ComboboxItem>
-			)}
-			estimatedItemSize={44}
-			onEndReached={handleEndReached}
-			onEndReachedThreshold={0.1}
-			ListEmptyComponent={<ComboboxEmpty>{t('common.no_category_found')}</ComboboxEmpty>}
-		/>
-	);
-}
-
-/**
- *
- */
-export function CategorySearch() {
-	const t = useT();
-	const binding = useSearchSelect('category');
-
-	/**
-	 *
-	 */
-	return (
-		<>
-			<ComboboxInput
-				placeholder={t('common.search_categories')}
-				value={binding.search}
-				onChangeText={binding.setSearch}
-			/>
-			<Suspense>
-				<CategoryList binding={binding} />
-			</Suspense>
-		</>
-	);
-}
+import type { QueryHandle } from '../../../../query';
 
 /**
  * Loads all resident categories and passes them as HierarchicalOption[] to a callback.
@@ -90,12 +17,12 @@ export function CategorySearch() {
  */
 function CategoryTreeLoaderInner({
 	onOptionsLoaded,
-	resource,
+	handle,
 }: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
-	resource: ReturnType<typeof useAllCategoriesBinding>['resource'];
+	handle: QueryHandle;
 }) {
-	const result = useObservableSuspense(resource) as {
+	const result = useQuerySnapshot(handle, []) as unknown as {
 		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 
@@ -124,42 +51,16 @@ function CategoryTreeLoaderInner({
 export function CategoryTreeLoader(props: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
 }) {
-	// The binding is built HERE, above the boundary, and only the reader is inside it. A
-	// resource built inside the boundary that suspends on it is discarded with the aborted
-	// render and rebuilt by every retry, which never ends (#1707); built above it, this
-	// component commits alongside the fallback and the retry reads back the same resource.
-	const binding = useAllCategoriesBinding();
+	// The handle's owner is HERE, above the boundary, and only the reader is inside it. The
+	// owner's retain is an effect, and it is what starts the read: an owner inside the boundary
+	// its reader suspends is discarded with the aborted render and never commits, so the read
+	// never starts and the reader waits forever (#1707). Above it, this component commits
+	// alongside the fallback, the read starts, and the retry reads the same handle's answer.
+	const handle = useAllCategoriesHandle();
 
 	return (
 		<Suspense>
-			<CategoryTreeLoaderInner {...props} resource={binding.resource} />
+			<CategoryTreeLoaderInner {...props} handle={handle} />
 		</Suspense>
-	);
-}
-
-/**
- *
- */
-export function CategorySelect({
-	value,
-	onValueChange,
-}: {
-	value?: import('@wcpos/components/combobox').Option;
-	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
-}) {
-	const t = useT();
-
-	/**
-	 *
-	 */
-	return (
-		<Combobox value={value} onValueChange={onValueChange}>
-			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('common.select_category')} />
-			</ComboboxTrigger>
-			<ComboboxContent className="min-w-64">
-				<CategorySearch />
-			</ComboboxContent>
-		</Combobox>
 	);
 }

@@ -74,6 +74,15 @@ cd <electron-worktree> && CXXFLAGS="-std=c++17" pnpm rebuild:all
 
 Required — Electron needs `usb` rebuilt for its Node ABI. `CXXFLAGS="-std=c++17"` is required since 2026-08-14: `usb`'s `node-addon-api` ≥ 8.9 needs C++17 (`std::void_t`, `is_null_pointer_v` errors in napi.h) while the `usb` gyp file still compiles at C++14.
 
+### 4b. Seed rxdb-premium from the monorepo worktree
+
+`rxdb-premium` on npm is a download stub: its postinstall needs a licence key that only CI has, so after step 3 the electron worktree's `node_modules/rxdb-premium/` has no `dist/` or `plugins/`, and Forge dies at launch with `Cannot find module 'rxdb-premium/plugins/storage-sqlite'` (hit 2026-10-22). Copy the real build from the monorepo worktree (versions must match — `grep '"version"' <each>/node_modules/rxdb-premium/package.json`) and re-apply the electron patch:
+
+```bash
+cp -R <monorepo-worktree>/node_modules/rxdb-premium/dist <monorepo-worktree>/node_modules/rxdb-premium/plugins <electron-worktree>/node_modules/rxdb-premium/
+cd <electron-worktree> && pnpm run patch:premium   # "already patched" is fine: the monorepo patched it
+```
+
 ### 5. Kill conflicting ports
 
 ```bash
@@ -125,6 +134,7 @@ Report: "Electron dev launched in Terminal windows. Logs are visible there."
 | Mistake | Result |
 |---------|--------|
 | Skip `pnpm rebuild:all` in the electron worktree | Native module crashes at runtime |
+| Skip seeding `rxdb-premium` (step 4b) | Forge launches, then `Cannot find module 'rxdb-premium/plugins/storage-sqlite'` |
 | Start Electron before the renderer answers on 8088 | Electron opens a white screen against a server that is not up yet |
 | Don't kill port 8088 | Expo can't bind, white screen |
 | Don't kill port 9000 | Electron Forge logger crashes |

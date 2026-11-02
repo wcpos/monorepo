@@ -20,36 +20,117 @@
 
 import { randomUUID } from 'crypto';
 
-import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
+import {
+	type APIRequestContext,
+	expect,
+	type Locator,
+	type Page,
+	type TestInfo,
+} from '@playwright/test';
 
 import { isolatedProductTest } from './checkout-probe';
-import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
+import {
+	closeOrderSheet,
+	ensureRegisterOpen,
+	getStoreUrl,
+	type StoreAuthorization,
+	storeRequestOptions,
+} from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
 
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
 /**
- * Whether a response is the order-push POST, under EITHER permalink style.
+ * Match the completed order-push POST, under EITHER permalink style.
  * Pretty permalinks put the route in the pathname; plain permalinks carry it
  * as `?rest_route=` — matching only the pretty form makes a spec time out on a
  * plain-permalink store despite a successful save (#1114 review). Same dual
- * form orders.spec.ts always used.
+ * form orders.spec.ts always used. The first 401 starts the fetcher's single
+ * refresh-and-retry cycle; a second 401 is the terminal retry response.
  */
-export function isPushOrdersResponse(response: {
+export function createPushOrdersResponseMatcher(): (response: {
 	url: () => string;
 	request: () => { method: () => string };
-}): boolean {
-	if (response.request().method() !== 'POST') return false;
-	const url = new URL(response.url());
-	return (
-		PUSH_ORDERS.test(response.url()) ||
-		url.searchParams.get('rest_route') === '/wcpos/v2/push/orders'
-	);
+	status: () => number;
+}) => boolean {
+	let sawUnauthorized = false;
+	return (response) => {
+		if (response.request().method() !== 'POST') return false;
+		const url = new URL(response.url());
+		const isPushOrders =
+			PUSH_ORDERS.test(response.url()) ||
+			url.searchParams.get('rest_route') === '/wcpos/v2/push/orders';
+		if (!isPushOrders || response.status() !== 401) return isPushOrders;
+		if (sawUnauthorized) return true;
+		sawUnauthorized = true;
+		return false;
+	};
 }
 
-/** The checkout modal route, `/cart/<uuid>/checkout`. */
+/** The checkout route, `/cart/<uuid>/checkout`. */
 const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
+
+/**
+ * Where checkout happens. On a wide screen, a store with the payments contract checks out in
+ * the tender pane that replaces the products column (da7341cd6, roadmap#165); a phone, or a
+ * store without the contract, opens the modal.
+ */
+export type CheckoutSurface = 'pane' | 'modal';
+
+/** Whichever checkout surface is on screen. */
+export function checkoutSurfaceLocator(page: Page): Locator {
+	return page
+		.getByTestId('checkout-tender-pane')
+		.or(page.getByTestId('checkout-dialog'))
+		.filter({ visible: true })
+		.first();
+}
+
+async function checkoutSurface(page: Page): Promise<CheckoutSurface> {
+	return (await page.getByTestId('checkout-tender-pane').isVisible()) ? 'pane' : 'modal';
+}
+
+/** The same control on either surface: the amount put in front of the cashier, and the way out. */
+const CONTROL_IDS = {
+	// The pane's balance line hides itself when it equals the entry (#2529); the entry is what the cashier sees.
+	pane: { amount: 'checkout-entry', close: 'checkout-close' },
+	modal: { amount: 'checkout-amount-to-pay', close: 'cancel-checkout-button' },
+} as const;
+export function checkoutControl(page: Page, surface: CheckoutSurface, control: 'amount' | 'close') {
+	return page.getByTestId(CONTROL_IDS[surface][control]);
+}
+
+/**
+ * Bring the store's order-pay webview on screen and return its Process button. The modal
+ * shows both at once; the pane keeps them on its Legacy tab, beside the tender grid.
+ */
+export async function showPaymentWebview(page: Page, surface: CheckoutSurface): Promise<Locator> {
+	if (surface === 'modal') return page.getByTestId('process-payment-button');
+	await page.getByTestId('checkout-tab-legacy').click();
+	return page.getByTestId('checkout-legacy-process-payment');
+}
+
+/**
+ * With no payment link the store's payment page cannot load: the modal disables
+ * Process, and the pane's Legacy tab shows the notice in place of the frame and
+ * its button. `gatewaysLoaded` settles once the webview surface is on screen.
+ */
+export async function expectPaymentBlocked(
+	page: Page,
+	surface: CheckoutSurface,
+	gatewaysLoaded: Promise<unknown>,
+	timeout: number
+) {
+	const process = await showPaymentWebview(page, surface);
+	await gatewaysLoaded;
+	if (surface === 'modal') {
+		await expect(process).toBeDisabled({ timeout });
+		return;
+	}
+	await expect(page.getByTestId('checkout-payment-form-unavailable')).toBeVisible({ timeout });
+	await expect(process).toHaveCount(0);
+}
 
 /* -------------------------------------------------------------------------- */
 /* Wire shapes                                                                */
@@ -169,20 +250,22 @@ export function newRunLabel(): string {
 }
 
 /**
- * Stamp the run label onto the order via the cart's order-note UI, so the
+ * Stamp the run label onto the order via the cart's Order Meta UI, so the
  * created order is identifiable in the shared store.
  */
 export async function stampRunLabel(page: Page, label: string): Promise<void> {
-	await page.getByTestId('order-note-button').click();
+	await page.getByTestId('order-meta-button').click();
 	const input = page.getByTestId('order-note-input');
 	await expect(input).toBeVisible({ timeout: 15_000 });
+	// The note saves as it is typed; the Saved mark beside the label is the write landing.
 	await input.fill(label);
-	await page.getByTestId('add-note-button').click();
-	await expect(page.getByTestId('order-note-dialog')).toBeHidden({ timeout: 15_000 });
+	await expect(page.getByTestId('saved-customer_note')).toBeVisible({ timeout: 15_000 });
+	await closeOrderSheet(page);
 }
 
 /**
- * Click Checkout and wait, deterministically, for the checkout modal.
+ * Click Checkout and wait, deterministically, for the checkout surface (the
+ * wide tender pane or the modal; see {@link CheckoutSurface}).
  *
  * WHY THIS EXISTS (#1012). `PayButton.handlePay` awaits `pushDocument(order)` —
  * a live POST to `/wcpos/v2/push/orders` — and only calls `router.push(...)`
@@ -202,8 +285,9 @@ export async function stampRunLabel(page: Page, label: string): Promise<void> {
 export async function openCheckout(
 	page: Page,
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
-): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
-	const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+): Promise<{ orderId: number; uuid: string; sent: OrderPayload; surface: CheckoutSurface }> {
+	await ensureRegisterOpen(page);
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});
 	// If the click below throws, this waiter is left pending and rejects later with
@@ -253,20 +337,27 @@ export async function openCheckout(
 	const routeUuid = /\/cart\/([^/]+)\/checkout$/.exec(new URL(page.url()).pathname)?.[1];
 	expect(routeUuid, 'the observed order save must belong to the order under checkout').toBe(uuid);
 
-	// The modal body is Suspense-gated on the order document resolving out of the
-	// local engine, so the dialog can mount after the route settles.
-	await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
-	await expect(page.getByTestId('process-payment-button')).toBeVisible({ timeout: 30_000 });
+	// Either surface is Suspense-gated on the order document resolving out of the
+	// local engine, so it can mount after the route settles.
+	await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
+	const surface = await checkoutSurface(page);
+	if (surface === 'modal') {
+		await expect(page.getByTestId('process-payment-button')).toBeVisible({ timeout: 30_000 });
+	}
 
-	if (orderId > 0) return { orderId, uuid, sent };
+	if (orderId > 0) return { orderId, uuid, sent, surface };
 
 	// The ack carried no id. The order still exists server-side, so recover the id
-	// from the payment frame — and register THAT, or a real paid order silently
-	// escapes the cleanup registry.
-	const resolvedId = await orderIdFromPaymentFrame(page);
-	expect(resolvedId, 'server-assigned order id (ack had none, iframe fallback)').toBeGreaterThan(0);
+	// (the pane prints it; the modal's payment frame names it) — and register THAT,
+	// or a real paid order silently escapes the cleanup registry.
+	// The pane's id is `display:none`, so a text assertion, never visibility.
+	const printed = page.getByTestId('checkout-server-order-id');
+	if (surface === 'pane') await expect(printed).toHaveText(/^[1-9]\d*$/, { timeout: 30_000 });
+	const resolvedId =
+		surface === 'pane' ? Number(await printed.textContent()) : await orderIdFromPaymentFrame(page);
+	expect(resolvedId, 'server-assigned order id (ack had none)').toBeGreaterThan(0);
 	options.onOrderCreated?.({ id: resolvedId, uuid });
-	return { orderId: resolvedId, uuid, sent };
+	return { orderId: resolvedId, uuid, sent, surface };
 }
 
 /**
@@ -274,7 +365,7 @@ export async function openCheckout(
  * `order-pay/<id>` endpoint, so the id is recoverable even if the push ack was
  * a retry we did not observe.
  */
-async function orderIdFromPaymentFrame(page: Page): Promise<number> {
+export async function orderIdFromPaymentFrame(page: Page): Promise<number> {
 	const src = await page
 		.locator('iframe')
 		.first()
@@ -318,6 +409,8 @@ async function orderIdFromPaymentFrame(page: Page): Promise<number> {
  * before any payment happens. Route departure cannot.
  */
 export async function processPayment(page: Page): Promise<void> {
+	// On the pane the frame lives on the Legacy tab, so that tab comes first.
+	const button = await showPaymentWebview(page, await checkoutSurface(page));
 	// Order matters. Since #1031 the app itself keeps this button disabled while
 	// `paymentFrameLoading` is true, so `toBeEnabled` now transitively waits on the
 	// store's page load — a live cross-origin fetch. Wait for the frame FIRST, so
@@ -329,7 +422,6 @@ export async function processPayment(page: Page): Promise<void> {
 		'the store payment page must be loaded before the process-payment message is posted'
 	).toBeAttached({ timeout: 90_000 });
 
-	const button = page.getByTestId('process-payment-button');
 	await expect(
 		button,
 		'payment button must be enabled — the store supplied a payment link and the frame has loaded'
@@ -339,6 +431,7 @@ export async function processPayment(page: Page): Promise<void> {
 
 	await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
 	await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
+	await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -611,8 +704,7 @@ export async function readCartMoney(
 	const marker = (testId: string) => page.getByTestId(testId);
 	const total = marker('cart-order-total');
 	// Exactly one: OpenOrders — and so the cart, and so these markers — is
-	// mounted once, by design (see useCartSettlement's "mounted exactly once"
-	// note). Two would mean two carts, which is a defect in its own right and
+	// mounted once, by design. Two would mean two carts, a defect in its own right, and
 	// would make "the" cart total ambiguous.
 	await expect(total, 'exactly one cart-order-total must be rendered').toHaveCount(1);
 	await expect(total, 'the cart must settle a total before it can be compared').toHaveText(/\d/, {

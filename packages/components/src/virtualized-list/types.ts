@@ -70,6 +70,8 @@ type ListProps<T> = {
 
 	/** Optional custom native scroll component passed through to FlashList. */
 	renderScrollComponent?: FlashListProps<T>['renderScrollComponent'];
+	/** A list inside a page that scrolls on the same axis: Android hands it its own drags. */
+	nestedScrollEnabled?: boolean;
 };
 
 type ItemProps<T> = ViewProps & {

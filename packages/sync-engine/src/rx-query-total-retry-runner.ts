@@ -1,4 +1,4 @@
-import { RequestTimeoutError } from './write-path/request-timeout';
+import { RequestTimeoutError } from './transport/request-timeout';
 
 import type {
 	QueryTotalCacheEntry,
@@ -59,7 +59,7 @@ export type QueryTotalRetryRunnerResult = {
 	unsupported: number;
 	failed: number;
 	timedOut: number;
-	lastFailure?: unknown;
+	lastTimeout?: RequestTimeoutError;
 	cacheEntries: QueryTotalCacheEntry[];
 };
 
@@ -197,8 +197,10 @@ export async function runQueryTotalRetryRequests(
 				failedState(claimedState, input, failedAtMs)
 			);
 			result.failed += 1;
-			if (error instanceof RequestTimeoutError) result.timedOut += 1;
-			result.lastFailure = error;
+			if (error instanceof RequestTimeoutError) {
+				result.timedOut += 1;
+				result.lastTimeout = error;
+			}
 		}
 	}
 

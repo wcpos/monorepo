@@ -1,23 +1,18 @@
 import * as React from 'react';
 
-import { endOfDay } from 'date-fns/endOfDay';
 import { isSameDay } from 'date-fns/isSameDay';
 import { isToday } from 'date-fns/isToday';
 import { isYesterday } from 'date-fns/isYesterday';
-import { startOfDay } from 'date-fns/startOfDay';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
+import { FilterChip as Chip } from './chip';
 import { DateRangeCalendar } from './calendar';
+import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../../../hooks/use-store-day';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
-import {
-	convertLocalDateToUTCString,
-	convertUTCStringToLocalDate,
-	useLocalDate,
-} from '../../../../../hooks/use-local-date';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../../../hooks/use-local-date';
 
 interface Props {
 	onRemove?: () => void;
@@ -28,6 +23,7 @@ interface Props {
  */
 export function DateRangePill({ onRemove }: Props = {}) {
 	const t = useT();
+	const { timezone, dayBounds, rangeToFilter } = useStoreDay();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
@@ -41,20 +37,20 @@ export function DateRangePill({ onRemove }: Props = {}) {
 	 */
 	const label = React.useMemo(() => {
 		if (!isActive) {
-			return t('common.date_range');
+			return t('orders.date_range');
 		}
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
 		// we need to convert it to a local date
-		const from = convertUTCStringToLocalDate(selectedDateRange.from);
-		const to = convertUTCStringToLocalDate(selectedDateRange.to);
+		const from = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.from));
+		const to = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.to));
 
 		// check if to and from are the same day
 		if (isSameDay(from, to)) {
-			if (isToday(from)) {
+			if (isToday(from, zoneOptions(timezone))) {
 				return t('common.today');
 			}
-			if (isYesterday(from)) {
+			if (isYesterday(from, zoneOptions(timezone))) {
 				return t('common.yesterday');
 			}
 		}
@@ -63,7 +59,7 @@ export function DateRangePill({ onRemove }: Props = {}) {
 		const toStr = formatDate(to, 'd MMM');
 
 		return `${fromStr} - ${toStr}`;
-	}, [isActive, selectedDateRange, formatDate, t]);
+	}, [isActive, selectedDateRange, formatDate, t, timezone]);
 
 	/**
 	 *
@@ -76,19 +72,19 @@ export function DateRangePill({ onRemove }: Props = {}) {
 
 			const { from, to } = range;
 
-			// Ensure we capture the full day range in local time
-			// from: start of day (00:00:00 local) → converted to UTC
-			// to: end of day (23:59:59 local) → converted to UTC
-			actions.setFilter('dateRange', {
-				from: convertLocalDateToUTCString(startOfDay(from)),
-				to: convertLocalDateToUTCString(endOfDay(to)),
-			});
+			actions.setFilter(
+				'dateRange',
+				rangeToFilter({
+					from: dayBounds(calendarDate(from)).from,
+					to: dayBounds(calendarDate(to)).to,
+				})
+			);
 
 			if (triggerRef.current) {
 				triggerRef.current?.close();
 			}
 		},
-		[actions]
+		[actions, dayBounds, rangeToFilter]
 	);
 
 	return (
@@ -98,18 +94,22 @@ export function DateRangePill({ onRemove }: Props = {}) {
 				ref={triggerRef}
 				asChild
 			>
-				<ButtonPill
-					size="xs"
-					leftIcon="calendarDays"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => (onRemove ? onRemove() : actions.clearFilter('dateRange'))}
-				>
-					<ButtonText>{label}</ButtonText>
-				</ButtonPill>
+				<Chip
+					clearLabel={t('common.remove')}
+					clearTestID="order-filter-date-remove"
+					testID="order-filter-date"
+					icon="calendar"
+					on={isActive}
+					onClear={
+						isActive ? () => (onRemove ? onRemove() : actions.clearFilter('dateRange')) : undefined
+					}
+					label={label}
+				/>
 			</PopoverTrigger>
-			<PopoverContent className="w-auto p-2">
-				<DateRangeCalendar onSelect={handleDateSelect} />
+			<PopoverContent testID="order-filter-date-popover" className="w-auto p-2">
+				{/* Keyed by zone: the calendar seeds its selection from the store day at mount, so a
+				    zone resolved after mount must not leave the old selection behind. */}
+				<DateRangeCalendar key={timezone} onSelect={handleDateSelect} />
 			</PopoverContent>
 		</Popover>
 	);

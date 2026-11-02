@@ -1,0 +1,200 @@
+import * as React from 'react';
+import { type Pressable, View } from 'react-native';
+
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { ListRow } from '@wcpos/components/list-row';
+import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
+import { type EngineRecord, useDocField } from '@wcpos/query';
+
+import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+import { CustomerAvatar, GuestAvatar } from '../../components/user-avatar/customer-avatar';
+import { useT } from '../../../../contexts/translations';
+import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
+import { CartTabTitle } from './tab-title';
+import { cartContents } from './cart-contents';
+import { cartRestartsOnAdd } from '../hooks/cart-restart';
+import { TabChip } from './tab-chip';
+
+// The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows
+// must not re-render every second.
+export const AGE_TICK_MS = 60_000;
+// From three entries the line leads with its count, so whatever the ellipsis hides is counted.
+const COUNT_FROM = 3;
+// A cart parked for an hour is one somebody forgot: its age turns the warning colour so it
+// stands out from the live ones (Blaze's "parked list grows stale" in one row).
+export const STALE_AFTER_MS = 60 * 60_000;
+
+type Order = { id: string; record: EngineRecord<'orders'> };
+export function OpenOrdersList({
+	orders,
+	activeValue,
+	leaving = false,
+	onSelect,
+	onClose,
+}: {
+	orders: readonly Order[];
+	activeValue: string;
+	/** The list is sliding out: focus has gone back to the strip and must stay there. */
+	leaving?: boolean;
+	onSelect: (id: string) => void;
+	onClose: (id?: string) => void;
+}) {
+	const t = useT();
+	const nowMs = useNowMs(AGE_TICK_MS);
+	return (
+		<View testID="open-orders-list" className="flex-1">
+			<View className="h-ctl border-border flex-row items-center justify-between border-b px-2">
+				<Text>{t('pos_cart.open_orders')}</Text>
+				<IconButton
+					name="close"
+					testID="open-orders-close"
+					accessibilityLabel={t('common.close')}
+					onPress={() => onClose()}
+				/>
+			</View>
+			{/* Virtualized: a store can hold thousands of open orders, and every row subscribes
+			    to its record, save state and payment methods. */}
+			<VirtualizedList.Root style={{ flex: 1 }}>
+				<VirtualizedList.List
+					data={orders}
+					keyExtractor={(order) => order.id}
+					estimatedItemSize={60}
+					extraData={`${activeValue}:${leaving}:${nowMs}`}
+					renderItem={({ item: { id, record } }) => (
+						<VirtualizedList.Item>
+							<OrderRow
+								order={record}
+								selected={id === activeValue}
+								takesFocus={!leaving}
+								nowMs={nowMs}
+								onPress={() => {
+									onSelect(id);
+									onClose(id);
+								}}
+							/>
+						</VirtualizedList.Item>
+					)}
+				/>
+			</VirtualizedList.Root>
+		</View>
+	);
+}
+
+/**
+ * Who, what, how much, how long, and the status (board, chosen 2026-10-09). The item line
+ * is what a cashier remembers a cart by when the customer is "Guest"; the age is a quiet
+ * number until the cart has waited an hour. Nothing appears on hover: the row is the button.
+ * The open cart is the filled row with the bar on its left; it needs no further mark.
+ */
+function OrderRow({
+	order,
+	selected,
+	takesFocus,
+	nowMs,
+	onPress,
+}: {
+	order: EngineRecord<'orders'>;
+	selected: boolean;
+	takesFocus: boolean;
+	nowMs: number;
+	onPress: () => void;
+}) {
+	const t = useT();
+	const { getLabel } = useOrderStatusLabel();
+	const relative = useRelativeTime();
+	const payload = useDocField(order, (value) => value.payload);
+	const billing = payload.billing;
+	const focusCurrent = React.useCallback(
+		(node: React.ElementRef<typeof Pressable> | null) => {
+			// The row is focused while its list is still sliding in: without `preventScroll` the
+			// browser scrolls the clipping frame to bring it into view and the slide jumps.
+			if (selected && takesFocus)
+				(node as { focus?: (options?: FocusOptions) => void } | null)?.focus?.({
+					preventScroll: true,
+				});
+		},
+		[selected, takesFocus]
+	);
+	const name = [billing?.first_name, billing?.last_name].filter(Boolean).join(' ');
+	const entries = cartContents(payload);
+	const parts = entries.map((entry) =>
+		entry.kind === 'line'
+			? entry.quantity !== 1
+				? `${entry.name} ×${entry.quantity}`
+				: entry.name
+			: entry.kind === 'fee'
+				? entry.name
+				: t('pos_cart.shipping_item', { method: entry.method })
+	);
+	const items =
+		entries.length >= COUNT_FROM
+			? `${t('pos_cart.n_items', { n: entries.length, count: entries.length })} · ${parts.join(', ')}`
+			: parts.join(', ');
+	const openedMs = payload.date_created_gmt
+		? convertUTCStringToLocalDate(payload.date_created_gmt).getTime()
+		: undefined;
+	const stale = openedMs !== undefined && nowMs - openedMs >= STALE_AFTER_MS;
+	const ink = stale ? 'text-warning-text' : 'text-muted-foreground';
+	return (
+		<ListRow
+			testID={`open-orders-row-${order.uuid}`}
+			size="sm"
+			selected={selected}
+			ref={focusCurrent}
+			onPress={onPress}
+			leading={
+				// The avatar follows the row's title, which reads the billing name only: a row titled
+				// "Guest" (a guest, or a registered customer whose order carries no name) gets the
+				// Guest glyph, never another person's picture or initials beside that word.
+				name ? (
+					<CustomerAvatar
+						customer={{
+							billing: { first_name: billing?.first_name, last_name: billing?.last_name },
+							id: payload.customer_id,
+						}}
+						size="md"
+					/>
+				) : (
+					<GuestAvatar size="md" />
+				)
+			}
+			trailing={
+				<View className="items-end gap-0.5">
+					<View className="tabular-nums">
+						<CartTabTitle order={order} active />
+					</View>
+					<HStack space="sm">
+						{/* A cart that will restart with its next line has no age to show (#2183). */}
+						{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
+							<TextClassContext.Provider value={ink}>
+								<HStack space="xs">
+									<Icon name="pending" size="xs" />
+									<Text
+										testID={`open-orders-row-${order.uuid}-age`}
+										variant="help"
+										className={stale ? `${ink} font-semibold` : undefined}
+									>
+										{relative(openedMs, nowMs)}
+									</Text>
+								</HStack>
+							</TextClassContext.Provider>
+						)}
+						<TabChip order={order} fallbackLabel={getLabel(payload.status)} fallbackIsStatus />
+					</HStack>
+				</View>
+			}
+		>
+			<Text className="font-semibold" numberOfLines={1}>
+				{name || t('pos_cart.guest')}
+			</Text>
+			<Text testID={`open-orders-row-${order.uuid}-items`} variant="help" numberOfLines={1}>
+				{items || t('pos_cart.cart_empty')}
+			</Text>
+		</ListRow>
+	);
+}

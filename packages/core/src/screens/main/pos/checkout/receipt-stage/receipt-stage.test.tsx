@@ -1,0 +1,624 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+import { AccessibilityInfo } from 'react-native';
+
+import * as Haptics from 'expo-haptics';
+import { withDelay, withTiming } from 'react-native-reanimated';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+
+import { withAwaitingCustomer } from '@wcpos/order-math';
+import { Platform } from '@wcpos/utils/platform';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
+
+import { enterReceipt, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import { useTerminalLeg } from '../payments/server/use-terminal-leg';
+import { ReceiptStage } from './receipt-stage';
+
+jest.mock('../payments/server/use-terminal-leg', () => ({ useTerminalLeg: jest.fn() }));
+let mockAwaiting: boolean | null = false;
+jest.mock('../use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+// The unused asChild path imports untranspiled JSX; keep the real collapsible behavior.
+jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
+
+const mockReplace = jest.fn();
+const mockDismiss = jest.fn();
+const mockDismissTo = jest.fn();
+const mockSetCurrentOrderID = jest.fn();
+let mockPrintedTo: string | null = null;
+let mockAutoPrint = false;
+let mockAutoPrintPending = false;
+let mockBack: () => void;
+let mockScreenSize = 'sm';
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
+}));
+const mockOrder = {
+	uuid: 'paid',
+	payload: { total: '92.95', currency_symbol: '$', meta_data: [] },
+};
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+}));
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => mockOrder }));
+jest.mock('observable-hooks', () => ({ useObservableSuspense: <T,>(value: T) => value }));
+jest.mock('../../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ printedTo: mockPrintedTo, autoPrintPending: mockAutoPrintPending }),
+}));
+jest.mock('../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: { autoPrintReceipt: mockAutoPrint } }),
+}));
+jest.mock('../../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
+jest.mock('../../../receipt/receipt-actions', () => ({
+	useReceiptActions: () => ({
+		sync: undefined,
+		choices: [],
+		print: { onPress: () => undefined, disabled: false, loading: false },
+		dialog: null,
+	}),
+}));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({
+		methods: [
+			{ id: 'pos_cash', title: 'Cash' },
+			{ id: 'till_cash', title: 'Till cash' },
+			{ id: 'pos_card', title: 'Card' },
+		],
+	}),
+}));
+jest.mock('../../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+}));
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
+}));
+jest.mock('../../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
+}));
+jest.mock('../../contexts/current-order/context', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+}));
+jest.mock('../column/use-checkout-back', () => ({
+	useCheckoutBack: (back: () => void) => {
+		mockBack = back;
+	},
+}));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({
+		replace: mockReplace,
+		dismissTo: mockDismissTo,
+		canDismiss: () => true,
+		dismiss: mockDismiss,
+	}),
+}));
+jest.mock('@wcpos/components/text', () => ({
+	TextClassContext: React.createContext(''),
+	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('expo-haptics', () => ({
+	notificationAsync: jest.fn().mockResolvedValue(undefined),
+	NotificationFeedbackType: { Success: 'success' },
+}));
+jest.mock('@wcpos/utils/platform', () => ({ Platform: { isNative: false } }));
+jest.mock('uniwind', () => ({ useCSSVariable: () => 'green' }));
+// jsdom cannot run the UI-thread runtime; preserve styles and SVG props for assertions.
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: {
+		View: jest.requireActual('react-native').View,
+		createAnimatedComponent: (component: unknown) => component,
+	},
+	useSharedValue: (value: number) => React.useRef({ value }).current,
+	useAnimatedStyle: (style: () => object) => style(),
+	useAnimatedProps: (props: () => object) => props(),
+	withTiming: jest.fn((value: number) => value),
+	withDelay: jest.fn((_delay: number, value: number) => value),
+	cancelAnimation: jest.fn(),
+	Easing: { bezier: jest.fn() },
+	Keyframe: class {
+		duration() {
+			return this;
+		}
+	},
+}));
+jest.mock('react-native-svg', () => ({
+	__esModule: true,
+	default: ({ children }: { children?: React.ReactNode }) => <svg>{children}</svg>,
+	Path: ({
+		animatedProps,
+		...props
+	}: React.SVGProps<SVGPathElement> & { animatedProps?: object }) => (
+		<path {...props} {...animatedProps} />
+	),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+		disabled,
+		className,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		onPress?: () => void;
+		disabled?: boolean;
+		className?: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled} className={className}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
+
+beforeEach(() => {
+	jest.clearAllMocks();
+	jest.mocked(useTerminalLeg).mockReturnValue(null);
+	resetCheckoutMode();
+	enterReceipt('paid');
+	mockPrintedTo = null;
+	mockAutoPrint = false;
+	mockAutoPrintPending = false;
+	mockAwaiting = false;
+	Platform.isNative = false;
+	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+	mockOrder.payload.total = '92.95';
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						kind: 'cash',
+						amount: '92.95',
+						tendered: '100.00',
+						captured_at_gmt: null,
+					},
+				],
+			},
+		},
+	] as never;
+});
+afterEach(() => jest.restoreAllMocks());
+it('shows a retained capture finishing error above the paid headline and still finishes the sale', async () => {
+	const leg = {
+		outcome: 'captured',
+		settlement: { finishingError: 'local write failed' },
+	} as NonNullable<ReturnType<typeof useTerminalLeg>>;
+	jest
+		.mocked(useTerminalLeg)
+		.mockImplementation((orderUuid) => (orderUuid === 'paid' ? leg : null));
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+	});
+	const notice = screen.getByTestId('checkout-terminal-finishing-error');
+	expect(screen.getAllByTestId('checkout-terminal-finishing-error')).toHaveLength(1);
+	expect(notice.compareDocumentPosition(screen.getByTestId('checkout-paid-headline'))).toBe(
+		Node.DOCUMENT_POSITION_FOLLOWING
+	);
+	expect(screen.queryByTestId('checkout-terminal-finishing-details')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-terminal-finishing-details-toggle'));
+	expect(screen.getByTestId('checkout-terminal-finishing-details').textContent).toBe(
+		'local write failed'
+	);
+	fireEvent.click(screen.getByTestId('checkout-terminal-finishing-help'));
+	expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/PAYMENT121');
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+});
+it.each([
+	null,
+	{ outcome: 'captured' },
+	{ outcome: 'captured', settlement: {} },
+	{ outcome: 'failed', settlement: { finishingError: 'local write failed' } },
+])('omits the finishing notice without a captured finishing error: %j', async (leg) => {
+	jest.mocked(useTerminalLeg).mockReturnValue(leg as ReturnType<typeof useTerminalLeg>);
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+	});
+	expect(screen.queryByTestId('checkout-terminal-finishing-error')).toBeNull();
+	expect(screen.queryByTestId('checkout-terminal-finishing-help')).toBeNull();
+});
+it('shows the change headline and cash tendered sub-line', () => {
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-banner').textContent).toContain('$92.95');
+	expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Change $7.05');
+	expect(screen.getByTestId('receipt-change-due').textContent).toBe('Change $7.05');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'Paid $92.95 · tendered $100.00 in cash'
+	);
+	expect(screen.queryByTestId('receipt-printed-to')).toBeNull();
+});
+it('recognizes a custom cash method from the payment row kind', () => {
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'till_cash',
+						kind: 'cash',
+						amount: '92.95',
+						tendered: '100.00',
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'Paid $92.95 · tendered $100.00 in cash'
+	);
+});
+it('sums cash-row tendered values for a mixed split', () => {
+	mockOrder.payload.total = '100.00';
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						kind: 'cash',
+						amount: '40.00',
+						tendered: '50.00',
+					},
+					{
+						id: 'card',
+						status: 'captured',
+						method_id: 'pos_card',
+						kind: 'card',
+						amount: '60.00',
+						tendered: null,
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'Paid $100.00 · tendered $50.00 in cash · 2 payments'
+	);
+});
+it('counts recorded-offline authorizations as settled payments', () => {
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						kind: 'cash',
+						amount: '40.00',
+						tendered: '40.00',
+					},
+					{
+						id: 'card',
+						status: 'authorized',
+						recorded_offline: true,
+						method_id: 'pos_card',
+						kind: 'card',
+						amount: '52.95',
+						tendered: null,
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Cash + Card · 2 payments');
+});
+it('shows successful printing and omits zero change', () => {
+	mockPrintedTo = 'Till printer';
+	mockOrder.payload.meta_data = [];
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-printed-to').textContent).toContain('Till printer');
+	expect(screen.queryByTestId('receipt-change-due')).toBeNull();
+});
+it('New sale finishes the sale on both layouts', () => {
+	const wide = render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
+	wide.unmount();
+	enterReceipt('paid');
+	render(<ReceiptStage orderUuid="paid" compact />);
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+	expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(2);
+	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
+});
+it('a standalone checkout modal on a wide screen leaves for the wide cart when the sale is done', () => {
+	// The modal's layout is compact on every width; leaving it is the host's, never the width's.
+	mockScreenSize = 'lg';
+	try {
+		render(<ReceiptStage orderUuid="paid" compact />);
+		fireEvent.click(screen.getByTestId('receipt-new-sale'));
+		expect(mockDismiss).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+	} finally {
+		mockScreenSize = 'sm';
+	}
+});
+it('finishes on Android hardware back', () => {
+	render(<ReceiptStage orderUuid="paid" compact />);
+	act(() => mockBack());
+	expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
+});
+
+it('shows the paid headline and joined methods with only captured payments counted', () => {
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						amount: '40.00',
+						tendered: '40.00',
+					},
+					{ id: 'card', status: 'captured', method_id: 'pos_card', amount: '52.95' },
+					{ id: 'failed', status: 'failed', method_id: 'pos_card', amount: '52.95' },
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Paid $92.95');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Cash + Card · 2 payments');
+	expect(screen.queryByTestId('receipt-change-due')).toBeNull();
+});
+it.each([false, true])(
+	'labels the primary using auto-print = %s, not a manual print result',
+	(autoPrint) => {
+		mockAutoPrint = autoPrint;
+		mockPrintedTo = 'Till printer';
+		render(<ReceiptStage orderUuid="paid" compact />);
+		expect(screen.getByTestId('receipt-new-sale').textContent).toBe(
+			autoPrint ? 'Print receipt · New sale' : 'New sale'
+		);
+		expect(screen.getByTestId('receipt-new-sale').className).toContain('w-full');
+		expect(screen.getByTestId('checkout-paid-print').closest('button')).toBe(
+			screen.getByTestId('receipt-new-sale')
+		);
+		// The finish is ONE button: there is no second "No receipt" route to the same press.
+		expect(screen.queryByTestId('receipt-no-receipt')).toBeNull();
+	}
+);
+it.each([
+	[false, Node.DOCUMENT_POSITION_PRECEDING],
+	[true, Node.DOCUMENT_POSITION_FOLLOWING],
+])(
+	'the footer puts New sale last on a wide pane and first on a phone (compact %s)',
+	(compact, position) => {
+		render(<ReceiptStage orderUuid="paid" compact={compact} />);
+		const newSale = screen.getByTestId('receipt-new-sale');
+		expect(newSale.compareDocumentPosition(screen.getByTestId('receipt-print-button'))).toBe(
+			position
+		);
+	}
+);
+it('keeps New sale disabled while auto-print is pending', () => {
+	mockAutoPrintPending = true;
+	render(<ReceiptStage orderUuid="paid" compact />);
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect((screen.getByTestId('receipt-new-sale') as HTMLButtonElement).disabled).toBe(true);
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(true);
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+});
+it('the corner X on the columns pane finishes the sale as New sale does', () => {
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-close'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
+});
+it('the corner X waits on auto-print exactly as New sale does', () => {
+	mockAutoPrintPending = true;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	fireEvent.click(screen.getByTestId('receipt-close'));
+	expect(screen.getByTestId('receipt-close').getAttribute('aria-disabled')).toBe('true');
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(true);
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+});
+it('the modal host draws no second X: the dialog chrome already finishes the sale', () => {
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.queryByTestId('receipt-close')).toBeNull();
+});
+it('renders a complete tick and surface without animation when motion is reduced', async () => {
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(AccessibilityInfo.isReduceMotionEnabled).toHaveBeenCalledTimes(1);
+	expect(withTiming).not.toHaveBeenCalled();
+	expect(withDelay).not.toHaveBeenCalled();
+	expect(screen.getByTestId('receipt-paid-disc')).toBeTruthy();
+	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('1');
+});
+it('waits for the preference before stamping the disc when motion is allowed', async () => {
+	let resolvePreference!: (enabled: boolean) => void;
+	jest
+		.mocked(AccessibilityInfo.isReduceMotionEnabled)
+		.mockImplementationOnce(() => new Promise<boolean>((resolve) => (resolvePreference = resolve)));
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('0');
+	expect(withTiming).not.toHaveBeenCalled();
+	await act(async () => {
+		resolvePreference(false);
+	});
+	expect(withTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: 380 }));
+	expect(withDelay).not.toHaveBeenCalled();
+});
+it.each([false, true])('only sends a success haptic on native = %s', async (native) => {
+	Platform.isNative = native;
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(native ? 1 : 0);
+	if (native)
+		expect(Haptics.notificationAsync).toHaveBeenCalledWith(
+			Haptics.NotificationFeedbackType.Success
+		);
+});
+it('still allows finishing when native haptics reject', async () => {
+	Platform.isNative = true;
+	jest.mocked(Haptics.notificationAsync).mockRejectedValueOnce(new Error('Unavailable'));
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact />);
+	});
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+});
+
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		children,
+		testID,
+		className,
+		style,
+	}: React.PropsWithChildren<{
+		testID?: string;
+		className?: string;
+		style?: React.CSSProperties;
+	}>) => (
+		<div data-testid={testID} className={className} style={style}>
+			{children}
+		</div>
+	),
+}));
+it('paints the paid surface neutrally and the success disc semantically', () => {
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.getByTestId('checkout-paid').className).toContain('bg-card');
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-ok-bg');
+});
+it('a sent sale shows the neutral sent moment: where it went, what is due, no tick, no haptic', async () => {
+	Platform.isNative = true;
+	mockOrder.payload.meta_data = withAwaitingCustomer([], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-10-08T10:00:00.000Z',
+		cashier_id: 7,
+	}) as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	await act(async () => {});
+	expect(screen.getByTestId('checkout-sent')).not.toBeNull();
+	expect(screen.queryByTestId('checkout-paid')).toBeNull();
+	expect(screen.getByTestId('checkout-sent-headline').textContent).toBe('Invoice sent');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'to buyer@example.com · $92.95 due'
+	);
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-muted');
+	expect(screen.getByTestId('receipt-paid-disc').className).not.toContain('bg-ok-bg');
+	expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('checkout-sent-new'));
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+});
+it('a stamp beside settled money is stale: the paid moment wins', () => {
+	mockOrder.payload.meta_data = withAwaitingCustomer(mockOrder.payload.meta_data as never[], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'x@y.z',
+		attempt_id: 'a',
+		sent_at_gmt: '',
+		cashier_id: 0,
+	}) as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('checkout-paid')).not.toBeNull();
+	expect(screen.queryByTestId('checkout-sent')).toBeNull();
+});
+
+// ADR 0040 Decided 1 rule 1: the money was taken, the store has not heard it yet. The moment
+// waits, unseen, for the journal's first answer: one pop in the right tone, never green then amber.
+it.each([
+	[true, 'bg-warning-bg'],
+	[false, 'bg-ok-bg'],
+])('a sale read as awaiting=%s pops once, in its tone, with one haptic', async (awaiting, tone) => {
+	Platform.isNative = true;
+	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+	mockAwaiting = null;
+	const { rerender } = render(<ReceiptStage orderUuid="paid" compact />);
+	await act(async () => {});
+	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('0');
+	expect(withTiming).not.toHaveBeenCalled();
+	expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+	mockAwaiting = awaiting;
+	await act(async () => {
+		rerender(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain(tone);
+	expect(screen.queryByTestId('receipt-awaiting-store') !== null).toBe(awaiting);
+	expect(withTiming).toHaveBeenCalledTimes(1);
+	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+});
+
+it('an awaiting sale shows the awaiting-store sub-line; the answer pops it green once more, no second haptic', async () => {
+	Platform.isNative = true;
+	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+	mockAwaiting = true;
+	const { rerender } = render(<ReceiptStage orderUuid="paid" compact />);
+	await act(async () => {});
+	expect(screen.getByTestId('receipt-awaiting-store').textContent).toBe('Awaiting store · ');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toMatch(/^Awaiting store · /);
+	const headline = screen.getByTestId('checkout-paid-headline');
+	expect(headline.textContent).toBe('Change $7.05');
+	expect(withTiming).toHaveBeenCalledTimes(1);
+
+	mockAwaiting = false;
+	await act(async () => {
+		rerender(<ReceiptStage orderUuid="paid" compact />);
+	});
+	expect(screen.queryByTestId('receipt-awaiting-store')).toBeNull();
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-ok-bg');
+	// The disc alone re-pops; the headline never unmounts.
+	expect(withTiming).toHaveBeenCalledTimes(2);
+	expect(screen.getByTestId('checkout-paid-headline')).toBe(headline);
+	expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+});
+
+it.each([false, true])(
+	'lets the column surface show through only when embedded: compact=%s',
+	(compact) => {
+		render(<ReceiptStage orderUuid="paid" compact={compact} />);
+		expect(screen.getByTestId('checkout-receipt-stage').className.includes('bg-card')).toBe(
+			compact
+		);
+	}
+);

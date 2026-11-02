@@ -2,19 +2,20 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
+import { getStoreUrl, openOrderSheet, tryAddProductBySku } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
+import { fillKeypadField } from './keypad-field';
 import {
 	assertDiscriminating,
 	assertMixedTaxTreatment,
 	type GuardLine,
 	linesOf,
 } from './money-oracle-guards';
-import { getStoreUrl, tryAddProductBySku } from './fixtures';
 import {
+	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
 	expectTaxParity,
-	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -94,71 +95,33 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
 }
 
 /**
- * Type an amount into a `CurrencyInput`, which opens a numpad popover rather than
- * accepting keystrokes in place.
+ * Enter an amount into a form's `AmountField` (money or percent): on web, the price keypad its
+ * outlined field grows into (`fillKeypadField`). Type `.` for the decimal: the keypad takes
+ * the store's separator or a dot (dev-free is fr_FR and shows `9,99`).
  *
- * MUST type, never `fill()`. The numpad's value does not live in the input element:
- * `Numpad` holds it in `useCalculator` state fed by `onKeyPress`
- * (packages/components/src/numpad/index.tsx), and the Done button reads that state
- * via `numpadRef.current.getValue()`. `fill()` sets `.value` and dispatches a single
- * `input` event — no per-character key events — so the calculator never sees a digit
- * and Done commits the INITIAL value.
- *
- * That is not a hypothetical. The first version of this file used `fill()`, and the
- * whole oracle went green against a deliberately un-fixed client: the fee was added
- * at its default 0.00, its taxes were 0 on both sides, and 0 === 0 passes. The
- * [money-oracle] log line is what exposed it:
+ * The read-back below is not decoration. An earlier version of this file drove a numpad
+ * whose value did not live in the input, and the whole oracle went green against a
+ * deliberately un-fixed client: the fee was added at its default 0.00, its taxes were 0
+ * on both sides, and 0 === 0 passes. The [money-oracle] log line is what exposed it:
  *
  *     [money-oracle] fee cart fee_lines[0] sent=[{"id":6,"total":"0"}]
  *                                        server=[{"id":6,"total":"0.000000"}]
  *
- * Hence the read-back below: this helper asserts the amount actually landed, at the
- * point of interaction, instead of letting a silent no-op surface three steps later
- * as a green test.
+ * So this helper asserts the amount actually landed, at the point of interaction,
+ * instead of letting a silent no-op surface three steps later as a green test.
  */
-async function fillCurrencyField(
-	page: Page,
-	testID: string,
-	value: string,
-	options: { negative?: boolean } = {}
-) {
+async function fillCurrencyField(page: Page, testID: string, value: string) {
+	await fillKeypadField(page, testID, value);
 	const field = page.getByTestId(testID);
-	await expect(field).toBeVisible({ timeout: 15_000 });
-	await field.click();
-	const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-	await expect(numpad).toBeVisible({ timeout: 15_000 });
-	// Press the numpad's own KEYS, one per character. Two reasons this is not typing
-	// into the input:
-	//
-	//  - The numpad's value lives in `useCalculator` state, not the input element (see
-	//    above), so the keys are the only interaction that actually moves it.
-	//  - The decimal character is the STORE's separator. dev-free is fr_FR and renders
-	//    a "," key, so a typed "." is dropped by `handleKeyPress` — "9.99" silently
-	//    becomes 999. Digit keys carry stable testIDs already; the separator carries
-	//    the role-based `numpad-key-decimal` so this works on any store's locale.
-	for (const character of value) {
-		const key =
-			character === '.' || character === ','
-				? numpad.getByTestId('numpad-key-decimal')
-				: numpad.getByTestId(`numpad-key-${character}`);
-		await expect(key, `numpad key for "${character}" is missing`).toBeVisible({ timeout: 5_000 });
-		await key.click();
-	}
-	if (options.negative) {
-		const sign = numpad.getByTestId('numpad-key-icon-plusMinus');
-		await expect(sign, 'numpad +/- key is missing').toBeVisible({ timeout: 5_000 });
-		await sign.click();
-	}
-	await page.getByTestId('numpad-done-button').click();
 
-	// The trigger renders the committed amount. Locale-agnostic on purpose: dev-free
-	// is fr_FR and formats "1,00", so this asserts "a non-zero digit is showing"
+	// The field renders the committed amount, formatted. Locale-agnostic on purpose:
+	// dev-free is fr_FR and formats "1,00", so this asserts "a non-zero digit is showing"
 	// rather than an exact string. Every amount this file mints has one.
 	await expect(
 		field,
-		`${testID}: the numpad committed nothing — the trigger still shows no non-zero ` +
-			`digit after entering "${value}". The amount never reached the form, so any ` +
-			`assertion downstream would be comparing zero against zero.`
+		`${testID}: the field committed nothing — it still shows no non-zero digit after ` +
+			`entering "${value}". The amount never reached the form, so any assertion ` +
+			`downstream would be comparing zero against zero.`
 	).toHaveText(/[1-9]/, { timeout: 10_000 });
 }
 
@@ -168,9 +131,23 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	// dialog, and this suite selects app UI by stable testID only.
 	const dialog = page.getByTestId('add-misc-product-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
+	// The dialog defers its auto-focus to the first field (Name); wait for focus to settle inside
+	// it, or that focus move lands after the price click and pulls focus out of the price field.
+	await expect
+		.poll(
+			() =>
+				page.evaluate(
+					() => document.activeElement?.closest('[data-testid="add-misc-product-dialog"]') != null
+				),
+			{ timeout: 15_000 }
+		)
+		.toBe(true);
 	await fillCurrencyField(page, 'misc-product-price-input', price);
 	if (taxStatus) {
-		const option = page.getByTestId(`tax_status-option-${taxStatus}`);
+		// Tax is ONE select (TaxSelect): Not taxable, then the store's classes.
+		await page.getByTestId('misc-product-tax-select').click();
+		const value = taxStatus === 'none' ? 'status:none' : 'class:standard';
+		const option = page.getByTestId(`misc-product-tax-select-option-${value}`);
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
 	}
@@ -178,21 +155,14 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
-/**
- * A NEGATIVE fee — entered the way a cashier does, with the numpad's +/- key.
- *
- * WooCommerce treats a negative fee as a discount and taxes it on a completely
- * different code path (`WC_Order_Item_Fee::calculate_taxes()`): instead of applying
- * the fee's own tax class to the whole amount, it apportions the amount across the
- * tax-class mix of every POSITIVE line in the order — including a `non-taxable`
- * bucket that draws no tax at all.
- */
-async function addNegativeFee(page: Page, amount: string) {
-	await openCartMenuAndClick(page, 'menu-add-fee');
-	const dialog = page.getByTestId('add-fee-dialog');
+/** Adds a quick discount through the cashier's fixed-amount or percent field. */
+async function addQuickDiscount(page: Page, amount: string, percent = false) {
+	await openCartMenuAndClick(page, 'menu-add-discount');
+	const dialog = page.getByTestId('add-discount-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
-	await fillCurrencyField(page, 'fee-amount-input', amount, { negative: true });
-	await page.getByTestId('add-to-cart-submit').click();
+	if (percent) await page.getByTestId('discount-percent-switch').click();
+	await fillCurrencyField(page, 'discount-amount-input', amount);
+	await page.getByTestId('add-discount-submit').click();
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
@@ -235,11 +205,12 @@ async function saveAndCapture(
 	// against itself and go green whatever the server did (pos-cart.spec.ts).
 	const cart = await readCartMoney(page);
 
-	const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});
 	saved.catch(() => {});
 
+	await openOrderSheet(page);
 	await page.getByTestId('save-to-server-button').click();
 	const response = await saved;
 	expect(response.status(), 'save to server must succeed').toBeLessThan(400);
@@ -443,6 +414,7 @@ function assertSaleParity(sale: SavedSale, page: Page, underTest: string, label:
  * reconciliation that raises it has already run.
  */
 async function expectNoBanner(page: Page, label: string, divergence: () => string[]) {
+	await openOrderSheet(page);
 	await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 	const logged = divergence();
 	await expect(
@@ -530,7 +502,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 * published products used either — the classes were live and unreachable. Every
 	 * money assertion the suite had ever made ran on the standard class alone.
 	 *
-	 * This is also the shape the v1.11.0 quick-discount work needs (wcpos/roadmap#91):
+	 * This is also the shape the 2.0.0 quick-discount work needs (wcpos/roadmap#91):
 	 * the whole correctness argument for moving till discounts to `percent` coupons is
 	 * that they allocate pro rata by value across tax classes, and that claim cannot be
 	 * tested on a single-class basket.
@@ -579,47 +551,74 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 		}
 	);
 	/**
-	 * NEGATIVE FEE — the POS override, NOT WooCommerce's discount path.
+	 * QUICK DISCOUNTS are coupon lines: WooCommerce's contra-revenue primitive,
+	 * which recomputes each line's tax on its discounted base. On tax-inclusive
+	 * stores the discount acts on gross amounts, preserving the correct tax base.
 	 *
-	 * `WC_Order_Item_Fee::calculate_taxes()` branches on the sign: a negative fee is
-	 * treated as a discount and apportioned across the tax-class mix of every positive
-	 * line, ignoring the fee's own `tax_status` and `tax_class` entirely. **The POS
-	 * plugin deliberately undoes that.** `WCPOS\WooCommercePOS\Orders::fee_after_calculate_taxes()`
-	 * hooks `woocommerce_order_item_fee_after_calculate_taxes` and, for any POS order,
-	 * recomputes the tax from the fee's OWN tax class — or clears it when the fee's
-	 * `tax_status` is `none`. So on a POS order the apportionment runs and is then
-	 * replaced, and the client is right to apply the fee's own class.
+	 * `percent` discounts every line at the same rate, pro rata by value;
+	 * `fixed_cart` allocates equally per unit with WooCommerce's remainder loop.
+	 * The mixed taxable / non-taxable cart discriminates the allocation: the untaxed
+	 * line takes its share of the fixed discount but draws no tax.
 	 *
-	 * This test therefore locks the OVERRIDE, not the apportionment. It goes red if the
-	 * plugin-side hook stops firing — the order gate loosens, the POS marker is dropped
-	 * from the v2 push's inner wc/v3 forward, the hook is removed — any of which would
-	 * silently hand negative-fee tax back to WooCommerce and start diverging from every
-	 * till that rang one up.
-	 *
-	 * The cart mixes a taxable line with a NON-taxable one on purpose: that is the shape
-	 * where apportionment and the override give different answers, so a green here means
-	 * the override is genuinely in force rather than the two happening to agree.
-	 *
-	 * The override is a STOPGAP with a ruling behind it (woocommerce-pos
-	 * .claude/research/2026-08-06-wc-negative-fee-tax.md): on a tax-INCLUSIVE store it
-	 * charges the customer the right amount but over-declares VAT, while WooCommerce's
-	 * own behaviour charges the wrong amount. Neither is defensible there; the plan of
-	 * record is migrating till discounts to coupon lines. When that lands, this test
-	 * changes with it — it pins today's contract, not a permanent truth.
+	 * These cases pin the SERVER's application of the app's virtual-coupon line,
+	 * including its echoed intent, not just the client's discount calculation.
+	 * Per-rate taxes live on `line_items`, not `coupon_lines`.
+	 * See wcpos/roadmap#91, woocommerce-pos#1927, monorepo#1932.
 	 */
 	liveTest(
-		'a negative fee is taxed from its OWN class (the POS override, not WC apportionment)',
+		'a percent quick discount is a coupon line: pro-rata across a mixed taxable / non-taxable cart',
 		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
 			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
-			await addNegativeFee(page, ADVERSARIAL.fee);
+			await addQuickDiscount(page, '10', true);
 			await stampRunLabel(page, label);
 
 			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
-			assertSaleParity(sale, page, 'fee_lines', 'negative-fee cart');
-			await expectNoBanner(page, 'negative-fee cart', divergence);
+			assertSaleParity(sale, page, 'line_items', 'percent quick-discount cart');
+			expect(sale.doc.coupon_lines).toEqual([
+				expect.objectContaining({
+					code: 'pos-discount',
+					discount_type: 'percent',
+					meta_data: expect.arrayContaining([
+						expect.objectContaining({
+							key: '_wcpos_quick_discount',
+							value: { discount_type: 'percent', amount: '10' },
+						}),
+					]),
+				}),
+			]);
+			expect(Number(sale.doc.discount_total)).toBeGreaterThan(0);
+			await expectNoBanner(page, 'percent quick-discount cart', divergence);
+		}
+	);
+	liveTest(
+		'a fixed quick discount is a coupon line: equal-per-unit across a mixed taxable / non-taxable cart',
+		async ({ posPage: page, trackOrder }, testInfo) => {
+			const label = newRunLabel();
+			const divergence = captureDivergenceLog(page);
+			await addCheckoutProbeProduct(page);
+			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
+			await addQuickDiscount(page, ADVERSARIAL.fee);
+			await stampRunLabel(page, label);
+
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
+			assertSaleParity(sale, page, 'line_items', 'fixed quick-discount cart');
+			expect(sale.doc.coupon_lines).toEqual([
+				expect.objectContaining({
+					code: 'pos-discount',
+					discount_type: 'fixed_cart',
+					meta_data: expect.arrayContaining([
+						expect.objectContaining({
+							key: '_wcpos_quick_discount',
+							value: { discount_type: 'fixed_cart', amount: ADVERSARIAL.fee },
+						}),
+					]),
+				}),
+			]);
+			expect(Number(sale.doc.discount_total)).toBeGreaterThan(0);
+			await expectNoBanner(page, 'fixed quick-discount cart', divergence);
 		}
 	);
 	/**

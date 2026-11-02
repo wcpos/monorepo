@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { scannerDeviceKey } from '@wcpos/scanner';
@@ -15,6 +15,38 @@ const mockRemove = jest.fn();
 const mockUpsert = jest.fn();
 const mockOpenExternalURL = jest.fn();
 
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ testID }: { testID?: string }) => <button data-testid={testID} />,
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({
 	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
 }));
@@ -50,6 +82,7 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<span data-testid={testID}>{children}</span>
 	),
+	TextClassContext: jest.requireActual('react').createContext(''),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -57,46 +90,42 @@ jest.mock('@wcpos/components/hstack', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('./scanner-device-chooser', () => ({
+	ScannerDeviceChooser: () => <div data-testid="scanner-device-chooser" />,
+}));
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
 
-/**
- * A Collapsible that really collapses. Mocking it open-always would make every
- * "advanced content is hidden by default" assertion below vacuously pass — which
- * is the entire property this section's redesign rests on.
- */
-jest.mock('@wcpos/components/collapsible', () => {
-	const ReactModule = require('react') as typeof import('react');
-	const Context = ReactModule.createContext<{ open: boolean; toggle: () => void }>({
+/** A sheet that is really closed until opened: the direct controls must not be in the tree. */
+jest.mock('@wcpos/components/dialog', () => {
+	function Wrap({ children }: React.PropsWithChildren) {
+		return <div>{children}</div>;
+	}
+	const Ctx = React.createContext<{ open: boolean; onOpenChange: (open: boolean) => void }>({
 		open: false,
-		toggle: () => undefined,
+		onOpenChange: () => {},
 	});
 	return {
-		Collapsible: ({ children }: React.PropsWithChildren) => {
-			const [open, setOpen] = ReactModule.useState(false);
-			const value = ReactModule.useMemo(
-				() => ({ open, toggle: () => setOpen((previous) => !previous) }),
-				[open]
-			);
-			return (
-				<Context.Provider value={value}>
-					<div>{children}</div>
-				</Context.Provider>
-			);
+		Dialog: ({
+			open,
+			onOpenChange,
+			children,
+		}: React.PropsWithChildren<{ open: boolean; onOpenChange: (open: boolean) => void }>) => (
+			<Ctx.Provider value={{ open, onOpenChange }}>{children}</Ctx.Provider>
+		),
+		DialogTrigger: ({ children }: { children: React.ReactElement<{ onPress?: () => void }> }) => {
+			const { onOpenChange } = React.useContext(Ctx);
+			return React.cloneElement(children, { onPress: () => onOpenChange(true) });
 		},
-		CollapsibleTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => {
-			const { toggle } = ReactModule.useContext(Context);
-			return (
-				<button type="button" data-testid={testID} onClick={toggle}>
-					{children}
-				</button>
-			);
+		DialogContent: ({ children }: React.PropsWithChildren) => {
+			const { open } = React.useContext(Ctx);
+			return open ? <div data-testid="scanner-direct-sheet">{children}</div> : null;
 		},
-		CollapsibleContent: ({ children }: React.PropsWithChildren) => {
-			const { open } = ReactModule.useContext(Context);
-			return open ? <div>{children}</div> : null;
-		},
+		DialogHeader: Wrap,
+		DialogTitle: Wrap,
+		DialogBody: Wrap,
+		DialogFooter: () => null,
 	};
 });
 
@@ -122,12 +151,19 @@ const keyboardProfile = {
 
 let mockProfiles: Record<string, unknown>[] = [keyboardProfile];
 const collection = {
-	find: () => ({ $: of(mockProfiles) }),
+	find: () => ({ $: of(mockProfiles.map((row) => ({ toJSON: () => row }))) }),
+	findOne: (deviceKey: string) => ({
+		exec: async () => {
+			const row = mockProfiles.find((profile) => profile.deviceKey === deviceKey);
+			return row ? { remove: mockRemove } : null;
+		},
+	}),
 	upsert: (...args: unknown[]) => mockUpsert(...args),
 };
 
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => ({ collection }),
+const mockStoreDB = { collections: { scanner_profiles: collection } };
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ storeDB: mockStoreDB }),
 }));
 const CANDIDATE = { deviceName: 'ACME Scanner', vendorId: 1234, productId: 5678 };
 // The capture flow deliberately replaces the list while it is running, so most
@@ -140,7 +176,7 @@ let mockRegistration: {
 jest.mock('../../hooks/barcodes/use-scanner-registration', () => ({
 	useScannerRegistration: () => ({
 		...mockRegistration,
-		save: mockSave,
+		register: mockSave,
 		stop: jest.fn(),
 		start: jest.fn(),
 		discard: jest.fn(),
@@ -197,7 +233,7 @@ describe('InputSources — quiet by default', () => {
 		expect(screen.getByText(/WCPOS recognises the scan automatically/)).toBeTruthy();
 	});
 
-	it('keeps every direct-connection control behind the disclosure until it is opened', () => {
+	it('keeps every direct-connection control in the sheet until its row verb opens it', () => {
 		// The whole point of the redesign: a merchant who pairs a keyboard-mode
 		// scanner must not be shown connect buttons that read as required steps.
 		mockProfiles = [];
@@ -209,27 +245,62 @@ describe('InputSources — quiet by default', () => {
 		expect(screen.queryByTestId('serial-connect-button')).toBeNull();
 		expect(screen.queryByTestId('hid-connect-button')).toBeNull();
 		expect(screen.queryByTestId('bluetooth-service-class-id-input')).toBeNull();
+		expect(screen.getByTestId('scanner-row-direct').textContent).toContain('None');
 
 		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
 
+		expect(screen.getByTestId('scanner-direct-sheet')).toBeTruthy();
 		expect(screen.getByTestId('scanner-advanced-content')).toBeTruthy();
 		expect(screen.getByTestId('serial-connect-button')).toBeTruthy();
 		expect(screen.getByTestId('hid-connect-button')).toBeTruthy();
 	});
 
-	it('keeps the raw UUID field one level below the advanced disclosure', () => {
+	it('hosts the Electron device chooser inside the sheet whose connect press it answers (Codex, #2978)', () => {
 		mockProfiles = [];
 		mockSerialControl = { ...unavailableControl, available: true };
 		render(<InputSources />);
 
+		expect(screen.queryByTestId('scanner-device-chooser')).toBeNull();
 		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
-		expect(screen.queryByTestId('bluetooth-service-class-id-input')).toBeNull();
-
-		fireEvent.click(screen.getByTestId('scanner-uuid-trigger'));
-		expect(screen.getByTestId('bluetooth-service-class-id-input')).toBeTruthy();
+		expect(
+			screen
+				.getByTestId('scanner-advanced-content')
+				.querySelector('[data-testid="scanner-device-chooser"]')
+		).toBeTruthy();
 	});
 
-	it('shows saved scanners without needing the disclosure opened', () => {
+	it('shows the raw UUID field unfolded at the end of the sheet, never on the page', () => {
+		mockProfiles = [];
+		mockSerialControl = { ...unavailableControl, available: true };
+		render(<InputSources />);
+
+		expect(screen.queryByTestId('bluetooth-service-class-id-input')).toBeNull();
+		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
+
+		expect(screen.getByTestId('bluetooth-service-class-id-control').textContent).toContain(
+			'isn’t in the list'
+		);
+		expect(screen.getByTestId('bluetooth-service-class-id-input')).toBeTruthy();
+		expect(screen.queryByTestId('scanner-uuid-trigger')).toBeNull();
+	});
+
+	it('closes the sheet when a registration started from it takes over the section', () => {
+		const { rerender } = render(<InputSources />);
+		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
+		expect(screen.getByTestId('register-scanner-button')).toBeTruthy();
+
+		mockRegistration = { available: true, capturing: true, candidate: null };
+		rerender(<InputSources />);
+		expect(screen.queryByTestId('scanner-direct-sheet')).toBeNull();
+
+		// The capture ends: the list returns with the sheet still closed.
+		mockRegistration = { available: true, capturing: false, candidate: null };
+		rerender(<InputSources />);
+		expect(screen.getByTestId('scanner-advanced-trigger')).toBeTruthy();
+		expect(screen.queryByTestId('scanner-direct-sheet')).toBeNull();
+	});
+
+	it('shows saved scanners without needing the sheet opened', () => {
 		// Adding is advanced; seeing and removing what you already have is not.
 		render(<InputSources />);
 
@@ -243,7 +314,7 @@ describe('InputSources — quiet by default', () => {
 		expect(screen.getByTestId('scanner-registered-hint')).toBeTruthy();
 	});
 
-	it('explains the operating-system keyboard-mode wall inside the disclosure', () => {
+	it('explains the operating-system keyboard-mode wall inside the sheet', () => {
 		mockSerialControl = { ...unavailableControl, available: true };
 		render(<InputSources />);
 
@@ -386,7 +457,6 @@ describe('InputSources manual Bluetooth service UUID', () => {
 	function openUuidField() {
 		render(<InputSources />);
 		fireEvent.click(screen.getByTestId('scanner-advanced-trigger'));
-		fireEvent.click(screen.getByTestId('scanner-uuid-trigger'));
 	}
 
 	it('adds a Bluetooth-SPP profile keyed on the normalized canonical UUID', async () => {
@@ -395,7 +465,9 @@ describe('InputSources manual Bluetooth service UUID', () => {
 		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
 			target: { value: ' 49535343-FE7D-4AE5-8FA9-9FAFD205E455 ' },
 		});
-		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		});
 
 		await waitFor(() =>
 			expect(mockUpsert).toHaveBeenCalledWith({

@@ -10,6 +10,10 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
+import {
+	isWcposPluginCompatible,
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+} from '@wcpos/core/utils/wcpos-plugin-version';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -27,7 +31,8 @@ import {
 	type StoreAuthorization,
 	TEARDOWN_CREDENTIAL_TIMEOUT_MS,
 } from './probe-credential';
-import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
+import { quarantineGate } from './quarantine';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -104,6 +109,79 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 		.waitFor({ state: 'visible', timeout })
 		.then(() => true)
 		.catch(() => false);
+}
+
+export async function openOrderSheet(page: Page): Promise<void> {
+	const dialog = page.getByTestId('order-meta-dialog');
+	if (!(await dialog.isVisible())) await page.getByTestId('order-meta-button').click();
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * The order sheet is modal (a scrim covers the columns), and Save leaves it open so its
+ * loading state and result stay visible. A test that goes on to press anything else closes it.
+ */
+export async function closeOrderSheet(page: Page): Promise<void> {
+	const dialog = page.getByTestId('order-meta-dialog');
+	if (!(await dialog.isVisible())) return;
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
+}
+
+export async function setVariationsStyle(page: Page, style: 'drill' | 'inline'): Promise<void> {
+	await page.getByTestId('products-settings-button').click();
+	const dialog = page
+		.getByRole('dialog')
+		.filter({ has: page.getByTestId(`products-variations-style-${style}`) });
+	await dialog.getByTestId(`products-variations-style-${style}`).click();
+	// The footer Close by id: the store's locale sets its label (dev-next reads "Cerrar"). Forced:
+	// the toast host (`#error-toast`) intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
+	await expect(dialog).toBeHidden();
+}
+
+/**
+ * Pick the products stage's Browse by source in the same settings dialog. A source the store
+ * has no terms for is dimmed and refuses the press, so the radio is asserted checked before the
+ * dialog closes: a disabled row would otherwise leave the previous source in place silently.
+ */
+export async function setBrowseBy(
+	page: Page,
+	value: 'all' | 'categories' | 'tags' | 'brands' | 'shortcuts'
+): Promise<void> {
+	await page.getByTestId('products-settings-button').click();
+	const dialog = page
+		.getByRole('dialog')
+		.filter({ has: page.getByTestId(`ui-settings-browse-by-${value}`) });
+	const radio = dialog.getByTestId(`ui-settings-browse-by-${value}`);
+	await radio.click();
+	await expect(radio).toHaveAttribute('aria-checked', 'true');
+	// Forced, as setVariationsStyle: the toast host intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
+	await expect(dialog).toBeHidden();
+}
+
+/**
+ * Open a real live-store session when the cart column shows the open-register
+ * landing; leave it open so later runs can reuse it.
+ *
+ * Races the landing against the ready cart header rather than waiting a fixed
+ * few seconds for the card: an already-open register resolves as soon as its
+ * header renders (this runs several times per checkout), and a slow register
+ * hydration still gets the normal readiness budget instead of a short timer
+ * that would return just before the card appears.
+ */
+export async function ensureRegisterOpen(page: Page): Promise<void> {
+	const card = page.getByTestId('open-register-card');
+	const cartReady = page.getByTestId('add-cart-item-menu');
+	await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	if (!(await card.isVisible())) return;
+	const amount = page.getByTestId('open-register-amount');
+	await amount.fill((await amount.inputValue()) || '100');
+	await page.getByTestId('open-register-button').click();
+	await expect(card).toBeHidden({ timeout: 30_000 });
+	// A healthy open register has no warning pill; its cart header is ready instead.
+	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
 }
 
 /**
@@ -354,6 +432,26 @@ export async function stubStoreVersionForE2E(
 				await route.fulfill({ response });
 				return;
 			}
+			// The stub exists to mask the LICENCE per variant (one next-lane site
+			// serves both) and to keep the app's version string in step with the
+			// store's. It must never carry the app past its own minimum-plugin
+			// gate: a store older than MINIMUM_WCPOS_PLUGIN_VERSION is one this
+			// app refuses in production, so a run that reaches it is pointed at
+			// the wrong lane's store (roadmap#277). Pass the real response through
+			// and let the connect screen refuse it with the real reason, rather
+			// than run the whole suite against a plugin generation the app does
+			// not support and read the first feature it lacks as a bug.
+			// A missing or non-string version is the same case: the endpoint answered
+			// without the plugin's discovery payload, and painting the app version
+			// onto it would fabricate a plugin the store did not report.
+			const realVersion = typeof data.wcpos_version === 'string' ? data.wcpos_version : undefined;
+			if (!isWcposPluginCompatible(realVersion)) {
+				console.error(
+					`[stubStoreVersionForE2E] ${storeOrigin} ${realVersion ? `runs woocommerce-pos ${realVersion}, below this app's minimum ${MINIMUM_WCPOS_PLUGIN_VERSION}` : 'reported no wcpos_version at all'}. Leaving the discovery response unstubbed so the app refuses the store with the real reason: this run is pointed at the wrong lane's store (see the lane routing in deploy.yml).`
+				);
+				await route.fulfill({ response });
+				return;
+			}
 			await route.fulfill({
 				response,
 				json: {
@@ -537,6 +635,106 @@ export async function waitForStoreQuiescence(
 	}
 }
 
+const ENGINE_LEDGER_PREFIX = 'WCPOS_E2E_ENGINE ';
+
+/** The engine's `cadence.start`, as the E2E ledger (`lib/e2e-engine-ledger.ts`) prints it. */
+function isCadenceStartLine(text: string): boolean {
+	if (!text.startsWith(ENGINE_LEDGER_PREFIX)) return false;
+	try {
+		return JSON.parse(text.slice(ENGINE_LEDGER_PREFIX.length)).type === 'cadence.start';
+	} catch {
+		return false;
+	}
+}
+
+const cadenceStarts = new WeakMap<Page, Promise<void>>();
+
+/**
+ * Arm a per-page record of the engine's first `cadence.start`. Call before the app boots:
+ * the line prints once, usually before a spec gets the page, and the app keeps no global
+ * a spec could query for it afterwards.
+ */
+function recordCadenceStart(page: Page): void {
+	cadenceStarts.set(
+		page,
+		new Promise<void>((resolve) => {
+			const onConsole = (message: { text(): string }) => {
+				if (!isCadenceStartLine(message.text())) return;
+				page.off('console', onConsole);
+				resolve();
+			};
+			page.on('console', onConsole);
+		})
+	);
+}
+
+/**
+ * Wait until the sync engine has drained its startup pulls and started change-signal
+ * polling (`cadence.start`). Resolves at once when that already happened on this page.
+ *
+ * The require plane serves one request at a time and never preempts, so an interaction
+ * measured before this point measures the queued startup sync, not the interaction.
+ * Needs a bundle built with `EXPO_PUBLIC_WCPOS_E2E=1`; without it the ledger is silent.
+ */
+export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise<void> {
+	// A production bundle (the main-push E2E target, or a local `build:web`) carries no
+	// ledger, so no line can come: fall back to network silence, the pre-ledger settle
+	// check, and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
+	const ledgerOn = await page
+		.evaluate(
+			() => (globalThis as { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger === true
+		)
+		.catch(() => false);
+	if (!ledgerOn) {
+		console.log(
+			'WCPOS_E2E cadence.start unavailable: no engine ledger in this bundle, waiting for network silence instead'
+		);
+		expect(
+			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: Math.min(timeout, 30_000) }),
+			'store traffic did not settle before the measured interaction'
+		).toBe(true);
+		return;
+	}
+	const started =
+		cadenceStarts.get(page) ??
+		page
+			.waitForEvent('console', { predicate: (m) => isCadenceStartLine(m.text()), timeout })
+			.then(() => undefined);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			started,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() =>
+						reject(
+							new Error(
+								`no ${ENGINE_LEDGER_PREFIX}cadence.start within ${timeout} ms: the startup sync is still draining, or the bundle lacks EXPO_PUBLIC_WCPOS_E2E=1`
+							)
+						),
+					timeout
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * The store row `authenticateWithStore` presses on the connect screen's picker:
+ * the requested WooCommerce store, or the first offered when none is named.
+ *
+ * Addressed by the store rows' own testIDs, never by radio role: the users above the
+ * stores are a radio group too (#2703), so "the first radio" is the cashier's row, and
+ * pressing it re-selects the user and clears the store choice (store-pick.unit.spec.ts).
+ */
+export function storePickLocator(page: Page, storeId?: number | string): Locator {
+	return storeId != null
+		? page.getByTestId(`store-option-${storeId}`)
+		: page.locator('[data-testid^="store-option-"]').first();
+}
+
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
@@ -589,6 +787,8 @@ export async function authenticateWithStore(
 	console.log('[auth] Enter Demo Store button visible');
 
 	// Type the store URL and connect
+	if (await page.getByTestId('connect-another-store').isVisible())
+		await page.getByTestId('connect-another-store').click();
 	const urlInput = page.getByTestId('store-url-input');
 	await urlInput.click();
 	await urlInput.fill(storeUrl);
@@ -648,9 +848,7 @@ export async function authenticateWithStore(
 	}
 
 	// Submit login form
-	const logInButton = loginPage.locator(
-		'#wp-submit, #wcpos-submit, button:has-text("Log In"), input[value="Log In"]'
-	);
+	const logInButton = loginPage.locator('#wp-submit, #wcpos-submit');
 	await expect(logInButton.first()).toBeVisible({ timeout: 15_000 });
 	await logInButton.first().click();
 
@@ -706,7 +904,7 @@ export async function authenticateWithStore(
 	//   1. Click wp-user-button (ListItem) — selects the user, which mounts
 	//      StoreSelect below with a RadioGroup of stores + an "Open POS" button.
 	//      Single-store users have their store auto-selected; multi-store users
-	//      pick a RadioGroupItem (handled below by selecting the first option).
+	//      pick a store-option-* row (handled below by storePickLocator).
 	//   2. Click open-pos-button — this is what actually calls login() and
 	//      transitions the router out of /connect.
 	let loginSuccess = await hasReachedPos(page, 3_000);
@@ -753,7 +951,7 @@ export async function authenticateWithStore(
 		// Step 2: wait for the Open POS button to become enabled. It is gated
 		// on: stores resolved + store selected + user validation passed.
 		// Single-store users have the store auto-selected; for multi-store
-		// variants, pick the first radio option to satisfy the store gate.
+		// variants, pick the first store-option-* row to satisfy the store gate.
 		const openPosVisible = await becomesVisible(openPosButton, 10_000);
 		if (!openPosVisible) {
 			console.log(`[auth] open-pos-button not visible (attempt ${attempt}), retrying...`);
@@ -786,20 +984,13 @@ export async function authenticateWithStore(
 			// was a localID hash, so "first" was the only reachable choice and tax
 			// coverage was whatever the render order happened to give (see
 			// woocommerce-pos#1548).
-			const storeOption =
-				storeId != null
-					? page.getByTestId(`store-option-${storeId}`)
-					: page
-							.locator(
-								'[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]'
-							)
-							.first();
+			const storeOption = storePickLocator(page, storeId);
 			const hasOption = await becomesVisible(storeOption, storeId != null ? 10_000 : 2_000);
 			if (hasOption) {
 				console.log(
 					storeId != null
 						? `[auth] Selecting requested store ${storeId}...`
-						: '[auth] Selecting first store radio option...'
+						: '[auth] Selecting the first store-option-* row...'
 				);
 				await storeOption.click().catch(() => null);
 			} else if (storeId != null) {
@@ -814,7 +1005,9 @@ export async function authenticateWithStore(
 					).join(', ')}`
 				);
 			} else {
-				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
+				console.log(
+					'[auth] open-pos-button still disabled and no store-option-* row found, waiting...'
+				);
 				await page.waitForTimeout(2_000);
 				continue;
 			}
@@ -882,6 +1075,15 @@ export async function authenticateWithStore(
 	} else {
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
 	}
+	// Persist the inline alternative in the auth snapshot, after catalogue readiness. And the
+	// product grid: a till that never chose browses by categories, and every spec that reads
+	// the grid at the root (tiles, headers, scroll, the cold profile's `no-data-message`) wants
+	// All products. Set here, in the one path every authenticated page takes — a snapshot's
+	// export, a lazy per-test login, a snapshot that would not restore — not only on export.
+	if (await becomesVisible(page.getByTestId('products-settings-button'), 5_000)) {
+		await setVariationsStyle(page, 'inline');
+		await setBrowseBy(page, 'all');
+	}
 	await waitForOPFSPersistence(page);
 
 	return { storeIds: discoveredStoreIds };
@@ -907,6 +1109,27 @@ export async function navigateToPage(
 	await expect(drawerItem).toBeVisible({ timeout: 10_000 });
 	await drawerItem.click();
 	await page.waitForTimeout(2_000);
+}
+
+/**
+ * Pin THIS device's app language to English through the General settings combobox,
+ * then return to POS. `locale` is server-owned but app-editable: the edit stays in the
+ * local database and never syncs, so the store's own language is never changed.
+ * Only for specs whose referent is a status sentence with no value-bearing testID.
+ */
+export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
+	await navigateToPage(page, 'settings');
+	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
+	await page.getByTestId('language-select').click();
+	const combobox = page.getByTestId('language-select-content');
+	await expect(combobox).toBeVisible({ timeout: 10_000 });
+	await page.getByTestId('combobox-search').fill('en_US');
+	const option = combobox.getByTestId('language-select-option-en_US');
+	await expect(option).toBeVisible({ timeout: 10_000 });
+	await option.click();
+	await expect(combobox).toBeHidden({ timeout: 10_000 });
+	await navigateToPage(page, 'pos');
+	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
 }
 
 export interface HydrateAuthenticatedPageOptions {
@@ -955,6 +1178,8 @@ export async function hydrateAuthenticatedPage(
 	options: HydrateAuthenticatedPageOptions = {}
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
+	// Before anything boots, so a spec can wait on a cadence.start that already printed.
+	recordCadenceStart(page);
 	const variant = getStoreVariant(testInfo);
 	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
@@ -978,9 +1203,13 @@ export async function hydrateAuthenticatedPage(
 			await page.route('**/*', blockScriptRequests);
 			await page.goto('/', { waitUntil: 'commit' });
 
-			// Restore OPFS and localStorage while JS is blocked (no worker running)
+			// Restore OPFS and localStorage while JS is blocked (no worker running).
+			// Every test is a copy of the login's database, register document (till id +
+			// sale counters) included; restored as a clone, each re-mints its own till
+			// before it sells, or Store health on the dev stores would list one
+			// "duplicate counter" row per CI run.
 			await restoreOPFS(page, state.opfs);
-			await restoreLocalStorage(page, state.localStorage);
+			await restoreLocalStorageAsClone(page, state.localStorage);
 
 			// Unblock JS and reload so the app picks up the restored OPFS state
 			await page.unroute('**/*', blockScriptRequests);
@@ -994,7 +1223,9 @@ export async function hydrateAuthenticatedPage(
 			await expect(page.getByTestId('search-products')).toBeVisible({
 				timeout: 60_000,
 			});
-			const appError = page.getByTestId('error-boundary-fallback').first();
+			const appError = page
+				.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
+				.first();
 			// Intentional one-shot: `search-products` is already visible above, so if the
 			// restored state faulted the error boundary has already rendered. A waiting
 			// check would add its full timeout to every happy-path hydration for a
@@ -1064,6 +1295,8 @@ export async function hydrateAuthenticatedPage(
 
 			// Unblock JS before re-authenticating
 			await page.unroute('**/*', blockScriptRequests).catch(() => {});
+			// Re-arm: a cadence.start from the abandoned restored boot is not this session's.
+			recordCadenceStart(page);
 			await authenticateWithStore(page, testInfo, {
 				waitForCatalogue,
 				credentials: cashierAuth ?? undefined,
@@ -1102,6 +1335,7 @@ export function listStoreIds(variant: StoreVariant = 'pro'): string[] {
 }
 
 export const authenticatedTest = base.extend<{
+	quarantineGate: void;
 	posPage: Page;
 	storeAuthorization: () => StoreAuthorization | null;
 	/**
@@ -1115,6 +1349,7 @@ export const authenticatedTest = base.extend<{
 	 */
 	targetStoreId: string | null;
 }>({
+	quarantineGate,
 	targetStoreId: [null, { option: true }],
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook

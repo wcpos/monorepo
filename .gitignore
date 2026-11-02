@@ -16,6 +16,7 @@ node_modules
 !.claude/settings.json
 docs/
 apps/main/web-build-atlas/
+apps/main/web-build-measure/
 
 # Playwright
 /test-results/

@@ -1,3 +1,5 @@
+import { identityColumns, type MetaDataEntry, wooMetaCarrier } from './pos-carrier/carrier';
+import { foldSearchText } from './searchText';
 import { type RemoteId } from './woo/remoteIdCodec';
 import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 
@@ -32,6 +34,8 @@ export type WooProductPayload = Record<string, unknown> & {
  * via `promotedOrderColumns`; backfilled from payload by the orderSchema v1 migration.
  */
 export type PromotedOrderColumns = {
+	posUserId: string;
+	posStoreId: string;
 	// Driver-shaped filter dimensions stay numeric; they are not document identity.
 	number: string;
 	dateCreatedGmt: string;
@@ -60,6 +64,9 @@ export type StoredOrderDocument = OrderDocument & PromotedOrderColumns;
  * promotion mapping (used by the storage boundary AND the schema migration backfill). */
 export function promotedOrderColumns(payload: WooOrderPayload): PromotedOrderColumns {
 	return {
+		...identityColumns(
+			wooMetaCarrier.readIdentity(payload.meta_data as MetaDataEntry[] | undefined)
+		),
 		number: String(payload.number ?? ''),
 		dateCreatedGmt: String(payload.date_created_gmt ?? ''),
 		status: String(payload.status ?? ''),
@@ -68,11 +75,16 @@ export function promotedOrderColumns(payload: WooOrderPayload): PromotedOrderCol
 	};
 }
 
+/** Non-null lookup spelling; remoteId itself retains the born-local null state. */
+export function remoteKeyFor(remoteId: string | null | undefined): string {
+	return remoteId ?? '';
+}
+
 /** Attach the promoted columns (derived from `doc.payload`) to an order document for storage. */
-export function withOrderColumns<T extends { payload: WooOrderPayload }>(
+export function withOrderColumns<T extends { payload: WooOrderPayload; remoteId?: string | null }>(
 	doc: T
-): T & PromotedOrderColumns {
-	return { ...doc, ...promotedOrderColumns(doc.payload) };
+): T & PromotedOrderColumns & { remoteKey: string } {
+	return { ...doc, ...promotedOrderColumns(doc.payload), remoteKey: remoteKeyFor(doc.remoteId) };
 }
 
 /** Numeric ids from a Woo taxonomy array (categories/brands: `[{ id, name, ... }]`). Defensive — the
@@ -105,13 +117,16 @@ export function finiteOrNull(value: unknown): number | null {
 
 /**
  * Promoted product filter/sort columns (INC-2a; the attribute "any" facet array is INC-2b). `price`
- * is numeric for range filters; `categoryIds`/`brandIds` are membership arrays for multi-select.
+ * is numeric for range filters; `categoryIds`/`tagIds`/`brandIds` are membership arrays for
+ * multi-select.
  */
 export type PromotedProductColumns = {
+	sortName: string;
 	price: number;
 	stockStatus: string;
 	type: string;
 	categoryIds: number[];
+	tagIds: number[];
 	brandIds: number[];
 	onSale: boolean;
 	featured: boolean;
@@ -131,11 +146,13 @@ export type StoredProductDocument = ProductDocument & PromotedProductColumns;
  * mapping (storage boundary AND the schema migration backfill). */
 export function promotedProductColumns(payload: WooProductPayload): PromotedProductColumns {
 	return {
+		sortName: foldSearchText(payload.name ?? '').slice(0, 256),
 		// Rounded to cents so the indexed price column satisfies the schema's multipleOf:0.01.
 		price: Math.round((Number(payload.price) || 0) * 100) / 100,
 		stockStatus: String(payload.stock_status ?? ''),
 		type: String(payload.type ?? ''),
 		categoryIds: taxonomyIds(payload.categories),
+		tagIds: taxonomyIds(payload.tags),
 		brandIds: taxonomyIds(payload.brands),
 		onSale: Boolean(payload.on_sale),
 		featured: Boolean(payload.featured),

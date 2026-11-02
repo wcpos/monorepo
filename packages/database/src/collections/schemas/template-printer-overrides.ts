@@ -1,6 +1,6 @@
 export const templatePrinterOverridesLiteral = {
 	title: 'Template Printer Overrides schema',
-	version: 1,
+	version: 0,
 	description: 'Per-device mapping of template IDs to printer target IDs',
 	type: 'object',
 	primaryKey: 'template_id',

@@ -1,3 +1,5 @@
+import { isGatewayId } from '@wcpos/sync-core';
+
 import {
 	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
 	clampToBrowseWindowBackstop,
@@ -50,7 +52,7 @@ export function normalizeOrderBrowseWindowLimit(limit: number): number {
  * window resumes from (#957; see browse-window-continuation.ts). The limit is the LAST
  * field of this grammar, so the predecessor is the same key with a smaller `:limit=`
  * suffix; every other dimension is preserved verbatim, which is what keeps a
- * customer/cashier/store/date-scoped browse continuing from its own prefix.
+ * customer/cashier/register/store/payment-method/date-scoped browse continuing from its own prefix.
  */
 export function orderBrowserPredecessorWindow(
 	queryKey: string,
@@ -72,7 +74,9 @@ export type OrderBrowserSchedulerDescriptor = {
 	limit: number;
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
 	store?: string;
+	paymentMethod?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
@@ -104,7 +108,9 @@ export type OrderBrowseWindowFields = {
 	limit: number | 'all';
 	customerId?: number | undefined;
 	cashierId?: number | undefined;
+	registerId?: string | undefined;
 	store?: string | undefined;
+	paymentMethod?: string | undefined;
 	afterSeconds?: number | undefined;
 	beforeSeconds?: number | undefined;
 	orderby?: OrderBrowserSchedulerDescriptor['orderby'];
@@ -143,7 +149,9 @@ function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: 
 		`orders:browser:status=${fields.status}`,
 		browseWindowKeyPart('customer', fields.customerId),
 		browseWindowKeyPart('cashier', fields.cashierId),
+		browseWindowKeyPart('register', fields.registerId),
 		browseWindowKeyPart('store', fields.store),
+		browseWindowKeyPart('payment_method', fields.paymentMethod),
 		browseWindowKeyPart('after', fields.afterSeconds),
 		browseWindowKeyPart('before', fields.beforeSeconds),
 		orderBrowseWindowSortPart(fields),
@@ -168,7 +176,9 @@ export function orderBrowseWindowRequirementId(fields: OrderBrowseWindowFields):
 	const dimensioned =
 		fields.customerId !== undefined ||
 		fields.cashierId !== undefined ||
+		fields.registerId !== undefined ||
 		fields.store !== undefined ||
+		fields.paymentMethod !== undefined ||
 		fields.afterSeconds !== undefined ||
 		fields.beforeSeconds !== undefined ||
 		orderBrowseWindowSortPart(fields) !== '';
@@ -186,6 +196,11 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
 	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
+	if (dims.paymentMethod !== undefined && !isGatewayId(dims.paymentMethod)) {
+		throw new TypeError(
+			'orders browse payment method must be a gateway id of 1–64 letters, digits, _, . or -'
+		);
+	}
 	if (status === '') throw new TypeError('orders browse status must not be empty');
 	if (status.includes(':')) throw new TypeError('orders browse status must not contain ":"');
 	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
@@ -218,6 +233,8 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		limit: dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number),
 		customerId: safeNonNegativeInteger(dims.customerId),
 		cashierId: safeNonNegativeInteger(dims.cashierId),
+		registerId: dims.registerId,
+		paymentMethod: dims.paymentMethod,
 		store,
 		afterSeconds,
 		beforeSeconds,
@@ -245,11 +262,11 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
 	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
 	// which is how this grammar has always terminated it. Every structured dimension
-	// (customer, cashier, store, the range bounds, then the sort pair) therefore sits
+	// (customer, cashier, register, store, payment method, range bounds, then sort) therefore sits
 	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
 	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::payment_method=([A-Za-z0-9_.-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
@@ -259,7 +276,9 @@ export function parseOrderBrowserSchedulerDescriptor(
 		status,
 		customerText,
 		cashierText,
+		registerId,
 		store,
+		paymentMethod,
 		afterText,
 		beforeText,
 		orderby,
@@ -273,6 +292,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (
+		(paymentMethod !== undefined && !isGatewayId(paymentMethod)) ||
 		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
 		(cashierId !== undefined && !Number.isSafeInteger(cashierId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
@@ -302,7 +322,9 @@ export function parseOrderBrowserSchedulerDescriptor(
 			limit,
 			...(customerId !== undefined ? { customerId } : {}),
 			...(cashierId !== undefined ? { cashierId } : {}),
+			...(registerId !== undefined ? { registerId } : {}),
 			...(store !== undefined ? { store } : {}),
+			...(paymentMethod !== undefined ? { paymentMethod } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
 			// A ranged lane is sort-agnostic (see the sortPart note in orderBrowserQueryKey), so the
@@ -332,7 +354,9 @@ export function orderBrowseWindowFields(
 		limit: descriptor.complete ? 'all' : descriptor.limit,
 		customerId: descriptor.customerId,
 		cashierId: descriptor.cashierId,
+		registerId: descriptor.registerId,
 		store: descriptor.store,
+		paymentMethod: descriptor.paymentMethod,
 		afterSeconds: descriptor.afterSeconds,
 		beforeSeconds: descriptor.beforeSeconds,
 		orderby: descriptor.orderby,

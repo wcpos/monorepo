@@ -12,6 +12,25 @@ describe('package exports', () => {
 		expect(Object.keys(production).sort()).toEqual(
 			[
 				'createRxdbSyncEngine',
+				// Typed queue consumers share the engine's complete status vocabulary.
+				'QUEUE_ROW_STATUSES',
+				// Human decisions partition backlog from terminal work.
+				'TERMINAL_QUEUE_STATUSES',
+				// The unresolved panel selects parked work without re-spelling statuses.
+				'PARKED_QUEUE_STATUSES',
+				// Health counters select network-waiting work.
+				'BACKLOG_QUEUE_STATUSES',
+				// The dead-letter panel selects permanent refusals.
+				'REJECTED_QUEUE_STATUSES',
+				// The checkout hold projects the resident through the enqueue seam to compare
+				// it with a refused row (#2952).
+				'sanitizeOutboundOrderPayload',
+				// Register accounting shares the engine's definition of pending local work.
+				'hasPendingLocalWork',
+				// The one protected-order-meta rule (identity re-stamps, the one-way money-owner
+				// hint, Woo ids kept): pull adoption, acknowledgement adoption and core's
+				// mutation boundary must agree, so core imports the engine's merge (#2688).
+				'mergeProtectedOrderMeta',
 				'normalizeVariationAttributes',
 				// The variation projector, exported so @wcpos/query's parity test can pin
 				// the map face against it — the drift tripwire #1308 gave products/orders.
@@ -21,11 +40,12 @@ describe('package exports', () => {
 				// The Store health panel must decide "does discard delete this record?"
 				// from the SAME rule the engine enforces (#832 follow-up, R7b).
 				'rejectionSuggestsServerRecord',
-				// The host opens and names the cross-tab write-outcome channel (#1209)
-				// — web-only, scoped per store database, moved on a scope switch — so
-				// the factory and the naming rule are both part of the public door.
-				'createWriteOutcomeBridge',
-				'writeOutcomeChannelName',
+				// Query descriptions and actual discard share the same consequence rule.
+				'discardConsequence',
+				// A scope generation bump opens a fresh database; the host drains the previous
+				// generation's unsent sales through the engine's own write path before that
+				// database is removed (SCOPE_DATABASE_GENERATION 5 -> 6).
+				'drainLegacyScopeDatabase',
 				// The app's engine fetcher hydrates census/query-total responses
 				// through the same body-envelope seam the engine uses internally
 				// (B9, hostile-headers program) — one unwrap rule, two seams.
@@ -35,11 +55,16 @@ describe('package exports', () => {
 				// exported rather than mirrored. A mirrored copy that missed a new
 				// terminal type would hang every waiter on it.
 				'TERMINAL_WRITE_EVENT_TYPES',
+				'WRITTEN_BEFORE_PROTOCOL_3',
 				// The health counters must exclude the queue rows the write-drain lane
 				// holds by design while a cart is open — decided by the ENGINE's rule,
 				// never by a copy of it in the UI (#1546).
 				'heldOpenCartMutations',
 				'OPEN_CART_ORDER_STATUS',
+				// The engine is published without @wcpos/utils, so the host hands it a
+				// logger instead of the engine importing the app's: apps/main routes this
+				// process-wide warn sink to the category the engine used before.
+				'setSyncEngineLogger',
 				// @wcpos/query's catalogue-search blob reads through it, so no
 				// unsubscribed full-read RxQuery stays cached (#2502).
 				'findAllUncached',
@@ -49,6 +74,9 @@ describe('package exports', () => {
 				'isReportedRequestStatus',
 				'markTransportFailure',
 				'requestStatusOf',
+				// The one reader of an order resident's revision and adoption (#2879): @wcpos/query's
+				// money poster and birth path read through it, so no copy re-spells `sync.adopted`.
+				'residentRevision',
 			].sort()
 		);
 	});
@@ -57,7 +85,11 @@ describe('package exports', () => {
 		const testing = await import('./testing');
 		expect(Object.keys(testing).sort()).toEqual([
 			'createEngineHarness',
+			// @wcpos/query's fake engine runs the real revision door over its in-memory database.
+			'createOrderRevisionDoor',
 			'customerBrowseWindowQueryKeyFromDimensions',
+			'drainableGenerationCollectionCreators',
+			'engineCollectionCreators',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',
 			'existenceManifestSchema',
@@ -65,6 +97,7 @@ describe('package exports', () => {
 			'memoryStringStore',
 			'orderBrowserQueryKey',
 			'productBrowseWindowQueryKeyFromDimensions',
+			'refundBrowserQueryKey',
 			'remoteId',
 			'schedulerTaskStateKey',
 			'schedulerTaskStateSchema',

@@ -1,0 +1,23 @@
+# Behaviour ledger: `notice`
+
+Seeded 2026-09-18 by wcpos/roadmap#358 from the feedback-states page (wcpos/roadmap#308). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** The one band for Status and Outage.
+
+**Base:** `react-native` View; `Text`, `Icon`, `VStack`, `HStack`, `Button` and `DocsLink`.
+
+## Lines
+
+1. Never dismissible from inside the band; a band that must go is unmounted by its owner — evidence: ADR 0032 §5 as the default; wcpos/roadmap#358.
+2. `bad` is the only red surface in the app — evidence: wcpos/roadmap#308 §6; wcpos/roadmap#358.
+3. Always text, never icon-only; colour is never the only signal — evidence: wcpos/roadmap#308 §7, guideline 6; wcpos/roadmap#358.
+4. At most two actions and one docs link — evidence: component map §5; wcpos/roadmap#358.
+5. The text column keeps a wrapping basis of twelve units so the actions wrap beneath it before the text narrows to a sliver — evidence: Codex review on wcpos/monorepo#2182 (a 300 px pane produced a 600 px-tall message column with `flex-1 min-w-0` alone); wcpos/roadmap#358.
+6. The icon takes the foreground colour; the tone lives on the surface and its border, never on an icon that would fall under 3:1 against the tinted surface — evidence: `.claude/rules/design.mdc` §7 (icon contrast 3:1); the prototype's `.notice` colours no icon; Codex review on wcpos/monorepo#2182.
+7. A `bad` notice is announced on iOS when it mounts, because iOS has no live region; Android and web use the live region — evidence: Codex review on wcpos/monorepo#2182.
+8. Copy at the base size and action labels that wrap, as `empty-state` lines 5–6 — evidence: `.claude/rules/design.mdc` §3; Codex review on wcpos/monorepo#2182.
+9. Optional children render in the text column under the description — evidence: wcpos/roadmap#465, board section 5: the totals-changed banner keeps its body text.
+10. Optional `items` render in the text column under the description and before any children (a closing line such as "and 2 more"), one line each with its own at most two actions in the band's action styling (a ghost small Button whose label wraps); the owner, not the band, caps how many it passes — evidence: wcpos/monorepo B2 review (ADR 0040 Decided 1 rule 4): the Orders needs-attention band lists refused sales, each with Open order and Handled, instead of the screen hand-building buttons.
+11. An action may carry `loading`: its button shows the spinner and is inert while the owner's command runs — evidence: wcpos/monorepo C5-S1 (Try again on the checkout's unanswered gate showed no in-flight state).
+12. `tone` is `warning`, `info` or `bad` from the tone map (`warn` became `warning`); the band is the map's `band` face and the leading glyph its `glyph` face (card 16, 2026-10-28) — evidence: card 16 of the 2026-10-28 component-library review (`lib/tone.ts`), test `lib/tone.test.ts`.
+13. `live` (default true) keeps the band a live region (`status`, or `alert` for `bad`); `live={false}` renders `role="group"` with no `aria-live` and skips line 7's iOS announcement, for a band that holds controls whose every pick would otherwise be re-announced — evidence: the order's hand-over box (2026-10-30, feat/order-hand-over-box); test `index.test.tsx` “live={false} is a plain group with no live region” — platform: all.

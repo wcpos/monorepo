@@ -1,11 +1,10 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import type { QueryStateActions } from '../../../../query';
+import { useT } from '../../../../contexts/translations';
 
 /**
  *
@@ -16,9 +15,8 @@ export function ProductBrands({
 }: CellContext<{ record: EngineRecord<'products'> }, 'brands'>) {
 	const brands = useRecordField(row.original.record, (product) => product.payload.brands) || [];
 
-	const meta = table.options.meta as unknown as {
-		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
-	};
+	const t = useT();
+	const actions = table.options.meta?.actions;
 
 	if (brands.length === 0) {
 		return null;
@@ -28,21 +26,23 @@ export function ProductBrands({
 	 * @NOTE - Don't use a unique key here, index is sufficient
 	 */
 	return (
-		<HStack className="w-full flex-wrap gap-1">
-			{(brands || []).map((brand, index) => (
-				<ButtonPill
-					variant="ghost-primary"
-					size="xs"
-					key={index}
-					onPress={() =>
-						brand.id === undefined ? undefined : meta.actions.setFilter('brands', [brand.id])
-					}
-				>
-					<ButtonText numberOfLines={1} decodeHtml>
+		<Text className="w-full text-sm" numberOfLines={1}>
+			<Text className="text-muted-foreground">{t('common.brands')} </Text>
+			{brands.map((brand, index) => (
+				<React.Fragment key={index}>
+					{index > 0 && ', '}
+					<Text
+						className="text-foreground text-sm"
+						accessibilityRole="button"
+						decodeHtml
+						onPress={() =>
+							brand.id === undefined ? undefined : actions?.setFilter('brands', [brand.id])
+						}
+					>
 						{brand.name}
-					</ButtonText>
-				</ButtonPill>
+					</Text>
+				</React.Fragment>
 			))}
-		</HStack>
+		</Text>
 	);
 }

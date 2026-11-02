@@ -45,6 +45,7 @@ let mockCaps: Record<string, boolean> = {
 	canEditCustomers: true,
 	canEditCoupons: true,
 };
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
 }));
@@ -54,9 +55,6 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	engineCollection: jest.requireActual('@wcpos/query').engineCollection,
-	observeEngineCollection: jest.requireActual('@wcpos/query').observeEngineCollection,
-	resolveLegacyField: jest.requireActual('@wcpos/query').resolveLegacyField,
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('../../../contexts/translations', () => {
@@ -107,11 +105,7 @@ jest.mock('@wcpos/components/text', () => {
 		),
 	};
 });
-jest.mock('./components', () => ({
-	Callout: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
-}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 const stuck = (collection: string, retryable: boolean): StuckRecord => ({
 	key: `${collection}:record-uuid`,

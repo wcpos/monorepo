@@ -13,6 +13,10 @@ import type { FallbackProps } from 'react-error-boundary';
 /**
  * TODO - convert this to a general removable message component
  */
+// The fallback renders when the tree under it threw, translations included, so its words are
+// English, as "Something went wrong" already is; the dismiss control still gets a name.
+const DISMISS_LABEL = 'Dismiss';
+
 export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	const [containerWidth, setContainerWidth] = React.useState(0);
 	const errorMessage = error instanceof Error ? error.message : String(error);
@@ -32,12 +36,12 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 		return (
 			<HStack
 				testID="error-boundary-fallback"
-				className="bg-error items-start justify-between p-2"
+				className="bg-bad items-start justify-between p-2"
 				onLayout={handleLayout}
 			>
 				<Tooltip>
 					<TooltipTrigger>
-						<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
+						<Icon name="warning" size="4xl" className="text-destructive-foreground" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<VStack className="w-full flex-1 gap-1">
@@ -46,7 +50,13 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 						</VStack>
 					</TooltipContent>
 				</Tooltip>
-				<IconButton name="xmark" size="sm" variant="destructive" onPress={resetErrorBoundary} />
+				<IconButton
+					name="close"
+					size="sm"
+					variant="destructive"
+					accessibilityLabel={DISMISS_LABEL}
+					onPress={resetErrorBoundary}
+				/>
 			</HStack>
 		);
 	}
@@ -57,18 +67,19 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	return (
 		<HStack
 			testID="error-boundary-fallback"
-			className="bg-error w-full items-start p-2"
+			className="bg-bad w-full items-start p-2"
 			onLayout={handleLayout}
 		>
-			<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
+			<Icon name="warning" size="4xl" className="text-destructive-foreground" />
 			<VStack className="w-full flex-1 gap-1">
-				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
-				<Text className="text-error-foreground">{errorMessage}</Text>
+				<Text className="text-destructive-foreground font-bold">Something went wrong:</Text>
+				<Text className="text-destructive-foreground">{errorMessage}</Text>
 			</VStack>
 			<IconButton
-				name="xmark"
+				name="close"
 				size="sm"
-				className="text-destructive-foreground"
+				iconClassName="text-destructive-foreground"
+				accessibilityLabel={DISMISS_LABEL}
 				onPress={resetErrorBoundary}
 			/>
 		</HStack>

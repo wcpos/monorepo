@@ -1,18 +1,19 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { from, Observable, of } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { type Observable, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
-import { useQueryRuntime, WRITEABLE_REMOTE_ID_FIELD } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
-import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
-import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import {
+	type DescribedQueueRow,
+	observeDescribedQueueRows,
+	observeQueueRows,
+	PARKED_QUEUE_STATUSES,
+	useQueryRuntime,
+} from '@wcpos/query';
+import type { QueueRow, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { recordHandle } from './record-handle';
-
-const healthLogger = getLogger(['wcpos', 'health']);
 
 /**
  * The unresolved-conflict feed for Store health → Database.
@@ -51,30 +52,12 @@ export type UnresolvedConflict = {
 	residentUnknown: boolean;
 };
 
-type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
-type MutationRow = EngineConflict | { toJSON(): EngineConflict };
-type MutationCollection = {
-	find(query: { selector: { status: { $in: string[] } } }): {
-		$: Observable<readonly MutationRow[]>;
-	};
-};
-
-const PARKED_STATUSES = ['conflicted', 'needs-revision'];
-
-const REMOTE_ID_FIELD: Record<string, string | undefined> = WRITEABLE_REMOTE_ID_FIELD;
-
-function toJson(row: MutationRow): EngineConflict {
-	return 'toJSON' in row && typeof row.toJSON === 'function'
-		? row.toJSON()
-		: (row as EngineConflict);
-}
-
 /**
  * The record handle (shared with the attention panel and the Logs rows), read
  * from the resident first and the queued snapshot as the last resort — a
  * parked UPDATE's payload may be partial (a lone stock tweak carries no name).
  */
-function labelFor(resident: Record<string, unknown> | null, entry: EngineConflict): string | null {
+function labelFor(resident: Record<string, unknown> | null, entry: QueueRow): string | null {
 	return recordHandle(
 		entry.collectionName,
 		resident,
@@ -82,64 +65,22 @@ function labelFor(resident: Record<string, unknown> | null, entry: EngineConflic
 	);
 }
 
-async function describe(
-	database: EngineDatabase,
-	rows: readonly MutationRow[]
-): Promise<UnresolvedConflict[]> {
-	const described = await Promise.all(
-		rows.map(async (row) => {
-			const entry = toJson(row);
-			// A failed resident read must NOT reject this Promise.all (see
-			// use-rejected-mutations): the label is decoration — degrade to the
-			// queued snapshot rather than blanking the screen.
-			let resident: Record<string, unknown> | null = null;
-			let readFailed = false;
-			try {
-				const doc = await database.collections[entry.collectionName]
-					?.findOne(entry.recordId)
-					.exec();
-				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
-			} catch (error) {
-				readFailed = true;
-				healthLogger.debug('Conflicts panel could not read the local record', {
-					context: {
-						collection: entry.collectionName,
-						recordId: entry.recordId,
-						error: getErrorMessage(error),
-					},
-				});
-			}
-			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
-			const columnRemoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
-			const queuedRemoteId =
-				entry.collectionName === 'orders'
-					? undefined
-					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
-						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
-			const remoteId = remoteIdOrNull(columnRemoteId) ?? remoteIdOrNull(queuedRemoteId);
-			return {
-				mutationId: entry.mutationId,
-				collectionName: entry.collectionName,
-				recordId: entry.recordId,
-				operation: entry.operation,
-				label: labelFor(resident, entry),
-				queuedAt: entry.queuedAt ?? null,
-				status: entry.status === 'needs-revision' ? 'needs-revision' : 'conflicted',
-				destroysRecord:
-					entry.operation === 'create' &&
-					resident !== null &&
-					!readFailed &&
-					remoteId === null &&
-					!rejectionSuggestsServerRecord(entry.rejectedReason),
-				mayDestroyRecord:
-					entry.collectionName !== 'orders' &&
-					resident !== null &&
-					!readFailed &&
-					remoteId !== null,
-				residentUnknown: readFailed,
-			} satisfies UnresolvedConflict;
-		})
-	);
+function describe(rows: readonly DescribedQueueRow[]): UnresolvedConflict[] {
+	const described = rows.map((entry): UnresolvedConflict => {
+		const { resident, residentRead, discard } = entry;
+		return {
+			mutationId: entry.mutationId,
+			collectionName: entry.collectionName,
+			recordId: entry.recordId,
+			operation: entry.operation,
+			label: labelFor(resident, entry),
+			queuedAt: entry.queuedAt ?? null,
+			status: entry.status === 'needs-revision' ? 'needs-revision' : 'conflicted',
+			residentUnknown: residentRead === 'failed',
+			destroysRecord: discard === 'destroys-record',
+			mayDestroyRecord: discard === 'may-destroy-record',
+		};
+	});
 	// Newest first — the row the cashier just watched park.
 	return described.sort((a, b) => (b.queuedAt ?? '').localeCompare(a.queuedAt ?? ''));
 }
@@ -152,19 +93,8 @@ async function describe(
 export type UnresolvedConflictsRead = { rows: UnresolvedConflict[]; readError: boolean };
 
 function conflicted$(engine: RxdbSyncEngine): Observable<UnresolvedConflictsRead> {
-	return new Observable<EngineDatabase | null>((subscriber) =>
-		engine.db$((database) => subscriber.next(database))
-	).pipe(
-		switchMap((database) => {
-			if (!database) return of<UnresolvedConflictsRead>({ rows: [], readError: false });
-			const mutations = database.collections[
-				MUTATION_QUEUE_RXDB_COLLECTION
-			] as unknown as MutationCollection;
-			return mutations.find({ selector: { status: { $in: PARKED_STATUSES } } }).$.pipe(
-				switchMap((rows) => from(describe(database, rows))),
-				map((rows) => ({ rows, readError: false }))
-			);
-		}),
+	return observeDescribedQueueRows(engine, { statuses: PARKED_QUEUE_STATUSES }).pipe(
+		map((rows) => ({ rows: describe(rows), readError: false })),
 		// Never poison the cached resource (see use-rejected-mutations): a storage
 		// fault degrades to a visible read error, not a forever-throwing read().
 		catchError(() => of<UnresolvedConflictsRead>({ rows: [], readError: true }))
@@ -193,9 +123,9 @@ function conflictedResource(engine: RxdbSyncEngine): ObservableResource<Unresolv
  * the house data-flow (ObservableResource + Suspense).
  */
 export function useUnresolvedConflicts(): UnresolvedConflictsRead {
-	const { engine } = useQueryRuntime();
-	const result = useObservableSuspense(conflictedResource(engine));
-	if (result.readError) resourceByEngine.delete(engine);
+	const runtime = useQueryRuntime();
+	const result = useObservableSuspense(conflictedResource(runtime.engine));
+	if (result.readError) resourceByEngine.delete(runtime.engine);
 	return result;
 }
 
@@ -206,27 +136,18 @@ export function useUnresolvedConflicts(): UnresolvedConflictsRead {
  * shape the dead-letter keys take, same reason.
  */
 export function useUnresolvedConflictKeys(): Set<string> {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const [keys, setKeys] = React.useState<Set<string>>(() => new Set());
 
 	React.useEffect(() => {
 		// The engine owns this external subscription; bind it to the hook lifecycle.
-		const subscription = new Observable<EngineDatabase | null>((subscriber) =>
-			engine.db$((database) => subscriber.next(database))
-		)
+		const subscription = observeQueueRows(runtime.engine, { statuses: PARKED_QUEUE_STATUSES })
 			.pipe(
-				switchMap((database) => {
-					if (!database) return of<readonly MutationRow[]>([]);
-					const mutations = database.collections[
-						MUTATION_QUEUE_RXDB_COLLECTION
-					] as unknown as MutationCollection;
-					return mutations.find({ selector: { status: { $in: PARKED_STATUSES } } }).$;
-				}),
 				map(
 					(rows) =>
 						new Set(
 							rows.map((row) => {
-								const entry = toJson(row);
+								const entry = row;
 								return `${entry.collectionName}:${entry.recordId}`;
 							})
 						)
@@ -237,7 +158,7 @@ export function useUnresolvedConflictKeys(): Set<string> {
 			)
 			.subscribe(setKeys);
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [runtime.engine]);
 
 	return keys;
 }

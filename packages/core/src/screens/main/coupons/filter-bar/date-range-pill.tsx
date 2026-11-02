@@ -1,26 +1,22 @@
 import * as React from 'react';
 
-import { endOfDay } from 'date-fns/endOfDay';
 import { isSameDay } from 'date-fns/isSameDay';
 import { isToday } from 'date-fns/isToday';
 import { isYesterday } from 'date-fns/isYesterday';
-import { startOfDay } from 'date-fns/startOfDay';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
 import { DateRangeCalendar } from '../../components/order/filter-bar/calendar';
 import { useQueryState, useQueryStateActions } from '../../../../query';
+import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
-import {
-	convertLocalDateToUTCString,
-	convertUTCStringToLocalDate,
-	useLocalDate,
-} from '../../../../hooks/use-local-date';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 
 export function DateRangePill() {
 	const t = useT();
+	const { timezone, dayBounds, rangeToFilter } = useStoreDay();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const selectedDateRange = useQueryState<'coupons', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
@@ -31,17 +27,17 @@ export function DateRangePill() {
 
 	const label = React.useMemo(() => {
 		if (!isActive) {
-			return t('coupons.expiry_date');
+			return t('coupons.expires');
 		}
 
-		const from = convertUTCStringToLocalDate(selectedDateRange.from);
-		const to = convertUTCStringToLocalDate(selectedDateRange.to);
+		const from = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.from));
+		const to = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.to));
 
 		if (isSameDay(from, to)) {
-			if (isToday(from)) {
+			if (isToday(from, zoneOptions(timezone))) {
 				return t('common.today');
 			}
-			if (isYesterday(from)) {
+			if (isYesterday(from, zoneOptions(timezone))) {
 				return t('common.yesterday');
 			}
 		}
@@ -50,7 +46,7 @@ export function DateRangePill() {
 		const toStr = formatDate(to, 'd MMM');
 
 		return `${fromStr} - ${toStr}`;
-	}, [isActive, selectedDateRange, formatDate, t]);
+	}, [isActive, selectedDateRange, formatDate, t, timezone]);
 
 	const handleDateSelect = React.useCallback(
 		(range: DateRange) => {
@@ -60,14 +56,17 @@ export function DateRangePill() {
 
 			const { from, to } = range;
 
-			setFilter('dateRange', {
-				from: convertLocalDateToUTCString(startOfDay(from)),
-				to: convertLocalDateToUTCString(endOfDay(to)),
-			});
+			setFilter(
+				'dateRange',
+				rangeToFilter({
+					from: dayBounds(calendarDate(from)).from,
+					to: dayBounds(calendarDate(to)).to,
+				})
+			);
 
 			triggerRef.current?.close();
 		},
-		[setFilter]
+		[setFilter, dayBounds, rangeToFilter]
 	);
 
 	return (
@@ -77,18 +76,20 @@ export function DateRangePill() {
 				ref={triggerRef}
 				asChild
 			>
-				<ButtonPill
-					size="xs"
-					leftIcon="calendarDays"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => clearFilter('dateRange')}
-				>
-					<ButtonText>{label}</ButtonText>
-				</ButtonPill>
+				<Chip
+					testID="filter-pill-date_expires_gmt"
+					clearTestID="filter-pill-remove-date_expires_gmt"
+					icon="calendar"
+					label={label}
+					on={isActive}
+					clearLabel={t('common.remove')}
+					onClear={isActive ? () => clearFilter('dateRange') : undefined}
+				/>
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-2">
-				<DateRangeCalendar onSelect={handleDateSelect} />
+				{/* Keyed by zone: the calendar seeds its selection from the store day at mount, so a
+				    zone resolved after mount must not leave the old selection behind. */}
+				<DateRangeCalendar key={timezone} onSelect={handleDateSelect} />
 			</PopoverContent>
 		</Popover>
 	);

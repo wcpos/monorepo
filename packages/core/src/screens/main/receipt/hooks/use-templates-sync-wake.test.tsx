@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  *
  * The wake behaviour of `useTemplatesSync`. The deferral is recorded inside the
- * module-level `syncTemplates` (not in the hook), so the hook and the sync
+ * query-owned `syncTemplates` (not in the hook), so the hook and the sync
  * function have to agree on the SAME collection identity for the retry to fire —
  * a mismatch there would fail silently, leaving the template set empty until the
  * next remount. These tests pin that handshake.
@@ -12,15 +12,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useTemplatesSync } from './use-templates-sync';
 
 const mockGet = jest.fn();
+const mockHttp = { get: mockGet };
 const mockWakeCallbacks: (() => void)[] = [];
-const collection = { name: 'templates' };
+const session = { storeDB: { templates: { name: 'templates' } } };
 
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ get: mockGet }),
+	useRestHttpClient: () => mockHttp,
 }));
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ localDB: { collections: { templates: collection } } }),
-}));
+jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => session }));
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	// The real predicate — a stub here would ratify the test instead of checking
 	// the guard the code actually runs.
@@ -94,4 +93,22 @@ describe('useTemplatesSync wake behaviour', () => {
 		await wake();
 		expect(mockGet).toHaveBeenCalledTimes(2);
 	});
+});
+
+// Without settlement state, a local report can print before its templates arrive.
+it('synced turns true when the first run settles, on failure too', async () => {
+	for (const fails of [false, true]) {
+		let settle!: () => void;
+		mockGet.mockImplementation(
+			() =>
+				new Promise<{ data: unknown[] }>((resolve, reject) => {
+					settle = () => (fails ? reject(new Error('offline')) : resolve({ data: [] }));
+				})
+		);
+		const view = renderHook(() => useTemplatesSync('report', 5));
+		expect(view.result.current).toEqual({ synced: false });
+		await act(async () => settle());
+		expect(view.result.current).toEqual({ synced: true });
+		view.unmount();
+	}
 });

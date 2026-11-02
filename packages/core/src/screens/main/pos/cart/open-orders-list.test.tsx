@@ -1,0 +1,212 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import type { EngineRecord } from '@wcpos/query';
+
+import { OpenOrdersList } from './open-orders-list';
+jest.mock('../../hooks/use-order-status-label', () => ({
+	useOrderStatusLabel: () => ({ getLabel: () => 'Pending' }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+}));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('./tab-title', () => ({ CartTabTitle: () => null }));
+// The real converter sits behind the locale hook, whose module graph reaches the app state.
+jest.mock('../../../../hooks/use-local-date', () => ({
+	convertUTCStringToLocalDate: (value: string) => new Date(`${value}Z`),
+}));
+jest.mock('./tab-chip', () => ({ TabChip: () => null }));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Text: ({
+		children,
+		className,
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<span data-testid={testID} data-classes={className} className={className}>
+			{children}
+		</span>
+	),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name, testID }: { name: string; testID?: string }) => {
+		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
+		return (
+			<i data-testid={testID} data-icon={name} data-classes={React.useContext(TextClassContext)} />
+		);
+	},
+}));
+jest.mock('@wcpos/components/avatar', () => ({
+	// The nameless Guest is drawn with a glyph, not initials.
+	Avatar: ({ fallback, icon }: { fallback?: string; icon?: string }) =>
+		icon ? <i data-icon={icon} /> : <b data-testid="avatar">{fallback}</b>,
+	getInitials: (name: string) =>
+		name
+			.split(' ')
+			.map((part) => part[0])
+			.join(''),
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+it('focuses the current row, selects a row then closes, and provides close', () => {
+	const onSelect = jest.fn();
+	const onClose = jest.fn();
+	const orders = ['a', 'b'].map((id) => ({
+		id,
+		record: {
+			uuid: id,
+			payload: { billing: { first_name: 'Ada', last_name: 'Lovelace' } },
+		} as EngineRecord<'orders'>,
+	}));
+	render(<OpenOrdersList orders={orders} activeValue="b" onSelect={onSelect} onClose={onClose} />);
+	expect(document.activeElement).toBe(screen.getByTestId('open-orders-row-b'));
+	expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
+	fireEvent.click(screen.getByTestId('open-orders-row-a'));
+	expect(onSelect).toHaveBeenCalledWith('a');
+	expect(onClose).toHaveBeenCalledWith('a');
+	expect(onSelect.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+	fireEvent.click(screen.getByTestId('open-orders-close'));
+	expect(onClose).toHaveBeenLastCalledWith();
+});
+
+it('a list that is leaving does not pull focus back to its selected row', () => {
+	const orders = ['a', 'b'].map((id) => ({
+		id,
+		record: { uuid: id, payload: { billing: {} } } as EngineRecord<'orders'>,
+	}));
+	const props = { orders, onSelect: jest.fn(), onClose: jest.fn() };
+	const { rerender } = render(
+		<>
+			<button data-testid="tab" />
+			<OpenOrdersList {...props} activeValue="b" />
+		</>
+	);
+	// The cashier picks order a: the strip takes focus, the list starts to leave, and only
+	// then does the selection move to row a.
+	screen.getByTestId('tab').focus();
+	rerender(
+		<>
+			<button data-testid="tab" />
+			<OpenOrdersList {...props} activeValue="a" leaving />
+		</>
+	);
+	expect(document.activeElement).toBe(screen.getByTestId('tab'));
+});
+
+it('a row says who, what, how long and its status; from three entries the line is counted', () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-10-09T10:30:00Z'));
+	try {
+		const orders = [
+			{
+				id: 'a',
+				record: {
+					uuid: 'a',
+					payload: {
+						billing: { first_name: 'Ana', last_name: 'López' },
+						date_created_gmt: '2026-10-09T10:26:00',
+						line_items: [
+							{ name: 'Blue T-shirt', quantity: 2 },
+							{ name: 'Hoodie &amp; Cap', quantity: 1 },
+						],
+						fee_lines: [{ name: 'Gift wrap' }],
+						shipping_lines: [{ method_title: 'Flat rate' }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'b',
+				record: {
+					uuid: 'b',
+					payload: {
+						status: 'pos-open',
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'c',
+				record: {
+					uuid: 'c',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [{ name: 'Beanie', quantity: 1 }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'e',
+				record: {
+					uuid: 'e',
+					// Emptied, but a payment row binds it to its money: it will not restart.
+					payload: {
+						status: 'pos-partial',
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'd',
+				record: {
+					uuid: 'd',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T10:26:00',
+						// A live shipping line with its title cleared: nothing to list, but a line.
+						shipping_lines: [{ method_id: 'flat_rate', method_title: '' }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+		];
+		render(
+			<OpenOrdersList orders={orders} activeValue="b" onSelect={jest.fn()} onClose={jest.fn()} />
+		);
+		expect(screen.getByTestId('avatar').textContent).toBe('AL');
+		// Products with quantity, then the fee, then shipping; four entries, so the count leads.
+		expect(screen.getByTestId('open-orders-row-a-items').textContent).toBe(
+			'pos_cart.n_items · Blue T-shirt ×2, Hoodie & Cap, Gift wrap, pos_cart.shipping_item'
+		);
+		expect(screen.getByTestId('open-orders-row-a-age').textContent).toBe(
+			'health.database.n_minutes'
+		);
+		// The guest's empty cart: a user mark, "Empty" and NO age — its creation time restarts
+		// with the next line (#2183). The open cart is told by the row itself (aria-selected, the
+		// fill and the bar), not by a mark.
+		expect(screen.getByTestId('open-orders-row-b-items').textContent).toBe('pos_cart.cart_empty');
+		expect(screen.queryByTestId('open-orders-row-b-age')).toBeNull();
+		// A cart with a line that has sat for hours shows its age gone stale.
+		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warning-text');
+		// The age follows the live-line test, not the summary text (Greptile/Codex on #2467).
+		expect(screen.getByTestId('open-orders-row-d-items').textContent).toBe('pos_cart.cart_empty');
+		expect(screen.getByTestId('open-orders-row-d-age')).toBeTruthy();
+		// An emptied cart that cannot restart (it holds a payment) keeps its age and warning.
+		expect(screen.getByTestId('open-orders-row-e-age').className).toContain('text-warning-text');
+		for (const [id, ink] of [
+			['a', 'text-muted-foreground'],
+			['c', 'text-warning-text'],
+		]) {
+			const nodes = screen
+				.getByTestId(`open-orders-row-${id}-age`)
+				.parentElement!.querySelectorAll('[data-classes]');
+			expect(nodes).toHaveLength(2);
+			for (const node of nodes) expect(node.getAttribute('data-classes')).toContain(ink);
+		}
+		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
+	} finally {
+		jest.useRealTimers();
+	}
+});

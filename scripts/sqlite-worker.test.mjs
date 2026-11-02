@@ -1,0 +1,149 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+
+import { quietRecoveredConstraintWarnings } from './sqlite-quiet-constraint.mjs';
+
+const shipped = new URL('../apps/main/public/', import.meta.url);
+test('shipped SQLite worker carries the premium translation patch exactly once', async () => {
+	const worker = await readFile(new URL('sqlite.worker.js', shipped), 'utf8');
+	assert.equal(worker.split('WCPOS_SQLITE_QUERY_TRANSLATION_PATCH=1').length - 1, 1);
+	assert.ok(worker.includes('/* WCPOS_SQLITE_WORKER */'));
+});
+test('shipped wasm is the installed build, including its wasm magic', async () => {
+	const actual = await readFile(new URL('sqlite3.wasm', shipped));
+	const installed = await readFile(
+		new URL(import.meta.resolve('@sqlite.org/sqlite-wasm/sqlite3.wasm'))
+	);
+	assert.deepEqual(actual.subarray(0, 4), Buffer.from([0, 97, 115, 109]));
+	const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+	assert.equal(sha(actual), sha(installed));
+});
+test('oo1 adapter enforces WAL, NORMAL, and boolean bindings', async () => {
+	const { getSQLiteBasicsOo1 } = await import('./sqlite-basics-oo1.mjs');
+	const sqlite3 = await sqlite3InitModule();
+	// Node's wasm VFS provides a temporary virtual filesystem (not host persistence).
+	const basics = getSQLiteBasicsOo1({
+		openDb: (name) => new sqlite3.oo1.DB(name, 'c'),
+		journalMode: 'WAL',
+	});
+	const db = await basics.open('/pr3a-test.sqlite');
+	try {
+		assert.equal(db.selectValue('PRAGMA locking_mode'), 'exclusive');
+		await basics.setPragma(db, 'journal_mode', 'WAL');
+		assert.equal(db.selectValue('PRAGMA journal_mode'), 'wal');
+		assert.equal(db.selectValue('PRAGMA synchronous'), 1);
+		await basics.run(db, { query: 'CREATE TABLE flags (value INTEGER)', params: [] });
+		await basics.run(db, { query: 'INSERT INTO flags VALUES (?)', params: [true] });
+		assert.deepEqual(
+			(
+				await basics.all(db, { query: 'SELECT value FROM flags WHERE value = ?', params: [true] })
+			).map((row) => ({ ...row })),
+			[{ value: 1 }]
+		);
+		assert.deepEqual(
+			(await basics.all(db, { query: 'SELECT ? AS value', params: [false] })).map((row) => ({
+				...row,
+			})),
+			[{ value: 0 }]
+		);
+	} finally {
+		await basics.close(db);
+	}
+	const memory = await basics.open(':memory:');
+	try {
+		await assert.rejects(basics.setPragma(memory, 'journal_mode', 'WAL'), /requested but memory/);
+	} finally {
+		await basics.close(memory);
+	}
+});
+test('recovered INSERT constraint failures are quiet; other step failures still warn (#2334)', async () => {
+	const sqlite3 = await sqlite3InitModule();
+	const originalWarn = sqlite3.config.warn;
+	const warnings = [];
+	sqlite3.config.warn = (...args) => warnings.push(args);
+	quietRecoveredConstraintWarnings(sqlite3);
+	const db = new sqlite3.oo1.DB(':memory:', 'c');
+	try {
+		db.exec('CREATE TABLE t (id TEXT PRIMARY KEY, u TEXT UNIQUE, n INTEGER CHECK (n >= 0))');
+		db.exec("INSERT INTO t VALUES ('a', 'x', 1)");
+
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('a', 'y', 1)"));
+		assert.deepEqual(warnings, []);
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('b', 'x', 1)"));
+		assert.deepEqual(warnings, []);
+
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('b', 'y', -1)"));
+		assert.equal(warnings.length, 1);
+		assert.equal(warnings[0][0], 'sqlite3_step() rc=');
+		assert.equal(warnings[0][1], 275);
+		assert.match(warnings[0][4], /INSERT/);
+
+		db.exec("INSERT INTO t VALUES ('b', 'y', 1)");
+		assert.throws(() => db.exec("UPDATE t SET id='a' WHERE id='b'"));
+		assert.equal(warnings.length, 2);
+		assert.equal(warnings[1][1], 1555);
+
+		sqlite3.config.warn('other', 1);
+		assert.equal(warnings.length, 3);
+		assert.deepEqual(warnings[2], ['other', 1]);
+	} finally {
+		db.close();
+		sqlite3.config.warn = originalWarn;
+	}
+});
+const poolFake = ({ files, capacity }) => {
+	const calls = [];
+	return {
+		calls,
+		getFileCount: () => files,
+		getCapacity: () => capacity,
+		addCapacity: async (n) => {
+			calls.push(n);
+			capacity += n;
+			return capacity;
+		},
+	};
+};
+const poolLimits = { filesPerDatabase: 2, growthStep: 16, maxCapacity: 246 };
+test('pool capacity: room for one more database does not grow the pool', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 20, capacity: 22 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, []);
+});
+test('pool capacity: grows by one step under the cap', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 22, capacity: 22 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, [16]);
+});
+test('pool capacity: grows by a partial step up to the cap', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 240, capacity: 240 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, [6]);
+});
+test('pool capacity: at the cap with no room rejects with SqlitePoolFullError', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 246, capacity: 246 });
+	await assert.rejects(ensurePoolCapacity(pool, poolLimits), (error) => {
+		assert.equal(error.name, 'SqlitePoolFullError');
+		assert.match(error.message, /246/);
+		return true;
+	});
+	assert.deepEqual(pool.calls, []);
+});
+test('pool capacity: the cap sits below the 253-handle WebKit ceiling, in whole steps', async () => {
+	const { SQLITE_POOL_GROWTH_STEP, SQLITE_POOL_INITIAL_CAPACITY, SQLITE_POOL_MAX_CAPACITY } =
+		await import('../packages/database/src/adapters/storage/sqlite-pool.ts');
+	assert.ok(SQLITE_POOL_MAX_CAPACITY < 253);
+	assert.ok(SQLITE_POOL_MAX_CAPACITY > SQLITE_POOL_INITIAL_CAPACITY);
+	assert.equal(
+		(SQLITE_POOL_MAX_CAPACITY - SQLITE_POOL_INITIAL_CAPACITY) % SQLITE_POOL_GROWTH_STEP,
+		0
+	);
+});

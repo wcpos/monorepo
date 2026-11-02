@@ -28,12 +28,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * The compileSdk the Android build actually uses. Expo SDK 57 ships Android
- * Gradle Plugin 8.12, whose maximum supported compileSdk is 36 — the app does
+ * The compileSdk the Android build actually uses. Expo SDK 58 prescribes Android
+ * Gradle Plugin 9.2.1 and compileSdk 37 — the app does
  * not set it, so this tracks the Expo default rather than a repo value. Bump
  * it when an Expo upgrade raises the prescribed AGP/compileSdk pair.
  */
-export const ANDROID_COMPILE_SDK = 36;
+export const ANDROID_COMPILE_SDK = 37;
 
 const AAR_METADATA_ENTRY = 'META-INF/com/android/build/gradle/aar-metadata.properties';
 

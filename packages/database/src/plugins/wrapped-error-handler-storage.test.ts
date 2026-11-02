@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	__resetStorageLivenessForTests,
@@ -10,9 +11,12 @@ import {
 	degradedStorage$,
 	isStorageDegraded,
 	isStorageWorkerFailure,
+	noteStorageWriteDeadlinePassed,
+	reportStorageWorkerLost,
 	resetReportedCleanupFailures,
 	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
+	STORAGE_WRITE_DEADLINE_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
 
@@ -28,6 +32,7 @@ const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-han
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: jest.fn(() => ({
 		debug: jest.fn(),
+		info: jest.fn(),
 		warn: jest.fn(),
 		error: jest.fn(),
 	})),
@@ -40,6 +45,7 @@ jest.mock('@wcpos/utils/logger', () => ({
  */
 const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
 	debug: jest.Mock;
+	info: jest.Mock;
 	warn: jest.Mock;
 	error: jest.Mock;
 };
@@ -349,40 +355,6 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalled();
 		});
 
-		it('should re-throw for requestRemote errors', async () => {
-			const recoveryDocumentId = 'customers:search=Acme "West"\\priority: high';
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						error: {
-							message: `Unexpected token; targeted recovery failed for ${recoveryDocumentId}: no-valid-document`,
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const storage = createMockStorage(instance);
-			const wrapped = wrappedErrorHandlerStorage({ storage });
-			const wrappedInstance = await wrapped.createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['1'], false)).rejects.toThrow(
-				'could not requestRemote'
-			);
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						collectionName: 'test-collection',
-						documentId: '1',
-						recoveryDocumentId,
-						recoveryFailure: 'no-valid-document',
-					}),
-				})
-			);
-		});
-
 		it('should preserve a requestRemote error with a malformed envelope', async () => {
 			const error = new Error('could not requestRemote: {"error":');
 			const instance = createMockStorageInstance({
@@ -397,37 +369,6 @@ describe('wrappedErrorHandlerStorage', () => {
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					code: 'SYNC999',
-				})
-			);
-		});
-
-		it('should not classify a recovery document ID containing 409 as a conflict', async () => {
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						params: [['409'], false],
-						error: {
-							message: 'Unexpected token; targeted recovery failed for 409: no-valid-document',
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const wrappedInstance = await wrappedErrorHandlerStorage({
-				storage: createMockStorage(instance),
-			}).createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['409'], false)).rejects.toBe(error);
-			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						recoveryDocumentId: '409',
-						recoveryFailure: 'no-valid-document',
-					}),
 				})
 			);
 		});
@@ -859,6 +800,100 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 	});
 
+	describe('local write deadline', () => {
+		let resolveWrite: (value: { error: [] }) => void;
+		let instance: ReturnType<typeof createMockStorageInstance>;
+		let read: jest.Mock;
+		let emissions: (readonly StorageDegradation[])[];
+		let subscription: { unsubscribe(): void };
+
+		beforeEach(async () => {
+			clearStorageDegradation();
+			read = jest.fn().mockResolvedValue([]);
+			instance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						bulkWrite: jest.fn(
+							() =>
+								new Promise<{ error: [] }>((resolve) => {
+									resolveWrite = resolve;
+								})
+						),
+						findDocumentsById: read,
+						close: jest.fn().mockResolvedValue(undefined),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'write-deadline-db' } as never);
+			emissions = [];
+			subscription = degradedStorage$.subscribe((next) => emissions.push(next));
+		});
+		afterEach(async () => {
+			subscription.unsubscribe();
+			await instance.close();
+			clearStorageDegradation();
+		});
+
+		it('marks a pending bulkWrite degraded, then clears when storage answers', async () => {
+			const write = instance.bulkWrite([], 'test');
+			const context = { waitedMs: STORAGE_WRITE_DEADLINE_MS, orderId: 'order-1' };
+			expect(noteStorageWriteDeadlinePassed(context)).toBe(true);
+			expect(isStorageDegraded()).toBe(true);
+			expect(isStorageDegraded('write-deadline-db')).toBe(true);
+			expect(emissions).toEqual([
+				[],
+				[
+					expect.objectContaining({
+						databaseName: 'write-deadline-db',
+						methodName: 'bulkWrite',
+						kind: 'write-stalled',
+					}),
+				],
+			]);
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ code: ERROR_CODES.LOCAL_DB_STALLED, context })
+			);
+			await instance.findDocumentsById([], false);
+			expect(emissions[emissions.length - 1]).toEqual([]);
+			expect(isStorageDegraded()).toBe(false);
+			expect(mockLoggerInstance.info).toHaveBeenCalledTimes(1);
+			resolveWrite({ error: [] });
+			await expect(write).resolves.toEqual({ error: [] });
+		});
+
+		it('does nothing when no bulkWrite is in flight', () => {
+			expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(false);
+			expect(isStorageDegraded()).toBe(false);
+			expect(emissions).toEqual([[]]);
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
+		});
+
+		it.each(['ordinary error', 'worker gone'])(
+			'does not clear on a rejected call: %s',
+			async (message) => {
+				const write = instance.bulkWrite([], 'test');
+				expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(true);
+				read.mockRejectedValueOnce(
+					new Error(`could not requestRemote: ${JSON.stringify({ error: { message } })}`)
+				);
+				await expect(instance.findDocumentsById([], false)).rejects.toThrow(message);
+				expect(isStorageDegraded()).toBe(true);
+				expect(emissions.slice(1).every((entries) => entries.length === 1)).toBe(true);
+				expect(mockLoggerInstance.info).not.toHaveBeenCalled();
+				resolveWrite({ error: [] });
+				await write;
+				// A later success clears only the stall, never the worker-lost latch.
+				expect(isStorageDegraded()).toBe(message === 'worker gone');
+				expect(emissions[emissions.length - 1]).toEqual(
+					message === 'worker gone'
+						? [expect.objectContaining({ databaseName: 'write-deadline-db', kind: 'worker-lost' })]
+						: []
+				);
+			}
+		);
+	});
+
 	describe('degraded storage signal (#163)', () => {
 		const workerLoss = () =>
 			new Error(
@@ -1171,6 +1206,35 @@ describe('wrappedErrorHandlerStorage', () => {
 				storage: createMockStorage(instance),
 			}).createStorageInstance({ databaseName } as any);
 		}
+
+		it('reports worker events for every database and before the first instance', async () => {
+			reportStorageWorkerLost(undefined, 'script load failed');
+			expect(isStorageDegraded()).toBe(true);
+			clearStorageDegradation();
+			const first = await wrap('events-first', { close: jest.fn(async () => undefined) });
+			const second = await wrap('events-second', { close: jest.fn(async () => undefined) });
+			reportStorageWorkerLost(undefined, 'worker crashed');
+			expect(isStorageDegraded('events-first')).toBe(true);
+			expect(isStorageDegraded('events-second')).toBe(true);
+			await first.close();
+			await second.close();
+		});
+
+		it.each(['query', 'createStorageInstance'])('calls onCondemn for silent %s', async (method) => {
+			const onCondemn = jest.fn();
+			const instance = createMockStorageInstance({
+				query: jest.fn(() => new Promise<never>(() => undefined)),
+			});
+			const storage = createMockStorage(instance);
+			if (method === 'createStorageInstance') storage.createStorageInstance = pending() as never;
+			const wrapped = wrappedErrorHandlerStorage({ storage, onCondemn });
+			const opening = wrapped.createStorageInstance({ databaseName: 'condemn-db' } as never);
+			const call = method === 'query' ? (await opening).query({} as never) : opening;
+			const assertion = expect(call).rejects.toMatchObject({ name: 'StorageWorkerTimeoutError' });
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
+			await assertion;
+			expect(onCondemn).toHaveBeenCalledTimes(1);
+		});
 
 		it('trips the latch when an RPC never comes back', async () => {
 			const wrappedInstance = await wrap('dead-worker-db', {
@@ -1795,3 +1859,29 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 	});
 });
+
+test.each(['resolve', 'reject'] as const)(
+	'a pending bulkWrite holds write until %s',
+	async (settlement) => {
+		let settle!: () => void;
+		const pending = new Promise<never>((resolve, reject) => {
+			settle = () =>
+				settlement === 'resolve' ? resolve(undefined as never) : reject(new Error('write failed'));
+		});
+		const release = jest.fn();
+		const onWrite = jest.fn(() => release);
+		const storage = wrappedErrorHandlerStorage({
+			storage: createMockStorage(createMockStorageInstance({ bulkWrite: () => pending })),
+			onWrite,
+		});
+		const instance = await storage.createStorageInstance({
+			databaseName: 'hold-write',
+		} as Parameters<typeof storage.createStorageInstance>[0]);
+		const result = instance.bulkWrite([], 'hold-test').catch(() => undefined);
+		expect(onWrite).toHaveBeenCalledTimes(1);
+		expect(release).not.toHaveBeenCalled();
+		settle();
+		await result;
+		expect(release).toHaveBeenCalledTimes(1);
+	}
+);

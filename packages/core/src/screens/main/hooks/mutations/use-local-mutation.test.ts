@@ -1,13 +1,25 @@
 /**
  * @jest-environment jsdom
  */
-import { serialize as structuredSerialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { getLogger, isErrorReported } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported, log } from '@wcpos/utils/logger';
 
 import { useLocalMutation } from './use-local-mutation';
+import { useCartWrite } from '../../pos/commands/use-cart-write';
+import { config } from '../../../../../jest/cart-write';
+
+let cartConfig = config;
+let moneyOwned = false;
+let divergenceListener: (event: { type: string; recordId?: string }) => void;
+jest.mock('../../pos/hooks/use-cart-config', () => ({
+	useCartConfigReader: () => () => cartConfig,
+}));
+jest.mock('../../pos/contexts/order-money-divergence', () => ({
+	...jest.requireActual('../../pos/contexts/order-money-divergence'),
+	useServerOwnsMoneyReader: () => () => moneyOwned,
+}));
 
 const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
@@ -23,15 +35,6 @@ const EMPTY_SCOPE_SELECTORS: ScopeSelectors = {
 	variations: [],
 };
 let scopeSelectorsByScopeId = new Map<string, ScopeSelectors>();
-
-function setSelectors(
-	scopeId: string,
-	collection: 'products' | 'variations',
-	list: readonly string[]
-): void {
-	const current = scopeSelectorsByScopeId.get(scopeId) ?? EMPTY_SCOPE_SELECTORS;
-	scopeSelectorsByScopeId.set(scopeId, { ...current, [collection]: list });
-}
 
 /** The id `engine.active()` reports. `status().activeScopeId` is mocked
  * separately so a test can drive the two apart the way the engine's fallback
@@ -67,18 +70,19 @@ const readActive = () => {
 	return engineScope(activeScopeId);
 };
 
+jest.mock('../../contexts/extra-data/use-extra-data', () => ({
+	useExtraData: () => ({ extraData: undefined }),
+}));
+
 jest.mock('@wcpos/query', () => ({
-	// The write-direction projections are the code under test here (parity with the
-	// old hand-written promotion switch) — pull the real implementations, mock the rest.
-	...(() => {
-		const { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor } =
-			jest.requireActual('@wcpos/query');
-		return { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor };
-	})(),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({
 		engine: {
+			events: (callback: typeof divergenceListener) => {
+				divergenceListener = callback;
+				return () => {};
+			},
 			active: readActive,
 			ready: Promise.resolve(),
 			/**
@@ -98,17 +102,22 @@ jest.mock('@wcpos/query', () => ({
 	}),
 }));
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({}),
+	useAppState: () => ({ site: { uuid: 'site' } }),
+}));
+
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => mockUseT(),
 }));
 
-jest.mock('../../pos/contexts/current-order/temporary-order', () => ({
+jest.mock('@wcpos/query/temporary-order', () => ({
 	getTemporaryOrder: (uuid: string) => mockGetTemporaryOrder(uuid),
 	patchTemporaryOrderPayload: (uuid: string, changes: Record<string, unknown>) =>
 		mockPatchTemporaryOrderPayload(uuid, changes),
 }));
 
-jest.mock('../../../../hooks/use-local-date', () => ({
+jest.mock('../../../../../../query/src/mutations/date', () => ({
 	convertLocalDateToUTCString: (date: Date) => mockConvertLocalDateToUTCString(date),
 }));
 
@@ -125,458 +134,11 @@ describe('useLocalMutation', () => {
 		);
 	});
 
-	it.each([
-		['sku', { sku: 'EDITED' }],
-		['global_unique_id', { global_unique_id: 'EDITED' }],
-		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: 'EDITED' }] }],
-	] as const)(
-		'keeps a barcode edit and its %s carrier consistent locally',
-		async (selector, carrier) => {
-			setSelectors('scope-1', 'products', [selector]);
-			const stored: Record<string, unknown> = {
-				uuid: 'product-uuid',
-				remoteId: '42',
-				payload: { id: 42 },
-				sync: { revision: 'rev-1' },
-				local: { dirty: false, pendingMutationIds: [] },
-			};
-			mockFindOneExec.mockResolvedValue({
-				incrementalModify: async (
-					modifier: (old: Record<string, unknown>) => Record<string, unknown>
-				) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				},
-				toJSON: () => JSON.parse(JSON.stringify(stored)),
-			});
-			const document = {
-				uuid: 'product-uuid',
-				id: 42,
-				collection: { name: 'products' },
-				getLatest: () => document,
-			};
-
-			const { result } = renderHook(() => useLocalMutation());
-			await act(() =>
-				result.current.localPatch({
-					document: document as never,
-					data: { barcode: '  EDITED  ' } as never,
-				})
-			);
-
-			expect(stored.payload).toMatchObject({ barcode: 'EDITED', ...carrier });
-		}
-	);
-
-	it.each(['proxy', 'record'] as const)(
-		'builds dotted-path changes from the resident payload for a %s-face document',
-		async (face) => {
-			const stored: Record<string, unknown> = {
-				uuid: 'order-uuid',
-				remoteId: '42',
-				payload: {
-					id: 42,
-					billing: { first_name: 'Resident', last_name: 'Customer', city: 'Old City' },
-				},
-				sync: { revision: 'rev-1' },
-				local: { dirty: false, pendingMutationIds: [] },
-			};
-			const resident = {
-				...stored,
-				incrementalModify: async (
-					modifier: (old: Record<string, unknown>) => Record<string, unknown>
-				) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				},
-				toJSON: () => JSON.parse(JSON.stringify(stored)),
-			};
-			mockFindOneExec.mockResolvedValue(resident);
-			const document = {
-				uuid: 'order-uuid',
-				id: 42,
-				collection: { name: 'orders' },
-				getLatest: () => document,
-				toMutableJSON: () =>
-					face === 'proxy'
-						? { billing: { first_name: 'Stale proxy' } }
-						: { payload: { billing: { first_name: 'Stale record' } } },
-			};
-
-			const { result } = renderHook(() => useLocalMutation());
-			await act(() =>
-				result.current.localPatch({
-					document: document as never,
-					data: { 'billing.city': 'New City' } as never,
-				})
-			);
-
-			expect(mockWrite).toHaveBeenCalledWith(
-				expect.objectContaining({
-					payload: expect.objectContaining({
-						billing: {
-							first_name: 'Resident',
-							last_name: 'Customer',
-							city: 'New City',
-						},
-					}),
-				})
-			);
-		}
-	);
-
-	it('keeps the resident and barcode carrier on one scope through an A→B→A switch', async () => {
-		setSelectors('scope-1', 'products', ['sku']);
-		const stored: Record<string, unknown> = {
-			uuid: 'product-uuid',
-			remoteId: '42',
-			payload: { id: 42 },
-			sync: { revision: 'rev-1' },
-			local: { dirty: false, pendingMutationIds: [] },
-		};
-		mockFindOneExec.mockImplementationOnce(async () => {
-			// The resident came from scope A, then scope B became active while the
-			// lookup yielded. The status returns to A during the write below.
-			setSelectors('scope-2', 'products', ['global_unique_id']);
-			return {
-				incrementalModify: async (
-					modifier: (old: Record<string, unknown>) => Record<string, unknown>
-				) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				},
-				toJSON: () => JSON.parse(JSON.stringify(stored)),
-			};
-		});
-		mockWrite.mockImplementationOnce(async () => {
-			setSelectors('scope-1', 'products', ['sku']);
-			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
-		});
-		const document = {
-			uuid: 'product-uuid',
-			id: 42,
-			collection: { name: 'products' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { barcode: 'EDITED' } as never,
-			})
-		);
-
-		expect(stored.payload).toMatchObject({ barcode: 'EDITED', sku: 'EDITED' });
-		expect(stored.payload).not.toHaveProperty('global_unique_id');
-	});
-
-	it.each([
-		['sku', { sku: 'OLD' }, { sku: 'NEW' }, { sku: 'NEW' }],
-		[
-			'global_unique_id',
-			{ global_unique_id: 'OLD' },
-			{ global_unique_id: 'NEW' },
-			{
-				global_unique_id: 'NEW',
-			},
-		],
-		[
-			'meta_data:_barcode',
-			{ meta_data: [{ key: '_barcode', value: 'OLD' }] },
-			{ meta_data: [{ key: '_barcode', value: 'NEW' }] },
-			{ meta_data: [{ key: '_barcode', value: 'NEW' }] },
-		],
-	] as const)(
-		'a direct %s carrier edit wins over the echoed unchanged barcode',
-		async (selector, priorCarrier, carrierEdit, expected) => {
-			setSelectors('scope-1', 'products', [selector]);
-			const stored: Record<string, unknown> = {
-				uuid: 'product-uuid',
-				remoteId: '42',
-				payload: { id: 42, ...priorCarrier, barcode: 'OLD' },
-				sync: { revision: 'rev-1' },
-				local: { dirty: false, pendingMutationIds: [] },
-			};
-			mockFindOneExec.mockResolvedValue({
-				incrementalModify: async (
-					modifier: (old: Record<string, unknown>) => Record<string, unknown>
-				) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				},
-				toJSON: () => JSON.parse(JSON.stringify(stored)),
-			});
-			const document = {
-				uuid: 'product-uuid',
-				id: 42,
-				collection: { name: 'products' },
-				getLatest: () => document,
-			};
-
-			const { result } = renderHook(() => useLocalMutation());
-			await act(() =>
-				result.current.localPatch({
-					document: document as never,
-					// The full edit form echoes the unchanged derived barcode alongside
-					// the direct carrier change.
-					data: { ...carrierEdit, barcode: 'OLD' } as never,
-				})
-			);
-
-			// The carrier edit survives and the materialized field re-derives from it.
-			expect(stored.payload).toMatchObject({ barcode: 'NEW', ...expected });
-			// The echoed barcode never reaches the mutation queue, so the push
-			// adapter cannot map the stale value back over the carrier.
-			expect(mockWrite).toHaveBeenCalledWith(
-				expect.objectContaining({
-					payload: expect.not.objectContaining({ barcode: expect.anything() }),
-				})
-			);
-		}
-	);
-
-	it('patches a brand-new temporary order through the temp-order repository payload merge', async () => {
-		// Engine-shaped template (ADR 0028 stage I): the write goes through
-		// patchTemporaryOrderPayload, never through the passed document face.
-		const stored: Record<string, unknown> = {
-			uuid: 'temporary-order-uuid',
-			payload: { status: 'pos-open', customer_id: 0 },
-		};
-		mockPatchTemporaryOrderPayload.mockImplementation(
-			async (_uuid: string, changes: Record<string, unknown>) => {
-				stored.payload = { ...(stored.payload as Record<string, unknown>), ...changes };
-				return stored;
-			}
-		);
-		mockGetTemporaryOrder.mockResolvedValue({
-			...stored,
-			toMutableJSON: () => JSON.parse(JSON.stringify(stored)),
-		});
-		const document = {
-			uuid: 'temporary-order-uuid',
-			id: 0,
-			isNew: true,
-			collection: { name: 'orders' },
-			getLatest: () => ({ uuid: 'temporary-order-uuid' }),
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		const patchResult = await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { customer_id: 91 } as never,
-			})
-		);
-
-		expect(mockPatchTemporaryOrderPayload).toHaveBeenCalledWith('temporary-order-uuid', {
-			customer_id: 91,
-			date_modified_gmt: '2026-03-02T00:00:00',
-		});
-		expect(stored.payload).toMatchObject({
-			status: 'pos-open',
-			customer_id: 91,
-			date_modified_gmt: '2026-03-02T00:00:00',
-		});
-		expect(patchResult?.document).toBe(stored);
-		expect(mockFindOneExec).not.toHaveBeenCalled();
-		expect(mockWrite).not.toHaveBeenCalled();
-	});
-
-	it('ignores undefined values in patch data', async () => {
-		const persistedDoc = {
-			barcode_scanning_prefix: '',
-			barcode_scanning_suffix: '',
-		};
-
-		const incrementalModify = jest.fn(
-			async (modifier: (old: Record<string, unknown>) => unknown) => {
-				modifier(persistedDoc);
-				return persistedDoc;
-			}
-		);
-
-		const document = {
-			id: 'store_1',
-			collection: {
-				name: 'stores',
-				schema: {
-					jsonSchema: {
-						properties: {
-							date_modified_gmt: { type: 'string' },
-						},
-					},
-				},
-			},
-			getLatest: () => ({ incrementalModify }),
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-
-		const patchResult = await act(async () => {
-			return result.current.localPatch({
-				document: document as never,
-				data: {
-					barcode_scanning_prefix: undefined,
-				} as never,
-			});
-		});
-
-		expect(persistedDoc.barcode_scanning_prefix).toBe('');
-		expect(patchResult?.changes).not.toHaveProperty('barcode_scanning_prefix');
-		expect(mockConvertLocalDateToUTCString).toHaveBeenCalledTimes(1);
-	});
-
-	it('optimistically patches a server-born resident and enqueues syncable fields', async () => {
-		const stored: Record<string, unknown> = {
-			uuid: 'order-uuid',
-			remoteId: '42',
-			status: 'pending',
-			payload: { id: 42, status: 'pending' },
-			sync: { revision: 'rev-1' },
-			local: { dirty: false, pendingMutationIds: [] },
-		};
-		const incrementalModify = jest.fn(
-			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-				Object.assign(stored, modifier(stored));
-				return stored;
-			}
-		);
-		mockFindOneExec.mockResolvedValue({
-			incrementalModify,
-			toJSON: () => JSON.parse(JSON.stringify(stored)),
-		});
-		const document = {
-			uuid: 'order-uuid',
-			id: 42,
-			collection: { name: 'orders' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		const patchResult = await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { status: 'processing' } as never,
-			})
-		);
-
-		expect(stored).toMatchObject({
-			status: 'processing',
-			payload: {
-				status: 'processing',
-				date_modified_gmt: '2026-03-02T00:00:00',
-			},
-		});
-		expect(mockWrite).toHaveBeenCalledWith({
-			collection: 'orders',
-			operation: 'update',
-			recordId: 'order-uuid',
-			payload: {
-				status: 'processing',
-				date_modified_gmt: '2026-03-02T00:00:00',
-			},
-		});
-		expect(patchResult?.changes).toEqual({
-			status: 'processing',
-			date_modified_gmt: '2026-03-02T00:00:00',
-		});
-	});
-
-	it('stores a plain patch when the caller hands over an RxDB proxy', async () => {
-		// RxDB serves object-valued document fields as Proxies, nested ones included.
-		// A caller reading `customer.payload.billing` off a record and patching it
-		// onto the order — which is exactly what the cart's add-customer flow does —
-		// would otherwise kill the optimistic write at the storage boundary with
-		// "#<Object> could not be cloned": on web that write is a `postMessage` into
-		// the storage worker.
-		const stored: Record<string, unknown> = {
-			uuid: 'order-uuid',
-			remoteId: '42',
-			payload: { id: 42 },
-			sync: { revision: 'rev-1' },
-			local: { dirty: false, pendingMutationIds: [] },
-		};
-		const incrementalModify = jest.fn(
-			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-				Object.assign(stored, modifier(stored));
-				return stored;
-			}
-		);
-		mockFindOneExec.mockResolvedValue({
-			incrementalModify,
-			toJSON: () => JSON.parse(JSON.stringify(stored)),
-		});
-		const document = {
-			uuid: 'order-uuid',
-			id: 42,
-			collection: { name: 'orders' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { billing: new Proxy({ email: 'ada@example.com' }, {}) } as never,
-			})
-		);
-
-		// jsdom omits `structuredClone`; `v8.serialize` runs the same algorithm the
-		// storage worker's `postMessage` does, and raises the same DataCloneError.
-		expect(() => structuredSerialize(stored)).not.toThrow();
-		expect(() => structuredSerialize(mockWrite.mock.calls[0][0])).not.toThrow();
-		expect(stored.payload).toMatchObject({ billing: { email: 'ada@example.com' } });
-	});
-
-	it('enqueues born-local edits as updates for the write plane to fold into the pending create', async () => {
-		const stored: Record<string, unknown> = {
-			uuid: 'order-uuid',
-			remoteId: null,
-			status: 'pos-open',
-			payload: { status: 'pos-open', line_items: [] },
-			sync: { revision: '' },
-			local: { dirty: false, pendingMutationIds: [] },
-		};
-		const incrementalModify = jest.fn(
-			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-				Object.assign(stored, modifier(stored));
-				return stored;
-			}
-		);
-		mockFindOneExec.mockResolvedValue({
-			incrementalModify,
-			toJSON: () => JSON.parse(JSON.stringify(stored)),
-		});
-		const document = {
-			uuid: 'order-uuid',
-			id: null,
-			collection: { name: 'orders' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { line_items: [{ product_id: 7 }] } as never,
-			})
-		);
-
-		expect(mockWrite).toHaveBeenCalledWith({
-			collection: 'orders',
-			operation: 'update',
-			recordId: 'order-uuid',
-			payload: expect.objectContaining({
-				line_items: [{ product_id: 7 }],
-			}),
-		});
-	});
-
 	it('restores the resident snapshot when the write intent cannot be enqueued', async () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 			sync: { revision: 'rev-1' },
@@ -604,7 +166,7 @@ describe('useLocalMutation', () => {
 		await act(() =>
 			result.current.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 		);
 
@@ -619,66 +181,6 @@ describe('useLocalMutation', () => {
 			showToast: true,
 			context: expect.objectContaining({ error: 'queue unavailable' }),
 		});
-	});
-
-	it('keeps an A→B→A mutation: the resident, the carriers and the guard are all scope A', async () => {
-		// The reviewed claim: a switch to B and back to A during the write leaves
-		// the guard comparing A against A, so nothing rolls back while the write
-		// "really" belonged to B. It does not: the scope is captured ONCE, up
-		// front, and the resident, the carriers and the rollback baseline all come
-		// from that one object — so the write that is kept is the A write it
-		// always was, mapped by A's carriers.
-		mockStatus.mockImplementation(() => ({ activeScopeId }));
-		setSelectors('scope-1', 'products', ['sku']);
-		const stored: Record<string, unknown> = {
-			uuid: 'product-uuid',
-			remoteId: '42',
-			payload: { id: 42 },
-			sync: { revision: 'rev-1' },
-			local: { dirty: false, pendingMutationIds: [] },
-		};
-		mockFindOneExec.mockImplementation(async () => {
-			// B becomes active while the resident lookup is in flight, and brings
-			// its own (different) carriers with it.
-			activeScopeId = 'scope-2';
-			setSelectors('scope-2', 'products', ['global_unique_id']);
-			expect(engineScope('scope-1').barcodeSelectors.products).toEqual(['sku']);
-			expect(engineScope('scope-2').barcodeSelectors.products).toEqual(['global_unique_id']);
-			return {
-				incrementalModify: async (
-					modifier: (old: Record<string, unknown>) => Record<string, unknown>
-				) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				},
-				toJSON: () => JSON.parse(JSON.stringify(stored)),
-			};
-		});
-		mockWrite.mockImplementationOnce(async () => {
-			// ...and back to A before the guard reads.
-			activeScopeId = 'scope-1';
-			setSelectors('scope-1', 'products', ['sku']);
-			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
-		});
-		const document = {
-			uuid: 'product-uuid',
-			id: 42,
-			collection: { name: 'products' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { barcode: 'EDITED' } as never,
-			})
-		);
-
-		// Kept (not rolled back), and mapped by A's carrier — never B's.
-		expect(mockWrite).toHaveBeenCalledTimes(1);
-		expect(stored.payload).toMatchObject({ barcode: 'EDITED', sku: 'EDITED' });
-		expect(stored.payload).not.toHaveProperty('global_unique_id');
 	});
 
 	/**
@@ -697,6 +199,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -716,7 +219,7 @@ describe('useLocalMutation', () => {
 		await act(() =>
 			result.current.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 		);
 
@@ -724,69 +227,6 @@ describe('useLocalMutation', () => {
 		expect(stored).toMatchObject({ status: 'pending' });
 	});
 
-	it('compensates and retries the resident patch once when the active scope changes', async () => {
-		// One source of truth for the switch: `engine.active()` and `status()` are
-		// the same engine, so a test that moved only one of them would model a
-		// state the engine cannot be in.
-		mockStatus.mockImplementation(() => ({ activeScopeId }));
-		const firstStored: Record<string, unknown> = {
-			uuid: 'order-uuid',
-			remoteId: '42',
-			status: 'pending',
-			payload: { id: 42, status: 'pending' },
-		};
-		const secondStored = JSON.parse(JSON.stringify(firstStored)) as Record<string, unknown>;
-		const resident = (stored: Record<string, unknown>) => ({
-			incrementalModify: jest.fn(
-				async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				}
-			),
-			toJSON: () => JSON.parse(JSON.stringify(stored)),
-		});
-		mockFindOneExec
-			.mockResolvedValueOnce(resident(firstStored))
-			.mockResolvedValueOnce(resident(secondStored));
-		mockWrite
-			.mockImplementationOnce(async () => {
-				activeScopeId = 'scope-2';
-				return { mutationId: 'mutation-1', recordId: 'order-uuid' };
-			})
-			.mockResolvedValueOnce({ mutationId: 'mutation-2', recordId: 'order-uuid' });
-		const document = {
-			uuid: 'order-uuid',
-			id: 42,
-			collection: { name: 'orders' },
-			getLatest: () => document,
-		};
-
-		const { result } = renderHook(() => useLocalMutation());
-		await act(() =>
-			result.current.localPatch({
-				document: document as never,
-				data: { status: 'processing' } as never,
-			})
-		);
-
-		expect(firstStored).toMatchObject({
-			status: 'pending',
-			payload: { id: 42, status: 'pending' },
-		});
-		expect(secondStored).toMatchObject({
-			status: 'processing',
-			payload: { id: 42, status: 'processing' },
-		});
-		expect(mockWrite).toHaveBeenCalledTimes(2);
-	});
-
-	/**
-	 * #1507 / ADR 0032. WooCommerce owns the order aggregate: those fields are
-	 * `readonly` in the wc/v3 schema and dropped before anything is set, so a
-	 * settlement that writes only money has nothing to say to the server — but
-	 * the cart still has to display it, and an offline till still has to run on
-	 * it.
-	 */
 	describe('a settlement that writes only the order aggregate', () => {
 		const AGGREGATE = {
 			discount_total: '5.00',
@@ -803,6 +243,7 @@ describe('useLocalMutation', () => {
 			const stored: Record<string, unknown> = {
 				uuid: 'order-uuid',
 				remoteId: '42',
+				remoteKey: '42',
 				status: 'pos-open',
 				payload: { id: 42, status: 'pos-open', total: '0.00' },
 				sync: { revision: 'rev-1' },
@@ -886,6 +327,7 @@ describe('useLocalMutation', () => {
 		const firstStored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -922,7 +364,7 @@ describe('useLocalMutation', () => {
 		const rethrown = await result.current
 			.localPatch({
 				document: document as never,
-				data: { status: 'processing' } as never,
+				data: { status: 'on-hold' } as never,
 			})
 			.then(
 				() => undefined,
@@ -942,3 +384,307 @@ describe('useLocalMutation', () => {
 		expect(mockWrite).toHaveBeenCalledTimes(2);
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
+
+describe('cart changes at the resident modifier', () => {
+	it.each(['meta', 'memory', 'config', 'retry', 'money-only', 'lines-and-money'])(
+		'resolves %s against the row and config at write time',
+		async (scenario) => {
+			cartConfig = config;
+			moneyOwned = false;
+			mockWrite.mockClear();
+			mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
+			activeScopeId = 'scope-1';
+			const stored = {
+				uuid: 'order-uuid',
+				payload: {
+					status: 'pos-open',
+					line_items: [{ subtotal: '10', total: '10' }],
+					total: '99',
+					meta_data: [],
+				} as Record<string, unknown>,
+			};
+			let execute!: () => void;
+			const resident = {
+				getLatest: () => resident,
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+				incrementalModify: (modify: (old: typeof stored) => typeof stored) =>
+					new Promise((resolve) => {
+						execute = () => {
+							if (scenario === 'retry') {
+								modify(stored);
+								stored.payload.line_items = [{ subtotal: '20', total: '20' }];
+							}
+							Object.assign(stored, modify(stored));
+							resolve(resident);
+						};
+					}),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const document = { ...stored, collection: { name: 'orders' }, getLatest: () => document };
+			const { result, rerender } = renderHook(() => ({
+				...useLocalMutation(),
+				cart: useCartWrite(),
+			}));
+			let pending: Promise<unknown>;
+			await act(async () => {
+				pending =
+					scenario === 'money-only' || scenario === 'lines-and-money'
+						? result.current.localPatch({
+								document: document as never,
+								changes: () => ({
+									total: '10',
+									...(scenario === 'lines-and-money' ? { line_items: [] } : {}),
+								}),
+							} as never)
+						: result.current.cart.localPatch({
+								queue: {
+									dispatchToken: {},
+								} as import('../../pos/hooks/order-mutation-queue').OrderMutationContext,
+								document: document as never,
+								data: { billing: { country: 'NZ' } },
+							});
+			});
+			if (scenario === 'meta')
+				stored.payload.meta_data = [{ key: '_wcpos_money_owner_hint', value: 'server' }];
+			if (scenario === 'memory') moneyOwned = true;
+			if (scenario === 'config') {
+				cartConfig = { ...config, dp: 3 };
+				stored.payload.line_items = [{ subtotal: '10.123', total: '10.123' }];
+				rerender();
+			}
+			await act(async () => {
+				execute?.();
+				await pending;
+			});
+			expect(stored.payload.total).toBe(
+				['meta', 'memory'].includes(scenario)
+					? '99'
+					: scenario === 'config'
+						? '10.123'
+						: scenario === 'retry'
+							? '20'
+							: '10'
+			);
+			if (['meta', 'memory'].includes(scenario))
+				expect(stored.payload.billing).toEqual({ country: 'NZ' });
+			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'money-only' ? 0 : 1);
+		}
+	);
+});
+
+// Exercise the app-session bridge (no POS provider) through the real writeOrderChanges and outbound write contract.
+describe('durable divergence ownership', () => {
+	const { MoneyOwnerHintBridge } = jest.requireActual<
+		typeof import('../../components/money-owner-hint-bridge')
+	>('../../components/money-owner-hint-bridge');
+	const query = jest.requireMock('@wcpos/query');
+	const originalRuntime = query.useQueryRuntime;
+	beforeEach(() => {
+		activeScopeId = 'scope-1';
+		mockStatus.mockReturnValue({ activeScopeId });
+		const manager = originalRuntime();
+		query.useQueryRuntime = () => manager;
+	});
+	afterEach(() => {
+		query.useQueryRuntime = originalRuntime;
+	});
+	const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+	const other = { id: 7, key: 'unrelated', value: 'keep' };
+	it.each([null, 'foreign'])('replaces a non-server hint (%s) in place', async (value) => {
+		mockWrite.mockClear().mockResolvedValue({});
+		const stored = {
+			uuid: 'hint-order',
+			payload: { meta_data: [{ id: 8, ...hint, value }, other], total: '99' },
+		};
+		const resident = {
+			...stored,
+			getLatest: () => resident,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+			incrementalModify: async (modify: (old: typeof stored) => typeof stored) => {
+				Object.assign(stored, modify(stored));
+				return resident;
+			},
+		};
+		mockFindOneExec.mockResolvedValue(resident);
+		renderHook(() => MoneyOwnerHintBridge());
+		await act(async () => {
+			divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(stored.payload.meta_data).toEqual([{ id: 8, ...hint }, other]);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: {
+					meta_data: [{ id: 8, ...hint }, other],
+					date_modified_gmt: '2026-03-02T00:00:00',
+				},
+			})
+		);
+	});
+	it.each(['new', 'existing', 'missing', 'failure', 'switched'])(
+		'enqueues a money-free hint once: %s resident',
+		async (scenario) => {
+			jest.mocked(log.warn).mockClear();
+			mockWrite.mockClear();
+			mockWrite.mockResolvedValue({});
+			if (scenario === 'failure')
+				mockWrite.mockRejectedValueOnce(new Error('offline write failed'));
+			const stored = {
+				uuid: 'hint-order',
+				payload: { total: '99', meta_data: scenario === 'existing' ? [other, hint] : [other] },
+			};
+			const resident = {
+				...stored,
+				getLatest: () => resident,
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) => {
+					Object.assign(stored, modify(stored));
+					return resident;
+				},
+			};
+			mockFindOneExec.mockResolvedValue(scenario === 'missing' ? null : resident);
+			renderHook(() => MoneyOwnerHintBridge());
+			await act(async () => {
+				divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+				if (scenario !== 'failure')
+					divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+				if (scenario === 'switched') divergenceListener({ type: 'scope-switched' });
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+			expect(log.warn).toHaveBeenCalledTimes(scenario === 'failure' ? 1 : 0);
+			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'new' || scenario === 'failure' ? 1 : 0);
+			if (scenario === 'new' || scenario === 'failure') {
+				expect(mockWrite).toHaveBeenLastCalledWith({
+					collection: 'orders',
+					operation: 'update',
+					recordId: 'hint-order',
+					payload: { meta_data: [other, hint], date_modified_gmt: '2026-03-02T00:00:00' },
+				});
+				expect(stored.payload.total).toBe('99');
+			}
+		}
+	);
+});
+
+describe('protected order meta at the mutation boundary', () => {
+	it.each([{ meta_data: [] }, { meta_data: [{ key: '_wcpos_money_owner_hint', value: null }] }])(
+		'localPatch restores omitted or tombstoned protected meta: %j',
+		async ({ meta_data }) => {
+			activeScopeId = 'scope-1';
+			mockStatus.mockReturnValue({ activeScopeId });
+			mockWrite.mockResolvedValue({});
+			const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+			const stored = { payload: { meta_data: [hint] } };
+			const resident = {
+				toJSON: () => stored,
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+					Object.assign(stored, modify(stored)),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const { result } = renderHook(() => useLocalMutation());
+			await result.current.localPatch({
+				document: { uuid: 'order', collection: { name: 'orders' } } as never,
+				data: { meta_data },
+			});
+			expect(stored.payload.meta_data).toEqual([hint]);
+			expect(mockWrite).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					payload: expect.objectContaining({ meta_data: [hint] }),
+				})
+			);
+		}
+	);
+});
+
+it('keeps the provider latch immediate without invoking the mutation path', async () => {
+	const { OrderMoneyDivergenceProvider, useServerOwnsMoneyReader } = jest.requireActual<
+		typeof import('../../pos/contexts/order-money-divergence')
+	>('../../pos/contexts/order-money-divergence');
+	mockFindOneExec.mockClear();
+	const { result } = renderHook(() => useServerOwnsMoneyReader(), {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	await act(async () => {
+		divergenceListener({ type: 'order-money-divergence', recordId: 'hint-order' });
+		expect(result.current('hint-order')).toBe(true);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockFindOneExec).not.toHaveBeenCalled();
+});
+
+// The link stamp holds only `{ uuid, isNew }`: the command names the collection, never a fabricated document.
+it('passes collectionName through to the door for an identity-only target', async () => {
+	activeScopeId = 'scope-1';
+	activeReturnsNullOnce = false;
+	mockStatus.mockReturnValue({ activeScopeId });
+	mockWrite.mockClear().mockResolvedValue({});
+	const stored = { uuid: 'order', payload: { customer_id: 0 } };
+	mockFindOneExec.mockResolvedValue({
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	});
+	const { result } = renderHook(() => useLocalMutation());
+	const document = { uuid: 'order', isNew: false };
+	// Without a name the identity has no collection, so the door refuses it.
+	await expect(
+		result.current.localPatch({ document, data: { customer_id: 91 } })
+	).resolves.toBeUndefined();
+	expect(mockWrite).not.toHaveBeenCalled();
+	await result.current.localPatch(
+		{ document, data: { customer_id: 91 } },
+		{ collectionName: 'orders' }
+	);
+	expect(stored.payload.customer_id).toBe(91);
+	expect(mockWrite).toHaveBeenLastCalledWith(
+		expect.objectContaining({ payload: expect.objectContaining({ customer_id: 91 }) })
+	);
+});
+
+jest.mock('../../pos/commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));
+
+it.each(['ordinary', 'superseded', 'scope'] as const)(
+	'preserves the %s adapter failure policy',
+	async (kind) => {
+		const { ActiveScopeChangedTwiceError } = await import('@wcpos/query/mutations');
+		const error =
+			kind === 'scope'
+				? new ActiveScopeChangedTwiceError('orders')
+				: Object.assign(
+						new Error('write failed'),
+						kind === 'superseded' ? { code: 'write-superseded-by-delete' } : {}
+					);
+		activeScopeId = 'scope-1';
+		activeReturnsNullOnce = false;
+		mockStatus.mockReturnValue({ activeScopeId });
+		mockFindOneExec.mockResolvedValue({
+			toJSON: () => ({ payload: {} }),
+			incrementalModify: async () => {
+				throw error;
+			},
+		});
+		jest.mocked(log.error).mockClear();
+		const { result } = renderHook(() => useLocalMutation());
+		const pending = result.current.localPatch({
+			document: { uuid: 'order-uuid', collection: { name: 'orders' } } as never,
+			data: { status: 'on-hold' },
+		});
+		if (kind === 'ordinary') await expect(pending).resolves.toBeUndefined();
+		else await expect(pending).rejects.toBe(error);
+		if (kind === 'superseded') expect(log.error).not.toHaveBeenCalled();
+		else
+			expect(log.error).toHaveBeenCalledWith(
+				'Local mutation failed',
+				expect.objectContaining({
+					code: 'SYNC101',
+					showToast: true,
+					context: expect.objectContaining({ collectionName: 'orders', documentId: 'order-uuid' }),
+				})
+			);
+	}
+);

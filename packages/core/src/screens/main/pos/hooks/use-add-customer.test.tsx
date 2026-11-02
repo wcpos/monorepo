@@ -29,6 +29,7 @@ jest.mock('@wcpos/utils/logger', () => {
 });
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useDocField: (_store: unknown, selector: (value: { store_country: string }) => unknown) =>
 		selector({ store_country: 'ES' }),
 }));
@@ -47,7 +48,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('../../hooks/use-guest-customer', () => ({
@@ -56,8 +59,24 @@ jest.mock('../../hooks/use-guest-customer', () => ({
 
 const currentOrderRecord = {
 	uuid: 'order-uuid',
-	payload: { id: 99, number: '99' },
+	payload: { id: 99, number: '99', customer_id: 0 },
+	getLatest: () => currentOrderRecord,
 };
+
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null, paymentMethod: () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false, priceDecimals: 2 },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
@@ -150,8 +169,19 @@ describe('useAddCustomer', () => {
 					email: 'ada@example.com',
 					country: 'ES',
 				}),
+				// The order's own snapshot, overriding any prior one when the cashier swaps customers.
+				tax_ids: [],
 			}),
 		});
+	});
+
+	it('a picked customer whose create is not yet acknowledged keeps the order customer and takes the addresses', async () => {
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCustomer());
+		await result.current.addCustomer({ first_name: 'New', email: 'new@example.com' } as never);
+		const { data } = localPatch.mock.calls[0][0];
+		expect('customer_id' in data).toBe(false);
+		expect(data.billing).toEqual(expect.objectContaining({ email: 'new@example.com' }));
 	});
 
 	it('does not log assignment success when the local write returns no result', async () => {
@@ -167,3 +197,9 @@ describe('useAddCustomer', () => {
 		expect(getLogger([]).success).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

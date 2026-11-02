@@ -18,7 +18,15 @@ export function decideWritePlacement(input: {
 	hasBaseRevision: boolean;
 }): WritePlacement {
 	const { rows, operation, isRecovery, canCoalesce } = input;
-	if (isRecovery && rows.some((row) => row.operation === 'delete')) {
+	if (
+		operation !== 'delete' &&
+		rows.some(
+			(row) =>
+				row.operation === 'delete' &&
+				(row.status === undefined || row.status === 'pending' || row.status === 'claimed') &&
+				!row.supersededBy?.startsWith('coalesce:')
+		)
+	) {
 		return { kind: 'refuse-recovery-superseded-by-delete' };
 	}
 	if (canCoalesce && operation === 'delete' && isNeverPushedChain(rows)) {
@@ -33,6 +41,7 @@ export function decideWritePlacement(input: {
 	const canUseCandidate =
 		canCoalesce &&
 		candidate !== undefined &&
+		candidate.supersededBy === undefined &&
 		(isRecovery || candidate.explicit !== true) &&
 		(candidate.attempts ?? 0) === 0;
 	if (
@@ -75,8 +84,11 @@ export function coalescedPayload(input: {
 	incomingPayload: Record<string, unknown>;
 }): Record<string, unknown> {
 	if (input.operation === 'delete') return input.incomingPayload;
+	// Status is an intent, never an echo (ADR 0040): a stale resident `pending` on a paid
+	// order would be a reopen, so only the prior or incoming write may name it.
+	const { status: _echo, ...resident } = input.residentPayload ?? {};
 	return {
-		...(input.residentPayload ?? {}),
+		...(input.prior.collectionName === 'orders' ? resident : (input.residentPayload ?? {})),
 		...(input.prior.operation === 'delete' ? {} : input.prior.payload),
 		...input.incomingPayload,
 	};

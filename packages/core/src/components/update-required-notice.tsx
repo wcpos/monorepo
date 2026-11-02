@@ -30,9 +30,9 @@ interface Props {
 
 /**
  * The server's protocol-gate refusal (wcpos_update_required, SYNC341): this app
- * is older than the store's WCPOS plugin requires. Shared by the in-app
- * UpdateRequired screen and the login card, so both read the same SYNC341
- * summary, action and docs link — one source for screen, card, row and docs page.
+ * is older than the store's WCPOS plugin requires, shown on the login card. It
+ * reads the SYNC341 summary, action and docs link — one source for card, row
+ * and docs page (the in-app gate is the GateScreen in screens/main/update-required).
  */
 export function UpdateRequiredNotice({ onRetry, align = 'center', testID, children }: Props) {
 	const t = useT();
@@ -40,13 +40,13 @@ export function UpdateRequiredNotice({ onRetry, align = 'center', testID, childr
 	// Web: a reload picks up the updated bundle and clears the in-memory latch.
 	const showReload = Platform.isWeb;
 	const showRetry = !showReload && onRetry !== undefined;
-	const hasActions = showReload || showRetry || React.Children.count(children) > 0;
+	const hasActions = showReload || showRetry || React.Children.toArray(children).length > 0;
 
 	return (
 		<VStack testID={testID} className={centered ? 'max-w-md items-center' : undefined}>
 			<HStack className="items-center">
-				<Icon name="triangleExclamation" variant="destructive" />
-				<Text className="text-destructive">{translateErrorSummary(t, CODE)}</Text>
+				<Icon name="warning" variant="bad" />
+				<Text className="text-bad">{translateErrorSummary(t, CODE)}</Text>
 			</HStack>
 			<Text className={centered ? 'text-center' : undefined}>{translateErrorAction(t, CODE)}</Text>
 			<DocsLink testID={`update-required-docs-link-${CODE}`} href={getErrorCodeDocURL(CODE)}>

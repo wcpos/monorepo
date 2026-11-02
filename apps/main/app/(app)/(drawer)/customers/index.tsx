@@ -1,4 +1,13 @@
-import { withProAccess } from '@wcpos/core/screens/main/components/pro-guard';
-import { CustomersScreen } from '@wcpos/core/screens/main/customers';
+import * as React from 'react';
 
-export default withProAccess(CustomersScreen, 'customers');
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.CustomersScreen);
+
+export default function CustomersRoute() {
+	return (
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
+	);
+}

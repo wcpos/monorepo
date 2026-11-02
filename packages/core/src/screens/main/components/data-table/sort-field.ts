@@ -1,4 +1,4 @@
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
+import { normalizeQuerySortField } from '@wcpos/query/query-state';
 
 import type { CollectionKey } from '../../../../query';
 

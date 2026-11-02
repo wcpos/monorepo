@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { AxiosError, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 jest.mock('@wcpos/utils/logger', () => {
 	const debug = jest.fn();
@@ -102,8 +103,8 @@ describe('useHttpClient network audit logs', () => {
 			await result.current.get('https://example.com/wp-json/wcpos/v2/products');
 
 			const config = (http.request as jest.Mock).mock.calls[0][0];
-			expect(config.headers['x-wcpos-protocol']).toBe('2');
-			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version}`);
+			expect(config.headers['x-wcpos-protocol']).toBe(String(SYNC_PROTOCOL_VERSION));
+			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version} payments=1.3`);
 		} finally {
 			AppInfo.platform = webPlatform;
 		}
@@ -120,8 +121,8 @@ describe('useHttpClient network audit logs', () => {
 		} as never);
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['x-wcpos-protocol']).toBe('2');
-		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
+		expect(config.headers['x-wcpos-protocol']).toBe(String(SYNC_PROTOCOL_VERSION));
+		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version} payments=1.3`);
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
@@ -203,7 +204,7 @@ describe('useHttpClient network audit logs', () => {
 				data: {
 					code: 'wcpos_update_required',
 					message: 'This store requires a newer version of WCPOS.',
-					data: { status: 426, min_protocol: 2, plugin_version: '1.11.0' },
+					data: { status: 426, min_protocol: 2, plugin_version: '2.0.0' },
 				},
 			},
 		});
@@ -215,7 +216,7 @@ describe('useHttpClient network audit logs', () => {
 
 		expect(onUpdateRequired).toHaveBeenCalledWith({
 			minProtocol: 2,
-			pluginVersion: '1.11.0',
+			pluginVersion: '2.0.0',
 			status: 426,
 		});
 		const transportRow = loggerMock.__debug.mock.calls.findIndex(
@@ -289,6 +290,83 @@ describe('useHttpClient network audit logs', () => {
 				}),
 				terminal: { outcome: 'failed' },
 			}
+		);
+	});
+
+	it('logs a request-owned failureCode instead of reading a non-REST 404 as a missing REST route', async () => {
+		// WordPress answers a missing upload with its HTML 404 page; as an
+		// arraybuffer it carries no WP error code, so without the request-owned
+		// code the status table would attribute it to AUTH311 (REST route missing).
+		const failure = Object.assign(new Error('Request failed with status code 404'), {
+			response: { status: 404, data: new ArrayBuffer(8) },
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/2016/03/product-300x300.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/2016/03/product-300x300.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 404 }),
+				terminal: { outcome: 'failed' },
+			}
+		);
+		expect(loggerMock.__debug.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('logs a request-owned failureCode for a transport failure instead of the CLIENT999 fallback', async () => {
+		const failure = new Error('Network Error');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 0 }),
+				terminal: { outcome: 'failed' },
+			}
+		);
+		expect(loggerMock.__debug.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('lets a WordPress error body outrank the request-owned failureCode', async () => {
+		const failure = Object.assign(new Error('request failed'), {
+			response: {
+				status: 401,
+				data: { code: 'rest_forbidden', message: 'Sorry', data: { status: 401 } },
+			},
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', { failureCode: 'PRODUCT201' })
+		).rejects.toBe(failure);
+
+		// rest_forbidden maps directly to AUTH201; asserting that exact code (rather
+		// than "not PRODUCT201") also rules out the status fallback winning.
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			expect.objectContaining({
+				code: 'AUTH201',
+				context: expect.objectContaining({ serverCode: 'rest_forbidden' }),
+			})
 		);
 	});
 
@@ -552,7 +630,7 @@ describe('request preamble dispatch seam', () => {
 		expect(sent.url).toBe(
 			'https://shop.test/blog/?rest_route=%2Fwcpos%2Fv2%2Forders%2F42' +
 				'&include%5B%5D=1&include%5B%5D=2&status=wc-completed&after=2026-01-01T00%3A00%3A00&_fields=id%2Cstatus' +
-				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}&store_id=7`
+				`&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F${AppInfo.version}+payments%3D1.3&store_id=7`
 		);
 	});
 	it.each(['test', 'development'])(

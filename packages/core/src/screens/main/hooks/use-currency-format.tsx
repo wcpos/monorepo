@@ -52,8 +52,8 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 			right_space: { prefix: '', suffix: ` ${currencySymbol}` },
 		};
 
-		return positionMap[currencyPosition] || { prefix: '', suffix: '' };
-	}, [currencyPosition, currencySymbol]);
+		return positionMap[options?.currencyPosition ?? currencyPosition] || { prefix: '', suffix: '' };
+	}, [currencyPosition, currencySymbol, options?.currencyPosition]);
 
 	/**
 	 * NOTE: If I memoize the options, the price doesn't update when changing settings.
@@ -66,5 +66,5 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 		})
 	);
 
-	return { ...numberFormat, currencySymbol, prefix, suffix };
+	return { ...numberFormat, currency, currencySymbol, prefix, suffix };
 };

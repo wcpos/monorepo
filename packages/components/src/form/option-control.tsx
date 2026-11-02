@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
+import { focusFirstControl, FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { optionToFieldValue } from './option-value';
 
 import type { FormItemProps } from './common';
@@ -55,11 +56,9 @@ type FormOptionControlProps<TControl extends React.ElementType> = FormOptionFiel
 };
 
 /**
- * Shared body behind `FormSelect` and `FormCombobox`. The two differ only in which
- * control they default to — everything else here (the scalar/Option conversion, the
- * open state, the aria wiring, the label/description/message scaffold) was duplicated
- * line for line between them, and the one place they had quietly diverged was the
- * clear path (see `optionToFieldValue`).
+ * `FormCombobox`'s body: a field whose label cannot be derived from its scalar (a customer
+ * id) passes the `{ value, label }` pair straight through; a plain scalar is lifted into one.
+ * `FormSelect` takes the scalar as it is, so it no longer shares this.
  */
 export function FormOptionControl<TControl extends React.ElementType>({
 	label,
@@ -71,7 +70,13 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	...props
 }: FormOptionControlProps<TControl>) {
 	const [open, setOpen] = React.useState(false);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const controlRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const handleOnLabelPress = () => focusFirstControl(controlRef);
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	/**
 	 * The control is chosen at runtime, so its props cannot be resolved statically here.
@@ -94,16 +99,22 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	);
 
 	return (
-		<FormItem>
-			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
-			<Component
-				{...ariaProps}
-				open={open}
-				onOpenChange={setOpen}
-				value={controlValue}
-				onValueChange={handleValueChange}
-				{...props}
-			/>
+		<FormItem nativeID={itemNativeID}>
+			{!!label && (
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
+					{label}
+				</FormLabel>
+			)}
+			<View ref={controlRef}>
+				<Component
+					{...ariaProps}
+					open={open}
+					onOpenChange={setOpen}
+					value={controlValue}
+					onValueChange={handleValueChange}
+					{...props}
+				/>
+			</View>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>

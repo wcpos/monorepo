@@ -16,12 +16,11 @@ jest.mock('observable-hooks', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (r: unknown, select: (r: unknown) => unknown) => (r ? select(r) : undefined),
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: mockDiv,
-	ModalBody: mockDiv,
-	ModalContent: mockDiv,
-	ModalHeader: mockDiv,
-	ModalTitle: mockDiv,
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: mockDiv,
+	DialogContent: mockDiv,
+	DialogHeader: mockDiv,
+	DialogTitle: mockDiv,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: Props) => <span>{children}</span>,

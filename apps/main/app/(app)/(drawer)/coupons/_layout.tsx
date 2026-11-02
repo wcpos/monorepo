@@ -7,7 +7,7 @@ import { useUserCapabilities } from '@wcpos/core/screens/main/hooks/use-user-cap
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
-	initialRouteName: 'index',
+	anchor: 'index',
 };
 
 export default function CouponsLayout() {

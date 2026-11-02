@@ -1,37 +1,59 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useDocField } from '@wcpos/query';
+import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
+import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
+import { CommandsProvider } from '@wcpos/core/extensions/commands';
+import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
+import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
+import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
+import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
+import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
 import {
 	CurrentOrderProvider,
-	useOpenOrdersResource,
+	useOpenOrdersHandle,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
+import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/commands/settlement-coordinator-provider';
+import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
+import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'index',
+	anchor: 'index',
 };
 
 export default function POSLayout() {
 	const { wpCredentials, store } = useStoreSession();
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
+	useResetCheckoutModeOnStoreChange(storeID);
+	useRejectedOrderSavesSync(storeID);
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
+	useCheckoutUrlSeed(params.orderId);
 
 	// Extract orderId: handle array (catch-all) vs string, and handle empty array
 	let orderIdFromParams: string | undefined;
@@ -67,21 +89,28 @@ export default function POSLayout() {
 	if (resolved.tillOrderId !== tillOrderId) setTillOrderId(resolved.tillOrderId);
 	const orderId = resolved.orderId;
 
-	/**
-	 * We then need to filter the open orders to limit by cashier and store
-	 *
-	 * @TODO - it would be nice to be able to query ($elemMatch) by cashier and store, but
-	 * there are too many edge cases, ie: cashier is not set, store is not set, etc.
-	 * For now, we'll just filter the results.
-	 */
-	const resource = useOpenOrdersResource(cashierID, storeID);
+	// The open orders are scoped IN STORAGE by cashier, store and register (#2242, `openOrdersSelector`).
+	const { registerId } = useRegisterBinding();
+	// Owned HERE, above the Suspense below: the provider only reads it. The owner's retain effect
+	// is what starts the read, and a boundary suspending on a handle its own subtree owns never
+	// commits that effect (#1707).
+	const openOrdersHandle = useOpenOrdersHandle(cashierID, storeID, registerId);
 
-	// Built HERE, above the Suspense below, and handed to the provider — the same shape as the
-	// open-orders resource above it and for the same reason: a resource built inside the
+	// Built HERE, above the Suspense below, and handed to the provider — the same placement as
+	// the open-orders handle above it and for the same reason: a resource built inside the
 	// boundary that suspends on it is discarded with the aborted render and rebuilt by every
 	// retry, which never ends (#1707). This layout commits alongside the fallback, so the retry
 	// reads back the resource the first attempt already subscribed.
-	const { defaultCustomerResource } = useDefaultCustomer();
+	const { defaultCustomerResource, retry: retryDefaultCustomer } = useDefaultCustomer();
+
+	// The boundary around the Suspense below is this owner's: either read it owns (the open orders,
+	// the default customer) can fail into it, so its reset retries both. A remount alone would draw
+	// the readers over the same failed handle and resource, which the root boundary cannot rebuild
+	// from below this layout.
+	const retryOwnedReads = () => {
+		openOrdersHandle.retry();
+		retryDefaultCustomer();
+	};
 
 	// The divergence store sits OUTSIDE the Suspense boundary, deliberately (R1).
 	// A save-time money divergence can be acked for an order in a background tab,
@@ -89,7 +118,7 @@ export default function POSLayout() {
 	// subscription has to outlive them, and the store is keyed by order uuid so
 	// the alert surfaces on the tab it belongs to. It must also outlive the
 	// BOUNDARY itself: while CurrentOrderProvider suspends on its open-orders
-	// resource React never commits effects inside that boundary, and
+	// handle React never commits effects inside that boundary, and
 	// `engine.events()` does not replay, so a drain landing during the initial
 	// load would be missed for good.
 	//
@@ -101,23 +130,44 @@ export default function POSLayout() {
 	return (
 		<OrderMoneyDivergenceProvider>
 			<OrderEngineWarningsProvider>
-				<Suspense>
-					<CurrentOrderProvider
-						resource={resource}
-						defaultCustomerResource={defaultCustomerResource}
-						currentOrderUUID={orderId}
-					>
-						<ErrorBoundary>
-							<Suspense>
-								<POSStack />
-							</Suspense>
-						</ErrorBoundary>
-					</CurrentOrderProvider>
-				</Suspense>
+				<ErrorBoundary
+					FallbackComponent={FallbackScreen}
+					onReset={retryOwnedReads}
+					resetKeys={[openOrdersHandle]}
+				>
+					<Suspense>
+						<CurrentOrderProvider
+							handle={openOrdersHandle}
+							scope={`${cashierID}:${storeID}:${registerId}`}
+							defaultCustomerResource={defaultCustomerResource}
+							currentOrderUUID={orderId}
+						>
+							<ErrorBoundary FallbackComponent={FallbackScreen}>
+								{/* Spans both register layouts (tabs, columns): the products screen's query and
+								    browse path live here, so a resize across the phone boundary — which
+								    mounts the screen afresh in the other tree — keeps the cashier's place. */}
+								<PersistedStateProvider>
+									<Suspense>
+										{/* The command context (roadmap#428): inside the current order, around the stack.
+										    The hotkeys bind its commands while the POS is mounted (web and Electron). */}
+										<CommandsProvider>
+											<Hotkeys />
+											<POSStack />
+										</CommandsProvider>
+									</Suspense>
+								</PersistedStateProvider>
+							</ErrorBoundary>
+						</CurrentOrderProvider>
+					</Suspense>
+				</ErrorBoundary>
 			</OrderEngineWarningsProvider>
 		</OrderMoneyDivergenceProvider>
 	);
 }
+
+const STRIP = ['strip'] as const;
+const TOP = ['top'] as const;
+const NONE = [] as const;
 
 /**
  * Deliberately does NOT subscribe to the current order.
@@ -129,43 +179,69 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const { theme } = useUniwind();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	// The root never pads a SYSTEM inset: every surface that touches a screen edge runs its own
+	// background through the inset and pads inside it (`EdgeSurface`: the columns, the phone tab
+	// container; the full-size modal), so the status bar floats over the column it sits on (owner,
+	// iPad, 2026-10-14: a flat grey band under the status bar and the home indicator).
+	// The one exception is the desktop's title-bar strip: it is not a system bar but the till's
+	// topmost row (the register bar portals into it across the full width), so the root takes the
+	// strip alone, as one ground, and the columns below pad only the status bar.
+	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
+	}, []);
 
 	return (
 		<TaxRatesProvider>
-			<View className="bg-background flex-1">
-				<Stack
-					screenOptions={{
-						animation: 'none',
-						headerShown: false,
-						contentStyle: { backgroundColor: screenBackgroundColor },
-					}}
-				>
-					<Stack.Screen name="index" />
-					<Stack.Screen
-						name="(modals)/cart/[orderId]/checkout"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-					<Stack.Screen
-						name="(modals)/cart/receipt/[orderId]"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-				</Stack>
-			</View>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
+			<CustomerDisplaySnapshotSource />
+			<PosUrlMirror />
+			<CartConfigProvider>
+				<SettlementCoordinatorProvider />
+				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
+					<SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />
+					{/* With the upgrade notice showing, the notice owns the top edge: this column pads
+					    the status bar in the notice's colour, and nothing under it touches the top. */}
+					<EdgeSurface
+						edges={showUpgrade ? TOP : NONE}
+						className={showUpgrade ? 'bg-muted flex-1' : 'flex-1'}
+					>
+						{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+						<Stack
+							screenOptions={{
+								animation: 'none',
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
+							}}
+						>
+							<Stack.Screen name="index" />
+							<Stack.Screen
+								name="(modals)/cart/[orderId]/checkout"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/cart/receipt/[orderId]"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+						</Stack>
+					</EdgeSurface>
+				</EdgeSurface>
+				{/**
+				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+				 * so that dialogs like add/edit product etc can access the context
+				 */}
+				<ErrorBoundary>
+					<PortalHost name="pos" />
+				</ErrorBoundary>
+			</CartConfigProvider>
 		</TaxRatesProvider>
 	);
 }

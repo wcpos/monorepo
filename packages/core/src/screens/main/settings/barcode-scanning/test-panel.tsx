@@ -1,29 +1,27 @@
 import * as React from 'react';
-import {
-	type NativeSyntheticEvent,
-	Platform,
-	ScrollView,
-	type TextInputKeyPressEventData,
-	View,
-} from 'react-native';
+import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Card } from '@wcpos/components/card';
+import { Badge } from '@wcpos/components/badge';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 const BAR_HEIGHT_CAP_MS = 60;
@@ -64,18 +62,16 @@ function TimingChart({
 									style={{ height }}
 								/>
 								<Text className="font-mono text-xs">{keyGlyph(keys[index] ?? '')}</Text>
-								<Text className="text-muted-foreground text-xs">{index === 0 ? '—' : gap}</Text>
+								<Text variant="help">{index === 0 ? '—' : gap}</Text>
 							</View>
 						);
 					})}
 					{analysis.gaps.length === 0 ? (
-						<Text className="text-muted-foreground text-sm">
-							{t('settings.barcode_test_chart_empty')}
-						</Text>
+						<EmptyState kind="empty" size="inline" title={t('settings.barcode_test_chart_empty')} />
 					) : null}
 				</View>
 			</ScrollView>
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{t('settings.barcode_test_chart_threshold', {
 					threshold,
 				})}
@@ -87,7 +83,6 @@ function TimingChart({
 export function TestPanel() {
 	const t = useT();
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const { barcode$, onKeyPress: detectorOnKeyPress } = useBarcodeDetection();
 	const detectedBarcode = useObservableState(barcode$) as string | undefined;
 	const { currentKeys, attempts, onKeyPress: captureOnKeyPress } = useScanTraceCapture();
@@ -97,7 +92,7 @@ export function TestPanel() {
 	// the detected-barcode readout stays empty on native.
 	const isWeb = Platform.OS === 'web';
 	const handleNativeKeyPress = React.useCallback(
-		(event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(event: TextInputKeyPressEvent) => {
 			captureOnKeyPress(event);
 			detectorOnKeyPress(event);
 		},
@@ -136,9 +131,9 @@ export function TestPanel() {
 
 	const applySuggestion = React.useCallback(
 		async (suggestion: TraceSuggestion) => {
-			await localPatch({ document: store, data: suggestion.patch });
+			await patchStoreSettings(store, suggestion.settings, t);
 		},
-		[localPatch, store]
+		[t, store]
 	);
 
 	const liveKeys = (currentKeys.length > 0 ? currentKeys : (latestAttempt ?? []))
@@ -205,70 +200,69 @@ function Verdict({
 	const avg = Math.round(analysis.avgGapMs);
 
 	let headline: string;
-	let boxClass: string;
-	let textClass: string;
 	if (analysis.detectedAsScan) {
 		headline = t('settings.barcode_test_detected_scan', {
 			code: analysis.code,
 		});
-		boxClass = 'border-success/40 bg-success/10';
-		textClass = 'text-success';
 	} else if (analysis.nearMiss) {
 		headline = t('settings.barcode_test_near_miss', {
 			avg,
 			threshold: settings.threshold,
 		});
-		boxClass = 'border-warning/40 bg-warning/10';
-		textClass = 'text-warning';
 	} else if (!Number.isFinite(analysis.avgGapMs)) {
 		// A single (or modifier-only) keypress has no gaps — "Infinityms" is not
 		// a number a cashier should ever read.
 		headline = t('settings.barcode_test_single_key');
-		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,
 		});
-		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	}
 
 	return (
 		<VStack space="sm" testID="barcode-test-verdict">
-			<View className={`rounded-md border p-2 ${boxClass}`}>
-				<Text className={`text-sm font-medium ${textClass}`}>{headline}</Text>
-				{analysis.detectedAsScan ? (
-					<Text className="text-muted-foreground text-xs">
+			{analysis.detectedAsScan ? (
+				<>
+					<HStack className="min-h-9 items-center gap-2">
+						<Icon name="check" className="text-success" />
+						<Text variant="subheading" className="flex-1">
+							{headline}
+						</Text>
+					</HStack>
+					<Text variant="help">
 						{t('settings.barcode_test_scan_detail', {
 							avg,
 							threshold: settings.threshold,
 						})}
 					</Text>
-				) : null}
-			</View>
+				</>
+			) : analysis.nearMiss ? (
+				<Notice tone="warning" title={headline} />
+			) : (
+				<Text variant="key">{headline}</Text>
+			)}
 
 			{analysis.suggestions.map((suggestion) => (
-				<HStack key={suggestion.kind} className="border-info/40 bg-info/10 rounded-md border p-2">
-					<Text className="flex-1 text-sm">{suggestionText(t, suggestion, avg)}</Text>
-					<Button size="sm" onPress={() => onApply(suggestion)}>
-						<ButtonText>{t('settings.barcode_test_apply')}</ButtonText>
-					</Button>
-				</HStack>
+				<Notice
+					key={suggestion.kind}
+					tone="info"
+					title={suggestionText(t, suggestion, avg)}
+					actions={[
+						{ label: t('settings.barcode_test_apply'), onPress: () => onApply(suggestion) },
+					]}
+				/>
 			))}
 
 			{analysis.shiftMangled ? (
-				<View className="border-destructive/40 bg-destructive/10 rounded-md border p-2">
-					<Text className="text-destructive text-sm">
-						{t('settings.barcode_test_shift_mangled')}
-					</Text>
-				</View>
+				<Notice
+					tone="warning"
+					title={t('settings.barcode_test_shift_mangled_title')}
+					description={t('settings.barcode_test_shift_mangled_description')}
+				/>
 			) : null}
 
 			{analysis.trailingEnter ? (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.barcode_test_trailing_enter')}
-				</Text>
+				<Text variant="help">{t('settings.barcode_test_trailing_enter')}</Text>
 			) : null}
 		</VStack>
 	);
@@ -300,30 +294,26 @@ function History({ history }: { history: TraceAnalysis[] }) {
 
 	return (
 		<VStack space="xs" testID="barcode-test-history">
-			<Text className="text-sm font-medium">{t('settings.barcode_test_recent')}</Text>
+			<Text variant="subheading">{t('settings.barcode_test_recent')}</Text>
 			{history.map((entry, index) => {
 				const result = entry.detectedAsScan
 					? entry.tooShort
 						? t('settings.barcode_test_result_too_short')
 						: t('settings.barcode_test_result_scan')
 					: t('settings.barcode_test_result_typing');
-				const chipClass = entry.detectedAsScan
-					? entry.tooShort
-						? 'bg-warning/10 text-warning'
-						: 'bg-success/10 text-success'
-					: 'bg-muted text-muted-foreground';
+				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'ok') : 'muted';
 				return (
-					<HStack key={index} className="border-border rounded-md border p-2">
+					<Card key={index} padding="row" className="flex-row items-center gap-2">
 						<Text className="flex-1 font-mono text-sm" numberOfLines={1}>
 							{entry.code || entry.raw || '—'}
 						</Text>
-						<Text className={`rounded-full px-2 py-0.5 text-xs font-medium ${chipClass}`}>
+						<Badge variant={tone} tinted>
 							{result}
-						</Text>
-						<Text className="text-muted-foreground w-16 text-right text-xs">
+						</Badge>
+						<Text variant="help" className="w-16 text-right">
 							{Number.isFinite(entry.avgGapMs) ? `${Math.round(entry.avgGapMs)}ms` : '—'}
 						</Text>
-					</HStack>
+					</Card>
 				);
 			})}
 		</VStack>

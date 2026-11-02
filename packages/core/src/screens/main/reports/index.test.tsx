@@ -3,21 +3,173 @@
  */
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
-import { render } from '@testing-library/react';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
+import { utc } from '@date-fns/utc';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
+
+import type { ClosureRow } from '@wcpos/query/register-session';
+import { compileQuery } from '@wcpos/query/query-state';
 
 import { ReportsScreen } from './index';
 
-import type { QueryStateOf } from '../../../query';
+import type { QueryHandle, QueryStateOf } from '../../../query';
 
-const mockBinding = {
-	resource: { kind: 'reports-orders-resource' },
-	active$: of(false),
-	total$: of(24),
-	sync: jest.fn(async () => undefined),
+afterEach(() => jest.useRealTimers());
+
+type FakeHandle = QueryHandle & { set: (partial: object) => void; retry: () => void };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
+jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
+jest.mock('../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
+}));
+jest.mock('../components/pro-guard', () => ({
+	withProAccess: (Component: React.ComponentType) => () =>
+		mockPro ? (
+			<Component />
+		) : (
+			<div data-testid="pro-preview">
+				<Component />
+			</div>
+		),
+}));
+const mockClosureScope = jest.fn();
+jest.mock('./closures', () => ({
+	Closures: (props: { onClose?: () => void; initialClosureId?: string }) => {
+		mockClosureScope(props);
+		return (
+			<div data-testid="reports-closures">
+				{props.initialClosureId && <button data-testid="close-closure" onClick={props.onClose} />}
+			</div>
+		);
+	},
+}));
+let mockPro = true;
+let mockCapabilities: string[] | undefined = ['view_woocommerce_pos_reports'];
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockPro } }),
+}));
+jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+const mockBarScope = jest.fn();
+let mockNextStoreID = 9;
+const mockViewedStores = of([
+	{ id: 9, timezone: 'UTC' },
+	{ id: 21, timezone: 'America/New_York' },
+]);
+const mockLocalClosure = {
+	id: 'c',
+	business_day: '2026-09-16',
+	opened_at: '2026-09-16T09:00:00Z',
+	register_id: 'r',
 };
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
+const mockReadClosure = jest.fn();
+const mockStoreDB = {};
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	readClosure: (...args: unknown[]) => mockReadClosure(...args),
+}));
+jest.mock('./closures/closure-panel', () => ({
+	ClosurePanel: ({ row, onClose }: { row: ClosureRow; onClose: () => void }) => (
+		<button data-testid="closure-panel" onClick={onClose}>
+			{row.id}
+		</button>
+	),
+}));
+jest.mock('./till-strip', () => ({
+	TillStrip: ({
+		onOpenClosures,
+		onOpenClosure,
+	}: {
+		onOpenClosures?: () => void;
+		onOpenClosure?: (closure: typeof mockLocalClosure) => void;
+	}) => (
+		<>
+			{onOpenClosures && <button data-testid="till-closures" onClick={onOpenClosures} />}
+			<button data-testid="till-last-closure" onClick={() => onOpenClosure?.(mockLocalClosure)} />
+		</>
+	),
+}));
+// The hero reaches expo-haptics through IconButton; the scope strip keeps the date button.
+jest.mock('./hero', () => ({
+	Hero: () => <div data-testid="reports-hero" />,
+	HeroShell: () => <div data-testid="reports-hero-loading" />,
+	SalesScope: ({ date }: { date: React.ReactNode }) => (
+		<div data-testid="reports-scope-strip">{date}</div>
+	),
+}));
+jest.mock('./bar', () => ({
+	ClosuresCashierChip: () => null,
+	ScopeHint: () => null,
+	Bar: ({
+		onBack,
+		onScopeChange,
+		scope,
+	}: {
+		scope: unknown;
+		onBack: () => void;
+		onScopeChange: (scope: unknown) => void;
+	}) => {
+		mockBarScope(scope);
+		return (
+			<>
+				<button data-testid="reports-back-sales" onClick={onBack} />
+				<button
+					data-testid="past-scope"
+					onClick={() =>
+						onScopeChange({
+							from: '2026-07-14',
+							to: '2026-07-14',
+							storeId: mockNextStoreID,
+							registerId: 'other',
+						})
+					}
+				/>
+			</>
+		);
+	},
+}));
+
+// One fake handle per query, as the registry's identity by key: an equal query is the same
+// handle, a new one (another register, another range) is a new handle.
+const mockHandles = new Map<string, FakeHandle>();
+let mockAnswered = true;
+const mockUseCollectionQueryHandle = jest.fn(
+	(collection: unknown, state: unknown, options?: { storeScope?: 'pos' | 'sales' }) => {
+		const key = JSON.stringify([collection, state, options ?? null]);
+		let handle = mockHandles.get(key);
+		if (!handle) {
+			handle = fakeQueryHandle(mockAnswered ? {} : { ready: false }, key) as FakeHandle;
+			mockHandles.set(key, handle);
+		}
+		return handle;
+	}
+);
+const latestHandle = (collection: string) => {
+	const index = mockUseCollectionQueryHandle.mock.calls.findLastIndex(
+		([name]) => name === collection
+	);
+	return mockUseCollectionQueryHandle.mock.results[index].value as FakeHandle;
+};
+beforeEach(() => {
+	mockHandles.clear();
+	mockAnswered = true;
+	mockProvided = null;
+	mockPro = true;
+	mockPhone = true;
+	mockRoute = {};
+	mockClosureScope.mockClear();
+	mockSetParams.mockClear();
+	mockReadClosure.mockReset().mockResolvedValue({ toMutableJSON: () => mockLocalClosure });
+});
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
 let mockStoreID: number | undefined = 9;
@@ -26,33 +178,90 @@ jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (
+			collection: unknown,
+			state: unknown,
+			options?: { storeScope?: 'pos' | 'sales' }
+		) => mockUseCollectionQueryHandle(collection, state, options),
 	};
 });
 jest.mock('@wcpos/query', () => ({
+	// The store-day hook reads zone fields through it; a plain test record is read directly.
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (v: Record<string, unknown>) => unknown
+	) => (source ? select(source) : undefined),
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
 }));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
+// The real react-error-boundary (the shared one pulls in a tooltip jest cannot parse): the
+// inner boundary's reset is part of the contract.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			FallbackComponent = () => null,
+			...props
+		}: React.PropsWithChildren<{ FallbackComponent?: React.ComponentType }>) => (
+			<ErrorBoundary FallbackComponent={FallbackComponent} {...props} />
+		),
+	};
+});
 jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
+	Suspense: ({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) => (
+		<React.Suspense fallback={fallback ?? null}>{children}</React.Suspense>
+	),
 }));
+// The readers read as the real ones do (`useQuerySnapshot`): suspend while unanswered, throw a
+// failure to the boundary.
+let mockProvided: { handle: QueryHandle; refundsHandle: QueryHandle } | null = null;
 jest.mock('./context', () => ({
-	ReportsProvider: ({ children }: { children: React.ReactNode }) => children,
+	...jest.requireActual('./context'),
+	ReportsRefunds: ({ children }: React.PropsWithChildren) => {
+		jest.requireActual('../../../query').useQuerySnapshot(mockProvided!.refundsHandle, []);
+		return <div data-testid="reports-refunds-read">{children}</div>;
+	},
+	ReportsProvider: ({
+		children,
+		...handles
+	}: React.PropsWithChildren<{ handle: QueryHandle; refundsHandle: QueryHandle }>) => {
+		mockProvided = handles;
+		jest.requireActual('../../../query').useQuerySnapshot(handles.handle, []);
+		return children;
+	},
 }));
-jest.mock('./reports', () => ({ Reports: () => null }));
+jest.mock('./reports', () => ({
+	// `header` is the till strip, the page's first row since 2026-10-18.
+	Reports: ({ date, header }: { date: React.ReactNode; header?: React.ReactNode }) => {
+		const actions = jest.requireActual('../../../query').useQueryStateActions();
+		return (
+			<>
+				{header}
+				<div data-testid="reports-scope-strip">{date}</div>
+				<button
+					data-testid="legacy-register"
+					onClick={() => actions.setFilter('register', 'other')}
+				/>
+			</>
+		);
+	},
+}));
 jest.mock('../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ storeDB: mockStoreDB }),
 	useAppState: () => ({
-		wpCredentials: { id: 7 },
-		store: mockStoreID === undefined ? undefined : { id: mockStoreID },
+		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
+		site: { timezone_string: 'UTC', gmt_offset: '0' },
+		store:
+			mockStoreID === undefined
+				? undefined
+				: { id: mockStoreID, timezone: mockStoreID === 21 ? 'America/New_York' : 'UTC' },
 	}),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: require('date-fns').format }),
 	convertLocalDateToUTCString: (date: Date) => date.toISOString(),
+	convertUTCStringToLocalDate: (value: string) => new Date(value),
 }));
 jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
@@ -61,8 +270,10 @@ jest.mock('../contexts/ui-settings', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('reports orders binding was not called');
+	const call = mockUseCollectionQueryHandle.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-2);
+	if (!call) throw new Error('reports orders handle was not acquired');
 	return call[1] as QueryStateOf<'orders'>;
 }
 
@@ -74,24 +285,26 @@ describe('ReportsScreen query-state wiring', () => {
 		mockSortBy = 'date_created_gmt';
 		mockSortDirection = 'desc';
 		mockStoreID = 9;
+		mockPro = true;
+		mockCapabilities = ['view_woocommerce_pos_reports'];
 	});
 
 	afterEach(() => jest.useRealTimers());
 
-	it('binds the completed current-day report window and current cashier/store scope', () => {
+	it('binds today for every status and Everyone in the current store (no status or cashier filter)', () => {
 		render(<ReportsScreen />);
 
 		const today = new Date(2026, 6, 15, 12);
-		expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object));
+		expect(mockUseCollectionQueryHandle).toHaveBeenCalledWith('orders', expect.any(Object), {
+			storeScope: 'sales',
+		});
 		expect(latestState()).toEqual({
 			search: '',
 			filters: {
-				status: 'completed',
 				dateRange: {
-					from: startOfDay(today).toISOString(),
-					to: endOfDay(today).toISOString(),
+					from: startOfDay(today, { in: utc }).toISOString(),
+					to: endOfDay(today, { in: utc }).toISOString(),
 				},
-				cashier: '7',
 				store: '9',
 			},
 			sort: { field: 'date_created_gmt', direction: 'desc' },
@@ -99,6 +312,42 @@ describe('ReportsScreen query-state wiring', () => {
 		});
 	});
 
+	it('the sales and comparison handles are acquired with storeScope sales', () => {
+		render(<ReportsScreen />);
+		const calls = mockUseCollectionQueryHandle.mock.calls
+			.filter(([collection]) => collection === 'orders')
+			.slice(-2);
+		expect(calls).toHaveLength(2);
+		for (const [, state, options] of calls) {
+			expect(options).toEqual({ storeScope: 'sales' });
+			const compiled = compileQuery('orders', state as QueryStateOf<'orders'>, {
+				id: 'report',
+				...options,
+			});
+			expect(compiled.represented).toBe(false);
+			expect(compiled.demand[0]).not.toHaveProperty('store');
+		}
+	});
+
+	it("Free's register-scoped state still compiles as pos", () => {
+		mockPro = false;
+		render(<ReportsScreen />);
+		for (const [, state, options] of mockUseCollectionQueryHandle.mock.calls
+			.filter(([collection]) => collection === 'orders')
+			.slice(-2)) {
+			const queryState = state as QueryStateOf<'orders'>;
+			expect(queryState.filters.register).toBe('r');
+			const sales = compileQuery('orders', queryState, { id: 'report', ...options });
+			const pos = compileQuery('orders', queryState, { id: 'report' });
+			expect(sales.demand).toEqual(pos.demand);
+			// Store scoping stays pos; only the date clause moves to the local sale-moment predicate.
+			const { $and: clauses } = pos.read.prefilter as { $and: Record<string, unknown>[] };
+			expect(sales.read.prefilter).toEqual({
+				$and: clauses.filter((clause) => !('dateCreatedGmt' in clause)),
+			});
+			expect(sales.represented).toBe(true);
+		}
+	});
 	it('preserves the POS created-via fallback and valid persisted report sort', () => {
 		mockStoreID = undefined;
 		mockSortBy = 'status';
@@ -107,7 +356,7 @@ describe('ReportsScreen query-state wiring', () => {
 		render(<ReportsScreen />);
 
 		expect(latestState()).toMatchObject({
-			filters: { cashier: '7', store: 'woocommerce-pos' },
+			filters: { store: 'woocommerce-pos' },
 			sort: { field: 'status', direction: 'asc' },
 		});
 	});
@@ -120,6 +369,19 @@ describe('ReportsScreen query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
 	});
 
+	// Revert: stringify store zero as metadata scope "0" rather than the POS source.
+	it('restores the POS source after switching Sales to store 5 and back to store 0', () => {
+		mockStoreID = 0;
+		render(<ReportsScreen />);
+		expect(latestState().filters.store).toBe('woocommerce-pos');
+		mockNextStoreID = 5;
+		fireEvent.click(screen.getByTestId('past-scope'));
+		expect(latestState().filters.store).toBe('5');
+		mockNextStoreID = 0;
+		fireEvent.click(screen.getByTestId('past-scope'));
+		expect(latestState().filters.store).toBe('woocommerce-pos');
+	});
+
 	it('re-initializes report filters when the selected store scope changes', () => {
 		const { rerender } = render(<ReportsScreen />);
 		expect(latestState().filters.store).toBe('9');
@@ -129,4 +391,407 @@ describe('ReportsScreen query-state wiring', () => {
 
 		expect(latestState().filters.store).toBe('12');
 	});
+
+	it('re-initializes report filters when the plan drops to Free', () => {
+		const { rerender } = render(<ReportsScreen />);
+		const proRange = latestState().filters.dateRange;
+		expect(proRange).toBeDefined();
+
+		mockPro = false;
+		rerender(<ReportsScreen />);
+
+		// A fresh query on the bound register, not the Pro scope kept alive under locked controls.
+		expect(latestState().filters.register).toBeDefined();
+		expect(latestState().filters.dateRange).toEqual(proRange);
+	});
+
+	it('re-keys Free Sales onto the new today at the store-day boundary', () => {
+		mockPro = false;
+		const { rerender } = render(<ReportsScreen />);
+		const before = latestState().filters.dateRange;
+		expect(before).toBeDefined();
+
+		// Past the store's midnight whatever the machine's zone: the rollover timer fires and the
+		// query remounts on the new day.
+		React.act(() => {
+			jest.advanceTimersByTime(26 * 60 * 60 * 1000);
+		});
+		rerender(<ReportsScreen />);
+
+		expect(latestState().filters.dateRange).not.toEqual(before);
+	});
+});
+
+// Revert: convert a newly selected store's days using the bound till's UTC midnight.
+it('uses the viewed store midnight for Sales immediately on a cross-store selection', () => {
+	mockStoreID = 9;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockNextStoreID = 21;
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('past-scope'));
+	expect(latestState().filters).toMatchObject({
+		store: '21',
+		dateRange: {
+			from: '2026-07-14T04:00:00.000Z',
+			to: '2026-07-15T03:59:59.999Z',
+		},
+	});
+	expect(mockBarScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({ storeId: 21, from: '2026-07-14', to: '2026-07-14' })
+	);
+	mockNextStoreID = 9;
+});
+
+// Revert: leave the orders provider mounted around both rooms.
+it('the Sales handle is not acquired in Closures, and is again on returning to Sales', () => {
+	render(<ReportsScreen />);
+	mockUseCollectionQueryHandle.mockClear();
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('reports-back-sales'));
+	// The viewed-store directory can emit after mount; both renders acquire the Sales handle.
+	expect(mockUseCollectionQueryHandle).toHaveBeenCalledWith('orders', expect.any(Object), {
+		storeScope: 'sales',
+	});
+});
+
+// Revert: remove the capability boundary before local report readers mount.
+it('does not mount report readers for a cashier without report permission', () => {
+	mockCapabilities = [];
+	mockUseCollectionQueryHandle.mockClear();
+	mockClosureScope.mockClear();
+	render(<ReportsScreen />);
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('till-closures')).toBeNull();
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+});
+// Revert: trust a retained Pro scope after the license becomes Free.
+it('constrains a retained Pro scope before mounting Free closures', () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
+	mockPro = true;
+	mockStoreID = 9;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	const view = render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('till-closures'));
+	fireEvent.click(screen.getByTestId('past-scope'));
+	expect(mockClosureScope).toHaveBeenLastCalledWith({
+		scope: expect.objectContaining({ registerId: 'other' }),
+		onClose: expect.any(Function),
+		renderScopeRow: expect.any(Function),
+	});
+	mockClosureScope.mockClear();
+	mockPro = false;
+	view.rerender(<ReportsScreen />);
+	// Free now protects the scope by not mounting the room at all.
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(latestState().filters).toMatchObject({ register: 'r', store: '9' });
+	mockPro = true;
+	jest.useRealTimers();
+});
+
+// Revert: feed the shared Sales bar a separate scope instead of the live orders query.
+it('shows Sales actual scope initially and after a legacy filter changes', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockPro = true;
+	render(<ReportsScreen />);
+	expect(mockBarScope).toHaveBeenLastCalledWith(expect.objectContaining({ registerId: '' }));
+	fireEvent.click(screen.getByTestId('legacy-register'));
+	expect(mockBarScope).toHaveBeenLastCalledWith(expect.objectContaining({ registerId: 'other' }));
+});
+
+// Revert: let an unanswered Sales handle suspend the page bar and trap the room switch.
+// The date button is the only way out of a slow range: the loading shell keeps it.
+it('keeps the date button while the Sales handle has not answered', () => {
+	mockAnswered = false;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
+	expect(
+		screen.getByTestId('reports-scope-strip').contains(screen.getByTestId('reports-period'))
+	).toBe(true);
+	expect(screen.getByTestId('reports-period')).toBeTruthy();
+	expect(screen.queryByTestId('legacy-register')).toBeNull();
+});
+it('can enter local Closures while the Sales handle has not answered', () => {
+	mockAnswered = false;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(mockClosureScope).toHaveBeenCalled();
+});
+
+// Revert: drop the inner boundary's onReset. A new sales query keeps the failed refunds handle,
+// and the reset would remount its reader over the old failure instead of asking again.
+it('a failed refunds read keeps the report, and the next sales query retries it', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		render(<ReportsScreen />);
+		const refunds = latestHandle('refunds');
+		expect(screen.getByTestId('reports-refunds-read')).toBeTruthy();
+
+		act(() => refunds.set({ error: new Error('refunds failed') }));
+		expect(screen.queryByTestId('reports-refunds-read')).toBeNull();
+		// The fallback is the report itself, without the refunds.
+		expect(screen.getByTestId('legacy-register')).toBeTruthy();
+
+		const retry = jest.fn(() => refunds.set({ error: null }));
+		refunds.retry = retry;
+		fireEvent.click(screen.getByTestId('legacy-register'));
+		expect(latestHandle('refunds')).toBe(refunds);
+		expect(retry).toHaveBeenCalled();
+		expect(screen.getByTestId('reports-refunds-read')).toBeTruthy();
+	} finally {
+		errors.mockRestore();
+	}
+});
+
+let mockRoute: Record<string, string | undefined> = {};
+const mockSetParams = jest.fn((params) => {
+	mockRoute = { ...mockRoute, ...params };
+});
+const mockOpenDrawer = jest.fn();
+jest.mock('expo-router', () => ({
+	useLocalSearchParams: () => mockRoute,
+	useRouter: () => ({ setParams: mockSetParams }),
+	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
+}));
+let mockPhone = true;
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
+jest.mock('@wcpos/components/button', () => ({
+	ButtonText: require('react-native').Text,
+	Button: ({
+		testID,
+		onPress,
+		children,
+	}: {
+		testID: string;
+		onPress: () => void;
+		children: React.ReactNode;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
+jest.mock('@wcpos/components/calendar', () => ({ Calendar: () => null }));
+jest.mock('@wcpos/components/popover', () => ({
+	Popover: ({ children }: React.PropsWithChildren) => children,
+	PopoverTrigger: ({ children }: React.PropsWithChildren) => children,
+	PopoverContent: () => null,
+}));
+// The page bar (menu, safe area, held-session banner) has its own suite.
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({ testID, title }: { testID: string; title?: string }) => (
+		<div data-testid={testID}>{title}</div>
+	),
+}));
+// Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
+it('opens the requested closure room and business day for Pro', () => {
+	mockPro = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	render(<ReportsScreen />);
+	expect(mockClosureScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			initialClosureId: 'c',
+			scope: expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' }),
+		})
+	);
+	expect(screen.getByTestId('reports-closures')).toBeTruthy();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(mockReadClosure).not.toHaveBeenCalled();
+	mockRoute = {};
+});
+
+// Revert: derive an unstamped closure route from closedAt instead of openedAt.
+it('opens an unstamped last closure on the day used by the local list', () => {
+	mockPro = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = {
+		closureId: 'legacy',
+		openedAt: '2026-09-16T23:00:00Z',
+		closedAt: '2026-09-17T01:00:00Z',
+		registerId: 'r',
+	};
+	render(<ReportsScreen />);
+	expect(mockClosureScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			initialClosureId: 'legacy',
+			scope: expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' }),
+		})
+	);
+	mockRoute = {};
+});
+
+// Revert: return bare denial text without the page bar (the drawer, the safe area, the
+// held-session banner: Codex review on #2611).
+it('gives a denied cashier the page bar above the denial without mounting report readers', () => {
+	mockCapabilities = [];
+	mockUseCollectionQueryHandle.mockClear();
+	mockClosureScope.mockClear();
+	render(<ReportsScreen />);
+	const bar = screen.getByTestId('reports-bar');
+	expect(bar.textContent).toBe('common.reports');
+	expect(bar.nextElementSibling).toBe(screen.getByTestId('reports-denied'));
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+});
+
+// Revert: treat an absent legacy capability payload as an explicit denial.
+it('keeps Sales and Closures accessible when capabilities are unknown', () => {
+	mockCapabilities = undefined;
+	render(<ReportsScreen />);
+	expect(screen.queryByTestId('reports-denied')).toBeNull();
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(mockClosureScope).toHaveBeenCalled();
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+});
+
+// Revert: retain the consumed closureId, or remount the shell when it is cleared.
+it('clears a closed deep link without leaving Closures or reopening it after Sales', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	const view = render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('close-closure'));
+	expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined });
+	view.rerender(<ReportsScreen />);
+	expect(screen.queryByTestId('legacy-register')).toBeNull();
+	fireEvent.click(screen.getByTestId('reports-back-sales'));
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(screen.queryByTestId('close-closure')).toBeNull();
+	// A later visit to the same deep link must still select it.
+	mockRoute = { ...mockRoute, closureId: 'c' };
+	view.rerender(<ReportsScreen />);
+	expect(screen.getByTestId('close-closure')).toBeTruthy();
+	mockRoute = {};
+});
+
+// Revert: restore the Pro overlay or leave Free Sales unscoped to its bound till.
+it('renders the Sales body for a Free cashier without the Pro overlay', () => {
+	mockPro = false;
+	mockStoreID = 9;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	try {
+		render(<ReportsScreen />);
+		expect(screen.getByTestId('legacy-register')).toBeTruthy();
+		expect(screen.queryByTestId('pro-preview')).toBeNull();
+		expect(screen.getByTestId('reports-period').querySelector('[data-icon="lock"]')).toBeTruthy();
+		expect(latestState().filters).toMatchObject({ register: 'r', store: '9' });
+	} finally {
+		mockPro = true;
+	}
+});
+
+// Revert: bind the comparison without copying the register, store and cashier scope.
+it('binds the comparison with the same filters and a shifted date range', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	const current = latestState();
+	const comparison = mockUseCollectionQueryHandle.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-1)![1] as QueryStateOf<'orders'>;
+	expect(comparison.filters).toEqual({ ...current.filters, dateRange: expect.any(Object) });
+	expect(comparison.filters.dateRange).not.toEqual(current.filters.dateRange);
+	expect(comparison.limit).toBe(current.limit);
+});
+
+// Inheriting the order's sort or room filters would violate the refunds browse lane's contract.
+it('binds refunds by their date alone with the supported sort', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	const state = mockUseCollectionQueryHandle.mock.calls.findLast(
+		([collection]) => collection === 'refunds'
+	)![1] as QueryStateOf<'refunds'>;
+	expect(state.filters).toEqual({ dateRange: latestState().filters.dateRange });
+	expect(state.sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
+	expect(state.limit).toBe(Number.MAX_SAFE_INTEGER);
+});
+
+// Revert: route Free through the room, or gate yesterday's local document by history.
+it.each([true, false])('opens a Free deep link over Sales (phone: %s)', async (phone) => {
+	mockPro = false;
+	mockPhone = phone;
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	const view = render(<ReportsScreen />);
+	await waitFor(() => expect(screen.getByTestId('closure-panel').textContent).toBe('c'));
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(mockClosureScope).not.toHaveBeenCalled();
+	expect(!!screen.queryByTestId('legacy-register')).toBe(!phone);
+	// The phone's page keeps the Sales bar above it: the bar pads the status-bar inset.
+	expect(screen.getByTestId('reports-back-sales')).toBeTruthy();
+	expect(mockReadClosure).toHaveBeenCalledTimes(1);
+	expect(mockReadClosure).toHaveBeenCalledWith(mockStoreDB, { id: 'c', serverClosureId: 'c' });
+	fireEvent.click(screen.getByTestId('closure-panel'));
+	expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined });
+	view.rerender(<ReportsScreen />);
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+it('clears a missing local Free closure without opening a pane or room', async () => {
+	mockPro = false;
+	mockRoute = { closureId: 'missing' };
+	mockReadClosure.mockResolvedValue(null);
+	render(<ReportsScreen />);
+	await waitFor(() => expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined }));
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.queryByTestId('reports-closures')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+// Revert: keep a failed local read as missing, clearing a link nothing proved absent.
+it('keeps a Free link whose local read failed, opening nothing', async () => {
+	mockPro = false;
+	mockRoute = { closureId: 'c' };
+	mockReadClosure.mockRejectedValue(new Error('storage closed'));
+	render(<ReportsScreen />);
+	await waitFor(() => expect(mockReadClosure).toHaveBeenCalledTimes(1));
+	// The rejection lands a tick later; a cleared link would call setParams from that render.
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockSetParams).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('closure-panel')).toBeNull();
+	expect(screen.getByTestId('legacy-register')).toBeTruthy();
+});
+// Revert: open the strip's door by id alone, so a closure this device never held clears itself.
+it.each([false, true])(
+	'routes the last-closure door with the register-panel params (Pro: %s)',
+	(pro) => {
+		mockPro = pro;
+		const view = render(<ReportsScreen />);
+		expect(!!screen.queryByTestId('till-closures')).toBe(pro);
+		fireEvent.click(screen.getByTestId('till-last-closure'));
+		expect(mockSetParams).toHaveBeenCalledWith({
+			closureId: 'c',
+			businessDay: '2026-09-16',
+			openedAt: '2026-09-16T09:00:00Z',
+			registerId: 'r',
+		});
+		if (pro) return;
+		// Free opens the row the strip drew, local or the server's, without a local read.
+		view.rerender(<ReportsScreen />);
+		expect(screen.getByTestId('closure-panel').textContent).toBe('c');
+		expect(mockReadClosure).not.toHaveBeenCalled();
+	}
+);
+
+it('All stores writes the sentinel and keeps the bound store day', () => {
+	mockStoreID = 21;
+	mockNextStoreID = 0;
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('past-scope'));
+	expect(latestState().filters).toMatchObject({
+		store: 'woocommerce-pos',
+		dateRange: { from: '2026-07-14T04:00:00.000Z', to: '2026-07-15T03:59:59.999Z' },
+	});
+	expect(mockBarScope).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 0 }));
 });

@@ -10,7 +10,10 @@ import type { TestPrintFailure } from './use-printer-dialog-form';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
+	View: jest.requireActual('react-native').View,
 }));
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -97,7 +100,7 @@ describe('TestPrintError', () => {
 	it('shows one actionable line instead of the attempt, reason and numbered suggestions', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
-		expect(screen.getByTestId('add-printer-test-error-line')).toHaveTextContent(
+		expect(screen.getByTestId('add-printer-test-error-title')).toHaveTextContent(
 			'The printer did not accept the job.'
 		);
 		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
@@ -109,7 +112,7 @@ describe('TestPrintError', () => {
 	it('maps a known transport failure to its line', () => {
 		render(<TestPrintError error={{ message: 'connect ECONNREFUSED', diagnostics: null }} />);
 
-		expect(screen.getByTestId('add-printer-test-error-line')).toHaveTextContent(
+		expect(screen.getByTestId('add-printer-test-error-title')).toHaveTextContent(
 			'The printer refused the connection. Check its network settings, then try again.'
 		);
 	});
@@ -118,6 +121,7 @@ describe('TestPrintError', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
 		const details = screen.getByTestId('add-printer-support-details');
+		expect(screen.getByTestId('add-printer-test-error')).not.toContainElement(details);
 		expect(details).toHaveTextContent('Vendor: Epson');
 		expect(details).toHaveTextContent('Host: localhost');
 		expect(details).toHaveTextContent('Configured port: 8043');

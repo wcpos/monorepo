@@ -2,11 +2,12 @@
  * @jest-environment jsdom
  */
 import { renderHook } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { of } from 'rxjs';
 
 import { recalculateCoupons } from './coupon-recalculate';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 
+let mockTaxRates: object[] = [];
 const engine = {
 	active: jest.fn(),
 };
@@ -15,30 +16,30 @@ jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({ engine }),
+	observeCatalogByWooIds: () =>
+		of({
+			available: true,
+			products: [{ remoteId: '82', payload: { tax_status: 'none' } }],
+			variations: [],
+		}),
 }));
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		store: {
-			woocommerce_calc_discounts_sequentially$: new BehaviorSubject('no'),
-			calc_discounts_sequentially$: new BehaviorSubject('no'),
-		},
-	}),
-}));
-
-jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: () => ({
-		rates: [],
+jest.mock('./use-cart-config', () => ({
+	useCartConfigReader: () => (payload: import('@wcpos/query').OrderPayload) => ({
+		rates: mockTaxRates,
 		pricesIncludeTax: false,
+		calcDiscountsSequentially: false,
 		taxRoundAtSubtotal: false,
-		priceNumDecimals: 2,
+		dp: 2,
+		vatExempt: jest.requireActual('@wcpos/sync-core').wooMetaCarrier.vatExempt(payload.meta_data),
 	}),
-}));
-
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => {
-		throw new Error('legacy storeDB read');
-	},
+	useCartConfig: () => ({
+		rates: mockTaxRates,
+		pricesIncludeTax: false,
+		calcDiscountsSequentially: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+	}),
 }));
 
 type EngineDocument = Record<string, unknown> & {
@@ -94,25 +95,42 @@ const lineItems = [
 
 function installEngineFixture(couponPayload: Record<string, unknown>, throwOnCouponToJSON = false) {
 	const coupon = engineDocument(
-		{ uuid: 'coupon-uuid', remoteId: '501', payload: couponPayload },
+		{ uuid: 'coupon-uuid', remoteId: '501', remoteKey: '501', payload: couponPayload },
 		throwOnCouponToJSON
 	);
 	const products = [
 		engineDocument({
 			uuid: 'product-83',
 			remoteId: '83',
+			remoteKey: '83',
 			payload: { id: 83, categories: [{ id: 19 }] },
 		}),
 		engineDocument({
 			uuid: 'product-82',
 			remoteId: '82',
+			remoteKey: '82',
 			payload: { id: 82, categories: [{ id: 17 }] },
 		}),
 	];
 	const categories = [
-		engineDocument({ uuid: 'category-16', remoteId: '16', payload: { id: 16, parent: 0 } }),
-		engineDocument({ uuid: 'category-17', remoteId: '17', payload: { id: 17, parent: 16 } }),
-		engineDocument({ uuid: 'category-19', remoteId: '19', payload: { id: 19, parent: 0 } }),
+		engineDocument({
+			uuid: 'category-16',
+			remoteId: '16',
+			remoteKey: '16',
+			payload: { id: 16, parent: 0 },
+		}),
+		engineDocument({
+			uuid: 'category-17',
+			remoteId: '17',
+			remoteKey: '17',
+			payload: { id: 17, parent: 16 },
+		}),
+		engineDocument({
+			uuid: 'category-19',
+			remoteId: '19',
+			remoteKey: '19',
+			payload: { id: 19, parent: 0 },
+		}),
 	];
 	const couponFind = jest.fn(() => ({ exec: async () => [coupon] }));
 	const productFind = jest.fn(() => ({ exec: async () => products }));
@@ -170,9 +188,11 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 		expect(reads.productFind).toHaveBeenCalledWith({
-			selector: { remoteId: { $in: ['83', '82'] } },
+			selector: { remoteKey: { $in: ['83', '82'] } },
 		});
 		expect(reads.categoryFind).toHaveBeenCalledWith();
 	});
@@ -199,7 +219,9 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 	});
 
 	it('builds the replay config directly from the coupon record payload', async () => {
@@ -228,6 +250,75 @@ describe('useRecalculateCoupons engine reads', () => {
 		});
 		const { result } = renderHook(() => useRecalculateCoupons());
 
-		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+		await expect(
+			result.current.recalculate({ line_items: lineItems }, couponLines)
+		).resolves.toEqual(expected);
 	});
+});
+
+it.each(['missing', 'mixed', 'collision'])('resolves virtual coupons: %s', async (mode) => {
+	const reads = installEngineFixture({
+		code: mode === 'collision' ? 'pos-discount' : 'real',
+		...couponConfig({ amount: '1' }),
+	});
+	if (mode === 'missing') reads.couponFind.mockReturnValue({ exec: async () => [] });
+	const virtual = {
+		code: 'pos-discount',
+		discount: '0',
+		discount_tax: '0',
+		meta_data: [
+			{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+		],
+	};
+	const coupons = mode === 'mixed' ? [virtual, { code: 'real', meta_data: [] }] : [virtual];
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const recalculated = await result.current.recalculate({ line_items: lineItems }, coupons);
+	expect(recalculated.couponLines[0]).toEqual(
+		expect.objectContaining({ discount: '3.6', meta_data: virtual.meta_data })
+	);
+	expect(recalculated.lineItems.map((line) => line.total)).toEqual(
+		mode === 'mixed' ? ['15.2', '15.2'] : ['16.2', '16.2']
+	);
+	if (mode === 'mixed') expect(recalculated.couponLines[1].discount).toBe('2');
+	expect(reads.couponFind).toHaveBeenCalledTimes(1);
+});
+
+it('throws when an active coupon record has an unknown discount_type', async () => {
+	installEngineFixture({ code: 'broken', discount_type: 'unknown', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	await expect(
+		result.current.recalculate({ line_items: lineItems }, [{ code: 'broken' }])
+	).rejects.toThrow('Coupon "broken" not found in local collection');
+});
+
+it('recalculates using the target payload exemption, not the rendered config', async () => {
+	mockTaxRates = [{ id: 1, rate: '10', class: 'standard' }];
+	installEngineFixture({ code: 'ten', discount_type: 'percent', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const payload = { meta_data: [{ key: 'is_vat_exempt', value: 'yes' }] };
+	const taxed = lineItems.map((line) => ({
+		...line,
+		subtotal_tax: '1.8',
+		total_tax: '1.8',
+		taxes: [{ id: 1, total: '1.8', subtotal: '1.8' }],
+	}));
+	const replay = await result.current.recalculate({ ...payload, line_items: taxed }, [
+		{ code: 'ten' },
+	]);
+	expect(replay.lineItems.map((line) => line.total_tax)).toEqual(['0', '0']);
+	expect(replay.couponLines[0].discount_tax).toBe('0');
+});
+
+it('keeps a catalog-none web line untaxed through coupon recalculation', async () => {
+	mockTaxRates = [{ id: 1, rate: '10', class: 'standard' }];
+	installEngineFixture({ code: 'ten', discount_type: 'percent', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const replay = await result.current.recalculate(
+		{
+			line_items: [{ ...lineItems[1], meta_data: [] }],
+		},
+		[{ code: 'ten' }]
+	);
+	expect(replay.lineItems[0].total_tax).toBe('0');
+	expect(replay.couponLines[0].discount_tax).toBe('0');
 });

@@ -1,5 +1,5 @@
 // Mock react-native primitives hooks to avoid ESM issues
-import { cn, getFlexAlign, getTailwindJustifyClass } from './utils';
+import { cn, getFlexAlign } from './utils';
 
 jest.mock('@rn-primitives/hooks', () => ({
 	useComposedRefs: jest.fn(),
@@ -8,6 +8,19 @@ jest.mock('@rn-primitives/hooks', () => ({
 
 describe('lib/utils', () => {
 	describe('cn', () => {
+		it.each([
+			['rounded-field', 'rounded-control'],
+			['rounded-control', 'rounded-lg'],
+			['rounded-l-chip', 'rounded-l-none'],
+			['font-ui', 'font-normal'],
+			['font-semibold', 'font-strong'],
+			['font-strong', 'font-commit'],
+			['shadow-commit', 'shadow-none'],
+			['active:shadow-commit-press', 'active:shadow-none'],
+		])('merges theme utility %s with %s', (first, last) => {
+			expect(cn(first, last)).toBe(last);
+		});
+
 		it('should merge class names', () => {
 			const result = cn('class1', 'class2');
 			expect(result).toContain('class1');
@@ -27,11 +40,45 @@ describe('lib/utils', () => {
 			expect(result).toContain('valid');
 		});
 
+		it('lets a later animation of ours replace an earlier one', () => {
+			expect(cn('web:animate-pop-in', 'web:animate-quantity-grow')).toBe(
+				'web:animate-quantity-grow'
+			);
+		});
+
+		it('keeps the amount size beside a text colour', () => {
+			// `amt` is a font-size token, not a colour: neither class may drop the other.
+			expect(cn('text-foreground text-amt').split(' ').sort()).toEqual([
+				'text-amt',
+				'text-foreground',
+			]);
+			expect(cn('text-amt text-foreground').split(' ').sort()).toEqual([
+				'text-amt',
+				'text-foreground',
+			]);
+			expect(cn('text-amt text-base')).toBe('text-base');
+		});
+
 		it('should merge tailwind classes correctly', () => {
 			// twMerge should handle conflicting tailwind classes
 			const result = cn('p-4', 'p-2');
 			// Should keep the last one
 			expect(result).toBe('p-2');
+		});
+
+		it('lets glyph size replace control dimensions', () => {
+			const result = cn('h-ctl w-ctl items-center', 'size-4.5');
+			expect(result.split(' ')).toContain('size-4.5');
+			expect(result.split(' ')).not.toContain('h-ctl');
+			expect(result.split(' ')).not.toContain('w-ctl');
+		});
+
+		it.each([
+			['h-10', 'h-ctl'],
+			['h-ctl', 'h-10'],
+			['min-w-ctl', 'min-w-0'],
+		])('merges %s with %s', (first, last) => {
+			expect(cn(first, last)).toBe(last);
 		});
 
 		it('should handle empty inputs', () => {
@@ -49,25 +96,6 @@ describe('lib/utils', () => {
 			const result = cn({ active: true, disabled: false });
 			expect(result).toContain('active');
 			expect(result).not.toContain('disabled');
-		});
-	});
-
-	describe('getTailwindJustifyClass', () => {
-		it('should return justify-start for left', () => {
-			expect(getTailwindJustifyClass('left')).toBe('justify-start');
-		});
-
-		it('should return justify-end for right', () => {
-			expect(getTailwindJustifyClass('right')).toBe('justify-end');
-		});
-
-		it('should return justify-center for center', () => {
-			expect(getTailwindJustifyClass('center')).toBe('justify-center');
-		});
-
-		it('should return empty string for invalid input', () => {
-			// @ts-expect-error - testing invalid input
-			expect(getTailwindJustifyClass('invalid')).toBe('');
 		});
 	});
 

@@ -1,11 +1,16 @@
 import { Subject } from 'rxjs';
 
-import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+import type { StoreDocument } from '@wcpos/database';
+import type { ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
 import { storeListResource } from './store-list-resource';
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: () => unknown }) => credentials.populate$(),
+}));
 
 const credentialsWith = (source: Subject<StoreDocument[]>) =>
-	({ populate$: () => source.asObservable() }) as unknown as WPCredentialsDocument;
+	({ populate$: () => source.asObservable() }) as unknown as ReadonlyWpCredentialsRecord;
 
 describe('storeListResource', () => {
 	it('hands back the same resource for the same credentials document', () => {
@@ -30,7 +35,7 @@ describe('storeListResource', () => {
 				subscribes++;
 				return new Subject<StoreDocument[]>().asObservable();
 			},
-		} as unknown as WPCredentialsDocument;
+		} as unknown as ReadonlyWpCredentialsRecord;
 
 		storeListResource(credentials);
 		storeListResource(credentials);

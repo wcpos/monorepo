@@ -5,6 +5,17 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
+		// The rn-primitives builds ship JSX, so no suite could load one unmocked. A suite that
+		// needs the browser behaviour (hover versus press, monorepo#2284) loads the web build.
+		// Listed first: the first matching pattern wins.
+		'/node_modules/@rn-primitives/.+\\.js$': [
+			'babel-jest',
+			{
+				babelrc: false,
+				configFile: false,
+				plugins: ['@babel/plugin-transform-react-jsx', '@babel/plugin-transform-modules-commonjs'],
+			},
+		],
 		'^.+\\.js$': [
 			'babel-jest',
 			{
@@ -18,6 +29,7 @@ module.exports = {
 		// here; everything else goes through ts-jest. The patterns are mutually
 		// exclusive so transformer pick order can't matter.
 		//
+		// The v2 table is compiled for the same store-subscription reason.
 		// data-table/index.tsx joined this list with the react-table v9 migration:
 		// its useTableWrapper used to return `{ ...useReactTable(...) }`, and that
 		// spread is illegal in v9 (methods live on prototypes now). The spread was
@@ -25,13 +37,20 @@ module.exports = {
 		// kept React Compiler from serving a stale memo. v9's store subscription
 		// is supposed to make that unnecessary — compiling this file the way the
 		// app compiles it is what actually holds that claim to account.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$':
+		//
+		// settings/customer-display/index.tsx joined with the cold-load pairing bug
+		// (wcpos/roadmap#129): the compiler cached a module-level service read
+		// behind a memo sentinel, so the screen never saw the service that started
+		// after it mounted. Uncompiled, the same component passed every test.
+		// Reader dev controls (now on the Card readers settings row) must refresh mutable driver state under compiler memoization too.
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|rows|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|rows|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
+	// react-hotkeys-hook v5 ships ESM only; the hotkeys module's suite drives the real library.
 	transformIgnorePatterns: [
-		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/)',
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/|react-hotkeys-hook/|@shopify/flash-list/)',
 	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
@@ -47,13 +66,20 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
+		'\\.(ttf|otf)$': '<rootDir>/jest/__mocks__/font.js',
+		'^@wcpos/database/create-db$': '<rootDir>/../query/tests/__mocks__/create-db.ts',
+		'^expo-crypto$': '<rootDir>/../query/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/core-test/mock-use-doc-field$': '<rootDir>/jest/mock-use-doc-field.js',
+		'^@wcpos/core-test/fake-query-handle$': '<rootDir>/jest/fake-query-handle.js',
 		// Mock logger modules (must come before generic @wcpos/utils matcher)
 		'^@wcpos/utils/logger$': '<rootDir>/jest/__mocks__/@wcpos/utils/logger.js',
 		// Other mocks
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
+		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',
+		'^react-native-reanimated$': '<rootDir>/jest/__mocks__/react-native-reanimated.js',
 		'^expo-modules-core$': '<rootDir>/jest/__mocks__/expo-modules-core.js',
 		'^react-native$': 'react-native-web',
+		'^react-native-svg$': '<rootDir>/jest/__mocks__/react-native-svg.js',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
 		'^@wcpos/scanner$': '<rootDir>/../scanner/src/index.ts',
 		'^@wcpos/scanner/(.*)$': '<rootDir>/../scanner/src/$1',
@@ -67,6 +93,9 @@ module.exports = {
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',
+		// Same reason as app-info: the till anchor's default variant is the native
+		// marker file (expo-file-system, ESM); the register document imports it.
+		'^@wcpos/database/till-anchor$': '<rootDir>/../database/src/till-anchor.web',
 		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 		'^@wcpos/hooks/(.*)$': '<rootDir>/../hooks/src/$1',
 	},

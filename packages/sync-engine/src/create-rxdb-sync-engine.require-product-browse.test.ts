@@ -113,8 +113,132 @@ async function productIds(engine: RxdbSyncEngine): Promise<number[]> {
 		.sort((a, b) => a - b);
 }
 
+/** Past the one-microtask release grace: a release with no redeclare by now is abandoned. */
+const afterTheGrace = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A products server whose browse pages hang until aborted or opened; records every signal. */
+function heldProductServer() {
+	const page = Promise.withResolvers<Response>();
+	const signals: AbortSignal[] = [];
+	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+		if (!new URL(url).pathname.endsWith('/products')) return json([]);
+		const signal = init?.signal;
+		if (!signal) throw new Error('product request did not receive an abort signal');
+		signals.push(signal);
+		return await new Promise<Response>((resolve, reject) => {
+			signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+			void page.promise.then(resolve);
+		});
+	};
+	return { signals, fetch, open: () => page.resolve(json([productPayload(1, 0, '10')], 1)) };
+}
+
 describe('require() for the products browse window', () => {
-	it('fetches an identical requirement immediately after releasing an in-flight fetch', async () => {
+	it('releasing and redeclaring the same browse window in one tick keeps the in-flight fetch (no abort, no second request)', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const server = heldProductServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		const first = engine.require({
+			id: 'browse-render-1',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await vi.waitFor(() => expect(server.signals).toHaveLength(1));
+		// The grid's re-render (a keystroke in the search box): the old handle releases and
+		// the identical window is redeclared in the same synchronous effect pass.
+		first.release();
+		const second = engine.require({
+			id: 'browse-render-2',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await afterTheGrace();
+		expect(server.signals[0]!.aborted).toBe(false);
+
+		server.open();
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(second.ready).resolves.toMatchObject({ action: 'fetched', documents: 1 });
+		expect(server.signals).toHaveLength(1);
+		expect(server.signals[0]!.aborted).toBe(false);
+		await engine.dispose();
+	});
+
+	it('a redeclare after the grace, or a different window, still abandons', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const server = heldProductServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		const late = engine.require({
+			id: 'late',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await vi.waitFor(() => expect(server.signals).toHaveLength(1));
+		late.release();
+		await afterTheGrace();
+		expect(server.signals[0]!.aborted).toBe(true);
+
+		const unfiltered = engine.require({
+			id: 'unfiltered',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await vi.waitFor(() => expect(server.signals).toHaveLength(2));
+		unfiltered.release();
+		const inStock = engine.require({
+			id: 'in-stock',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+			stock_status: 'instock',
+		});
+		await afterTheGrace();
+		expect(server.signals[1]!.aborted).toBe(true);
+
+		server.open();
+		await expect(inStock.ready).resolves.toMatchObject({ action: 'fetched' });
+		await engine.dispose();
+	});
+
+	it("a browse declared after a scope switch does not join the previous scope's in-flight browse (it fetches for its own scope)", async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const server = heldProductServer();
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		const window = { collection: 'products', kind: 'product-browse', limit: 10 } as const;
+		const before = engine.require({ id: 'browse-scope-a', ...window });
+		const beforeSettled = before.ready.catch(() => undefined);
+		await vi.waitFor(() => expect(server.signals).toHaveLength(1));
+
+		// Declared the instant the switch lands, while the old scope's execution is still
+		// unwinding: the new scope's screen re-renders on the switch event.
+		let after: ReturnType<RxdbSyncEngine['require']> | undefined;
+		const stop = engine.events((event) => {
+			if (event.type === 'scope-switched')
+				after = engine.require({ id: 'browse-scope-b', ...window });
+		});
+		await engine.scope.switch(freshIdentity());
+		stop();
+		await vi.waitFor(() => expect(server.signals).toHaveLength(2));
+
+		server.open();
+		await expect(after!.ready).resolves.toMatchObject({ action: 'fetched', documents: 1 });
+		await beforeSettled;
+		expect(await productIds(engine)).toEqual([1]);
+		await engine.dispose();
+	});
+
+	it('fetches an identical requirement immediately after releasing an in-flight fetch past the grace', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
 		let firstSignal: AbortSignal | null | undefined;
@@ -139,6 +263,7 @@ describe('require() for the products browse window', () => {
 		});
 		await vi.waitFor(() => expect(firstSignal).toBeDefined());
 		first.release();
+		await afterTheGrace();
 		const second = engine.require({
 			id: 'browse-successor',
 			collection: 'products',
@@ -184,6 +309,7 @@ describe('require() for the products browse window', () => {
 		});
 		await vi.waitFor(() => expect(firstSignal).toBeDefined());
 		first.release();
+		await afterTheGrace();
 		const second = engine.require({
 			id: 'browse-released-successor',
 			collection: 'products',

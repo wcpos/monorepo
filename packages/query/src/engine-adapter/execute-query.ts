@@ -10,6 +10,7 @@ import {
 	readEnginePath,
 	resolveLegacyField,
 } from './collection-map';
+import { normalizeSelectorSemantics } from './normalize-selector';
 import { type LegacyMangoSelector, translateSelector } from './translate-selector';
 
 import type { MangoQuerySelector, MangoQuerySortPart, RxDocument, RxJsonSchema } from 'rxdb';
@@ -86,8 +87,9 @@ function comparableValue(
 	return projected;
 }
 
-function compareValues(left: unknown, right: unknown): number {
-	if (Object.is(left, right)) {
+/** Missing and null tie before every value; subsequent sort parts, then uuid, break the tie. */
+function compareValues(left: unknown, right: unknown, codePoint = false): number {
+	if (Object.is(left, right) || (left == null && right == null)) {
 		return 0;
 	}
 	if (left === undefined || left === null) {
@@ -109,6 +111,15 @@ function compareValues(left: unknown, right: unknown): number {
 	// tiebreak), never to case. The uuid fallback keeps the overall sort total.
 	const leftString = String(left);
 	const rightString = String(right);
+	if (codePoint) {
+		const leftPoints = Array.from(leftString);
+		const rightPoints = Array.from(rightString);
+		for (let index = 0; index < Math.min(leftPoints.length, rightPoints.length); index++) {
+			const difference = leftPoints[index].codePointAt(0)! - rightPoints[index].codePointAt(0)!;
+			if (difference !== 0) return difference;
+		}
+		return leftPoints.length - rightPoints.length;
+	}
 	return CASHIER_STRING_COLLATOR.compare(leftString, rightString);
 }
 
@@ -150,7 +161,8 @@ function sortDocuments(
 			}
 			const comparison = compareValues(
 				comparableValue(collection, left, legacyField),
-				comparableValue(collection, right, legacyField)
+				comparableValue(collection, right, legacyField),
+				mapping.enginePath === 'sortName'
 			);
 			if (comparison !== 0) {
 				return direction === 'desc' ? -comparison : comparison;
@@ -160,7 +172,7 @@ function sortDocuments(
 	});
 }
 
-function sortCompiledDocuments(
+export function sortCompiledDocuments(
 	documents: EngineRxDocument[],
 	sort: CompiledSortPart[]
 ): EngineRxDocument[] {
@@ -175,7 +187,11 @@ function sortCompiledDocuments(
 				if (comparison !== 0) return comparison;
 				continue;
 			}
-			const comparison = compareValues(part.value(left), part.value(right));
+			const comparison = compareValues(
+				part.value(left),
+				part.value(right),
+				part.enginePath === 'sortName'
+			);
 			if (comparison !== 0) return part.direction === 'desc' ? -comparison : comparison;
 		}
 		return String(left.uuid).localeCompare(String(right.uuid));
@@ -222,11 +238,13 @@ export function executeAdapterQuery({
 	const compiledWithSearch = read && Object.keys(selector).length > 0;
 	const selectorRead =
 		!read || compiledWithSearch ? translateSelector(collection, selector) : undefined;
-	const prefilter = read
-		? ((compiledWithSearch
-				? { $and: [read.prefilter, selectorRead!.prefilter] }
-				: read.prefilter) as MangoQuerySelector<EngineDocument>)
-		: selectorRead!.prefilter;
+	const prefilter = normalizeSelectorSemantics(
+		read
+			? ((compiledWithSearch
+					? { $and: [read.prefilter, selectorRead!.prefilter] }
+					: read.prefilter) as MangoQuerySelector<EngineDocument>)
+			: selectorRead!.prefilter
+	) as MangoQuerySelector<EngineDocument>;
 	const residual = read
 		? (document: EngineDocument) =>
 				read.residual(document) && (!compiledWithSearch || selectorRead!.residual(document))
@@ -282,12 +300,10 @@ export function executeAdapterQuery({
 			Object.keys(prefilter).length > 0
 				? getQueryMatcher(schema, normalizeMangoQuery(schema, { selector: prefilter }))
 				: undefined;
-		// A pushable sort was the STORAGE's order before this path existed (code-unit
-		// order on the index string, 'Zoo' before 'apple'); keep it byte-for-byte so a
-		// panel never orders differently with and without a search term. Non-pushable
-		// sorts already went through the JS sorters below.
+		// sortName follows SQLite code-point order, not RxDB's UTF-16 comparator.
+		// Other pushable sorts retain the existing storage comparator.
 		const storageOrder =
-			complete && engineSort.pushable
+			complete && engineSort.pushable && !engineSort.sort.some((part) => 'sortName' in part)
 				? getSortComparator(
 						schema,
 						normalizeMangoQuery(schema, {

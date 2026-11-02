@@ -2,37 +2,24 @@ import * as React from 'react';
 import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import get from 'lodash/get';
 import { useCSSVariable } from 'uniwind';
 
 import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
-import { Loader } from '../loader';
-import { TextClassContext } from '../text';
-import * as Svgs from './components/fontawesome/solid';
+import { Loader, Spin } from '../loader';
+import { TextClassContext } from '../text/context';
+import { useIconSet } from './set-context';
+import { ICON_SETS } from './sets';
 
-import type { SvgProps } from 'react-native-svg';
+import type { IconName } from './names';
 
-export type IconName = Extract<keyof typeof Svgs, string>;
-
-/**
- * Map variant to CSS variable name for SVG fill colors
- */
-const variantToCSSVariable: Record<string, string> = {
-	default: '--color-foreground',
-	primary: '--color-primary',
-	destructive: '--color-destructive',
-	secondary: '--color-secondary',
-	muted: '--color-muted-foreground',
-	success: '--color-success',
-	error: '--color-error',
-	warning: '--color-warning',
-	info: '--color-info',
-	accent: '--color-accent-foreground',
-	attention: '--color-attention',
-};
+export type { IconName } from './names';
+export type { IconSetId } from './sets';
+export { ICON_SET_IDS, DEFAULT_ICON_SET, ICON_SETTING_AUTO } from './sets';
+export { IconSetProvider, useIconSet } from './set-context';
 
 /**
  * We need to make the icons bigger for native apps
@@ -42,13 +29,12 @@ const iconVariants = cva('inset-0 content-center items-center', {
 		variant: {
 			default: '',
 			primary: 'text-primary',
-			destructive: 'text-destructive',
 			secondary: 'text-secondary',
-			muted: 'text-muted-foreground',
-			success: 'text-success',
-			error: 'text-error',
-			warning: 'text-warning',
-			info: 'text-info',
+			muted: TONE.muted.text,
+			ok: TONE.ok.text,
+			bad: TONE.bad.text,
+			warning: TONE.warning.text,
+			info: TONE.info.text,
 			accent: 'text-accent-foreground',
 			attention: 'text-attention',
 		},
@@ -71,7 +57,14 @@ const iconVariants = cva('inset-0 content-center items-center', {
 
 export type IconProps = VariantProps<typeof iconVariants> & {
 	name: IconName;
+	/** Swap the glyph for the Loader: a wait in the glyph's place. */
 	loading?: boolean;
+	/**
+	 * Turn the glyph itself while true, and rest it upright when done (`loader/spin.tsx`): for a glyph
+	 * that reads as motion (refresh, sync), where swapping it for the Loader jars. `undefined`
+	 * mounts no animation at all; a glyph that may spin passes a boolean.
+	 */
+	spin?: boolean;
 	fill?: string;
 	className?: string;
 	pointerEvents?: ViewProps['pointerEvents'];
@@ -85,23 +78,21 @@ export function Icon({
 	variant = 'default',
 	size,
 	loading,
+	spin,
 	className,
 	fill,
 	pointerEvents,
 	...props
 }: IconProps) {
-	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
+	const set = useIconSet();
+	const Svg = ICON_SETS[set][name] ?? ICON_SETS[set].alert;
 	const textClass = React.useContext(TextClassContext);
 
 	// Combine all classNames to find the effective text color
 	// Order matters: textClass (from context like Button) → iconVariants → className (explicit override)
 	const combinedClassName = cn(textClass, iconVariants({ variant, size }), className);
 
-	// Extract CSS variable from className, falling back to variant's default
-	const cssVariable =
-		getColorVariableFromClassName(combinedClassName) ||
-		variantToCSSVariable[variant ?? 'default'] ||
-		'--color-foreground';
+	const cssVariable = getColorVariableFromClassName(combinedClassName) || '--color-foreground';
 
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
 	const resolvedColor = useCSSVariable(cssVariable);
@@ -125,15 +116,19 @@ export function Icon({
 	const svgColor =
 		fill || (Platform.isWeb || Platform.isElectron ? 'currentColor' : String(resolvedColor ?? ''));
 
+	const glyph = (
+		<Svg
+			width="100%"
+			height="100%"
+			fill={svgColor}
+			color={svgColor}
+			pointerEvents={pointerEvents}
+		/>
+	);
+
 	return (
 		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
-			<Svg
-				width="100%"
-				height="100%"
-				fill={svgColor}
-				color={svgColor}
-				pointerEvents={pointerEvents}
-			/>
+			{spin === undefined ? glyph : <Spin active={spin}>{glyph}</Spin>}
 		</View>
 	);
 }

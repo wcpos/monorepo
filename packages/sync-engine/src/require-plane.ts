@@ -11,6 +11,7 @@
  *  - `refresh` (greedy-prunable / upsert-refresh collections): one re-pull of
  *    the small collection (that IS the lane's coverage contract).
  *  - A higher-priority requirement enqueued behind a lower one runs FIRST
+ *    within its lane — typed searches and everything else pump separately
  *    (the queue re-sorts on every enqueue; only an explicit release aborts
  *    in-flight foreground scheduler work).
  *  - `release()` removes queued work or aborts an active foreground execution;
@@ -61,12 +62,15 @@ import {
 	parseCustomerBrowseWindowDescriptor,
 	parseOrderBrowserSchedulerDescriptor,
 	parseProductBrowseWindowDescriptor,
+	parseRefundBrowserSchedulerDescriptor,
 	type PersistedSchedulerTaskOutcomeKind,
 	type PersistedSchedulerTaskRunnerResult,
 	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKeyFromDimensions,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
+	refundBrowserQueryKey,
+	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
@@ -76,9 +80,13 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundBrowseSchedulerTask,
+	seedRefundParentLane,
+	seedRefundWindowLane,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
 import { createDemandFloodDetector } from './demand-flood-detector';
+import { withOrderReadopt } from './write-path/order-revision';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
@@ -97,7 +105,7 @@ const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
  * A require execution that has made no drain progress for this long is STALLED and is
  * abandoned: its entry is aborted, its declarers are rejected, and the pump moves on.
  *
- * The pump below is a SERIAL loop, so before this existed one execution whose await never
+ * Each lane's pump below is a SERIAL loop, so before this existed one execution whose await never
  * settled starved every queued requirement forever, with no diagnostic at all. Run
  * 33445432662 (Android phone, flow 07, 2026-08-31): after the last search outcome at
  * 23:41:54 the pump completed ZERO requirements for the job's final 38 minutes — the
@@ -159,6 +167,15 @@ type EngineRequirementCommon = {
 	/** Re-fetch targeted records even when they are already resident. Used by
 	 * explicit refresh/re-anchor flows; ordinary requirements stay coverage-aware. */
 	forceRefresh?: boolean;
+	/** Orders only, with `forceRefresh`: adopt the fetched documents even under an equal stamp
+	 * (ADR 0040 §1.3's corrective refresh). */
+	readopt?: boolean;
+};
+
+export type RefundBrowseDimensions = {
+	after: number;
+	before: number;
+	limit?: number | 'all';
 };
 
 export type OrderBrowseDimensions = {
@@ -174,6 +191,9 @@ export type OrderBrowseDimensions = {
 	limit?: number | 'all';
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
+	/** Gateway id: 1–64 case-preserving letters, digits, underscores, dots or hyphens. */
+	paymentMethod?: string;
 	/** Numeric store id or created_via slug (/^[a-z0-9_-]+$/). */
 	store?: string;
 	/** date_created_gmt range bounds, epoch seconds. */
@@ -200,6 +220,9 @@ export type ProductBrowseDimensions = {
 	featured?: boolean;
 	on_sale?: boolean;
 	stock_status?: 'instock' | 'outofstock' | 'onbackorder';
+	min_price?: number;
+	max_price?: number;
+	type?: 'simple' | 'variable' | 'grouped' | 'external';
 };
 
 /**
@@ -222,6 +245,7 @@ export type CustomerBrowseDimensions = {
  */
 export type EngineRequirement = EngineRequirementCommon &
 	(
+		| { kind: 'refunds-by-parent'; collection: 'refunds'; parentRemoteId: RemoteId }
 		| { kind: 'targeted-records'; collection: SyncCollectionName; remoteIds: RemoteId[] }
 		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
 		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
@@ -232,12 +256,16 @@ export type EngineRequirement = EngineRequirementCommon &
 				orderby?: string;
 				order?: 'asc' | 'desc';
 		  }
+		| ({ kind: 'refunds-browse'; collection: 'refunds' } & RefundBrowseDimensions)
 		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
 		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
 		| ({ kind: 'customer-browse'; collection: 'customers' } & CustomerBrowseDimensions)
 	);
 
 export type CoverageOutcome = {
+	/** Remote IDs confirmed by targeted pulls, not merely requested or received. */
+	appliedRecordIds?: string[];
+	prunedRecordIds?: string[];
 	action: 'serve-local' | 'fetched' | 'released';
 	missingRecordIds: RemoteId[];
 	reason: string;
@@ -258,6 +286,7 @@ export type RequirePlaneDeps = {
 	admitted: () => Promise<ScopeBound>;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
@@ -315,7 +344,7 @@ type InternalRequirement =
 	| EngineRequirement
 	| (EngineRequirementCommon & {
 			kind: 'query';
-			collection: 'orders' | 'products' | 'customers';
+			collection: 'orders' | 'products' | 'customers' | 'refunds';
 			queryKey: string;
 	  });
 
@@ -324,7 +353,7 @@ type QueuedRequirement = {
 	priority: number;
 	seq: number;
 	subscribers: Set<RequirementSubscriber>;
-	searchDedupeKey: string | null;
+	dedupeKey: string | null;
 	predecessor?: QueuedRequirement;
 	released: boolean;
 	started: boolean;
@@ -487,7 +516,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		...(deps.now !== undefined ? { now: deps.now } : {}),
 	});
 	const queue: QueuedRequirement[] = [];
-	const activeSearches = new Map<string, QueuedRequirement>();
+	const activeByDedupeKey = new Map<string, QueuedRequirement>();
 	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfills' ordering signal. */
 	const activeScope = () => deps.manager.activeScope;
 	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
@@ -502,15 +531,27 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// and maintenance completions never count.
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
-	let running = false;
+	// Two lanes, each one execution at a time. A typed search must not queue behind the
+	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
+	// Searches stay serial among themselves, so a newer search still supersedes the older
+	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
+	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
+	type Lane = 'search' | 'durable';
+	const running: Record<Lane, boolean> = { search: false, durable: false };
+	const laneOf = (entry: QueuedRequirement): Lane =>
+		entry.requirement.kind === 'search' ? 'search' : 'durable';
 	// Requirement stalls with no requirement completing in between, stamped on
 	// coverage.require.stalled: the screen re-declares a stalled requirement, so
 	// one stall is an attempt; repeated ones (storage that never settles, a walk
 	// that never progresses) have no other row and must reach the merchant.
 	// Replaced on every scope activation; each execution settles the instance it
 	// started with, so a scope-A execution timing out after the switch to B
-	// never counts toward B's streak.
-	const stallStreaks = scopeBoundFailureStreak(deps.manager);
+	// never counts toward B's streak. One per lane: a search completing must not
+	// reset a durable lane's streak of stalls.
+	const stallStreaks = {
+		search: scopeBoundFailureStreak(deps.manager),
+		durable: scopeBoundFailureStreak(deps.manager),
+	};
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
@@ -520,20 +561,31 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// its walk already covers. Wider-than-started declarations queue a successor instead.
 	// Invalid limits stay outside coalescing so every declaration keeps its own validation
 	// outcome; force-refresh is part of identity because it must never inherit serve-local.
-	const searchDedupeKey = (requirement: InternalRequirement): string | null => {
+	const dedupeKeyOf = (requirement: InternalRequirement): string | null => {
+		// Browse windows get the same rejoin-within-grace as searches: they are UI-declared
+		// (re-declared on every render) and their queryKey IS the wire identity, so a grid
+		// re-render while the boot window is in flight rejoins it instead of aborting it and
+		// re-sending page=1. Kinds with no such key (targeted-records, refresh, refunds-by-
+		// parent) keep the immediate abort: nothing could rejoin them within the grace.
+		// The (scope, epoch) ticket guardWrite checks: a declaration after a store switch must
+		// never join the previous scope's execution, whose writes that switch drops.
+		const scope = `${deps.manager.activeScope}\u0000${deps.manager.epoch}`;
+		if (requirement.kind === 'query') {
+			return `${scope}\u0000query\u0000${requirement.collection}\u0000${requirement.queryKey}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+		}
 		if (requirement.kind !== 'search') return null;
 		const limit = searchLimitOf(requirement);
 		if (!Number.isSafeInteger(limit) || limit <= 0) return null;
-		return `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+		return `${scope}\u0000${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
 	};
-	const forgetSearch = (item: QueuedRequirement): void => {
-		if (item.searchDedupeKey && activeSearches.get(item.searchDedupeKey) === item) {
-			activeSearches.delete(item.searchDedupeKey);
+	const forgetDedupeKey = (item: QueuedRequirement): void => {
+		if (item.dedupeKey && activeByDedupeKey.get(item.dedupeKey) === item) {
+			activeByDedupeKey.delete(item.dedupeKey);
 		}
 	};
 	const abandon = (entry: QueuedRequirement): void => {
 		entry.released = true;
-		forgetSearch(entry);
+		forgetDedupeKey(entry);
 		entry.abortController.abort(
 			new DOMException('Requirement released during drain', 'AbortError')
 		);
@@ -546,7 +598,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		}
 	};
 	/**
-	 * The deferred half of `release()` for dedupeable searches (#1221). By the time this
+	 * The deferred half of `release()` for dedupeable entries (#1221). By the time this
 	 * microtask runs, a same-tick redeclare (React releases the old handles and redeclares
 	 * in one synchronous effect pass) has either rejoined the entry — keep it — or queued a
 	 * wider successor behind it — let the in-flight walk finish, because its pages record
@@ -557,8 +609,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		if (entry.released || entry.subscribers.size > 0) return;
 		if (
 			entry.started &&
-			entry.searchDedupeKey !== null &&
-			activeSearches.get(entry.searchDedupeKey) !== entry
+			entry.dedupeKey !== null &&
+			activeByDedupeKey.get(entry.dedupeKey) !== entry
 		) {
 			return;
 		}
@@ -742,7 +794,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	): Promise<RemoteId[]> {
 		const collection = db.collections[d.collection] as RxCollection;
 		const docs = await collection
-			.find({ selector: { [d.wooIdField]: { $in: remoteIds } } as never })
+			.find({ selector: { remoteKey: { $in: remoteIds } } as never })
 			.exec();
 		const present = new Set(
 			docs
@@ -830,6 +882,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			/** One drain tick carrying the require-plane's invariant arguments. */
 			const drainScheduler = (overrides: RequirementDrainOverrides = {}) =>
 				runEngineSchedulerDrain({
+					scope: { storeId: deps.storeIdFor?.(bound.scopeId) },
 					db: schedulerDb,
 					coverage,
 					baseUrl: deps.syncBaseUrl,
@@ -919,6 +972,57 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					freshReason: spec.freshReason,
 				});
 			};
+
+			if (
+				item.requirement.collection === 'refunds' &&
+				(item.requirement.kind === 'refresh' || item.requirement.kind === 'refunds-by-parent')
+			) {
+				const requirement = item.requirement;
+				return runSeedDrain({
+					seed: async () => {
+						const input = {
+							database,
+							nowMs: deps.now?.() ?? Date.now(),
+							completedDedupeForMs: requirement.forceRefresh
+								? 0
+								: REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
+						};
+						const seed = await (requirement.kind === 'refunds-by-parent'
+							? seedRefundParentLane({ ...input, parentRemoteId: requirement.parentRemoteId })
+							: seedRefundWindowLane(input));
+						return { seed, drain: { taskId: seed.taskIds[0], nowMs: input.nowMs } };
+					},
+					droppedMessage: 'require: scope moved mid-refund refresh (writes dropped)',
+					activeReason: 'refund refresh already in progress',
+					dedupedReason: 'refund lane refreshed within the dedupe window',
+					fetchedReason: 'drained refund refresh',
+					freshReason: 'refund lane refreshed within the dedupe window',
+				});
+			}
+
+			if (item.requirement.collection === 'refunds' && item.requirement.kind === 'query') {
+				const requirement = item.requirement;
+				const descriptor = parseRefundBrowserSchedulerDescriptor(requirement.queryKey);
+				if (!descriptor)
+					throw new Error(`require: unsupported refund query ${requirement.queryKey}`);
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedRefundBrowseSchedulerTask({
+							descriptor,
+							database,
+							nowMs: deps.now?.() ?? Date.now(),
+							completedDedupeForMs: requirement.forceRefresh ? 0 : undefined,
+						}),
+					}),
+					...(requirement.forceRefresh
+						? { drain: { refreshBrowseWindowKey: requirement.queryKey } }
+						: {}),
+					droppedMessage: 'require: scope moved mid-refund query (writes dropped)',
+					activeReason: 'refund query refresh already in progress',
+					fetchedReason: `drained refund query ${requirement.queryKey}`,
+					freshReason: 'refund query refreshed within the dedupe window',
+				});
+			}
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
 				// Captured here: the guardWrite closure below loses this narrowing.
@@ -1230,11 +1334,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// scheduler drain completes, so a crash mid-fetch never loses the
 				// requirement (the drain lane finishes it later). Presence gate first.
 				//
-				// This one does NOT go through `runSeedDrain`, deliberately: its verdict is
-				// RESIDENCY, not the drain tick. It re-checks the records after every tick,
+				// This one does NOT go through `runSeedDrain`: presence requests use RESIDENCY;
+				// forced refreshes require owned completions. It re-checks after every tick,
 				// waits out another owner's active claim with a bounded backoff instead of
-				// releasing on it, and reports the ids it pulled — so it shares the drain
-				// arguments (`drainScheduler`) and nothing else.
+				// releasing on it, and reports the ids it pulled. Forced requests share the
+				// drain outcome classifier, but keep this residency/active-wait loop.
 				const remoteIds = item.requirement.remoteIds ?? [];
 				if (remoteIds.length === 0) {
 					throw new Error("require: 'targeted-records' needs remoteIds");
@@ -1264,6 +1368,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					}
 					return waitMs;
 				};
+				const appliedRecordIds: string[] = [];
 				let remaining = missing;
 				let activeOrderWaitStep = 0;
 				const activeOrderWaitStepsMs = [50, 250, 1_000] as const;
@@ -1272,9 +1377,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					remainingActiveOrderWaitMs(remaining.length);
 					let skippedActive = 0;
 					let failed = 0;
+					let refreshOutcome: CoverageOutcome | undefined;
+					let refreshPending = false;
 					const applied = await bound.guardWrite(async () => {
 						const nowMs = now();
 						const seedResult = await seedTargetedOrderSchedulerTask({
+							wakeFailed: item.requirement.forceRefresh,
 							remoteIds: remaining,
 							priority: item.priority,
 							completedDedupeForMs: 0,
@@ -1283,18 +1391,56 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						});
 						skippedActive = seedResult.skippedActive;
 						const ownedTaskIds = new Set(seedResult.taskIds);
-						const drainResult = await drainScheduler({ nowMs });
+						const drainResult = await withOrderReadopt(
+							database,
+							item.requirement.readopt ? remaining : [],
+							() => drainScheduler({ nowMs })
+						);
+						appliedRecordIds.push(
+							...drainResult.tasks
+								.filter((task) => ownedTaskIds.has(task.taskId) && task.kind === 'succeeded')
+								.flatMap((task) => task.appliedRecordIds ?? [])
+						);
 						// Only OUR targeted tasks count: an unrelated collection failing in the same
 						// tick must not abort a pull whose own tasks are fine.
 						failed = drainResult.tasks.filter(
 							(outcome) => ownedTaskIds.has(outcome.taskId) && outcome.kind === 'failed'
 						).length;
+						if (item.requirement.forceRefresh && failed === 0) {
+							refreshOutcome = drainResult.ledgerRebuilt
+								? {
+										action: 'released',
+										missingRecordIds: [],
+										reason: 'local sync bookkeeping was rebuilt mid-drain',
+									}
+								: requirementDrainOutcome({
+										drain: drainResult,
+										seed: seedResult,
+										fetchedReason: 'orders refreshed',
+										freshReason: 'orders already fresh',
+									});
+							refreshPending = !seedResult.taskIds.every((id) =>
+								drainResult.tasks.some((task) => task.taskId === id && task.kind === 'succeeded')
+							);
+						}
 					});
 					if (applied === 'dropped') {
 						throw new Error('require: scope moved mid-pull — writes dropped');
 					}
 					if (item.abortController.signal.aborted) return releasedOutcome();
-					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					const absent = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					if (item.requirement.forceRefresh && failed > 0) {
+						throw new Error(
+							`require: forced refresh failed ${failed} task(s) for ${remoteIds.length - absent.length} resident order(s)`
+						);
+					}
+					// Forced resident refreshes are fetched only after every seeded task has an owned
+					// completion. Other outcomes use the shared classification; active tasks wait.
+					if (refreshOutcome?.action === 'released') return refreshOutcome;
+					if (refreshPending && skippedActive === 0 && refreshOutcome) {
+						return refreshOutcome.action === 'fetched' ? releasedOutcome() : refreshOutcome;
+					}
+					if (!refreshPending) remaining = absent;
 					if (remaining.length === 0) break;
 					if (failed > 0) {
 						throw new Error(
@@ -1328,12 +1474,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					if (!bound.isCurrent()) {
 						throw new Error('require: scope moved while waiting for an active order task');
 					}
-					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					if (!item.requirement.forceRefresh)
+						remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
 				}
 				return {
 					action: 'fetched' as const,
 					missingRecordIds: missing,
 					reason: `pulled ${missing.length} missing order(s) via the persisted scheduler`,
+					appliedRecordIds,
+					prunedRecordIds: [],
 				};
 			}
 
@@ -1358,8 +1507,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					};
 				}
 				if (item.abortController.signal.aborted) return releasedOutcome();
+				let delivery: Awaited<ReturnType<typeof pullTargetedByIds>> | undefined;
 				const applied = await bound.guardWrite(async () => {
-					await pullTargetedByIds(ctx, descriptor, missing.map(wooIdOf));
+					delivery = await pullTargetedByIds(ctx, descriptor, missing.map(wooIdOf));
 				});
 				if (applied === 'dropped') {
 					throw new Error('require: scope moved mid-pull — writes dropped');
@@ -1369,6 +1519,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched' as const,
 					missingRecordIds: missing,
 					reason: `pulled ${missing.length} missing record(s)`,
+					...delivery,
 				};
 			}
 
@@ -1397,18 +1548,19 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		})();
 	}
 
-	async function pump(): Promise<void> {
-		if (running) return;
-		running = true;
+	async function pump(lane: Lane): Promise<void> {
+		if (running[lane]) return;
+		running[lane] = true;
 		try {
 			for (;;) {
 				// Re-sort each pass: a higher-priority requirement enqueued while this
-				// pump was busy PREEMPTS everything still queued.
+				// pump was busy PREEMPTS everything still queued in its lane.
 				queue.sort((a, b) => b.priority - a.priority || a.seq - b.seq);
-				const next = queue.shift();
+				const index = queue.findIndex((entry) => laneOf(entry) === lane);
+				const next = index < 0 ? undefined : queue.splice(index, 1)[0];
 				if (!next) return;
 				if (next.released) {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue; // release() already resolved it — just drop the entry.
 				}
 				// Startup/activation waits are not stalls. Admission failures use the
@@ -1422,15 +1574,16 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					admissionError = error;
 				}
 				if (next.released) {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue; // released while waiting for readiness — same drop as above.
 				}
 				next.started = true;
 				const startedAt = Date.now();
-				const executionStreak = stallStreaks();
+				const executionStreak = stallStreaks[lane]();
 				// The start line is the stall watchdog's evidence twin: when a stall IS hit, the
-				// artifact's last started-without-outcome pair names exactly which requirement
-				// wedged — the line run 33445432662 did not have.
+				// started-without-outcome line with the stalled line's requirementId and kind names
+				// exactly which requirement wedged — the line run 33445432662 did not have. Pair by
+				// id, not by "last started": the search lane runs beside the durable lane.
 				deps.diagnostics({
 					type: 'coverage.require.started',
 					level: 'debug',
@@ -1458,10 +1611,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				]);
 				watchdog.cancel();
 				if (raced === STALLED) {
-					// One hung await must never starve the queue (the serial pump IS the
-					// choke point): abandon this execution and keep draining.
+					// One hung await must never starve its lane (each lane's pump is serial):
+					// abandon this execution and keep draining.
 					abandonStalledExecution(next, startedAt, executionStreak, execution);
-					forgetSearch(next);
+					forgetDedupeKey(next);
 					continue;
 				}
 				try {
@@ -1586,16 +1739,16 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						}
 					}
 				} finally {
-					forgetSearch(next);
+					forgetDedupeKey(next);
 				}
 			}
 		} finally {
-			running = false;
+			running[lane] = false;
 		}
 	}
 
 	return {
-		hasPendingWork: () => running || queue.length > 0,
+		hasPendingWork: () => running.search || running.durable || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		require: (requirement) => {
@@ -1604,7 +1757,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// swallowed, so a window that stops growing is legible in the logs as well as in
 			// the grid's footer count (which stops climbing with it).
 			if (
-				(requirement.kind === 'orders-browse' || requirement.kind === 'product-browse') &&
+				(requirement.kind === 'orders-browse' ||
+					requirement.kind === 'refunds-browse' ||
+					requirement.kind === 'product-browse') &&
 				typeof requirement.limit === 'number' &&
 				requirement.limit > BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT
 			) {
@@ -1617,8 +1772,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				});
 			}
 			const queryKey = (() => {
+				if (requirement.kind === 'refunds-by-parent')
+					return refundParentQueryKey(requirement.parentRemoteId);
 				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+				if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
 					// window the grid is showing even when that window was served entirely from
@@ -1651,6 +1809,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// the parser-based internal queued path used by the durable scheduler.
 			const queuedRequirement: InternalRequirement =
 				requirement.kind === 'orders-browse' ||
+				requirement.kind === 'refunds-browse' ||
 				requirement.kind === 'product-browse' ||
 				requirement.kind === 'customer-browse'
 					? {
@@ -1664,8 +1823,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								: {}),
 						}
 					: requirement;
-			const dedupeKey = searchDedupeKey(queuedRequirement);
-			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
+			const dedupeKey = dedupeKeyOf(queuedRequirement);
+			let entry = dedupeKey ? activeByDedupeKey.get(dedupeKey) : undefined;
 			let predecessor: QueuedRequirement | undefined;
 			// A started walk only absorbs declarations it already covers; a wider request gets
 			// its own successor entry below, queued behind the in-flight one — never aborting it.
@@ -1705,15 +1864,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					priority: requirement.priority ?? 500,
 					seq: (seq += 1),
 					subscribers: new Set([subscriber!]),
-					searchDedupeKey: dedupeKey,
+					dedupeKey,
 					...(predecessor ? { predecessor } : {}),
 					released: false,
 					started: false,
 					abortController: new AbortController(),
 				};
-				if (dedupeKey) activeSearches.set(dedupeKey, entry);
+				if (dedupeKey) activeByDedupeKey.set(dedupeKey, entry);
 				queue.push(entry);
-				void pump();
+				void pump(laneOf(entry));
 			}
 			return {
 				ready,
@@ -1730,7 +1889,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						reason: entry.started ? 'released during drain' : 'released before execution',
 					});
 					if (entry.subscribers.size === 0) {
-						if (entry.searchDedupeKey !== null) {
+						if (entry.dedupeKey !== null) {
 							// Defer one microtask (#1221): React releases the old handles and
 							// redeclares in the same synchronous effect pass, so an identical
 							// redeclare must find this entry still alive and rejoin it instead

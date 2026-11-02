@@ -14,10 +14,6 @@ const mockDownload = jest.fn();
 const mockPrint = jest.fn();
 const mockUseTemplateRenderer = jest.fn();
 const mockUseUISettings = jest.fn(() => ({ uiSettings: { autoPrintReceipt: false } }));
-type NavigationState = { routeNames: string[] };
-const mockUseNavigationState = jest.fn((selector: (state: NavigationState) => unknown) =>
-	selector({ routeNames: [] })
-);
 const mockUseDownloadReceiptPdf = jest.fn(() => ({
 	download: mockDownload,
 	isDownloading: false,
@@ -26,8 +22,7 @@ let mockSuspenseValue: unknown;
 
 const mockOrder = {
 	uuid: 'local-order-42',
-	// A paid order: the auto-print gate treats a missing status as not settled.
-	payload: { id: 42, status: 'completed', links: undefined, billing: {} },
+	payload: { id: 42, links: undefined, billing: {} },
 };
 
 const defaultTemplateRenderer = {
@@ -60,26 +55,32 @@ function TestButton({ children, disabled, loading, onPress, testID }: TestButton
 	);
 }
 
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalAction: (props: TestButtonProps) => <TestButton {...props} />,
-	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: (props: TestButtonProps) => <TestButton {...props} />,
-	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+// The receipt document hook toasts when a cloud profile falls back to the system dialog for a report.
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ title }: { title: string }) => <span>{title}</span>,
 }));
-
 jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	Dialog: ({ children, open = true }: React.PropsWithChildren<{ open?: boolean }>) =>
+		open ? <div>{children}</div> : null,
+	DialogAction: (props: TestButtonProps) => <TestButton {...props} />,
 	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogClose: (props: TestButtonProps) => <TestButton {...props} />,
+	DialogContent: ({ children, side }: React.PropsWithChildren<{ side: string }>) => (
+		<div data-testid={side ? 'receipt-panel' : undefined} data-side={side}>
+			{children}
+		</div>
+	),
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../jest/footer.test-utils').DismissIsClose,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h2>{children}</h2>,
-	DialogTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
 }));
 
+jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -102,15 +103,21 @@ jest.mock('@wcpos/components/webview', () => ({
 	WebView: ({
 		onContentSizeChange,
 		onLoad,
+		testID,
+		srcDoc,
 	}: {
 		onContentSizeChange?: (event: ContentSizeEvent) => void;
 		onLoad?: () => void;
+		testID?: string;
+		srcDoc?: string;
 	}) => {
 		if (onContentSizeChange) capturedContentSizeHandlers.push(onContentSizeChange);
 		if (onLoad) capturedLoadHandlers.push(onLoad);
-		return <iframe title="receipt-preview-frame" />;
+		return <iframe title="receipt-preview-frame" data-testid={testID} srcDoc={srcDoc} />;
 	},
 }));
+
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 
 jest.mock('./components/receipt-preview-viewport', () => ({
 	ReceiptPreviewViewport: ({
@@ -124,11 +131,15 @@ jest.mock('./components/receipt-preview-viewport', () => ({
 			{children}
 		</div>
 	),
-	getReceiptPreviewPaperWidth: () => 80,
+	getReceiptPreviewPaperWidth: () => '80mm',
 }));
 
 jest.mock('./email', () => ({
 	EmailForm: () => <div>Email form</div>,
+}));
+
+jest.mock('../hooks/use-sync-order', () => ({
+	useSyncOrder: () => ({ sync: jest.fn(), loading: false, disabled: false }),
 }));
 
 jest.mock('./mismatch-badge', () => ({
@@ -151,19 +162,15 @@ jest.mock('./hooks/use-template-renderer', () => ({
 	useTemplateRenderer: (...args: unknown[]) => mockUseTemplateRenderer(...args),
 }));
 
-const mockSystemDialogPrinter = {
-	allPrinters: [],
-	resolvedPrinter: null,
-	printerSelection: null,
-	setPrinterSelection: jest.fn(),
-	mismatch: null,
-	useSystemDialog: true,
-	isResolving: false,
-};
-const mockUseResolvedPrinter = jest.fn((): Record<string, unknown> => mockSystemDialogPrinter);
-
 jest.mock('./hooks/use-resolved-printer', () => ({
-	useResolvedPrinter: () => mockUseResolvedPrinter(),
+	useResolvedPrinter: () => ({
+		allPrinters: [],
+		resolvedPrinter: null,
+		printerSelection: null,
+		setPrinterSelection: jest.fn(),
+		mismatchWarning: null,
+		useSystemDialog: true,
+	}),
 }));
 
 jest.mock('./hooks/use-download-receipt-pdf', () => ({
@@ -178,6 +185,11 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({}),
 }));
 
+let mockAwaiting: boolean | null = false;
+jest.mock('../pos/checkout/use-awaiting-store', () => ({ useAwaitsStore: () => mockAwaiting }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		store: { wc_price_decimals$: new BehaviorSubject(2) },
@@ -201,23 +213,16 @@ jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 }));
 
 jest.mock('@wcpos/printer', () => ({
+	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
+		.isOrderBasedCloudProfile,
 	usePrint: (options: { onBeforePrint?: () => void }) => ({
 		print: async () => {
 			options.onBeforePrint?.();
 			await mockPrint();
+			return true;
 		},
 		isPrinting: false,
 	}),
-	// The real branch predicates: the auto-print gate mirrors usePrint's routing with them.
-	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
-		.isOrderBasedCloudProfile,
-	usesSystemPrintDialog: jest.requireActual('@wcpos/printer/transport/device-key')
-		.usesSystemPrintDialog,
-}));
-
-jest.mock('expo-router/react-navigation', () => ({
-	useNavigationState: (selector: (state: NavigationState) => unknown) =>
-		mockUseNavigationState(selector),
 }));
 
 jest.mock('observable-hooks', () => ({
@@ -232,6 +237,14 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 describe('Receipt preview content size', () => {
+	// Revert: remove the frame-specific testID so the viewport is mistaken for its iframe.
+	it('addresses rendered receipt HTML through a distinct frame testID', () => {
+		render(<Receipt resource={{} as never} />);
+		expect(screen.getByTestId('receipt-preview-frame').getAttribute('srcdoc')).toBe(
+			defaultTemplateRenderer.renderedHtml
+		);
+	});
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedContentSizeHandlers.length = 0;
@@ -290,187 +303,15 @@ describe('Receipt preview content size', () => {
 	});
 });
 
-describe('Receipt auto-print', () => {
-	// A template the preview loads from a URL (e.g. legacy-php): the system dialog has no
-	// rendered HTML, so it reads the loaded frame and auto-print must wait for it.
-	const urlTemplateRenderer = { ...defaultTemplateRenderer, renderedHtml: null };
-	const thermalPrinter = {
-		...mockSystemDialogPrinter,
-		resolvedPrinter: {
-			id: 'thermal-1',
-			name: 'Counter printer',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 48,
-		},
-		useSystemDialog: false,
-	};
-
-	beforeEach(() => {
+describe('Receipt reprint host', () => {
+	it('does not auto-print even when the setting is enabled', async () => {
 		jest.clearAllMocks();
-		capturedLoadHandlers.length = 0;
-		mockOrder.payload.id = 42;
 		mockSuspenseValue = mockOrder;
 		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
-		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: false });
-	});
-	afterEach(() => {
-		mockOrder.payload.id = 42;
-		mockUseResolvedPrinter.mockReturnValue(mockSystemDialogPrinter);
-	});
-
-	it('prints to a raw/thermal printer once final data is present, without waiting for the frame', () => {
-		mockUseResolvedPrinter.mockReturnValue(thermalPrinter);
-		const { rerender } = render(<Receipt resource={{} as never} />);
-		expect(mockPrint).not.toHaveBeenCalled();
-
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
-		rerender(<Receipt resource={{} as never} />);
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		// Still single-shot: the frame loading later does not print again.
-		act(() => capturedLoadHandlers.at(-1)!());
-		rerender(<Receipt resource={{} as never} />);
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('prints rendered HTML through the dialog without waiting for the frame', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
-
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 		render(<Receipt resource={{} as never} />);
-
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('waits until the printer is resolved before deciding how to print', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
-		mockUseResolvedPrinter.mockReturnValue({ ...mockSystemDialogPrinter, isResolving: true });
-		const { rerender } = render(<Receipt resource={{} as never} />);
+		await act(async () => capturedLoadHandlers.at(-1)!());
 		expect(mockPrint).not.toHaveBeenCalled();
-
-		mockUseResolvedPrinter.mockReturnValue(thermalPrinter);
-		rerender(<Receipt resource={{} as never} />);
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('waits for final data after the receipt frame loads and prints exactly once', () => {
-		const { rerender } = render(<Receipt resource={{} as never} />);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).not.toHaveBeenCalled();
-
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
-		rerender(<Receipt resource={{} as never} />);
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('reports a failed autoprint as PRINT101, and a manual print during it on its own terms', async () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
-		let failAutoprint!: (error: Error) => void;
-		mockPrint
-			.mockImplementationOnce(
-				() =>
-					new Promise<void>((_resolve, reject) => {
-						failAutoprint = reject;
-					})
-			)
-			.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
-		render(<Receipt resource={{} as never} />);
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		// A manual Print fails while the autoprint is still in flight: PRINT201, not PRINT101.
-		fireEvent.click(screen.getByTestId('receipt-print-button'));
-		await act(async () => Promise.resolve());
-		expect(getLogger([]).error).toHaveBeenCalledWith(
-			'Receipt print failed',
-			expect.objectContaining({ code: 'PRINT201', showToast: true })
-		);
-
-		await act(async () => {
-			failAutoprint(new Error('ECONNREFUSED'));
-			await Promise.resolve();
-		});
-		expect(getLogger([]).warn).toHaveBeenCalledWith(
-			'Receipt print failed',
-			expect.objectContaining({ code: 'PRINT101', showToast: true })
-		);
-	});
-
-	it('waits for the receipt frame to load when final data is already available', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
-
-		render(<Receipt resource={{} as never} />);
-
-		expect(mockPrint).not.toHaveBeenCalled();
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('waits for the new receipt frame to load after the order changes', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...urlTemplateRenderer, hasFinalData: true });
-		const { rerender } = render(<Receipt resource={{} as never} />);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => {
-			mockOrder.payload.id = 43;
-			rerender(<Receipt resource={{} as never} />);
-		});
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(2);
-	});
-
-	describe('contract gateway: routed before the order refresh landed (#2807)', () => {
-		const orderPayload = mockOrder.payload;
-		afterEach(() => {
-			orderPayload.status = 'completed';
-		});
-
-		it('does not auto-print a local pos-open fallback; prints once the order settles', () => {
-			// The receipt request failed (hasResponded) with the refresh still pending: the
-			// only data is built from the local order, which still says pos-open.
-			orderPayload.status = 'pos-open';
-			mockUseTemplateRenderer.mockReturnValue({
-				...defaultTemplateRenderer,
-				hasFinalData: true,
-				receiptDataIsServer: false,
-			});
-			const { rerender } = render(<Receipt resource={{} as never} />);
-			expect(mockPrint).not.toHaveBeenCalled();
-
-			// The bounded refresh lands: the order record is now completed.
-			orderPayload.status = 'completed';
-			rerender(<Receipt resource={{} as never} />);
-			expect(mockPrint).toHaveBeenCalledTimes(1);
-
-			rerender(<Receipt resource={{} as never} />);
-			expect(mockPrint).toHaveBeenCalledTimes(1);
-		});
-
-		it('auto-prints server receipt data even while the local order is still pos-open', () => {
-			orderPayload.status = 'pos-open';
-			mockUseTemplateRenderer.mockReturnValue({
-				...defaultTemplateRenderer,
-				hasFinalData: true,
-				receiptDataIsServer: true,
-			});
-
-			render(<Receipt resource={{} as never} />);
-
-			expect(mockPrint).toHaveBeenCalledTimes(1);
-		});
 	});
 });
 
@@ -529,6 +370,14 @@ describe('Receipt PDF download action', () => {
 		);
 	});
 
+	// ADR 0040 Decided 1 rule 1: until the journal answers, the paper's mark is unknown.
+	it('holds the Print button until the journal has said whether the sale awaits the store', () => {
+		mockAwaiting = null;
+		render(<Receipt resource={{} as never} />);
+		expect((screen.getByTestId('receipt-print-button') as HTMLButtonElement).disabled).toBe(true);
+		mockAwaiting = false;
+	});
+
 	it('persists a print attempt before invoking the printer transport', async () => {
 		let loggedBeforeTransport = false;
 		mockPrint.mockImplementation(async () => {
@@ -539,6 +388,7 @@ describe('Receipt PDF download action', () => {
 		fireEvent.click(screen.getByTestId('receipt-print-button'));
 		await act(async () => Promise.resolve());
 		expect(loggedBeforeTransport).toBe(true);
+		expect(screen.getByTestId('receipt-print-button').textContent).toBe('receipt.print_again');
 		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Receipt print attempted',
 			expect.objectContaining({
@@ -554,16 +404,49 @@ describe('Receipt PDF download action', () => {
 describe('Receipt email action', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockAwaiting = false;
 		mockSuspenseValue = mockOrder;
 		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 	});
 
 	const emailButton = () => screen.getByTestId('receipt-email-button') as HTMLButtonElement;
 
+	it('offers Sync order when the order has no server id', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.getByTestId('receipt-sync-order-button').textContent).toBe('pos_cart.sync_order');
+		expect(screen.getByTestId('receipt-close-button').textContent).toBe('Close');
+	});
+
+	it('does not offer Sync order when the order has a server id', () => {
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.queryByTestId('receipt-sync-order-button')).toBeNull();
+	});
+
+	it('disables Email when the order has no server id', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(true);
+	});
+
+	it('leaves replay in charge of an order without a server id awaiting the store', () => {
+		mockSuspenseValue = { ...mockOrder, payload: { billing: {} } };
+		mockAwaiting = true;
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.queryByTestId('receipt-sync-order-button')).toBeNull();
+		expect(emailButton().disabled).toBe(false);
+	});
+
 	it('opens the email dialog when the store is reachable', () => {
 		render(<Receipt resource={{} as never} />);
 
 		expect(emailButton().disabled).toBe(false);
+		expect(screen.queryByText('Email form')).toBeNull();
+		fireEvent.click(emailButton());
 		expect(screen.getByText('Email form')).toBeTruthy();
 	});
 
@@ -579,6 +462,8 @@ describe('Receipt email action', () => {
 		render(<Receipt resource={{} as never} />);
 
 		expect(emailButton().disabled).toBe(false);
+		expect(screen.queryByText('Email form')).toBeNull();
+		fireEvent.click(emailButton());
 		expect(screen.getByText('Email form')).toBeTruthy();
 	});
 
@@ -592,3 +477,42 @@ describe('Receipt email action', () => {
 		);
 	});
 });
+
+it('shows the refund title without email and keeps sale actions unchanged', () => {
+	const translations = jest.requireMock('../../../contexts/translations');
+	const { createTestT } = jest.requireActual('../../../../jest/translate');
+	const translation = jest.spyOn(translations, 'useT').mockReturnValue(createTestT());
+	mockSuspenseValue = mockOrder;
+	mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	try {
+		const { rerender } = render(<Receipt resource={{} as never} document="refund:12" />);
+		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Refund receipt');
+		expect(screen.queryByTestId('receipt-email-button')).toBeNull();
+		expect(screen.getByTestId('receipt-print-button').dataset.variant).toBe('default');
+		expect(screen.getByTestId('receipt-print-button').textContent).toBe('Print receipt');
+		fireEvent.click(screen.getByTestId('receipt-download-pdf-button'));
+		expect(mockDownload).toHaveBeenLastCalledWith({
+			orderId: 42,
+			templateId: '7',
+			document: 'refund:12',
+		});
+		rerender(<Receipt resource={{} as never} />);
+		expect(screen.getByRole('heading', { level: 1, name: 'Receipt' }).textContent).toBe('Receipt');
+		expect(screen.getByTestId('receipt-email-button')).toBeTruthy();
+	} finally {
+		translation.mockRestore();
+	}
+});
+
+// Revert: ignore the explicit cart side or derive it from the removed POS provider.
+it.each([null, mockOrder])(
+	'uses the explicit panel side for a resolved or missing order (%p)',
+	(order) => {
+		mockSuspenseValue = order;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+		const { rerender } = render(<Receipt {...{ resource: {} as never, side: 'left' as const }} />);
+		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('left');
+		rerender(<Receipt resource={{} as never} />);
+		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('right');
+	}
+);

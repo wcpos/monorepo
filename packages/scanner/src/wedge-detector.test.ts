@@ -66,6 +66,28 @@ describe('createWedgeDetector (streaming)', () => {
 		expect(scans).toEqual(['9310988001234']);
 	});
 
+	it('reports the first key time for each slow 13-key burst', () => {
+		const onScan = vi.fn();
+		const detector = createWedgeDetector({
+			getSettings: () => ({ ...SETTINGS, threshold: 40 }),
+			onScan,
+			now: () => Date.now(),
+			setTimeout: (fn, ms) => setTimeout(fn, ms),
+		});
+		for (const startedAtMs of [1000, 10_000]) {
+			for (const entry of trace('1234567890123'.split(''), 30, startedAtMs)) {
+				vi.setSystemTime(entry.timeMs);
+				detector.handleKey(entry.key);
+			}
+			vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+			expect(onScan).toHaveBeenLastCalledWith('1234567890123', {
+				terminated: false,
+				startedAtMs,
+			});
+		}
+		expect(onScan).toHaveBeenCalledTimes(2);
+	});
+
 	it('handleKey reports keys that belong to a latched burst', () => {
 		const onScan = vi.fn();
 		const detector = createWedgeDetector({
@@ -81,7 +103,7 @@ describe('createWedgeDetector (streaming)', () => {
 		expect(detector.handleKey('Enter')).toBe(true);
 		expect(onScan).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
-		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: true });
+		expect(onScan).toHaveBeenCalledWith('12345678', expect.objectContaining({ terminated: true }));
 		expect(detector.handleKey('Enter')).toBe(false);
 	});
 
@@ -95,7 +117,7 @@ describe('createWedgeDetector (streaming)', () => {
 		vi.setSystemTime(Date.now() + WEDGE_END_OF_SCAN_MS + 1);
 		expect(detector.handleKey('Enter')).toBe(false);
 		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
-		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: false });
+		expect(onScan).toHaveBeenCalledWith('12345678', expect.objectContaining({ terminated: false }));
 	});
 
 	it('a threshold at or above the settle window still emits once the burst is quiet', () => {
@@ -112,7 +134,7 @@ describe('createWedgeDetector (streaming)', () => {
 		expect(onScan).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
 		expect(onScan).toHaveBeenCalledTimes(1);
-		expect(onScan).toHaveBeenCalledWith('12345678', { terminated: false });
+		expect(onScan).toHaveBeenCalledWith('12345678', expect.objectContaining({ terminated: false }));
 	});
 
 	it('does not emit for typing-speed input', () => {

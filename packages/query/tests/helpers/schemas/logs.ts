@@ -13,6 +13,15 @@ export const logsLiteral = {
 		timestamp: {
 			type: 'integer',
 			description: 'The time the log entry was created.',
+			minimum: 0,
+			maximum: 100000000000000,
+			multipleOf: 1,
+		},
+		lastSeen: {
+			type: 'integer',
+			minimum: 0,
+			maximum: 100000000000000,
+			multipleOf: 1,
 		},
 		code: {
 			type: 'string',
@@ -22,6 +31,7 @@ export const logsLiteral = {
 			type: 'string',
 			description: 'The severity level of the log entry.',
 			default: 'info',
+			maxLength: 16,
 		},
 		message: {
 			type: 'string',
@@ -32,4 +42,5 @@ export const logsLiteral = {
 			additionalProperties: true,
 		},
 	},
+	indexes: [['timestamp'], ['level', 'timestamp'], ['level', 'lastSeen']],
 } as const;

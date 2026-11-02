@@ -1,0 +1,686 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { BehaviorSubject, of } from 'rxjs';
+
+import { Hero, SalesScope } from './index';
+import {
+	ReportsComparison,
+	ReportsProvider,
+	ReportsScopeProvider,
+	useReportsData,
+	useReportsScope,
+	useReportsSelection,
+} from '../context';
+import { QueryStateProvider, useQueryState } from '../../../../query';
+
+import type { ReportOrder } from '../context';
+import type { QueryHandle } from '../../../../query';
+
+type FakeHandle = QueryHandle & { set: (partial: object) => void };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+
+const mockPrint = jest.fn();
+let mockCashiersPending = false;
+let mockPhone = true;
+const mockPendingCashiers = new Promise(() => {});
+const mockCashiers = of([{ id: 7, display_name: 'Priya' }]);
+const mockStores = new BehaviorSubject([{ id: 9, name: 'Shop' }]);
+const mockStore = {
+	id: 9,
+	timezone: 'America/New_York',
+	currency: 'GBP',
+	currency_pos: 'left',
+	price_num_decimals: 2,
+	price_decimal_sep: '.',
+	price_thousand_sep: ',',
+};
+// The shared boundary pulls in a tooltip primitive jest cannot parse; the real react-error-boundary
+// behind it is what the comparison-failure case exercises.
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
+		credentials.populate$('stores'),
+}));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
+}));
+jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: mockStore, site: { populate$: () => mockCashiers } }),
+	useStoreSession: () => ({
+		site: {
+			populate$: () => {
+				if (mockCashiersPending) throw mockPendingCashiers;
+				return mockCashiers;
+			},
+		},
+		wpCredentials: { populate$: () => mockStores },
+	}),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (v: Record<string, unknown>) => unknown
+	) => source && select(source),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
+}));
+jest.mock('../../../../hooks/use-local-date', () => ({
+	...jest.requireActual('../../../../hooks/use-local-date'),
+	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
+}));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0 }),
+}));
+jest.mock('@wcpos/components/calendar', () => ({ Calendar: () => null }));
+jest.mock('../bar', () => ({ ScopeHint: () => null }));
+jest.mock('../chart', () => ({
+	Chart: ({ comparison = false }: { comparison?: boolean }) => {
+		const { chartView } = useReportsScope();
+		const { wholeComparisonOrders } = useReportsData();
+		return (
+			<div
+				data-testid="existing-chart"
+				data-comparison={comparison ? wholeComparisonOrders.length : 'unavailable'}
+			>
+				{chartView}
+			</div>
+		);
+	},
+}));
+const mockPrintDocument = {
+	printedTo: null,
+	printHeld: false,
+	isPrinting: false,
+	isSyncing: false,
+	templates: [{ id: 7 }],
+	selectedTemplateId: null,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	allPrinters: [],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
+	resolvedPrinter: null,
+	mismatch: null,
+	previewProps: { renderedHtml: '', previewPaperWidth: 'a4' },
+	print: mockPrint,
+	templatesReady: true,
+
+	documentError: null,
+};
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: jest.fn(() => mockPrintDocument),
+}));
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+	useRegisterNamesReady: () => true,
+}));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'front', registerName: 'Front' }),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: jest.requireActual('react-native').Text,
+	TextClassContext: jest.requireActual('react').createContext(''),
+}));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({
+		testID,
+		onPress,
+		disabled,
+		accessibilityLabel,
+		name,
+	}: {
+		accessibilityLabel?: string;
+		name: string;
+		testID: string;
+		onPress: () => void;
+		disabled?: boolean;
+	}) => (
+		<button
+			data-testid={testID}
+			data-icon={name}
+			aria-label={accessibilityLabel}
+			onClick={onPress}
+			disabled={disabled}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	ButtonText: jest.requireActual('react-native').Text,
+	Button: ({
+		testID,
+		onPress,
+		children,
+		disabled,
+	}: {
+		disabled?: boolean;
+		testID: string;
+		onPress: () => void;
+		children: React.ReactNode;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/popover', () => {
+	const C = React.createContext({ open: false, setOpen: (_value: boolean) => {} });
+	return {
+		Popover: ({ children }: React.PropsWithChildren) => {
+			const [open, setOpen] = React.useState(false);
+			return <C.Provider value={{ open, setOpen }}>{children}</C.Provider>;
+		},
+		PopoverTrigger: React.forwardRef(function Trigger({ children }: React.PropsWithChildren, ref) {
+			const { open, setOpen } = React.useContext(C);
+			React.useImperativeHandle(ref, () => ({
+				close: () => setOpen(false),
+				open: () => setOpen(true),
+			}));
+			return React.cloneElement(children as React.ReactElement<{ onPress: () => void }>, {
+				onPress: () => setOpen(!open),
+			});
+		}),
+		PopoverContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) =>
+			React.useContext(C).open ? <div data-testid={testID}>{children}</div> : null,
+	};
+});
+const current = [
+	{
+		uuid: 'one',
+		total: '20',
+		status: 'completed',
+		line_items: [{ quantity: 2 }, { quantity: NaN }],
+	},
+	{ uuid: 'two', total: '10', status: 'processing', line_items: [{ quantity: 1 }] },
+	{ uuid: 'pending', total: '5', status: 'pending', line_items: [] },
+] as ReportOrder[];
+const previous = [
+	{
+		uuid: 'morning',
+		total: '20',
+		status: 'completed',
+		date_created_gmt: '2026-07-14T13:00:00',
+		line_items: [{ quantity: 1 }],
+	},
+	{
+		uuid: 'late',
+		total: '80',
+		status: 'processing',
+		date_created_gmt: '2026-07-14T22:00:00',
+		line_items: [{ quantity: 8 }],
+	},
+] as ReportOrder[];
+const hitsOf = (orders: ReportOrder[]) =>
+	orders.map(({ uuid, ...payload }) => ({ record: { uuid, payload } }));
+/** An answered handle over these orders. */
+function handleOf(orders: ReportOrder[]): FakeHandle {
+	return fakeQueryHandle({ result: { hits: hitsOf(orders) } });
+}
+/** A handle whose read has not answered yet. */
+const unanswered = (): FakeHandle => fakeQueryHandle({ ready: false });
+function Probe() {
+	const data = useReportsData();
+	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	const { detail } = useReportsScope();
+	const state = useQueryState<'orders'>();
+	return (
+		<>
+			<span data-testid="exclusions">{Object.keys(unselectedRowIds).join()}</span>
+			<span data-testid="detail">{detail}</span>
+			<button data-testid="exclude-hidden" onClick={() => setUnselectedRowIds({ pending: true })} />
+			<span data-testid="comparison-counts">
+				{data.comparisonOrders.length}/{data.wholeComparisonOrders.length}
+			</span>
+			<span data-testid="cashier-filter">{state.filters.cashier ?? 'Everyone'}</span>
+			<button
+				data-testid="exclude"
+				onClick={() => setUnselectedRowIds({ one: true, morning: true })}
+			/>
+		</>
+	);
+}
+function setup({
+	comparison = handleOf(previous),
+	sales = handleOf(current),
+	refunds = handleOf([]),
+	week = false,
+	probe = true,
+	settled = true,
+	cashier = undefined as string | undefined,
+	store = '9',
+} = {}) {
+	return render(
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={Number.MAX_SAFE_INTEGER}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			initialFilters={{
+				store,
+				cashier,
+				dateRange: {
+					from: '2026-07-15T04:00:00',
+					to: week ? '2026-07-22T03:59:59' : '2026-07-16T03:59:59',
+				},
+			}}
+		>
+			<ReportsScopeProvider>
+				{!settled ? (
+					<SalesScope date={<span>Today</span>} settled={false} />
+				) : (
+					<React.Suspense fallback={null}>
+						<ReportsProvider handle={sales} comparisonHandle={comparison} refundsHandle={refunds}>
+							<SalesScope date={<span>Today</span>} settled />
+							<Hero />
+							{probe && (
+								<React.Suspense fallback={null}>
+									<ReportsComparison>
+										<Probe />
+									</ReportsComparison>
+								</React.Suspense>
+							)}
+						</ReportsProvider>
+					</React.Suspense>
+				)}
+			</ReportsScopeProvider>
+		</QueryStateProvider>
+	);
+}
+beforeEach(() => {
+	mockPhone = true;
+	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
+	mockPrint.mockReset().mockResolvedValue(true);
+	mockPrintDocument.templatesReady = true;
+});
+afterEach(() => jest.useRealTimers());
+// Removing calculateTotals or the live-day cutoff changes all the displayed comparisons.
+it('renders the figure, delta and three companions using the store currency and finite quantities', () => {
+	setup();
+	for (const [id, value] of Object.entries({
+		total: '£30.00',
+		delta: '+50.0% vs yesterday',
+		orders: '2',
+		average: '£15.00',
+		items: '3',
+		'orders-delta': '+1',
+		'average-delta': '−£5.00',
+		'items-delta': '+2',
+	}))
+		expect(screen.getByTestId(`hero-${id}`).textContent).toBe(value);
+	expect(screen.getByTestId('existing-chart')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('hero-print-sheet')).toBeTruthy();
+	expect(mockPrint).not.toHaveBeenCalled();
+	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print summary');
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+it('shows a muted dash when the comparison figure is zero', () => {
+	setup({ comparison: handleOf([]) });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+});
+// With nothing to compare with, the companions read the same dash, never a difference against nothing.
+it('shows the dash on every companion when there are no comparison orders', () => {
+	setup({ comparison: handleOf([]) });
+	for (const id of ['orders-delta', 'average-delta', 'items-delta'])
+		expect(screen.getByTestId(`hero-${id}`).textContent).toBe('—');
+});
+it('Every status adds pending to the figure and clearing restores completed and processing', () => {
+	setup();
+	fireEvent.click(screen.getByTestId('hero-chip-status'));
+	fireEvent.click(screen.getByTestId('hero-status-all'));
+	expect(screen.getByTestId('hero-total').textContent).toBe('£35.00');
+	expect(screen.queryByTestId('hero-status-menu')).toBeNull();
+	fireEvent.click(screen.getByTestId('hero-chip-status-clear'));
+	expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
+});
+it('clears the cashier chip to Everyone', () => {
+	setup({ cashier: '7' });
+	expect(screen.getByTestId('hero-chip-cashier').textContent).toContain('Priya');
+	fireEvent.click(screen.getByTestId('hero-chip-cashier-clear'));
+	expect(screen.getByTestId('cashier-filter').textContent).toBe('Everyone');
+});
+it('keeps a week comparison chip non-pressable', () => {
+	setup({ week: true });
+	fireEvent.click(screen.getByTestId('hero-chip-compare'));
+	expect(screen.queryByTestId('hero-compare-menu')).toBeNull();
+	expect(screen.getByTestId('hero-chip-compare').textContent).toBe('vs the week before');
+});
+it('cuts a live comparison at store wall time but retains the whole period and ignores exclusions', () => {
+	setup();
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/2');
+	fireEvent.click(screen.getByTestId('exclude'));
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/2');
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−50.0% vs yesterday');
+});
+it('keeps the current figure and companions visible while comparison is suspended', () => {
+	setup({ comparison: unanswered() });
+	expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
+	expect(screen.getByTestId('hero-orders').textContent).toBe('2');
+	expect(screen.getByTestId('hero-delta-loading')).toBeTruthy();
+	expect(screen.getByTestId('hero-orders-delta-loading')).toBeTruthy();
+});
+
+// The selected value must reopen its own menu; clearing it restores yesterday.
+it('selects last weekday, marks the current row and clears back to yesterday', () => {
+	setup();
+	fireEvent.click(screen.getByTestId('hero-chip-compare'));
+	fireEvent.click(screen.getByTestId('hero-compare-lastweek'));
+	expect(screen.getByTestId('hero-delta').textContent).toContain('vs last Wednesday');
+	expect(screen.queryByTestId('hero-compare-menu')).toBeNull();
+	fireEvent.click(screen.getByTestId('hero-chip-compare-label'));
+	expect(
+		screen.getByTestId('hero-compare-lastweek').querySelector('[data-icon="check"]')
+	).toBeTruthy();
+	fireEvent.click(screen.getByTestId('hero-compare-lastweek'));
+	expect(screen.queryByTestId('hero-compare-menu')).toBeNull();
+	fireEvent.click(screen.getByTestId('hero-chip-compare-clear'));
+	expect(screen.getByTestId('hero-chip-compare').textContent).toContain('vs yesterday');
+});
+it('selects a cashier from its own menu and closes it', () => {
+	setup();
+	fireEvent.click(screen.getByTestId('hero-chip-cashier'));
+	expect(screen.getByTestId('hero-cashier-all').querySelector('[data-icon="check"]')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('hero-cashier-7'));
+	expect(screen.getByTestId('hero-chip-cashier').textContent).toContain('Priya');
+	expect(screen.getByTestId('cashier-filter').textContent).toBe('7');
+	expect(screen.queryByTestId('hero-cashier-menu')).toBeNull();
+});
+
+it('keeps the figure visible while the cashier chip is suspended', () => {
+	mockCashiersPending = true;
+	try {
+		setup();
+		expect(screen.getByTestId('hero-cashier-loading')).toBeTruthy();
+		expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
+	} finally {
+		mockCashiersPending = false;
+	}
+});
+it('shows flat deltas in percent and the companions own units', () => {
+	setup({
+		comparison: handleOf(
+			current
+				.filter((order) => order.status !== 'pending')
+				.map((order) => ({ ...order, date_created_gmt: '2026-07-14T08:00:00' }))
+		),
+	});
+	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
+	for (const name of ['orders', 'average', 'items'])
+		expect(screen.getByTestId(`hero-${name}-delta`).textContent).toBe('±0');
+});
+// The live cutoff moves with the clock, so a report left open does not compare against a stale hour.
+it('advances a live comparison cutoff as the clock moves', () => {
+	setup();
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/2');
+	act(() => {
+		jest.advanceTimersByTime(6 * 60 * 60 * 1000 + 60_000);
+	});
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('2/2');
+});
+// Money differences are taken at the displayed precision: two figures that read the same never differ.
+it('shows no money difference below the store precision', () => {
+	setup({
+		comparison: handleOf([
+			{ ...previous[0], total: '15.004' },
+			{ ...previous[0], uuid: 'other', total: '14.998' },
+		] as ReportOrder[]),
+	});
+	expect(screen.getByTestId('hero-average').textContent).toBe('£15.00');
+	expect(screen.getByTestId('hero-average-delta').textContent).toBe('±0');
+});
+// The percentage is rounded to its displayed tenth before the sign: a change below that reads flat.
+it('reads a change below a tenth of a percent as flat', () => {
+	setup({ comparison: handleOf([{ ...previous[0], total: '30.01' }] as ReportOrder[]) });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
+});
+// Past the store's midnight the day is no longer live: the whole comparison day counts.
+it('counts the whole comparison day once the store day rolls over', () => {
+	const lateNight = {
+		...previous[0],
+		uuid: 'late-night',
+		total: '5',
+		// 23:59 in New York on the 14th.
+		date_created_gmt: '2026-07-15T03:59:00',
+	};
+	setup({ comparison: handleOf([...previous, lateNight] as ReportOrder[]) });
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/3');
+	act(() => {
+		// 12:00 to 00:31 New York time, in minute ticks.
+		jest.advanceTimersByTime(12 * 60 * 60 * 1000 + 31 * 60 * 1000);
+	});
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('3/3');
+});
+
+it('switches the chart view for the visit without changing query filters', () => {
+	setup();
+	expect(screen.getByTestId('hero-chart-toggle-hour').textContent).toBe('By hour');
+	expect(screen.getByTestId('existing-chart').textContent).toBe('hour');
+	fireEvent.click(screen.getByTestId('hero-chart-toggle-run'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('run');
+	expect(screen.getByTestId('hero-chart-toggle-run').getAttribute('aria-checked')).toBe('true');
+	fireEvent.click(screen.getByTestId('hero-chip-status'));
+	fireEvent.click(screen.getByTestId('hero-status-all'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('run');
+	fireEvent.click(screen.getByTestId('hero-chart-toggle-hour'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('hour');
+});
+it('labels the week chart By day', () => {
+	setup({ week: true });
+	expect(screen.getByTestId('hero-chart-toggle-hour').textContent).toBe('By day');
+	expect(screen.getByTestId('hero-chart-toggle-run').textContent).toBe('Running total');
+});
+it('keeps the primary chart while comparison is pending then supplies the comparison', async () => {
+	const comparison = unanswered();
+	setup({ comparison });
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	await act(async () => {
+		comparison.set({ ready: true, result: { hits: hitsOf(previous) } });
+	});
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
+
+it('keeps the primary chart and figures when the comparison fails', async () => {
+	const comparison = unanswered();
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		setup({
+			comparison,
+			probe: false,
+		});
+		await act(async () => {
+			comparison.set({ error: new Error('comparison failed') });
+		});
+		expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe(
+			'unavailable'
+		);
+		expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
+		expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+	} finally {
+		errors.mockRestore();
+	}
+});
+
+// A status change keeps the comparison handle: without `onReset` the boundary would remount the
+// reader over the same failure and show the dash again instead of asking the engine.
+it('retries a failed comparison when the status choice resets its boundary', async () => {
+	const comparison = unanswered();
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		setup({ comparison, probe: false });
+		await act(async () => {
+			comparison.set({ error: new Error('comparison failed') });
+		});
+		expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+		const retry = jest.fn(() =>
+			comparison.set({ error: null, ready: true, result: { hits: hitsOf(previous) } })
+		);
+		comparison.retry = retry;
+		fireEvent.click(screen.getByTestId('hero-chip-status'));
+		fireEvent.click(screen.getByTestId('hero-status-all'));
+		expect(retry).toHaveBeenCalled();
+		expect(screen.getByTestId('hero-delta').textContent).not.toBe('—');
+		expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).not.toBe(
+			'unavailable'
+		);
+	} finally {
+		errors.mockRestore();
+	}
+});
+
+// Counting hidden exclusions or clearing only visible exclusions breaks these contracts.
+it('the left-out chip appears only when an included order is unticked and counts them', () => {
+	setup();
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	fireEvent.click(screen.getByTestId('exclude-hidden'));
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	fireEvent.click(screen.getByTestId('hero-chip-status'));
+	fireEvent.click(screen.getByTestId('hero-status-all'));
+	expect(screen.getByTestId('hero-chip-left-out').textContent).toContain('1 order left out');
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-label'));
+	expect(screen.getByTestId('detail').textContent).toBe('orders');
+});
+it('its clear puts every order back', () => {
+	setup();
+	fireEvent.click(screen.getByTestId('exclude'));
+	expect(screen.getByTestId('hero-chip-left-out').textContent).toContain('1 order left out');
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-clear'));
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	expect(screen.getByTestId('exclusions').textContent).toBe('');
+});
+
+// A missing template must block printing; failures must be visible and recover on the next press.
+it('disables Print with the shared waiting line until templates are ready', () => {
+	mockPrintDocument.templatesReady = false;
+	setup();
+	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading templates');
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(mockPrint).not.toHaveBeenCalled();
+});
+it('builds a grouped report with the viewed scope', () => {
+	setup({ cashier: '7' });
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	const options = useReceiptDocument.mock.calls.at(-1)[0];
+	expect(options).toMatchObject({
+		templateType: 'report',
+		storeId: 9,
+		autoPrintAllowed: false,
+	});
+	expect(options.localReport.report).toMatchObject({
+		key: 'summary',
+		title: 'Sales summary',
+		rows: [],
+		has_groups: true,
+	});
+	expect(options.localReport.report.scope.label).toContain('Priya · Completed & processing');
+});
+it('shows false and thrown print failures and clears the error on success', async () => {
+	mockPrint.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('printer unavailable'));
+	setup();
+	fireEvent.click(screen.getByTestId('hero-print'));
+	for (let i = 0; i < 2; i++) {
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
+		await waitFor(() =>
+			expect(screen.getByTestId('print-sheet-error').textContent).toBe(
+				'Could not print. Try again.'
+			)
+		);
+	}
+	fireEvent.click(screen.getByTestId('print-sheet-print'));
+	await waitFor(() => expect(screen.queryByTestId('print-sheet-error')).toBeNull());
+});
+
+// Downloading either lane must not print a document labelled as the whole period.
+it.each(['sales', 'refunds'] as const)('waits for the %s lane then enables Print', (lane) => {
+	const handle = handleOf(lane === 'sales' ? current : []);
+	handle.set({ laneProgress: { phase: 'fetching', loaded: 1, total: 2 } });
+	setup({ [lane]: handle });
+	fireEvent.click(screen.getByTestId('hero-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
+		lane === 'sales'
+			? 'Still loading orders for this range'
+			: 'Still loading refunds for this range'
+	);
+	act(() => handle.set({ laneProgress: null }));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
+});
+
+jest.mock('../../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="sheet-preview" />,
+}));
+
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
+		open ? children : null,
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
+	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
+}));
+
+it('on phone prints from an icon button and puts comparison above the chart toggle', () => {
+	setup();
+	const print = screen.getByTestId('hero-print');
+	expect(print.getAttribute('data-icon')).toBe('print');
+	expect(print.getAttribute('aria-label')).toBe('Print summary');
+	const strip = screen.getByTestId('reports-scope-strip');
+	expect(strip.contains(print)).toBe(true);
+	expect(strip.contains(screen.getByTestId('hero-chips'))).toBe(true);
+	const compare = screen.getByTestId('hero-chip-compare');
+	expect(screen.getByTestId('reports-hero').contains(compare)).toBe(true);
+	expect(compare.parentElement!.nextElementSibling).toBe(screen.getByTestId('hero-chart-toggle'));
+});
+it.each([true, false])('renders unsettled scope without report data (phone: %s)', (phone) => {
+	mockPhone = phone;
+	setup({ settled: false });
+	expect(screen.getByTestId('hero-chip-cashier').textContent).toBe('Everyone');
+	expect(screen.getByTestId('hero-chip-status').textContent).toBe('Completed & processing');
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	expect(screen.getByRole('button', { name: 'Print summary' }).hasAttribute('disabled')).toBe(true);
+});
+
+it('names All stores in the summary print scope', () => {
+	mockStores.next([
+		{ id: 9, name: 'Shop' },
+		{ id: 10, name: 'Annex' },
+	]);
+	try {
+		setup({ store: 'woocommerce-pos' });
+		const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+		const report = useReceiptDocument.mock.calls.at(-1)[0].localReport.report;
+		expect(report.scope.label).toContain('All stores');
+		// The paper breaks down by store: the bound directory cannot name other stores' registers.
+		expect(JSON.stringify(report.groups)).toContain('"Stores"');
+	} finally {
+		mockStores.next([{ id: 9, name: 'Shop' }]);
+	}
+});
+// Store 0's own scope is the same sentinel: a single-store till never prints "All stores".
+it('a single-store install keeps All registers under the sentinel', () => {
+	setup({ store: 'woocommerce-pos' });
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	const label = useReceiptDocument.mock.calls.at(-1)[0].localReport.report.scope.label;
+	expect(label).toContain('All registers');
+	expect(label).not.toContain('All stores');
+});

@@ -1,0 +1,20 @@
+diff --git a/build/src/start/server/middleware/ExpoGoManifestHandlerMiddleware.js b/build/src/start/server/middleware/ExpoGoManifestHandlerMiddleware.js
+index 99da91b0c882fea6b8ab7813c748b58683b2bd63..94d855f1995281b1b9e979a49080951cc586b479 100644
+--- a/build/src/start/server/middleware/ExpoGoManifestHandlerMiddleware.js
++++ b/build/src/start/server/middleware/ExpoGoManifestHandlerMiddleware.js
+@@ -146,7 +146,14 @@ class ExpoGoManifestHandlerMiddleware extends _ManifestMiddleware.ManifestMiddle
+     }
+     async _getManifestResponseAsync(requestOptions) {
+         const { exp, hostUri, expoGoConfig, bundleUrl } = await this._resolveProjectSettingsAsync(requestOptions);
+-        const runtimeVersion = await (0, _resolveRuntimeVersionWithExpoUpdatesAsync.resolveRuntimeVersionWithExpoUpdatesAsync)({
++        // WCPOS patch: a STRING runtimeVersion is what `expo-updates runtimeversion:resolve`
++        // returns verbatim (expo-updates/utils/build/resolveRuntimeVersionAsync.js), so read it
++        // from the config this request already evaluated instead of spawning a node child per
++        // manifest. On the starved CI simulator runner that spawn pushed the dev launcher's
++        // 10 s manifest request over its deadline ("There was a problem loading the project",
++        // apps/main/.maestro/README.md). Policy objects still go through the CLI unchanged.
++        const configuredRuntimeVersion = exp[requestOptions.platform]?.runtimeVersion ?? exp.runtimeVersion;
++        const runtimeVersion = (typeof configuredRuntimeVersion === 'string' && configuredRuntimeVersion ? configuredRuntimeVersion : null) ?? await (0, _resolveRuntimeVersionWithExpoUpdatesAsync.resolveRuntimeVersionWithExpoUpdatesAsync)({
+             projectRoot: this.projectRoot,
+             platform: requestOptions.platform
+         }) ?? // if expo-updates can't determine runtime version, fall back to calculation from config-plugin.

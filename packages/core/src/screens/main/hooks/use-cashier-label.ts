@@ -4,8 +4,8 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import type { EngineRecord } from '@wcpos/query';
+import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
-import { useEngineRecordByWooId } from './use-engine-document';
 import { parseRemoteId } from '../../../utils/parse-remote-id';
 import { useCustomerNameFormat } from './use-customer-name-format';
 

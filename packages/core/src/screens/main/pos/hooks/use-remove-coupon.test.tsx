@@ -5,6 +5,8 @@ import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
+import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useRemoveCoupon } from './use-remove-coupon';
 
 const localPatch = jest.fn();
@@ -31,7 +33,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('./use-recalculate-coupons', () => ({
@@ -63,6 +67,22 @@ const currentOrderRecord = {
 	getLatest: () => currentOrderRecord,
 };
 
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string, params?: Record<string, unknown>) =>
+				params ? `${key} ${JSON.stringify(params)}` : key,
+			now: Date.now,
+			read: { catalog: async () => null, paymentMethod: () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false, priceDecimals: 2 },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
@@ -77,6 +97,7 @@ const couponLine = (code: string, id?: number): CouponLine => ({
 
 describe('useRemoveCoupon', () => {
 	beforeEach(() => {
+		resetActionRegistry();
 		localPatch.mockReset();
 		recalculate.mockReset();
 		mockLoggerInfo.mockReset();
@@ -88,6 +109,46 @@ describe('useRemoveCoupon', () => {
 			coupon_lines: [couponLine('save10')],
 		};
 	});
+
+	it('presents the closed-order refusal instead of reporting coupon removal', async () => {
+		orderSnapshot = { ...orderSnapshot, ...{ status: 'completed' } };
+		recalculate.mockResolvedValue({ couponLines: [], lineItems });
+		const { result } = renderHook(() => useRemoveCoupon());
+		await result.current.removeCoupon('save10');
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_checkout.order_changed_retry',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockLoggerInfo).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it.each([undefined, 12])(
+		'removes a virtual line with id %p without a catalog lookup',
+		async (id) => {
+			const virtual = {
+				...couponLine('pos-discount', id),
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			};
+			orderSnapshot.coupon_lines = [virtual];
+			const remaining = id ? [{ ...virtual, code: null }] : [];
+			recalculate.mockResolvedValue({ couponLines: remaining, lineItems });
+			localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+			const { result } = renderHook(() => useRemoveCoupon());
+			await result.current.removeCoupon('pos-discount');
+			expect(recalculate).toHaveBeenCalledWith(
+				expect.objectContaining({ line_items: lineItems }),
+				remaining
+			);
+			expect(localPatch).toHaveBeenCalledWith({
+				document: currentOrderRecord,
+				data: expect.objectContaining({ coupon_lines: remaining, line_items: lineItems }),
+			});
+		}
+	);
 
 	it('matches coupon codes case-insensitively after trimming the requested code', async () => {
 		recalculate.mockResolvedValue({ couponLines: [], lineItems });
@@ -114,7 +175,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 12, code: null, discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
 	});
@@ -127,7 +188,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 12, code: null, discount: '1.80', discount_tax: '0', meta_data: [] },
 			{ id: 13, code: 'other', discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
@@ -141,7 +202,7 @@ describe('useRemoveCoupon', () => {
 
 		await result.current.removeCoupon('save10');
 
-		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+		expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 			{ id: 13, code: 'other', discount: '1.80', discount_tax: '0', meta_data: [] },
 		]);
 	});
@@ -191,14 +252,38 @@ describe('useRemoveCoupon', () => {
 
 		expect(localPatch).toHaveBeenCalledWith({
 			document: currentOrderRecord,
-			data: {
+			data: expect.objectContaining({
 				coupon_lines: recalculatedCouponLines,
 				line_items: recalculatedLineItems,
-			},
+			}),
 		});
 		expect(getLogger([]).info).toHaveBeenCalledWith('Coupon removed', {
 			showToast: true,
 			context: { couponCode: 'save10' },
 		});
 	});
+
+	it('a cart that moved under the removal keeps the coupon and tells the cashier', async () => {
+		const { CartChangedError } =
+			jest.requireActual<typeof import('./coupon-line-actions')>('./coupon-line-actions');
+		recalculate.mockImplementation(async () => {
+			throw new CartChangedError();
+		});
+		const { result } = renderHook(() => useRemoveCoupon());
+		await result.current.removeCoupon('save10');
+		expect(localPatch).not.toHaveBeenCalled();
+		// This suite's `t` returns the English sentence for the key.
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Cart changed during coupon application. Please try again.',
+			expect.objectContaining({ showToast: true })
+		);
+	});
 });
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

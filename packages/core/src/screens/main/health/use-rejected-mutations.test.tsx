@@ -10,10 +10,8 @@ let mockEngine = {};
 let mockRead = { rows: [], readError: false };
 
 jest.mock('@wcpos/query', () => ({
-	// The real map of each collection's server-identity column: the hook reads it
-	// to decide whether a discard destroys the record, so a stubbed one would
-	// prove nothing.
-	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
+	REJECTED_QUEUE_STATUSES: ['rejected'],
+	observeDescribedQueueRows: () => jest.requireActual('rxjs').of([]),
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('observable-hooks', () => ({

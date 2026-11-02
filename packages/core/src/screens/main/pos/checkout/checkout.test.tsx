@@ -7,13 +7,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Checkout } from './checkout';
 
-import type { PaymentFrameStatus } from './components/payment-webview';
+import type { PaymentFrameStatus } from './pay-page/use-pay-frame-gate';
 
 const mockUseCheckoutSession = jest.fn();
 const mockBlockIfDegraded = jest.fn(() => false);
 let mockStorageDegraded = false;
 
 jest.mock('../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => mockStorageDegraded,
 	useStorageMoneyPathGuard: () => ({
 		storageDegraded: mockStorageDegraded,
 		blockIfDegraded: mockBlockIfDegraded,
@@ -22,6 +23,7 @@ jest.mock('../../hooks/use-storage-health', () => ({
 const mockUseObservableSuspense = jest.fn();
 const mockUseObservableEagerState = jest.fn();
 const mockPostMessage = jest.fn();
+const mockPaymentWebview = jest.fn();
 
 interface MockPaymentWebviewProps {
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -31,11 +33,12 @@ interface MockPaymentWebviewProps {
 	ref?: React.RefObject<{ postMessage: (message: unknown) => void } | null>;
 }
 
-interface MockModalActionProps {
+interface MockDialogActionProps {
 	children?: React.ReactNode;
 	testID?: string;
 	disabled?: boolean;
 	loading?: boolean;
+	asChild?: boolean;
 	onPress?: () => void | Promise<void>;
 }
 
@@ -47,8 +50,8 @@ const notRendered = (name: string) => () => {
 let paymentWebviewProps: MockPaymentWebviewProps = {
 	setFrameStatus: notRendered('PaymentWebview'),
 };
-/** Props last handed to the Process Payment ModalAction. */
-let processPaymentProps: MockModalActionProps = {
+/** Props last handed to the Process Payment footer intent. */
+let processPaymentProps: MockDialogActionProps = {
 	onPress: notRendered('process-payment-button'),
 };
 
@@ -58,7 +61,16 @@ jest.mock('observable-hooks', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: jest.fn(), canDismiss: () => true, dismiss: jest.fn() }),
+	useRouter: () => ({
+		replace: jest.fn(),
+		dismissTo: jest.fn(),
+		canDismiss: () => true,
+		dismiss: jest.fn(),
+	}),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
 }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
@@ -70,6 +82,7 @@ jest.mock('./hooks/use-checkout-session', () => ({
 
 jest.mock('./components/payment-webview', () => ({
 	PaymentWebview: (props: MockPaymentWebviewProps) => {
+		mockPaymentWebview(props);
 		paymentWebviewProps = props;
 		// The real component forwards the ref through to the WebView, which exposes
 		// `postMessage`. Stand that in so the test can observe (or not observe) the
@@ -81,49 +94,51 @@ jest.mock('./components/payment-webview', () => ({
 	},
 }));
 jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
+// This suite is about the legacy gateway checkout, which is what a store WITHOUT
+// the payments contract still gets. The contract branch has its own suite
+// (tender/tender-checkout.test.tsx); mounting it here would drag the tab strip →
+// expo-haptics into a suite that transforms neither.
+let paymentMethodsLoaded = false;
+jest.mock('../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({
+		methods: [],
+		byId: new Map(),
+		contract: null,
+		loaded: paymentMethodsLoaded,
+		unsupportedSchema: false,
+	}),
+}));
+jest.mock('./tender/tender-checkout', () => ({
+	TenderCheckout: () => <div data-testid="tender-checkout" />,
+}));
 // The R1 banner has its own suite (cart/totals-changed-banner.test.tsx); here it
 // is only a child, and rendering it for real drags @wcpos/components/icon-button
 // → expo-haptics into a suite that transforms neither.
 jest.mock('../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
-	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
-	// Superset of the mock #1019 introduced: it also captures the props so a test
-	// can invoke the handler directly, and exposes the `loading` affordance.
-	ModalAction: ({ children, ...props }: MockModalActionProps) => {
-		if (props.testID === 'process-payment-button') {
-			processPaymentProps = props;
-		}
-		return (
-			<button
-				data-testid={props.testID}
-				disabled={!!props.disabled}
-				data-loading={props.loading ? 'true' : 'false'}
-				onClick={props.onPress}
-			>
-				{children}
-			</button>
-		);
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		if ((props.intent || undefined)?.testID === 'process-payment-button')
+			processPaymentProps = props.intent as unknown as MockDialogActionProps;
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return <Footer {...props} />;
 	},
+	DialogClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 }));
 
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		testID,
-		onPress,
-	}: {
-		children?: React.ReactNode;
-		testID?: string;
-		onPress?: () => void;
-	}) => (
-		<button data-testid={testID} onClick={onPress}>
+	Button: ({ children, testID, onPress, disabled, loading }: MockDialogActionProps) => (
+		<button
+			data-testid={testID}
+			disabled={!!disabled}
+			data-loading={loading ? 'true' : 'false'}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),
@@ -318,6 +333,24 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		paymentWebviewProps = { setFrameStatus: notRendered('PaymentWebview') };
 		processPaymentProps = { onPress: notRendered('process-payment-button') };
 	});
+	it('blocks the older-store frame on a catalog error and retries the catalog fetch', () => {
+		const refetch = jest.fn();
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
+		mockUseObservableEagerState.mockReturnValue(null);
+		mockUseCheckoutSession.mockReturnValue({
+			mode: 'webview',
+			loading: false,
+			gatewayError: 'fetch failed',
+			error: 'payment_gateways_fetch_failed',
+			settledOrderStatuses: {},
+			refetch,
+		});
+		render(<Checkout resource={{} as never} />);
+		expect(mockPaymentWebview).not.toHaveBeenCalled();
+		expect(screen.getByText('pos_checkout.gateway_catalog_unavailable')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('checkout-gateway-catalog-retry'));
+		expect(refetch).toHaveBeenCalledTimes(1);
+	});
 
 	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {
 		const button = renderCheckout({ mode: 'webview' });
@@ -348,7 +381,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		});
 
 		expect(button.disabled).toBe(true);
-		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+		expect(screen.getByTestId('checkout-payment-form-unavailable-title').textContent).toBe(
 			'pos_checkout.payment_form_load_failed_retry'
 		);
 		expect(paymentWebviewProps.retryToken).toBe(0);
@@ -368,7 +401,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		});
 
 		expect(button.disabled).toBe(true);
-		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+		expect(screen.getByTestId('checkout-payment-form-unavailable-title').textContent).toBe(
 			'pos_checkout.payment_form_navigation_failed'
 		);
 		expect(screen.queryByTestId('checkout-payment-form-retry')).toBeNull();
@@ -542,4 +575,23 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(startCheckout).toHaveBeenCalledTimes(1);
 		expect(mockPostMessage).not.toHaveBeenCalled();
 	});
+
+	it('latches the checkout mode when the modal opens — a descriptor change mid-checkout does not swap it', () => {
+		paymentMethodsLoaded = true;
+		mockUseObservableSuspense.mockReturnValue(makeOrder(PAYMENT_URL));
+		mockUseObservableEagerState.mockReturnValue(null);
+		const { rerender } = render(<Checkout resource={{} as never} />);
+		expect(screen.getByTestId('tender-checkout')).toBeTruthy();
+
+		// The store's answer changes underneath an open checkout (cache invalidated, config refresh).
+		paymentMethodsLoaded = false;
+		rerender(<Checkout resource={{} as never} />);
+
+		expect(screen.getByTestId('tender-checkout')).toBeTruthy();
+		paymentMethodsLoaded = false;
+	});
 });
+
+// Notice links out through the native URL boundary; keep that boundary inert in jsdom.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

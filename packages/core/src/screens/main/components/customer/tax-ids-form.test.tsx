@@ -4,9 +4,9 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { FormProvider, useForm, type UseFormReturn } from 'react-hook-form';
+import { FormProvider, useFieldArray, useForm, type UseFormReturn } from 'react-hook-form';
 
-import { TaxIdsForm } from './tax-ids-form';
+import { TaxIdsForm, useNewTaxIdRow } from './tax-ids-form';
 
 import type { TaxIdType } from '../../../../lib/tax-id';
 
@@ -27,33 +27,14 @@ jest.mock('@wcpos/query', () => ({
 		selector(mockStore),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children, onPress }: React.PropsWithChildren<{ onPress: () => void }>) => (
-		<button data-testid="add-tax-id" onClick={onPress}>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	CollapsibleContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
-jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	TooltipContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	TooltipTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/form', () => {
 	const { Controller } = jest.requireActual('react-hook-form') as typeof import('react-hook-form');
@@ -66,23 +47,30 @@ jest.mock('@wcpos/components/form', () => {
 			onChange,
 		}: {
 			customComponent: React.ComponentType<{
-				value: { value: string; label: string };
+				value: string;
+				onChange: (value: string | undefined) => void;
 				children?: React.ReactNode;
 			}>;
 			value: string;
-			onChange: (value: TaxIdType) => void;
-		}) => (
-			<>
-				<Component value={{ value, label: value }} />
-				<button data-testid="type-change" onClick={() => onChange(mockNextType)} />
-			</>
-		),
+			onChange: (value: string | undefined) => void;
+		}) => <Component value={value} onChange={onChange} />,
 	};
 });
 jest.mock('@wcpos/components/select', () => ({
-	Select: ({ value, children }: React.PropsWithChildren<{ value?: { label?: string } }>) => (
+	Select: ({
+		value,
+		onValueChange,
+		children,
+	}: React.PropsWithChildren<{
+		value?: { label?: string };
+		onValueChange: (option: { value: string; label: string }) => void;
+	}>) => (
 		<div>
 			<span data-testid="selected-type">{value?.label}</span>
+			<button
+				data-testid="type-change"
+				onClick={() => onValueChange({ value: mockNextType, label: mockNextType })}
+			/>
 			{children}
 		</div>
 	),
@@ -103,10 +91,13 @@ function renderForm(defaultValues: FormValues) {
 	const formRef = React.createRef<UseFormReturn<FormValues>>();
 	function Wrapper() {
 		const form = useForm({ defaultValues });
+		const newTaxIdRow = useNewTaxIdRow(form.control);
+		const { append } = useFieldArray({ control: form.control, name: 'tax_ids' });
 		React.useImperativeHandle(formRef, () => form);
 		return (
 			<FormProvider {...form}>
 				<TaxIdsForm />
+				<button data-testid="add-tax-id" onClick={() => append(newTaxIdRow())} />
 			</FormProvider>
 		);
 	}

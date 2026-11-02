@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
-import Animated from 'react-native-reanimated';
 
-import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
+import { Trigger as SelectPrimitiveTrigger } from './trigger';
+import { Value as SelectPrimitiveValue } from './value';
 import { toControlledSingleProps } from './controlled-value';
 import { resolveOption } from './resolve-option';
 import {
@@ -14,12 +14,20 @@ import {
 	SelectMultiTrigger,
 	SelectMultiValue,
 } from './select-multi';
-import { Button } from '../button';
+import { fieldBox } from '../field-box';
 import { Icon } from '../icon';
-import { useLayoutWidth } from '../lib/use-layout-width';
+import { useLayoutWidth } from './use-layout-width';
+import {
+	AnchoredOverlay,
+	type OverlayAnchor,
+	type OverlayScrimProps,
+	useOverlayPresentation,
+} from '../lib/overlay';
+import { MenuRow } from '../menu-row';
+import { Text } from '../text';
+import { webTestID } from './test-id';
 import { cn } from '../lib/utils';
 
-import type { ButtonProps } from '../button';
 import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';
 
 /**
@@ -53,7 +61,12 @@ function Select({ multiple, ...props }: SelectRootProps) {
 
 const useRootContext = SelectPrimitive.useRootContext;
 
-const SelectGroup = SelectPrimitive.Group;
+/** On the phone sheet no primitive Content is mounted: the parts draw plain Views. */
+const useSheet = () => useOverlayPresentation() === 'bottom';
+function SelectGroup(props: SelectPrimitive.GroupProps) {
+	if (useSheet()) return <View {...props} role="group" />;
+	return <SelectPrimitive.Group {...props} />;
+}
 
 function SelectValue({
 	placeholder,
@@ -88,13 +101,22 @@ function SelectValue({
 	);
 }
 
+/** The closed face's layout inside the field box: the value, then the chevron at the end. */
+const SELECT_FACE = 'flex-row items-center justify-between gap-2 px-3 py-2 [&>span]:line-clamp-1';
+
+/**
+ * `tone="attention"` draws a changed value's box (a staged hand-over); open and disabled still win.
+ * A multi-select trigger ignores it.
+ */
+type SelectTriggerProps = SelectPrimitive.TriggerProps & { tone?: 'attention' };
+
 function SelectTrigger({
 	className,
 	children,
-	asChild,
 	onLayout: onLayoutProp,
+	tone,
 	...props
-}: SelectPrimitive.TriggerProps) {
+}: SelectTriggerProps) {
 	const isMulti = React.useContext(MultiModeContext);
 	const layoutHandler = React.useContext(SelectLayoutContext);
 
@@ -106,111 +128,98 @@ function SelectTrigger({
 		[layoutHandler, onLayoutProp]
 	);
 
-	if (isMulti) {
-		if (asChild) {
-			return (
-				<SelectMultiTrigger
-					asChild
-					className={className}
-					onLayout={handleLayout}
-					{...(props as any)}
-				>
-					{children}
-				</SelectMultiTrigger>
-			);
-		}
-		return (
-			<SelectMultiTrigger
-				className={cn(
-					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
-					props.disabled && 'web:cursor-not-allowed opacity-50',
-					className
-				)}
-				onLayout={handleLayout}
-				{...(props as any)}
-			>
-				<>{children}</>
-				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-			</SelectMultiTrigger>
-		);
-	}
-
+	const Trigger = isMulti ? SelectMultiTrigger : SingleSelectTrigger;
 	return (
-		<SelectPrimitiveTrigger
-			asChild={asChild}
-			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
-				className
-			)}
+		<Trigger
+			className={cn(SELECT_FACE, className)}
 			onLayout={handleLayout}
-			{...props}
+			{...(isMulti ? {} : { tone })}
+			{...(props as any)}
 		>
 			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-		</SelectPrimitiveTrigger>
+			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
+		</Trigger>
 	);
+}
+
+/** The single select's field box, lit while its list is open. */
+function SingleSelectTrigger({ className, tone, ...props }: SelectTriggerProps) {
+	const { open } = SelectPrimitive.useRootContext();
+	const state = props.disabled ? 'disabled' : open ? 'open' : (tone ?? 'rest');
+	return <SelectPrimitiveTrigger className={cn(fieldBox({ state }), className)} {...props} />;
 }
 
 /**
  * Internal single-select content component that safely calls useRootContext at top level.
  */
 function SelectSingleContent({
-	className,
-	children,
 	position = 'popper',
-	portalHost,
 	matchWidth,
 	...props
-}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
-	const { open } = SelectPrimitive.useRootContext();
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
+	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (!open) return null;
-
 	return (
-		<SelectPrimitive.Portal hostName={portalHost}>
-			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<SelectPrimitive.Content
-						className={cn(
-							'border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
-							position === 'popper' &&
-								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-							open
-								? 'web:zoom-in-95 web:animate-in web:fade-in-0'
-								: 'web:zoom-out-95 web:animate-out web:fade-out-0',
-							className
-						)}
-						style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
-						position={position}
-						{...props}
-					>
-						<SelectPrimitive.Viewport
-							className={cn(
-								'p-1',
-								position === 'popper' &&
-									'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
-							)}
-						>
-							{children}
-						</SelectPrimitive.Viewport>
-					</SelectPrimitive.Content>
-				</Animated.View>
-			</SelectPrimitive.Overlay>
-		</SelectPrimitive.Portal>
+		<AnchoredOverlay
+			anchor={SELECT}
+			open={open}
+			onOpenChange={onOpenChange}
+			size={cn(
+				'relative max-h-96 min-w-32 p-1.5',
+				// The trigger-width floor sits on the bordered, padded box, not the viewport: there it
+				// made trigger-width rows inside a trigger-width box, overflowing its padding and border.
+				position === 'popper' && 'min-w-(--radix-select-trigger-width)',
+				position === 'popper' &&
+					'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1'
+			)}
+			// Options in a group: a listbox promises arrow keys a touch sheet lacks (CodeRabbit, #2215).
+			list="group"
+			content={{
+				style: matchWidth && triggerWidth ? { width: triggerWidth } : undefined,
+				position,
+				...props,
+			}}
+			sheetStyle={props.style}
+		/>
 	);
 }
+
+/** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
+function SelectPanel({ position, children, ...props }: SelectPrimitive.ContentProps) {
+	return (
+		<SelectPrimitive.Content position={position} {...props}>
+			<SelectPrimitive.Viewport
+				className={cn('p-0', position === 'popper' && 'h-(--radix-select-trigger-height) w-full')}
+			>
+				{children}
+			</SelectPrimitive.Viewport>
+		</SelectPrimitive.Content>
+	);
+}
+
+/**
+ * The primitive's WEB Overlay renders its Pressable with no children and emits `children`
+ * as a sibling (Radix positions the anchored content itself), so the phone sheet fell out
+ * of the scrim's `justify-end` box and rendered after the app root: a dimmed screen with the
+ * sheet below the fold, on every single select at phone width on web. The scrim here is the
+ * plain Pressable the primitive would render, with its children kept inside it; native keeps
+ * the primitive's Overlay (the shell renders that scrim childless by design).
+ */
+function SelectScrim(p: OverlayScrimProps) {
+	return Platform.OS === 'web' ? <Pressable {...p} /> : <SelectPrimitive.Overlay {...p} />;
+}
+const SELECT: OverlayAnchor = {
+	Portal: SelectPrimitive.Portal,
+	Scrim: SelectScrim,
+	Content: SelectPanel,
+};
 
 function SelectContent({
 	matchWidth,
 	...props
-}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
 	const isMulti = React.useContext(MultiModeContext);
 	const triggerWidth = React.useContext(SelectWidthContext);
 
@@ -232,15 +241,22 @@ function SelectContent({
 }
 
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
+	if (useSheet())
+		return (
+			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
+				<Text variant="caption">{props.children}</Text>
+			</View>
+		);
 	return (
 		<SelectPrimitive.Label
-			className={cn('text-popover-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
+			className={cn('text-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
 			{...props}
 		/>
 	);
 }
 
 function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
+	const sheet = useSheet();
 	const isMulti = React.useContext(MultiModeContext);
 
 	if (isMulti) {
@@ -256,57 +272,68 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 		);
 	}
 
-	/**
-	 * On web this Item is a Radix node, not a react-native-web Pressable, so nothing translates
-	 * `testID` into the `data-testid` that RNW gives every other control — the prop reaches the
-	 * DOM as an inert `testid` attribute and no test can address the option. Selecting the option
-	 * by its visible text instead is not available to us: the labels are translated, and the repo
-	 * forbids localized text as an E2E selector.
-	 */
-	const webTestProps = (
-		Platform.OS === 'web' && props.testID ? { 'data-testid': props.testID } : {}
-	) as Record<string, unknown>;
+	if (sheet)
+		return (
+			<SelectSheetItem className={className} {...props}>
+				{children}
+			</SelectSheetItem>
+		);
+	return <SelectAnchoredItem className={className} {...props} />;
+}
 
+/** Native presses the row through `asChild`; web's Radix option hosts it (a nested pressable swallows its click). */
+function SelectAnchoredItem({ className, ...props }: SelectPrimitive.ItemProps) {
+	const { value } = SelectPrimitive.useRootContext();
+	// On web the Radix item is a DOM node: `testID` must not reach it (React warns on the
+	// unknown attribute), `data-testid` carries the id instead. Native keeps `testID`.
+	const { testID, ...item } = props;
 	return (
 		<SelectPrimitive.Item
-			className={cn(
-				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
-				className
-			)}
-			{...props}
-			{...webTestProps}
+			asChild={Platform.OS !== 'web'}
+			className="web:outline-none web:focus:bg-accent rounded-md"
+			{...item}
+			{...(Platform.OS === 'web' ? webTestID(testID) : { testID })}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-				<SelectPrimitive.ItemIndicator>
-					<Icon name="check" className="text-popover-foreground" />
-				</SelectPrimitive.ItemIndicator>
-			</View>
-			<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+			<MenuRow
+				hosted={Platform.OS === 'web'}
+				role="option"
+				choice
+				selected={value?.value === props.value}
+				disabled={!!props.disabled}
+				className={className}
+				label={<SelectPrimitive.ItemText className="text-foreground text-base" />}
+			/>
 		</SelectPrimitive.Item>
 	);
 }
 
-function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
+function SelectSheetItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
+	const { value, onValueChange, onOpenChange } = SelectPrimitive.useRootContext();
 	return (
-		<SelectPrimitive.Separator className={cn('bg-muted -mx-1 my-1 h-px', className)} {...props} />
+		<MenuRow
+			role="option"
+			choice
+			selected={value?.value === props.value}
+			disabled={!!props.disabled}
+			testID={props.testID}
+			className={className}
+			label={(children as React.ReactNode) ?? props.label}
+			onPress={(e) => {
+				props.onPress?.(e);
+				onValueChange({ value: props.value, label: props.label });
+				if (props.closeOnPress !== false) onOpenChange(false);
+			}}
+		/>
 	);
 }
 
-function SelectButton({ className, children, ...props }: ButtonProps) {
+function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
+	if (useSheet()) return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
 	return (
-		<Button
-			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
-				className
-			)}
-			variant="ghost"
+		<SelectPrimitive.Separator
+			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
 			{...props}
-		>
-			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-		</Button>
+		/>
 	);
 }
 
@@ -314,6 +341,7 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
  * Platform: WEB ONLY
  */
 function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) {
+	if (useSheet()) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -331,6 +359,7 @@ function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpB
  * Platform: WEB ONLY
  */
 function SelectScrollDownButton({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) {
+	if (useSheet()) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -354,7 +383,14 @@ type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange
 	fallbackLabel?: string;
 	matchWidth?: boolean;
 	triggerClassName?: string;
+	/** The trigger's `tone` (see `SelectTrigger`). */
+	tone?: 'attention';
 	valueClassName?: string;
+	/** The trigger's testID; each option takes `${triggerTestID}-option-${value}`. */
+	triggerTestID?: string;
+	/** The root takes no aria props, so a field's label reference goes to the trigger. */
+	'aria-labelledby'?: string;
+	portalHost?: string;
 };
 
 function OptionSelect({
@@ -365,7 +401,11 @@ function OptionSelect({
 	fallbackLabel,
 	matchWidth,
 	triggerClassName,
+	tone,
 	valueClassName,
+	triggerTestID,
+	'aria-labelledby': labelledBy,
+	portalHost,
 	...props
 }: OptionSelectProps) {
 	const selected = options.find((option) => option.value === value);
@@ -380,10 +420,18 @@ function OptionSelect({
 			onValueChange={(option) => onChange?.(option?.value, resolveOption(options, option))}
 			{...props}
 		>
-			<SelectTrigger className={triggerClassName}>
+			{/* The trigger owns the dimmed look and the touch/native press guard: a root-only
+			    `disabled` neither dims it nor stops a press from opening it. */}
+			<SelectTrigger
+				testID={triggerTestID}
+				className={triggerClassName}
+				tone={tone}
+				disabled={props.disabled}
+				aria-labelledby={labelledBy}
+			>
 				<SelectValue className={valueClassName} placeholder={placeholder} />
 			</SelectTrigger>
-			<SelectContent matchWidth={matchWidth}>
+			<SelectContent matchWidth={matchWidth} portalHost={portalHost}>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem
@@ -391,6 +439,7 @@ function OptionSelect({
 							value={option.value}
 							label={option.label}
 							disabled={option.disabled}
+							testID={triggerTestID ? `${triggerTestID}-option-${option.value}` : undefined}
 						/>
 					))}
 				</SelectGroup>
@@ -412,7 +461,6 @@ export {
 	SelectTrigger,
 	SelectValue,
 	type Option,
-	SelectButton,
 	useRootContext,
 	SelectPrimitiveTrigger,
 };

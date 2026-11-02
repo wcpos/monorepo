@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 import { extractShippingLineData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type ShippingLine = import('@wcpos/query').OrderShippingLine;
 
 /**
  * Custom hook to retrieve and process shipping line data.

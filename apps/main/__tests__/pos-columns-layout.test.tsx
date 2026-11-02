@@ -1,0 +1,502 @@
+import * as React from 'react';
+
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import ResizablePOSColumns from '../app/(app)/(drawer)/(pos)/(columns)/index';
+import POSProductsTab from '../app/(app)/(drawer)/(pos)/(tabs)/index';
+
+// Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
+jest.resetModules();
+
+type PanelRecord = { id: string; testID?: string; defaultSize?: number };
+
+const mockPanels: PanelRecord[] = [];
+const mockChildOrder: string[] = [];
+let mockLayoutHandler:
+	((layout: number[], meta: { isUserInteraction: boolean }) => void) | undefined;
+let mockPosition: 'left' | 'right' = 'right';
+const mockPatchUI = jest.fn();
+let mockScreenSize = 'lg';
+let mockSegments: string[] = [];
+let mockSuspendedPane: 'products' | 'cart' | null = null;
+const mockPendingPane = new Promise<void>(() => {});
+const mockMarkInteractive = jest.fn();
+
+/**
+ * `useUISettings` hands back a stable RxState container; `useDocField` is what subscribes a
+ * component to one of its fields. This stands in for that subscription so a settings change
+ * can be pushed at a MOUNTED route, the way the in-place settings dialog does it.
+ */
+const mockUISettings = {
+	width: 60,
+	// `position` is the CART's side (`pos-cart`, #3117): `right` is the default products-first
+	// layout. One container stands in for both settings docs here.
+	// A getter, because the real RxState container is stable and its FIELDS change under it.
+	// An object literal rebuilt per call would freeze whatever `useDocField` captured.
+	get position() {
+		return mockPosition;
+	},
+};
+const mockUISettingsListeners = new Set<() => void>();
+const mockSubscribeUISettings = (listener: () => void) => {
+	mockUISettingsListeners.add(listener);
+	return () => {
+		mockUISettingsListeners.delete(listener);
+	};
+};
+
+// Native press handling is unrelated to Suspense; avoid its lazy React import after resetModules.
+jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => ({
+	default: 'Pressable',
+}));
+jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
+// The paid flash reads uniwind (ESM, untransformed here) and Reanimated colour interpolation; this
+// layout test wants the plain surface it wraps.
+jest.mock('@wcpos/components/flash-surface', () => ({
+	FlashSurface: jest.requireActual('@wcpos/components/edge-surface').EdgeSurface,
+}));
+// The EAS Observe marker needs the native module; the route's layout is what is under test.
+jest.mock('expo-observe', () => {
+	const react = jest.requireActual('react');
+	return {
+		ObserveInteractiveMarker: () => {
+			react.useEffect(() => {
+				mockMarkInteractive();
+			}, []);
+			return null;
+		},
+	};
+});
+// iPad-like insets: a status bar at the top and a home indicator at the bottom.
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockScreenSize === 'sm',
+}));
+jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/query', () => {
+	const react = jest.requireActual('react');
+	return {
+		useDocField: (source: unknown, select: (value: unknown) => unknown) => {
+			const read = () => select(source);
+			return react.useSyncExternalStore(mockSubscribeUISettings, read, read);
+		},
+	};
+});
+jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: mockUISettings, patchUI: mockPatchUI }),
+}));
+/**
+ * The slot registry and the panel registrations are the code under test, so they are the two
+ * @wcpos/core modules that stay REAL — pinned to this checkout's source, because a linked
+ * worktree borrows `node_modules` (and therefore the @wcpos/core symlink) from the main
+ * tree. `virtual` covers the case where that symlink has no such subpath yet.
+ *
+ * The two panel bodies the registrations then reach are stubbed under BOTH specifiers: they
+ * are one file wherever the symlink points here, and two while it does not.
+ */
+jest.mock(
+	'@wcpos/core/extensions/slots',
+	() => jest.requireActual('../../../packages/core/src/extensions/slots'),
+	{ virtual: true }
+);
+jest.mock(
+	'@wcpos/core/screens/main/pos/register-panel-entries',
+	() => jest.requireActual('../../../packages/core/src/screens/main/pos/register-panel-entries'),
+	{ virtual: true }
+);
+/**
+ * The wide layout now lives in `POSColumns` (wcpos/roadmap#165), reached through the same
+ * borrowed-symlink situation as the slots above: keep it REAL and pinned to this checkout.
+ * What it reaches for beyond the slot — the checkout mode, the tender column, the receipt
+ * stage, the current order, reanimated's native init — is not under test here.
+ */
+jest.mock(
+	'@wcpos/core/screens/main/pos/columns',
+	() => jest.requireActual('../../../packages/core/src/screens/main/pos/columns'),
+	{ virtual: true }
+);
+jest.mock('react-native-reanimated', () => {
+	const react = jest.requireActual('react');
+	return {
+		__esModule: true,
+		default: {
+			View: ({ children }: { children: React.ReactNode }) =>
+				react.createElement(react.Fragment, null, children),
+		},
+		FadeIn: { duration: () => ({}) },
+		FadeOut: { duration: () => ({}) },
+		// `lib/motion` builds its easing curves at import; the columns import it for CROSSFADE.
+		Easing: { bezier: () => (t: number) => t },
+		ReduceMotion: { System: 'system' },
+	};
+});
+jest.mock('../../../packages/core/src/screens/main/pos/contexts/current-order', () => ({
+	useCurrentOrder: () => ({
+		currentOrderRecord: { uuid: 'draft', isNew: true },
+		openOrders: [],
+		setCurrentOrderID: () => {},
+	}),
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/checkout/checkout-mode', () => ({
+	useOrderCheckoutStage: () => 'cart',
+	useCheckoutMode: () => ({
+		checkoutOrders: new Set(),
+		receiptOrders: new Set(),
+		selectedReceiptOrder: null,
+	}),
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/checkout/column/checkout-column', () => ({
+	CheckoutColumn: () => null,
+}));
+jest.mock(
+	'../../../packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage',
+	() => ({ ReceiptStage: () => null })
+);
+// The columns route and the panel entry render the v2 products screen since the register switch.
+jest.mock('@wcpos/core/screens/main/pos/products', () => ({
+	POSProducts: () => {
+		if (mockSuspendedPane === 'products') throw mockPendingPane;
+		return null;
+	},
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
+	POSProducts: () => {
+		if (mockSuspendedPane === 'products') throw mockPendingPane;
+		return null;
+	},
+}));
+jest.mock('@wcpos/core/screens/main/pos/cart', () => ({
+	OpenOrders: () => {
+		if (mockSuspendedPane === 'cart') throw mockPendingPane;
+		return null;
+	},
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/cart', () => ({
+	OpenOrders: () => {
+		if (mockSuspendedPane === 'cart') throw mockPendingPane;
+		return null;
+	},
+}));
+jest.mock('@wcpos/core/screens/main/pos/cart/register-bar', () => {
+	const react = jest.requireActual('react');
+	const { View } = jest.requireActual('react-native');
+	return {
+		RegisterBar: () => react.createElement(View, { testID: 'register-bar-stub' }),
+	};
+});
+jest.mock('@wcpos/core/screens/main/components/session-hold-banner', () => ({
+	SessionHoldBanner: () => null,
+}));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/error-boundary/fallback-screen', () => ({
+	FallbackScreen: () => null,
+}));
+jest.mock('@wcpos/components/suspense', () => {
+	const react = jest.requireActual('react');
+	const { View } = jest.requireActual('react-native');
+	return {
+		Suspense: ({ children }: { children: React.ReactNode }) =>
+			react.createElement(
+				react.Suspense,
+				{
+					fallback: react.createElement(View, { testID: 'pane-fallback' }),
+				},
+				children
+			),
+	};
+});
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
+// The Cart tab's count reads the current order through the mocked provider, which has no record.
+jest.mock('@wcpos/core/screens/main/pos/cart/cart-tab-count', () => ({ CartTabCount: () => null }));
+jest.mock('@wcpos/components/panels', () => {
+	const react = jest.requireActual('react');
+	return {
+		PanelGroup: ({
+			children,
+			onLayoutChanged,
+		}: {
+			children: React.ReactNode;
+			onLayoutChanged: (layout: number[], meta: { isUserInteraction: boolean }) => void;
+		}) => {
+			mockLayoutHandler = onLayoutChanged;
+			return react.createElement(react.Fragment, null, children);
+		},
+		Panel: ({ children, ...props }: PanelRecord & { children: React.ReactNode }) => {
+			mockPanels.push({ id: props.id, testID: props.testID, defaultSize: props.defaultSize });
+			mockChildOrder.push(props.id);
+			return react.createElement(react.Fragment, null, children);
+		},
+		PanelResizeHandle: ({ testID }: { testID: string }) => {
+			mockChildOrder.push(testID);
+			return null;
+		},
+	};
+});
+
+let view: ReactTestRenderer | undefined;
+
+function resetRecords() {
+	mockPanels.length = 0;
+	mockChildOrder.length = 0;
+}
+
+function renderColumns(position: 'left' | 'right') {
+	mockPosition = position;
+	resetRecords();
+	mockLayoutHandler = undefined;
+	mockPatchUI.mockClear();
+	act(() => {
+		view = create(<ResizablePOSColumns />);
+	});
+}
+
+/** Change a UI setting the way the in-place settings dialog does: no remount. */
+function setPositionSetting(position: 'left' | 'right') {
+	mockPosition = position;
+	resetRecords();
+	act(() => {
+		mockUISettingsListeners.forEach((listener) => listener());
+	});
+}
+
+beforeEach(() => {
+	mockScreenSize = 'lg';
+	mockSegments = [];
+	mockSuspendedPane = null;
+	mockMarkInteractive.mockClear();
+});
+
+afterEach(() => {
+	if (view) act(() => view!.unmount());
+	view = undefined;
+});
+
+describe('POS columns layout as a pos.columns.panel slot', () => {
+	it('renders the registered panels products-first by default, with a handle between them', () => {
+		renderColumns('right');
+
+		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
+		expect(mockPanels).toEqual([
+			{ id: 'products', testID: 'pos-products-panel', defaultSize: 60 },
+			{ id: 'cart', testID: 'pos-cart-panel', defaultSize: 40 },
+		]);
+	});
+
+	it('reverses the panels when the cart is set to the left', () => {
+		renderColumns('left');
+
+		expect(mockChildOrder).toEqual(['cart', 'pos-resize-handle', 'products']);
+		// Both sides stay sized whichever order they render in (#1620).
+		expect(mockPanels).toEqual([
+			{ id: 'cart', testID: 'pos-cart-panel', defaultSize: 40 },
+			{ id: 'products', testID: 'pos-products-panel', defaultSize: 60 },
+		]);
+	});
+
+	it('reorders a MOUNTED route when the position setting changes', () => {
+		renderColumns('right');
+		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
+
+		setPositionSetting('left');
+		expect(mockChildOrder).toEqual(['cart', 'pos-resize-handle', 'products']);
+
+		setPositionSetting('right');
+		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
+	});
+
+	it.each([
+		['right', [70, 30], 70],
+		['left', [30, 70], 70],
+	] as const)(
+		'writes the products panel width with the cart at %s whichever index it sits at',
+		(position, layout, expected) => {
+			renderColumns(position);
+
+			act(() => mockLayoutHandler?.(layout as unknown as number[], { isUserInteraction: true }));
+			expect(mockPatchUI).toHaveBeenCalledWith({ width: expected });
+		}
+	);
+
+	it('ignores layout changes that were not driven by the user', () => {
+		renderColumns('right');
+
+		act(() => mockLayoutHandler?.([70, 30], { isUserInteraction: false }));
+		expect(mockPatchUI).not.toHaveBeenCalled();
+	});
+});
+
+describe('phone Products pane (#2363)', () => {
+	// Count only host nodes so React Native's composite View and its host are not counted twice.
+	it('keeps the register bar in the small columns Products pane after landing on /cart', () => {
+		mockScreenSize = 'sm';
+		mockSegments = ['cart'];
+		renderColumns('right');
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+
+	it('keeps the register bar in the small columns Products pane at the root route', () => {
+		mockScreenSize = 'sm';
+		mockSegments = [];
+		renderColumns('right');
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+
+	it('does not render the phone Products pane or its register bar in wide columns', () => {
+		mockScreenSize = 'lg';
+		renderColumns('right');
+
+		expect(view!.root.findAllByProps({ testID: 'pos-products-tab' })).toHaveLength(0);
+		expect(view!.root.findAllByProps({ testID: 'register-bar-stub' })).toHaveLength(0);
+	});
+
+	it('keeps the register bar in the tabs Products pane', () => {
+		act(() => {
+			view = create(<POSProductsTab />);
+		});
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+});
+
+describe('phone columns tab across a drawer round trip (#2363)', () => {
+	const cartSegments = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart'];
+	const paneDisplays = () =>
+		view!.root
+			.findAll((node) => typeof node.type === 'string' && node.props.style?.display)
+			.map((node) => node.props.style.display);
+
+	it('keeps Products active after leaving POS through the drawer and returning', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('right');
+		expect(paneDisplays()).toEqual(['none', 'flex']);
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(orders)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+	});
+
+	it('still switches to Cart on an in-POS move onto /cart', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('right');
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(pos)', '(columns)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['none', 'flex']);
+	});
+
+	it('labels the phone tabs through translation keys, not English literals', () => {
+		mockScreenSize = 'sm';
+		renderColumns('right');
+		const tabText = (testID: string) =>
+			view!.root
+				.findByProps({ testID })
+				.findAll((node) => typeof node.props.children === 'string')
+				.map((node) => node.props.children);
+		expect(tabText('pos-tab-products')).toContain('common.products');
+		expect(tabText('pos-tab-cart')).toContain('pos_cart.tab_cart');
+	});
+});
+
+// A marker outside the active pane's Suspense boundary marks a fallback as interactive.
+describe('small POS columns interactive timing', () => {
+	it.each(['products', 'cart'] as const)(
+		'waits for the active %s pane even when the inactive pane is ready',
+		async (pane) => {
+			mockScreenSize = 'sm';
+			mockSegments = pane === 'cart' ? ['cart'] : [];
+			mockSuspendedPane = pane;
+			await act(async () => {
+				view = create(<ResizablePOSColumns />);
+			});
+
+			expect(view!.root.findAllByProps({ testID: 'pane-fallback' }).length).toBeGreaterThan(0);
+			expect(mockMarkInteractive).not.toHaveBeenCalled();
+
+			mockSuspendedPane = null;
+			await act(async () => {
+				view!.update(<ResizablePOSColumns />);
+			});
+			expect(view!.root.findAllByProps({ testID: 'pane-fallback' })).toHaveLength(0);
+			expect(mockMarkInteractive).toHaveBeenCalledTimes(1);
+		}
+	);
+});
+
+// Every edge-touching surface pads its own inset inside its own background; the root never
+// does (owner, iPad, 2026-10-14: grey bands under the status bar and the home indicator).
+describe('safe-area insets belong to the surfaces at the edges', () => {
+	/** The flattened style of the one host node with this testID. */
+	const hostStyle = (testID: string) => {
+		const [node] = view!.root
+			.findAllByProps({ testID })
+			.filter((candidate) => typeof candidate.type === 'string');
+		const style = [node.props.style].flat(Infinity).filter(Boolean);
+		return Object.assign({}, ...style) as { paddingTop?: number; paddingBottom?: number };
+	};
+
+	it('pads each wide column, never the screen-pos root', () => {
+		mockScreenSize = 'lg';
+		renderColumns('right');
+
+		const root = hostStyle('screen-pos');
+		expect(root.paddingTop).toBeUndefined();
+		expect(root.paddingBottom).toBeUndefined();
+		for (const column of ['pos-products-column', 'pos-cart-column']) {
+			expect(hostStyle(column)).toMatchObject({ paddingTop: 24, paddingBottom: 20 });
+		}
+	});
+
+	it('on the phone fallback, pads the status bar on the container and the home indicator in the tab bar', () => {
+		mockScreenSize = 'sm';
+		renderColumns('right');
+
+		const root = hostStyle('screen-pos');
+		expect(root.paddingTop).toBe(24);
+		expect(root.paddingBottom).toBeUndefined();
+		// The tab bar pads the home indicator in its card colour; its own `py-2` row sits above it.
+		expect(hostStyle('pos-tab-bar').paddingBottom).toBe(20);
+	});
+});

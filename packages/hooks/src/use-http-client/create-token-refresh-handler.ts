@@ -82,6 +82,8 @@ import type { WcposRequestConfig } from './use-http-client';
 import type { RefreshAccessTokenConfig } from './refresh-access-token';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
+export { refreshAccessToken } from './refresh-access-token';
+
 const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 
 /** Resolves at once when the app is awake, else on the next wake. */

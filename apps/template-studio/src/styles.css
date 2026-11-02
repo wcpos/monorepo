@@ -150,6 +150,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	height: 100%;
 	overflow: hidden;
 }
+.studio-body.display-mode { grid-template-columns: 220px minmax(420px, 1fr); }
 
 /* ─────────────────────────── Left panel ────────────────────────── */
 
@@ -223,6 +224,36 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 .stage .stage-empty {
 	color: var(--ts-text-muted);
 	font-style: italic;
+}
+.display-state-controls {
+	padding: 16px 24px 0;
+	background: var(--ts-panel);
+	border-bottom: 1px solid var(--ts-border);
+}
+.display-state-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.display-state-picker button[aria-pressed='true'] {
+	background: var(--ts-accent);
+	border-color: var(--ts-accent-strong);
+	color: #fff;
+}
+.display-state-controls p { margin: 8px 0 12px; color: var(--ts-text-secondary); }
+.display-preview {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+	overflow: hidden;
+}
+.display-frame-wrap { position: relative; flex: none; }
+.display-frame {
+	position: absolute;
+	top: 0;
+	left: 0;
+	border: 0;
+	background: var(--ts-paper);
+	box-shadow: var(--ts-shadow-paper);
+	transform-origin: top left;
 }
 
 /* ─────────────────────── Code preview panel ─────────────────────── */
@@ -380,6 +411,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	min-height: 0;
 	height: 100%;
 }
+.right-panel[hidden] { display: none; }
 .section {
 	border-bottom: 1px solid var(--ts-border);
 	display: flex;

@@ -30,6 +30,12 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: () => null,
 	AlertDialogTitle: () => null,
 }));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: () => null,
+	DropdownMenuContent: () => null,
+	DropdownMenuItem: () => null,
+	DropdownMenuTrigger: () => null,
+}));
 jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null, getInitials: () => 'ES' }));
 jest.mock('@wcpos/components/button', () => {
 	const { Pressable, Text } = jest.requireActual('react-native');
@@ -70,9 +76,13 @@ jest.mock('../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 jest.mock('../../../hooks/use-site-info', () => ({ useSiteInfo: () => undefined }));
-jest.mock('../../../hooks/use-version-check', () => ({
-	useVersionCheck: () => ({ wcposVersionPass: mockWcposVersionPass }),
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ compatibility: { wcposVersionPass: mockWcposVersionPass } }),
 }));
+jest.mock('@wcpos/components/notice', () => {
+	const { Text } = jest.requireActual('react-native');
+	return { Notice: ({ title }: { title: string }) => <Text>{title}</Text> };
+});
 
 jest.mock('@wcpos/components/accordion', () => ({
 	Accordion: () => null,
@@ -134,6 +144,6 @@ describe('AccordionSiteContent and the update-required gate', () => {
 
 		expect(screen.queryByTestId('update-required-card-notice')).toBeNull();
 		expect(screen.queryByTestId('wp-users-sentinel')).toBeNull();
-		expect(screen.getByText(en['common.please_update_your_woocommerce_pos_plugin'])).toBeTruthy();
+		expect(screen.getByText(en['auth.update_plugin_to_continue'])).toBeTruthy();
 	});
 });

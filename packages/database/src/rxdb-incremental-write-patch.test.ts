@@ -1,6 +1,6 @@
 /**
  * Pins the IncrementalWriteQueue behaviour rxdb 17.6.0 ships upstream (it was
- * patches/rxdb@17.4.0.patch until then).
+ * patches/rxdb@17.5.0.patch until then).
  *
  * Upstream bug (https://github.com/pubkey/rxdb/pull/9026): triggerRun() had no
  * try/finally, so one rejected storage bulkWrite left isRunning=true forever;

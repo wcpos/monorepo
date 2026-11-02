@@ -83,17 +83,20 @@ test.describe('#1135 server-down feedback (live store)', () => {
 			throw new Error('No authenticated store API request was observed');
 		}
 
-		// Healthy baseline: the dot reports online (green) before the outage.
-		const dot = page.getByTestId('header-online-status');
-		await expect(dot).toBeVisible({ timeout: 30_000 });
-		await expect(dot.locator('.text-success')).toBeVisible({ timeout: PROBE_FLIP_TIMEOUT_MS });
+		// Healthy baseline: the register bar shows no status pill before the outage
+		// (the POS has no title bar; the bar carries one Offline pill, only when the
+		// store is unreachable).
+		await expect(page.getByTestId('register-bar-place')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('register-bar-pill')).toHaveCount(0);
 
 		// Backend dies: proxy still answers, but everything is a 502 from here on.
 		await injectStoreOutage(page, storeOrigins);
 
-		// 1. The dot must flip to amber within one probe interval — this exact
-		//    shape (readable 5xx) used to count as "reachable" and stay green.
-		await expect(dot.locator('.text-warning')).toBeVisible({ timeout: PROBE_FLIP_TIMEOUT_MS });
+		// 1. The Offline pill must appear within one probe interval — this exact
+		//    shape (readable 5xx) used to count as "reachable" and show nothing.
+		await expect(page.getByTestId('register-bar-pill')).toBeVisible({
+			timeout: PROBE_FLIP_TIMEOUT_MS,
+		});
 
 		// 2. Manual sync must give feedback instead of silently doing nothing.
 		await navigateToPage(page, 'health');

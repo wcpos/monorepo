@@ -1,7 +1,9 @@
 import type { StudioTemplate, TemplateEngine } from '../studio-core';
+import type { DisplayTemplate } from '../studio-api';
 
 interface TemplateListProps {
 	templates: readonly StudioTemplate[];
+	displayTemplates: readonly DisplayTemplate[];
 	selectedTemplateId: string;
 	onSelect: (id: string) => void;
 }
@@ -12,7 +14,13 @@ const ENGINE_LABELS: Record<TemplateEngine, string> = {
 };
 const ENGINE_ORDER: TemplateEngine[] = ['logicless', 'thermal'];
 
-export function TemplateList({ templates, selectedTemplateId, onSelect }: TemplateListProps) {
+/** Lists receipt and customer-display templates for Studio selection. */
+export function TemplateList({
+	templates,
+	displayTemplates,
+	selectedTemplateId,
+	onSelect,
+}: TemplateListProps) {
 	const groups = new Map<TemplateEngine, StudioTemplate[]>();
 	for (const engine of ENGINE_ORDER) groups.set(engine, []);
 	for (const template of templates) {
@@ -47,7 +55,30 @@ export function TemplateList({ templates, selectedTemplateId, onSelect }: Templa
 					</div>
 				);
 			})}
-			{templates.length === 0 ? <p className="template-list-empty">No templates loaded.</p> : null}
+			{displayTemplates.length > 0 ? (
+				<div className="template-group">
+					<h3>Display</h3>
+					{displayTemplates.map((template) => {
+						const selectionKey = `display:${template.id}`;
+						return (
+							<button
+								key={selectionKey}
+								type="button"
+								className={
+									selectionKey === selectedTemplateId ? 'template-item selected' : 'template-item'
+								}
+								aria-pressed={selectionKey === selectedTemplateId}
+								onClick={() => onSelect(selectionKey)}
+							>
+								{template.title}
+							</button>
+						);
+					})}
+				</div>
+			) : null}
+			{templates.length === 0 && displayTemplates.length === 0 ? (
+				<p className="template-list-empty">No templates loaded.</p>
+			) : null}
 		</aside>
 	);
 }

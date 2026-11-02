@@ -4,8 +4,41 @@
     "sortDirection": "asc",
     "width": 60,
     "showOutOfStock": false,
-    "position": "left",
+    "filterBar": [
+      {
+        "id": "stock_status",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "featured",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "on_sale",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "categories",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "tags",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "brands",
+        "type": "pill",
+        "show": true
+      }
+    ],
     "viewMode": "grid",
+    "variationsStyle": "drill",
+    "browseBy": "categories",
     "scannerHeight": 176,
     "gridColumns": 4,
     "gridFields": {
@@ -22,6 +55,7 @@
     "columns": [
       {
         "key": "image",
+        "width": 68,
         "disableSort": true,
         "hideLabel": true,
         "show": true
@@ -114,13 +148,16 @@
     "metaDataKeys": ""
   },
   "pos-cart": {
+    "sortLines": "newest_top",
+    "position": "right",
+    "openOrdersPosition": "bottom",
     "sortBy": "id",
     "sortDirection": "asc",
     "autoShowReceipt": true,
     "autoPrintReceipt": false,
     "receiptOutputType": "html",
     "openCashDrawer": false,
-    "quickDiscounts": [5, 10, 15, 20],
+    "quickDiscounts": [5, 10, 15],
     "columns": [
       {
         "key": "quantity",
@@ -329,7 +366,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -341,10 +378,10 @@
     "columns": [
       {
         "key": "status",
-        "width": 45,
-        "align": "center",
+        "flex": 1.6,
+        "align": "left",
         "show": true,
-        "hideLabel": true
+        "hideLabel": false
       },
       {
         "key": "number",
@@ -417,6 +454,11 @@
         "show": true
       },
       {
+        "key": "register",
+        "disableSort": true,
+        "show": false
+      },
+      {
         "key": "payment_method",
         "show": true
       },
@@ -441,7 +483,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -454,8 +496,8 @@
       {
         "key": "active",
         "show": true,
-        "width": 46,
-        "hideLabel": true,
+        "flex": 1.4,
+        "hideLabel": false,
         "disableSort": true
       },
       {
@@ -507,7 +549,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -571,7 +613,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 56,
         "hideLabel": true,
         "show": true
       }
@@ -632,6 +674,11 @@
       },
       {
         "key": "cashier",
+        "disableSort": true,
+        "show": false
+      },
+      {
+        "key": "register",
         "disableSort": true,
         "show": false
       },

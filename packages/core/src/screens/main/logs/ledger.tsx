@@ -3,25 +3,26 @@ import { Pressable, ScrollView, View } from 'react-native';
 import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns/isToday';
-import { useObservableSuspense } from 'observable-hooks';
 
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Badge } from '@wcpos/components/badge';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
+import { Loader } from '@wcpos/components/loader';
+import { StatusBadge } from '@wcpos/components/status-badge';
+import { Suspense } from '@wcpos/components/suspense';
+import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { QueryResult } from '@wcpos/query';
+import type { QueryHandle } from '@wcpos/query';
+import { CodeChip } from '@wcpos/components/code-chip';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import {
-	CodeChip,
-	HairlineHeaderCell,
-	HairlineHeaderRow,
-	LevelIndicator,
-	type LevelKind,
-	RepeatChip,
-} from '../health/components';
+import { useDrawnHandle, useQuerySnapshot } from '../../../query';
 import { useRecordLabel } from '../health/use-record-label';
 import { useEventTitle } from './event-title';
 import {
@@ -29,15 +30,21 @@ import {
 	displayCategory,
 	displayKind,
 	formatDurationMs,
+	type LevelKind,
 	type LogRow,
 	recordRefOf,
 } from './logs-logic';
 import { RowDetail } from './row-detail';
 
-import type { ObservableResource } from 'observable-hooks';
-import type { RxCollection } from 'rxdb';
-
-type LedgerResource = ObservableResource<QueryResult<RxCollection>>;
+// The level's dot from the tone map; an actor's row takes the accent.
+const LEVEL_TONE = {
+	info: 'muted',
+	warn: 'warning',
+	error: 'bad',
+	action: 'default',
+	sync: 'info',
+	debug: 'muted',
+} as const satisfies Record<LevelKind, string>;
 
 export function useLevelLabel(): (kind: LevelKind) => string {
 	const t = useT();
@@ -110,7 +117,7 @@ function Subline({
 	}
 
 	if ((row.count ?? 1) > 1) {
-		parts.push(<RepeatChip key="rep" count={row.count ?? 1} />);
+		parts.push(<Badge key="rep" variant="muted">{`×${(row.count ?? 1).toLocaleString()}`}</Badge>);
 	}
 
 	if (parts.length === 0) return null;
@@ -196,11 +203,11 @@ function LevelPill({
 			onPress={onPress}
 			className={cn(
 				'-mx-1.5 self-start rounded-full px-1.5 py-0.5',
-				'web:hover:bg-muted/60',
+				'web:hover:bg-accent/60',
 				active && 'bg-muted'
 			)}
 		>
-			<LevelIndicator kind={kind} label={label} />
+			<StatusBadge size="caption" variant={LEVEL_TONE[kind]} label={label} />
 		</Pressable>
 	);
 }
@@ -230,7 +237,8 @@ function LedgerRow({
 	// Once per row: both responsive layouts are mounted, so resolving inside the
 	// subline would read the record twice.
 	const record = recordRefOf(row);
-	const recordText = useRecordLabel(record?.collection, record?.recordId)?.text ?? null;
+	const recordText = useRecordLabel(record?.collectionName, record?.recordId)?.text ?? null;
+	const phone = useIsPhone();
 
 	return (
 		<View
@@ -239,13 +247,13 @@ function LedgerRow({
 				chained ? 'border-l-info/30' : 'border-l-transparent'
 			)}
 		>
-			{/* md+ — table row. The whole row is the press target: a full-bleed
+			{/* Off a phone — table row. The whole row is the press target: a full-bleed
 			    pressable overlay sits ABOVE the static cells, and the interactive
 			    children (level pill, code chip) float above the overlay — nested
 			    <button> is invalid DOM on web, so siblings-by-z-order it is. */}
-			<View className="web:hover:bg-muted/20 relative hidden md:flex">
+			<View className={cn('web:hover:bg-accent/20 relative', phone && 'hidden')}>
 				<HStack className="items-baseline gap-3 py-2">
-					<Text className="text-muted-foreground w-20 font-mono text-xs tabular-nums">
+					<Text variant="help" tabular className="w-20 font-mono">
 						{timeText}
 					</Text>
 					<View className="z-20 w-16">
@@ -266,7 +274,7 @@ function LedgerRow({
 							recordTestID={`logs-record-${row.logId}`}
 						/>
 					</View>
-					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
+					<Text variant="help" tabular className="w-16 text-right font-mono">
 						{formatDurationMs(row.durationMs) ?? '—'}
 					</Text>
 					<View pointerEvents="box-none" className="z-20 w-32">
@@ -283,9 +291,9 @@ function LedgerRow({
 				/>
 			</View>
 
-			{/* below md — two-line pressable row; the status badge overlays the first
+			{/* On a phone — two-line pressable row; the status badge overlays the first
 			    line as a sibling, and the duration stays in the subline (B2 mobile). */}
-			<View className="relative md:hidden">
+			<View className={cn('relative', !phone && 'hidden')}>
 				<Pressable
 					testID={`logs-row-sm-${row.logId}`}
 					accessibilityRole="button"
@@ -293,9 +301,10 @@ function LedgerRow({
 					className="gap-0.5 py-2"
 				>
 					<HStack className="items-center gap-2 pr-32">
-						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
-						{/* Dot-only for space, but the kind still reads to assistive tech. */}
-						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
+						<Text variant="help" tabular className="font-mono">
+							{timeText}
+						</Text>
+						<StatusBadge size="caption" variant={LEVEL_TONE[kind]} label={levelLabel} />
 					</HStack>
 					<Text className="text-sm">{title}</Text>
 					<Subline
@@ -322,7 +331,7 @@ function LedgerRow({
  * "Show more" button); the header and honest-count footer stay pinned.
  */
 export function Ledger({
-	resource,
+	handle,
 	activeKind,
 	onKindPress,
 	onRenderedCount,
@@ -331,7 +340,7 @@ export function Ledger({
 	onLayout,
 	scrollEventThrottle,
 }: {
-	resource: LedgerResource;
+	handle: QueryHandle;
 	activeKind: LevelKind | undefined;
 	onKindPress: (kind: LevelKind) => void;
 	onRenderedCount?: (count: number) => void;
@@ -341,8 +350,11 @@ export function Ledger({
 	scrollEventThrottle?: ScrollViewProps['scrollEventThrottle'];
 }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const { formatDate } = useLocalDate();
-	const result = useObservableSuspense(resource);
+	// Drawn, not live: a changed filter's new handle answers while the previous rows stay.
+	const drawn = useDrawnHandle(handle);
+	const result = useQuerySnapshot(drawn, []);
 	const levelLabel = useLevelLabel();
 	const eventTitle = useEventTitle();
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
@@ -374,23 +386,27 @@ export function Ledger({
 
 	return (
 		<VStack testID="logs-ledger" className="min-h-0 flex-1 gap-0">
-			<HairlineHeaderRow className="hidden pl-2 md:flex">
-				<HairlineHeaderCell testID="logs-heading-time" className="w-20">
-					{t('health.logs.col_time')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-level" className="w-16">
-					{t('health.logs.col_level')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-event" className="flex-1">
-					{t('health.logs.col_event')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-took" className="w-16 text-right">
-					{t('health.logs.col_took')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-status" className="w-32 text-right">
-					{t('health.logs.col_status')}
-				</HairlineHeaderCell>
-			</HairlineHeaderRow>
+			{/* The shared table head, flush (`px-0`) over the rows' own `gap-3` gutter; the
+			    transparent left edge is the rows' chain mark, so the heads sit over their cells. */}
+			<TableHeader className={cn(phone && 'hidden')}>
+				<TableRow className="items-center gap-3 border-l-2 border-l-transparent pl-2">
+					<TableHead testID="logs-heading-time" className="w-20 flex-none px-0">
+						<Text>{t('health.logs.col_time')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-level" className="w-16 flex-none px-0">
+						<Text>{t('health.logs.col_level')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-event" className="min-w-0 px-0">
+						<Text>{t('health.logs.col_event')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-took" className="w-16 flex-none items-end px-0">
+						<Text>{t('health.logs.col_took')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-status" className="w-32 flex-none items-end px-0">
+						<Text>{t('health.logs.col_status')}</Text>
+					</TableHead>
+				</TableRow>
+			</TableHeader>
 
 			<ScrollView
 				className="min-h-0 flex-1"
@@ -400,9 +416,12 @@ export function Ledger({
 				scrollEventThrottle={scrollEventThrottle}
 			>
 				{rows.length === 0 ? (
-					<Text className="text-muted-foreground py-6 text-center text-sm">
-						{t('logs.no_logs_found')}
-					</Text>
+					<EmptyState
+						kind="empty"
+						size="inline"
+						title={t('logs.no_logs_found')}
+						className="justify-center py-6"
+					/>
 				) : (
 					rows.map((row) => (
 						<LedgerRow
@@ -425,6 +444,29 @@ export function Ledger({
 }
 
 /**
+ * The ledger inside its own boundaries, the way the screen mounts it. A failed read reaches the
+ * error boundary; its reset asks the handle again (`retry` withdraws the stored failure, so the
+ * remounted reader waits on the new read instead of rethrowing the old one), and a new handle —
+ * a changed filter or search — resets it too.
+ */
+export function LedgerPane(props: React.ComponentProps<typeof Ledger>) {
+	const { handle } = props;
+	return (
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense
+				fallback={
+					<View className="min-h-0 flex-1 items-center justify-center py-8">
+						<Loader />
+					</View>
+				}
+			>
+				<Ledger {...props} />
+			</Suspense>
+		</ErrorBoundary>
+	);
+}
+
+/**
  * Pinned honest-count footer. Rendered by the screen OUTSIDE the ledger's
  * Suspense/error boundary so the count and the live status accessory stay
  * mounted while the log query is loading or broken. flex-wrap lets the
@@ -442,7 +484,7 @@ export function LedgerFooter({
 	const t = useT();
 	return (
 		<HStack className="border-border/50 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-2">
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{/* Grouped to match every other footer and the Database page; the hidden
 				    markers below stay raw digits for E2E. */}
 				{t('common.showing_of', {

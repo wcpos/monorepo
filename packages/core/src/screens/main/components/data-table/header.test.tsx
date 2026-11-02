@@ -69,33 +69,4 @@ describe('DataTableHeader sorting behavior', () => {
 			sortDirection: 'asc',
 		});
 	});
-
-	describe('sort direction toggling', () => {
-		// This mirrors the onPress logic in DataTableHeader:
-		// isSorted && sortDirection === 'asc' ? 'desc' : 'asc'
-		function getNextSortDirection(
-			columnSortField: string,
-			currentSortBy: string,
-			currentDirection: 'asc' | 'desc'
-		): 'asc' | 'desc' {
-			const isSorted = currentSortBy === columnSortField;
-			return isSorted && currentDirection === 'asc' ? 'desc' : 'asc';
-		}
-
-		it('toggles asc to desc when clicking the already-sorted column', () => {
-			expect(getNextSortDirection('name', 'name', 'asc')).toBe('desc');
-		});
-
-		it('toggles desc to asc when clicking the already-sorted column', () => {
-			expect(getNextSortDirection('name', 'name', 'desc')).toBe('asc');
-		});
-
-		it('defaults to asc when clicking a different column', () => {
-			expect(getNextSortDirection('sku', 'name', 'desc')).toBe('asc');
-		});
-
-		it('defaults to asc when clicking a different column even if current is asc', () => {
-			expect(getNextSortDirection('sku', 'name', 'asc')).toBe('asc');
-		});
-	});
 });

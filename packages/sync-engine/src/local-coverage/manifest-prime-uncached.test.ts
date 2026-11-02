@@ -41,6 +41,7 @@ function customer(wooId: number) {
 	return {
 		uuid: customerDocumentId(remoteId(wooId)),
 		remoteId: String(wooId),
+		remoteKey: String(wooId),
 		payload: { id: wooId, date_modified_gmt: '2026-07-01T10:00:00' },
 		sync: { revision: `r${wooId}`, partial: false, source: 'woo-rest' },
 		local: { dirty: false, pendingMutationIds: [] },

@@ -1,93 +1,83 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../query';
-import { useCollectionReset } from '../../hooks/use-collection-reset';
 import { SyncButton } from '../sync-button';
+import { useCollectionReset } from '../../hooks/use-collection-reset';
 
-import type { CollectionKey } from '../../hooks/use-collection';
-import type { Observable } from 'rxjs';
-
-interface CommonProps {
-	children?: React.ReactNode;
-	count: number;
-}
-
-export type BindingDataTableFooterProps = CommonProps & {
-	collectionName: CollectionKey;
-	active$: Observable<boolean>;
-	total$: Observable<number | null>;
-	sync: () => Promise<void>;
-};
-
-type FooterContentProps = CommonProps &
-	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$'> & {
-		clearAndSync: () => Promise<void>;
-	};
+import type { CollectionKey } from '../../hooks/use-collection-reset';
 
 /**
- *
+ * What a table footer is handed: VALUES, read by its owner from the query handles in the same
+ * commit as the rows it counts. A stream's value lands one commit after the rows, and the footer
+ * printed the new count over the old denominator for a frame; no footer subscribes to one.
  */
-function FooterContent({
-	children,
-	count,
-	active$,
-	total$,
-	sync,
-	clearAndSync,
-}: FooterContentProps) {
-	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, null);
-	const t = useT();
+export type DataTableFooterProps = {
+	collectionName: CollectionKey;
+	/** The rows drawn. */
+	drawnCount: number;
+	/** The engine is pulling the collection now (the live handle's `active`): the sync button turns. */
+	active: boolean;
+	/** The drawn rows' denominator, or null when nothing vouches for one ("Showing N"). */
+	total: number | null;
+	sync: () => Promise<void>;
+	/** Replaces the count sentence (the POS products' own); the raw count markers stay. */
+	label?: string;
+	/** The caption at the row's start, e.g. the tax notice. */
+	children?: React.ReactNode;
+};
 
+/** The table's caption row: values in, read by the table from its handles (`DataTableFooterProps`). */
+export function DataTableFooter({
+	collectionName,
+	active: loading,
+	total,
+	sync,
+	drawnCount,
+	label,
+	children,
+}: DataTableFooterProps) {
+	const { clearAndSync } = useCollectionReset(collectionName);
+	const actions = useQueryStateActions();
+	const t = useT();
 	return (
-		<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
-			{/* min-w-0 lets the children (the tax label) shrink and truncate; without it a
-			    narrow products column wrapped the label one character per line and the
-			    footer grew to the column's full height. The count and sync button keep
-			    their natural width. */}
-			<HStack className="min-w-0 flex-1 justify-start *:min-w-0 *:flex-1">{children}</HStack>
-			<HStack className="shrink-0 justify-end gap-0">
-				<Text testID="data-table-count" className="text-xs">
-					{/* No denominator unless something vouches for one (binding.total$). Falling
-					    back to the loaded-row count printed "Showing 20 of 20" on a page of 20
-					    and told the cashier that was all their orders.
-					    Grouped like the Store Health › Database page prints the same number —
-					    one source of truth means the FORMATTING agrees too, or "62,438" and
-					    "62438" read as two different numbers. The hidden markers below stay
-					    raw digits: E2E asserts on them. */}
-					{total === null
-						? t('common.showing_n', { shown: count.toLocaleString() })
-						: t('common.showing_of', {
-								shown: count.toLocaleString(),
-								total: total.toLocaleString(),
-							})}
+		// A caption row on the ground under the card: no rule of its own, and no height of its own:
+		// it is its content's height (the `xs` sync button, 6 units; its press band keeps the 44
+		// touch target past the row), not a control row. Its mount aligns the text with the card's cells
+		// (`CaptionRowInset`: the card's gutter + the cell's 12).
+		<HStack testID="data-table-caption-row" className="items-center">
+			{/* The caption fills the row only as a layout slot: its child keeps its own width (shrinkable,
+			    never grown), so a trigger inside it is pressable on its text and icons alone. */}
+			<HStack className="min-w-0 flex-1 *:min-w-0 *:shrink">{children}</HStack>
+			<HStack className="shrink-0 gap-0">
+				<Text testID="data-table-count" variant="key">
+					{label ??
+						(total === null
+							? t('common.showing_n', { shown: drawnCount.toLocaleString() })
+							: t('common.showing_of', {
+									shown: drawnCount.toLocaleString(),
+									total: total.toLocaleString(),
+								}))}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
-					{count}
+					{drawnCount}
 				</Text>
 				<Text testID="data-table-total-count" className="hidden">
-					{total === null ? '' : total}
+					{total ?? ''}
 				</Text>
-				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
+				<SyncButton
+					sync={sync}
+					active={loading}
+					clearAndSync={() => {
+						actions.clearSearch();
+						actions.resetFilters();
+						return clearAndSync();
+					}}
+				/>
 			</HStack>
 		</HStack>
 	);
-}
-
-export function DataTableFooter({ collectionName, ...props }: BindingDataTableFooterProps) {
-	const { clearAndSync } = useCollectionReset(collectionName);
-	const { clearSearch, resetFilters } = useQueryStateActions();
-	const resetQueryAndCollection = React.useCallback(() => {
-		clearSearch();
-		resetFilters();
-		return clearAndSync();
-	}, [clearAndSync, clearSearch, resetFilters]);
-
-	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
 }

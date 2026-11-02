@@ -36,18 +36,23 @@ function isPushProductsResponse(response: Response): boolean {
 }
 
 /**
- * Locate the probe row's stock cell and type a new quantity through the numpad
- * popover. Returns the cell locator so callers can assert on its rendered text.
+ * Locate the probe row's stock cell, the box that grows into the cart's quantity keypad on
+ * web, and type a new count on the keypad (✓ commits). Returns the box locator so callers
+ * can assert on its text.
  */
-async function editStockQuantityViaNumpad(page: Page, rowTestId: string, digit: string) {
+async function editStockQuantityField(page: Page, rowTestId: string, digit: string) {
 	const screen = page.getByTestId('screen-products').filter({ visible: true });
 	const row = screen.getByTestId(rowTestId);
 	const cell = row.getByTestId('stock-quantity-input');
 	await expect(cell).toBeVisible({ timeout: 30_000 });
 	// #1094 (capability UI) will disable this cell for cashiers without catalog
 	// write capability — that is a declared-missing environment, not a failure.
+	// The box is a button: a disabled one says so with `aria-disabled`.
 	const disabled = await cell.evaluate(
-		(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
+		(el) =>
+			el.hasAttribute('disabled') ||
+			el.hasAttribute('readonly') ||
+			el.getAttribute('aria-disabled') === 'true'
 	);
 	if (disabled) {
 		test.skip(
@@ -57,36 +62,35 @@ async function editStockQuantityViaNumpad(page: Page, rowTestId: string, digit: 
 	}
 	await expect(cell).toHaveText('0', { timeout: 15_000 });
 	await cell.click();
-	const key = page.locator(`[data-testid="numpad-key-${digit}"]:visible`);
-	await expect(key).toBeVisible({ timeout: 15_000 });
-	await key.click();
-	await page.locator('[data-testid="numpad-done-button"]:visible').click();
+	await page.getByTestId(`keypad-key-${digit}`).click();
+	await page.getByTestId('keypad-key-done').click();
 	return cell;
 }
 
 /**
  * Products page (pro-only drawer page with inline editing).
  */
+// The Products page drills into a variable product by default (the POS panel's
+// `variationsStyle`); the tests that cover the inline expand choose it first.
+async function chooseInlineVariations(page: Page) {
+	const screen = page.locator('[data-testid="screen-products"]:visible');
+	await screen.getByTestId('products-bar-display').click();
+	await page.getByTestId('products-variations-style-inline').click();
+	await page.getByTestId('products-display-close').click();
+}
+
 test.describe('Products Page (Pro)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Products page requires Pro');
 	});
 
-	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
+	test('Products page initial table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('search-products')).toBeVisible({
 			timeout: 30_000,
 		});
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
-			timeout: 60_000,
-		});
-	});
-
-	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -331,7 +335,7 @@ test.describe('Products Page (Pro)', () => {
 			});
 			pushResponsePending.catch(() => {});
 
-			const cell = await editStockQuantityViaNumpad(page, rowTestId, '7');
+			const cell = await editStockQuantityField(page, rowTestId, '7');
 
 			// Optimistic outcome: green enqueue toast + the row renders the new value.
 			await expect(page.getByTestId('success-toast').first()).toBeVisible({
@@ -415,8 +419,8 @@ test.describe('Products Page (Pro)', () => {
 
 			const row = screen.getByTestId(rowTestId);
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.getByTestId('product-actions-button').click();
-			const editAction = page.getByTestId('product-actions-edit');
+			// The row's caret opens the product's modal (it replaced the row menu's Edit item).
+			const editAction = row.getByTestId('product-open-button');
 			const editDisabled = await editAction.evaluate(
 				(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
 			);
@@ -430,15 +434,13 @@ test.describe('Products Page (Pro)', () => {
 
 			const modal = page.getByTestId('product-edit-modal');
 			await expect(modal).toBeVisible({ timeout: 15_000 });
-			const nameInput = modal.getByTestId('product-edit-name-input');
-			await nameInput.clear();
-			await nameInput.fill(newName);
-
 			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
 				timeout: 60_000,
 			});
 			pushResponsePending.catch(() => {});
-			await modal.getByTestId('product-edit-save-button').click();
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.fill(newName);
+			await expect(modal.getByTestId('saved-name')).toBeVisible({ timeout: 15_000 });
 
 			const pushResponse = await pushResponsePending;
 			if (pushResponse.status() === 403) {
@@ -448,6 +450,7 @@ test.describe('Products Page (Pro)', () => {
 				);
 			}
 			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+			await modal.getByTestId('product-edit-close-button').click();
 
 			await expect
 				.poll(
@@ -532,8 +535,8 @@ test.describe('Products Page (Pro)', () => {
 				poisonedProducts,
 				'catalog GET was never intercepted — the poisoned-store premise did not apply'
 			).toBeGreaterThan(0);
-			await row.getByTestId('product-actions-button').click();
-			const editAction = page.getByTestId('product-actions-edit');
+			// The row's caret opens the product's modal (it replaced the row menu's Edit item).
+			const editAction = row.getByTestId('product-open-button');
 			const editDisabled = await editAction.evaluate(
 				(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
 			);
@@ -547,15 +550,13 @@ test.describe('Products Page (Pro)', () => {
 
 			const modal = page.getByTestId('product-edit-modal');
 			await expect(modal).toBeVisible({ timeout: 15_000 });
-			const nameInput = modal.getByTestId('product-edit-name-input');
-			await nameInput.clear();
-			await nameInput.fill(newName);
-
 			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
 				timeout: 60_000,
 			});
 			pushResponsePending.catch(() => {});
-			await modal.getByTestId('product-edit-save-button').click();
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.fill(newName);
+			await expect(modal.getByTestId('saved-name')).toBeVisible({ timeout: 15_000 });
 
 			const pushResponse = await pushResponsePending;
 			if (pushResponse.status() === 403) {
@@ -565,6 +566,7 @@ test.describe('Products Page (Pro)', () => {
 				);
 			}
 			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+			await modal.getByTestId('product-edit-close-button').click();
 
 			const pushRequestBody = pushResponse.request().postDataJSON() as {
 				mutationId: unknown;
@@ -634,7 +636,7 @@ test.describe('Products Page (Pro)', () => {
 
 			await page.route(routeMatcher, fulfillRejection);
 
-			const cell = await editStockQuantityViaNumpad(page, rowTestId, '9');
+			const cell = await editStockQuantityField(page, rowTestId, '9');
 
 			// The optimistic edit lands first…
 			await expect(cell).toHaveText('9', { timeout: 15_000 });
@@ -658,54 +660,40 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
-	test('should show product actions menu', async ({ posPage: page }) => {
+	test("should open a product's modal, with its record actions, from the row caret", async ({
+		posPage: page,
+	}) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
 
-		const actionsButton = screen.getByTestId('product-actions-button').first();
-		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
-		await actionsButton.click();
+		// Every row's caret opens its product, a variable product's too.
+		const openButton = screen.getByTestId('product-open-button').first();
+		await expect(openButton).toBeVisible({ timeout: 15_000 });
+		test.skip(
+			await openButton.isDisabled(),
+			'Product caret is disabled: the signed-in cashier has no catalog write capability on this store'
+		);
+		await openButton.click();
 
-		await expect(page.getByRole('menuitem').first()).toBeVisible({
-			timeout: 15_000,
-		});
+		// The menu's Sync now sits in the modal's footer (a store product always has a Woo id).
+		const modal = page.getByTestId('product-edit-modal');
+		await expect(modal).toBeVisible({ timeout: 15_000 });
+		await expect(modal.getByTestId('product-modal-sync')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should expand variable product to show variations', async ({ posPage: page }) => {
+	test("should open a variation's modal, with sync, from its row caret", async ({
+		posPage: page,
+	}) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
 
-		await findVariableProduct(page, screen.getByTestId('search-products'));
-
-		// Click the expand link on the variable product
-		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
-		await expect(expandLink).toBeVisible({ timeout: 30_000 });
-		await Promise.all([
-			page.waitForResponse(
-				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
-				{ timeout: 30_000 }
-			),
-			expandLink.click(),
-		]);
-
-		// Variation rows should now be visible with their actions menus
-		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
-		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
-	});
-
-	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
-			timeout: 60_000,
-		});
-
+		await chooseInlineVariations(page);
 		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -718,15 +706,18 @@ test.describe('Products Page (Pro)', () => {
 			expandLink.click(),
 		]);
 
-		// Click the variation actions menu (ellipsis button)
-		const variationActionsMenu = screen
-			.locator('[data-testid="variation-actions-menu"]:visible')
+		// The variation row's caret opens its modal; the menu's Sync now sits in that footer.
+		const variationOpenButton = screen
+			.locator('[data-testid="variation-open-button"]:visible')
 			.first();
-		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
-		await variationActionsMenu.click();
+		await expect(variationOpenButton).toBeVisible({ timeout: 15_000 });
+		test.skip(
+			await variationOpenButton.isDisabled(),
+			'Variation caret is disabled: the signed-in cashier has no variation write capability on this store'
+		);
+		await variationOpenButton.click();
 
-		// The dropdown should show menu items (Edit, Sync, Delete)
-		await expect(page.getByRole('menuitem').first()).toBeVisible({
+		await expect(page.getByTestId('variation-modal-sync')).toBeVisible({
 			timeout: 15_000,
 		});
 	});
@@ -738,6 +729,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
+		await chooseInlineVariations(page);
 		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -750,14 +742,14 @@ test.describe('Products Page (Pro)', () => {
 			expandLink.click(),
 		]);
 
-		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
+		const variationActionsMenu = screen.locator('[data-testid="variation-open-button"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 
 		// Collapse
 		await expandLink.click();
 		await page.waitForTimeout(1_000);
 
-		// Variation actions should no longer be visible
+		// The variation carets should no longer be visible
 		await expect(variationActionsMenu.first()).not.toBeVisible({
 			timeout: 10_000,
 		});
@@ -771,13 +763,6 @@ test.describe('Products Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Products', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({
-			timeout: 30_000,
-		});
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

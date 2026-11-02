@@ -181,30 +181,30 @@ describe('Novu Electron client', () => {
 		expect(onNotificationReceived).toHaveBeenCalledWith(notification);
 	});
 
-	it('maps wait, fetch, and unread count requests and unwraps their results', async () => {
+	it('maps wait, fetch, and mark-all-read requests and unwraps their results', async () => {
 		const { ipcRenderer } = createIpcRenderer();
 		setIpcRenderer(ipcRenderer);
 		const notification = { id: 'notification-two' } as NovuNotification;
 		ipcRenderer.invoke
 			.mockResolvedValueOnce({ success: true, result: true })
 			.mockResolvedValueOnce({ success: true, result: [notification] })
-			.mockResolvedValueOnce({ success: true, result: 7 })
+			.mockResolvedValueOnce({ success: true, result: true })
 			.mockResolvedValue({ success: false, message: 'main process failed' });
-		const { fetchNotifications, getUnreadCount, waitForNovuReady } = await loadClient();
+		const { fetchNotifications, markAllAsRead, waitForNovuReady } = await loadClient();
 
 		await expect(waitForNovuReady(1234)).resolves.toBe(true);
 		await expect(fetchNotifications(12)).resolves.toEqual([notification]);
-		await expect(getUnreadCount()).resolves.toBe(7);
+		await expect(markAllAsRead()).resolves.toBe(true);
 		await expect(waitForNovuReady()).resolves.toBe(false);
 		await expect(fetchNotifications()).resolves.toEqual([]);
-		await expect(getUnreadCount()).resolves.toBe(0);
+		await expect(markAllAsRead()).resolves.toBe(false);
 		expect(ipcRenderer.invoke.mock.calls).toEqual([
 			['novu', { type: 'waitReady', timeoutMs: 1234 }],
 			['novu', { type: 'fetchNotifications', limit: 12 }],
-			['novu', { type: 'getUnreadCount' }],
+			['novu', { type: 'markAllAsRead' }],
 			['novu', { type: 'waitReady', timeoutMs: 5000 }],
 			['novu', { type: 'fetchNotifications', limit: 50 }],
-			['novu', { type: 'getUnreadCount' }],
+			['novu', { type: 'markAllAsRead' }],
 		]);
 	});
 
@@ -240,11 +240,11 @@ describe('Novu Electron client', () => {
 		const { ipcRenderer } = createIpcRenderer();
 		setIpcRenderer(ipcRenderer);
 		ipcRenderer.invoke.mockRejectedValue(new Error('IPC unavailable'));
-		const { fetchNotifications, getUnreadCount, waitForNovuReady } = await loadClient();
+		const { fetchNotifications, markAllAsRead, waitForNovuReady } = await loadClient();
 
 		await expect(waitForNovuReady()).resolves.toBe(false);
 		await expect(fetchNotifications()).resolves.toEqual([]);
-		await expect(getUnreadCount()).resolves.toBe(0);
+		await expect(markAllAsRead()).resolves.toBe(false);
 	});
 
 	it('disconnects and permits the same subscriber to initialize again', async () => {
@@ -275,6 +275,5 @@ describe('Novu Electron client', () => {
 		await expect(client.markAllAsRead()).resolves.toBe(false);
 		await expect(client.markAsSeen('notification-one')).resolves.toBe(false);
 		await expect(client.markAllAsSeen()).resolves.toBe(false);
-		await expect(client.getUnreadCount()).resolves.toBe(0);
 	});
 });

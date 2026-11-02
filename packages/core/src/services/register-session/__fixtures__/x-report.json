@@ -1,0 +1,37 @@
+{
+  "session": {
+    "id": "open-session-fixture",
+    "register_id": "register-fixture",
+    "store_id": 1,
+    "status": "open",
+    "opened_at_gmt": "2026-09-11T08:00:00Z",
+    "expected_float": "100.0000",
+    "counted_float": "100.0000",
+    "opening_variance": "0.0000",
+    "server_expected": {
+      "cash": "180.0000"
+    },
+    "sync_status": "synced",
+    "sync_attempts": 0
+  },
+  "fiscal": {
+    "document_type": "xreport",
+    "receipt_number": "",
+    "is_sale_document": false,
+    "is_refund_document": false,
+    "is_closure_document": true,
+    "is_x_report": true,
+    "is_reprint": false,
+    "reprint_count": 0
+  },
+  "expected_tender": {
+    "name": "cash",
+    "label": "Cash",
+    "expected": "180.0000",
+    "expected_display": "$180.00",
+    "counted": "",
+    "counted_display": "",
+    "variance": "",
+    "variance_display": ""
+  }
+}

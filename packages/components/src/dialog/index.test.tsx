@@ -1,0 +1,932 @@
+import { readFileSync } from 'node:fs';
+
+import * as React from 'react';
+import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'react-native';
+
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { router } from 'expo-router';
+
+import { TEXT_LADDER } from '../text/ladder';
+import { Input } from '../input';
+import { DeviceScope } from '../lib/device';
+import { PANEL_SLIDE } from '../lib/motion';
+import * as overlay from '../lib/overlay';
+import { registerPortalContainer } from '../lib/portal-container';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogLabelsProvider,
+	DialogTitle,
+	DialogTrigger,
+	useDialog,
+} from './index';
+
+import type * as Primitive from '@rn-primitives/dialog';
+
+const mockPortalCalls: Primitive.PortalProps[] = [];
+const mockAutoFocusEvents: { preventDefault: jest.Mock }[] = [];
+const mockScrimProps: Primitive.OverlayProps[] = [];
+const mockPressableProps: PressableProps[] = [];
+const mockInteractOutside: NonNullable<Primitive.ContentProps['onInteractOutside']>[] = [];
+
+jest.mock('react-native', () => {
+	const actual = jest.requireActual<typeof import('react-native')>('react-native');
+	return {
+		...actual,
+		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+		Pressable: (props: PressableProps) => {
+			mockPressableProps.push(props);
+			return <actual.Pressable {...props} />;
+		},
+		// Like page-bar's harness, preserve classes that RN-web drops without Uniwind.
+		View: ({ children, className, testID }: ViewProps) => (
+			<div className={className} data-testid={testID}>
+				{children}
+			</div>
+		),
+		ScrollView: ({ children, className, testID }: ScrollViewProps) => (
+			<div className={className} data-testid={testID}>
+				{children}
+			</div>
+		),
+		Text: ({
+			children,
+			className,
+			testID,
+			role,
+			'aria-level': level,
+		}: TextProps & { role?: string; 'aria-level'?: number }) => (
+			<span className={className} data-testid={testID} role={role} aria-level={level}>
+				{children}
+			</span>
+		),
+	};
+});
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+jest.mock('../keyboard-controller', () => ({
+	KeyboardAvoidingView: jest.requireMock('react-native').View,
+}));
+jest.mock('../lib/overlay', () => ({
+	__esModule: true,
+	...jest.requireActual('../lib/overlay'),
+	isWeb: true,
+}));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
+jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('../icon', () => ({
+	Icon: ({ className }: { className?: string }) => <svg className={className} />,
+}));
+jest.mock('../input', () => ({
+	Input: ({ value, onChangeText, placeholder, ...props }: any) => (
+		<input
+			aria-label={placeholder}
+			value={value ?? ''}
+			onChange={(event) => onChangeText?.(event.currentTarget.value)}
+			{...props}
+		/>
+	),
+}));
+jest.mock('@rn-primitives/slot', () => ({
+	Slot: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) =>
+		React.isValidElement(children) ? React.cloneElement(children, props) : null,
+}));
+jest.mock('react-native-reanimated', () => {
+	const started: { toValue: unknown; callback?: (finished: boolean) => void }[] = [];
+	const pending: ((finished: boolean) => void)[] = [];
+	return {
+		__esModule: true,
+		default: { View: ({ children }: React.PropsWithChildren) => <div>{children}</div> },
+		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
+		Easing: { bezier: () => (value: number) => value },
+		...Object.fromEntries(
+			[
+				'FadeIn',
+				'FadeOut',
+				'SlideInLeft',
+				'SlideOutLeft',
+				'SlideInRight',
+				'SlideOutRight',
+				'SlideInDown',
+				'SlideOutDown',
+			].map((name) => [
+				name,
+				{
+					duration() {
+						return this;
+					},
+					easing: jest.fn().mockReturnThis(),
+				},
+			])
+		),
+		__started: started,
+		__pending: pending,
+		cancelAnimation: () => pending.splice(0).forEach((callback) => callback(false)),
+		useAnimatedStyle: () => ({}),
+		useSharedValue: (value: unknown) => ({ value }),
+		withSequence: (...animations: unknown[]) => animations,
+		withTiming: (toValue: unknown, _config: unknown, callback?: (finished: boolean) => void) => {
+			started.push({ toValue, callback });
+			if (callback) pending.push(callback);
+			return toValue;
+		},
+	};
+});
+jest.mock('react-native-worklets', () => ({
+	scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args),
+}));
+
+// A controllable native-contract stand-in; dismissal/focus-trap internals belong to the primitive.
+jest.mock('@rn-primitives/dialog', () => {
+	const Context = React.createContext<{
+		open: boolean;
+		onOpenChange: (open: boolean) => void;
+	} | null>(null);
+	function useRootContext() {
+		const context = React.useContext(Context);
+		if (!context) throw new Error('Dialog context is missing');
+		return context;
+	}
+	function Content({
+		testID,
+		className,
+		style,
+		children,
+		onOpenAutoFocus,
+		onInteractOutside,
+		ref,
+	}: Omit<Primitive.ContentProps, 'ref'> & { ref?: React.Ref<HTMLDivElement> }) {
+		const { open } = useRootContext();
+		if (onInteractOutside) mockInteractOutside.push(onInteractOutside);
+		const autofocus = React.useRef(onOpenAutoFocus);
+		// Keep the event callback current without retriggering the primitive's mount event.
+		React.useLayoutEffect(() => {
+			autofocus.current = onOpenAutoFocus;
+		}, [onOpenAutoFocus]);
+		// Model the primitive's mount event, including content mounted after a trigger press.
+		React.useEffect(() => {
+			if (!open) return;
+			const event = { preventDefault: jest.fn() };
+			mockAutoFocusEvents.push(event);
+			autofocus.current?.(event as unknown as Event);
+		}, [open]);
+		return open ? (
+			<div
+				role="dialog"
+				data-testid={testID}
+				className={className}
+				style={
+					jest
+						.requireActual<typeof import('react-native')>('react-native')
+						.StyleSheet.flatten(style) as React.CSSProperties
+				}
+				ref={ref}
+			>
+				{children}
+			</div>
+		) : null;
+	}
+	return {
+		useRootContext,
+		Root: ({
+			open: controlled,
+			defaultOpen = false,
+			onOpenChange,
+			children,
+			asChild,
+		}: Primitive.RootProps) => {
+			const [internal, setInternal] = React.useState(defaultOpen);
+			return (
+				<Context.Provider
+					value={{
+						open: controlled ?? internal,
+						onOpenChange: (next) => {
+							if (controlled === undefined) setInternal(next);
+							onOpenChange?.(next);
+						},
+					}}
+				>
+					{asChild ? children : <div data-testid="primitive-root">{children}</div>}
+				</Context.Provider>
+			);
+		},
+		Trigger: ({ children, testID }: Primitive.TriggerProps) => {
+			const { onOpenChange } = useRootContext();
+			return (
+				<button data-testid={testID} onClick={() => onOpenChange(true)}>
+					{typeof children === 'function' ? children({ pressed: false }) : children}
+				</button>
+			);
+		},
+		Portal: (props: Primitive.PortalProps) => {
+			mockPortalCalls.push(props);
+			return <>{props.children}</>;
+		},
+		Overlay: (props: Primitive.OverlayProps) => {
+			mockScrimProps.push(props);
+			const { onOpenChange, open } = useRootContext();
+			// As Radix: a closed overlay stays only while its exit animates, and jsdom animates
+			// nothing. The component itself no longer unmounts on web (the exit needs it mounted).
+			if (!open) return null;
+			const mapped = Object.fromEntries(
+				Object.entries(props)
+					.filter(
+						([key]) =>
+							![
+								'focusable',
+								'accessible',
+								'importantForAccessibility',
+								'accessibilityElementsHidden',
+							].includes(key)
+					)
+					.map(([key, value]) => [key === 'testID' ? 'data-testid' : key, value])
+			);
+			return <div {...mapped} onClick={() => onOpenChange(false)} />;
+		},
+		Content,
+		Close: ({ children, asChild, testID }: Primitive.CloseProps) => {
+			const { onOpenChange } = useRootContext();
+			if (asChild && React.isValidElement<{ onPress?: (event: unknown) => void }>(children)) {
+				return React.cloneElement(children, {
+					onPress: (event: unknown) => {
+						onOpenChange(false);
+						children.props.onPress?.(event);
+					},
+				});
+			}
+			return (
+				<button data-testid={testID} onClick={() => onOpenChange(false)}>
+					{typeof children === 'function' ? children({ pressed: false }) : children}
+				</button>
+			);
+		},
+		Title: ({ children }: Primitive.TitleProps) => <span>{children}</span>,
+		Description: ({ children }: Primitive.DescriptionProps) => <span>{children}</span>,
+	};
+});
+
+beforeEach(() => {
+	jest.clearAllMocks();
+	mockPortalCalls.length = 0;
+	mockAutoFocusEvents.length = 0;
+	mockScrimProps.length = 0;
+	mockPressableProps.length = 0;
+	mockInteractOutside.length = 0;
+});
+afterEach(() => jest.useRealTimers());
+
+it('1. opens from a trigger and closes from the generated close control', () => {
+	render(
+		<Dialog>
+			<DialogTrigger testID="trigger">Open</DialogTrigger>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('d-scrim')).not.toBeInTheDocument();
+	expect(screen.getByTestId('primitive-root')).toBeInTheDocument();
+	fireEvent.click(screen.getByTestId('trigger'));
+	expect(screen.getByTestId('d')).toBeInTheDocument();
+	expect(screen.getByTestId('d-scrim')).toBeInTheDocument();
+	fireEvent.click(screen.getByTestId('d-close'));
+	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('d-scrim')).not.toBeInTheDocument();
+});
+
+it('1. slots a single content child without a primitive root wrapper', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('d')).toBeInTheDocument();
+	expect(screen.queryByTestId('primitive-root')).not.toBeInTheDocument();
+});
+
+it('2. passes controlled open and onOpenChange through', () => {
+	const onOpenChange = jest.fn();
+	render(
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('d')).toBeInTheDocument();
+	fireEvent.click(screen.getByTestId('d-close'));
+	expect(onOpenChange).toHaveBeenCalledWith(false);
+	expect(screen.getByTestId('d')).toBeInTheDocument();
+});
+
+it('2. honours explicit asChild=false for a single content child', () => {
+	render(
+		<Dialog open asChild={false}>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('primitive-root')).toContainElement(screen.getByTestId('d'));
+});
+
+function CloseFromContext() {
+	const { open, close } = useDialog();
+	return (
+		<button data-testid="context-close" data-open={open} onClick={close}>
+			Done
+		</button>
+	);
+}
+it('3. useDialog closes an uncontrolled, default-open dialog', () => {
+	render(
+		<Dialog defaultOpen>
+			<DialogContent inline testID="d">
+				<CloseFromContext />
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('context-close')).toHaveAttribute('data-open', 'true');
+	fireEvent.click(screen.getByTestId('context-close'));
+	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
+});
+it('3. close stays referentially stable when its consumer rerenders', () => {
+	const closes: (() => void)[] = [];
+	function Consumer() {
+		const [, rerender] = React.useReducer((value: number) => value + 1, 0);
+		const { close } = useDialog();
+		closes.push(close);
+		return <button onClick={rerender}>Rerender consumer</button>;
+	}
+	render(
+		<Dialog open>
+			<Consumer />
+		</Dialog>
+	);
+	fireEvent.click(screen.getByRole('button', { name: 'Rerender consumer' }));
+	expect(closes).toHaveLength(2);
+	expect(closes[1]).toBe(closes[0]);
+});
+
+it('3. useDialog throws outside Dialog', () => {
+	expect(() => render(<CloseFromContext />)).toThrow('Dialog context is missing');
+});
+
+it.each([undefined, false])(
+	'4. route mode forces inline=%s and closes with router.back',
+	(inline) => {
+		render(
+			<Dialog route>
+				<DialogContent inline={inline} testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(screen.getByTestId('d')).toBeInTheDocument();
+		expect(mockPortalCalls).toHaveLength(0);
+		fireEvent.click(screen.getByTestId('d-close'));
+		expect(router.back).toHaveBeenCalledTimes(1);
+	}
+);
+it('4. route mode uses the supplied onClose', () => {
+	const onClose = jest.fn();
+	render(
+		<Dialog route onClose={onClose}>
+			<DialogContent testID="d">Task</DialogContent>
+		</Dialog>
+	);
+	fireEvent.click(screen.getByTestId('d-close'));
+	expect(onClose).toHaveBeenCalledTimes(1);
+	expect(router.back).not.toHaveBeenCalled();
+	expect(mockPortalCalls).toHaveLength(0);
+});
+it('4. route mode without content is safe', () => {
+	expect(() => render(<Dialog route />)).not.toThrow();
+});
+it('4. trigger mode resolves a named portal host to its container', () => {
+	const container = document.createElement('div');
+	registerPortalContainer('products', container);
+	try {
+		render(
+			<Dialog open>
+				<DialogContent portalHost="products" testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(mockPortalCalls).toContainEqual(
+			expect.objectContaining({ hostName: 'products', container })
+		);
+	} finally {
+		act(() => registerPortalContainer('products', null));
+	}
+});
+
+it.each([
+	['center', 'rounded-lg', 'w-160'],
+	['right', 'border-l', 'h-full'],
+	['left', 'border-r', 'h-full'],
+	// The wrappers carry the sheet's cap (web: the Radix wrapper; native: the shell's); the panel fills it.
+	['bottom', 'rounded-t-2xl', 'max-h-full'],
+] as const)(
+	'5. %s has its presentation classes and honours only applicable sizes',
+	(side, edge, sizing) => {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side={side} size="xl">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(screen.getByTestId('d')).toHaveClass(edge, sizing);
+		if (side === 'bottom') expect(screen.getByTestId('d')).not.toHaveClass('w-160');
+		else expect(screen.getByTestId('d')).toHaveClass('w-160');
+	}
+);
+
+it.each(['right', 'left'] as const)(
+	'6. phone %s becomes a full page and keeps the close control',
+	(side) => {
+		render(
+			<DeviceScope phone>
+				<Dialog open>
+					<DialogContent inline testID="d" side={side} size="lg">
+						Task
+					</DialogContent>
+				</Dialog>
+			</DeviceScope>
+		);
+		expect(screen.getByTestId('d')).toHaveClass('w-full', 'border-0');
+		expect(screen.getByTestId('d')).not.toHaveClass('w-lg');
+		expect(screen.getByTestId('d-close')).toBeInTheDocument();
+	}
+);
+it.each([
+	['center', 'rounded-lg'],
+	['bottom', 'rounded-t-2xl'],
+] as const)('6. phone %s retains its presentation', (side, rounding) => {
+	render(
+		<DeviceScope phone>
+			<Dialog open>
+				<DialogContent inline testID="d" side={side}>
+					Task
+				</DialogContent>
+			</Dialog>
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('d')).toHaveClass(rounding);
+	expect(screen.getByTestId('d')).not.toHaveClass('border-0');
+});
+
+it('7. names the close control and lets callers override its label and testID', () => {
+	const { rerender } = render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('d-close')).toHaveAttribute('aria-label', 'Close');
+	const icon = screen.getByTestId('d-close').querySelector('svg');
+	expect(icon).toHaveClass('size-4.5');
+	expect(icon).not.toHaveClass('h-ctl');
+	expect(icon).not.toHaveClass('w-ctl');
+	expect(
+		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
+	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
+	rerender(
+		<Dialog open>
+			<DialogContent inline testID="d" closeLabel="Dismiss" closeButtonProps={{ testID: 'custom' }}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('custom')).toHaveAttribute('aria-label', 'Dismiss');
+	expect(screen.queryByTestId('d-close')).not.toBeInTheDocument();
+	rerender(
+		<Dialog open>
+			<DialogContent inline>Task</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('dialog-close')).toBeInTheDocument();
+});
+
+it('7. merges caller close classes with the control dimensions', () => {
+	render(
+		<Dialog open>
+			<DialogContent
+				inline
+				testID="d"
+				closeButtonProps={{ className: 'opacity-70', iconClassName: 'size-6' }}
+			>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(
+		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
+	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl', 'opacity-70']));
+	const icon = screen.getByTestId('d-close').querySelector('svg');
+	expect(icon).toHaveClass('size-6');
+	expect(icon).not.toHaveClass('size-4.5');
+});
+
+it.each(['right', 'center'] as const)(
+	'8. %s reserves the close width and applies body/footer flex rules',
+	(side) => {
+		render(
+			<Dialog open>
+				<DialogContent inline side={side}>
+					<DialogHeader testID="header" />
+					<DialogBody testID="body" />
+					<DialogFooter testID="footer" close />
+				</DialogContent>
+			</Dialog>
+		);
+		expect(screen.getByTestId('header')).toHaveClass('pr-ctl');
+		if (side === 'right') {
+			expect(screen.getByTestId('body')).toHaveClass('flex-1');
+			expect(screen.getByTestId('footer')).toHaveClass('border-t');
+		} else {
+			expect(screen.getByTestId('body')).not.toHaveClass('flex-1');
+			expect(screen.getByTestId('footer')).not.toHaveClass('border-t');
+		}
+	}
+);
+it.each([true, false])(
+	'19. the footer stacks on a phone and is a row otherwise (phone=%s)',
+	(phone) => {
+		render(
+			<DeviceScope phone={phone}>
+				<Dialog open>
+					<DialogContent inline side="right">
+						<DialogFooter testID="footer" close />
+					</DialogContent>
+				</Dialog>
+			</DeviceScope>
+		);
+		const footer = screen.getByTestId('footer');
+		if (phone) {
+			expect(footer).toHaveClass('flex-col');
+			expect(footer).not.toHaveClass('flex-row');
+		} else {
+			expect(footer).toHaveClass('flex-row', 'items-center', 'justify-end');
+			expect(footer).not.toHaveClass('flex-col');
+		}
+		expect(footer.className).not.toMatch(/\bsm:/);
+		expect(footer).toHaveClass('gap-2', 'px-4', 'border-t', 'pt-4', 'max-w-full');
+	}
+);
+it('9. titles receive their themed typography through the text context', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				<DialogTitle testID="title">Email receipt</DialogTitle>
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('d')).toContainElement(screen.getByTestId('title'));
+	expect(screen.getByTestId('title')).toHaveTextContent('Email receipt');
+	expect(screen.getByTestId('title')).toHaveClass(
+		...TEXT_LADDER.dialog.split(' '),
+		'text-foreground'
+	);
+	// The dialog's heading is level 1 inside the modal; a SectionHeading in its body is level 2
+	// (CodeRabbit, #2979). On web the Radix Title is slotted onto this Text, so the role is ours.
+	expect(screen.getByRole('heading', { level: 1 })).toBe(screen.getByTestId('title'));
+});
+
+it.each([false, true])(
+	'10. the primitive scrim dismisses (route=%s) and cannot take focus',
+	(route) => {
+		const onOpenChange = jest.fn();
+		render(
+			<Dialog route={route} open onOpenChange={onOpenChange}>
+				<DialogContent inline testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		fireEvent.click(screen.getByTestId('d-scrim'));
+		if (route) expect(router.back).toHaveBeenCalledTimes(1);
+		else expect(onOpenChange).toHaveBeenCalledWith(false);
+		expect(mockScrimProps.at(-1)).toMatchObject({ focusable: false });
+	}
+);
+
+it.each(['animation', 'timer'] as const)(
+	'11. right defers autofocus until the %s settles',
+	(settle) => {
+		jest.useFakeTimers();
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side="right">
+					<Input data-testid="field" placeholder="Email address" />
+				</DialogContent>
+			</Dialog>
+		);
+		expect(mockAutoFocusEvents[0].preventDefault).toHaveBeenCalledTimes(1);
+		const input = screen.getByTestId('field');
+		expect(input).not.toHaveFocus();
+		const focus = jest.spyOn(input, 'focus');
+		if (settle === 'animation') {
+			fireEvent.animationEnd(input);
+			expect(input).not.toHaveFocus();
+			fireEvent.animationEnd(screen.getByTestId('d'));
+		} else act(() => jest.advanceTimersByTime(PANEL_SLIDE + 50));
+		expect(input).toHaveFocus();
+		expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+		act(() => jest.advanceTimersByTime(PANEL_SLIDE + 50));
+		expect(focus).toHaveBeenCalledTimes(1);
+	}
+);
+it('11. composes the caller ref with focus after the right panel settles', () => {
+	jest.useFakeTimers();
+	const ref = React.createRef<Primitive.ContentRef>();
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d" side="right" ref={ref}>
+				<Input data-testid="field" placeholder="Email address" />
+			</DialogContent>
+		</Dialog>
+	);
+	expect(ref.current).toBe(screen.getByTestId('d'));
+	expect(screen.getByTestId('field')).not.toHaveFocus();
+	fireEvent.animationEnd(screen.getByTestId('d'));
+	expect(screen.getByTestId('field')).toHaveFocus();
+});
+it('11. center does not defer or focus through the settle path', () => {
+	jest.useFakeTimers();
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d" side="center">
+				<Input data-testid="field" placeholder="Email address" />
+			</DialogContent>
+		</Dialog>
+	);
+	expect(mockAutoFocusEvents[0].preventDefault).not.toHaveBeenCalled();
+	fireEvent.animationEnd(screen.getByTestId('d'));
+	act(() => jest.advanceTimersByTime(PANEL_SLIDE + 50));
+	expect(screen.getByTestId('field')).not.toHaveFocus();
+});
+
+it('12. keeps the platform boundary in the shell and exports only the new dialog API', () => {
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	const shell = readFileSync(`${__dirname}/../lib/overlay/index.tsx`, 'utf8');
+	expect(source).toContain("'children' | 'asChild'");
+	expect(source).not.toContain('Platform');
+	expect(shell.match(/Platform\.OS/g)).toHaveLength(1);
+	expect(source).not.toMatch(
+		/export\s+(?:(?:function|const)\s+useRootContext|\{[^}]*\buseRootContext\b)|useModal|as Panel/
+	);
+});
+
+it('13. a press on a toast does not dismiss the dialog under it; any other outside press still can', () => {
+	const onInteractOutside = jest.fn();
+	render(
+		<Dialog open onOpenChange={jest.fn()}>
+			<DialogContent inline testID="d" onInteractOutside={onInteractOutside}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	// sonner's web toaster root, holding a toast's action (the register panel's Undo).
+	const toaster = document.createElement('ol');
+	toaster.setAttribute('data-sonner-toaster', 'true');
+	const undo = toaster.appendChild(document.createElement('button'));
+	document.body.appendChild(toaster);
+	const onToast = { target: undo, preventDefault: jest.fn() };
+	const elsewhere = { target: document.body, preventDefault: jest.fn() };
+	const handler = mockInteractOutside.at(-1)!;
+	handler(onToast as unknown as Event);
+	handler(elsewhere as unknown as Event);
+	toaster.remove();
+	expect(onToast.preventDefault).toHaveBeenCalled();
+	expect(elsewhere.preventDefault).not.toHaveBeenCalled();
+	expect(onInteractOutside).toHaveBeenCalledTimes(2);
+});
+
+it('14. a bottom sheet pads the bottom inset the shell leaves (native answer: lib/overlay.native.test)', () => {
+	const inset = jest.spyOn(overlay, 'useSheetInset').mockReturnValue({ paddingBottom: 50 });
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side="bottom">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(inset).toHaveBeenLastCalledWith(16);
+		expect(screen.getByTestId('d')).toHaveStyle({ paddingBottom: '50px' });
+		expect(screen.getByTestId('d')).not.toHaveClass('max-h-[92%]');
+	} finally {
+		inset.mockRestore();
+	}
+});
+
+it('15. uses provider close labels, falls back to English, and lets closeLabel win', () => {
+	const dialog = (closeLabel?: string) => (
+		<Dialog open>
+			<DialogContent inline closeLabel={closeLabel}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	const { rerender } = render(dialog());
+	expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+	rerender(
+		<DialogLabelsProvider labels={{ cancel: 'Cancel', close: 'Fermer' }}>
+			{dialog()}
+		</DialogLabelsProvider>
+	);
+	expect(screen.getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
+	rerender(
+		<DialogLabelsProvider labels={{ cancel: 'Cancel', close: 'Fermer' }}>
+			{dialog('Dismiss')}
+		</DialogLabelsProvider>
+	);
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+	rerender(dialog('Dismiss'));
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+});
+
+it('16. keeps the header close borderless and the footer close outlined', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				<DialogFooter close={{ testID: 'plain-close' }} />
+			</DialogContent>
+		</Dialog>
+	);
+	const classes = (testID: string) =>
+		mockPressableProps.find((props) => props.testID === testID)?.className?.split(' ');
+	expect(classes('d-close')).toEqual(
+		expect.arrayContaining(['h-ctl', 'w-ctl', 'web:hover:bg-accent', 'active:bg-accent'])
+	);
+	expect(classes('d-close')).not.toContain('border');
+	expect(screen.getByTestId('d-close').querySelector('svg')).toHaveClass('text-muted-foreground');
+	for (const testID of ['plain-close']) {
+		expect(classes(testID)).toEqual(expect.arrayContaining(['border', 'border-border', 'bg-card']));
+		expect(classes(testID)).not.toContain('bg-primary');
+	}
+});
+
+it.each([
+	['center', false, 'full', true],
+	['right', false, 'full', false],
+	['right', true, 'full', false],
+	['center', false, '2xl', false],
+] as const)(
+	'17. %s (phone=%s, size=%s) requests fill only for a full-size centre dialog',
+	(side, phone, size, fill) => {
+		const shell = jest.spyOn(overlay, 'OverlayShell');
+		try {
+			render(
+				<DeviceScope phone={phone}>
+					<Dialog open>
+						<DialogContent inline testID="d" side={side} size={size}>
+							Task
+						</DialogContent>
+					</Dialog>
+				</DeviceScope>
+			);
+			expect(shell.mock.calls.at(-1)?.[0]).toMatchObject({
+				fill,
+				presentation: phone && side === 'right' ? 'page' : side,
+			});
+		} finally {
+			shell.mockRestore();
+		}
+	}
+);
+
+it.each([true, false])('17. takes full-size geometry only when the shell says fill=%s', (fill) => {
+	const context = jest.spyOn(overlay, 'useOverlay').mockReturnValue({
+		presentation: 'center',
+		open: true,
+		deferAutoFocus: false,
+		onPanelNode: jest.fn(),
+		fill,
+	});
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" size="full">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		const panel = screen.getByTestId('d');
+		const close = screen.getByTestId('d-close').parentElement;
+		if (fill) {
+			expect(panel).toHaveClass('h-full', 'rounded-none', 'border-0', 'py-2');
+			// One class per call: jest-dom's negated form passes when ANY listed class is missing.
+			expect(panel).not.toHaveClass('py-4');
+			expect(panel).not.toHaveClass('rounded-lg');
+			expect(panel).not.toHaveClass('border');
+			expect(close).toHaveClass('top-0');
+			expect(close).not.toHaveClass('top-1');
+		} else {
+			expect(panel).not.toHaveClass('py-2');
+			expect(panel).not.toHaveClass('rounded-none');
+			expect(panel).not.toHaveClass('border-0');
+			expect(panel).toHaveClass('py-4', 'rounded-lg', 'border');
+			expect(close).toHaveClass('top-1');
+		}
+	} finally {
+		context.mockRestore();
+	}
+});
+
+// Keep the existing cases' stand-ins unchanged; test 18 uses the installed title/slot contracts.
+describe('18. title platform contract', () => {
+	beforeEach(() => {
+		const native = jest.requireMock<typeof import('react-native')>('react-native');
+		jest.spyOn(native, 'Text').mockImplementation(({ children, className, testID, role, id }) => (
+			<span className={className} data-testid={testID} role={role} id={id}>
+				{children}
+			</span>
+		));
+		const slot = jest.requireMock<typeof import('@rn-primitives/slot')>('@rn-primitives/slot');
+		jest.spyOn(slot, 'Slot').mockImplementation(jest.requireActual('@rn-primitives/slot').Slot);
+	});
+	afterEach(() => jest.restoreAllMocks());
+
+	it.each([true, false])(
+		'native keeps the heading directly in the header (asChild=%s)',
+		(asChild) => {
+			jest.replaceProperty(overlay, 'isWeb', false);
+			const primitive = jest.requireMock<typeof Primitive>('@rn-primitives/dialog');
+			jest
+				.spyOn(primitive, 'Title')
+				.mockImplementation(jest.requireActual('@rn-primitives/dialog/dist/dialog').Title);
+			const { Text } = jest.requireActual<typeof import('../text')>('../text');
+			render(
+				<DialogHeader testID="header">
+					{asChild ? (
+						<DialogTitle asChild>
+							<Text testID="title" className="flex-1">
+								Order 12345678901234567890
+							</Text>
+						</DialogTitle>
+					) : (
+						<DialogTitle testID="title">Order 12345678901234567890</DialogTitle>
+					)}
+				</DialogHeader>
+			);
+			const title = screen.getByTestId('title');
+			expect(title.parentElement).toBe(screen.getByTestId('header'));
+			expect(title).toHaveAttribute('role', 'heading');
+			expect(title.tagName).toBe('SPAN');
+			if (asChild) expect(title).toHaveClass('flex-1');
+		}
+	);
+
+	it.each([true, false])('web keeps the primitive accessible name (asChild=%s)', (asChild) => {
+		const primitive = jest.requireMock<typeof Primitive>('@rn-primitives/dialog');
+		const web = jest.requireActual<typeof Primitive>(
+			require.resolve('@rn-primitives/dialog').replace(/index\.js$/, 'dialog.web.js')
+		);
+		jest.spyOn(primitive, 'Title').mockImplementation(web.Title);
+		const { Text } = jest.requireActual<typeof import('../text')>('../text');
+		render(
+			<web.Root open>
+				<web.Content testID="d">
+					{asChild ? (
+						<DialogTitle asChild>
+							<Text testID="title">Email receipt</Text>
+						</DialogTitle>
+					) : (
+						<DialogTitle testID="title">Email receipt</DialogTitle>
+					)}
+					<web.Description>Receipt options</web.Description>
+				</web.Content>
+			</web.Root>
+		);
+		const title = screen.getByTestId('title');
+		expect(title.id).not.toBe('');
+		expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', title.id);
+		expect(screen.getByRole('dialog')).toHaveAccessibleName('Email receipt');
+	});
+});
+
+it('uses the root portal when its host is explicitly null', () => {
+	render(
+		<Dialog open>
+			<DialogContent portalHost={null} testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(mockPortalCalls).toContainEqual(
+		expect.objectContaining({ hostName: undefined, container: undefined })
+	);
+});

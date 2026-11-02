@@ -8,6 +8,30 @@ import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { NetworkFields } from './network-fields';
 
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../../../jest/property-row.test-utils')
+);
+jest.mock('@wcpos/components/list-item', () => ({
+	ListItem: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<button type="button" data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
 jest.mock('react-native', () => ({
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
@@ -15,6 +39,11 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('@wcpos/components/form', () => ({
+	FormItem: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
+		<div data-form-item={nativeID ?? ''}>{children}</div>
+	),
+	FormLabel: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	SavedMark: () => null,
 	FormField: ({
 		render,
 		name,
@@ -30,6 +59,14 @@ jest.mock('@wcpos/components/form', () => ({
 	),
 }));
 
+jest.mock('../printer-rows', () => ({
+	PrinterRow: ({ children, verb }: { children?: React.ReactNode; verb?: React.ReactNode }) => (
+		<div>
+			{children}
+			{verb}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -282,6 +319,26 @@ describe('NetworkFields discovery states', () => {
 		expect(screen.getByTestId('add-printer-endpoint-explanation')).toHaveTextContent(
 			'Using Epson ePOS over HTTPS'
 		);
+	});
+
+	it('gives the port its own form item beside the address (Codex, #2978)', () => {
+		// Both inputs share the Address row; the port must not be named by the Address label
+		// or share its validation-message id, so it carries its own item and label.
+		render(
+			<NetworkFields
+				form={makeForm()}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[]}
+			/>
+		);
+
+		const port = screen.getByTestId('add-printer-port-input').closest('[data-form-item]');
+		expect(port?.getAttribute('data-form-item')).toBe('printer-port');
+		expect(port?.textContent).toContain('Port');
+		const address = screen.getByTestId('add-printer-ip-input').closest('[data-form-item]');
+		expect(address?.getAttribute('data-form-item')).not.toBe('printer-port');
 	});
 
 	it('clears stale port state when the selected target has no port', () => {

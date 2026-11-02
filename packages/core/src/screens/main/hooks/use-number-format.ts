@@ -4,12 +4,27 @@ import defaults from 'lodash/defaults';
 import round from 'lodash/round';
 import { NumericFormatProps, numericFormatter } from 'react-number-format';
 
+import { QUANTITY_PLACES } from '@wcpos/components/quantity-keypad/reducer';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { plainNumberString } from './plain-number-string';
 
 export type NumberFormatOptions = NumericFormatProps;
+
+/**
+ * A quantity's format: the store's separators, but never the currency's decimal scale. A
+ * weighed line holds 0.125 whatever the prices round to, and an integer shows no decimals.
+ */
+export const QUANTITY_FORMAT: NumberFormatOptions = {
+	fixedDecimalScale: false,
+	decimalScale: QUANTITY_PLACES,
+};
+
+/** A percentage is typed to hundredths (12.75 %), whatever the currency's places. */
+export const PERCENT_PLACES = 2;
+/** And reads at them: a store pricing to 0 places never shows 12.5 % as "12". */
+export const PERCENT_FORMAT: NumberFormatOptions = { decimalScale: PERCENT_PLACES };
 
 /**
  * Custom hook to format numbers based on application state and provided options.
@@ -26,7 +41,9 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 	 *
 	 */
 	const mergedOptions = React.useMemo(() => {
-		const opts = defaults(options, {
+		// Into a fresh object: `defaults` mutates its first argument, so a caller's constant
+		// options would keep the first store's separators for good.
+		const opts = defaults({}, options, {
 			thousandSeparator,
 			decimalSeparator,
 			decimalScale: decimalPrecision,

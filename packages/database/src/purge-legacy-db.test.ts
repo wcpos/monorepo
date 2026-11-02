@@ -1,4 +1,6 @@
-const mockDeleteLegacySQLiteDirectory = jest.fn();
+jest.mock('./database-generation', () => ({ DATABASE_GENERATION: 'v10' }));
+
+const mockDeleteDirectory = jest.fn();
 
 /**
  * `Documents/SQLite` is expo-sqlite's SHARED directory, not a WCPOS-owned one, so
@@ -12,10 +14,13 @@ const sqliteEntries = [
 	'wcposusers_v4.db-wal',
 	'wcposusers_v4.db-shm',
 	'fast_store_v5_shop.db',
-	// Not legacy (`store_v5_` is not a legacy prefix — store goes v3, v4, v6) and
+	// Not legacy (`store_v5_` is not a legacy prefix — store goes v3, v4, v7) and
 	// not ours. Both must survive.
 	'store_v5_shop.db',
-	'store_v6_shop.db',
+	'store_v7_shop.db',
+	'store_v8_shop.db',
+	'store_v9_shop.db',
+	'store_v10_shop.db',
 	'some-other-library.db',
 ].map((name) => ({ name, delete: jest.fn() }));
 
@@ -23,10 +28,25 @@ const opfsEntries = [
 	'rxdb-wcposusers_v4-sites-0',
 	'rxdb-store_v4_shop-products-0',
 	'rxdb-fast_store_v5_shop-orders-0',
-	'rxdb-wcposusers_v6-sites-0',
-	'rxdb-store_v6_shop-products-0',
-	'rxdb-fast_store_v6_shop-orders-0',
+	'rxdb-wcposusers_v7-sites-0',
+	'rxdb-store_v7_shop-products-0',
+	'rxdb-fast_store_v7_shop-orders-0',
+	'rxdb-wcposusers_v8-sites-0',
+	'rxdb-wcposusers_v9-sites-0',
+	'rxdb-pos_v5_shop-orders-0',
 	'unrelated',
+].map((name) => ({ name, delete: jest.fn() }));
+
+// The live SQLite root after the 2.0 schema reset: retired generations beside the
+// current one, plus a kept drainable scope database and an older one.
+const liveRootEntries = [
+	'wcposusers_v8',
+	'wcposusers_v8-wal',
+	'store_v9_shop',
+	'wcposusers_v10',
+	'store_v10_shop',
+	'pos_v6_0123456789ab_s1_c2',
+	'pos_v4_0123456789ab_s1_c2',
 ].map((name) => ({ name, delete: jest.fn() }));
 
 class MockDirectory {
@@ -46,6 +66,9 @@ class MockDirectory {
 		if (this.uri.includes('.expo-opfs')) {
 			return opfsEntries;
 		}
+		if (this.uri.includes('wcpos-sqlite')) {
+			return liveRootEntries;
+		}
 		if (this.uri.includes('SQLite')) {
 			return sqliteEntries;
 		}
@@ -54,7 +77,7 @@ class MockDirectory {
 	}
 
 	delete() {
-		mockDeleteLegacySQLiteDirectory(this.uri);
+		mockDeleteDirectory(this.uri);
 	}
 }
 
@@ -79,18 +102,16 @@ describe('purgeLegacyDatabases native', () => {
 		jest.resetModules();
 	});
 
-	it('deletes only legacy SQLite and OPFS entries, counting databases not files', async () => {
+	it('removes the retired OPFS root whole and only legacy files from shared SQLite', async () => {
 		const { purgeLegacyDatabases } = await import('./purge-legacy-db');
 
-		// 2 legacy SQLite databases (their -wal/-shm sidecars go too, but are not
-		// separate databases) + 3 legacy OPFS entries.
-		await expect(purgeLegacyDatabases()).resolves.toEqual({
+		// Five old SQLite databases, nine rxdb entries in the retired root, and three
+		// retired-generation databases in the live root (the `-wal` sidecar is not counted).
+		await expect(purgeLegacyDatabases()).resolves.toMatchObject({
 			success: true,
-			message: 'Successfully purged 5 legacy database entries',
-			databasesDeleted: 5,
+			databasesDeleted: 17,
 		});
-		// The shared directory itself is never removed.
-		expect(mockDeleteLegacySQLiteDirectory).not.toHaveBeenCalled();
+		expect(mockDeleteDirectory.mock.calls).toEqual([['document-dir/.expo-opfs']]);
 		expect(
 			sqliteEntries.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
 		).toEqual([
@@ -98,13 +119,46 @@ describe('purgeLegacyDatabases native', () => {
 			'wcposusers_v4.db-wal',
 			'wcposusers_v4.db-shm',
 			'fast_store_v5_shop.db',
+			'store_v7_shop.db',
+			'store_v8_shop.db',
+			'store_v9_shop.db',
 		]);
+		// The live root loses only retired generations; v10 and the drainable scope stay.
 		expect(
-			opfsEntries.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
-		).toEqual([
-			'rxdb-wcposusers_v4-sites-0',
-			'rxdb-store_v4_shop-products-0',
-			'rxdb-fast_store_v5_shop-orders-0',
+			liveRootEntries.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
+		).toEqual(['wcposusers_v8', 'wcposusers_v8-wal', 'store_v9_shop', 'pos_v4_0123456789ab_s1_c2']);
+		expect(mockDeleteDirectory).not.toHaveBeenCalledWith('document-dir/wcpos-sqlite');
+	});
+
+	it('never reaches a kept drainable scope database, by name or by directory', async () => {
+		const drainable = 'pos_v6_0123456789ab_s1_c2';
+		const older = 'pos_v4_0123456789ab_s1_c2';
+		const added = [drainable, `${drainable}-wal`, older].map((name) => ({
+			name,
+			delete: jest.fn(),
+		}));
+		sqliteEntries.push(...added);
+		try {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db');
+			await purgeLegacyDatabases();
+			expect(
+				added.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
+			).toEqual([older]);
+			// The live root, where a kept drainable database actually lives, is never deleted.
+			expect(mockDeleteDirectory).not.toHaveBeenCalledWith('document-dir/wcpos-sqlite');
+		} finally {
+			sqliteEntries.splice(-added.length);
+		}
+	});
+
+	it('clearAllDB removes the live directory and both legacy roots', async () => {
+		const { clearAllDB } = await import('./clear-all-db');
+		await expect(clearAllDB()).resolves.toMatchObject({ success: true });
+		expect(mockDeleteDirectory.mock.calls.map(([uri]) => uri).sort()).toEqual([
+			'document-dir/.expo-opfs',
+			'document-dir/SQLite',
+			'document-dir/wcpos-sqlite',
 		]);
+		expect(sqliteEntries.every((entry) => entry.delete.mock.calls.length === 0)).toBe(true);
 	});
 });

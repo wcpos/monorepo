@@ -149,6 +149,9 @@ async function main() {
 		'**/build/**',
 		'**/web-build/**',
 		'apps/web/**',
+		// Vendored/generated bundles served as-is (the SQLite storage worker): minified
+		// code carries `t(`-shaped calls that are not translation lookups.
+		'apps/main/public/**',
 		'**/*.d.ts',
 		'**/*.test.*',
 		'**/*.spec.*',

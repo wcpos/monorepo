@@ -1,10 +1,15 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Platform } from '@wcpos/utils/platform';
+import { type QueryHandle, type QueryResult, useRecordField } from '@wcpos/query';
+import { useQuerySnapshot } from '@wcpos/query/query-state';
 
+import {
+	getCheckoutModeSnapshot,
+	isReceiptStage,
+	subscribeCheckoutMode,
+} from '../../checkout/checkout-mode';
 import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,
@@ -15,7 +20,7 @@ import { useNewOrder } from './use-new-order';
 
 import type { DefaultCustomerResource } from './use-new-order';
 
-export { useOpenOrdersResource } from './use-open-orders-resource';
+export { useOpenOrdersHandle } from './use-open-orders-handle';
 export {
 	CurrentOrderActionsContext,
 	CurrentOrderContext,
@@ -31,10 +36,19 @@ export {
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	resource: ObservableResource<OpenOrderHit[]>;
+	/** Owned by `(pos)/_layout.tsx`, above this boundary — see `useOpenOrdersHandle`. */
+	handle: QueryHandle<QueryResult>;
+	/** Whose open orders `handle` holds; see `CurrentOrderContextProps.openOrdersScope`. */
+	scope: string;
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
 	defaultCustomerResource: DefaultCustomerResource;
 	currentOrderUUID?: string;
+}
+
+function inFlightFor(id: string | undefined) {
+	const mode = getCheckoutModeSnapshot();
+	if (!id) return 'none';
+	return mode.receiptOrders.has(id) ? 'receipt' : mode.checkoutOrders.has(id) ? 'checkout' : 'none';
 }
 
 /**
@@ -47,12 +61,14 @@ interface CurrentOrderContextProviderProps {
  */
 export function CurrentOrderProvider({
 	children,
-	resource,
+	handle,
+	scope,
 	defaultCustomerResource,
 	currentOrderUUID,
 }: CurrentOrderContextProviderProps) {
 	const { newOrder } = useNewOrder(defaultCustomerResource);
-	const openOrders = useObservableSuspense(resource);
+	const { hits } = useQuerySnapshot(handle, ['hits']);
+	const openOrders = hits as OpenOrderHit[];
 	const router = useRouter();
 
 	// Internal state is the source of truth, initialized from route param
@@ -100,7 +116,30 @@ export function CurrentOrderProvider({
 	// Determine the current record from internal state. The temporary order has the same
 	// engine-shaped record face as resident orders since ADR 0028 stage I.
 	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
-	const currentOrderRecord = selectedOrder?.record ?? newOrder;
+	// The hit and the scope it came from: another cashier's or register's query must not keep
+	// showing this one's sale.
+	const [held, setHeld] = React.useState<(OpenOrderHit & { scope: string }) | undefined>(undefined);
+	// Subscribe only to this order's membership, not keypad/tender-plan updates.
+	const membership = () => inFlightFor(internalOrderId);
+	React.useSyncExternalStore(subscribeCheckoutMode, membership, membership);
+	const heldStatus = useRecordField(held?.record, (order) => order.payload.status);
+	// Decide from the latest document: the subscribed status can lag the hits by one emission.
+	const latestHeldStatus = held?.record.getLatest?.().payload.status ?? heldStatus;
+	const keepHeld =
+		held &&
+		held.id === internalOrderId &&
+		held.scope === scope &&
+		isReceiptStage(held.id, getCheckoutModeSnapshot(), latestHeldStatus);
+	if (selectedOrder && (held?.record !== selectedOrder.record || held.scope !== scope)) {
+		setHeld({ ...selectedOrder, scope });
+	} else if (!selectedOrder && held && !keepHeld) {
+		setHeld(undefined);
+	}
+	const heldRecord = !selectedOrder && keepHeld ? held.record : undefined;
+	const currentOrderRecord = selectedOrder?.record ?? heldRecord ?? newOrder;
+	// The displayed and writable orders differ only while a paid sale is finishing;
+	// a scan then starts the next sale.
+	const writableOrderRecord = selectedOrder?.record ?? newOrder;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.
@@ -119,18 +158,6 @@ export function CurrentOrderProvider({
 
 			// Also sync to URL for bookmarking/refresh/history purposes
 			router.setParams({ orderId: orderId ? [orderId] : undefined });
-
-			// On web, update the browser URL for nice URLs
-			// Run after setParams completes to override the query param URL
-			if (Platform.isWeb) {
-				requestAnimationFrame(() => {
-					// Get base path from homepage URL (e.g., '/foobar/' from 'https://wcpos.local/foobar/')
-					const homepage = (globalThis as any).initialProps?.homepage as string | undefined;
-					const basePath = homepage ? new URL(homepage).pathname.replace(/\/$/, '') : '';
-					const newPath = orderId ? `${basePath}/cart/${orderId}` : `${basePath}/cart`;
-					window.history.replaceState(null, '', newPath);
-				});
-			}
 		},
 		[router]
 	);
@@ -144,10 +171,12 @@ export function CurrentOrderProvider({
 	 * barcode scan) can fire after the commit that switched orders but before passive
 	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
-	const currentOrderRecordRef = React.useRef(currentOrderRecord);
+	const currentOrderRecordRef = React.useRef(writableOrderRecord);
+	const currentOrderIDRef = React.useRef(internalOrderId);
 	React.useLayoutEffect(() => {
-		currentOrderRecordRef.current = currentOrderRecord;
-	}, [currentOrderRecord]);
+		currentOrderRecordRef.current = writableOrderRecord;
+		currentOrderIDRef.current = internalOrderId;
+	}, [writableOrderRecord, internalOrderId]);
 
 	React.useLayoutEffect(() => {
 		routeOrderUUIDRef.current = currentOrderUUID;
@@ -161,6 +190,7 @@ export function CurrentOrderProvider({
 	const actions = React.useMemo<CurrentOrderActions>(
 		() => ({
 			getCurrentOrderRecord: () => currentOrderRecordRef.current,
+			getCurrentOrderID: () => currentOrderIDRef.current,
 			setCurrentOrderID,
 		}),
 		[setCurrentOrderID]
@@ -172,6 +202,7 @@ export function CurrentOrderProvider({
 				value={{
 					currentOrderRecord,
 					openOrders,
+					openOrdersScope: scope,
 					setCurrentOrderID,
 				}}
 			>

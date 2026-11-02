@@ -8,28 +8,32 @@ import {
 } from 'observable-hooks';
 
 import {
-	Modal,
-	ModalAction,
-	ModalBody,
-	ModalClose,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-	ModalTitle,
-} from '@wcpos/components/modal';
-import { Button, ButtonText } from '@wcpos/components/button';
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { WebViewHandle } from '@wcpos/components/webview';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
+import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
+import { PayFrameNotice } from './pay-page/pay-frame-notice';
+import { usePayFrameGate } from './pay-page/use-pay-frame-gate';
+import { TenderCheckout } from './tender/tender-checkout';
 import { returnToTill } from './till-route';
 import { useT } from '../../../../contexts/translations';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
 
 interface Props {
@@ -45,50 +49,65 @@ export function Checkout({ resource }: Props) {
 
 	if (!order) {
 		return (
-			<Modal>
-				<ModalContent testID="checkout-dialog" size="lg">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
+			<Dialog route>
+				<DialogContent testID="checkout-dialog" size="lg">
+					<DialogHeader>
+						<DialogTitle>
+							<Text>{t('pos_checkout.checkout')}</Text>
+						</DialogTitle>
+					</DialogHeader>
+					<EmptyState kind="empty" title={t('common.no_order_found')} />
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
 	return <CheckoutDocument order={order} />;
 }
 
+/**
+ * Which checkout the till gets is decided by the store, not by a setting: a store
+ * serving `GET wcpos/v2/payment-methods` has the payments contract and gets the
+ * two-pane tender flow (wcpos/roadmap#143). A store that does not — an older
+ * plugin, or one whose descriptor is a schema this build cannot read — keeps the
+ * gateway checkout it has always had. There is no half-way state where a cashier
+ * meets a tile grid the server cannot record against.
+ */
 function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
+	const { loaded, unsupportedSchema } = usePaymentMethods();
+	// Latched once, when the modal opens. The descriptor can change underneath an open
+	// checkout (a config refresh, a 404 invalidating the cache); swapping the component then
+	// would unmount a tender flow holding live legs without running its cancel guard. The
+	// next time checkout opens, the current answer is read again.
+	const [useTenderFlow] = React.useState(() => loaded && !unsupportedSchema);
+
+	if (useTenderFlow) {
+		return <TenderCheckout key={order.uuid} order={order} />;
+	}
+
+	return <LegacyCheckoutDocument order={order} />;
+}
+
+function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderNumber = orderData.number;
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const router = useRouter();
+	const phone = useIsPhone();
 	const t = useT();
-	const webViewRef = React.useRef<WebViewHandle>(null);
-	const [legacyLoading, setLegacyLoading] = React.useState(false);
-	// `wcpos-process-payment` is fire-and-forget: no ack, no retry. Posted before
-	// the store's order-pay document has loaded, it is dropped silently and the
-	// cashier is left with a button that spins forever (#1024). The payment frame
-	// reports its load event; until then the footer stays gated.
-	//
-	// The status is mirrored into a ref because the render state alone cannot be
-	// trusted by the handler: when the frame's src is swapped (JWT refresh, a new
-	// payment link) the press already in flight still carries the closure from the
-	// render that said `ready`. The ref is written the moment the frame re-gates,
-	// so the guard reads live state rather than a snapshot.
-	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
-	const frameStatusRef = React.useRef<PaymentFrameStatus>('loading');
-	const reportFrameStatus = React.useCallback((next: PaymentFrameStatus) => {
-		frameStatusRef.current = next;
-		setFrameStatus(next);
-	}, []);
-	// Each Retry press hands the frame a new token; the frame remounts on it.
-	const [frameRetryToken, setFrameRetryToken] = React.useState(0);
-	const retryPaymentFrame = React.useCallback(() => setFrameRetryToken((n) => n + 1), []);
-	const { loading, mode, error, startCheckout, handleStockRejection, settledOrderStatuses } =
-		useCheckoutSession(order);
+	// The legacy frame's footer gate (#1024): see usePayFrameGate.
+	const frameGate = usePayFrameGate();
+	const { status: frameStatus, press: pressPaymentFrame } = frameGate;
+	const {
+		loading,
+		mode,
+		error,
+		startCheckout,
+		handleStockRejection,
+		settledOrderStatuses,
+		gatewayError,
+		refetch,
+	} = useCheckoutSession(order);
 	// #163 ruling R5. This modal is where a checkout already in progress is caught:
 	// it was opened while storage was healthy, and the worker can die at any point
 	// before the cashier presses Process Payment.
@@ -101,13 +120,11 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// Scoped to the legacy webview path — contract checkout posts nothing into a
 	// frame, so it has nothing to wait for. When the link is missing no frame is
 	// rendered at all, and `paymentLinkMissing` is already the reason shown.
-	const frameGateApplies = mode === 'webview' && !paymentLinkMissing;
+	const frameGateApplies = mode === 'webview' && !paymentLinkMissing && !gatewayError;
+	// Anything but `ready` blocks the press, so a new status blocks by default;
+	// `loading` alone also spins.
+	const paymentFrameBlocked = frameGateApplies && frameStatus !== 'ready';
 	const paymentFrameLoading = frameGateApplies && frameStatus === 'loading';
-	// Stalled = the first document never came; retrying its navigation is safe.
-	// Failed = a later navigation broke; a retry would reload the pay page under
-	// a sale that may already be paid, so none is offered.
-	const paymentFrameStalled = frameGateApplies && frameStatus === 'stalled';
-	const paymentFrameFailed = frameGateApplies && frameStatus === 'failed';
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
@@ -131,36 +148,27 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 			return;
 		}
 
-		// Refuse rather than post into a document that cannot be listening yet: the
-		// message would vanish with no ack and no retry. `disabled` covers the
-		// render; the ref covers a press that beats the re-render, including one
-		// held over from before the frame's src was swapped.
-		if (frameStatusRef.current !== 'ready') {
-			return;
-		}
-
-		setLegacyLoading(true);
-		if (webViewRef.current && webViewRef.current.postMessage) {
-			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
-		}
-	}, [blockIfDegraded, mode, order.uuid, startCheckout]);
+		// The frame gate last: it refuses silently, so every guard that explains
+		// itself (the storage toast above all) has to have had its turn first.
+		pressPaymentFrame();
+	}, [blockIfDegraded, mode, order.uuid, pressPaymentFrame, startCheckout]);
 
 	/**
 	 *
 	 */
 	return (
-		<Modal>
-			<ModalContent testID="checkout-dialog" size="xl" className="h-full">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent testID="checkout-dialog" size="xl" className="h-full">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>
 							{orderNumber
 								? t('pos_checkout.checkout_order', { orderNumber })
 								: t('pos_checkout.checkout')}
 						</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody contentContainerStyle={{ height: '100%' }}>
+					</DialogTitle>
+				</DialogHeader>
+				<DialogBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
 						{/* R1. The cart's copy of this banner is behind this full-height
@@ -172,47 +180,32 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						    stand, and the cashier decides. */}
 						<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
 						{storageDegraded && !showStockRejection ? (
-							<VStack
-								space="xs"
-								className="border-destructive bg-destructive/10 rounded-md border p-3"
-							>
-								<Text testID="checkout-storage-unavailable" className="text-destructive">
-									{t('pos_checkout.storage_unavailable')}
-								</Text>
-							</VStack>
+							<StorageOutageBanner testID="checkout-storage-unavailable" />
 						) : null}
-						{(paymentLinkMissing || paymentFrameStalled || paymentFrameFailed) &&
-						!showStockRejection ? (
-							<VStack
-								space="xs"
-								className="border-destructive bg-destructive/10 rounded-md border p-3"
-							>
-								<Text testID="checkout-payment-form-unavailable" className="text-destructive">
-									{paymentLinkMissing
-										? t('pos_checkout.payment_form_unavailable')
-										: paymentFrameStalled
-											? t('pos_checkout.payment_form_load_failed_retry')
-											: t('pos_checkout.payment_form_navigation_failed')}
-								</Text>
-								{paymentFrameStalled ? (
-									<Button
-										variant="outline"
-										size="sm"
-										testID="checkout-payment-form-retry"
-										onPress={retryPaymentFrame}
-									>
-										<ButtonText>{t('common.retry')}</ButtonText>
-									</Button>
-								) : null}
-							</VStack>
+						{mode === 'webview' && !gatewayError && !showStockRejection ? (
+							<PayFrameNotice
+								status={paymentLinkMissing ? 'link-missing' : frameStatus}
+								onRetry={frameGate.retry}
+								testID="checkout-payment-form-unavailable"
+							/>
 						) : null}
-						{mode === 'webview' && !showStockRejection ? (
+						{gatewayError ? (
+							<Notice
+								tone="bad"
+								title={t('pos_checkout.gateway_catalog_unavailable')}
+								actions={[
+									{
+										label: t('pos_checkout.try_again'),
+										onPress: () => void refetch(),
+										testID: 'checkout-gateway-catalog-retry',
+									},
+								]}
+								testID="checkout-gateway-catalog-unavailable"
+							/>
+						) : mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
 								order={order}
-								ref={webViewRef}
-								setLoading={setLegacyLoading}
-								setFrameStatus={reportFrameStatus}
-								retryToken={frameRetryToken}
+								{...frameGate.frameProps}
 								settledOrderStatuses={settledOrderStatuses}
 								onStockRejection={handleStockRejection}
 							/>
@@ -224,17 +217,15 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 									<Text>{t('pos_checkout.amount_to_pay')}</Text>
 								)}
 								{showStockRejection ? (
-									<VStack
-										space="xs"
-										className="border-destructive bg-destructive/10 rounded-md border p-3"
+									<Notice
+										tone="bad"
+										title={t('pos_checkout.insufficient_stock_message')}
+										testID="checkout-stock-rejection"
 									>
-										<Text className="text-destructive font-semibold">
-											{t('pos_checkout.insufficient_stock_message')}
-										</Text>
 										{stockRejection!.items.map((item) => (
 											<Text
 												key={`${item.product_id}-${item.variation_id}`}
-												className="text-destructive text-sm"
+												variant="key"
 												decodeHtml
 											>
 												{item.available === null
@@ -245,43 +236,39 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 														})}
 											</Text>
 										))}
-									</VStack>
+									</Notice>
 								) : (
-									error && <Text className="text-destructive">{error}</Text>
+									error && <Text className="text-bad">{error}</Text>
 								)}
 							</VStack>
 						)}
 					</VStack>
-				</ModalBody>
-				<ModalFooter>
-					{!showStockRejection && (
-						<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
-					)}
-					{showStockRejection ? (
-						<ModalAction testID="return-to-cart-button" onPress={() => returnToTill(router)}>
-							{t('pos_checkout.return_to_cart')}
-						</ModalAction>
-					) : (
-						<ModalAction
-							testID="process-payment-button"
-							onPress={handleProcessPayment}
-							loading={mode === 'contract' ? loading : legacyLoading || paymentFrameLoading}
-							disabled={
-								mode === 'pending' ||
-								storageDegraded ||
-								error === 'payment_gateways_fetch_failed' ||
-								paymentLinkMissing ||
-								(mode === 'contract' && loading) ||
-								paymentFrameLoading ||
-								paymentFrameStalled ||
-								paymentFrameFailed
-							}
-						>
-							{t('pos_checkout.process_payment')}
-						</ModalAction>
-					)}
-				</ModalFooter>
-			</ModalContent>
-		</Modal>
+				</DialogBody>
+				<DialogFooter
+					close={!showStockRejection && { testID: 'cancel-checkout-button' }}
+					intent={
+						showStockRejection
+							? {
+									label: t('pos_checkout.return_to_cart'),
+									testID: 'return-to-cart-button',
+									onPress: () => returnToTill(router, phone, 'cart'),
+								}
+							: {
+									label: t('pos_checkout.process_payment'),
+									testID: 'process-payment-button',
+									onPress: () => void handleProcessPayment(),
+									disabled:
+										mode === 'pending' ||
+										storageDegraded ||
+										error === 'payment_gateways_fetch_failed' ||
+										paymentLinkMissing ||
+										(mode === 'contract' && loading) ||
+										paymentFrameBlocked,
+									loading: mode === 'contract' ? loading : frameGate.busy || paymentFrameLoading,
+								}
+					}
+				/>
+			</DialogContent>
+		</Dialog>
 	);
 }

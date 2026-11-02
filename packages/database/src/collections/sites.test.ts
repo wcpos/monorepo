@@ -1,25 +1,23 @@
 import { sitesLiteral } from './schemas/sites';
 
-describe('sites migration strategy', () => {
-	it('migration 5 leaves existing documents unchanged', async () => {
-		const { userCollections } = await import('./index');
-		const migrate = userCollections.sites.migrationStrategies?.[5];
-		if (!migrate) throw new Error('sites migration 5 missing');
-		const oldDoc = { uuid: 'site-1' };
-
-		expect(migrate(oldDoc, undefined as never)).toBe(oldDoc);
+describe('sites schema', () => {
+	it('uses schema version 0', () => {
+		expect(sitesLiteral.version).toBe(0);
 	});
+});
 
-	it.each([6, 7])('migration %s leaves existing documents unchanged', async (version) => {
-		const { userCollections } = await import('./index');
-		const migrate = userCollections.sites.migrationStrategies?.[version];
-		if (!migrate) throw new Error(`sites migration ${version} missing`);
-		const oldDoc = { uuid: 'site-1' };
-
-		expect(migrate(oldDoc, undefined as never)).toBe(oldDoc);
-	});
-
-	it('uses schema version 7', () => {
-		expect(sitesLiteral.version).toBe(7);
+describe('sites schema and the site payload', () => {
+	it('keeps search_meta_keys from wcpos/v2/site through the schema prune (#2411)', async () => {
+		const { pruneProperties } = await import('../plugins/parse-rest-response');
+		const data: Record<string, unknown> = {
+			uuid: 'site-1',
+			search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+			not_in_schema: true,
+		};
+		pruneProperties(sitesLiteral as never, data);
+		expect(data).toEqual({
+			uuid: 'site-1',
+			search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+		});
 	});
 });

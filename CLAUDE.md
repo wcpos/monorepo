@@ -4,11 +4,14 @@ React Native + Expo cross-platform POS client app.
 
 ## Local Agent Configuration
 
+Coding standards live in `CODING_STANDARDS.md`; `/code-review` enforces them on the diff. They are not repeated here.
+
 This repository keeps project-specific agent configuration local to the repo:
 
 - `CLAUDE.md` — project overview and shared local agent policy.
 - `AGENTS.md` — Codex/agent entrypoint and local discovery instructions.
 - `.claude/rules/*.mdc` — local project rules.
+- `CODING_STANDARDS.md` § Design — **must-read before any UI work** (screens, components, `global.css`, mockups, UI review); `.claude/rules/design.mdc` is the pointer that loads for UI files.
 - `.claude/skills/*/SKILL.md` — local project skills.
 
 Do not move these local rules or skills to global `~/.claude`, `~/.codex`, or other global agent configuration without explicit user approval.
@@ -108,39 +111,34 @@ version bump no longer moves it. Read from `eas build:view <build-id> --json`, n
 | Android | `247b12c8-4d98-47d2-8f3e-9840666d211d` | `050c0144c106f24ab23db6509c37f998f4c1dddd` |
 | iOS | `d650ce31-d233-481f-99dc-edc037e58fab` | `612a275dcc877f7d400f203cd56c0b8f77490683` |
 
-
-## E2E selector policy
-
-E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; _selecting_ by text is not.)
-
-**Assertions follow the same referent discipline.** Never assert on a composite or translated sentence when a value-bearing testID exists: `data-table-count` renders `Showing {shown} of {total}`, so a digit regex on it (`/[1-9]/`, `/\b1\b/`) matches the SERVER total and passes on an empty grid — the exact failure that let a dead scope database pass readiness on 2026-08-19 (#1336, #1345). Assert `data-table-loaded-count` (the rendered-row count on its own; `display:none`, so use text assertions, not visibility). Where a composite string deliberately IS the referent (e.g. probing the server total), say so in a comment naming which constituent is being read.
-
 ## E2E store-agnostic policy
 
-E2E specs must pass against **any** store — never against one store's remembered contents. A spec that hardcodes a product name, an order number, or a customer that "should exist" is deterministically wrong the day the store drifts, and it reads as a product regression (this cost a full diagnosis loop on 2026-08-07).
+Orders are created **through the POS UI** (the app stamps the correct cashier/store scope; `order-cleanup.ts` finalizes them); products/customers via the store API with the captured or writer credentials.
 
-- **Create-and-find is the primary pattern.** A spec that needs data creates its own record with a unique probe token (single alphanumeric word, ≥ 3 chars for the search tokenizer — see `mintSearchProbeToken` in `apps/main/e2e/search-probe.ts`), acts on it, and asserts on _that_ record. This also exercises the full pipeline: server write → sync demand → materialization → rendered row. Orders are created **through the POS UI** (the app stamps the correct cashier/store scope; `order-cleanup.ts` finalizes them); products/customers via the store API with the captured or writer credentials.
-- **No fixture-content assumptions.** Never assert absolute row counts, other records' names/ids, or hidden-column values. Count assertions are relative; row assertions target the probe's id-bearing testID.
-- **Declared-missing environment is a skip; broken environment is a failure.** Zero rows in scope, or a capability the environment never claimed (no writer credentials configured, the anonymous demo user's known catalog read-only 403) produce `test.skip` with a reason naming exactly what's missing — the spec lights up when the environment provides it. But when the environment _declares_ a capability (credentials configured) and the operation still fails (401/403/500), that is a **test failure**, not a skip — otherwise an auth or creation regression turns CI green while the covered behavior silently goes untested.
-- **Both permalink styles.** Any direct REST call must tolerate pretty (`/wp-json/...`) and plain (`?rest_route=...`) permalinks — see `probeRequest` in `search-probe.ts`.
-- **Infra identities are keyed by well-known username, never server-specific ids.** The `e2e-product-writer` (shop_manager) identity exists on every dev server with one shared credential pair (`E2E_PRODUCT_WRITER_USER/_PASS` Actions secrets); a new or moved server needs exactly one `wp user create` line and the specs skip-with-reason until it's run.
-- **Leftover probe records on dev stores are acceptable** (owner ruling, 2026-08-07): unique per-run tokens make past probes invisible to future runs; delete in teardown only best-effort, never letting teardown fail a test.
+
+The `e2e-product-writer` (shop_manager) identity exists on every dev server with one shared credential pair (`E2E_PRODUCT_WRITER_USER/_PASS` Actions secrets); a new or moved server needs exactly one `wp user create` line and the specs skip-with-reason until it's run.
+
+## Standing rulings
+
+- **Web `multiInstance` is pinned to the storage engine, never set on its own.** On `next` (2.0) the engine is `sqlite-sahpool` and the flag is `false` with one live tab per origin (#2242, #2271); on `main` (1.10.x) the engine is `opfs-filesystem` and the flag is `true` (#1057). The pair is enforced by `multi-instance-ruling.test.ts`; change both halves or neither, and never backport one lane's flag to the other. Read the Decision section of `packages/database/src/adapters/default/README.md` first.
 
 ## Branch lanes
 
-This repo has two permanent trunks:
+Three trunks during the 2.0 beta period (from the 2.0 promotion of 2026-11-02 until 2.0 GA):
 
-- **`main`** — the **stable**, released line (1.11.x now: the app, the plugins and the web lane `@1.11`; patches ship from here).
-- **`next`** — the **in-development** major (2.0, versioned `2.0.0` in `apps/main/package.json`).
+- **`main`** — WCPOS 2.0, this branch: the beta now (`2.0.0` in `apps/main/package.json`; the plugins carry `2.0.0-beta.1`), GA later. dev-free and dev-pro run it; the web lane is `@2.0`. Fixes for 2.0 and work that ships in 2.0.x branch from `origin/main` and target `main`.
+- **`1.11.x`** — the stable patch line for merchants still on 1.11. A 1.11 fix branches from `origin/1.11.x` and targets `1.11.x`; it has no dev site and no E2E. A fix 2.0 also needs is re-applied to `main` through a PR of its own.
+- **`next`** — frozen until 2.0 GA; nothing targets it. At GA it is re-cut from `main`.
 
-Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
+Never commit directly to a trunk — branch off the right one in a worktree and target the PR's base at the same lane. When the lane is not explicit, ask "main or 1.11.x?" rather than defaulting.
 
-### Web bundle ref per lane (jsDelivr)
+### Web bundle ref per lane (cdn.wcpos.com, jsDelivr as fallback)
 
-The WordPress plugin loads the POS JS/CSS from `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<ref>/build/`. There is exactly **one ref per lane, named after the lane** (owner ruling, 2026-09-04):
+The plugin's loader asks `https://cdn.wcpos.com/manifest?ref=<lane>&…` for a signed build descriptor and loads the page from `https://cdn.wcpos.com/b/<build_id>/build/` (monorepo #2623, 2026-10-17). jsDelivr `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<ref>/build/` is the **fallback** only, used when the manifest service fails. A publish is live only when the manifest answers with the new `build_id`: check `curl -s 'https://cdn.wcpos.com/manifest?ref=next&plugin=2.0.0&worker=17.6.0&pro=2.0.0&site=<uuid>'`, never the green run. A run whose job list lacks "☁️ Publish to cdn.wcpos.com" moved web-bundle but deployed nothing (2026-10-21: four `--ref main` dispatches left dev-next on a three-day-old build). There is exactly **one ref per lane, named after the lane** (owner ruling, 2026-09-04):
 
-- **`next` lane → `@next`** — `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next`. The `next` _branch_ of `wcpos/web-bundle` **is** the dev lane's tag; there is no versioned or prerelease tag for `next`, and nobody should ask for one. Publishing it is the whole deploy: `gh workflow run publish-web-bundle.yml --ref main -f monorepo_ref=<next SHA> -f bundle_branch=next -f override_release_gate='I accept a red main'`. `dev-next.wcpos.com` reads `@next` (`WCPOS_WEB_BUNDLE_REF=next` in its `wp-config.php`).
-- **Released lane → `@<major.minor>`** — `@1.11` today (since 2026-10-14; `@1.10` stays frozen at `v1.10.40` for plugins ≤ 1.10.27). A worker whose `RXDB_VERSION` changes needs a NEW minor ref, never a patch on an existing one: plugins in the field keep their vendored worker, and RxDB remote storage refuses any version mismatch (`RM1`). The plugin derives that ref from its own version, and the release train cuts the tag; `publish-web-bundle.yml` never does.
+- **`next` lane → `@next`** — `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next`. The `next` _branch_ of `wcpos/web-bundle` **is** the dev lane's tag; there is no versioned or prerelease tag for `next`, and nobody should ask for one. Publishing it deploys the page: `gh workflow run publish-web-bundle.yml --ref next -f monorepo_ref=next -f bundle_branch=next -f override_release_gate='I accept a red main'` (`--ref next` is mandatory: the dispatch runs the workflow FILE at that ref, and only `next`'s file has the cdn.wcpos.com job and the dev-next worker check; `monorepo_ref` is a branch name or a FULL SHA, the checkout step rejects a short SHA). `dev-next.wcpos.com` reads `@next` (`WCPOS_WEB_BUNDLE_REF=next` in its `wp-config.php`).
+  - **The storage worker is not in the bundle.** The plugin serves `sqlite.worker.js` (`Frontend.php` hands the app `opfsWorker`), and on dev-next the active plugin is **woocommerce-pos-pro**, whose *vendored copy* of the free plugin is what the page loads — the free plugin dir there is inactive and its own deploy changes nothing. When `apps/main/public/sqlite.worker.js` changes (an rxdb bump), the bundle boots against a stale worker and every tab fails with `RxDB RM1 mainVersion X remoteVersion Y` → "Failed to create user database". The order is: (1) re-vendor the worker in `wcpos/woocommerce-pos` `next` (`assets/js/sqlite.worker.js`, byte-identical to `web-bundle@next`'s), merge; (2) `gh workflow run deploy-dev.yml --repo wcpos/woocommerce-pos-pro --ref next` (Pro runs `composer update` against free `dev-next` at build time); (3) verify by fetching the worker URL the POS page emits, not the free plugin's path. The publish workflow's last step checks dev-next for exactly this and names the two deploys when it fails.
+- **Released lane → `@<major.minor>`** — `@2.0` since 2026-11-02 (the 2.0 beta plugins load it; `@1.11` is frozen for plugins ≤ 1.11.x and moves only through a `1.11.x` train with `allow_frozen_lane`; `@1.10` stays frozen at `v1.10.40` for plugins ≤ 1.10.27). A worker whose `RXDB_VERSION` changes needs a NEW minor ref, never a patch on an existing one: plugins in the field keep their vendored worker, and RxDB remote storage refuses any version mismatch (`RM1`). The plugin derives that ref from its own version, and the release train cuts the tag; `publish-web-bundle.yml` never does.
 - Publishing to the web-bundle `main` _branch_ is staging only. It moves nothing a released plugin loads.
 
 **Patch compatibility rule (Paul, 2026-10-19).** Every patch on a lane is compatible with every other patch on that lane, in both directions: a `2.0.N` app or bundle works with any `2.0.M` plugin and vice versa. The lane ref above forces it (every plugin on `@<major.minor>` loads the newest bundle; desktop and mobile merchants update when they choose), and the RxDB rule is only its best-known case. So a `main` PR that touches a REST call, a response shape it reads, a header, an option, the sync protocol or a storage schema answers one question: *would this fail against the lane floor, the `<major.minor>.0` plugin, or any patch between it and the tip?* The floor, not "one patch older": a capability the plugin gained in 2.0.3 is absent on 2.0.0–2.0.2, and those merchants load the newest bundle too. Yes means feature-detect it (`bareAuthParamSupported`, the echo-probe gates in `packages/utils/src/sync-protocol.ts`) or bump the minor across every line; it never ships as a patch. `MINIMUM_WCPOS_PLUGIN_VERSION` always ends in `.0` (unit-tested); raising it is a minor. The rule and the train-time box live in roadmap `docs/releases/RELEASE-CHECKLIST.md`. The lane-floor E2E leg is filed as #2763 and not built yet; until it is, the question above is answered by review, not CI.

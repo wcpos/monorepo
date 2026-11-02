@@ -1,13 +1,15 @@
 import * as React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import * as TooltipPrimitive from '@rn-primitives/tooltip';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+import { useTitleBarStrip } from '../edge-surface';
+import { OVERLAY_MOTION } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
-import type { TooltipContentProps, TooltipProps } from './types';
+import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
 
 function Tooltip({ children, delayDuration, className }: TooltipProps) {
 	return (
@@ -17,19 +19,33 @@ function Tooltip({ children, delayDuration, className }: TooltipProps) {
 	);
 }
 
-function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: TooltipContentProps) {
+function TooltipContent({
+	className,
+	sideOffset = 4,
+	portalHost,
+	insets,
+	...props
+}: TooltipContentProps) {
+	const { height: stripHeight } = useTitleBarStrip();
+	const collision = React.useMemo(() => {
+		if (stripHeight <= 0) return insets;
+		return { ...insets, top: Math.max(stripHeight, insets?.top ?? 0) };
+	}, [insets, stripHeight]);
 	return (
 		<TooltipPrimitive.Portal hostName={portalHost}>
 			<TooltipPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
 				<Animated.View
-					entering={Platform.select({ web: undefined, default: FadeIn })}
-					exiting={Platform.select({ web: undefined, default: FadeOut })}
+					entering={Platform.select({ web: undefined, default: OVERLAY_MOTION.anchored.entering })}
+					exiting={Platform.select({ web: undefined, default: OVERLAY_MOTION.anchored.exiting })}
 				>
 					<TextClassContext.Provider value="text-sm text-popover-foreground">
 						<TooltipPrimitive.Content
 							sideOffset={sideOffset}
+							insets={collision}
 							className={cn(
-								'web:animate-in web:fade-in-0 web:zoom-in-95 border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 overflow-hidden rounded-md border px-3 py-1.5 shadow-md',
+								// The anchored panel's look and entrance (lib/overlay): hairline border, no shadow.
+								OVERLAY_MOTION.anchored.enter,
+								'border-border bg-popover z-50 overflow-hidden rounded-lg border px-3 py-1.5',
 								className
 							)}
 							{...props}
@@ -41,7 +57,34 @@ function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: Too
 	);
 }
 
-const TooltipTrigger = TooltipPrimitive.Trigger;
+const PassiveTriggerContext = React.createContext(false);
 
-export { Tooltip, TooltipContent, TooltipTrigger };
+/**
+ * Wraps the content of a pressable parent (a table row that adds on press). A tooltip
+ * trigger inside is then a hint, not a control: it renders no <button>, so it may sit in a
+ * parent that is one, and a press on it reaches the parent. Hover still opens the tooltip.
+ * The web counterpart of the native rule for handlerless triggers.
+ */
+function TooltipPassiveTriggers({ children }: { children: React.ReactNode }) {
+	return <PassiveTriggerContext.Provider value>{children}</PassiveTriggerContext.Provider>;
+}
+
+function TooltipTrigger({ asChild, children, ...props }: TooltipTriggerProps) {
+	const passive = React.useContext(PassiveTriggerContext);
+	if (passive && !asChild) {
+		return (
+			<TooltipPrimitive.Trigger asChild {...props}>
+				{/* The child's role wins the slot merge, so the primitive's `button` never lands. */}
+				<View role="none">{children}</View>
+			</TooltipPrimitive.Trigger>
+		);
+	}
+	return (
+		<TooltipPrimitive.Trigger asChild={asChild} {...props}>
+			{children}
+		</TooltipPrimitive.Trigger>
+	);
+}
+
+export { Tooltip, TooltipContent, TooltipPassiveTriggers, TooltipTrigger };
 export type { TooltipProps, TooltipContentProps, TooltipTriggerProps } from './types';

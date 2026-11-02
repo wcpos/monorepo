@@ -22,6 +22,7 @@ function orderDatabase(orders: OrderRow[]) {
 	const removedOrderIds: string[][] = [];
 	const removedManifestIds: string[][] = [];
 	const db = {
+		refunds: { find: () => ({ exec: async () => [] }), bulkRemove: async () => [] },
 		orders: {
 			find: () => ({ exec: async () => orders.map((row) => ({ toJSON: () => row })) }),
 			bulkRemove: async (ids: string[]) => {

@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { ensureRegisterOpen, openOrderSheet, waitForCadenceStart } from './fixtures';
 import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
@@ -8,9 +9,9 @@ import {
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
 import {
+	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
-	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -31,6 +32,7 @@ async function addFirstProductToCart(page: Page) {
  * dropdown trigger in the cart header.
  */
 async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
+	await ensureRegisterOpen(page);
 	await page.getByTestId('add-cart-item-menu').click();
 	const menuItem = page.getByTestId(menuItemTestId);
 	await expect(menuItem).toBeVisible({ timeout: 5_000 });
@@ -45,6 +47,8 @@ test.describe('POS Cart', () => {
 	test('should add a product to the cart and show checkout button', async ({
 		posPage: page,
 	}, testInfo) => {
+		// The budget is for the add, not the sync: measure after the startup writes drain.
+		await waitForCadenceStart(page);
 		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
 		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
@@ -105,7 +109,7 @@ test.describe('POS Cart', () => {
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		await page.keyboard.type('3');
-		await page.getByTestId('numpad-done-button').click();
+		await page.getByTestId('keypad-key-done').click();
 		// A keyboard-wedge scanner's Enter used to press the refocused quantity
 		// trigger and reopen the numpad for the wrong row. The burst is shorter than
 		// the store's minimum code length on purpose: it never reaches the catalog,
@@ -128,21 +132,13 @@ test.describe('POS Cart', () => {
 
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
-		const numpadInput = numpad.locator('input');
-		await expect(numpadInput).toBeVisible({ timeout: 10_000 });
-		await numpadInput.click();
+		// The keypad's first digit replaces the quantity and later digits append (decision 36).
+		for (const digit of '123') await page.getByTestId(`keypad-key-${digit}`).click();
+		await expect(page.getByTestId('quantity-keypad-value')).toHaveText('123');
 
-		// Append two digits to the default quantity (1) and verify they stick.
-		// We assert the numeric tail to tolerate locale formatting (eg "1.23").
-		await numpadInput.type('23', { delay: 100 });
-		await expect
-			.poll(async () => (await numpadInput.inputValue()).replace(/\D/g, ''), {
-				timeout: 10_000,
-			})
-			.toMatch(/123$/);
-
-		await page.getByTestId('numpad-done-button').click();
-		await page.waitForTimeout(500);
+		await page.getByTestId('keypad-key-done').click();
+		await expect(numpad).toBeHidden();
+		await expect(quantityButton).toHaveText(/123/, { timeout: 15_000 });
 	});
 
 	test('should add multiple different products', async ({ posPage: page }, testInfo) => {
@@ -178,6 +174,7 @@ test.describe('POS Cart', () => {
 	test('should void an order to clear cart', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
+		await openOrderSheet(page);
 		await page.getByTestId('void-button').click();
 		await page.waitForTimeout(1_500);
 
@@ -186,14 +183,10 @@ test.describe('POS Cart', () => {
 		});
 	});
 
-	test('should show subtotal in cart totals', async ({ posPage: page }) => {
+	test('cart subtotal and checkout total', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
 		await expect(page.getByTestId('cart-subtotal')).toBeVisible({ timeout: 15_000 });
-	});
-
-	test('should show cart total in checkout button', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
 
 		const checkoutButton = page.getByTestId('checkout-button');
 		const buttonText = await checkoutButton.textContent();
@@ -238,11 +231,12 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// server's total against itself: green whatever the server did.
 			const cart = await readCartMoney(page);
 
-			const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+			const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 				timeout: 90_000,
 			});
 			saved.catch(() => {});
 
+			await openOrderSheet(page);
 			await page.getByTestId('save-to-server-button').click();
 			const response = await saved;
 			expect(response.status(), 'save to server must succeed').toBeLessThan(400);
@@ -284,6 +278,7 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// when the round trip completes, so the reconciliation that could rewrite
 			// the rendered total has run before we compare — a bare toPass would
 			// succeed instantly on the pre-save rendering.
+			await openOrderSheet(page);
 			await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 			const totalNow = ((await checkoutButton.textContent()) ?? '').trim();
 			expect(totalNow, 'cart total must be unchanged by the save round trip').toBe(cartTotalText);

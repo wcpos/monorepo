@@ -125,7 +125,7 @@ async function missingVariationIds(
 	if (ids.length === 0) return [];
 	const remoteIds = ids.map(remoteIdOrNull).filter((id) => id !== null);
 	const docs = await findAllUncached(database.collections[descriptor.collection], {
-		selector: { [descriptor.wooIdField]: { $in: remoteIds } } as never,
+		selector: { remoteKey: { $in: remoteIds } } as never,
 	});
 	const present = new Set(
 		docs

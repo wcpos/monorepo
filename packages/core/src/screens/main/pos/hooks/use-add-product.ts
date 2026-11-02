@@ -5,10 +5,11 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 import {
 	convertProductToLineItemWithoutTax,
 	findByProductVariationID,
@@ -21,7 +22,7 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductDocument = import('@wcpos/query').ProductPayload;
 
 /**
  *
@@ -37,7 +38,7 @@ export const useAddProduct = () => {
 	 * per add or remove. Nothing this hook does needs the order until the user acts.
 	 */
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { incrementLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateCartLine();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
@@ -136,6 +137,7 @@ export const useAddProduct = () => {
 				// is an internal fault rather than a merchant condition — reported all the
 				// same, because "every engine call site in core reports" is the rule, and a
 				// site exempted by argument is how the dropped-warnings comment spread.
+				// Computed for the optimistic add; useAddItemToOrder recomputes it inside the slot before it is written.
 				const computed = calculateCartLine({ kind: 'line_item', line: newLineItem }, cartConfig);
 				reportEngineWarnings(computed.warnings, {
 					orderId: currentOrderRecord.uuid,
@@ -150,13 +152,13 @@ export const useAddProduct = () => {
 			// returned success should be the updated order
 			if (success) {
 				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
-					// Scan-driven adds toast via the scan-feedback module instead.
-					showToast: !options?.silent,
 					context: {
 						productId: product.id,
 						productName: product.name,
 					},
 				});
+				// Scan-driven adds toast via the scan-feedback module instead.
+				if (!options?.silent) showAddedToCartToast(t, product.name);
 				return true;
 			} else {
 				if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') timing?.cancelCartAddTiming(timingSequence);

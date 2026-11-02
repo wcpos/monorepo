@@ -21,7 +21,13 @@ interface ReceiptApiResponse {
 	data: Record<string, unknown>;
 }
 
+export interface ClosurePrintMarker {
+	print_count: number;
+	last_printed_at_gmt: string;
+}
+
 interface UseReceiptDataResult {
+	commitPrint: () => Promise<ClosurePrintMarker | undefined>;
 	data: Record<string, unknown> | null;
 	mode: ReceiptMode;
 	hasSnapshot: boolean;
@@ -30,15 +36,22 @@ interface UseReceiptDataResult {
 	hasResponded: boolean;
 	error: Error | null;
 	refetch: () => void;
+	fetchForPrint: () => Promise<Record<string, unknown> | null>;
 }
 
 interface UseReceiptDataOptions {
+	previewEnabled?: boolean;
+	nextLocalCount?: () => Promise<number>;
 	orderId: number | undefined;
 	mode?: ReceiptMode;
+	intent?: 'print';
+	document?: string;
+	isReprint?: boolean;
 }
 
-type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch'> & {
+type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint' | 'commitPrint'> & {
 	orderId: number | undefined;
+	document?: string;
 };
 
 /**
@@ -49,13 +62,73 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch'> & {
  * the API returns a 404.
  */
 export function useReceiptData({
+	nextLocalCount,
+	previewEnabled = true,
 	orderId,
-	mode = 'live',
+	mode: requestedMode = 'live',
+	intent,
+	isReprint = false,
+	document,
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
+	const mode = document ? 'fiscal' : requestedMode;
+	const fetchData = React.useCallback(
+		async (requestIntent = intent) => {
+			const response = await http.get(`/receipts/${orderId ?? 0}`, {
+				params: {
+					mode,
+					...(document ? { document } : {}),
+					...(requestIntent && !document?.startsWith('closure:') ? { intent: requestIntent } : {}),
+				},
+			});
+			return response?.data as ReceiptApiResponse;
+		},
+		[http, orderId, mode, intent, document]
+	);
+	const fetchForPrint = React.useCallback(async () => {
+		if (!orderId && !document) return null;
+		if (document?.startsWith('closure:')) {
+			const data = (await fetchData()).data;
+			const marker = {
+				print_count: Math.max(
+					Number((data.closure as { print_count?: number })?.print_count ?? 0) + 1,
+					(await nextLocalCount?.()) ?? 0
+				),
+				last_printed_at_gmt: new Date().toISOString(),
+			};
+			return {
+				...data,
+				closure: {
+					...(data.closure as object),
+					print_count: marker.print_count,
+					last_printed_at_gmt: marker.last_printed_at_gmt,
+				},
+				fiscal: {
+					...(data.fiscal as object),
+					is_reprint: isReprint || marker.print_count > 1,
+					reprint_count: Math.max(0, marker.print_count - 1),
+				},
+			};
+		}
+		return (
+			(
+				await fetchData(
+					document?.startsWith('xreport:') || document?.startsWith('handover:')
+						? undefined
+						: 'print'
+				)
+			).data ?? null
+		);
+	}, [orderId, document, fetchData, isReprint, nextLocalCount]);
+	const commitPrint = React.useCallback(async () => {
+		if (!document?.startsWith('closure:')) return;
+		const response = await http.post(`closures/${document.slice(8)}/print`, {});
+		return response.data as ClosurePrintMarker;
+	}, [document, http]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
+		document,
 		data: null,
 		mode,
 		hasSnapshot: false,
@@ -70,9 +143,8 @@ export function useReceiptData({
 	}, []);
 
 	React.useEffect(() => {
-		if (!orderId) {
-			// No order: nothing to fetch. The empty result is derived below, so no
-			// setState is needed here.
+		if (!previewEnabled || (!orderId && !document)) {
+			// Hidden cards fetch only through fetchForPrint; previews need an order or document.
 			return;
 		}
 
@@ -81,6 +153,7 @@ export function useReceiptData({
 		async function fetchReceipt() {
 			setState({
 				orderId,
+				document,
 				data: null,
 				mode,
 				hasSnapshot: false,
@@ -91,16 +164,13 @@ export function useReceiptData({
 			});
 
 			try {
-				const response = await http.get(`/receipts/${orderId}`, {
-					params: { mode },
-				});
+				const res = await fetchData();
 
 				if (cancelled) return;
 
-				const res = response?.data as ReceiptApiResponse;
-
 				setState({
 					orderId,
+					document,
 					data: res.data ?? null,
 					mode: res.mode ?? mode,
 					hasSnapshot: res.has_snapshot ?? false,
@@ -135,11 +205,11 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [http, orderId, mode, fetchKey]);
+	}, [fetchData, orderId, mode, fetchKey, document, previewEnabled]);
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
-	if (!orderId || state.orderId !== orderId) {
+	if ((!orderId && !document) || state.orderId !== orderId || state.document !== document) {
 		return {
 			data: null,
 			mode,
@@ -149,9 +219,11 @@ export function useReceiptData({
 			hasResponded: false,
 			error: null,
 			refetch,
+			fetchForPrint,
+			commitPrint,
 		};
 	}
 
-	const { orderId: _requestOrderId, ...currentState } = state;
-	return { ...currentState, refetch };
+	const { orderId: _requestOrderId, document: _requestDocument, ...currentState } = state;
+	return { ...currentState, refetch, fetchForPrint, commitPrint };
 }

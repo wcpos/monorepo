@@ -1,4 +1,5 @@
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 const mockNetworkInfo = jest.fn();
 const mockNetworkWarn = jest.fn();
@@ -218,7 +219,7 @@ describe('createEngineFetcher', () => {
 		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=2&per_page=50');
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1',
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1`,
 			expect.any(Object)
 		);
 	});
@@ -236,7 +237,7 @@ describe('createEngineFetcher', () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0',
+			`https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3`,
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -247,6 +248,7 @@ describe('createEngineFetcher', () => {
 		['variations', 'wcpos/v1/products/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
+		['refunds', 'wcpos/v2/refunds'],
 		['categories', 'wcpos/v2/products/categories'],
 		['brands', 'wcpos/v2/products/brands'],
 		['tags', 'wcpos/v2/products/tags'],
@@ -274,7 +276,7 @@ describe('createEngineFetcher', () => {
 
 		expect(total).toBe(17);
 		expect(fetch).toHaveBeenCalledWith(
-			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1`,
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=ios%2F0.0.0+payments%3D1.3&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 		expect(recordTransport).toHaveBeenCalledTimes(1);

@@ -4,37 +4,36 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { saveConnectedSite, SiteIdentityClashError } from '@wcpos/query/user-db';
 
+import { createTestT } from '../../../../jest/translate';
+import { useSiteConnect } from './use-site-connect';
+
+const mockT = createTestT();
 const mockTestAuthorizationMethod = jest.fn();
 const mockRunConnectCompatibilityProbes = jest.fn();
 const mockSavedSite = { name: 'Test Store', getLatest: jest.fn() };
 mockSavedSite.getLatest.mockReturnValue(mockSavedSite);
-const mockUserLatest = { sites: [] as string[], incrementalUpdate: jest.fn() };
+const mockUser = {};
+const mockUserDB = {};
 const mockDiscoverWpApiUrl = jest.fn(async () => 'https://example.com/wp-json/');
 const mockDiscoverApiEndpoints = jest.fn(async () => ({
 	endpoints: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' },
-	siteData: { wcpos_version: '1.10.0' },
+	siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '2.0.0' },
 }));
 
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		user: {
-			getLatest: () => mockUserLatest,
-		},
-		userDB: {
-			sites: {
-				parseRestResponse: (data: unknown) => data,
-				findOneFix: () => ({ exec: jest.fn(async () => null) }),
-			},
-		},
+		user: mockUser,
+		userDB: mockUserDB,
 	}),
 }));
-jest.mock('../../../contexts/app-state/hydration-steps', () => ({
+jest.mock('../../../contexts/app-state/connect-probes', () => ({
 	testAuthorizationMethod: (...args: unknown[]) => mockTestAuthorizationMethod(...args),
 	runConnectCompatibilityProbes: (...args: unknown[]) => mockRunConnectCompatibilityProbes(...args),
 }));
 jest.mock('../../../contexts/translations', () => ({
-	useT: () => (key: string) => key,
+	useT: () => mockT,
 }));
 jest.mock('./use-api-discovery', () => ({
 	useApiDiscovery: () => ({ discoverApiEndpoints: mockDiscoverApiEndpoints }),
@@ -42,18 +41,16 @@ jest.mock('./use-api-discovery', () => ({
 jest.mock('./use-url-discovery', () => ({
 	useUrlDiscovery: () => ({ discoverWpApiUrl: mockDiscoverWpApiUrl }),
 }));
-jest.mock('../../../utils/site-writes', () => ({
-	upsertSiteData: jest.fn(async () => mockSavedSite),
+jest.mock('expo-crypto', () => ({}));
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	saveConnectedSite: jest.fn(async () => mockSavedSite),
 }));
-
-// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the hook.
-import { upsertSiteData } from '../../../utils/site-writes';
-// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the hook.
-import { useSiteConnect } from './use-site-connect';
 
 describe('useSiteConnect', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		jest.mocked(saveConnectedSite).mockResolvedValue(mockSavedSite as never);
 		mockRunConnectCompatibilityProbes.mockResolvedValue({
 			blocking: null,
 			warnings: [],
@@ -62,7 +59,7 @@ describe('useSiteConnect', () => {
 	});
 
 	it.each([
-		// Inline copy is TRANSLATED (the t mock returns the key); dedicated keys
+		// Inline copy is TRANSLATED; dedicated keys
 		// for the two anchor codes, the generic host line for classifier codes.
 		[ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST, 'auth.server_blocks_login_token'],
 		[ERROR_CODES.BOT_CHALLENGE_BLOCKING_API, 'auth.host_compatibility_problem'],
@@ -75,12 +72,28 @@ describe('useSiteConnect', () => {
 			await result.current.onConnect('https://example.com');
 		});
 
-		expect(result.current.error).toBe(messageKey);
+		expect(result.current.error).toBe(mockT(messageKey));
 		expect(result.current.errorCode).toBe(code);
 
 		act(() => result.current.reset());
 		expect(result.current.error).toBeNull();
 		expect(result.current.errorCode).toBeNull();
+	});
+
+	it.each([
+		[{ ok: false, code: null, timedOut: true }, 'auth.site_took_too_long_to_respond'],
+		[{ ok: false, code: null }, 'auth.failed_to_test_authorization_methods'],
+	] as const)('uses the translated %s connect error: %s', async (authResult, messageKey) => {
+		mockTestAuthorizationMethod.mockResolvedValue(authResult);
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			await result.current.onConnect('https://example.com');
+		});
+
+		expect(result.current.error).toBe(mockT(messageKey));
+		expect(result.current.errorCode).toBeNull();
+		expect(result.current.status).toBe('error');
 	});
 
 	it('exposes a blocking shared-cache replay with the generic translated host message', async () => {
@@ -100,8 +113,69 @@ describe('useSiteConnect', () => {
 			await result.current.onConnect('https://example.com');
 		});
 
-		expect(result.current.error).toBe('auth.host_compatibility_problem');
+		expect(result.current.error).toBe(mockT('auth.host_compatibility_problem'));
 		expect(result.current.errorCode).toBe(ERROR_CODES.CACHE_SHARED_REPLAY);
+	});
+
+	it('refuses a saved identity at another address without writing site data', async () => {
+		jest.mocked(saveConnectedSite).mockRejectedValueOnce(new SiteIdentityClashError('Live'));
+		mockDiscoverApiEndpoints.mockResolvedValueOnce({
+			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
+			siteData: { uuid: 'site-uuid', url: 'https://staging.example.com', wcpos_version: '2.0.0' },
+		});
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			expect(await result.current.onConnect('https://staging.example.com')).toBeNull();
+		});
+
+		expect(saveConnectedSite).toHaveBeenCalledWith(
+			mockUserDB,
+			mockUser,
+			expect.objectContaining({ uuid: 'site-uuid' }),
+			'https://staging.example.com/wp-json/wcpos/v2/'
+		);
+		expect(result.current.errorCode).toBe('AUTH341');
+		expect(result.current.error).toContain('Live');
+		expect(result.current.status).toBe('error');
+	});
+
+	it('refuses a raw copy that still reports the saved store as its home but was reached at another address', async () => {
+		// A database copy without a search-replace: the REST index reports the
+		// live store's url and uuid, only the address the connect reached differs.
+		jest.mocked(saveConnectedSite).mockRejectedValueOnce(new SiteIdentityClashError('Live'));
+		mockDiscoverApiEndpoints.mockResolvedValueOnce({
+			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
+			siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '2.0.0' },
+		});
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			expect(await result.current.onConnect('https://staging.example.com')).toBeNull();
+		});
+
+		expect(result.current.errorCode).toBe('AUTH341');
+	});
+
+	it('keeps merging a saved identity at the same address despite scheme, host case and permalink style', async () => {
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			expect(await result.current.onConnect('https://example.com')).toBe(mockSavedSite);
+		});
+
+		expect(saveConnectedSite).toHaveBeenCalledWith(
+			mockUserDB,
+			mockUser,
+			expect.objectContaining({ uuid: 'site-uuid', url: 'https://example.com' }),
+			'https://example.com/wp-json/wcpos/v2/'
+		);
+		expect(result.current.error).toBeNull();
+		expect(result.current.errorCode).toBeNull();
+		expect(result.current.status).toBe('success');
 	});
 
 	it.each([false, true])(
@@ -130,9 +204,11 @@ describe('useSiteConnect', () => {
 			});
 			expect(result.current.error).toBeNull();
 			expect(result.current.status).toBe('success');
-			expect(upsertSiteData).toHaveBeenCalledWith(
-				expect.anything(),
-				expect.objectContaining({ use_cache_buster: useCacheBuster })
+			expect(saveConnectedSite).toHaveBeenCalledWith(
+				mockUserDB,
+				mockUser,
+				expect.objectContaining({ use_cache_buster: useCacheBuster }),
+				'https://example.com/wp-json/wcpos/v2/'
 			);
 			expect(result.current.errorCode).toBeNull();
 		}

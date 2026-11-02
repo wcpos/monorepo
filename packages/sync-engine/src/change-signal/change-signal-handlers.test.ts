@@ -105,13 +105,78 @@ describe('change-signal tombstone manifest membership', () => {
 	});
 });
 
+describe('pullTargetedByIds unchanged-row boundary', () => {
+	// What the journal lane sees every tick: the same product, its related_ids reshuffled by
+	// WooCommerce, under the server's unchanged canonical stamp.
+	const stamp = 'sha256:' + 'ab'.repeat(32);
+	const wire = (relatedIds: number[]) => ({
+		id: 1,
+		meta_data: [
+			{ id: 9, key: '_woocommerce_pos_uuid', value: '6f1d2c3b-0000-4000-8000-000000000001' },
+		],
+		name: 'Belt',
+		status: 'publish',
+		type: 'simple',
+		price: '10',
+		related_ids: relatedIds,
+		_rxdb_revision: stamp,
+	});
+
+	function pullingContext(resident: Record<string, unknown> | null) {
+		const upserts: unknown[][] = [];
+		const urls: string[] = [];
+		const ctx = context('products', [wire([2, 3, 1])], urls);
+		const collection = ctx.database.collections.products as unknown as Record<string, unknown>;
+		collection.findByIds = (ids: string[]) => ({
+			exec: async () =>
+				new Map(
+					resident
+						? ids
+								.filter((id) => id === resident.uuid)
+								.map((id) => [id, { toJSON: () => resident }] as const)
+						: []
+				),
+		});
+		collection.bulkUpsert = async (documents: unknown[]) => {
+			upserts.push(documents);
+			return { error: [] };
+		};
+		return { ctx, upserts };
+	}
+
+	it('applies without a write when the resident carries the same stamp', async () => {
+		const resident = descriptor('products').projectMaterialized(wire([1, 2, 3])).storedDocument;
+		const { ctx, upserts } = pullingContext(resident);
+
+		await expect(pullTargetedByIds(ctx, descriptor('products'), [1])).resolves.toMatchObject({
+			appliedRecordIds: ['1'],
+			prunedRecordIds: [],
+		});
+		expect(upserts).toEqual([]);
+	});
+
+	it('writes when the stamp moved, or when nothing is resident', async () => {
+		const moved = descriptor('products').projectMaterialized({
+			...wire([1, 2, 3]),
+			_rxdb_revision: 'sha256:' + 'cd'.repeat(32),
+		}).storedDocument;
+		const changed = pullingContext(moved);
+		await pullTargetedByIds(changed.ctx, descriptor('products'), [1]);
+		expect(changed.upserts).toHaveLength(1);
+
+		const fresh = pullingContext(null);
+		await pullTargetedByIds(fresh.ctx, descriptor('products'), [1]);
+		expect(fresh.upserts).toHaveLength(1);
+	});
+});
+
 describe('pullTargetedByIds product publication filter', () => {
 	it('sends status=publish and accepts a short products response', async () => {
 		const urls: string[] = [];
 
 		await expect(
 			pullTargetedByIds(context('products', [], urls), descriptor('products'), [1, 2])
-		).resolves.toBe(2);
+		).resolves.toMatchObject({ appliedRecordIds: [], prunedRecordIds: ['1', '2'] });
 		expect(new URL(urls[0]!).searchParams.get('status')).toBe('publish');
 	});
 
@@ -129,13 +194,13 @@ describe('pullTargetedByIds product publication filter', () => {
 				descriptor('products'),
 				[1, 2]
 			)
-		).resolves.toBe(2);
+		).resolves.toMatchObject({ applied: 2 });
 		// The dirty row keeps the local-work protection every removal path honours.
 		expect(removed).toEqual(['uuid-clean']);
 	});
 
 	it.each([
-		['variations', { documents: [] }],
+		['variations', []],
 		['customers', []],
 	] as const)('prunes a short %s pull without sending status', async (collection, body) => {
 		const urls: string[] = [];
@@ -143,7 +208,9 @@ describe('pullTargetedByIds product publication filter', () => {
 		const ctx = context(collection, body, urls);
 		ctx.observe = observe;
 
-		await expect(pullTargetedByIds(ctx, descriptor(collection), [1])).resolves.toBe(1);
+		await expect(pullTargetedByIds(ctx, descriptor(collection), [1])).resolves.toMatchObject({
+			applied: 1,
+		});
 		expect(new URL(urls[0]!).searchParams.has('status')).toBe(false);
 		expect(observe).toHaveBeenCalledWith({
 			type: 'targeted.pull.shortfall-prune',
@@ -157,7 +224,7 @@ describe('pullTargetedByIds product publication filter', () => {
 		const removed: string[] = [];
 		const ctx = context(
 			'variations',
-			{ documents: [] },
+			[],
 			[],
 			[{ primary: 'uuid-resident', json: { wooId: 1 } }],
 			removed

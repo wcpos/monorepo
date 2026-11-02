@@ -40,16 +40,11 @@ const mockEngine = {
 	},
 };
 
-jest.mock('@wcpos/query', () => {
-	const actual = jest.requireActual('@wcpos/query');
-	return {
-		COLLECTION_VOCABULARY: actual.COLLECTION_VOCABULARY,
-		engineCollection: actual.engineCollection,
-		observeEngineCollection: actual.observeEngineCollection,
-		resolveLegacyField: actual.resolveLegacyField,
-		useQueryRuntime: () => ({ engine: mockEngine }),
-	};
-});
+// The named read (`@wcpos/query/record-readers`) runs for real against the mock engine.
+jest.mock('@wcpos/query', () => ({
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
+	useQueryRuntime: () => ({ engine: mockEngine }),
+}));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'

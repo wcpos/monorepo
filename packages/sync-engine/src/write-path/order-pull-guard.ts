@@ -15,14 +15,18 @@ import { isOpenCartHoldCandidate } from './open-cart-hold';
  * scheduler tick so the wiring + the (single) collection cast live in one place.
  */
 export function createOrderPendingMutationIds(
-	mutationsCollection: unknown
+	mutationsCollection: unknown,
+	acknowledgedMutationId?: string
 ): () => Promise<Set<string>> {
 	const storage = new RxRecordMutationStorage(
 		mutationsCollection as ConstructorParameters<typeof RxRecordMutationStorage>[0]
 	);
 	return async () =>
 		pendingRecordIds(
-			(await storage.list()).filter((mutation) => mutation.collectionName === 'orders')
+			(await storage.list()).filter(
+				(mutation) =>
+					mutation.collectionName === 'orders' && mutation.mutationId !== acknowledgedMutationId
+			)
 		);
 }
 

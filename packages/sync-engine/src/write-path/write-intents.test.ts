@@ -3,9 +3,17 @@ import { serialize as structuredSerialize } from 'node:v8';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
+import { drainMutationQueue, RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
-import { enqueueWriteIntent, requeueBornTwiceSnapshot } from './write-intents';
+import { writeFacetFor } from '../collections/collection-descriptors';
+import { withoutLocallyProtected } from './local-work-guard';
+import {
+	enqueueWriteIntent,
+	queueFor,
+	requeueBornTwiceSnapshot,
+	requeueRejectedMutation,
+} from './write-intents';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -32,9 +40,9 @@ function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMuta
 			get revision() {
 				return revs.get(id) ?? '';
 			},
-			patch: async (changes: Partial<QueuedMutation>) => {
+			modify: async (change: (row: QueuedMutation) => QueuedMutation) => {
 				if (!queued.has(id) || revs.get(id) !== captured) throw conflict();
-				queued.set(id, { ...queued.get(id)!, ...changes });
+				queued.set(id, change(queued.get(id)!));
 				bump(id);
 			},
 			remove: async () => {
@@ -116,9 +124,328 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each(['rejected', 'pending'] as const)(
+		'a pull during %s annihilation preserves the resident and queues a server delete',
+		async (status) => {
+			const storage = createFakeMutationCollection();
+			let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+			let removed = false;
+			const resident = {
+				toJSON: () => data,
+				remove: async () => {
+					removed = true;
+				},
+				incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+					data = modify(data);
+				},
+			};
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+					recordMutations: storage,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			await storage.bulkUpsert([
+				{
+					mutationId: 'create',
+					collectionName: 'orders',
+					recordId: 'order',
+					operation: 'create',
+					origin: 'minted',
+					payload: { id: 0 },
+					baseRevision: null,
+					queuedAt: '2026-09-18T00:00:00.000Z',
+					status,
+				},
+			]);
+			const mark = queue.markForAnnihilation.bind(queue);
+			vi.spyOn(queue, 'markForAnnihilation').mockImplementationOnce(async (...args) => {
+				const marked = await mark(...args);
+				data = { ...data, remoteId: '42', sync: { revision: 'pulled-revision' } };
+				return marked;
+			});
+			const receipt = await enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+				mintUuid: () => 'delete',
+				now: () => '2026-09-18T00:00:01.000Z',
+			});
+			expect(removed).toBe(false);
+			expect(receipt.annihilated).not.toBe(true);
+			expect(await queue.all()).toEqual([
+				expect.objectContaining({ mutationId: 'create', status }),
+				expect.objectContaining({ operation: 'delete', baseRevision: 'pulled-revision' }),
+			]);
+			expect((await queue.all()).every((row) => !row.supersededBy)).toBe(true);
+			expect(storage.store.has('orders/order')).toBe(false);
+		}
+	);
+
+	it.each([false, true, 'renewal'])('slow dirty mark: failed=%s', async (failed) => {
+		const storage = createFakeMutationCollection();
+		let now = Date.now();
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				now += 30_001;
+				if (failed) throw new Error('dirty mark failed');
+				data = modify(data);
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: storage,
+			},
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		if (failed === 'renewal') {
+			const enqueue = queue.enqueue.bind(queue);
+			vi.spyOn(queue, 'enqueue').mockImplementationOnce(async (row) => {
+				const appended = await enqueue(row);
+				now += 30_001;
+				return appended;
+			});
+		}
+		const writing = enqueueWriteIntent({
+			db,
+			mintUuid: () => 'slow',
+			now: () => new Date(now).toISOString(),
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order',
+				payload: { id: 0 },
+			},
+		});
+		if (failed) await expect(writing).rejects.toThrow();
+		else {
+			expect(await writing).toMatchObject({ mutationId: 'slow', recordId: 'order' });
+			expect(data.local).toMatchObject({ dirty: true, pendingMutationIds: ['slow'] });
+		}
+		const push = vi.fn(async (mutation) => ({
+			outcome: 'created' as const,
+			mutation,
+			document: { id: 1 },
+			currentRevision: 'r1',
+		}));
+		expect(await drainMutationQueue({ queue, push, now: () => now })).toMatchObject({
+			pushed: failed ? 0 : 1,
+			rejected: [],
+		});
+		expect(push).toHaveBeenCalledTimes(failed ? 0 : 1);
+		expect(await queue.all()).toEqual([]);
+	});
+
+	it('a late append after admission loss survives as a dead letter, not a resurrected sale', async () => {
+		const storage = createFakeMutationCollection();
+		let present = true;
+		let now = Date.now();
+		const resident = {
+			toJSON: () => ({ payload: { id: 0 }, sync: {} }),
+			remove: async () => {
+				expect(await queue.all()).toMatchObject([
+					{ status: 'rejected', rejectedReason: 'superseded-by-void' },
+				]);
+				present = false;
+			},
+			incrementalModify: vi.fn(),
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (present ? resident : null) }) },
+			recordMutations: storage,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const other = queueFor(otherDb);
+		const enqueue = queue.enqueue.bind(queue);
+		const fence = other.fenceForVoid.bind(other);
+		vi.spyOn(queue, 'enqueue').mockImplementationOnce(async (mutation) => {
+			now += 30_001;
+			let appended: QueuedMutation;
+			vi.spyOn(other, 'fenceForVoid').mockImplementationOnce(async (...args) => {
+				const held = await fence(...args);
+				appended = await enqueue(mutation);
+				return held;
+			});
+			await enqueueWriteIntent({
+				db: otherDb,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+				mintUuid: () => 'void',
+				now: () => new Date(now).toISOString(),
+			});
+			return appended!;
+		});
+		await expect(
+			enqueueWriteIntent({
+				db,
+				intent: {
+					collection: 'orders',
+					operation: 'create',
+					recordId: 'order',
+					payload: { id: 0 },
+				},
+				mintUuid: () => 'late',
+				now: () => new Date(now).toISOString(),
+			})
+		).rejects.toMatchObject({ reason: 'void-in-progress' });
+		expect(present).toBe(false);
+		expect(await queue.pendingResetCount(now)).toBe(0);
+		const push = vi.fn();
+		await drainMutationQueue({ queue, push, now: () => now });
+		expect(push).not.toHaveBeenCalled();
+		expect(await queue.all()).toEqual([]);
+	});
+
+	it.each([
+		'void between read and admission',
+		'expired admission',
+		'ordinary edit',
+		'write and release fail',
+	])(
+		'preserves resident and queued work while handling the admission interleaving: %s',
+		async (race) => {
+			const storage = createFakeMutationCollection();
+			let present = true;
+			let edited = false;
+			let now = Date.now();
+			const resident = {
+				toJSON: () => ({ payload: { id: 0, edited }, sync: {} }),
+				remove: async () => {
+					present = false;
+				},
+				incrementalModify: vi.fn(),
+			};
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => (present ? resident : null) }) },
+					recordMutations: storage,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			const other = new RecordMutationQueue(new RxRecordMutationStorage(() => storage));
+			const admit = queue.admitWriter.bind(queue);
+			let id = 0;
+			const deps = { db, mintUuid: () => `race-${++id}`, now: () => new Date(now).toISOString() };
+			vi.spyOn(queue, 'admitWriter').mockImplementationOnce(async (name, record, token, time) => {
+				if (race === 'void between read and admission') {
+					await enqueueWriteIntent({
+						...deps,
+						intent: { collection: 'orders', recordId: record, operation: 'delete' },
+					});
+					return admit(name, record, token, time);
+				}
+				const admitted = await admit(name, record, token, time);
+				if (race === 'ordinary edit') {
+					edited = true;
+					return admitted;
+				}
+				if (race === 'write and release fail') {
+					vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('release failed'));
+					vi.spyOn(queue, 'enqueue').mockRejectedValue(new Error('write failed'));
+					return admitted;
+				}
+				now += 30_001;
+				await other.clearExpiredAnnihilation(now);
+				expect(await other.fenceForVoid(name, record, 'other-void', now)).toBe(true);
+				return admitted;
+			});
+			const writing = enqueueWriteIntent({
+				...deps,
+				intent: {
+					collection: 'orders',
+					recordId: 'order-1',
+					operation: 'create',
+					payload: { id: 0 },
+				},
+			});
+			if (race === 'ordinary edit') {
+				await expect(writing).resolves.toMatchObject({ recordId: 'order-1' });
+				expect(await queue.all()).toHaveLength(1);
+				return;
+			}
+			if (race === 'write and release fail') await expect(writing).rejects.toThrow('write failed');
+			else await expect(writing).rejects.toMatchObject({ status: 428 });
+			expect(await queue.all()).toEqual([]);
+			expect(resident.incrementalModify).not.toHaveBeenCalled();
+		}
+	);
+
+	it.each(['foreign admission', 'owned committed fence'])(
+		'a refused fence releases only uncommitted marks: %s',
+		async (owner) => {
+			const mutationCollection = createFakeMutationCollection();
+			const resident = { toJSON: () => ({ payload: { id: 0 }, sync: {} }) };
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => resident }) },
+					recordMutations: mutationCollection,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			const other = new RecordMutationQueue(new RxRecordMutationStorage(() => mutationCollection));
+			await queue.enqueue({
+				mutationId: 'create',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				operation: 'create',
+				origin: 'minted',
+				payload: { id: 0 },
+				baseRevision: null,
+				queuedAt: '2026-09-18T00:00:00.000Z',
+			});
+			const fence = queue.fenceForVoid.bind(queue);
+			vi.spyOn(queue, 'fenceForVoid').mockImplementationOnce(async (name, id, token, now) => {
+				if (owner === 'foreign admission') {
+					await other.admitWriter(name, id, 'other-writer', now);
+					return fence(name, id, token, now);
+				}
+				await fence(name, id, token, now);
+				await queue.setVoidPhase(name, id, token, 'committed');
+				// A failed rollback CAS must leave the durable committed instruction intact.
+				const find = mutationCollection.find.bind(mutationCollection);
+				vi.spyOn(mutationCollection, 'find').mockImplementation(() => ({
+					exec: async () =>
+						(await find().exec()).map((doc) => {
+							if (!('toJSON' in doc)) return doc;
+							return {
+								...doc,
+								modify: async (change) => {
+									if (doc.toJSON().payload.phase === 'committed')
+										throw Object.assign(new Error('CONFLICT'), { status: 409 });
+									await doc.modify!(change);
+								},
+							};
+						}),
+				}));
+				return false;
+			});
+			await expect(
+				enqueueWriteIntent({
+					db,
+					intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+					mintUuid: () => 'void',
+					now: () => '2026-09-18T00:00:01.000Z',
+				})
+			).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
+			expect((await queue.all())[0].supersededBy).toBe(
+				owner === 'foreign admission' ? undefined : 'void'
+			);
+			expect(mutationCollection.store.get('orders/order-1')?.mutation).toMatchObject(
+				owner === 'foreign admission'
+					? { admittedBy: 'other-writer' }
+					: { payload: { phase: 'committed' } }
+			);
+		}
+	);
+
 	it.each([
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
 		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
+		{ name: 'bare-ack server record', id: 0, remoteId: '42', rejected: false, annihilated: false },
 		{ name: 'server record with no revision', id: 42, rejected: false, annihilated: false },
 		{
 			// `identity-ambiguous`: the push adapter matched MORE than one server record,
@@ -129,7 +456,8 @@ describe('enqueueWriteIntent', () => {
 			reason: 'identity-ambiguous',
 			annihilated: false,
 		},
-	])('deletes $name only when it is born-local', async ({ id, rejected, reason, annihilated }) => {
+	])('deletes $name only when it is born-local', async (testCase) => {
+		const { id, remoteId, rejected, reason, annihilated } = testCase;
 		const mutationCollection = createFakeMutationCollection();
 		if (rejected) {
 			await mutationCollection.bulkUpsert([
@@ -150,8 +478,11 @@ describe('enqueueWriteIntent', () => {
 		}
 		let removed = false;
 		const resident = {
-			toJSON: () => ({ payload: { id, status: 'pos-open' }, sync: {} }),
+			toJSON: () => ({ remoteId, payload: { id, status: 'pos-open' }, sync: {} }),
 			remove: async () => {
+				expect(mutationCollection.store.get('orders/order-1')?.mutation.payload.phase).toBe(
+					'committed'
+				);
 				removed = true;
 			},
 		};
@@ -173,6 +504,7 @@ describe('enqueueWriteIntent', () => {
 				mutationId: 'delete-1',
 				recordId: 'order-1',
 				annihilated: true,
+				annihilatedMutationIds: rejected ? ['create-1'] : [],
 			});
 			expect(await orders.findOne().exec()).toBeNull();
 			expect(observe).toHaveBeenCalledWith({
@@ -188,6 +520,189 @@ describe('enqueueWriteIntent', () => {
 		}
 		// A dead letter survives only when the void was refused because of it.
 		expect(mutationCollection.store.size).toBe(rejected && !annihilated ? 1 : 0);
+	});
+
+	it('refuses a late writer admission after the void final guard', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		let releaseAppend!: () => void;
+		let appendStarted!: () => void;
+		const heldAppend = new Promise<void>((resolve) => {
+			releaseAppend = resolve;
+		});
+		const started = new Promise<void>((resolve) => {
+			appendStarted = resolve;
+		});
+		const insert = mutationCollection.bulkInsert.bind(mutationCollection);
+		mutationCollection.bulkInsert = async (rows) => {
+			if (rows.some((row) => row.admittedBy === 'late-writer')) {
+				appendStarted();
+				await heldAppend;
+			}
+			return insert(rows);
+		};
+		const append = mutationCollection.bulkUpsert.bind(mutationCollection);
+		mutationCollection.bulkUpsert = async (rows) => {
+			if (rows.some((row) => row.mutationId === 'late-writer')) {
+				appendStarted();
+				await heldAppend;
+			}
+			return append(rows);
+		};
+		let removed = false;
+		let writerOutcome: Promise<unknown>;
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (
+				change: (row: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				data = change(data);
+			},
+			remove: async () => {
+				// The void has fenced and passed its last guard. Resume the OTHER
+				// queue instance at its admission CAS (the append on the old implementation).
+				releaseAppend();
+				await writerOutcome;
+				removed = true;
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+			recordMutations: mutationCollection,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const now = () => '2026-09-18T00:00:01.000Z';
+		writerOutcome = enqueueWriteIntent({
+			db: otherDb,
+			now,
+			mintUuid: () => 'late-writer',
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				payload: { id: 0 },
+			},
+		}).then(
+			(receipt) => ({ receipt }),
+			(error: unknown) => ({ error })
+		);
+		await started;
+		await enqueueWriteIntent({
+			db,
+			now,
+			mintUuid: () => 'void',
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+		});
+		expect(await writerOutcome).toMatchObject({
+			error: { status: 428, reason: 'void-in-progress' },
+		});
+		expect(await queueFor(db).all()).toEqual([]);
+		// The create producer reinserts its born-local resident after the void.
+		removed = false;
+		await enqueueWriteIntent({
+			db: otherDb,
+			now,
+			mintUuid: () => 'after-void',
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				payload: { id: 0 },
+			},
+		});
+		expect(await queueFor(db).pending()).toMatchObject([{ mutationId: 'after-void' }]);
+	});
+
+	it('an admitted writer blocks a void and a second writer then succeeds in order', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		let release!: () => void;
+		let started!: () => void;
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const writing = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const append = mutationCollection.bulkUpsert.bind(mutationCollection);
+		mutationCollection.bulkUpsert = async (rows) => {
+			if (rows.some((row) => row.mutationId === 'first')) {
+				started();
+				await held;
+			}
+			return append(rows);
+		};
+		let removed = false;
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (
+				change: (row: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				data = change(data);
+			},
+			remove: async () => {
+				removed = true;
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+			recordMutations: mutationCollection,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const now = () => '2026-09-18T00:00:01.000Z';
+		const write = (database: RxDatabase, id: string) =>
+			enqueueWriteIntent({
+				db: database,
+				now,
+				mintUuid: () => id,
+				canCoalesce: false,
+				intent: {
+					collection: 'orders',
+					operation: 'create',
+					recordId: 'order-1',
+					payload: { id: 0 },
+				},
+			});
+		const first = write(db, 'first');
+		await writing;
+		try {
+			await expect(
+				enqueueWriteIntent({
+					db: otherDb,
+					now,
+					mintUuid: () => 'void',
+					intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+				})
+			).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
+			expect(removed).toBe(false);
+			const otherQueue = queueFor(otherDb);
+			const admit = otherQueue.admitWriter.bind(otherQueue);
+			let contended = false;
+			// Release the paused first append only AFTER the second writer's real
+			// admission CAS has observed it. The retry must then enqueue second.
+			let refusals = 0;
+			vi.spyOn(otherQueue, 'admitWriter').mockImplementation(async (...args) => {
+				const accepted = await admit(...args);
+				contended ||= !accepted;
+				if (!accepted && ++refusals === 12) release();
+				return accepted;
+			});
+			const second = write(otherDb, 'second');
+			await expect(Promise.all([first, second])).resolves.toMatchObject([
+				{ mutationId: 'first' },
+				{ mutationId: 'second' },
+			]);
+			expect(contended).toBe(true);
+		} finally {
+			release();
+		}
+		expect((await queueFor(db).pending()).map((row) => row.mutationId)).toEqual([
+			'first',
+			'second',
+		]);
+		expect(mutationCollection.store.size).toBe(2);
 	});
 
 	it('a born-local void takes a same-record edit that lands after the queue read with it', async () => {
@@ -243,6 +758,234 @@ describe('enqueueWriteIntent', () => {
 			expect.objectContaining({ fields: { recordId: 'order-1', removed: 1, deadLetters: 0 } })
 		);
 	});
+
+	it.each([
+		'claimed successor',
+		'claimed dead letter',
+		'late replacement',
+		'chain claim',
+		'settlement refusal',
+		'late dead-letter claim',
+		'coalesced replacement',
+		'chain replacement',
+		'failed resident removal',
+	])('a refused void preserves resident and queued work: %s', async (scenario) => {
+		const mutationCollection = createFakeMutationCollection();
+		const row: QueuedMutation = {
+			mutationId: 'dead',
+			collectionName: 'orders',
+			recordId: 'order-1',
+			operation: 'create',
+			origin: 'minted',
+			payload: { id: 0 },
+			baseRevision: null,
+			queuedAt: '2026-09-18T00:00:00.000Z',
+			status: 'rejected',
+			attempts: 1,
+			seq: 1,
+		};
+		const claimedSuccessor = scenario === 'claimed successor';
+		const chain = scenario === 'chain claim' || scenario === 'chain replacement';
+		const claimedDeadLetter = scenario === 'claimed dead letter' || scenario === 'chain claim';
+		const older: QueuedMutation = {
+			...row,
+			mutationId: 'older',
+			operation: chain ? 'create' : 'update',
+			status: claimedSuccessor ? 'claimed' : 'pending',
+			attempts: 0,
+			seq: 2,
+		};
+		const newer: QueuedMutation = {
+			...older,
+			mutationId: 'newer',
+			operation: 'update',
+			status: 'pending',
+			seq: 3,
+		};
+		await mutationCollection.bulkUpsert([
+			{
+				...row,
+				...(claimedDeadLetter
+					? {
+							resolutionClaimBy: 'other-window',
+							resolutionClaimUntil: '2026-09-18T00:01:00.000Z',
+						}
+					: {}),
+			},
+			older,
+			newer,
+		]);
+		const local = { dirty: true, pendingMutationIds: ['older', 'newer'] };
+		let removed = false;
+		const resident = {
+			toJSON: () => ({ payload: { id: 0 }, sync: {}, local }),
+			remove: async () => {
+				if (scenario === 'failed resident removal') throw new Error('resident removal failed');
+				removed = true;
+			},
+		};
+		const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+		const db = {
+			collections: { orders, recordMutations: mutationCollection },
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const replacement: QueuedMutation = {
+			...newer,
+			mutationId: 'replacement',
+			coalesced: 1,
+			status: 'claimed',
+			claimedBy: 'other-window',
+		};
+		if (scenario === 'coalesced replacement' || scenario === 'chain replacement') {
+			const otherQueue = new RecordMutationQueue(
+				new RxRecordMutationStorage(() => mutationCollection)
+			);
+			const all = queue.all.bind(queue);
+			let inserted = false;
+			vi.spyOn(queue, 'all').mockImplementation(async () => {
+				const snapshot = await all();
+				const prior = snapshot.find((item) => item.mutationId === 'newer');
+				if (!inserted && (!prior || prior.supersededBy)) {
+					inserted = true;
+					// A second instance inserts work after the void's sweep, before its guard.
+					await otherQueue.replace(replacement);
+				}
+				return all();
+			});
+		}
+		if (scenario === 'late replacement') {
+			const pending = queue.pending.bind(queue);
+			vi.spyOn(queue, 'pending').mockImplementationOnce(async () => {
+				const snapshot = await pending();
+				await queue.replace({ ...older, mutationId: 'replacement', operation: 'create', seq: 4 });
+				return snapshot;
+			});
+		}
+		if (scenario === 'late dead-letter claim') {
+			const all = queue.all.bind(queue);
+			let reads = 0;
+			vi.spyOn(queue, 'all').mockImplementation(async () => {
+				const snapshot = await all();
+				if (++reads === 3)
+					await queue.replace({
+						...row,
+						resolutionClaimBy: 'other-window',
+						resolutionClaimUntil: '2026-09-18T00:01:00.000Z',
+					});
+				return snapshot;
+			});
+		}
+		if (scenario === 'settlement refusal') {
+			// The dead letter changes status after the guard, before its conditional mark.
+			const mark = queue.markForAnnihilation.bind(queue);
+			vi.spyOn(queue, 'markForAnnihilation').mockImplementation(async (id, token, now, status) => {
+				if (id === 'dead') await queue.replace({ ...row, status: 'pending' });
+				return mark(id, token, now, status);
+			});
+		}
+		const result = enqueueWriteIntent({
+			db,
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+			mintUuid: () => 'delete-1',
+			now: () => '2026-09-18T00:00:01.000Z',
+		});
+		if (scenario === 'failed resident removal') {
+			await expect(result).rejects.toThrow('resident removal failed');
+			expect(mutationCollection.store.get('dead')?.mutation).toEqual(row);
+		} else if (claimedSuccessor) {
+			await expect(result).rejects.toThrow('mutation queue kept changing');
+		} else {
+			await expect(result).rejects.toMatchObject({
+				status: 428,
+				reason: 'dead-letter-resolution-in-progress',
+			});
+		}
+		expect(await orders.findOne().exec()).toBe(resident);
+		if (scenario === 'coalesced replacement' || scenario === 'chain replacement') {
+			expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
+			expect(mutationCollection.store.get('replacement')?.mutation).toEqual(replacement);
+		} else {
+			expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
+		}
+		expect(mutationCollection.store.get('older')?.mutation).toEqual(older);
+		expect(resident.toJSON().local.pendingMutationIds).toEqual(['older', 'newer']);
+		expect(mutationCollection.store.has('dead')).toBe(true);
+		if (scenario === 'late replacement') {
+			expect(mutationCollection.store.get('replacement')?.mutation.operation).toBe('create');
+		}
+	});
+
+	it.each(['remoteId', 'revision', 'a push attempt'])(
+		'a void preserves queued work when %s prevents annihilation',
+		async (scenario) => {
+			const mutationCollection = createFakeMutationCollection();
+			const create: QueuedMutation = {
+				mutationId: 'create',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				operation: 'create',
+				origin: 'minted',
+				payload: { id: 0 },
+				baseRevision: null,
+				queuedAt: '2026-09-18T00:00:00.000Z',
+				status: 'pending',
+				attempts: 0,
+				seq: 1,
+			};
+			const edit: QueuedMutation = {
+				...create,
+				mutationId: 'edit',
+				operation: 'update',
+				explicit: true,
+				seq: 2,
+			};
+			await mutationCollection.bulkUpsert([create, edit]);
+			let data: Record<string, unknown> = {
+				remoteId: scenario === 'remoteId' ? '42' : undefined,
+				payload: { id: 0 },
+				sync: { revision: scenario === 'revision' ? 'rev-1' : undefined },
+				local: { pendingMutationIds: ['create', 'edit'] },
+			};
+			let removed = false;
+			const resident = {
+				toJSON: () => data,
+				remove: async () => {
+					removed = true;
+				},
+				incrementalModify: async (modify: (value: typeof data) => typeof data) => {
+					data = modify(data);
+				},
+			};
+			const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+			const db = {
+				collections: { orders, recordMutations: mutationCollection },
+			} as unknown as RxDatabase;
+			if (scenario === 'a push attempt') {
+				const queue = queueFor(db);
+				const all = queue.all.bind(queue);
+				vi.spyOn(queue, 'all').mockImplementationOnce(async () => {
+					const snapshot = await all();
+					await queue.reschedule({ ...create, attempts: 1 });
+					return snapshot;
+				});
+			}
+			const receipt = await enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+				mintUuid: () => 'delete',
+				now: () => '2026-09-18T00:00:01.000Z',
+			});
+			expect(receipt.annihilated).not.toBe(true);
+			expect(await orders.findOne().exec()).toBe(resident);
+			expect(mutationCollection.store.get('create')?.mutation).toEqual({
+				...create,
+				attempts: scenario === 'a push attempt' ? 1 : 0,
+			});
+			expect(mutationCollection.store.get('edit')?.mutation).toEqual(edit);
+			expect(mutationCollection.store.get('delete')?.mutation.operation).toBe('delete');
+			expect(data.local).toEqual({ dirty: true, pendingMutationIds: ['create', 'edit', 'delete'] });
+		}
+	);
 
 	it('carries an own `__proto__` payload key through as ordinary data', async () => {
 		// `sanitize_key` keeps `_`, so a Woo payload key literally spelled `__proto__`
@@ -382,6 +1125,57 @@ describe('enqueueWriteIntent', () => {
 		);
 		expect(queued.get('mutation-2')?.explicit).toBe(incomingExplicit || undefined);
 		if (priorExplicit) expect(queued.get('mutation-1')?.explicit).toBe(true);
+	});
+
+	it.each([false, true])('born-twice preserves admissions: released=%s', async (released) => {
+		const storage = createFakeMutationCollection();
+		let data = { local: { dirty: false, pendingMutationIds: [] as string[] } };
+		const resident = {
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				data = modify(data);
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: storage,
+			},
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const now = () => new Date().toISOString();
+		const mutation: QueuedMutation = {
+			mutationId: 'create',
+			collectionName: 'orders',
+			recordId: 'order',
+			operation: 'create',
+			origin: 'minted',
+			payload: { status: 'pos-open' },
+			baseRevision: null,
+			queuedAt: now(),
+		};
+		await queue.admitWriter('orders', 'order', 'writer', Date.now());
+		const edit: QueuedMutation = { ...mutation, mutationId: 'edit', admittedBy: 'writer' };
+		await queue.enqueue(edit);
+		const finishWrite = async () => {
+			data.local.dirty = true;
+			data.local.pendingMutationIds.push('edit');
+			await queue.releaseWriter('orders', 'order', 'writer');
+		};
+		if (released) await finishWrite();
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation,
+			ackRevision: 'r1',
+			mintUuid: () => 'follow-up',
+			now,
+		});
+		const rows = await queue.all();
+		expect(rows.every((row) => !row.supersededBy)).toBe(true);
+		const ids = rows.map((row) => row.mutationId);
+		expect(ids).toEqual(released ? ['follow-up'] : ['edit', 'follow-up']);
+		if (!released) await finishWrite();
+		expect(data.local.pendingMutationIds.sort()).toEqual(ids.sort());
+		expect(await queue.admissionState((await queue.all()).at(-1)!, Date.now())).toBe('released');
 	});
 
 	it('strips non-string order meta display fields after coalescing over resident payload', async () => {
@@ -529,10 +1323,11 @@ describe('enqueueWriteIntent', () => {
 		expect([...queued.values()]).toHaveLength(1);
 		const payload = [...queued.values()][0]!.payload;
 		expect(payload).toMatchObject({
-			status: 'pos-open',
 			customer_note: 'ring twice',
 			line_items: [{ id: 3, quantity: 2 }],
 		});
+		// Neither write named the status; the resident's is never echoed (ADR 0040).
+		expect(payload).not.toHaveProperty('status');
 		for (const field of [
 			'total',
 			'total_tax',
@@ -639,15 +1434,13 @@ describe('enqueueWriteIntent', () => {
 
 		// The aggregate the original create carried is gone: the requeue passes
 		// through the same outbound sanitizer (#1507), so a rebuilt payload cannot
-		// smuggle back money the server discards unread.
+		// smuggle back money the server discards unread. Nor does the create's status
+		// become an update intent (ADR 0040).
 		expect([...queued.values()]).toEqual([
 			expect.objectContaining({
 				mutationId: 'follow-up-1',
 				explicit: true,
-				payload: {
-					status: 'pos-open',
-					customer_note: 'ring twice',
-				},
+				payload: { customer_note: 'ring twice' },
 			}),
 		]);
 	});
@@ -707,4 +1500,353 @@ describe('enqueueWriteIntent', () => {
 			);
 		}
 	);
+});
+
+describe('admission crash recovery', () => {
+	const prior: QueuedMutation = {
+		mutationId: 'prior',
+		collectionName: 'orders',
+		recordId: 'order',
+		operation: 'update',
+		origin: 'existing',
+		payload: { id: 1 },
+		baseRevision: 'r0',
+		queuedAt: new Date().toISOString(),
+	};
+	const fixture = () => {
+		const storage = createFakeMutationCollection();
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				data = modify(data);
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => resident }) },
+			recordMutations: storage,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		return { storage, resident, collections, db, queue: queueFor(db) };
+	};
+	it('refuses an update after a server-known delete without changing the queue', async () => {
+		const { db, queue, resident } = fixture();
+		await resident.incrementalModify((data) => ({ ...data, remoteId: '1' }));
+		await queue.enqueue({ ...prior, operation: 'delete' });
+		const before = await queue.all();
+		await expect(
+			enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', recordId: 'order', operation: 'update', payload: {} },
+				mintUuid: () => 'update',
+				now: () => prior.queuedAt,
+			})
+		).rejects.toMatchObject({ code: 'write-superseded-by-delete' });
+		expect(await queue.all()).toEqual(before);
+	});
+
+	it('returns a successful write and delivers it when synthetic receipt holder cleanup throws', async () => {
+		const { db, queue } = fixture();
+		vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('release failed'));
+		const append = RxRecordMutationStorage.prototype.appendIfUnchanged;
+		const fault = vi.spyOn(RxRecordMutationStorage.prototype, 'appendIfUnchanged');
+		fault.mockImplementation(async function (this: RxRecordMutationStorage, row, rev) {
+			if (row.status === 'internal' && row.payload.phase === 'released')
+				throw new Error('holder cleanup failed');
+			return append.call(this, row, rev);
+		});
+		const observe = vi.fn();
+		try {
+			await expect(
+				enqueueWriteIntent({
+					db,
+					mintUuid: () => 'receipt',
+					now: () => new Date().toISOString(),
+					observe,
+					intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: {} },
+				})
+			).resolves.toMatchObject({ mutationId: 'receipt' });
+		} finally {
+			fault.mockRestore();
+		}
+		expect(observe).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+		expect(
+			await drainMutationQueue({
+				queue,
+				push: async (mutation) => ({
+					outcome: 'created',
+					mutation,
+					document: { id: 1 },
+					currentRevision: 'r1',
+				}),
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(await queue.all()).toEqual([]);
+	});
+
+	it('delivers a committed receipt when expiry swept its holder during the dirty mark', async () => {
+		const { resident, collections, db, queue } = fixture();
+		let now = Date.now();
+		const modify = resident.incrementalModify;
+		vi.spyOn(resident, 'incrementalModify').mockImplementationOnce(async (change) => {
+			now += 30_001;
+			await queueFor({ collections } as unknown as RxDatabase).clearExpiredAnnihilation(now);
+			await modify(change);
+		});
+		const receipt = await enqueueWriteIntent({
+			db,
+			mintUuid: () => 'receipt',
+			now: () => new Date(now).toISOString(),
+			intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: {} },
+		});
+		expect(receipt.mutationId).toBe('receipt');
+		const delivered: string[] = [];
+		expect(
+			await drainMutationQueue({
+				queue,
+				now: () => now,
+				push: async (mutation) => {
+					delivered.push(mutation.mutationId);
+					return { outcome: 'created', mutation, document: { id: 1 }, currentRevision: 'r1' };
+				},
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(delivered).toEqual(['receipt']);
+	});
+
+	it('settles a swept pending writer before releasing the void fence', async () => {
+		const { resident, db, queue } = fixture();
+		const now = Date.now();
+		await queue.admitWriter('orders', 'order', 'swept', now - 30_001);
+		await queue.replace({ ...prior, admittedBy: 'swept', baseRevision: null });
+		await queue.clearExpiredAnnihilation(now);
+		Object.assign(resident, {
+			remove: async () => {
+				expect(await queue.all()).toEqual([
+					expect.objectContaining({ status: 'rejected', rejectedReason: 'superseded-by-void' }),
+				]);
+			},
+		});
+		expect(
+			await enqueueWriteIntent({
+				db,
+				mintUuid: () => 'void',
+				now: () => new Date(now).toISOString(),
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+			})
+		).toMatchObject({ annihilated: true });
+		expect(await queue.hasVoidFence('orders', 'order', now)).toBe(false);
+		await expect(queue.recordWriterReceipt('prior')).rejects.toThrow();
+		expect(await queue.all()).toEqual([]);
+		expect(
+			await drainMutationQueue({
+				queue,
+				push: async () => {
+					throw new Error('recreated');
+				},
+			})
+		).toMatchObject({ pushed: 0, rejected: [] });
+	});
+
+	it('settles an admission-lost dead letter with a born-local void', async () => {
+		const { resident, db, queue } = fixture();
+		let removed = false;
+		Object.assign(resident, {
+			remove: async () => {
+				removed = true;
+			},
+		});
+		await queue.replace({
+			...prior,
+			mutationId: 'orphan',
+			admittedBy: 'swept',
+			status: 'rejected',
+			rejectedReason: 'admission-lost',
+			payload: { id: 0 },
+			baseRevision: null,
+		});
+		expect(
+			await enqueueWriteIntent({
+				db,
+				mintUuid: () => 'void',
+				now: () => new Date().toISOString(),
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+			})
+		).toMatchObject({ annihilated: true });
+		expect(removed).toBe(true);
+		expect(await queue.all()).toEqual([]);
+	});
+
+	it.each([false, true, 'expired'] as const)(
+		'recovers a committed receipt when release fails persistently=%s',
+		async (persistent) => {
+			const { storage, collections, db, queue } = fixture();
+			await queue.enqueue(prior);
+			const release = vi.spyOn(queue, 'releaseWriter');
+			if (persistent) release.mockRejectedValue(new Error('release storage unavailable'));
+			else release.mockRejectedValueOnce(new Error('release storage unavailable'));
+			const now = Date.now();
+			expect(
+				await enqueueWriteIntent({
+					db,
+					mintUuid: () => 'receipt',
+					now: () => new Date(now).toISOString(),
+					intent: {
+						collection: 'orders',
+						operation: 'create',
+						recordId: 'order',
+						payload: { id: 0 },
+					},
+				})
+			).toMatchObject({ mutationId: 'receipt' });
+			if (!persistent) expect(storage.store.has('orders/order')).toBe(false);
+			const restarted = queueFor({ collections } as unknown as RxDatabase);
+			const delivered: string[] = [];
+			expect(
+				await drainMutationQueue({
+					queue: restarted,
+					now: () => now + (persistent === 'expired' ? 30_001 : 0),
+					push: async (mutation) => {
+						delivered.push(mutation.mutationId);
+						return { outcome: 'created', mutation, document: { id: 1 }, currentRevision: 'r1' };
+					},
+				})
+			).toMatchObject({ pushed: 1, rejected: [] });
+			expect(delivered).toEqual(['receipt']);
+			await restarted.clearExpiredAnnihilation(now + 30_001);
+			expect(await restarted.all()).toEqual([]);
+			expect(storage.store.has('orders/order')).toBe(false);
+		}
+	);
+
+	it('restores resident ids after a crash following the coalesced dirty mark', async () => {
+		const { resident, collections, db, queue } = fixture();
+		const now = Date.now();
+		await queue.enqueue(prior);
+		await queue.admitWriter('orders', 'order', 'replacement', now);
+		await queue.coalesceInto(
+			'prior',
+			{ ...prior, mutationId: 'replacement', admittedBy: 'replacement' },
+			now
+		);
+		await resident.incrementalModify((row) => ({
+			...row,
+			local: { dirty: true, pendingMutationIds: ['replacement'] },
+		}));
+		const restarted = queueFor({ collections } as unknown as RxDatabase);
+		await restarted.clearExpiredAnnihilation(now + 30_001);
+		expect(
+			(resident.toJSON().local as { pendingMutationIds: string[] }).pendingMutationIds
+		).toEqual(['prior']);
+		expect(
+			await drainMutationQueue({
+				queue: restarted,
+				now: () => now + 30_001,
+				push: async (mutation) => ({
+					outcome: 'updated',
+					mutation,
+					document: null,
+					currentRevision: 'r1',
+				}),
+				applyAck: async (mutation) =>
+					writeFacetFor('orders')!.reconcile(db, {
+						recordId: 'order',
+						remoteId: null,
+						mutation,
+						currentRevision: 'r1',
+						document: null,
+					}),
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(resident.toJSON().local).toEqual({ dirty: false, pendingMutationIds: [] });
+		const pull = [{ uuid: 'order' }];
+		const source = { findByIds: () => ({ exec: async () => new Map([['order', resident]]) }) };
+		expect(await withoutLocallyProtected(source, pull)).toEqual(pull);
+	});
+});
+
+// ADR 0040: a stale pushable status re-sent against a paid order is a reopen, so
+// neither recovery builder may put one on the wire that the cashier did not name.
+describe('status is an intent, never an echo (ADR 0040)', () => {
+	it("recovering a rejected note edit does not re-send the resident's stale pending status", async () => {
+		const rejected: QueuedMutation = {
+			mutationId: 'rejected-1',
+			collectionName: 'orders',
+			operation: 'update',
+			recordId: 'order-1',
+			origin: 'existing',
+			payload: { customer_note: 'ring twice' },
+			baseRevision: 'sha256:server-r1',
+			queuedAt: '2026-10-20T00:00:00.000Z',
+			seq: 1,
+			status: 'rejected',
+		};
+		const queued = new Map<string, QueuedMutation>([[rejected.mutationId, rejected]]);
+		let residentData: Record<string, unknown> = {
+			payload: { id: 42, status: 'pending', customer_note: 'old', meta_data: [] },
+			sync: { revision: 'sha256:server-r2' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const resident = {
+			incrementalModify: async (
+				modify: (data: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				residentData = modify(residentData);
+			},
+			remove: async () => undefined,
+			toJSON: () => residentData,
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: revCollectionOverMap(queued),
+			},
+		} as unknown as RxDatabase;
+		let minted = 0;
+
+		await requeueRejectedMutation({
+			db,
+			entry: rejected,
+			mintUuid: () => `recovered-${++minted}`,
+			now: () => '2026-10-20T00:00:01.000Z',
+		});
+
+		const recovered = [...queued.values()].filter((row) => row.status !== 'rejected');
+		expect(recovered).toHaveLength(1);
+		expect(recovered[0]!.payload).toMatchObject({ customer_note: 'ring twice' });
+		expect(recovered[0]!.payload).not.toHaveProperty('status');
+	});
+
+	it('born-twice recovery against a paid server order carries no create status', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => null }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation: {
+				mutationId: 'create-1',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				origin: 'minted',
+				payload: { status: 'pos-open', customer_note: 'keep me' },
+				baseRevision: null,
+				queuedAt: '2026-10-20T00:00:00.000Z',
+				explicit: true,
+			} as never,
+			ackRevision: 'sha256:server-paid',
+			mintUuid: () => 'follow-up-1',
+			now: () => '2026-10-20T00:00:01.000Z',
+		});
+
+		const rows = [...mutationCollection.store.values()].map((entry) => entry.mutation);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]!.operation).toBe('update');
+		expect(rows[0]!.payload).toEqual({ customer_note: 'keep me' });
+	});
 });

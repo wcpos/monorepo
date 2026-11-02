@@ -8,12 +8,18 @@ type ElectronBridgeIpcRenderer = {
 	invoke(channel: string, args: unknown): Promise<unknown>;
 };
 
-type MainStorageRoot = 'fsdbs' | 'legacy-sqlite' | 'image-cache';
+/**
+ * `sqlite` is the 2.0 engine's root (one entry per database, sidecars summed by
+ * main); `fsdbs` (the 1.10 filesystem engine) and `legacy-sqlite` (pre-1.9) are
+ * retired roots the post-readiness purge removes, so both read as legacy.
+ */
+type MainStorageRoot = 'sqlite' | 'fsdbs' | 'legacy-sqlite' | 'image-cache';
 type MainStorageEntry = { name: string; bytes: number; root: MainStorageRoot };
+const LEGACY_MAIN_STORAGE_ROOTS: readonly MainStorageRoot[] = ['fsdbs', 'legacy-sqlite'];
 
 /**
- * Electron: the RxDB data lives in the MAIN process (filesystem-node storage
- * under userData), so the renderer's database storage APIs see ~0 bytes. The
+ * Electron: the RxDB data lives in the MAIN process (SQLite under userData,
+ * #2242), so the renderer's database storage APIs see ~0 bytes. The
  * main process walks its base paths behind `storage:measure`;
  * an older main process without the handler rejects the invoke and the
  * measurement reports null — the health screen then simply hides its
@@ -36,7 +42,7 @@ export async function measureAppStorage(): Promise<StorageFootprint | null> {
 				.map((entry) => ({
 					name: entry.name,
 					bytes: entry.bytes,
-					...(entry.root === 'legacy-sqlite' ? { legacy: true } : {}),
+					...(LEGACY_MAIN_STORAGE_ROOTS.includes(entry.root) ? { legacy: true } : {}),
 				})),
 			estimateBytes: null,
 			estimateDetails: null,

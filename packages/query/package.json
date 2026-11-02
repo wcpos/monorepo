@@ -9,7 +9,18 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./testing": "./src/testing.ts",
-		"./collection-map": "./src/collection-map.ts"
+		"./collection-map": "./src/collection-map.ts",
+		"./register-session": "./src/register-session/index.ts",
+		"./temporary-order": "./src/temporary-order/index.ts",
+		"./record-readers": "./src/record-readers/index.ts",
+		"./local-data-reset": "./src/local-data-reset/index.ts",
+		"./query-state": "./src/query-state/index.ts",
+		"./storage-health": "./src/storage-health.ts",
+		"./store-local": "./src/store-local/index.ts",
+		"./mutations": "./src/mutations/index.ts",
+		"./receipt-email-queue": "./src/receipt-email-queue/index.ts",
+		"./user-db": "./src/user-db/index.ts",
+		"./user-db/bootstrap": "./src/user-db/bootstrap.ts"
 	},
 	"type": "module",
 	"files": [
@@ -20,26 +31,34 @@
 		"test": "NODE_OPTIONS=--experimental-vm-modules pnpm exec jest",
 		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
 		"lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
-		"typecheck": "bash -c '! tsc --noEmit 2>&1 | grep -q \"^src/.*error TS\"'"
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@wcpos/order-math": "workspace:*",
+		"@date-fns/tz": "^1.5.0",
+		"@date-fns/utc": "^2.1.1",
 		"@wcpos/database": "workspace:*",
+		"@wcpos/hooks": "workspace:*",
+		"@wcpos/order-math": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
+		"date-fns": "^4.4.0",
 		"lodash": "^4.18.1",
 		"observable-hooks": "^4.2.4",
 		"rxdb": "17.6.0",
 		"rxjs": "7.8.2",
-		"uuid": "^14.0.1"
+		"expo-crypto": "~58.0.6"
 	},
 	"devDependencies": {
-		"@testing-library/react": "^16.3.2",
+		"@testing-library/react": "^16.3.3",
 		"@types/jest": "^30.0.0",
-		"@types/lodash": "^4.17.25",
-		"jest": "^30.4.2",
-		"jest-environment-jsdom": "^30.4.1",
-		"rxjs-marbles": "^7.0.1",
-		"ts-jest": "^29.4.12"
+		"@types/lodash": "^4.17.26",
+		"ajv": "^8.20.0",
+		"jest": "^30.5.2",
+		"jest-environment-jsdom": "^30.5.2",
+		"mingo": "7.2.4",
+		"ts-jest": "29.4.12",
+		"z-schema": "12.4.6"
 	}
 }

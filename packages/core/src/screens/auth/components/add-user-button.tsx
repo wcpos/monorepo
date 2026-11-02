@@ -1,8 +1,11 @@
-import React from 'react';
-import { Pressable, View } from 'react-native';
+import * as React from 'react';
 
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
+import { MenuRow } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
+import { ListItem } from '@wcpos/components/list-item';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -13,11 +16,12 @@ import { useLoginHandler } from '../hooks/use-login-handler';
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: Pick<ReadonlySiteRecord, 'uuid' | 'name' | 'wcpos_login_url'>;
 	hasExistingUsers: boolean;
+	compact?: boolean;
 }
 
-export function AddUserButton({ site, hasExistingUsers }: Props) {
+export function AddUserButton({ site, hasExistingUsers, compact = false }: Props) {
 	const { handleLoginSuccess, isProcessing } = useLoginHandler(site);
 	const processedResponseRef = React.useRef<string | null>(null);
 	const t = useT();
@@ -54,6 +58,20 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
 			void handleLoginSuccess({ params: response.params }).catch(() => undefined);
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Login did not complete', {
+					context: { siteName: site.name, errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
@@ -64,7 +82,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name]);
+	}, [response, handleLoginSuccess, site.name, t]);
 
 	const disabled = !isReady || isProcessing;
 
@@ -76,27 +94,35 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		void promptAsync();
 	}, [promptAsync]);
 
-	return (
-		<Pressable
-			testID="add-user-button"
+	const label = isProcessing
+		? t('common.loading')
+		: compact
+			? t('register.another_account')
+			: hasExistingUsers
+				? t('auth.add_another_user', { _tags: 'core' })
+				: t('auth.sign_in_with_wordpress', { _tags: 'core' });
+	// In the user sheet it is one of the sheet's quiet rows; on the connect screen, the
+	// dashed add-another row under the users.
+	return compact ? (
+		<MenuRow
+			testID="user-sheet-another-account"
+			leading={<Icon name="plus" className="text-muted-foreground" />}
 			disabled={disabled}
 			onPress={handlePress}
-			className={
-				disabled
-					? 'border-border web:cursor-not-allowed flex-row items-center gap-3 rounded-lg border border-dashed p-3 opacity-60'
-					: 'border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3'
-			}
+			label={label}
+		/>
+	) : (
+		<ListItem
+			testID="add-user-button"
+			variant="dashed"
+			className="w-full"
+			disabled={disabled}
+			onPress={handlePress}
+			leading={<Icon name="plus" size="sm" />}
 		>
-			<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
-				<Icon name="plus" size="sm" variant="primary" />
-			</View>
-			<Text className="text-muted-foreground text-sm font-medium">
-				{isProcessing
-					? t('common.loading')
-					: hasExistingUsers
-						? t('auth.add_another_user', { _tags: 'core' })
-						: t('auth.sign_in_with_wordpress', { _tags: 'core' })}
+			<Text variant="key" className="font-medium">
+				{label}
 			</Text>
-		</Pressable>
+		</ListItem>
 	);
 }

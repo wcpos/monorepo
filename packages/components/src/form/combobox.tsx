@@ -8,10 +8,7 @@ import type { FormOptionFieldProps } from './option-control';
 export type FormComboboxProps<TControl extends React.ElementType = typeof Combobox> =
 	FormOptionFieldProps<TControl>;
 
-/**
- * Form field backed by `Combobox`. The behaviour lives in `FormOptionControl`, which
- * `FormSelect` shares — the two wrappers differ only in the control they default to.
- */
+/** Form field backed by `Combobox`; the behaviour lives in `FormOptionControl`. */
 export function FormCombobox<TControl extends React.ElementType = typeof Combobox>(
 	props: FormComboboxProps<TControl>
 ) {

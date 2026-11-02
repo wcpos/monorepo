@@ -6,14 +6,18 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
-import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import {
+	CustomerForm,
+	customerFormSchema,
+	fillBillingFromIdentity,
+} from '../components/customer/customer-form';
+import { useCustomerRecord } from './commands/use-customer-record';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
@@ -22,7 +26,7 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
  *
  */
 export function AddCustomerScreen() {
-	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
+	const { createCustomer } = useCustomerRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const router = useRouter();
@@ -44,10 +48,10 @@ export function AddCustomerScreen() {
 			setLoading(true);
 			try {
 				// create() logs and toasts its own failure; reporting it here too doubled it.
-				const savedDoc = await create({ data }).catch(() => undefined);
+				const savedDoc = await createCustomer(data);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its payload.
-					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					const saved = savedDoc.getLatest().payload;
 					mutationLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {
@@ -71,31 +75,37 @@ export function AddCustomerScreen() {
 				setLoading(false);
 			}
 		},
-		[create, format, router, t]
+		[createCustomer, format, router, t]
 	);
 
 	/**
 	 *
 	 */
+	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
+
 	return (
-		<Modal>
-			<ModalContent size="xl">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('customers.add_customer')}</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody>
-					<ErrorBoundary>
-						<CustomerForm
-							form={form}
-							onSubmit={handleSave}
-							onClose={() => router.back()}
-							loading={loading}
-						/>
-					</ErrorBoundary>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+					</DialogTitle>
+				</DialogHeader>
+				<ErrorBoundary>
+					<CustomerForm
+						form={form}
+						footer={{
+							intent: {
+								label: t('customers.add_customer'),
+								testID: 'customer-form-add',
+								loading,
+								onPress: () => void onSubmit(),
+							},
+							close: { testID: 'customer-form-close' },
+						}}
+					/>
+				</ErrorBoundary>
+			</DialogContent>
+		</Dialog>
 	);
 }

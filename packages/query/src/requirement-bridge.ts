@@ -9,6 +9,7 @@ import type {
 } from '@wcpos/sync-engine';
 
 import {
+	COLLECTION_VOCABULARY,
 	type EngineCollectionName,
 	engineCollectionNameFor,
 	isMappedCollection,
@@ -50,8 +51,8 @@ export function declareRequirements(
 	});
 }
 
-/** Binding-independent refill for collections a reset may have emptied with no binding
- * mounted over them. Mounted bindings replay themselves (coverageGeneration). */
+/** Reader-independent refill for collections a reset may have emptied with no query handle
+ * owned over them. An owned handle replays itself (the coverage generation is in its key). */
 export function resetRefillRequirements(collectionNames: string[]): EngineRequirement[] {
 	const wanted = new Set(collectionNames);
 	const resetEngineCollections = new Set<EngineCollectionName>(
@@ -69,6 +70,15 @@ export function resetRefillRequirements(collectionNames: string[]): EngineRequir
 		requirements.push({
 			id: `${collection}:collection-reset`,
 			collection,
+			kind: 'refresh',
+			forceRefresh: true,
+			priority: 1000,
+		});
+	}
+	if (resetEngineCollections.has('refunds')) {
+		requirements.push({
+			id: 'refunds:collection-reset',
+			collection: 'refunds',
 			kind: 'refresh',
 			forceRefresh: true,
 			priority: 1000,
@@ -116,4 +126,28 @@ export async function runResetRefill(
 		for (const handle of handles) handle.release();
 	}
 	await engine.sync('scheduler-drain');
+}
+
+/** Engine row key → the legacy collection key the reset funnel speaks. */
+const ROW_TO_LEGACY = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.legacyName])
+) as Record<SyncCollectionName, string>;
+
+/** Reset the collection family, preserving queue confirmation, then re-arm its refill policy. */
+export async function resetCollectionsAndRefill(
+	engine: RxdbSyncEngine,
+	name: SyncCollectionName,
+	options: { confirmDestroyQueue?: boolean } = {}
+): Promise<'reset' | 'needs-confirmation'> {
+	// Clearing products must also clear the separate variations collection, or
+	// stale child docs survive — the same pairing the app-wide reset funnel uses.
+	const engineNames: SyncCollectionName[] =
+		name === 'products' ? ['variations', 'products'] : [name];
+	const legacyNames = engineNames.map((name) => ROW_TO_LEGACY[name]);
+	for (const name of engineNames) {
+		const outcome = await engine.scope.resetCollection(name, options);
+		if (outcome === 'needs-confirmation') return outcome;
+	}
+	await runResetRefill(engine, legacyNames);
+	return 'reset';
 }

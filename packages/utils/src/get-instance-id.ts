@@ -44,7 +44,7 @@ export async function getInstanceId(): Promise<string | undefined> {
 		// Before first unlock, reuse a provisional id but defer binding and the final memo.
 		if (!device) return id;
 		const record = JSON.stringify({ id, device: device ?? stored.device });
-		if (raw !== record) file.write(record);
+		if (raw !== record) file.writeSync(record);
 		// Minted once per process: every sync and REST request asks, and the file never changes.
 		cached = id;
 		return id;

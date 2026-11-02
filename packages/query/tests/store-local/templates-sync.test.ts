@@ -1,0 +1,266 @@
+/**
+ * Regression coverage for the empty receipt-template picker (dev-pro, 2026-08-19).
+ *
+ * The server's `/templates` payload carries fields the local schema doesn't
+ * declare (`preview_data`, `gallery_key`, `is_premade`, `tax_display`,
+ * `file_path`, `language`, `category`, ...). `parseRestResponse` coerces ONE
+ * document — handed the whole array it returned it untouched, so unpruned rows
+ * reached `bulkUpsert`, and on validating storage (dev builds wrap storage with
+ * z-schema) every row was rejected *silently*: `bulkUpsert` reports failures in
+ * its result instead of throwing. The local collection stayed empty, so the
+ * receipt modal hid the template switcher and disabled the PDF download.
+ *
+ * These run against a real RxDB with z-schema-validating memory storage — the
+ * same wrapper the dev app uses — because the bug lives in the interaction
+ * between parse (array vs document) and silent bulkUpsert validation failures.
+ */
+import { createRxDatabase } from 'rxdb';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
+
+import '@wcpos/database/plugins';
+import {
+	type StoreCollections,
+	storeCollections,
+	type StoreDatabase,
+} from '@wcpos/database/collections';
+import { getLogger } from '@wcpos/utils/logger';
+
+import { syncTemplates } from '../../src/store-local';
+
+jest.mock('uuid', () => ({
+	v4: () => `uuid-${Math.random().toString(36).slice(2)}`,
+}));
+
+jest.setTimeout(30000);
+
+/**
+ * Mirrors the live dev-pro `/wcpos/v2/templates` response shape: one virtual
+ * legacy template (no `status`, no `content`) plus published DB templates, all
+ * carrying server-side fields the local schema does not declare.
+ */
+const serverExtras = {
+	category: 'receipt',
+	language: 'php',
+	file_path: '/var/www/html/wp-content/plugins/woocommerce-pos/templates/receipt.php',
+	is_disabled: false,
+};
+
+const dbTemplateExtras = {
+	...serverExtras,
+	language: 'mustache',
+	is_premade: true,
+	gallery_key: 'standard',
+	gallery_version: '1.0.0',
+	preview_data: { order: { id: 1 } },
+	tax_display: 'itemized',
+	date_created: '2026-08-19T17:47:14',
+	date_modified: '2026-08-19T17:47:14',
+};
+
+const serverPayload = [
+	{
+		id: 'plugin-core',
+		uuid: '5806abe3-b79b-5002-99c0-685d5356a832',
+		title: 'Legacy PHP template',
+		description: '',
+		type: 'receipt',
+		engine: 'legacy-php',
+		output_type: 'html',
+		paper_width: null,
+		is_virtual: true,
+		source: 'plugin',
+		menu_order: 0,
+		is_active: true,
+		offline_capable: false,
+		date_modified_gmt: '2026-08-19T17:47:14',
+		...serverExtras,
+	},
+	...[64965, 64966, 64967, 64968].map((id, i) => ({
+		id,
+		uuid: `00000000-0000-4000-8000-00000000000${i}`,
+		title: `Receipt template ${id}`,
+		description: '',
+		type: 'receipt',
+		status: 'publish',
+		engine: i === 2 ? 'thermal' : 'logicless',
+		output_type: i === 2 ? 'escpos' : 'html',
+		paper_width: i === 2 ? '80mm' : null,
+		content: '<div>{{store.name}}</div>',
+		is_virtual: false,
+		source: 'custom',
+		menu_order: 0,
+		is_active: false,
+		offline_capable: true,
+		date_modified_gmt: '2026-08-19T17:47:14',
+		...dbTemplateExtras,
+	})),
+];
+
+let db: StoreDatabase;
+
+beforeEach(async () => {
+	db = await createRxDatabase<StoreCollections>({
+		name: `templates-sync-${Math.random().toString(36).slice(2)}`,
+		storage: wrappedValidateZSchemaStorage({ storage: getRxStorageMemory() }),
+		multiInstance: false,
+		ignoreDuplicate: true,
+	});
+	await db.addCollections({ templates: storeCollections.templates });
+});
+
+afterEach(async () => {
+	await db.close();
+});
+
+const fakeHttpClient = (data: unknown) => ({
+	get: jest.fn(async () => ({ data })),
+});
+
+type SyncTemplatesHttpClient = Parameters<typeof syncTemplates>[1];
+// Type-only pin: the response boundary must never regress to `any`.
+// @ts-expect-error A synchronous scalar is not a valid HTTP response.
+const invalidHttpClient: SyncTemplatesHttpClient = { get: () => 42 };
+void invalidHttpClient;
+
+describe('syncTemplates', () => {
+	it.each([
+		['global', [64967, 64965, 64966, 'plugin-core', 64968]],
+		['store-specific', [64968, 'plugin-core', 64965]],
+	] as const)('preserves %s display order on initial sync and reorder', async (_scope, ids) => {
+		const collection = db.collections.templates;
+		const query = collection.find({
+			selector: { type: 'receipt' },
+			sort: [{ menu_order: 'asc' }],
+		});
+		for (const order of [ids, [...ids].reverse()]) {
+			// The API orders the array, not the posts' menu_order fields. The
+			// store-specific response is already filtered and ordered by the server.
+			const payload = order.map((id, index) => ({
+				...serverPayload.find((template) => template.id === id)!,
+				is_active: index === 0,
+			}));
+			await syncTemplates(db, fakeHttpClient(payload));
+
+			const docs = await query.exec();
+			expect(docs.find((doc) => doc.is_active)?.id).toBe(order[0]);
+			expect(docs.map((doc) => doc.id)).toEqual(order);
+		}
+	});
+
+	it('upserts every template despite undeclared server fields on validating storage', async () => {
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+
+		// The exact read useActiveTemplates performs, including its publish/virtual filter.
+		const docs = await db.collections.templates
+			.find({ selector: { type: 'receipt' }, sort: [{ menu_order: 'asc' }] })
+			.exec();
+		const visible = docs.filter((doc: any) => doc.is_virtual || doc.status === 'publish');
+
+		expect(docs).toHaveLength(serverPayload.length);
+		expect(visible).toHaveLength(serverPayload.length);
+		// Undeclared server fields must not survive into the stored documents.
+		expect((docs[0] as any).toJSON()).not.toHaveProperty('gallery_key');
+	});
+
+	it('re-syncing the same payload is a stable upsert, not an insert conflict', async () => {
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+
+		const docs = await db.collections.templates.find().exec();
+		expect(docs).toHaveLength(serverPayload.length);
+	});
+
+	it('codes a rejected local save SYNC101 — the only copy failing — not the refresh info line', async () => {
+		const collection = db.collections.templates;
+		jest.spyOn(collection, 'bulkUpsert').mockRejectedValueOnce(new Error('storage worker gone'));
+
+		await syncTemplates(db, fakeHttpClient(serverPayload));
+
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			'Receipt templates could not be saved on this device',
+			{ code: 'SYNC101', context: { error: 'storage worker gone' } }
+		);
+		expect(getLogger([]).info).not.toHaveBeenCalledWith(
+			'Receipt templates not refreshed; using the saved templates',
+			expect.anything()
+		);
+	});
+
+	it('ignores a non-array response body', async () => {
+		await syncTemplates(db, fakeHttpClient({ code: 'rest_no_route' }));
+
+		const docs = await db.collections.templates.find().exec();
+		expect(docs).toHaveLength(0);
+	});
+});
+
+// Revert: deduplicate by collection alone or omit type/store request parameters.
+it('syncs closure/store requests without suppressing concurrent receipt sync', async () => {
+	const http = {
+		get: jest.fn(
+			async (
+				_url: string,
+				config: { params: { posts_per_page: number; type?: string; store_id?: number } }
+			) => ({
+				data:
+					config.params.type === 'closure'
+						? [
+								{
+									...serverPayload[0],
+									id: 'closure-core',
+									uuid: '00000000-0000-4000-8000-000000000099',
+									type: 'closure',
+								},
+							]
+						: serverPayload,
+			})
+		),
+	};
+	await Promise.all([syncTemplates(db, http), syncTemplates(db, http, 'closure', 7)]);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure', store_id: 7 },
+	});
+	expect(
+		await db.collections.templates.find({ selector: { type: 'closure' } }).exec()
+	).toHaveLength(1);
+	expect(
+		await db.collections.templates.find({ selector: { type: 'receipt' } }).exec()
+	).toHaveLength(serverPayload.length);
+});
+
+// Revert: upsert every store's closure templates under the same unscoped UUID.
+it('keeps closure template sets separate and removes omitted assignments only in that store', async () => {
+	const collection = db.collections.templates;
+	const payload = serverPayload.map((row) => ({ ...row, type: 'closure' }));
+	await syncTemplates(db, fakeHttpClient(payload.slice(0, 2)), 'closure', 1);
+	await syncTemplates(db, fakeHttpClient(payload.slice(1, 3)), 'closure', 2);
+	const rows = await collection.find().exec();
+	expect(rows).toHaveLength(4);
+	await syncTemplates(db, fakeHttpClient(payload.slice(2, 3)), 'closure', 2);
+	expect(
+		(await collection.find().exec()).map((row) => [row.get('closure_store_id'), row.id])
+	).toEqual(
+		expect.arrayContaining([
+			[1, 'plugin-core'],
+			[1, 64965],
+			[2, 64966],
+		])
+	);
+	expect(await collection.count().exec()).toBe(3);
+	await syncTemplates(db, fakeHttpClient([]), 'closure', 2);
+	expect(await collection.count().exec()).toBe(2);
+});
+
+// Revert: send store_id=0 for the global scope, or change its local closure_store_id cache key.
+it('omits the global store request parameter while caching closure templates under store zero', async () => {
+	const http = fakeHttpClient([{ ...serverPayload[0], type: 'closure' }]);
+	await syncTemplates(db, http, 'closure', 0);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure' },
+	});
+	const docs = await db.collections.templates.find().exec();
+	expect(docs).toHaveLength(1);
+	expect(docs[0].get('closure_store_id')).toBe(0);
+	expect(docs[0].uuid).toBe(`0:${serverPayload[0].uuid}`);
+});

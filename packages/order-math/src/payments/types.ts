@@ -1,0 +1,263 @@
+/**
+ * Wire types stay explicit because field names and nullability are part of Payments Contract v1.
+ */
+
+export type PaymentKind = 'cash' | 'card' | 'stored_value' | 'bank_transfer' | 'other';
+export const KNOWN_KINDS: readonly PaymentKind[] = [
+	'cash',
+	'card',
+	'stored_value',
+	'bank_transfer',
+	'other',
+];
+
+export type CaptureMode = 'manual' | 'webview' | 'server' | 'device' | 'stored_value' | 'gateway';
+export const KNOWN_CAPTURE_MODES: readonly CaptureMode[] = [
+	'manual',
+	'webview',
+	'server',
+	'device',
+	'stored_value',
+	'gateway',
+];
+
+/**
+ * Contract 1.2: the host components a gateway declares for the tender pane. Flat, one level,
+ * no layout; `id` is the gateway's own `$_POST` key and the value posted is the component's.
+ */
+export const FIELDS_SCHEMA = 1;
+export type FieldInput = 'text' | 'email' | 'tel' | 'number';
+export type FieldPrefill =
+	'order.billing.email' | 'order.billing.phone' | 'customer.email' | 'customer.phone';
+export const KNOWN_PREFILLS: readonly FieldPrefill[] = [
+	'order.billing.email',
+	'order.billing.phone',
+	'customer.email',
+	'customer.phone',
+];
+export type DeclaredComponent =
+	| {
+			component: 'field';
+			id: string;
+			input: OpenEnum<FieldInput>;
+			label: string;
+			required: boolean;
+			default: string;
+			prefill: OpenEnum<FieldPrefill> | null;
+	  }
+	| {
+			component: 'checkbox';
+			id: string;
+			label: string;
+			default: boolean;
+			prefill: OpenEnum<FieldPrefill> | null;
+	  }
+	| {
+			component: 'select';
+			id: string;
+			label: string;
+			required: boolean;
+			default: string;
+			options: { value: string; label: string }[];
+	  }
+	| { component: 'note'; text: string }
+	/** A name this build has never seen: display-only by rule, skipped and logged. */
+	| { component: string & {}; id?: string; [extra: string]: unknown };
+export type FieldsVerbKind = 'take' | 'send';
+export interface DeclaredFields {
+	schema: number;
+	verb: { kind: OpenEnum<FieldsVerbKind>; label: string };
+	components: DeclaredComponent[];
+}
+/** The values the app posts: strings for field and select, booleans for checkbox. */
+export type DeclaredValues = Record<string, string | boolean>;
+
+/** Open vocabularies survive parsing so unknown methods can be shown disabled-with-reason. */
+export type OpenEnum<Known extends string> = Known | (string & {});
+export type PaymentTransport = 'bluetooth' | 'usb' | 'network' | 'tap_to_pay';
+
+export type PaymentHardware =
+	| {
+			discovery: OpenEnum<'server'>;
+			readers: {
+				id: string;
+				label: string;
+				status: OpenEnum<'online' | 'offline'>;
+				default: boolean;
+			}[];
+			default_reader: string | null;
+			lock_to_default: boolean;
+	  }
+	| {
+			transports: {
+				transport: OpenEnum<PaymentTransport>;
+				offline: OpenEnum<'record' | 'queue' | 'none'>;
+				tips: OpenEnum<'none' | 'on_reader' | 'at_till'>;
+			}[];
+			discovery: OpenEnum<'sdk' | 'manual'>;
+	  };
+
+export interface PaymentEvent {
+	t: string;
+	level: 'info' | 'warning' | 'error';
+	message: string;
+	context?: Record<string, unknown>;
+}
+
+export interface PaymentMethodDescriptor {
+	schema: 1;
+	id: string;
+	title: string;
+	kind: OpenEnum<PaymentKind>;
+	pos_enabled: boolean;
+	order: number;
+	capture: {
+		mode: OpenEnum<CaptureMode>;
+		provider: string | null;
+		hardware: PaymentHardware | null;
+		webview_available: boolean;
+	};
+	capabilities: {
+		amount: { partial: boolean; min?: string; max?: string };
+		change: boolean;
+		refunds: { via: OpenEnum<'provider' | 'manual' | 'device' | 'none'>; partial: boolean };
+		tips: OpenEnum<'none' | 'on_reader' | 'at_till'>;
+		offline: OpenEnum<'record' | 'queue' | 'none'>;
+		void: boolean;
+	};
+	defaults: {
+		order_status: string;
+		rounding: { increment: string; mode: 'nearest' | 'up' | 'down' } | null;
+		open_drawer: boolean;
+	};
+	provider_data: Record<string, unknown>;
+	/** Contract 1.2; absent (not empty) on a method that declares nothing. */
+	fields?: DeclaredFields | null;
+}
+
+export interface PaymentMethodsEnvelope {
+	schema: 1;
+	contract: string;
+	methods: PaymentMethodDescriptor[];
+	deprecated?: string[];
+}
+
+export type PaymentStatus = 'pending' | 'authorized' | 'captured' | 'failed' | 'voided';
+export type PaymentSource = 'app' | 'webview';
+export interface PaymentRefundEntry {
+	id: number;
+	amount: string;
+	status: 'pending' | 'succeeded' | 'failed';
+	provider_ref: string | null;
+}
+
+export interface PaymentRow {
+	id: string;
+	version?: string;
+	source: PaymentSource;
+	order_id: number;
+	method_id: string;
+	provider: string | null;
+	kind: OpenEnum<PaymentKind>;
+	capture_mode: OpenEnum<CaptureMode>;
+	transport: string | null;
+	recorded_offline: boolean;
+	amount: string;
+	currency: string;
+	tendered: string | null;
+	change: string | null;
+	tip: string | null;
+	status: PaymentStatus;
+	expires_at?: string | null;
+	events?: PaymentEvent[];
+	void_requested_at?: string | null;
+	failure_reason: string | null;
+	refunded_amount: string;
+	refunds: PaymentRefundEntry[];
+	provider_refs: Record<string, string | null>;
+	receipt: Record<string, string>;
+	cashier_id: number;
+	store_id: number | null;
+	register_id?: string | null;
+	session_id?: string | null;
+	created_at_gmt: string;
+	captured_at_gmt: string | null;
+	// This is when the reader approved the hold; captured_at_gmt is when the money was taken.
+	authorized_at_gmt?: string | null;
+	updated_at_gmt: string;
+	[extra: string]: unknown;
+}
+
+export interface OrderLedger {
+	schema: 1;
+	payments: PaymentRow[];
+}
+
+/** Server derivation returned by payment routes; clients do not recompute after writes. */
+export interface OrderPaymentSummary {
+	status: string;
+	total: string;
+	paid: string;
+	balance: string;
+	payment_method: string;
+	payment_method_title: string;
+}
+export interface PaymentRouteResponse {
+	payment: PaymentRow;
+	order: OrderPaymentSummary;
+}
+/**
+ * `POST orders/{id}/payment-methods/{method}/submit` (contract 1.2): `recorded` carries the
+ * captured row the gateway's own `process_payment()` produced; `sent` carries no row and the
+ * order stays the gateway's status with the awaiting-customer stamp; `settled` carries no row
+ * and no stamp: the gateway landed the order on the status the merchant stored for it (§3.1).
+ */
+export interface GatewaySubmitResponse {
+	/** `paid` is a replay's word for a submit that completed the sale (read as `settled`). */
+	outcome: 'recorded' | 'sent' | 'settled' | 'paid';
+	payment: PaymentRow | null;
+	order: OrderPaymentSummary;
+}
+
+export type PaymentErrorCode =
+	| 'wcpos_payment_method_not_found'
+	| 'wcpos_payment_method_disabled'
+	| 'wcpos_capture_mode_unsupported'
+	| 'wcpos_payment_not_found'
+	| 'wcpos_payment_conflict'
+	| 'wcpos_payment_locked'
+	| 'wcpos_amount_mismatch'
+	| 'wcpos_invalid_transition'
+	| 'wcpos_amount_exceeds_balance'
+	| 'wcpos_order_already_paid'
+	| 'wcpos_refund_not_allocatable'
+	| 'wcpos_provider_error'
+	| 'wcpos_fields_invalid';
+
+/** A refused row is stored server-side as failed and may be returned with the WP_Error body. */
+export interface PaymentRefusalBody {
+	code: OpenEnum<PaymentErrorCode>;
+	message: string;
+	data: {
+		status: number;
+		payment?: PaymentRow;
+		order?: OrderPaymentSummary;
+		detail?: unknown;
+		retry_after?: number;
+		/** `wcpos_fields_invalid`: one message per component id, `_form` for the gateway's own line. */
+		errors?: Record<string, string>;
+	};
+}
+
+export type PosOrderStatus = 'pos-open' | 'pos-partial' | 'pending' | (string & {});
+export interface DerivedOrderView {
+	paid: string;
+	balance: string;
+	overpaid: string;
+	change: string;
+	status: PosOrderStatus;
+	payment_method: string | null;
+	payment_method_title: string;
+	transaction_id: string;
+	method_ids: string[];
+}

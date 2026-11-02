@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { KeyboardAvoidingViewProps } from 'react-native-keyboard-controller';
+import type { IKeyboardState, KeyboardAvoidingViewProps } from 'react-native-keyboard-controller';
 
 /**
  * KeyboardProvider - Web implementation
@@ -16,4 +16,12 @@ export function KeyboardProvider({ children }: { children: React.ReactNode }) {
  */
 export function KeyboardAvoidingView({ children }: KeyboardAvoidingViewProps) {
 	return <>{children}</>;
+}
+
+/**
+ * useKeyboardState - Web implementation
+ * The browser keyboard does not overlay the page, so the state is always hidden.
+ */
+export function useKeyboardState<T>(selector: (state: Pick<IKeyboardState, 'isVisible'>) => T): T {
+	return selector({ isVisible: false });
 }

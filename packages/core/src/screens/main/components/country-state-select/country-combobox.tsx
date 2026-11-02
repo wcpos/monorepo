@@ -2,26 +2,14 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxEmpty,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxItemText,
-	ComboboxList,
-	type ComboboxSingleRootProps,
-	ComboboxTrigger,
-	ComboboxValue,
-} from '@wcpos/components/combobox';
+import { OptionsCombobox } from '@wcpos/components/combobox';
+import type { OptionSelectProps } from '@wcpos/components/select';
 
 import { CountriesProvider, useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 
-/**
- *
- */
-function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
+type CountryComboboxProps = Omit<OptionSelectProps, 'options' | 'placeholder'>;
+function CountryComboboxBase(props: CountryComboboxProps) {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -40,44 +28,21 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 	/**
 	 *
 	 */
-	const label = React.useMemo(() => {
-		const selected = options.find((option) => option.value === value?.value);
-		return selected?.label;
-	}, [options, value]);
-
-	/**
-	 *
-	 */
 	return (
-		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger testID="country-select-trigger" disabled={disabled}>
-				<ComboboxValue placeholder={t('common.select_country')} />
-			</ComboboxTrigger>
-			<ComboboxContent>
-				<ComboboxInput placeholder={t('common.search_countries')} />
-				<ComboboxList
-					data={options}
-					renderItem={({ item }) => (
-						<ComboboxItem
-							testID={`country-option-${item.value}`}
-							value={String(item.value)}
-							label={item.label}
-							item={item}
-						>
-							<ComboboxItemText />
-						</ComboboxItem>
-					)}
-					estimatedItemSize={44}
-					ListEmptyComponent={<ComboboxEmpty>{t('common.no_country_found')}</ComboboxEmpty>}
-				/>
-			</ComboboxContent>
-		</Combobox>
+		<OptionsCombobox
+			options={options}
+			placeholder={t('common.select_country')}
+			searchPlaceholder={t('common.search_countries')}
+			emptyLabel={t('common.no_country_found')}
+			triggerTestID="country-select"
+			{...props}
+		/>
 	);
 }
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CountryCombobox(props: ComboboxSingleRootProps) {
+export function CountryCombobox(props: CountryComboboxProps) {
 	return (
 		<CountriesProvider>
 			<CountryComboboxBase {...props} />

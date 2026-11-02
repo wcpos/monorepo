@@ -1,0 +1,87 @@
+{
+  "timezone": "America/Los_Angeles",
+  "now": "2026-11-01T20:00:00Z",
+  "closures": [
+    {
+      "id": "before-fallback",
+      "number": 42,
+      "business_day": "2026-10-31",
+      "opened_at": "2026-10-31T23:00:00Z",
+      "closed_at": "2026-11-01T08:30:00Z"
+    },
+    {
+      "id": "after-fallback",
+      "number": 43,
+      "business_day": "2026-11-01",
+      "opened_at": "2026-11-01T07:00:00Z",
+      "closed_at": "2026-11-01T09:30:00Z"
+    }
+  ],
+  "corrections": [
+    {
+      "id": 1,
+      "type": "late_sale",
+      "created_at": "2026-11-01 08:45:00",
+      "actor": {
+        "id": 1,
+        "name": "Alex"
+      },
+      "approver": null,
+      "reason": "Overnight sale synced",
+      "figures": {
+        "expected_delta": {
+          "cash": "0.0001"
+        },
+        "sales_delta": "0.0001",
+        "refunds_delta": "0.0000"
+      }
+    },
+    {
+      "id": 2,
+      "type": "recount",
+      "created_at": "2026-11-01 09:45:00",
+      "actor": {
+        "id": 1,
+        "name": "Alex"
+      },
+      "approver": {
+        "id": 2,
+        "name": "Manager"
+      },
+      "reason": "Drawer recounted after the clock change",
+      "figures": {
+        "counted": {
+          "cash": "180.0000"
+        },
+        "variance": {
+          "cash": "0.0000"
+        }
+      }
+    }
+  ],
+  "settled": {
+    "expected": {
+      "cash": "180.0001",
+      "card": "120.0000"
+    },
+    "counted": {
+      "cash": "180.0000",
+      "card": "120.0000"
+    },
+    "variance": {
+      "cash": "-0.0001",
+      "card": "0.0000"
+    },
+    "period_sales_total": "250.0001",
+    "period_refunds_total": "50.0000",
+    "perpetual_sales_total": "5250.0001",
+    "perpetual_refunds_total": "250.0000"
+  },
+  "touched": [
+    "counted.cash",
+    "expected.cash",
+    "period_sales_total",
+    "perpetual_sales_total",
+    "variance.cash"
+  ]
+}

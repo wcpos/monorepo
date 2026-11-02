@@ -7,7 +7,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { useT } from '../../../contexts/translations';
 
 type CapabilityHint =
-	'editProducts' | 'createCoupons' | 'editCoupons' | 'createCustomers' | 'editCustomers';
+	| 'editProducts'
+	| 'editVariations'
+	| 'createCoupons'
+	| 'editCoupons'
+	| 'createCustomers'
+	| 'editCustomers';
 
 export function CapabilityTooltipTrigger({ children }: { children: React.ReactElement }) {
 	return (
@@ -29,6 +34,7 @@ export function CapabilityTooltip({
 	const t = useT();
 	const messages: Record<CapabilityHint, string> = {
 		editProducts: t('capability_hints.edit_products_admin_path'),
+		editVariations: t('capability_hints.edit_variations_admin_path'),
 		createCoupons: t('capability_hints.create_coupons_admin_path'),
 		editCoupons: t('capability_hints.edit_coupons_admin_path'),
 		createCustomers: t('capability_hints.create_customers_admin_path'),

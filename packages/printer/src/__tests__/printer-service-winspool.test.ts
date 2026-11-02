@@ -2,8 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 import { PrinterService } from '../printer-service';
+import { stubImageDecodingAsUnavailable } from './stub-image-decoding';
 
 import type { PrinterProfile } from '../types';
+
+stubImageDecodingAsUnavailable();
 
 const { printHtml } = vi.hoisted(() => ({ printHtml: vi.fn(async () => {}) }));
 vi.mock('../transport/system-print-adapter', () => ({

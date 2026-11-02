@@ -1,13 +1,11 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCashierLabel } from '../../hooks/use-cashier-label';
-
-import type { QueryStateActions } from '../../../../query';
 
 /**
  *
@@ -21,11 +19,7 @@ export function Cashier({
 		({ payload }) => wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? undefined
 	);
 	const cashier = useCashierLabel(cashierID);
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 
 	/**
 	 * It's possible the order doesn't have a cashier, eg: web or admin orders.
@@ -35,12 +29,10 @@ export function Cashier({
 	}
 
 	return (
-		<ButtonPill
-			variant="ghost-secondary"
-			size="xs"
+		<Chip
+			size="sm"
+			label={cashier.label}
 			onPress={() => actions?.setFilter('cashier', cashier.id)}
-		>
-			{cashier.label}
-		</ButtonPill>
+		/>
 	);
 }

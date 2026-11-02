@@ -3,12 +3,12 @@
  */
 import * as React from 'react';
 
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
+
 import { TaxRatesModal } from './index';
-import { TaxRatesTabs } from './tabs';
-import { QueryStateProvider } from '../../../query';
 
 import type { QueryStateOf } from '../../../query';
 
@@ -17,22 +17,29 @@ const rates = [
 	{ id: 2, name: 'Reduced', class: 'reduced-rate' },
 	{ id: 3, name: 'Second standard', class: 'standard' },
 ];
-const mockBinding = {
-	resource: { hits: rates.map((payload) => ({ record: { payload } })) },
-	active$: of(false),
-	total$: of(3),
-	sync: jest.fn(async () => undefined),
+// The tax-rates query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
-const mockRateTable = jest.fn((_props: { rates: typeof rates }) => null);
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+let mockHandle: FakeHandle;
+const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
+const mockRateTable = jest.fn(
+	(_props: { rates: typeof rates; appliesTo?: ReadonlySet<number> | null }) => null
+);
 const mockFooter = jest.fn((_props: Record<string, unknown>) => null);
 
+// The route params the "Tax based on" panel sends on View all; none here (opened from elsewhere).
+let mockParams: Record<string, string | undefined> = {};
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockParams }));
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -42,26 +49,50 @@ jest.mock('@wcpos/query', () => ({
 	},
 }));
 jest.mock('observable-hooks', () => ({
-	useObservableSuspense: (resource: unknown) => resource,
 	useObservableEagerState: () => [
 		{ name: 'Standard', slug: 'standard' },
 		{ name: 'Reduced', slug: 'reduced-rate' },
 	],
 }));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
+// The real boundary with a reset control: `TaxRates` wires `onReset` to the handle's retry and
+// `resetKeys` to the handle. Every boundary draws the same control, so only the retry tells the
+// owner's reset from the modal's (which sits above the owner and cannot reach the handle).
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
+	};
+});
 jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
+	Suspense: ({ children }: { children: React.ReactNode }) => (
+		<React.Suspense fallback={<div data-testid="tax-rates-fallback" />}>{children}</React.Suspense>
+	),
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-	ModalContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -78,16 +109,30 @@ jest.mock('../contexts/extra-data', () => ({
 	useExtraData: () => ({ extraData: { taxClasses$: of([]) } }),
 }));
 jest.mock('./rate-table', () => ({
-	TaxRateTable: (props: { rates: typeof rates }) => mockRateTable(props),
+	TaxRateTable: (props: Parameters<typeof mockRateTable>[0]) => mockRateTable(props),
 }));
 jest.mock('./footer', () => ({
 	TaxRatesFooter: (props: Record<string, unknown>) => mockFooter(props),
 }));
 
+// Pin the layout so it does not depend on jsdom's window: the anchored panel, not the phone page.
+function Modal() {
+	return (
+		<DeviceScope phone={false}>
+			<TaxRatesModal />
+		</DeviceScope>
+	);
+}
+
 function latestState(): QueryStateOf<'tax-rates'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('tax-rates binding was not called');
+	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
+	if (!call) throw new Error('tax-rates handle was not acquired');
 	return call[1] as QueryStateOf<'tax-rates'>;
+}
+
+/** The rate ids per tax class (standard, reduced) in the latest render. */
+function lastDrawnIds() {
+	return mockRateTable.mock.calls.slice(-2).map(([props]) => props.rates.map((rate) => rate.id));
 }
 
 function expectGroupingPreserved() {
@@ -97,12 +142,18 @@ function expectGroupingPreserved() {
 	]);
 }
 
+const answeredRates = () => ({ hits: rates.map((payload) => ({ record: { payload } })) });
+
 describe('tax-rates query-state wiring', () => {
-	beforeEach(() => jest.clearAllMocks());
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockHandle = fakeQueryHandle({ result: answeredRates(), total: 3 });
+		mockParams = {};
+	});
 	afterEach(cleanup);
 
-	it('binds the unsearched, unfiltered Tier-0 tax-rates view and passes binding projections', () => {
-		render(<TaxRatesModal />);
+	it('acquires the unsearched, unfiltered Tier-0 tax-rates view and hands the footer the handle', () => {
+		render(<Modal />);
 
 		expect(latestState()).toEqual({
 			search: '',
@@ -110,29 +161,159 @@ describe('tax-rates query-state wiring', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		});
-		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('tax-rates', latestState());
+		expect(mockUseCollectionQueryHandle.mock.calls.at(-1)?.[0]).toBe('tax-rates');
 		expect(mockFooter).toHaveBeenCalledWith({
-			count: 3,
-			active$: mockBinding.active$,
-			total$: mockBinding.total$,
-			sync: mockBinding.sync,
+			shownCount: 3,
+			handle: mockHandle,
+			shown: mockHandle,
+			applies: null,
 		});
 		expect(mockFooter.mock.calls[0]?.[0]).not.toHaveProperty('query');
 		expectGroupingPreserved();
 	});
 
-	it('keeps the unused tabs component on the same binding and client-side grouping path', () => {
-		render(
-			<QueryStateProvider
-				collection="tax-rates"
-				initialPageSize={Number.MAX_SAFE_INTEGER}
-				initialSort={{ field: 'id', direction: 'asc' }}
-			>
-				<TaxRatesTabs />
-			</QueryStateProvider>
-		);
+	it('matches the sent address against the current rates, and marks nothing without one', async () => {
+		const { rerender } = render(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(expect.objectContaining({ applies: null }));
+		expect(mockRateTable).toHaveBeenLastCalledWith(expect.objectContaining({ appliesTo: null }));
 
-		expect(latestState().search).toBe('');
-		expectGroupingPreserved();
+		const local = [
+			{ id: 1, name: 'Oregon', class: 'standard', country: 'US', state: 'OR' },
+			{
+				id: 2,
+				name: 'Metro',
+				class: 'standard',
+				country: 'US',
+				state: 'OR',
+				postcodes: ['972*'],
+				priority: 2,
+			},
+			{ id: 3, name: 'California', class: 'reduced-rate', country: 'US', state: 'CA' },
+		];
+		mockParams = { applies: '1', country: 'US', state: 'OR', city: 'Portland', postcode: '97201' };
+		await act(async () =>
+			mockHandle.set({ result: { hits: local.map((payload) => ({ record: { payload } })) } })
+		);
+		rerender(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 2, country: 'US' } })
+		);
+		expect(mockRateTable.mock.calls.at(-2)?.[0]).toMatchObject({ appliesTo: new Set([1, 2]) });
+
+		// A sync that drops the postcode rate re-evaluates the marks and the count.
+		await act(async () =>
+			mockHandle.set({
+				result: { hits: [local[0], local[2]].map((payload) => ({ record: { payload } })) },
+			})
+		);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 1, country: 'US' } })
+		);
+	});
+
+	it('says none apply when the sent address matches nothing', () => {
+		mockHandle = fakeQueryHandle({
+			result: {
+				hits: [{ record: { payload: { id: 1, name: 'VAT', class: 'standard', country: 'GB' } } }],
+			},
+			total: 1,
+		});
+		mockParams = { applies: '1', country: 'IS', state: '', city: '', postcode: '101' };
+		render(<Modal />);
+		expect(mockFooter).toHaveBeenLastCalledWith(
+			expect.objectContaining({ applies: { n: 0, country: 'IS' } })
+		);
+	});
+
+	it('draws the rates the acquired handle answers with', () => {
+		render(<Modal />);
+		act(() => mockHandle.set({ result: { hits: [{ record: { payload: rates[1] } }] } }));
+
+		expect(lastDrawnIds()).toEqual([[], [2]]);
+	});
+
+	/**
+	 * The footer's clear-and-sync bumps the coverage generation, which moves the scope key: the
+	 * modal is handed a fresh, unanswered handle. It keeps the current rates (and the footer
+	 * its total, read off the drawn handle) until that answers, rather than its fallback.
+	 */
+	it('keeps the current rates and total on screen while a changed handle answers', async () => {
+		const previous = mockHandle;
+		const { rerender } = render(<Modal />);
+		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
+
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		await act(async () => rerender(<Modal />));
+		expect(mockUseCollectionQueryHandle).toHaveReturnedWith(next);
+		expect(screen.queryByTestId('tax-rates-fallback')).toBeNull();
+		expect(lastDrawnIds()).toEqual([[1, 3], [2]]);
+		// The spinner and sync follow the live handle; the total, the rates beside it.
+		expect(mockFooter).toHaveBeenLastCalledWith({
+			shownCount: 3,
+			handle: next,
+			shown: previous,
+			applies: null,
+		});
+
+		await act(async () =>
+			next.set({ ready: true, result: { hits: [{ record: { payload: rates[0] } }] } })
+		);
+		expect(lastDrawnIds()).toEqual([[1], []]);
+		expect(mockFooter).toHaveBeenLastCalledWith({
+			shownCount: 1,
+			handle: next,
+			shown: next,
+			applies: null,
+		});
+	});
+
+	it('throws a failed read to its own boundary, whose reset asks the handle again', async () => {
+		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+		const retry = jest.fn(() => failed.set({ error: null, ready: false }));
+		failed.retry = retry;
+		mockHandle = failed;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(<Modal />);
+			expect(screen.getByTestId('error-reset')).toBeTruthy();
+			expect(mockRateTable).not.toHaveBeenCalled();
+
+			act(() => {
+				fireEvent.click(screen.getByTestId('error-reset'));
+			});
+			expect(retry).toHaveBeenCalledTimes(1);
+			// The reader suspends on the retry instead of throwing the old failure back.
+			expect(screen.getByTestId('tax-rates-fallback')).toBeTruthy();
+
+			await act(async () => failed.set({ ready: true, result: answeredRates() }));
+			expectGroupingPreserved();
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	it('clears a failed read’s fallback on its own when a fresh handle replaces it', async () => {
+		// A scope bump (clear-and-sync) or a changed query hands the owner a new handle; the
+		// boundary's keys move with it, so the stale failure leaves without a click.
+		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+		const retry = jest.fn();
+		failed.retry = retry;
+		mockHandle = failed;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			const { rerender } = render(<Modal />);
+			expect(screen.getByTestId('error-reset')).toBeTruthy();
+			expect(mockRateTable).not.toHaveBeenCalled();
+
+			mockHandle = fakeQueryHandle({ result: answeredRates(), total: 3 });
+			await act(async () => rerender(<Modal />));
+
+			expect(screen.queryByTestId('error-reset')).toBeNull();
+			expect(retry).not.toHaveBeenCalled();
+			expectGroupingPreserved();
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });

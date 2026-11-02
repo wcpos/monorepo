@@ -1,27 +1,49 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
-import { useCSSVariable } from 'uniwind';
+import { useIsFocused } from 'expo-router/react-navigation';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useCSSVariable, useUniwind } from 'uniwind';
 
-import { Icon } from '@wcpos/components/icon';
-import { useTheme } from '@wcpos/core/contexts/theme';
+import { isLightTheme } from '@wcpos/components/lib/themes';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
+import { PortalHost } from '@wcpos/components/portal';
+import type { IconName } from '@wcpos/components/icon';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
+import { TitleBarStripContent } from '@wcpos/core/screens/main/components/bar-controls/title-bar';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
+import { useRailWidth } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
-import { Header } from '@wcpos/core/screens/main/components/header';
+import { SessionHoldProvider } from '@wcpos/core/screens/main/components/session-hold-banner';
+import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
 
+/** Each drawer route's icon; the drawer item paints its tint. */
+const DRAWER_ICONS: Record<string, IconName> = {
+	'(pos)': 'register',
+	products: 'gift',
+	orders: 'receipt',
+	coupons: 'discount',
+	customers: 'customers',
+	reports: 'reports',
+	health: 'health',
+	settings: 'settings',
+	support: 'support',
+};
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: '(pos)',
+	anchor: '(pos)',
 };
 
 /**
@@ -31,16 +53,12 @@ export const unstable_settings = {
  * Uniwind's theme transition).
  */
 function ThemedDrawer({
-	screenSize,
+	phone,
 	t,
-	showUpgrade,
-	setShowUpgrade,
 	unreadErrorCount,
 }: {
-	screenSize: string;
+	phone: boolean;
 	t: ReturnType<typeof useT>;
-	showUpgrade: boolean;
-	setShowUpgrade: () => void;
 	unreadErrorCount: number;
 }) {
 	const screenBackgroundColor = useNavigationBackground();
@@ -56,27 +74,32 @@ function ThemedDrawer({
 	// screens there are already display:none). Never for the permanent rail, which is always on
 	// screen.
 	const panelSettledClosed = useDrawerPanelHidden();
-	const hideDrawerPanel = Platform.OS !== 'web' && screenSize !== 'lg' && panelSettledClosed;
+	const hideDrawerPanel = Platform.OS !== 'web' && phone && panelSettledClosed;
 
 	// Get theme-aware colors for navigation
 	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
 		'--color-sidebar',
 		'--color-sidebar-border',
 	]) as string[];
+	// Read on every width (a hook is never conditional); only the permanent rail uses it.
+	const railWidth = useRailWidth();
 
 	return (
 		<Drawer
 			screenOptions={{
-				header: (props) => {
-					return <Header {...props} showUpgrade={showUpgrade} setShowUpgrade={setShowUpgrade} />;
-				},
-				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
+				// Every screen carries its own bar (the register bar, or the page bar), so the
+				// navigator draws none.
+				headerShown: false,
+				drawerType: phone ? 'front' : 'permanent',
 				drawerStyle: {
 					// Only ever ADDED, never set to 'flex': the library drives `display` itself
 					// while it measures the panel, and we must not override that.
 					...(hideDrawerPanel ? ({ display: 'none' } as const) : null),
 					backgroundColor: sidebarColor,
-					width: screenSize === 'lg' ? 'auto' : 200,
+					// The rail's width is set here, not by a class on its scroll view (which the
+					// vendored view drops): 16 spacing units, the `size-12` item + 2 each side from
+					// the gutter table, so 64 at Regular and the live step's value at the others.
+					width: phone ? 200 : railWidth,
 					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
@@ -89,148 +112,73 @@ function ThemedDrawer({
 				},
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
-			drawerContent={DrawerContent}
+			// An element, not a call: called as a function its hooks would run in the drawer's own
+			// fiber, and a hook list that changed with the presentation would break React Compiler
+			// ("Expected a constant size argument for each invocation of useMemoCache").
+			screenLayout={({ children }) => <Scene>{children}</Scene>}
+			drawerContent={(props) => (
+				<DrawerContent
+					{...props}
+					presentation={phone ? 'front' : 'rail'}
+					icons={DRAWER_ICONS}
+					badges={{ health: <LogsBadge unread={unreadErrorCount} /> }}
+				/>
+			)}
 		>
-			<Drawer.Screen
-				name="(pos)"
-				options={{
-					title: t('common.pos'),
-					drawerLabel: t('common.pos'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="cashRegister"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="products"
-				options={{
-					title: t('common.products'),
-					drawerLabel: t('common.products'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="gifts"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="orders"
-				options={{
-					title: t('common.orders'),
-					drawerLabel: t('common.orders'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="receipt"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="coupons"
-				options={{
-					title: t('common.coupons'),
-					drawerLabel: t('common.coupons'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="badgePercent"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="customers"
-				options={{
-					title: t('common.customers'),
-					drawerLabel: t('common.customers'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="users"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="reports"
-				options={{
-					title: t('common.reports'),
-					drawerLabel: t('common.reports'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="chartMixedUpCircleDollar"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
+			<Drawer.Screen name="(pos)" options={{ title: t('common.pos') }} />
+			<Drawer.Screen name="products" options={{ title: t('common.products') }} />
+			<Drawer.Screen name="orders" options={{ title: t('common.orders') }} />
+			<Drawer.Screen name="coupons" options={{ title: t('common.coupons') }} />
+			<Drawer.Screen name="customers" options={{ title: t('common.customers') }} />
+			<Drawer.Screen name="reports" options={{ title: t('common.reports') }} />
 			<Drawer.Screen
 				name="health"
 				options={{
 					title: t('common.store_health'),
-					drawerLabel: t('common.store_health'),
-					drawerIcon: ({ focused }) => (
-						<View>
-							<Icon
-								size="xl"
-								name="heartPulse"
-								className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-							/>
-							<LogsBadge count={unreadErrorCount} />
-						</View>
-					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
 			/>
-			<Drawer.Screen
-				name="settings"
-				options={{
-					title: t('common.settings'),
-					drawerLabel: t('common.settings'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="gear"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
-			<Drawer.Screen
-				name="support"
-				options={{
-					title: t('common.support'),
-					drawerLabel: t('common.support'),
-					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="commentQuestion"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
-					),
-				}}
-			/>
+			<Drawer.Screen name="settings" options={{ title: t('common.settings') }} />
+			<Drawer.Screen name="support" options={{ title: t('common.support') }} />
 		</Drawer>
 	);
 }
 
+/**
+ * The scene host: the focused screen's overlay surface beside the rail, where a page bar's cashier
+ * sheet renders on wide (the root host wraps the rail too, and a sheet there covered it; Paul, 2026-10-29).
+ * Only the focused scene carries the host and the web container: the drawer keeps its other
+ * screens mounted, and two hosts of one name would draw the sheet twice. The POS keeps its own
+ * `pos` host inside its providers for the till's dialogs.
+ */
+function Scene({ children }: { children: React.ReactNode }) {
+	const focused = useIsFocused();
+	// On web the dialog portals into the registered DOM container, not the RN host (dialog ledger 7).
+	const register = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer(
+			'scene',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
+	return (
+		<View ref={focused ? register : undefined} className="flex-1">
+			{children}
+			{focused && <PortalHost name="scene" />}
+		</View>
+	);
+}
+
+function ThemedSystemBars() {
+	const { theme } = useUniwind();
+	return <SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />;
+}
+
 function DrawerLayoutContent() {
-	const { screenSize } = useTheme();
+	const phone = useIsPhone();
 	const t = useT();
 
 	const { license } = useAppInfo();
-	// `showUpgrade` is dismissable local state (the header can hide the banner), but it
+	// `showUpgrade` is dismissable local state (the notice closes itself), but it
 	// must re-sync whenever the license's Pro status changes. We track the previous
 	// `isPro` value and reset during render (React's "adjusting state during render"
 	// pattern) instead of in an effect, avoiding a cascading re-render.
@@ -244,15 +192,18 @@ function DrawerLayoutContent() {
 	const unreadErrorCount = useUnreadLogsCount();
 
 	return (
-		<View className="bg-background flex-1">
-			<ThemedDrawer
-				screenSize={screenSize}
-				t={t}
-				showUpgrade={showUpgrade}
-				setShowUpgrade={() => setShowUpgrade(false)}
-				unreadErrorCount={unreadErrorCount}
-			/>
-		</View>
+		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
+			{/* One owner for the held-session state; each bar renders its own banner. */}
+			<SessionHoldProvider>
+				<View className="bg-background flex-1">
+					<ThemedSystemBars />
+					<RestartLockOverlay />
+					{/* The desktop title bar's one owner, beside the rail: the same on every page. */}
+					<TitleBarStripContent />
+					<ThemedDrawer phone={phone} t={t} unreadErrorCount={unreadErrorCount} />
+				</View>
+			</SessionHoldProvider>
+		</UpgradeNoticeContext.Provider>
 	);
 }
 

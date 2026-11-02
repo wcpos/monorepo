@@ -15,16 +15,26 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { useQueryRuntime } from '@wcpos/query';
+import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { recordCustomerLink } from '@wcpos/query/store-local';
 
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useMutation } from '../../hooks/mutations/use-mutation';
+import {
+	CustomerForm,
+	customerFormSchema,
+	fillBillingFromIdentity,
+} from '../../components/customer/customer-form';
+import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
+import { useCartCustomerRecord } from '../commands/use-cart-customer-record';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+import { usePanelSide } from '../contexts/overlay-side';
 import { snapshotCustomerTaxIds } from '../hooks/utils';
+import { customerLinkIdentity } from './new-customer-link';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
@@ -35,11 +45,13 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
  */
 function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
+	const { createCustomer } = useCartCustomerRecord();
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useLocalMutation();
+	const setCartCustomer = useSetCartCustomer();
+	const { storeDB } = useStoreSession();
+	const runtime = useQueryRuntime();
 
 	const form = useForm<z.infer<typeof customerFormSchema>>({
 		resolver: zodResolver(customerFormSchema as never) as never,
@@ -47,41 +59,73 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	});
 
 	/**
-	 * Save to server
+	 * Save locally and attach at once (#1523). The create is queued, never
+	 * awaited: offline there is no Woo id to wait for, and the cashier is at the
+	 * till. The order takes the new customer's addresses now and stays a guest
+	 * (`customer_id` 0) — a local uuid must never reach the server — and
+	 * `NewCustomerLinkBridge` stamps the real id on when the create is acknowledged.
 	 */
 	const handleSave = React.useCallback(
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				// create() logs and toasts its own failure, with the store's sentence; reporting
-				// it here too showed the cashier two toasts for one refusal.
-				const savedDoc = await create({ data, awaitRemoteId: true }).catch(() => undefined);
+				// Our own "{name} saved" below replaces the generic toast (showSuccessToast: false).
+				// The create is queued, not awaited, so a store refusal arrives later through the
+				// engine; what can reject here (an enqueue failure, a scope change) create() has
+				// already reported, so it is not reported twice. The form stays open.
+				const savedDoc = await createCustomer(data);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its
 					// payload. Snapshot it rather than reading fields off the record:
 					// `billing`/`shipping` come back as RxDB Proxies, and writing one onto
 					// the order below would fail the storage clone.
 					const latest = (savedDoc as any).getLatest?.() ?? savedDoc;
-					const saved = ((latest as any).toMutableJSON?.() ?? latest).payload;
+					const record = (latest as any).toMutableJSON?.() ?? latest;
+					const saved = record.payload;
 					cartLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {
-							customerId: saved?.id,
+							customerUUID: record.uuid,
 							customerName: format(saved),
 						},
 					});
 					if (currentOrderRecord) {
-						await localPatch({
-							document: currentOrderRecord,
-							data: {
-								customer_id: saved?.id,
-								billing: saved?.billing,
-								shipping: saved?.shipping,
-								// The same snapshot the picker takes: without it a customer created at the
-								// till reached the receipt with no tax ID until removed and picked again.
-								tax_ids: snapshotCustomerTaxIds(saved),
-							},
+						const orderUuid = currentOrderRecord.uuid;
+						const scopeId = runtime.engine.status().activeScopeId;
+						const attached = await setCartCustomer(currentOrderRecord, {
+							customerId: GUEST_CUSTOMER_ID,
+							billing: saved?.billing,
+							shipping: saved?.shipping,
+							// The same snapshot the picker takes: without it a customer created at the
+							// till reached the receipt with no tax ID until removed and picked again.
+							taxIds: snapshotCustomerTaxIds(saved),
 						});
+						// After the attach, never before: a link whose order does not yet
+						// carry the copied identity would be dropped as "cashier moved on".
+						if (attached && orderUuid && scopeId) {
+							try {
+								await recordCustomerLink(storeDB, orderUuid, {
+									customerUuid: record.uuid,
+									scopeId,
+									// From the order the write landed on (a first add queued ahead may have
+									// replaced the temporary record), as it now stands: a hook may have
+									// completed or kept an address, and the bridge compares against that.
+									identity: customerLinkIdentity(
+										(
+											(attached as { document?: typeof currentOrderRecord }).document ??
+											currentOrderRecord
+										).getLatest().payload.billing as typeof saved.billing
+									),
+									at: new Date().toISOString(),
+								});
+							} catch (error) {
+								// The order keeps the addresses as a guest; only the later id stamp is lost.
+								cartLogger.error('Could not record the new customer for its order', {
+									code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+									context: { orderUUID: orderUuid, error: getErrorMessage(error) },
+								});
+							}
+						}
 						onClose();
 					}
 				}
@@ -109,16 +153,38 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				setLoading(false);
 			}
 		},
-		[create, currentOrderRecord, format, localPatch, onClose, t]
+		[createCustomer, currentOrderRecord, format, setCartCustomer, onClose, runtime, storeDB, t]
 	);
 
-	return <CustomerForm form={form} onClose={onClose} onSubmit={handleSave} loading={loading} />;
+	const onSubmit = form.handleSubmit((data) => handleSave(fillBillingFromIdentity(data)));
+
+	return (
+		<CustomerForm
+			form={form}
+			footer={{
+				intent: {
+					label: t('customers.add_customer'),
+					testID: 'customer-form-add',
+					loading,
+					onPress: () => void onSubmit(),
+				},
+				close: { testID: 'customer-form-close' },
+			}}
+			renderLayout={(body, footer) => (
+				<>
+					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
+					{footer}
+				</>
+			)}
+		/>
+	);
 }
 
 /**
  *
  */
 export function AddNewCustomer() {
+	const side = usePanelSide('cart');
 	const t = useT();
 	const [open, setOpen] = React.useState(false);
 	const close = React.useCallback(() => setOpen(false), []);
@@ -128,19 +194,21 @@ export function AddNewCustomer() {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpen(true)}>
-						<IconButton testID="add-customer-button" name="userPlus" />
+						<IconButton
+							testID="add-customer-button"
+							name="addCustomer"
+							accessibilityLabel={t('common.add_new_customer')}
+						/>
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent testID="add-new-customer-dialog" size="xl" portalHost="pos">
+				<DialogContent side={side} testID="add-new-customer-dialog" size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
-					<DialogBody>
-						<AddCustomerFormBody onClose={close} />
-					</DialogBody>
+					<AddCustomerFormBody onClose={close} />
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>
@@ -157,18 +225,17 @@ interface AddCustomerDialogProps {
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
+	const side = usePanelSide('cart');
 	const t = useT();
 	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent side={side} testID="add-customer-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>
-				<DialogBody>
-					<AddCustomerFormBody onClose={close} />
-				</DialogBody>
+				<AddCustomerFormBody onClose={close} />
 			</DialogContent>
 		</Dialog>
 	);

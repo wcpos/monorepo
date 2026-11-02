@@ -17,7 +17,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { promotedVariationColumns } from './variation-schema';
+import { promotedVariationColumns, variationSchema } from './variation-schema';
 
 /** Drive the module-private normalizer through its exported seam. */
 const normalize = (attributes: unknown) =>
@@ -111,4 +111,11 @@ describe('variation attribute normalization', () => {
 			attributes: [{ id: 1, name: 'Color', option: 'Red' }],
 		});
 	});
+});
+
+it('indexes cent-rounded variation prices without changing payload prices', () => {
+	expect(variationSchema.indexes).toContain('price');
+	const payload = { price: '12.345' };
+	expect(promotedVariationColumns(payload).price).toBe(12.35);
+	expect(payload.price).toBe('12.345');
 });

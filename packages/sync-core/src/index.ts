@@ -10,6 +10,7 @@ export {
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';
 export { mapCouponExpiryToPayload } from './couponWirePayload';
+export { GATEWAY_ID_PATTERN, isGatewayId } from './gatewayId';
 // prettier-ignore
 export { syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository, type WirePullDocument } from './customPullAdapter';
 export { drainMutationQueue, isNeverPushedChain } from './drainMutationQueue';
@@ -23,14 +24,14 @@ export {
 export { buildCreateMutation, buildDeleteMutation, buildUpdateMutation } from './recordMutation';
 // prettier-ignore
 export {
-	pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
+	NON_INTERNAL_MUTATION_STATUSES, isInternalRow, pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
 	RecordMutationQueue, RxRecordMutationStorage, type QueuedMutation,
 	type RxRecordMutationCollection,
 } from './recordMutationQueue';
 // prettier-ignore
 export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_CANNOT_DELETE } from './recordPushAdapter';
 // prettier-ignore
-export { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, FLEXSEARCH_TOKEN_BOUNDARY, foldSearchText } from './searchIndexConfig';
+export { foldSearchText, SCAN_MIN_TERM_LENGTH, SEARCH_TOKEN_BOUNDARY, searchTerms } from './searchText';
 export {
 	buildScanSearchSelector,
 	escapeRegex,
@@ -40,7 +41,12 @@ export {
 } from './scanSearchSelector';
 export {
 	canonicalSiteKey,
+	containsDrainableScopeDatabaseName,
+	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isScopeDatabaseName,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	siteHashFor,
@@ -51,6 +57,7 @@ export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeB
 // prettier-ignore
 export {
 	checkpointInstantMs, finiteOrNull, normalizeCheckpoint,
+	remoteKeyFor,
 	promotedOrderColumns, promotedProductColumns,
 	withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
@@ -59,13 +66,29 @@ export {
 // prettier-ignore
 export {
 	catalogDocumentId, customerDocumentId, orderDocumentId, productDocumentId,
-	referenceDocumentId, taxRateDocumentId, variationDocumentId,
+	referenceDocumentId, taxRateDocumentId, refundDocumentId, variationDocumentId,
 } from './woo/documentKeys';
 export {
+	isPushableOrderStatus,
 	orderChangesAssertIntent,
+	PUSHABLE_ORDER_STATUSES,
+	type PushableOrderStatus,
 	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
-	stripServerAuthoredOrderMoney,
+	SERVER_OWNED_ORDER_FIELDS,
+	SERVER_OWNED_ORDER_META_KEYS,
+	toOrderWirePayload,
 } from './woo/orderWriteContract';
+export {
+	isCloseAnswer,
+	isDefinitiveMoneyRefusal,
+	isMoneyAnswer,
+	isPaidStatus,
+	MONEY_ANSWER_CODES,
+	moneyInMotionOf,
+	moneyRefusalOf,
+	PAYMENT_ROW_REFUSALS,
+	type PaymentRowRefusal,
+} from './woo/moneyCommandAnswer';
 export {
 	identifyRecord,
 	isRecordUuid,
@@ -77,7 +100,10 @@ export {
 	type PosCarrier,
 	type PosIdentity,
 	NO_STORE,
+	identityColumns,
+	identityColumnFilter,
 	POS_META_KEYS,
+	PROTECTED_ORDER_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';
 export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';
@@ -100,3 +126,12 @@ export {
 	type SyncEventFields, type SyncEventFieldsBase, type SyncEventFieldsByType,
 	type SyncEventType, type SyncObserver,
 } from './telemetry';
+
+export { HISTORY_DAYS } from './history-policy';
+
+export { reconcileRefundIds } from './refund-reconciliation';
+export { hasPosRefundStamp } from './refund-provenance';
+
+export { readServerSentence, readWpFatalDetail, SERVER_SENTENCE_MAX_CHARS } from './serverSentence';
+
+export { parsePaymentsContract } from './payments-contract';

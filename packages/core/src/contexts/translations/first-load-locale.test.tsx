@@ -22,10 +22,13 @@ jest.mock('expo-localization', () => ({
 
 let appState: {
 	store?: { locale$: BehaviorSubject<string | null> };
-	translationsState: { set: jest.Mock };
+	translationsState: { get: jest.Mock; set: jest.Mock };
 };
 jest.mock('../app-state', () => ({
-	useAppState: () => appState,
+	useAppState: () => ({
+		...appState,
+		userDB: { states: { translations_v2: appState.translationsState } },
+	}),
 }));
 
 const mockFetch = jest.fn(
@@ -47,7 +50,7 @@ describe('first-load translation locale', () => {
 	it('fetches only the hydrated store locale, never the system locale', async () => {
 		appState = {
 			store: { locale$: new BehaviorSubject<string | null>('es_ES') },
-			translationsState: { set: jest.fn() },
+			translationsState: { get: jest.fn(), set: jest.fn() },
 		};
 
 		render(
@@ -64,7 +67,7 @@ describe('first-load translation locale', () => {
 
 	it('falls back to the system locale when no store is selected (first-ever login)', async () => {
 		appState = {
-			translationsState: { set: jest.fn() },
+			translationsState: { get: jest.fn(), set: jest.fn() },
 		};
 
 		render(
@@ -82,7 +85,7 @@ describe('first-load translation locale', () => {
 		const locale$ = new BehaviorSubject<string | null>('es_ES');
 		appState = {
 			store: { locale$ },
-			translationsState: { set: jest.fn() },
+			translationsState: { get: jest.fn(), set: jest.fn() },
 		};
 
 		render(

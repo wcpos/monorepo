@@ -1,10 +1,10 @@
 /**
- * The scan-based search for a collection that refuses a FlexSearch index (logs:
- * a 46k-row day cost 21.5 s and ~350 MB to index in the renderer, 2026-09-15).
+ * The scan-based search for the one collection the blob does not hold (logs: a
+ * 46k-row day is too much churn to mirror in the renderer, 2026-09-15).
  *
- * Parity with the index comes from folding BOTH operands with the same function:
+ * Parity with the blob comes from folding BOTH operands with the same function:
  * the writer stores `foldSearchText(...)` of the searched fields in one folded
- * field, and the query folds the typed term through the same encoder. A regex
+ * field, and the query folds the typed term through the same `searchTerms`. A regex
  * over the folded field is then an exact substring match in fold space — every
  * script, every normal form, every case pair — with no per-script widening.
  * Rows written before the folded field existed are searched through the raw
@@ -14,14 +14,14 @@
  * Pure: builds a mango selector the storage evaluates (in the OPFS worker on
  * web, off the main thread), bounded by the caller's own limit.
  */
-import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from './searchIndexConfig';
+import { SCAN_MIN_TERM_LENGTH, searchTerms } from './searchText';
 
 export type ScanSearchArm = Record<string, { $regex: string; $options?: string }>;
 export type ScanSearchSelector = { $and: { $or: ScanSearchArm[] }[] };
 
-/** The encoder's terms, minus those under the index minimum — "pull x" means "pull". */
+/** The query's terms, minus those under the scan minimum — "pull x" means "pull". */
 export function scanSearchTerms(search: string): string[] {
-	return encodeSearchText(search).filter((term) => term.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+	return searchTerms(search).filter((term) => term.length >= SCAN_MIN_TERM_LENGTH);
 }
 
 export function escapeRegex(value: string): string {

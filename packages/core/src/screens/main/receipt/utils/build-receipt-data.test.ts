@@ -1,5 +1,9 @@
-import { mapReceiptData, ReceiptDataSchema } from '@wcpos/printer/encoder';
+import { createInstance } from 'i18next';
+import { setI18n } from 'react-i18next';
 
+import { mapReceiptData, ReceiptDataSchema, renderPreview } from '@wcpos/printer/encoder';
+
+import en from '../../../../contexts/translations/locales/en/core.json';
 import { buildReceiptData } from './build-receipt-data';
 
 const mockOrder = {
@@ -127,7 +131,7 @@ describe('buildReceiptData', () => {
 		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
-	it('a payable order needs payment and carries no payment row', () => {
+	it('maps order payment-state fields from order', () => {
 		const result = buildReceiptData(
 			{
 				...mockOrder,
@@ -143,7 +147,7 @@ describe('buildReceiptData', () => {
 		expect(result.order.payment_url).toBe('https://example.test/checkout/order-pay/1234');
 	});
 
-	it('a completed order does not need payment and keeps its payment row', () => {
+	it('defaults order payment-state fields when omitted', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 
 		expect(result.order.needs_payment).toBe(false);
@@ -151,7 +155,7 @@ describe('buildReceiptData', () => {
 		expect(result.order.payment_url).toBe('');
 	});
 
-	it('an order never pushed (pos-open, no id, no number) needs payment and carries no payment row', () => {
+	it('omits payment for an unsaved pos-open cart', () => {
 		const { id, number, ...unsavedOrder } = mockOrder;
 		const result = buildReceiptData({ ...unsavedOrder, status: 'pos-open' }, mockStore);
 
@@ -161,7 +165,7 @@ describe('buildReceiptData', () => {
 		expect(result.payments).toEqual([]);
 	});
 
-	it('a pending order with a zero total does not need payment', () => {
+	it('does not need payment for a pending order with a zero total', () => {
 		const result = buildReceiptData({ ...mockOrder, status: 'pending', total: '0.00' }, mockStore);
 
 		expect(result.order.needs_payment).toBe(false);
@@ -251,6 +255,23 @@ describe('buildReceiptData', () => {
 		expect(result.store.tax_ids).toEqual([]);
 	});
 
+	it.each([0, 3, undefined])('carries server price decimals (%s) into receipt data', (decimals) => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			wc_price_decimals: decimals,
+			price_num_decimals: 2,
+		});
+		expect(result.store).toMatchObject({ price_decimals: decimals });
+		expect(ReceiptDataSchema.parse(mapReceiptData(result)).store).toMatchObject({
+			price_decimals: decimals,
+		});
+	});
+
+	it('defaults an absent billing first name to an empty string', () => {
+		const result = buildReceiptData({ ...mockOrder, billing: { last_name: 'Doe' } }, mockStore);
+		expect(result.customer).toMatchObject({ first_name: '' });
+	});
+
 	it('includes translated receipt labels from the store', () => {
 		const result = buildReceiptData(mockOrder, {
 			...mockStore,
@@ -306,8 +327,21 @@ describe('buildReceiptData', () => {
 	it('maps customer section from billing', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.customer.name).toBe('John Doe');
+		expect(result.customer).toMatchObject({ first_name: 'John' });
+		expect(ReceiptDataSchema.parse(mapReceiptData(result)).customer).toMatchObject({
+			first_name: 'John',
+		});
 		expect(result.customer.email).toBe('john@example.com');
 		expect(result.customer.phone).toBe('555-1234');
+	});
+
+	it('carries the customer id, null for a guest sale', () => {
+		// The guest customer is written onto the order with a real billing name
+		// ("Guest"), so `customer.id` is the only way a template can tell a
+		// known customer from a guest — same contract as the PHP builder.
+		expect(buildReceiptData({ ...mockOrder, customer_id: 7 }, mockStore).customer.id).toBe(7);
+		expect(buildReceiptData({ ...mockOrder, customer_id: 0 }, mockStore).customer.id).toBeNull();
+		expect(buildReceiptData(mockOrder, mockStore).customer.id).toBeNull();
 	});
 
 	it('maps line items', () => {
@@ -341,6 +375,35 @@ describe('buildReceiptData', () => {
 		expect(result.lines[0].meta).toEqual([{ key: 'Size', value: 'XL' }]);
 	});
 
+	it('shows variation attributes written with display_key/display_value only', () => {
+		// The POS writes a variation's attributes this way (pos/hooks/utils.ts and
+		// every add-variation caller); a server round-trip adds the display pair
+		// beside a taxonomy key. Either way the customer sees "Size: XL", never ": ".
+		const result = buildReceiptData(
+			{
+				...mockOrder,
+				line_items: [
+					{
+						...mockOrder.line_items[0],
+						meta_data: [
+							{ attr_id: 3, display_key: 'Size', display_value: 'XL' },
+							{ key: 'pa_colour', value: 'red', display_key: 'Colour', display_value: 'Red' },
+							{ key: '_woocommerce_pos_data', value: { price: 5 } },
+							{ key: 'note', value: { nested: true } },
+						],
+					},
+				],
+			},
+			mockStore
+		);
+
+		expect(result.lines[0].meta).toEqual([
+			{ key: 'Size', value: 'XL' },
+			{ key: 'Colour', value: 'Red' },
+			{ key: 'note', value: '' },
+		]);
+	});
+
 	it('maps totals', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.totals.subtotal).toBe('25.00');
@@ -368,6 +431,7 @@ describe('buildReceiptData', () => {
 		const orderNoBilling = { ...mockOrder, billing: undefined };
 		const result = buildReceiptData(orderNoBilling, mockStore);
 		expect(result.customer.name).toBe('');
+		expect(result.customer).toMatchObject({ first_name: '' });
 		expect(result.customer.email).toBe('');
 	});
 
@@ -388,6 +452,21 @@ describe('buildReceiptData', () => {
 		};
 		const result = buildReceiptData(orderBadSubtotal, mockStore);
 		expect(result.totals.subtotal).toBe('10.00');
+	});
+
+	// The gallery receipts gate their tax row on {{#totals.tax_total}}. The string "0.00" built
+	// here would be true to Mustache; the app renders through mapReceiptData, whose number is not.
+	it.each([
+		['0.00', ''],
+		['1.50', 'TAX 1.5'],
+	])('a total_tax of %s renders the tax_total section as %j', (total_tax, row) => {
+		const data = buildReceiptData({ ...mockOrder, total_tax }, mockStore);
+		const { html } = renderPreview({
+			template: '{{#totals.tax_total}}TAX {{totals.tax_total}}{{/totals.tax_total}}',
+			engine: 'logicless',
+			data,
+		});
+		expect(html.trim()).toBe(row);
 	});
 
 	it('formats tax_total using the requested decimal precision', () => {
@@ -949,4 +1028,123 @@ describe('buildReceiptData', () => {
 			});
 		});
 	});
+});
+
+it.each([
+	['fixed_cart', 'Discount'],
+	['percent', 'Discount (10%)'],
+])('labels quick %s discounts for receipts and printers', async (discount_type, label) => {
+	const i18n = createInstance();
+	await i18n.init({
+		lng: 'en',
+		keySeparator: false,
+		resources: { en: { translation: en } },
+		interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+	});
+	setI18n(i18n);
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			coupon_lines: [
+				{
+					code: 'pos-discount',
+					discount: '10',
+					discount_tax: '0',
+					meta_data: [
+						{
+							key: '_wcpos_quick_discount',
+							value: JSON.stringify({ discount_type, amount: '10.00' }),
+						},
+					],
+				},
+				{ code: 'SAVE10', discount: '1', discount_tax: '0' },
+			],
+		},
+		mockStore
+	);
+	expect(receipt.discounts.map((line) => line.label)).toEqual([label, 'SAVE10']);
+	expect(mapReceiptData(receipt as unknown as Record<string, unknown>).discounts[0].label).toBe(
+		label
+	);
+});
+
+it.each(['incl', 'excl'])(
+	'prints historical negative fees with signed totals (%s)',
+	(tax_display_cart) => {
+		const receipt = buildReceiptData(
+			{ ...mockOrder, fee_lines: [{ name: 'Legacy discount', total: '-5', total_tax: '-1' }] },
+			{ ...mockStore, tax_display_cart }
+		);
+		expect(receipt.fees).toEqual([
+			{
+				label: 'Legacy discount',
+				total_excl: '-5.00',
+				total_incl: '-6.00',
+				total: tax_display_cart === 'incl' ? '-6.00' : '-5.00',
+			},
+		]);
+	}
+);
+
+it('builds completed local sale identity and copy marking', () => {
+	const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Europe/Madrid' },
+				{ key: '_wcpos_sale_counter', value: '42' },
+				{ key: '_wcpos_register', value: 'register-1' },
+			],
+		},
+		mockStore,
+		2,
+		{
+			register: { id: 'register-1', name: 'Front till' },
+			pluginVersion: 'plugin',
+			printCount: 2,
+		}
+	);
+	expect(receipt.software).toEqual({
+		name: 'WCPOS',
+		plugin_version: 'plugin',
+		app_version: AppInfo.version,
+		app_build: AppInfo.buildNumber,
+	});
+	expect(receipt.register).toEqual({ id: 'register-1', name: 'Front till' });
+	expect(receipt.fiscal).toMatchObject({
+		document_type: 'sale',
+		sale_tz: 'Europe/Madrid',
+		sale_counter: 42,
+		is_reprint: true,
+		reprint_count: 1,
+	});
+	expect(receipt.fiscal.sale_time?.datetime).toBe('Sep 11, 2026, 10:30 AM');
+	expect(ReceiptDataSchema.parse(mapReceiptData(receipt))).toMatchObject({
+		software: receipt.software,
+		register: receipt.register,
+		fiscal: receipt.fiscal.sale_time ? { sale_time: receipt.fiscal.sale_time } : {},
+	});
+});
+
+it('a bad stamped zone or time never aborts the render', () => {
+	const badZone = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Not/AZone' },
+			],
+		},
+		mockStore,
+		2
+	);
+	expect(badZone.fiscal.sale_time?.datetime).toEqual(expect.any(String));
+	const badTime = buildReceiptData(
+		{ ...mockOrder, meta_data: [{ key: '_wcpos_sale_time', value: 'yesterday-ish' }] },
+		mockStore,
+		2
+	);
+	expect(badTime.fiscal.sale_time).toBeNull();
 });

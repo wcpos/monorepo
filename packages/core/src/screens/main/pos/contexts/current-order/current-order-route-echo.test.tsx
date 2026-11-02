@@ -4,8 +4,8 @@
 import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
-import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
+
+import type { QueryHandle } from '@wcpos/query';
 
 import {
 	type CurrentOrderActions,
@@ -15,17 +15,27 @@ import {
 	useCurrentOrderActions,
 } from './index';
 
-jest.mock('expo-router', () => ({
-	useRouter: () => ({ setParams: jest.fn() }),
+jest.mock('@wcpos/query', () => ({
+	useRecordField: <T,>(record: T, select: (value: T) => unknown) =>
+		record ? select(record) : undefined,
 }));
 
-jest.mock('@wcpos/utils/platform', () => ({
-	Platform: { isWeb: false },
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ setParams: jest.fn() }),
 }));
 
 jest.mock('./use-new-order', () => ({
 	useNewOrder: () => ({ newOrder: { uuid: 'new-order', isNew: true } }),
 }));
+
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => QueryHandle;
+};
+
+/** The open-orders handle the POS layout owns, answered with these hits. */
+function openOrdersHandle(hits: OpenOrderHit[]): QueryHandle {
+	return fakeQueryHandle({ ready: true, result: { hits } });
+}
 
 function orderRecord(uuid: string) {
 	return { uuid, payload: {} } as unknown as import('@wcpos/query').EngineRecord<'orders'>;
@@ -47,18 +57,13 @@ function renderedUUID(): string | null {
 	return document.querySelector('[data-testid="rendered-uuid"]')?.textContent ?? null;
 }
 
-function App({
-	currentOrderUUID,
-	resource,
-}: {
-	currentOrderUUID?: string;
-	resource: ObservableResource<OpenOrderHit[]>;
-}) {
+function App({ currentOrderUUID, handle }: { currentOrderUUID?: string; handle: QueryHandle }) {
 	return (
 		<React.Suspense fallback={null}>
 			<CurrentOrderProvider
-				resource={resource}
-				defaultCustomerResource={resource as never}
+				handle={handle}
+				scope="7:2:r1"
+				defaultCustomerResource={{} as never}
 				currentOrderUUID={currentOrderUUID}
 			>
 				<Probe />
@@ -67,13 +72,11 @@ function App({
 	);
 }
 
-function makeResource() {
-	return new ObservableResource(
-		new BehaviorSubject([
-			{ id: 'order-a', record: orderRecord('order-a') },
-			{ id: 'order-b', record: orderRecord('order-b') },
-		])
-	);
+function makeHandle() {
+	return openOrdersHandle([
+		{ id: 'order-a', record: orderRecord('order-a') },
+		{ id: 'order-b', record: orderRecord('order-b') },
+	]);
 }
 
 beforeEach(() => {
@@ -97,8 +100,8 @@ beforeEach(() => {
  */
 describe('CurrentOrderProvider route-param echo', () => {
 	it('keeps the new order when the route re-delivers the id the cashier just left', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-a');
 
 		// The cashier taps the "+" tab.
@@ -108,19 +111,19 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(renderedUUID()).toBe('new-order');
 
 		// Products tab: its focused route carries no orderId.
-		rerender(<App currentOrderUUID={undefined} resource={resource} />);
+		rerender(<App currentOrderUUID={undefined} handle={handle} />);
 		expect(renderedUUID()).toBe('new-order');
 
 		// Back to the Cart tab: the catch-all segment still holds the superseded id.
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 
 		expect(renderedUUID()).toBe('new-order');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('new-order');
 	});
 
 	it('still adopts a genuine navigation to a different order', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 
 		act(() => {
 			actions!.setCurrentOrderID('');
@@ -128,7 +131,7 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(renderedUUID()).toBe('new-order');
 
 		// e.g. "open in cart" from the Orders screen (orders/cells/actions.tsx).
-		rerender(<App currentOrderUUID="order-b" resource={resource} />);
+		rerender(<App currentOrderUUID="order-b" handle={handle} />);
 
 		expect(renderedUUID()).toBe('order-b');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-b');
@@ -139,17 +142,17 @@ describe('CurrentOrderProvider route-param echo', () => {
 	 * cart is stuck on that other order for the rest of the session.
 	 */
 	it('releases the parked id once the route delivers a different order', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 
 		act(() => {
 			actions!.setCurrentOrderID('');
 		});
-		rerender(<App currentOrderUUID="order-b" resource={resource} />);
+		rerender(<App currentOrderUUID="order-b" handle={handle} />);
 		expect(renderedUUID()).toBe('order-b');
 
 		// order-a is no longer an echo — the route left it two navigations ago.
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-a');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-a');
 	});
@@ -160,14 +163,14 @@ describe('CurrentOrderProvider route-param echo', () => {
 	 * it still holds the parked id. Persisting must therefore not release the mark.
 	 */
 	it('survives Products -> add -> Cart, and a second round trip', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 
 		act(() => {
 			actions!.setCurrentOrderID('');
 		});
 		// Products tab: its focused route carries no orderId.
-		rerender(<App currentOrderUUID={undefined} resource={resource} />);
+		rerender(<App currentOrderUUID={undefined} handle={handle} />);
 		// The add persists the new order (stood in for by order-b) from the Products tab.
 		act(() => {
 			actions!.setCurrentOrderID('order-b');
@@ -175,19 +178,19 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(renderedUUID()).toBe('order-b');
 
 		// Back to the Cart tab: its route still holds the parked order-a.
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-b');
 
 		// Second round trip.
-		rerender(<App currentOrderUUID={undefined} resource={resource} />);
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID={undefined} handle={handle} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-b');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-b');
 	});
 
 	it('P1-3: a sale completed from a sheet never re-adopts the set-aside order', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-a');
 		act(() => {
 			actions!.setCurrentOrderID('');
@@ -196,19 +199,20 @@ describe('CurrentOrderProvider route-param echo', () => {
 			actions!.setCurrentOrderID('order-b');
 		});
 		// The layout keeps delivering the till's A while B's sheet is focused.
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-b');
 		act(() => {
 			actions!.setCurrentOrderID('');
 		});
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		// Popping the sheet still delivers A, not a navigation back to it.
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('new-order');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('new-order');
 	});
 
 	it('releases the parked id when the cashier selects that order again', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 
 		act(() => {
 			actions!.setCurrentOrderID('');
@@ -219,14 +223,14 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(renderedUUID()).toBe('order-a');
 
 		// The route echo of order-a is now the truth, not an echo.
-		rerender(<App currentOrderUUID={undefined} resource={resource} />);
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID={undefined} handle={handle} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-a');
 	});
 
 	it('re-adopts the same order after the cashier selects it again', () => {
-		const resource = makeResource();
-		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} />);
 
 		act(() => {
 			actions!.setCurrentOrderID('');
@@ -237,14 +241,14 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(renderedUUID()).toBe('order-a');
 
 		// The route now genuinely carries order-a again.
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('order-a');
 
 		// And leaving it a second time must still hold.
 		act(() => {
 			actions!.setCurrentOrderID('');
 		});
-		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" handle={handle} />);
 		expect(renderedUUID()).toBe('new-order');
 	});
 });

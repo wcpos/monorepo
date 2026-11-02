@@ -1,0 +1,116 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import { mockState, setOrders } from './test-utils';
+import { PeriodSection } from './index';
+
+beforeEach(() => {
+	setOrders([]);
+	mockState.screenSize = 'lg';
+	mockState.from = mockState.to = '2026-07-15';
+});
+// Reordering or omitting a card, diverging labels and incorrect width buckets break these contracts.
+it('renders Orders, Payments, Where sold, Top products, Categories, Cashiers, Taxes and Refunds in that order', () => {
+	render(<PeriodSection />);
+	const section = screen.getByTestId('reports-period-section');
+	expect(
+		Array.from(section.querySelectorAll('[data-testid]'))
+			.map((node) => node.getAttribute('data-testid'))
+			.filter((id) =>
+				/^card-(orders|payments|where-sold|products|categories|cashiers|taxes|refunds)$/.test(id!)
+			)
+	).toEqual([
+		'card-orders',
+		'card-payments',
+		'card-where-sold',
+		'card-products',
+		'card-categories',
+		'card-cashiers',
+		'card-taxes',
+		'card-refunds',
+	]);
+});
+it('three columns on lg, two on md, one on sm', () => {
+	const view = render(<PeriodSection />);
+	for (const [size, columns] of [
+		['lg', 3],
+		['md', 2],
+		['sm', 1],
+	] as const) {
+		mockState.screenSize = size;
+		view.rerender(<PeriodSection />);
+		const row = screen.getByTestId('card-orders').parentElement!.parentElement!;
+		expect(row.children.length).toBe(columns);
+		expect(row.parentElement!.children.length).toBe(Math.ceil(8 / columns));
+		expect(row.children[0].contains(screen.getByTestId('card-orders'))).toBe(true);
+	}
+});
+it("an empty period shows the cards' empty lines and the three tax figures", () => {
+	render(<PeriodSection />);
+	expect(screen.getByTestId('card-orders-empty').textContent).toBe('No orders in this period');
+	expect(screen.getByTestId('card-products-empty').textContent).toBe('No sales in this period');
+	expect(screen.getByTestId('card-refunds-none').textContent).toBe('None in this period');
+	for (const id of ['net', 'tax', 'gross'])
+		expect(screen.getByTestId(`card-taxes-${id}`).textContent).toBe('£0.00');
+});
+it('shows skeletons while the viewed store is unknown', () => {
+	const store = mockState.store;
+	mockState.store = undefined;
+	try {
+		render(<PeriodSection />);
+		expect(screen.queryByTestId('reports-period-title')).toBeNull();
+		for (const id of ['orders', 'where-sold', 'products', 'taxes', 'refunds']) {
+			expect(screen.getByTestId(`card-${id}-loading`).querySelectorAll('[aria-busy]')).toHaveLength(
+				2
+			);
+			expect(screen.queryByTestId(`card-${id}-figure`)).toBeNull();
+		}
+	} finally {
+		mockState.store = store;
+	}
+});
+
+// Miswiring the card id or making the deferred Orders head live breaks these contracts.
+it('every card head, Orders included, opens its panel', () => {
+	const context = jest.requireMock<typeof import('../context')>('../context');
+	const real = jest.requireActual<typeof import('../context')>('../context');
+	const spy = jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
+	function Detail() {
+		return <span data-testid="open-detail">{context.useReportsScope().detail}</span>;
+	}
+	try {
+		render(
+			<real.ReportsScopeProvider>
+				<PeriodSection />
+				<Detail />
+			</real.ReportsScopeProvider>
+		);
+		for (const id of [
+			'orders',
+			'payments',
+			'products',
+			'categories',
+			'cashiers',
+			'taxes',
+			'refunds',
+		]) {
+			fireEvent.click(screen.getByTestId(`card-${id}-open`));
+			expect(screen.getByTestId('open-detail').textContent).toBe(id);
+		}
+	} finally {
+		spy.mockRestore();
+	}
+});
+
+it('the section renders Where sold after Payments', () => {
+	setOrders([{ total: '10', cost_of_goods_sold: {} }] as import('../context').ReportOrder[]);
+	render(<PeriodSection />);
+	const cards = screen
+		.getByTestId('reports-period-section')
+		.querySelectorAll('[data-testid$="-figure"]:not([data-testid*="-donut-"])');
+	expect(cards).toHaveLength(9);
+	expect(cards[1].getAttribute('data-testid')).toBe('card-payments-figure');
+	expect(cards[2].getAttribute('data-testid')).toBe('card-where-sold-figure');
+});

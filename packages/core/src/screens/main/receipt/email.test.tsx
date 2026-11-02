@@ -6,10 +6,9 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
+import type { ReceiptEmailRow } from '@wcpos/query/receipt-email-queue';
 
 import { EmailForm } from './email';
-
-import type { ReceiptEmailRow } from './email-queue/queue';
 
 const mockPost = jest.fn();
 const mockToast = jest.fn();
@@ -38,14 +37,15 @@ function createQueue() {
 
 const mockCloseDialog = jest.fn();
 jest.mock('@wcpos/components/dialog', () => ({
-	useRootContext: () => ({ open: true, onOpenChange: (open: boolean) => mockCloseDialog(open) }),
+	useDialog: () => ({ open: true, close: () => mockCloseDialog(false) }),
+	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DialogAction: ({ children, testID, onPress }: PressProps) => (
 		<button data-testid={testID} onClick={onPress} type="button">
 			{children}
 		</button>
 	),
 	DialogClose: ({ children }: Kids) => <span>{children}</span>,
-	DialogFooter: ({ children }: Kids) => <div>{children}</div>,
+	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
 }));
 jest.mock('@wcpos/components/form', () => {
 	const actualReact = jest.requireActual<typeof import('react')>('react');
@@ -105,8 +105,12 @@ jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost }),
 }));
-jest.mock('./email-queue/use-receipt-email-queue-collection', () => ({
-	useReceiptEmailQueueCollection: () => queueCollection,
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({
+		storeDB: queueCollection
+			? { collections: { receipt_email_queue: queueCollection } }
+			: undefined,
+	}),
 }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
@@ -156,7 +160,6 @@ describe('EmailForm', () => {
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
 		// Queued is a kept promise: the dialog's job is done.
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
-		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('queues when the store is unreachable even though the device has a network', async () => {
@@ -167,7 +170,16 @@ describe('EmailForm', () => {
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(queueRows).toHaveLength(1);
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
-		expect(mockCloseDialog).toHaveBeenCalledWith(false);
+	});
+
+	// ADR 0040 Decided 1 rule 1: the store has not heard the sale, so the email queues as offline.
+	it('queues while the sale awaits the store, though the till is online', async () => {
+		render(<EmailForm order={order} localOnly />);
+		await send();
+
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(queueRows).toHaveLength(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
 	it('posts straight away when online and reports success', async () => {
@@ -183,7 +195,6 @@ describe('EmailForm', () => {
 		expect(mockLoggerSuccess).toHaveBeenCalled();
 		// The merchant on 1.11.6 found the dialog still open after every Send.
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
-		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('queues an online send that failed on the connection', async () => {
@@ -204,7 +215,6 @@ describe('EmailForm', () => {
 		);
 		expect(mockLoggerError).not.toHaveBeenCalled();
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
-		expect(mockCloseDialog).toHaveBeenCalledWith(false);
 	});
 
 	it('surfaces a rejected address immediately instead of queuing it', async () => {

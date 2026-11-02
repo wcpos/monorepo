@@ -1,6 +1,8 @@
+import { filter } from 'rxjs';
 import { ObservableResource } from 'observable-hooks';
 
-import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import type { ReadonlyStoreRecord, ReadonlyWpCredentialsRecord } from '@wcpos/query/user-db';
 
 /**
  * The stores behind one set of credentials, as a Suspense resource that survives a retry.
@@ -32,20 +34,20 @@ import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
  * cache so a signed-out credential's resource is collectable with the document.
  */
 const resourcesByCredentials = new WeakMap<
-	WPCredentialsDocument,
-	ObservableResource<StoreDocument[]>
+	ReadonlyWpCredentialsRecord,
+	ObservableResource<ReadonlyStoreRecord[]>
 >();
 
 export function storeListResource(
-	wpCredentials: WPCredentialsDocument
-): ObservableResource<StoreDocument[]> {
+	wpCredentials: ReadonlyWpCredentialsRecord
+): ObservableResource<ReadonlyStoreRecord[]> {
 	const existing = resourcesByCredentials.get(wpCredentials);
 	if (existing) return existing;
 
 	const resource = new ObservableResource(
-		wpCredentials.populate$('stores'),
+		observeCredentialStores(wpCredentials).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
 		(value) => !!value
-	) as ObservableResource<StoreDocument[]>;
+	);
 	resourcesByCredentials.set(wpCredentials, resource);
 	return resource;
 }

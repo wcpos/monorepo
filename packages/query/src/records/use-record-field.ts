@@ -1,11 +1,14 @@
 import { useLayoutObservable, useObservableEagerState } from 'observable-hooks';
 import { combineLatest, defer, type Observable, of } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
-import type { TemporaryOrderDocument } from '@wcpos/database';
+import type { ClosureRow, TemporaryOrderDocument } from '@wcpos/database';
 
-import type { EngineRecord, EngineRecordCollectionName, EngineRecordShape } from './engine-record';
+import type { EngineRecordCollectionName, EngineRecordShape } from './engine-record';
+import type { ReadonlyEngineRecord } from './readonly-engine-record';
+import type { ReadonlyClosureDocument } from '../register-session/reads';
+import type { ReadonlyUserDatabaseRecord } from '../user-db/records';
 import type { RxDocument, RxState } from 'rxdb';
 
 /**
@@ -13,7 +16,7 @@ import type { RxDocument, RxState } from 'rxdb';
  * deep-equality dedupe, so RxDB's reactivity is consumed natively without wrappers, caches,
  * or per-render resubscription.
  *
- * Why this exists (verified against RxDB 17.4.0):
+ * Why this exists (verified against RxDB 17.5.0):
  *  - `doc.$` / `doc.get$()` are getters returning a FRESH observable object per access, and
  *    `useObservableEagerState` keys its subscription on observable identity — raw
  *    `get$`-into-hook resubscribes every render.
@@ -71,9 +74,14 @@ function useSelectedValue<TSource, TData, R>(
 				switchMap((input) => (input == null ? of(undefined) : toData$(input)))
 			);
 			const select$ = inputs$.pipe(map(([, selector]) => selector));
+			// ONE `last` per component, shared by the render-phase and effect-phase subscriptions:
+			// a slice deep-equal to the last one delivered here comes back as that same reference,
+			// so the effect-phase subscription makes no setState (an object slice renders once).
+			let last: R | undefined;
 			return combineLatest([data$, select$]).pipe(
 				map(([data, selector]) => (data === undefined ? undefined : selector(data as TData))),
-				distinctUntilChanged(deepEqual)
+				map((value) => (deepEqual(value, last) ? last : (last = value))),
+				distinctUntilChanged()
 			);
 		},
 		[source, select] as [TSource | null | undefined, Selector<TData, R>]
@@ -90,22 +98,22 @@ function useSelectedValue<TSource, TData, R>(
  * yields `undefined` (for optional mounts, e.g. no selected order).
  */
 export function useRecordField<C extends EngineRecordCollectionName, R>(
-	record: EngineRecord<C>,
+	record: ReadonlyEngineRecord<C>,
 	select: Selector<EngineRecordShape<C>, R>
 ): R;
 export function useRecordField<C extends EngineRecordCollectionName, R>(
-	record: EngineRecord<C> | null | undefined,
+	record: ReadonlyEngineRecord<C> | null | undefined,
 	select: Selector<EngineRecordShape<C>, R>
 ): R | undefined;
 // Interim overload for the POS current-order union (engine order | per-till temporary
 // template, ADR 0028 stage I). The union of two RxDocument instantiations matches neither
 // generic overload, so it needs its own. Dies with the temporary order in ADR 0030.
 export function useRecordField<R>(
-	record: EngineRecord<'orders'> | TemporaryOrderDocument,
+	record: ReadonlyEngineRecord<'orders'> | TemporaryOrderDocument,
 	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
 ): R;
 export function useRecordField<R>(
-	record: EngineRecord<'orders'> | TemporaryOrderDocument | null | undefined,
+	record: ReadonlyEngineRecord<'orders'> | TemporaryOrderDocument | null | undefined,
 	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
 ): R | undefined;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
@@ -145,23 +153,57 @@ export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxDocument<TState> | RxStateLike<TState> | null | undefined,
 	select: Selector<TState, R>
 ): R | undefined;
+export function useDocField<R>(
+	source: ReadonlyClosureDocument | null | undefined,
+	select: Selector<ClosureRow, R>
+): R | undefined;
+export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
+	source: TRecord,
+	select: Selector<ReturnType<TRecord['toJSON']>, R>
+): R;
+export function useDocField<TRecord extends ReadonlyUserDatabaseRecord, R>(
+	source: TRecord | null | undefined,
+	select: Selector<ReturnType<TRecord['toJSON']>, R>
+): R | undefined;
 export function useDocField<TState extends Record<string, unknown>, R>(
-	source: RxDocument<TState> | RxStateLike<TState> | null | undefined,
+	source:
+		| RxDocument<TState>
+		| RxStateLike<TState>
+		| ReadonlyUserDatabaseRecord
+		| ReadonlyClosureDocument
+		| null
+		| undefined,
 	select: Selector<TState, R>
 ): R | undefined {
 	return useSelectedValue(source, select, sourceData$);
 }
 
+// One stream and one `toJSON()` clone per document instance — a product row runs 7–12 field
+// hooks, which was 12 `record.$` observers and 12 clones (each deep-frozen in dev) per emission.
+// RxDB's doc-cache hands out one instance per revision, so the instance is the right key, and
+// `refCount` drops an idle document's subscription. The clone is SHARED: never mutate a slice.
+const documentStreams = new WeakMap<object, Observable<unknown>>();
+const documentJson = new WeakMap<object, unknown>();
+
+function jsonOf<TDoc extends Record<string, unknown>>(latest: RxDocument<TDoc>): TDoc {
+	if (!documentJson.has(latest)) documentJson.set(latest, latest.toJSON());
+	return documentJson.get(latest) as TDoc;
+}
+
 function recordData$<TDoc extends Record<string, unknown>>(
 	record: RxDocument<TDoc>
 ): Observable<TDoc> {
-	// One access of the `$` getter per subscription — the emitted instances come from RxDB's
-	// doc-cache (rev-deduped), and `toJSON()` exposes the immutable data without meta fields.
-	return record.$.pipe(map((latest) => latest.toJSON() as TDoc));
+	let data$ = documentStreams.get(record);
+	if (!data$) {
+		data$ = record.$.pipe(map(jsonOf), shareReplay({ bufferSize: 1, refCount: true }));
+		documentStreams.set(record, data$);
+	}
+	return data$ as Observable<TDoc>;
 }
 
 function sourceData$<TState extends Record<string, unknown>>(
-	source: RxDocument<TState> | RxStateLike<TState>
+	source:
+		RxDocument<TState> | RxStateLike<TState> | ReadonlyUserDatabaseRecord | ReadonlyClosureDocument
 ): Observable<TState> {
 	if (isRxDocumentLike(source)) {
 		return recordData$(source as RxDocument<TState>);

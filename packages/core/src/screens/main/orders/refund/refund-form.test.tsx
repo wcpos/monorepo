@@ -19,26 +19,30 @@ function mockWebProps({ testID, ...props }: any) {
 
 let mockEnableRefundActions = false;
 
+// The tax provider's own boundary (its fallback loads an icon jest's CommonJS runtime cannot).
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: any) => (
 		<div data-testid="refund-confirm-dialog" data-open={open}>
 			{children}
 		</div>
 	),
-	AlertDialogAction: ({ children, onPress, loading, disabled, ...props }: any) => (
-		<button
-			type="button"
-			onClick={onPress}
-			disabled={mockEnableRefundActions ? false : disabled}
-			{...mockWebProps(props)}
-		>
-			{children}
-		</button>
-	),
-	AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
 	AlertDialogContent: ({ children }: any) => <div>{children}</div>,
 	AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
-	AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+	AlertDialogFooter: (props: import('@wcpos/components/alert-dialog').AlertDialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').AlertDialogFooter;
+		return (
+			<Footer
+				{...props}
+				confirm={{
+					...props.confirm,
+					disabled: mockEnableRefundActions ? false : props.confirm.disabled,
+				}}
+			/>
+		);
+	},
 	AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
 }));
@@ -63,22 +67,36 @@ jest.mock('@wcpos/components/form', () => ({
 	),
 }));
 
+// FormInput is mocked; its keypad fields never render.
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	ModalAction: ({ children, onPress, loading, disabled, ...props }: any) => (
-		<button
-			type="button"
-			onClick={onPress}
-			disabled={mockEnableRefundActions ? false : disabled}
-			{...mockWebProps(props)}
-		>
-			{children}
-		</button>
+// Records `loading` so a test can read the process button's pending state.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children, loading }: React.PropsWithChildren<{ loading?: boolean }>) => (
+		<span data-loading={loading ? 'true' : 'false'}>{children}</span>
 	),
-	ModalClose: ({ children }: any) => <button>{children}</button>,
-	ModalFooter: ({ children }: any) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/components/dialog', () => ({
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return (
+			<div data-testid="modal-footer">
+				<Footer
+					{...props}
+					intent={{
+						...props.intent,
+						disabled: mockEnableRefundActions ? false : (props.intent || undefined)?.disabled,
+					}}
+				/>
+			</div>
+		);
+	},
 }));
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,
@@ -97,27 +115,20 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: any) => <label>{children}</label>,
 }));
-jest.mock('@wcpos/components/radio-group', () => ({
-	RadioGroup: ({ children, value }: any) => (
+jest.mock('@wcpos/components/segmented-control', () => ({
+	SegmentedControl: ({ segments, value }: any) => (
 		<div role="radiogroup" data-value={value}>
-			{children}
+			{segments.map((segment: any) => (
+				<input
+					key={segment.value}
+					type="radio"
+					aria-label={segment.label}
+					value={segment.value}
+					disabled={segment.disabled}
+					data-testid={segment.testID}
+				/>
+			))}
 		</div>
-	),
-	RadioGroupItem: ({ value, disabled, testID }: any) => (
-		<input type="radio" value={value} disabled={disabled} data-testid={testID} />
-	),
-	RadioGroupOption: ({ value, disabled, testID, label, description }: any) => (
-		<label>
-			{label}
-			<input
-				type="radio"
-				aria-label={label}
-				value={value}
-				disabled={disabled}
-				data-testid={testID}
-			/>
-			{description ? <span>{description}</span> : null}
-		</label>
 	),
 }));
 
@@ -213,8 +224,12 @@ describe('RefundOrderForm', () => {
 
 		render(<RefundOrderForm order={order} />);
 
-		await waitFor(() => expect(screen.getByText(/common.total: €155.00/)).toBeInTheDocument());
-		expect(screen.getByText(/orders.previously_refunded: -€10.00/)).toBeInTheDocument();
+		await waitFor(() =>
+			expect(screen.getByTestId('refund-order-total').textContent).toBe('common.total€155.00')
+		);
+		expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+			'orders.previously_refunded-€10.00'
+		);
 		await waitFor(() =>
 			expect(
 				screen.getByLabelText('orders.refund_to_original_method:Stripe Terminal')
@@ -356,8 +371,42 @@ describe('RefundOrderForm', () => {
 		render(<RefundOrderForm order={order} />);
 
 		await waitFor(() =>
-			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€25.00'
+			)
 		);
+	});
+
+	it('shows the process button loading while the refund save is pending', async () => {
+		mockEnableRefundActions = true;
+		// Never settles: the save stays pending for the rest of the test.
+		const pendingRefund = jest.fn();
+		pendingRefund.mockImplementation(() => new Promise<void>(() => {}));
+		mockUseRefundMutation.mockReturnValue(pendingRefund);
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({
+				data: [{ amount: '10.00' }, { amount: '15.00' }],
+				headers: { 'x-wp-totalpages': '1' },
+			});
+		});
+
+		render(<RefundOrderForm order={order} />);
+		// The fetched history total proves the refund details have loaded, so the submit is live.
+		await waitFor(() =>
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€25.00'
+			)
+		);
+		const processLabel = () =>
+			within(screen.getByTestId('process-refund-button')).getByText('orders.process_refund');
+		expect(processLabel()).toHaveAttribute('data-loading', 'false');
+
+		fireEvent.click(screen.getByTestId('process-refund-button'));
+		fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+
+		await waitFor(() => expect(pendingRefund).toHaveBeenCalledTimes(1));
+		expect(processLabel()).toHaveAttribute('data-loading', 'true');
 	});
 
 	it('holds line quantities at zero until detailed refund rows load', async () => {
@@ -453,7 +502,7 @@ describe('RefundOrderForm', () => {
 		);
 	});
 
-	it('renders refund actions in a right-aligned HStack row', async () => {
+	it('renders refund actions in the modal footer, outside the scrolling body', async () => {
 		mockGet.mockResolvedValue({
 			data: order.refunds,
 			headers: { 'x-wp-totalpages': '1' },
@@ -462,7 +511,7 @@ describe('RefundOrderForm', () => {
 		render(<RefundOrderForm order={order} />);
 
 		const processButton = await screen.findByTestId('process-refund-button');
-		expect(processButton.parentElement).toHaveClass('justify-end');
+		expect(processButton.parentElement).toBe(screen.getByTestId('modal-footer'));
 	});
 });
 

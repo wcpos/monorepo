@@ -4,14 +4,38 @@ import { View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@wcpos/components/dialog';
+import { DeviceList, DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
 import { Input } from '@wcpos/components/input';
+import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import type { ScannerProfileDocument } from '@wcpos/database';
+import {
+	observeScannerProfiles,
+	removeScannerProfile,
+	saveScannerProfile,
+	type ScannerProfile,
+} from '@wcpos/query/store-local';
 import { isCanonicalUuid, normalizeUuid, scannerDeviceKey } from '@wcpos/scanner';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -19,11 +43,11 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/scan-hub-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
-import { useCollection } from '../../hooks/use-collection';
+import { useAppState } from '../../../../contexts/app-state';
 import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
-const NO_PROFILES: ScannerProfileDocument[] = [];
+const NO_PROFILES: ScannerProfile[] = [];
 const scannerSettingsLogger = getLogger(['wcpos', 'settings', 'scanners']);
 
 /**
@@ -56,7 +80,7 @@ type ScannerStatus =
 	'connected' | 'registered' | 'not_in_range' | 'not_plugged_in' | 'disconnected';
 
 export function scannerStatus(
-	connectionType: ScannerProfileDocument['connectionType'],
+	connectionType: ScannerProfile['connectionType'],
 	live: boolean
 ): ScannerStatus {
 	if (connectionType === 'keyboard') {
@@ -83,15 +107,15 @@ function ScannerProfileRow({
 	live,
 	onRemove,
 }: {
-	profile: ScannerProfileDocument;
+	profile: ScannerProfile;
 	live: boolean;
-	onRemove: (profile: ScannerProfileDocument) => void;
+	onRemove: (profile: ScannerProfile) => void;
 }) {
 	const t = useT();
 	const status = scannerStatus(profile.connectionType, live);
 
 	// Literal keys so the translations pipeline can find them.
-	const typeLabel: Record<ScannerProfileDocument['connectionType'], string> = {
+	const typeLabel: Record<ScannerProfile['connectionType'], string> = {
 		keyboard: t('settings.scanner_type_keyboard'),
 		'usb-serial': t('settings.scanner_type_usb_serial'),
 		'bluetooth-spp': t('settings.scanner_type_bluetooth_spp'),
@@ -109,42 +133,78 @@ function ScannerProfileRow({
 		profile.vendorId !== undefined && profile.productId !== undefined
 			? `${profile.vendorId}:${profile.productId}`
 			: profile.serviceUuid;
-	const identity = detail
-		? `${typeLabel[profile.connectionType]} · ${detail}`
-		: typeLabel[profile.connectionType];
-	// "Not in range" is the normal state of a scanner sitting on a shelf — muted,
-	// never destructive. Only a live link earns colour.
-	const tone = status === 'connected' ? 'text-success' : 'text-muted-foreground';
-
 	return (
-		<HStack
-			className="border-border items-center gap-3 rounded-md border p-2"
+		<DeviceRow
 			testID="scanner-profile-row"
+			icon="barcode"
+			name={profile.name || profile.deviceName || typeLabel[profile.connectionType]}
+			identifiers={[typeLabel[profile.connectionType], detail]}
+			// "Not in range" is the normal state of a scanner sitting on a shelf — muted,
+			// never destructive. Only a live link earns colour.
+			state={{
+				label: statusLabel[status],
+				tone: status === 'connected' ? 'ok' : 'muted',
+				testID: 'scanner-profile-status',
+			}}
 		>
-			<View
-				className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-success' : 'bg-muted-foreground/40'}`}
-			/>
-			<VStack className="flex-1" space="xs">
-				<Text className="text-sm font-medium">
-					{profile.name || profile.deviceName || typeLabel[profile.connectionType]}
-				</Text>
-				<Text className="text-muted-foreground font-mono text-xs">{identity}</Text>
-			</VStack>
-			<Text className={`text-2xs font-medium ${tone}`} testID="scanner-profile-status">
-				{statusLabel[status]}
-			</Text>
-			{/* Quiet by design: a destructive-red button on every row is alarm for a
-			    list, not emphasis. ghost-quiet keeps the surface clear and
-			    de-emphasises only the label. */}
-			<Button
-				variant="ghost-quiet"
-				size="sm"
-				testID="scanner-profile-delete"
-				onPress={() => onRemove(profile)}
+			<DeviceRowActions>
+				{/* Removing a scanner is the row's only action and it loses the pairing: the last,
+				    red row of the row's ⋮ menu, never a red button on every row of a list. */}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<IconButton
+							name="more"
+							testID="scanner-profile-menu"
+							accessibilityLabel={t('common.actions')}
+						/>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							variant="destructive"
+							testID="scanner-profile-delete"
+							onPress={() => onRemove(profile)}
+						>
+							<Icon name="delete" className="fill-destructive" />
+							<Text>{t('settings.scanner_remove')}</Text>
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</DeviceRowActions>
+		</DeviceRow>
+	);
+}
+
+/** The Direct connection row and its sheet: connecting a scanner directly is a task of its own. */
+function DirectConnection(props: {
+	label: string;
+	none: boolean;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	children: React.ReactNode;
+}) {
+	const t = useT();
+	return (
+		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
+			<PropertyRow
+				testID="scanner-row-direct"
+				label={t('settings.scanner_direct_connection')}
+				verb={
+					// The verb is the dialog's trigger, so closing the sheet returns focus to it.
+					<DialogTrigger asChild>
+						<PropertyVerb testID="scanner-advanced-trigger">{props.label}</PropertyVerb>
+					</DialogTrigger>
+				}
 			>
-				<ButtonText>{t('settings.scanner_remove')}</ButtonText>
-			</Button>
-		</HStack>
+				{props.none ? <Text className="text-muted-foreground">{t('common.none')}</Text> : null}
+			</PropertyRow>
+			<DialogContent side="right" size="lg" closeLabel={t('common.close')}>
+				<DialogHeader>
+					<DialogTitle>{props.label}</DialogTitle>
+				</DialogHeader>
+				{props.children}
+				<DialogFooter close />
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -153,23 +213,24 @@ function ScannerProfileRow({
  *
  * Deliberately quiet when empty: the overwhelmingly common setup is a scanner
  * paired as a Bluetooth or USB keyboard, which needs nothing configured here.
- * The direct-connection apparatus is real but advanced, so it lives behind a
- * disclosure rather than behind two filled buttons that read as required steps.
- * Saved scanners stay OUTSIDE that disclosure — adding one is advanced, seeing
- * and removing what you already have is not.
+ * The direct-connection apparatus is real but advanced, so it lives in the
+ * Direct connection sheet rather than behind two filled buttons that read as
+ * required steps. Saved scanners stay OUTSIDE that sheet — adding one is
+ * advanced, seeing and removing what you already have is not.
  */
 export function InputSources() {
 	const t = useT();
-	const { collection } = useCollection('scanner_profiles');
+	const { storeDB } = useAppState();
 	const profiles = useObservableState(
-		React.useMemo(() => collection.find().$, [collection]),
+		React.useMemo(() => observeScannerProfiles(storeDB), [storeDB]),
 		NO_PROFILES
-	) as ScannerProfileDocument[];
+	);
 	const registration = useScannerRegistration();
 	const { serial, hid, ble } = useDeviceScanControls();
 	const [name, setName] = React.useState('');
 	const [serviceUuid, setServiceUuid] = React.useState('');
 	const [serviceUuidInvalid, setServiceUuidInvalid] = React.useState(false);
+	const [sheetOpen, setSheetOpen] = React.useState(false);
 
 	const liveKeys = React.useMemo(
 		() =>
@@ -194,7 +255,7 @@ export function InputSources() {
 
 	const handleSave = async () => {
 		try {
-			await registration.save(name);
+			await registration.register(name);
 			setName('');
 			Toast.show({ type: 'success', title: t('settings.scanner_registered'), duration: 2500 });
 		} catch (error) {
@@ -202,9 +263,9 @@ export function InputSources() {
 		}
 	};
 
-	const handleRemove = async (profile: ScannerProfileDocument) => {
+	const handleRemove = async (profile: ScannerProfile) => {
 		try {
-			await profile.getLatest().remove();
+			await removeScannerProfile(storeDB, profile.deviceKey);
 		} catch (error) {
 			reportScannerSettingFailure('remove', error);
 		}
@@ -233,7 +294,7 @@ export function InputSources() {
 			// Upsert on the canonical key: a second Add press while the first is in
 			// flight is now idempotent rather than a duplicate row, so this needs no
 			// in-flight guard.
-			await collection.upsert({
+			await saveScannerProfile(storeDB, {
 				deviceKey,
 				name: '',
 				connectionType: 'bluetooth-spp',
@@ -256,6 +317,8 @@ export function InputSources() {
 	};
 
 	const midFlow = registration.available && (registration.capturing || !!registration.candidate);
+	// A registration started from the sheet continues inline: the sheet gives way to it.
+	if (midFlow && sheetOpen) setSheetOpen(false);
 
 	return (
 		<SettingsSection
@@ -265,7 +328,7 @@ export function InputSources() {
 		>
 			<VStack space="sm" className="pt-1">
 				{profiles.length === 0 && !midFlow ? (
-					<Text className="text-sm font-medium" testID="scanner-no-setup-needed">
+					<Text variant="subheading" testID="scanner-no-setup-needed">
 						{t('settings.scanner_no_setup_needed')}
 					</Text>
 				) : null}
@@ -273,16 +336,18 @@ export function InputSources() {
 				{/* Mid-flow replaces the list: one thing is happening, so one thing shows. */}
 				{midFlow ? null : (
 					<>
-						{profiles.map((profile) => (
-							<ScannerProfileRow
-								key={profile.deviceKey}
-								profile={profile}
-								live={liveKeys.has(profile.deviceKey)}
-								onRemove={handleRemove}
-							/>
-						))}
+						<DeviceList>
+							{profiles.map((profile) => (
+								<ScannerProfileRow
+									key={profile.deviceKey}
+									profile={profile}
+									live={liveKeys.has(profile.deviceKey)}
+									onRemove={handleRemove}
+								/>
+							))}
+						</DeviceList>
 						{profiles.length > 0 ? (
-							<Text className="text-muted-foreground text-xs" testID="scanner-registered-hint">
+							<Text variant="help" testID="scanner-registered-hint">
 								{registrationLane
 									? t('settings.scanner_registered_hint_keyboard')
 									: t('settings.scanner_registered_hint')}
@@ -296,21 +361,23 @@ export function InputSources() {
 				</DocsLink>
 
 				{midFlow ? null : (
-					<Collapsible className="border-border/50 mt-1 border-t pt-3">
-						<CollapsibleTrigger testID="scanner-advanced-trigger">
-							<Text className="text-primary text-sm font-medium">
-								{registrationLane
-									? profiles.length > 0
-										? t('settings.scanner_advanced_register_more')
-										: t('settings.scanner_advanced_register')
-									: profiles.length > 0
-										? t('settings.scanner_advanced_connect_more')
-										: t('settings.scanner_advanced_connect')}
-							</Text>
-						</CollapsibleTrigger>
-						<CollapsibleContent>
+					<DirectConnection
+						label={
+							registrationLane
+								? profiles.length > 0
+									? t('settings.scanner_advanced_register_more')
+									: t('settings.scanner_advanced_register')
+								: profiles.length > 0
+									? t('settings.scanner_advanced_connect_more')
+									: t('settings.scanner_advanced_connect')
+						}
+						none={profiles.length === 0}
+						open={sheetOpen}
+						onOpenChange={setSheetOpen}
+					>
+						<DialogBody>
 							<VStack space="sm" testID="scanner-advanced-content">
-								<Text className="text-muted-foreground text-xs">
+								<Text variant="help">
 									{registrationLane
 										? t('settings.scanner_register_explainer')
 										: t('settings.scanner_direct_explainer')}
@@ -366,7 +433,6 @@ export function InputSources() {
 								{registration.available ? (
 									<View className="items-start">
 										<Button
-											size="sm"
 											variant="outline"
 											onPress={registration.start}
 											testID="register-scanner-button"
@@ -378,77 +444,72 @@ export function InputSources() {
 
 								{canConnectDirectly ? (
 									<View testID="scanner-keyboard-wall-note">
-										<Text className="text-muted-foreground text-xs">
-											{t('settings.scanner_keyboard_wall_note')}
-										</Text>
+										<Text variant="help">{t('settings.scanner_keyboard_wall_note')}</Text>
 									</View>
 								) : null}
 
+								{/* Electron answers a connect press with its serial/HID chooser: it lives in the
+								    sheet that asked, so the pick is in reach and closing the sheet cancels the
+								    pending request (the chooser replies on unmount). Inert elsewhere. */}
+								<ScannerDeviceChooser />
+
 								{/* Manual UUID entry is the "my scanner isn't listed" escape hatch —
-								    a 128-bit UUID is plumbing, and surfacing it by default made the
-								    whole section read as a required setup form. */}
+								    a 128-bit UUID is plumbing, so it sits last in the sheet as a
+								    labelled block (rule 9), never on the page itself. */}
 								{serial.available ? (
-									<Collapsible testID="bluetooth-service-class-id-control">
-										<CollapsibleTrigger testID="scanner-uuid-trigger">
-											<Text className="text-primary text-xs font-medium">
-												{t('settings.scanner_uuid_disclosure')}
-											</Text>
-										</CollapsibleTrigger>
-										<CollapsibleContent>
-											<VStack space="xs">
-												<HStack space="sm">
-													<Input
-														className="flex-1 font-mono"
-														value={serviceUuid}
-														onChangeText={(value) => {
-															setServiceUuid(value);
-															setServiceUuidInvalid(false);
-														}}
-														placeholder={t('settings.scanner_bluetooth_uuid_placeholder')}
-														testID="bluetooth-service-class-id-input"
-													/>
-													<Button
-														size="sm"
-														variant="outline"
-														onPress={handleAddServiceUuid}
-														testID="bluetooth-service-class-id-add"
-													>
-														<ButtonText>{t('settings.scanner_bluetooth_uuid_add')}</ButtonText>
-													</Button>
-												</HStack>
-												{serviceUuidInvalid ? (
-													<Text
-														className="text-destructive text-xs"
-														testID="bluetooth-service-class-id-error"
-													>
-														{t('settings.scanner_bluetooth_uuid_invalid')}
-													</Text>
-												) : null}
-												<DocsLink
-													testID="bluetooth-service-class-id-docs-link"
-													href={WIZARD_DOCS_URL}
+									<View testID="bluetooth-service-class-id-control">
+										<VStack space="xs">
+											<Text variant="subheading">{t('settings.scanner_uuid_disclosure')}</Text>
+											<HStack space="sm">
+												<Input
+													className="flex-1 font-mono"
+													value={serviceUuid}
+													onChangeText={(value) => {
+														setServiceUuid(value);
+														setServiceUuidInvalid(false);
+													}}
+													placeholder={t('settings.scanner_bluetooth_uuid_placeholder')}
+													testID="bluetooth-service-class-id-input"
+												/>
+												<Button
+													size="sm"
+													variant="outline"
+													onPress={handleAddServiceUuid}
+													testID="bluetooth-service-class-id-add"
 												>
-													{t('settings.scanner_bluetooth_uuid_docs_link')}
-												</DocsLink>
-											</VStack>
-										</CollapsibleContent>
-									</Collapsible>
+													<ButtonText>{t('settings.scanner_bluetooth_uuid_add')}</ButtonText>
+												</Button>
+											</HStack>
+											{serviceUuidInvalid ? (
+												<Text
+													className="text-bad text-xs"
+													testID="bluetooth-service-class-id-error"
+												>
+													{t('settings.scanner_bluetooth_uuid_invalid')}
+												</Text>
+											) : null}
+											<DocsLink
+												testID="bluetooth-service-class-id-docs-link"
+												href={WIZARD_DOCS_URL}
+											>
+												{t('settings.scanner_bluetooth_uuid_docs_link')}
+											</DocsLink>
+										</VStack>
+									</View>
 								) : null}
 							</VStack>
-						</CollapsibleContent>
-					</Collapsible>
+						</DialogBody>
+					</DirectConnection>
 				)}
 
-				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
-				<ScannerDeviceChooser />
-
 				{registration.available && registration.candidate ? (
-					<VStack space="sm" className="border-info/40 bg-info/10 rounded-md border p-2">
-						<Text className="text-sm">
-							{t('settings.scanner_detected', {
+					<VStack space="sm">
+						<Notice
+							tone="info"
+							title={t('settings.scanner_detected', {
 								deviceName: registration.candidate.deviceName,
 							})}
-						</Text>
+						/>
 						<Input
 							value={name}
 							onChangeText={setName}
@@ -465,14 +526,11 @@ export function InputSources() {
 						</HStack>
 					</VStack>
 				) : registration.capturing ? (
-					<View className="border-info/40 bg-info/10 rounded-md border p-2">
-						<HStack>
-							<Text className="flex-1 text-sm">{t('settings.scanner_capture_prompt')}</Text>
-							<Button variant="outline" size="sm" onPress={registration.stop}>
-								<ButtonText>{t('common.cancel')}</ButtonText>
-							</Button>
-						</HStack>
-					</View>
+					<Notice
+						tone="info"
+						title={t('settings.scanner_capture_prompt')}
+						actions={[{ label: t('common.cancel'), onPress: registration.stop }]}
+					/>
 				) : null}
 			</VStack>
 		</SettingsSection>

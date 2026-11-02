@@ -6,28 +6,38 @@
  * `tax_id.label.<type>` and `tax_id.placeholder.<type>` in the locale JSON.
  */
 
+import * as React from 'react';
+
+import { useT } from '../../contexts/translations';
+
 import type { TaxIdType } from './types';
 
 /**
- * Mapping of tax-id type → translation key. Resolved by the caller via the
- * `useT` hook so the labels respect the user's selected locale.
+ * Each tax-id type's label in the cashier's language. Every key is a literal `t('…')` call: the
+ * string extractor (`scripts/extract-js-strings.js`) reads no other form, and drops the rest.
  */
-export const TAX_ID_LABEL_KEYS: Record<TaxIdType, string> = {
-	eu_vat: 'tax_id.label.eu_vat',
-	gb_vat: 'tax_id.label.gb_vat',
-	au_abn: 'tax_id.label.au_abn',
-	br_cpf: 'tax_id.label.br_cpf',
-	br_cnpj: 'tax_id.label.br_cnpj',
-	in_gst: 'tax_id.label.in_gst',
-	it_cf: 'tax_id.label.it_cf',
-	it_piva: 'tax_id.label.it_piva',
-	es_nif: 'tax_id.label.es_nif',
-	ar_cuit: 'tax_id.label.ar_cuit',
-	sa_vat: 'tax_id.label.sa_vat',
-	ca_gst_hst: 'tax_id.label.ca_gst_hst',
-	us_ein: 'tax_id.label.us_ein',
-	other: 'tax_id.label.other',
-};
+export function useTaxIdLabels(): Record<TaxIdType, string> {
+	const t = useT();
+	return React.useMemo(
+		() => ({
+			eu_vat: t('tax_id.label.eu_vat'),
+			gb_vat: t('tax_id.label.gb_vat'),
+			au_abn: t('tax_id.label.au_abn'),
+			br_cpf: t('tax_id.label.br_cpf'),
+			br_cnpj: t('tax_id.label.br_cnpj'),
+			in_gst: t('tax_id.label.in_gst'),
+			it_cf: t('tax_id.label.it_cf'),
+			it_piva: t('tax_id.label.it_piva'),
+			es_nif: t('tax_id.label.es_nif'),
+			ar_cuit: t('tax_id.label.ar_cuit'),
+			sa_vat: t('tax_id.label.sa_vat'),
+			ca_gst_hst: t('tax_id.label.ca_gst_hst'),
+			us_ein: t('tax_id.label.us_ein'),
+			other: t('tax_id.label.other'),
+		}),
+		[t]
+	);
+}
 
 /**
  * Example value strings shown as input placeholders. Not translated — these

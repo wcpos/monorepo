@@ -1,12 +1,22 @@
+import * as React from 'react';
+
+import { ObserveInteractiveMarker } from 'expo-observe';
+
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
 import { Suspense } from '@wcpos/components/suspense';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+
+import { POSProductsPane } from '../../../../../components/pos-products-pane';
 
 export default function POSProductsTab() {
 	return (
-		<ErrorBoundary>
+		<ErrorBoundary FallbackComponent={FallbackScreen}>
 			<Suspense>
-				<POSProducts />
+				<POSProductsPane>
+					{/* The phone's logged-in entry screen: time-to-interactive is the till's
+					    mount, as on the columns layout (lib/observe.ts). */}
+					<ObserveInteractiveMarker />
+				</POSProductsPane>
 			</Suspense>
 		</ErrorBoundary>
 	);

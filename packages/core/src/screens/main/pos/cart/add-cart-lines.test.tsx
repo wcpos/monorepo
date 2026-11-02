@@ -13,7 +13,7 @@ import { AddShipping } from './add-shipping';
 const mockAddFee = jest.fn(() => Promise.resolve());
 const mockAddProduct = jest.fn(() => Promise.resolve());
 const mockAddShipping = jest.fn((_data?: Record<string, unknown>) => Promise.resolve());
-const mockOnOpenChange = jest.fn();
+const mockClose = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -35,19 +35,25 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</button>
 	),
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useRootContext: () => ({ onOpenChange: mockOnOpenChange }),
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	useDialog: () => ({ close: mockClose }),
 }));
 
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	FormField: () => null,
 	FormInput: () => null,
-	FormRadioGroup: () => null,
+	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	FormSegmentedControl: () => null,
 	FormSelect: () => null,
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
 }));
+
+jest.mock('@wcpos/components/property-row', () =>
+	jest.requireActual('../../../../../jest/property-row.test-utils')
+);
 
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -72,13 +78,15 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../components/amount-field', () => ({
+	AmountField: () => null,
+	FormAmountField: () => null,
+}));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../../components/number-input', () => ({ NumberInput: () => null }));
 jest.mock('../../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
 jest.mock('../../components/shipping-method-select', () => ({ ShippingMethodSelect: () => null }));
-jest.mock('../../components/tax-class-select', () => ({ TaxClassSelect: () => null }));
-jest.mock('../../components/tax-status-radio-group', () => ({ TaxStatusRadioGroup: () => null }));
+jest.mock('../../components/tax-select', () => ({ TaxSelect: () => null }));
+jest.mock('../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
 jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: mockAddFee }) }));
 jest.mock('../hooks/use-add-product', () => ({
 	useAddProduct: () => ({ addProduct: mockAddProduct }),
@@ -118,7 +126,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	it('prevents duplicate miscellaneous-product submissions while addProduct is pending', async () => {
@@ -138,7 +146,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	it('prevents duplicate shipping submissions while addShipping is pending', async () => {
@@ -158,7 +166,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	/**

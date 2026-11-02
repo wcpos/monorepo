@@ -9,7 +9,11 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { VariationsFilterBar } from './filters';
 import { VariationsTable } from './table';
-import { useCollectionBinding, useQueryState, useQueryStateActions } from '../../../../../../query';
+import {
+	useCollectionQueryHandle,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../../../../query';
 
 import type { DataTableFeatures } from '../../../data-table';
 import type { Row } from '../../../../../../table-types';
@@ -18,12 +22,14 @@ interface Props {
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
+	/** The products page opens a variation from its row. */
+	openVariation?: (record: EngineRecord<'variations'>) => void;
 }
 
 /**
  *
  */
-export function Variations({ row, stockStatus }: Props) {
+export function Variations({ row, stockStatus, openVariation }: Props) {
 	/**
 	 * React Compiler caches the <VariationsTable> element on props that are all
 	 * referentially stable across a columnVisibility change, so React bails out
@@ -41,14 +47,13 @@ export function Variations({ row, stockStatus }: Props) {
 	const actions = useQueryStateActions<'variations'>();
 	const variationIds = useRecordField(parent, (record) => record.payload.variations) ?? [];
 	const remoteIds = variationIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
-	const binding = useCollectionBinding('variations', state, {
-		remoteIds,
-	});
-	const initialBinding = React.useRef(binding);
+	const handle = useCollectionQueryHandle('variations', state, { remoteIds });
+	// The expansion's handle, not a later one: the refresh runs once per expansion.
+	const initialHandle = React.useRef(handle);
 
 	React.useEffect(() => {
 		// Refresh once per row expansion without blocking locally resident variations.
-		void initialBinding.current.sync().catch(() => undefined);
+		void initialHandle.current.sync().catch(() => undefined);
 	}, []);
 
 	React.useEffect(() => {
@@ -68,9 +73,16 @@ export function Variations({ row, stockStatus }: Props) {
 				<VariationsFilterBar row={row} />
 			</ErrorBoundary>
 			<View className="flex-1">
-				<ErrorBoundary>
+				{/* A failed variations read lands here; the reset asks the handle again, and a changed
+				    query (a new handle) clears the fallback on its own. */}
+				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 					<Suspense>
-						<VariationsTable row={row} binding={binding} stockStatus={stockStatus} />
+						<VariationsTable
+							row={row}
+							handle={handle}
+							stockStatus={stockStatus}
+							openVariation={openVariation}
+						/>
 					</Suspense>
 				</ErrorBoundary>
 			</View>

@@ -9,8 +9,8 @@
 import { recalculateCoupons as pureRecalculateCoupons } from '@wcpos/order-math/internal';
 import type { RecalculateInput as PureRecalculateInput } from '@wcpos/order-math/internal';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
+type CouponLine = import('@wcpos/query').OrderCouponLine;
 
 export interface RecalculateInput extends Omit<PureRecalculateInput, 'lineItems' | 'couponLines'> {
 	lineItems: LineItem[];

@@ -1,66 +1,99 @@
 import * as React from 'react';
 
+import { retaxLine } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
-import { wooMetaCarrier } from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { reportStaleCartLine } from './cart-failure';
+import { enqueueCartAction } from './enqueue-cart-action';
+// Undo re-enters through cart.line.add; the guard must be registered whoever imported first.
+import './stock-guard-hook';
+import { useCartConfigReader } from './use-cart-config';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
+import { useActionContext } from './use-action-context';
 import { useT } from '../../../../contexts/translations';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { dispatchAction } from '../../../../extensions/actions';
+import { useCartWrite } from '../commands/use-cart-write';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+
+import type { OrderMutationContext } from './order-mutation-queue';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
 type Line = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type LineItem =
-	| NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+	| import('@wcpos/query').OrderLineItem
+	| import('@wcpos/query').OrderFeeLine
+	| import('@wcpos/query').OrderShippingLine
+	| import('@wcpos/query').OrderCouponLine;
 
 /**
  *
  */
 export const useRemoveLineItem = () => {
 	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
+	const configForOrder = useCartConfigReader();
+	const report = useReportEngineWarnings();
+	const { ctx, actor } = useActionContext();
 	const t = useT();
 
 	/**
-	 *
+	 * Undo is its own action: the restored line re-enters through `cart.line.add`, so a guard
+	 * (stock, by then possibly short) and every pricing hook see it like any other add.
 	 */
 	const undoRemove = React.useCallback(
 		async (uuid: string, type: Line, itemToRestore: LineItem) => {
-			const order = currentOrderRecord.getLatest();
-
-			// Determine if the item with this UUID exists in the current list
-			const items = (order.payload[type] ?? []) as LineItem[];
-			// A confirmed deletion retired this Woo id; Undo must append a new line.
-			if (itemToRestore.id && !items.some((item) => item.id === itemToRestore.id)) {
-				const { id: _id, ...content } = itemToRestore;
-				itemToRestore = content;
-			}
-			const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
-
-			let updatedLines: LineItem[];
-
-			if (itemIndex >= 0) {
-				// If item exists, replace the existing one with the restored one
-				updatedLines = [...items];
-				updatedLines[itemIndex] = itemToRestore;
-			} else {
-				// If item does not exist, add the restored item to the array
-				updatedLines = [...items, itemToRestore];
-			}
-
-			// Perform the patch to restore the item
-			await localPatch({
-				document: order,
-				data: {
-					[type]: updatedLines,
-				},
-			});
+			const orderContext = { orderId: currentOrderRecord.payload.id };
+			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
+				const order = target.getLatest();
+				const items = (order.payload[type] ?? []) as LineItem[];
+				// A confirmed deletion retired this Woo id; Undo must append a new line.
+				if (itemToRestore.id && !items.some((item) => item.id === itemToRestore.id)) {
+					const { id: _id, ...content } = itemToRestore;
+					itemToRestore = content;
+				}
+				return dispatchAction({
+					event: 'cart.line.add',
+					token: queue.dispatchToken,
+					ctx,
+					input: {
+						orderId: order.uuid,
+						actor,
+						source: 'user',
+						payload: {
+							type,
+							line: itemToRestore as Record<string, unknown>,
+							lineItems: (order.payload.line_items ?? []) as Record<string, unknown>[],
+						},
+					},
+					bottom: async (e) => {
+						const payload = order.getLatest().payload;
+						const items = (payload[type] ?? []) as LineItem[];
+						const restored = e.payload.line as LineItem;
+						const config = configForOrder(payload);
+						// Taxed web lines keep stored tax: their catalog tax status is unknown here.
+						const { line, warnings } =
+							type === 'line_items' &&
+							(config.vatExempt ||
+								restored.meta_data?.some(({ key }) => key === POS_META_KEYS.posData))
+								? retaxLine({ kind: 'line_item', line: restored }, config)
+								: type === 'fee_lines'
+									? retaxLine({ kind: 'fee', line: restored }, config)
+									: { line: restored, warnings: [] };
+						report(warnings, { orderId: order.uuid, site: 'undoRemove' });
+						const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
+						const updatedLines = [...items];
+						// Replace the line if a later write brought it back, else append the restore.
+						if (itemIndex >= 0) updatedLines[itemIndex] = line;
+						else updatedLines.push(line);
+						return localPatch({ document: order, queue, data: { [type]: updatedLines } });
+					},
+				});
+			};
+			await enqueueCartAction(currentOrderRecord, run, { ctx, context: orderContext });
 		},
-		[currentOrderRecord, localPatch]
+		[currentOrderRecord, localPatch, ctx, actor, configForOrder, report]
 	);
 
 	/**
@@ -71,41 +104,55 @@ export const useRemoveLineItem = () => {
 	 */
 	const removeLineItem = React.useCallback(
 		async (uuid: string, type: Line) => {
-			const order = currentOrderRecord.getLatest();
 			let itemToRestore: LineItem | undefined;
-
-			const items = (order.payload[type] ?? []) as LineItem[];
-			const updatedLines = items
-				.map((item) => {
-					if (wooMetaCarrier.lineUuid(item) === uuid) {
-						itemToRestore = item;
-						if (item.id) {
-							switch (type) {
-								case 'line_items':
-									return { ...item, product_id: null };
-								case 'fee_lines':
-									return { ...item, name: null };
-								case 'shipping_lines':
-									return { ...item, method_id: null };
-								case 'coupon_lines':
-									return { ...item, code: null };
-								default:
-									return item;
-							}
-						}
-						return null; // If item should be removed completely, return null (to be filtered out later)
-					}
-					return item;
-				})
-				.filter((item) => item !== null);
-
-			// update the order with the item removed
-			await localPatch({
-				document: order,
-				data: {
-					[type]: updatedLines,
-				},
+			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
+				const order = target.getLatest();
+				const items = (order.payload[type] ?? []) as LineItem[];
+				itemToRestore = items.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
+				return dispatchAction({
+					event: 'cart.line.remove',
+					token: queue.dispatchToken,
+					ctx,
+					input: {
+						orderId: order.uuid,
+						actor,
+						source: 'user',
+						payload: {
+							type,
+							lineUuid: uuid,
+							line: (itemToRestore ?? null) as Record<string, unknown> | null,
+							lineItems: (order.payload.line_items ?? []) as Record<string, unknown>[],
+						},
+					},
+					bottom: async () => {
+						const updatedLines = items
+							.map((item) => {
+								if (wooMetaCarrier.lineUuid(item) !== uuid) return item;
+								// A synced line is retired by nulling its key field; a local one is dropped.
+								if (!item.id) return null;
+								switch (type) {
+									case 'line_items':
+										return { ...item, product_id: null };
+									case 'fee_lines':
+										return { ...item, name: null };
+									case 'shipping_lines':
+										return { ...item, method_id: null };
+									case 'coupon_lines':
+										return { ...item, code: null };
+									default:
+										return item;
+								}
+							})
+							.filter((item) => item !== null);
+						return localPatch({ document: order, queue, data: { [type]: updatedLines } });
+					},
+				});
+			};
+			const outcome = await enqueueCartAction(currentOrderRecord, run, {
+				ctx,
+				context: { orderId: currentOrderRecord.payload.id, uuid, type },
 			});
+			if (outcome === false) return;
 
 			if (itemToRestore) {
 				const itemName =
@@ -140,7 +187,7 @@ export const useRemoveLineItem = () => {
 				});
 			}
 		},
-		[currentOrderRecord, localPatch, t, undoRemove]
+		[currentOrderRecord, localPatch, t, undoRemove, ctx, actor]
 	);
 
 	return { removeLineItem };

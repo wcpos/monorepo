@@ -1,30 +1,13 @@
-import {
-	asyncScheduler,
-	defer,
-	EMPTY,
-	from,
-	merge,
-	Observable,
-	of,
-	ReplaySubject,
-	throwError,
-	timer,
-} from 'rxjs';
-import {
-	catchError,
-	distinctUntilChanged,
-	map,
-	startWith,
-	switchMap,
-	takeUntil,
-	tap,
-	throttleTime,
-} from 'rxjs/operators';
-import get from 'lodash/get';
+import { combineLatest, EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
-import { FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
-import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { foldSearchText, searchTerms } from '@wcpos/sync-core';
+import type {
+	CoverageTarget,
+	CoverageVerdict,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 import {
 	engineCollectionNameFor,
@@ -37,43 +20,33 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
-import { catalogueSearchBlobFor } from './catalogue-search-blob';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
-import {
-	fieldsMatchShortPrefix,
-	fieldsMatchTokens,
-	fieldsMissAnyOfTokens,
-	searchTerms,
-	searchTokens,
-} from './search-match';
-import {
-	markSearchRebuildCompleted,
-	rebuiltSearchIndexes,
-	SEARCH_SCAN_RETHROTTLE_MS,
-	type SearchableCollection,
-	searchLogger,
-	searchRebuildCompleted,
-	sharedSearchInstances,
-} from './search-shared';
+import { searchBlobFor } from './search-blob';
+import { searchFieldsFor } from './search-fields';
 
+import type { SearchableCollection } from './search-shared';
 import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
 import type { QueryResult } from './query-result';
 import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
 
 /**
- * How long one search waits for the FlexSearch index before answering from a
- * direct document scan. A healthy, built index answers in single-digit
- * milliseconds; this deadline only passes while the index is still building or
- * its pipeline cannot run at all (a follower tab, a backgrounded leader —
- * #1733). 250ms keeps the worst-case first answer under half a second
- * including the input debounce, without paying a scan on healthy keystrokes.
+ * A child collection whose search matches credit their parent (roadmap#423 R4): with a search
+ * term, a parent is a hit when it matches directly or when a child the relation admits does;
+ * the child count rides on the hit as `childrenSearchCount`, the term as `parentSearchTerm`,
+ * and the parent's window (sort, limit) applies AFTER the union, so every matching child is
+ * considered before the limit. Without a term the relation is ignored. The parents the
+ * children named are listed on the result as `relatedIds` (resident or not): what an OWNER
+ * asks the engine for — this read declares nothing.
  */
-const SEARCH_INDEX_ANSWER_DEADLINE_MS = 250;
-/** Log the scan takeover once per collection:locale per session, not per keystroke. */
-const stalledSearchIndexes = new Set<string>();
-// Owned by the side that builds the index; re-exported for existing consumers.
-export { FLEXSEARCH_MIN_TERM_LENGTH };
+export type EngineQueryRelation = {
+	collection: LegacyCollectionName;
+	/** The child payload field naming the parent's woo id. */
+	parentKey: string;
+	/** The children the relation admits (the products status filter today). */
+	selector?: LegacyMangoSelector;
+	searchFields?: string[];
+};
 
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;
@@ -85,6 +58,8 @@ export interface EngineQueryDescriptor {
 	searchFields?: string[];
 	/** Precompiled query-state read face; selectors remain the escape hatch for hand-built queries. */
 	read?: CompiledQueryRead;
+	/** One child collection whose search matches make their parent a hit (singular by design). */
+	relation?: EngineQueryRelation;
 }
 
 export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDatabase | null> {
@@ -122,6 +97,14 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 	});
 }
 
+/** Identity used to invalidate reference demand after a scope switch or collection reset. */
+export function readCoverageGeneration(
+	engine: RxdbSyncEngine,
+	collection: SyncCollectionName
+): number {
+	return engine.status().collections[collection].coverageGeneration;
+}
+
 /**
  * The engine's coverage verdict for one target, as an Observable.
  *
@@ -139,34 +122,14 @@ export function observeCoverage(
 }
 
 /**
- * The fallback answer when the index cannot answer: match the query directly
- * against the documents: non-catalogue collections retain the index's per-token AND semantics.
- * Folding goes through the SAME `foldSearchText` the index's encoder uses
- * (#1732), so a scan answer and the indexed answer that replaces it agree.
- *
- * The scan reads the documents themselves, so its answer is ground truth for
- * local data; the indexed answer replaces it only because the index also
- * carries the query cheaply on every later keystroke.
+ * The ids a search term selects, or `null` when there is no term. One path for every
+ * collection (#2411): the folded blob answers from local rows and re-answers on the
+ * collection's change stream. A collection without search fields answers nothing — never
+ * everything — so a stray term on an unsearchable panel cannot select the whole table.
  */
-async function scanDocumentsForSearch(
-	collection: SearchableCollection,
-	search: string,
-	searchFields: string[],
-	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
-): Promise<EngineRxDocument[]> {
-	const tokens = searchTokens(search);
-	if (searchFields.length === 0 || tokens.length === 0) return [];
-	const documents = await collection.find().exec();
-	return documents.filter((document) => {
-		const snapshot = documentSnapshot(document);
-		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-		return fieldsMatchTokens(fields, tokens);
-	});
-}
 function matchingSelectors$(
 	database: AdapterDatabase,
-	descriptor: EngineQueryDescriptor,
-	locale: string
+	descriptor: EngineQueryDescriptor
 ): Observable<{ selector: LegacyMangoSelector; hitIds: string[] | null }> {
 	const selector = descriptor.selector ?? {};
 	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
@@ -175,200 +138,26 @@ function matchingSelectors$(
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
-	if (!collection?.initSearch) return of({ selector, hitIds: [] });
+	if (!collection) return of({ selector, hitIds: [] });
+
+	// A query that folds away entirely (only combining marks) matches everything, like
+	// WooCommerce's ai_ci LIKE would (#1732).
+	if (!foldSearchText(search)) return of({ selector, hitIds: null });
+	const terms = searchTerms(search);
+	if (terms.length === 0) return of({ selector, hitIds: [] });
+
+	const searchFields =
+		descriptor.read?.searchFields ??
+		descriptor.searchFields ??
+		collection.options?.searchFields ??
+		searchFieldsFor(descriptor.collection) ??
+		[];
+	if (searchFields.length === 0) return of({ selector, hitIds: [] });
+
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
-
-	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
-	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
-	// scan path with the typed NFC "Cè" (#1732). A query that folds away entirely
-	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
-	const foldedSearch = foldSearchText(search);
-	if (!foldedSearch) return of({ selector, hitIds: null });
-	const phraseSearch =
-		descriptor.collection === 'products' || descriptor.collection === 'variations';
-	if (phraseSearch) {
-		const terms = searchTerms(search);
-		if (terms.length === 0) return of({ selector, hitIds: [] });
-		const searchFields =
-			descriptor.read?.searchFields ??
-			descriptor.searchFields ??
-			collection.options?.searchFields ??
-			[];
-		const blob = catalogueSearchBlobFor(collection, searchFields, documentSnapshot);
-		return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
-	}
-	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
-		const prefix = foldedSearch;
-		// Mirror initSearch's fallback so short and indexed terms search the same fields.
-		const searchFields =
-			descriptor.read?.searchFields ??
-			descriptor.searchFields ??
-			collection.options?.searchFields ??
-			[];
-		// No error handling here on purpose: this path has no search index, so a failure
-		// is a genuine collection read error and must stay eligible for storage recovery.
-		return collection.$.pipe(
-			startWith(null),
-			switchMap(() => from(collection.find().exec())),
-			map((documents) => ({
-				selector,
-				hitIds: documents
-					.filter((document) => {
-						const snapshot = documentSnapshot(document);
-						const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-						return fieldsMatchShortPrefix(fields, prefix);
-					})
-					.map((document) => document.primary),
-			}))
-		);
-	}
-	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
-	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
-	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = searchTokens(search);
-		if (searchFields.length === 0 || tokens.length === 0) return [];
-		return documents.flatMap((document) => {
-			const snapshot = documentSnapshot(document);
-			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return fieldsMissAnyOfTokens(fields, tokens)
-				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
-				: [];
-		});
-	};
-
-	const sharedKey = `${descriptor.collection}:${locale}`;
-	const logIndexNotAnswering = (error?: unknown) => {
-		if (stalledSearchIndexes.has(sharedKey)) return;
-		stalledSearchIndexes.add(sharedKey);
-		searchLogger.warn('Search index is not answering; searching by document scan', {
-			code: ERROR_CODES.SEARCH_INDEX_STALLED,
-			showToast: false,
-			context: {
-				collection: descriptor.collection,
-				locale,
-				search,
-				...(error instanceof Error ? { error: error.message } : {}),
-			},
-		});
-	};
-
-	// The scan answers directly from the documents, reacting to source writes;
-	// callers decide when it runs (deadline lane, or takeover after an index
-	// failure). No error handling on purpose: a scan failure is a genuine
-	// collection read error and must stay eligible for storage recovery
-	// (mirrors the short-term path above).
-	const scanAnswers$ = () =>
-		collection.$.pipe(
-			startWith(null),
-			throttleTime(SEARCH_SCAN_RETHROTTLE_MS, asyncScheduler, {
-				leading: true,
-				trailing: true,
-			}),
-			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
-			)
-		);
-
-	return defer(() => {
-		const boundInstances$ = from(
-			collection.initSearch(locale, {
-				searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
-				documentSnapshot,
-			})
-		).pipe(
-			switchMap((searchInstance) => {
-				if (!searchInstance) return of(null);
-				const searchInstances = sharedSearchInstances(sharedKey, searchInstance);
-				return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
-			}),
-			// A failed initSearch must never take search down with it: log once and
-			// answer from the scan. The next subscription (next keystroke) retries.
-			catchError((error) => {
-				logIndexNotAnswering(error);
-				return of(null);
-			})
-		);
-		// One race per BOUND INSTANCE, not per subscription: a rebuild rebind
-		// (divergence, false-miss audit) re-enters here with a fresh latch, so the
-		// scan lane revives if the rebuilt index stalls mid-build instead of
-		// leaving the term frozen on stale results.
-		return boundInstances$.pipe(
-			switchMap((bound) => {
-				if (!bound) return scanAnswers$();
-				const { activeSearch, searchInstances } = bound;
-				// Latched by the FIRST indexed answer for this binding; the scan lane
-				// stands down once the index has proven it can answer this term.
-				const indexAnswered$ = new ReplaySubject<void>(1);
-				const indexedLane$ = activeSearch.collection.$.pipe(
-					startWith(null),
-					switchMap(() => from(activeSearch.find(search)).pipe(tap(() => indexAnswered$.next()))),
-					switchMap(async (documents) => {
-						const falseHits = findFalseHits(documents);
-						if (falseHits.length === 0) return documents;
-						const alreadyRebuilt = rebuiltSearchIndexes.has(sharedKey);
-						// A rebuild is triggered automatically ("nothing to do"): warn. Only a
-						// divergence that survives a rebuild is an error.
-						const survivedRebuild = searchRebuildCompleted(collection, locale);
-						searchLogger[survivedRebuild ? 'error' : 'warn']('Search index divergence detected', {
-							code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
-							showToast: false,
-							context: {
-								collection: descriptor.collection,
-								locale,
-								search,
-								falseHits: falseHits.slice(0, 5).map(({ uuid, fields }) => ({ uuid, fields })),
-								totalHits: documents.length,
-								falseHitCount: falseHits.length,
-								...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
-							},
-						});
-						const filtered = documents.filter((document) =>
-							falseHits.every((falseHit) => falseHit.document !== document)
-						);
-						if (alreadyRebuilt) return filtered;
-						rebuiltSearchIndexes.add(sharedKey);
-						try {
-							await collection.recreateSearch?.(locale);
-							const rebuilt = await collection.initSearch(locale, {
-								searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
-								documentSnapshot,
-							});
-							markSearchRebuildCompleted(collection, locale);
-							if (rebuilt) searchInstances.next(rebuilt);
-							return filtered;
-						} catch (error) {
-							searchLogger.warn('Search index rebuild failed', {
-								code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
-								context: { collection: descriptor.collection, locale, search, error },
-							});
-							return filtered;
-						}
-					}),
-					// A poisoned pipeline surfacing through find() must never take search
-					// down with it — even after earlier answers: log once, stand the
-					// deadline lane down, and hand this binding to the scan for good. A
-					// rebind or the next keystroke retries the index.
-					catchError((error) => {
-						logIndexNotAnswering(error);
-						indexAnswered$.next();
-						return scanAnswers$();
-					})
-				);
-				const deadlineScanLane$ = timer(SEARCH_INDEX_ANSWER_DEADLINE_MS).pipe(
-					tap(() => logIndexNotAnswering()),
-					switchMap(() => scanAnswers$()),
-					takeUntil(indexAnswered$)
-				);
-				return merge(indexedLane$, deadlineScanLane$);
-			})
-		);
-	}).pipe(
-		map((documents) => ({
-			selector,
-			hitIds: documents.map((document) => document.primary),
-		}))
-	);
+	const blob = searchBlobFor(collection, searchFields, documentSnapshot, descriptor.collection);
+	return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
 }
 
 function emptyResult(): QueryResult<RxCollection> {
@@ -385,62 +174,187 @@ function pendingSearchResult(): QueryResult<RxCollection> {
 	return { count: 0, hits: [], searchState: 'pending' };
 }
 
-/** Direct reactive read against the current engine database through the adapter execute path. */
-export function observeEngineQuery(
+function searchTermOf(descriptor: EngineQueryDescriptor): string {
+	return (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
+}
+
+/**
+ * The engine database, re-published whenever it or any of the named collections changes
+ * identity (a store switch, a collection recreated by a reset); `null` while any is absent.
+ * Every leg of one read hangs off ONE binding, so a store switch rebinds them together.
+ */
+export function observeBinding(
 	engine: RxdbSyncEngine,
-	locale: string,
-	descriptor: EngineQueryDescriptor
-): Observable<QueryResult<RxCollection>> {
-	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
+	collections: (LegacyCollectionName | 'recordMutations')[]
+): Observable<AdapterDatabase | null> {
 	return observeEngineDatabases(engine).pipe(
 		map((database) => {
 			const adapterDatabase = database as unknown as AdapterDatabase | null;
 			return {
 				database: adapterDatabase,
-				collection: adapterDatabase?.collections[engineCollectionNameFor(descriptor.collection)],
+				collections: collections.map(
+					(name) =>
+						adapterDatabase?.collections[
+							name === 'recordMutations' ? name : engineCollectionNameFor(name)
+						]
+				),
 			};
 		}),
 		distinctUntilChanged(
 			(previous, current) =>
-				previous.database === current.database && previous.collection === current.collection
+				previous.database === current.database &&
+				previous.collections.every((collection, index) => collection === current.collections[index])
 		),
-		switchMap(({ database, collection }) => {
-			if (!database || !collection) {
-				return of(search ? pendingSearchResult() : emptyResult());
-			}
-			return matchingSelectors$(database, descriptor, locale).pipe(
-				switchMap(({ selector, hitIds }) =>
-					executeAdapterQuery({
-						database,
-						collection: descriptor.collection,
-						selector,
-						hitIds,
-						sort: descriptor.sort,
-						skip: descriptor.skip,
-						limit: descriptor.limit,
-						read: descriptor.read,
-					})
-				),
-				map((result): QueryResult<RxCollection> => ({
-					count: result.count,
-					hits: result.hits.map((document) => ({
-						id: document.primary,
-						record: document,
-					})),
-					// Every selector the search path emits derives from an actual answer
-					// (indexed or scanned), so reaching here with a term settles the state.
-					...(search ? { searchState: 'answered' as const } : {}),
-				})),
-				catchError((error) =>
-					from(
-						recoverEngineCollectionStorage(
-							engine,
-							engineCollectionNameFor(descriptor.collection),
-							error
-						)
-					).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))))
+		map(({ database, collections: bound }) => (database && bound.every(Boolean) ? database : null))
+	);
+}
+
+/** One read against a bound database, with storage recovery on a failed execution. */
+function readBound(
+	engine: RxdbSyncEngine,
+	database: AdapterDatabase,
+	descriptor: EngineQueryDescriptor
+): Observable<QueryResult<RxCollection>> {
+	const search = searchTermOf(descriptor);
+	return matchingSelectors$(database, descriptor).pipe(
+		switchMap(({ selector, hitIds }) =>
+			executeAdapterQuery({
+				database,
+				collection: descriptor.collection,
+				selector,
+				hitIds,
+				sort: descriptor.sort,
+				skip: descriptor.skip,
+				limit: descriptor.limit,
+				read: descriptor.read,
+			})
+		),
+		map((result): QueryResult<RxCollection> => ({
+			count: result.count,
+			hits: result.hits.map((document) => ({
+				id: document.primary,
+				record: document,
+			})),
+			// Every selector the search path emits derives from an actual blob answer,
+			// so reaching here with a term settles the state.
+			...(search ? { searchState: 'answered' as const } : {}),
+		})),
+		catchError((error) =>
+			from(
+				recoverEngineCollectionStorage(
+					engine,
+					engineCollectionNameFor(descriptor.collection),
+					error
 				)
+			).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))))
+		)
+	);
+}
+
+/**
+ * The relational search (roadmap#423 R4): direct hits ∪ the parents of matching children,
+ * then ONE windowed read over that uuid set. `parent` carries no relation; every leg is a
+ * plain read against the same bound database.
+ */
+function readRelation(
+	engine: RxdbSyncEngine,
+	database: AdapterDatabase,
+	parent: EngineQueryDescriptor,
+	relation: EngineQueryRelation,
+	search: string
+): Observable<QueryResult<RxCollection>> {
+	const { read } = parent;
+	// The direct leg is unwindowed: the window applies after the union.
+	const direct$ = readBound(engine, database, {
+		...parent,
+		skip: undefined,
+		limit: undefined,
+		...(read ? { read: { ...read, limit: undefined } } : {}),
+	});
+	const children$ = readBound(engine, database, {
+		collection: relation.collection,
+		selector: relation.selector,
+		sort: [{ id: 'asc' }],
+		search,
+		searchFields: relation.searchFields,
+	});
+	return combineLatest([direct$, children$]).pipe(
+		switchMap(([direct, children]) => {
+			const counts = new Map<number, number>();
+			for (const hit of children.hits) {
+				const parentId = Number(hit.record.payload[relation.parentKey]);
+				if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
+			}
+			const parentIds = [...counts.keys()];
+			// The union is an ANSWER only once both search legs have answered (#1733). A bound
+			// leg always answers; the pending state a reader sees comes from the null-binding
+			// emission below and from `combineLatest` holding until both legs have spoken. The
+			// guard keeps the contract explicit should a leg ever learn to answer 'pending'.
+			const searchAnswered =
+				direct.searchState === 'answered' && children.searchState === 'answered';
+			const named$ =
+				parentIds.length === 0
+					? of(emptyResult())
+					: readBound(engine, database, {
+							collection: parent.collection,
+							selector: { id: { $in: parentIds } },
+							searchFields: parent.searchFields,
+						});
+			return named$.pipe(map((named) => ({ direct, named, counts, parentIds, searchAnswered })));
+		}),
+		switchMap(({ direct, named, counts, parentIds, searchAnswered }) => {
+			const uuids = [...new Set([...direct.hits, ...named.hits].map((hit) => hit.id))];
+			const uuidWindow = { uuid: { $in: uuids } };
+			const own = parent.selector ?? {};
+			return readBound(engine, database, {
+				...parent,
+				search: undefined,
+				...(read ? { read: { ...read, search: '' } } : {}),
+				// The parent's own selector still bounds the union: a parent it excludes stays out
+				// even when one of its children matched.
+				selector: Object.keys(own).length > 0 ? { $and: [own, uuidWindow] } : uuidWindow,
+			}).pipe(
+				map((result): QueryResult<RxCollection> => ({
+					...result,
+					searchActive: true,
+					searchState: searchAnswered ? 'answered' : 'pending',
+					relatedIds: parentIds,
+					hits: result.hits.map((hit) => ({
+						...hit,
+						childrenSearchCount: counts.get(Number(hit.record.payload.id)) ?? 0,
+						parentSearchTerm: search,
+					})),
+				}))
 			);
 		})
+	);
+}
+
+/** Direct reactive read against the current engine database through the adapter execute path. */
+export function observeEngineQuery(
+	engine: RxdbSyncEngine,
+	descriptor: EngineQueryDescriptor
+): Observable<QueryResult<RxCollection>> {
+	const search = searchTermOf(descriptor);
+	const { relation, ...parent } = descriptor;
+	if (relation && search) {
+		return observeBinding(engine, [parent.collection, relation.collection]).pipe(
+			switchMap((database) =>
+				database
+					? readRelation(engine, database, parent, relation, search)
+					: of<QueryResult<RxCollection>>({
+							...pendingSearchResult(),
+							searchActive: true,
+							relatedIds: [],
+						})
+			)
+		);
+	}
+	return observeBinding(engine, [parent.collection]).pipe(
+		switchMap((database) =>
+			database
+				? readBound(engine, database, parent)
+				: of(search ? pendingSearchResult() : emptyResult())
+		)
 	);
 }

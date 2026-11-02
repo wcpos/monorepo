@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 
+import { Toast } from '@wcpos/components/toast';
+
 import { DatabaseScreen } from './database';
 
 import type { StuckRecord } from '../logs/logs-logic';
@@ -29,7 +31,6 @@ const mockCheckCollection = jest.fn();
 const defaultStorageFootprint = {
 	breakdown: {
 		activeDataBytes: 1_000_000,
-		searchIndexBytes: 2 * 1024 * 1024,
 		bookkeepingBytes: 3 * 1024 * 1024,
 		otherCashiersBytes: 5 * 1024 * 1024,
 		otherStoresBytes: 40 * 1024 * 1024,
@@ -52,6 +53,11 @@ let mockCensusTotals: Record<
 	{ total: number; updatedAtMs: number; freshUntilMs: number; fresh: boolean }
 > = { ...defaultCensusTotals };
 
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
@@ -63,11 +69,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	}
 	return {
 		AlertDialog: Component,
-		AlertDialogAction: Component,
-		AlertDialogCancel: Component,
 		AlertDialogContent: Component,
 		AlertDialogDescription: Component,
-		AlertDialogFooter: Component,
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 		AlertDialogHeader: Component,
 		AlertDialogTitle: Component,
 	};
@@ -97,6 +101,29 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({
+		name,
+		testID,
+		onPress,
+		disabled,
+		loading,
+	}: {
+		name: string;
+		testID?: string;
+		onPress?: () => void;
+		disabled?: boolean;
+		loading?: boolean;
+	}) => (
+		<button
+			data-testid={testID}
+			data-icon={name}
+			onClick={onPress}
+			disabled={disabled || loading}
+			data-loading={loading ? 'true' : 'false'}
+		/>
+	),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/dropdown-menu', () => {
 	function Component({ children }: { children: React.ReactNode }) {
@@ -109,15 +136,18 @@ jest.mock('@wcpos/components/dropdown-menu', () => {
 			children,
 			testID,
 			onPress,
+			variant,
 		}: {
 			children: React.ReactNode;
 			testID?: string;
 			onPress?: () => void;
+			variant?: string;
 		}) => (
-			<button data-testid={testID} onClick={onPress}>
+			<button data-testid={testID} data-variant={variant ?? 'default'} onClick={onPress}>
 				{children}
 			</button>
 		),
+		DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 		DropdownMenuTrigger: Component,
 	};
 });
@@ -138,7 +168,14 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -168,13 +205,53 @@ jest.mock('@wcpos/components/vstack', () => ({
 		);
 	},
 }));
+// The shared table: plain elements that keep testID and className, and register the
+// root's onLayout as the VStack mock does (the wide/compact switch reads it).
+jest.mock('@wcpos/components/table', () => {
+	function Cell({
+		children,
+		testID,
+		className,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) {
+		return (
+			<div data-testid={testID} className={className}>
+				{children}
+			</div>
+		);
+	}
+	return {
+		Table: ({
+			children,
+			testID,
+			onLayout,
+		}: {
+			children: React.ReactNode;
+			testID?: string;
+			onLayout?: LayoutHandler;
+		}) => {
+			if (typeof onLayout === 'function' && typeof testID === 'string') {
+				mockLayoutHandlers[testID] = onLayout;
+			}
+			return <div data-testid={testID}>{children}</div>;
+		},
+		TableCell: Cell,
+		TableHead: Cell,
+		TableHeader: Cell,
+		TableRow: Cell,
+	};
+});
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	runResetRefill: jest.fn(),
+	resetCollectionsAndRefill: jest.requireActual('@wcpos/query').resetCollectionsAndRefill,
 	useQueryRuntime: () => ({
 		engine: {
 			active: jest.fn(),
-			scope: {},
+			scope: { resetCollection: jest.fn().mockResolvedValue('reset') },
+			require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
 			sync: mockSync,
 			checkCollection: mockCheckCollection,
 		},
@@ -196,6 +273,7 @@ jest.mock('./use-unresolved-conflicts', () => ({
 	useUnresolvedConflictKeys: () => mockConflictedKeys,
 }));
 jest.mock('./queued-emails', () => ({ QueuedEmailsPanel: () => null }));
+jest.mock('./registers-panel', () => ({ RegistersPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
@@ -228,12 +306,7 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	}),
 	useMutationCounts: () => mockMutationCounts,
 }));
-jest.mock('./components', () => ({
-	Callout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	CoverageBar: ({ percent }: { percent: number }) => <div>{percent}</div>,
-	HairlineHeaderCell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	HairlineHeaderRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+jest.mock('@wcpos/components/stat', () => ({
 	Stat: () => null,
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -285,6 +358,19 @@ describe('DatabaseScreen coverage', () => {
 		expect(getAllByTestId('db-row-products')[0].textContent).toContain('server busy…');
 		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('server busy…');
 		expect(getByText(/Server totals updated/).textContent).toContain('server is busy');
+	});
+
+	it('builds the row menu like every other row menu: a ⋮ icon button, the destructive row last', () => {
+		const { getAllByTestId } = render(<DatabaseScreen />);
+		expect(getAllByTestId('db-row-menu-products')[0].getAttribute('data-icon')).toBe('more');
+		const sync = getAllByTestId('db-row-sync-now-products')[0];
+		const clear = getAllByTestId('db-row-clear-products')[0];
+		expect(sync.getAttribute('data-variant')).toBe('default');
+		// Red by the item's variant, never by a className on its label.
+		expect(clear.getAttribute('data-variant')).toBe('destructive');
+		const separator = clear.previousElementSibling;
+		expect(separator?.getAttribute('data-testid')).toBe('menu-separator');
+		expect(separator?.previousElementSibling).toBe(sync);
 	});
 
 	it('spins only the checked row and disables manual controls while its check runs', async () => {
@@ -359,12 +445,38 @@ describe('DatabaseScreen coverage', () => {
 		expect(getByTestId('db-row-sm-products').className).toContain('hidden');
 	});
 
-	it('keeps the wider health layout with the shared screen spacing', () => {
+	it('lays the heads, the collection rows and the storage lines on the same columns', () => {
 		const { getByTestId } = render(<DatabaseScreen />);
-
-		expect(getByTestId('screen-health-database').className).toBe(
-			'mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8'
+		act(() => mockLayoutHandlers['db-table']({ nativeEvent: { layout: { width: 760 } } }));
+		const classes = (testID: string) =>
+			Array.from(getByTestId(testID).children).map((cell) => cell.className);
+		const head = Array.from(getByTestId('db-table').children[0].children[0].children).map(
+			(cell) => cell.className
 		);
+		const row = classes('db-row-products');
+		// Same six columns, the last the menu button's own width (the old w-9 spacer sat
+		// 8 px short of the 44 px menu, pushing every head right of its numbers).
+		expect(row).toEqual(head);
+		expect(row.at(-1)).toContain('w-ctl');
+		expect(classes('db-row-cached-images').at(-1)).toBe(row.at(-1));
+	});
+
+	it('is an area page: the heading and its subtitle open the card', () => {
+		const { getAllByText, getByTestId } = render(<DatabaseScreen />);
+		const subtitle =
+			'Your store, on this device — sales keep working even if your server does not.';
+
+		// Once, in the heading block, ahead of the summary strip — not repeated in the body.
+		expect(getAllByText(subtitle)).toHaveLength(1);
+		const text = getByTestId('screen-health-database').textContent ?? '';
+		expect(text.startsWith(`Database${subtitle}`)).toBe(true);
+	});
+
+	it('keeps the table at the column a 1024 window leaves inside the page card', () => {
+		const { getByTestId } = render(<DatabaseScreen />);
+		act(() => mockLayoutHandlers['db-table']({ nativeEvent: { layout: { width: 620 } } }));
+		expect(getByTestId('db-row-products').className).toContain('flex');
+		expect(getByTestId('db-row-products').className).not.toContain('hidden');
 	});
 
 	it('does not disclose metadata for other store scopes', () => {
@@ -376,8 +488,6 @@ describe('DatabaseScreen coverage', () => {
 	it('itemizes measured storage as aggregate buckets, hiding empty ones', () => {
 		const { getByTestId, getByText, queryByText } = render(<DatabaseScreen />);
 
-		expect(getByText('Search indexes')).toBeTruthy();
-		expect(getByText('≈ 2.0 MB')).toBeTruthy();
 		expect(getByText('Other stores on this device (2)')).toBeTruthy();
 		expect(getByText('≈ 40 MB')).toBeTruthy();
 		expect(getByTestId('db-row-cached-images').textContent).toContain('≈ 4.0 MB');
@@ -476,4 +586,22 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(getAllByText('1 stuck')).toHaveLength(2);
 	});
+});
+
+it('shows the refund history policy on the registered Health row', () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	expect(getByTestId('db-row-refunds').textContent).toContain(
+		'Refunds from the last 92 days, plus any refund of an order you have opened'
+	);
+});
+
+it('does not claim refund history downloaded after requesting reset refill', async () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	fireEvent.click(getByTestId('db-row-clear-confirm-refunds'));
+	await waitFor(() =>
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'success',
+			text1: 'Refunds cleared — recent history requested again',
+		})
+	);
 });

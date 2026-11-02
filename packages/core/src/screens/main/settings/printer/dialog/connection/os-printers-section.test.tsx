@@ -11,7 +11,15 @@ import { OsPrintersSection } from './os-printers-section';
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
 
+// ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
+// ListItem reads the pointer, and this suite's react-native mock has no Platform.
+jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/form', () => ({ SavedMark: () => null }));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('react-native', () => ({
+	// The shared rows' press haptic reads it (native only).
+	Platform: { OS: 'web' },
 	Pressable: ({
 		children,
 		onPress,

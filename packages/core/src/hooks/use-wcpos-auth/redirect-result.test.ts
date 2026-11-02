@@ -8,6 +8,7 @@ import {
 	peekRedirectClaim,
 	peekRedirectLoginUrl,
 	saveRedirectState,
+	takeRedirectReturn,
 } from './redirect-result';
 
 // Mock expo-auth-session (ESM) pulled in transitively via ./utils
@@ -175,6 +176,15 @@ describe('redirect-result', () => {
 		expect(peekRedirectLoginUrl()).toBe(LOGIN_URL);
 		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
 		expect(peekRedirectLoginUrl()).toBeNull();
+	});
+
+	it('takeRedirectReturn hands the return to the first taker for its site only, and leaves the result', () => {
+		simulateRedirectReturn();
+
+		expect(takeRedirectReturn(OTHER_LOGIN_URL)).toBe(false);
+		expect(takeRedirectReturn(LOGIN_URL)).toBe(true);
+		expect(takeRedirectReturn(LOGIN_URL)).toBe(false);
+		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
 	});
 
 	it('peekRedirectClaim reveals the initiating site and claimKey without consuming', () => {

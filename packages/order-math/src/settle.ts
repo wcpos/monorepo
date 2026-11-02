@@ -1,12 +1,11 @@
-import { isGuestCustomer } from '@wcpos/sync-core';
+import isEqual from 'lodash/isEqual';
 
 import { calculateCartLine } from './cart-line';
 import { recalculateCoupons } from './internal/coupons/recalculate';
-import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
+import { couponValidationContext, resolveCouponReplay } from './internal/coupons/context';
 import { validateCoupon } from './internal/coupons/validate';
-import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
 import { calculateOrderTotals, type OrderTotals } from './internal/order-totals';
-import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
+import { extractFeeLineData } from './internal/lines/pos-data';
 import {
 	isActiveCouponLine,
 	isActiveFeeLine,
@@ -15,7 +14,7 @@ import {
 } from './snapshot';
 
 import type { CartConfig } from './config';
-import type { CouponLineItem } from './internal/coupons/helpers';
+import type { TaxStatus } from './retax-line';
 import type { CartSnapshot } from './snapshot';
 import type {
 	CouponContext,
@@ -35,6 +34,7 @@ type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines'
 // ===== public types (SPEC §3) =====
 
 export interface SettleOptions {
+	taxStatusFor?: (line: LineItemInput) => TaxStatus | undefined;
 	/** Required iff snapshot has >=1 active coupon line OR validate is given. */
 	coupons?: CouponContext;
 	/** Validate these codes as newly-added candidates before replaying. */
@@ -119,7 +119,10 @@ function canonicalMoney(value: unknown, key = 'total'): unknown {
 	if (Array.isArray(value)) return value.map((entry) => canonicalMoney(entry, key));
 	if (value !== null && typeof value === 'object') {
 		return Object.fromEntries(
-			Object.entries(value).map(([field, entry]) => [field, canonicalMoney(entry, field)])
+			// Woo emits empty money slots as absent; undefined fields are absent too.
+			Object.entries(value)
+				.filter(([field, entry]) => entry !== undefined && !(MONEY_KEYS.has(field) && entry === ''))
+				.map(([field, entry]) => [field, canonicalMoney(entry, field)])
 		);
 	}
 	return MONEY_KEYS.has(key) &&
@@ -127,6 +130,11 @@ function canonicalMoney(value: unknown, key = 'total'): unknown {
 		Number.isFinite(Number(value))
 		? String(Number(value))
 		: value;
+}
+
+/** Numeric money equality, independent of object key order; metadata stays opaque. */
+export function sameLineMoney(a: unknown, b: unknown): boolean {
+	return isEqual(canonicalMoney(a), canonicalMoney(b));
 }
 
 /**
@@ -149,81 +157,9 @@ function computeChanged(snapshot: CartSnapshot, patch: SettlePatch): boolean {
 		'shipping_lines',
 		'tax_lines',
 	] as const) {
-		if (
-			patch[field] &&
-			JSON.stringify(canonicalMoney(snapshot[field] ?? [])) !==
-				JSON.stringify(canonicalMoney(patch[field]))
-		)
-			return true;
+		if (patch[field] && !sameLineMoney(snapshot[field] ?? [], patch[field])) return true;
 	}
 	return false;
-}
-
-/**
- * Build the candidate-validation context EXACTLY as `use-add-coupon.ts` builds
- * it today: item price = parseFloat(total)/quantity, on_sale from
- * `_woocommerce_pos_data` price < regular_price, cartSubtotal = Σ
- * parseFloat(subtotal) over active lines, customer identity from the snapshot.
- */
-function buildValidationContext(args: {
-	snapshot: CartSnapshot;
-	activeLineItems: readonly LineItemInput[];
-	appliedCouponLines: readonly (CouponLineInput & { code: string })[];
-	coupons: CouponContext['coupons'];
-	enrichedCategories: Map<number, { id: number }[]>;
-	now: number;
-}) {
-	const { snapshot, activeLineItems, appliedCouponLines, coupons, enrichedCategories, now } = args;
-
-	const lineItems: CouponLineItem[] = activeLineItems.map((item) => {
-		const qty = item.quantity || 1;
-		const posData = parsePosData(item);
-		const posPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
-		const posRegular =
-			posData?.regular_price != null ? parseFloat(String(posData.regular_price)) : NaN;
-		const onSale =
-			Number.isFinite(posPrice) && Number.isFinite(posRegular) && posRegular > 0
-				? posPrice < posRegular
-				: false;
-		return {
-			product_id: item.product_id!,
-			quantity: qty,
-			price: parseFloat(item.total || '0') / qty,
-			subtotal: item.subtotal || '0',
-			total: item.total || '0',
-			categories: enrichedCategories.get(item.product_id!) || [],
-			on_sale: onSale,
-		};
-	});
-
-	const cartSubtotal = activeLineItems.reduce(
-		(sum, item) => sum + parseFloat(item.subtotal || '0'),
-		0
-	);
-
-	const appliedCoupons = appliedCouponLines.map((cl) => cl.code);
-	const appliedCouponsWithIndividualUse: string[] = [];
-	for (const cl of appliedCouponLines) {
-		const applied = coupons.get(cl.code.toLowerCase());
-		if (applied?.individual_use && cl.code) {
-			appliedCouponsWithIndividualUse.push(cl.code);
-		}
-	}
-
-	return {
-		lineItems,
-		appliedCoupons,
-		appliedCouponsWithIndividualUse,
-		cartSubtotal,
-		// QUIRK(parity): mirrors use-add-coupon.ts — `|| ''` preserved verbatim, and the
-		// guest customer (and absent customer_id) maps to null for the email-based used_by check.
-		customerEmail: snapshot.billing?.email || '',
-		customerId:
-			snapshot.customer_id == null || isGuestCustomer(snapshot.customer_id)
-				? null
-				: snapshot.customer_id,
-		now,
-	};
 }
 
 /**
@@ -359,27 +295,15 @@ export function settleCart(
 	// CouponInput in the context. No partial output. (Sanctioned crash fix (a):
 	// today this throws inside an uncaught subscription.)
 	const neededCodes = [...new Set([...activeCodes, ...candidateCodes])];
-	const availableCoupons = options?.coupons?.coupons;
-	const missingCodes = neededCodes.filter((code) => !availableCoupons?.has(code));
-	if (missingCodes.length > 0) {
-		return { ok: false, error: { code: 'missing_coupon', missingCodes }, warnings };
-	}
-
-	// 2. Category enrichment — once, shared by validation and replay
-	// (wc_get_product_cat_ids parity: ancestors included).
-	const enrichedCategories = new Map<number, { id: number }[]>();
-	if (options?.coupons) {
-		const direct = new Map<number, { id: number }[]>();
-		for (const [productId, categories] of options.coupons.productCategories) {
-			direct.set(productId, [...categories]);
-		}
-		const enriched = enrichCategoriesWithAncestors(
-			direct,
-			new Map(options.coupons.categoryParents ?? [])
-		);
-		for (const [productId, categories] of enriched) {
-			enrichedCategories.set(productId, categories);
-		}
+	const coupons = options?.coupons ?? { coupons: new Map(), productCategories: new Map() };
+	// Configs are built for the active codes only; candidates are validated, not replayed.
+	const replayContext = resolveCouponReplay(coupons, activeCodes, neededCodes);
+	if (!replayContext.ok) {
+		return {
+			ok: false,
+			error: { code: 'missing_coupon', missingCodes: replayContext.missingCodes },
+			warnings,
+		};
 	}
 
 	// 3. Validation stage — each candidate validated, in order, against the cart
@@ -402,18 +326,21 @@ export function settleCart(
 			})
 			.reverse();
 		const activeLineItems = lineItems.filter((item) => isActiveLineItem(item));
-		const context = buildValidationContext({
-			snapshot,
-			activeLineItems,
-			appliedCouponLines,
-			coupons: availableCoupons!,
-			enrichedCategories,
+		const context = {
+			...couponValidationContext({
+				lineItems: activeLineItems,
+				appliedCouponLines,
+				coupons,
+				productCategories: replayContext.productCategories,
+				billing: snapshot.billing,
+				customer_id: snapshot.customer_id,
+			}),
 			now: options.validate.now,
-		});
+		};
 
 		for (let i = 0; i < candidateCodes.length; i++) {
 			const code = candidateCodes[i];
-			const coupon = availableCoupons!.get(code)!;
+			const coupon = coupons.coupons.get(code)!;
 			const result = validateCoupon(coupon, context);
 			if (!result.valid) {
 				return {
@@ -438,13 +365,13 @@ export function settleCart(
 	let postReplayLineItems: LineItemInput[] | undefined;
 	let postReplayCouponLines: CouponLineInput[] | undefined;
 	if (activeCouponLines.length > 0) {
-		const couponConfigs = toCouponConfigs(activeCodes, availableCoupons!);
-
 		const replay = recalculateCoupons({
 			lineItems,
 			couponLines,
-			couponConfigs,
+			couponConfigs: replayContext.couponConfigs,
 			pricesIncludeTax: config.pricesIncludeTax,
+			vatExempt: config.vatExempt,
+			taxStatusFor: options?.taxStatusFor ?? options?.coupons?.taxStatusFor,
 			calcDiscountsSequentially: config.calcDiscountsSequentially,
 			// QUIRK(parity): replay taxes are recomputed from config.rates UNGATED by
 			// calcTaxes (SPEC §8.4) — pinned by the migrated recalculate tests.
@@ -455,7 +382,7 @@ export function settleCart(
 				order: number;
 				class?: string;
 			}[],
-			productCategories: enrichedCategories,
+			productCategories: replayContext.productCategories,
 			taxRoundAtSubtotal: config.taxRoundAtSubtotal,
 			dp: config.dp,
 		});
@@ -531,4 +458,11 @@ export function settleAggregate(snapshot: CartSnapshot, config: CartConfig): Set
 	});
 
 	return { changed: computeChanged(snapshot, patch), patch, totals, warnings };
+}
+
+/** Read a settlement result without exposing a mutator-named member at the UI seam. */
+export function settlementPatch(
+	result: SettleAggregateResult | Extract<SettleResult, { ok: true }>
+) {
+	return result.patch;
 }

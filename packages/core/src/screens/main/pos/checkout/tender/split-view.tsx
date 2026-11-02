@@ -1,0 +1,310 @@
+import * as React from 'react';
+import { ScrollView, View } from 'react-native';
+
+import Svg, { Circle } from 'react-native-svg';
+import { useCSSVariable } from 'uniwind';
+
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Checkbox } from '@wcpos/components/checkbox';
+import { ListItem } from '@wcpos/components/list-item';
+import { AmountFigure } from '@wcpos/components/amount-figure';
+import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
+import { TileGrid } from '@wcpos/components/tile-grid';
+
+import { evenSplitShareMinor } from './tender-state';
+import { useT } from '../../../../../contexts/translations';
+
+import type { SplitTab, TenderPlan } from './tender-state';
+import type { TenderFlow } from './use-tender-flow';
+
+type SplitFlow = Pick<
+	TenderFlow,
+	| 'state'
+	| 'dispatch'
+	| 'balanceMinor'
+	| 'paidMinor'
+	| 'dp'
+	| 'rows'
+	| 'lines'
+	| 'linesPaidBy'
+	| 'plan'
+	| 'planLegs'
+	| 'busy'
+>;
+
+export function SplitView({
+	flow,
+	format,
+	compact,
+}: {
+	flow: SplitFlow;
+	format: (minor: number) => string;
+	compact?: boolean;
+}) {
+	const t = useT();
+	const primary = String(useCSSVariable('--color-primary'));
+	const muted = String(useCSSVariable('--color-muted'));
+	const ringLegs = flow.planLegs.filter((leg) => leg.state !== 'done');
+	const circumference = 2 * Math.PI * 46;
+	const { splitTab: tab, pickedLineIds } = flow.state;
+	const balance = flow.balanceMinor;
+	const picked = flow.lines.filter(
+		(line) => pickedLineIds.includes(line.id) && !flow.linesPaidBy[line.id]
+	);
+	const sum = picked.reduce((total, line) => total + line.totalMinor, 0);
+	const paidCount = flow.lines.filter((line) => flow.linesPaidBy[line.id]).length;
+	const setPlan = (plan: TenderPlan) =>
+		flow.dispatch({ type: 'set-plan', plan, balanceMinor: balance });
+	const fixed = (firstMinor: number, title: string | null = null) =>
+		setPlan({ kind: 'fixed', firstMinor, title, from: flow.rows.length });
+	const items = (ways: number) =>
+		setPlan({
+			kind: 'items',
+			lineIds: picked.map((line) => line.id),
+			firstMinor: sum,
+			ways,
+			from: flow.rows.length,
+		});
+	const options =
+		tab === 'even'
+			? [2, 3, 4, 5, 6]
+			: tab === 'percent'
+				? [10, 20, 25, 30, 50, 75]
+				: [5, 10, 20, 50].filter((value) => value * 10 ** flow.dp < balance);
+	const hint =
+		tab === 'item' && paidCount
+			? t('pos_checkout.items_paid_of', { n: paidCount, total: flow.lines.length })
+			: {
+					even: t('pos_checkout.split_even_hint'),
+					amount: t('pos_checkout.split_amount_hint'),
+					percent: t('pos_checkout.split_percent_hint'),
+					item: t('pos_checkout.split_item_hint'),
+				}[tab];
+	return (
+		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
+			<Text variant="caption">
+				{flow.paidMinor > 0 ? t('pos_checkout.split_the_remaining') : t('pos_checkout.split')}
+			</Text>
+			<View className="size-48 items-center justify-center">
+				{flow.plan || flow.paidMinor > 0 ? (
+					<View className="absolute inset-0">
+						<Svg width="100%" height="100%" viewBox="0 0 100 100">
+							<Circle cx={50} cy={50} r={46} fill="none" stroke={muted} strokeWidth={3} />
+							{ringLegs.map((leg, index) => {
+								const length =
+									flow.balanceMinor > 0 ? (leg.minor / flow.balanceMinor) * circumference : 0;
+								const start = ringLegs
+									.slice(0, index)
+									.reduce(
+										(offset, previous) =>
+											offset +
+											(flow.balanceMinor > 0
+												? (previous.minor / flow.balanceMinor) * circumference
+												: 0),
+										0
+									);
+								return (
+									<Circle
+										key={index}
+										cx={50}
+										cy={50}
+										r={46}
+										fill="none"
+										stroke={primary}
+										strokeWidth={3}
+										strokeDasharray={`${Math.max(0, length - 3)} ${circumference}`}
+										strokeDashoffset={-start}
+										rotation={-90}
+										origin="50, 50"
+									/>
+								);
+							})}
+						</Svg>
+					</View>
+				) : null}
+				<AmountFigure>{format(balance)}</AmountFigure>
+			</View>
+			<View className="w-full max-w-2xl gap-4">
+				<SegmentedControl
+					value={tab}
+					onValueChange={(value) =>
+						flow.dispatch({ type: 'set-split-tab', tab: value as SplitTab })
+					}
+					segments={
+						(
+							[
+								['even', t('pos_checkout.split_even')],
+								['amount', t('pos_checkout.split_amount')],
+								['percent', t('pos_checkout.split_percent')],
+								['item', t('pos_checkout.split_item')],
+							] as const
+						).map(([value, label]) => ({
+							value,
+							label,
+							testID: `checkout-split-tab-${value}`,
+						})) as [Segment, Segment, Segment, Segment]
+					}
+				/>
+				{tab === 'item' ? (
+					<>
+						<View className="gap-2">
+							{flow.lines.map((line) => {
+								const paid = flow.linesPaidBy[line.id];
+								const checked = pickedLineIds.includes(line.id) || Boolean(paid);
+								return (
+									<ListItem
+										key={line.id}
+										testID={`checkout-split-item-${line.id}`}
+										// `aria-*`, not `accessibilityState`: react-native-web drops the latter.
+										role="checkbox"
+										aria-checked={checked}
+										aria-disabled={Boolean(paid) || flow.busy}
+										disabled={Boolean(paid) || flow.busy}
+										selected={pickedLineIds.includes(line.id)}
+										onPress={() => flow.dispatch({ type: 'toggle-split-line', lineId: line.id })}
+										className="min-h-14"
+										// The row is the checkbox; the mark only draws its state.
+										leading={
+											<Checkbox
+												checked={checked}
+												onCheckedChange={() =>
+													flow.dispatch({ type: 'toggle-split-line', lineId: line.id })
+												}
+												className="pointer-events-none"
+											/>
+										}
+										trailing={
+											<Text className="text-foreground font-semibold tabular-nums">
+												{format(line.totalMinor)}
+											</Text>
+										}
+									>
+										<Text className="text-foreground font-semibold" decodeHtml>
+											{line.name}
+										</Text>
+										{paid ? (
+											<Text variant="help" decodeHtml>
+												{t('pos_checkout.line_paid_by', { methods: paid.join(' + ') })}
+											</Text>
+										) : null}
+									</ListItem>
+								);
+							})}
+						</View>
+						<Button
+							size="lg"
+							testID="checkout-split-items-go"
+							disabled={sum <= 0 || flow.busy}
+							onPress={() => items(1)}
+						>
+							<ButtonText>
+								{sum > 0
+									? t('pos_checkout.pay_for_these', { amount: format(sum) })
+									: t('pos_checkout.tick_items')}
+							</ButtonText>
+						</Button>
+						{sum > 0 ? (
+							<View className="flex-row flex-wrap items-center justify-center gap-2">
+								<Text variant="key">{t('pos_checkout.share_these_between')}</Text>
+								{[2, 3, 4].map((ways) => (
+									<Button
+										key={ways}
+										variant="outline"
+										size="sm"
+										testID={`checkout-split-share-${ways}`}
+										disabled={flow.busy}
+										onPress={() => items(ways)}
+									>
+										<ButtonText>
+											{t('pos_checkout.share_each', {
+												ways,
+												amount: format(evenSplitShareMinor(sum, ways)),
+											})}
+										</ButtonText>
+									</Button>
+								))}
+							</View>
+						) : null}
+					</>
+				) : (
+					<TileGrid columns={tab === 'even' && !compact ? options.length : 2}>
+						{options.map((value) => {
+							const minor =
+								tab === 'even'
+									? evenSplitShareMinor(balance, value)
+									: tab === 'percent'
+										? Math.round((balance * value) / 100)
+										: value * 10 ** flow.dp;
+							const title =
+								tab === 'percent'
+									? t('pos_checkout.split_percent_value', { percent: value })
+									: null;
+							const selected =
+								flow.plan?.kind === 'even'
+									? tab === 'even' && flow.plan.ways === value
+									: flow.plan?.kind === 'fixed' &&
+										flow.plan.firstMinor === minor &&
+										flow.plan.title === title;
+							return (
+								<Tile
+									key={value}
+									selected={selected}
+									testID={`checkout-split-option-${value}`}
+									disabled={flow.busy || minor <= 0}
+									onPress={() =>
+										tab === 'even'
+											? setPlan({ kind: 'even', ways: value, from: flow.rows.length })
+											: fixed(minor, title)
+									}
+									title={
+										tab === 'even'
+											? t('pos_checkout.n_ways', { ways: value })
+											: (title ?? format(minor))
+									}
+									sub={
+										tab === 'even'
+											? t('pos_checkout.each_amount', { amount: format(minor) })
+											: tab === 'amount'
+												? t('pos_checkout.then_amount', { amount: format(balance - minor) })
+												: format(minor)
+									}
+								/>
+							);
+						})}
+						{tab === 'amount' ? (
+							<>
+								<Tile
+									testID="checkout-split-option-half"
+									onPress={() => fixed(evenSplitShareMinor(balance, 2))}
+									title={t('pos_checkout.half')}
+									sub={format(evenSplitShareMinor(balance, 2))}
+								/>
+								<Tile
+									testID="checkout-split-option-custom"
+									onPress={() => flow.dispatch({ type: 'arm-custom' })}
+									title={t('pos_checkout.type_first_payment')}
+									sub={t('pos_checkout.type_first_hint')}
+								/>
+							</>
+						) : null}
+					</TileGrid>
+				)}
+				<Text variant="key" className="text-center">
+					{hint}
+				</Text>
+				{flow.plan ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						testID="checkout-split-none"
+						onPress={() => flow.dispatch({ type: 'clear-plan', balanceMinor: balance })}
+					>
+						<ButtonText className="underline">{t('pos_checkout.no_split')}</ButtonText>
+					</Button>
+				) : null}
+			</View>
+		</ScrollView>
+	);
+}

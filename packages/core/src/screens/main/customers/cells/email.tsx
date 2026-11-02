@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type ReadonlyEngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 /**
@@ -9,7 +9,7 @@ import type { CellContext } from '@wcpos/core/table-types';
  */
 export function CustomerEmail({
 	row,
-}: CellContext<{ record: EngineRecord<'customers'> }, 'email'>) {
+}: CellContext<{ record: ReadonlyEngineRecord<'customers'> }, 'email'>) {
 	const email = useRecordField(row.original.record, ({ payload }) => payload.email);
 
 	// Value-bearing testID: customer rows key their row testID on a client uuid

@@ -101,6 +101,10 @@ export const ReceiptStoreAddressSchema = z.object({
 export const ReceiptStoreMetaSchema = z.object({
 	id: z.number().int().describe('Store ID'),
 	name: z.string().describe('Store display name'),
+	price_decimals: z
+		.number()
+		.optional()
+		.describe('Store money precision from wc_get_price_decimals()'),
 	address: ReceiptStoreAddressSchema.optional().describe(
 		'Structured address parts. Use these to compose custom / country-specific layouts; address_lines[] is the pre-formatted default.'
 	),
@@ -180,6 +184,7 @@ export const ReceiptTaxIdSchema = z.object({
 export const ReceiptCustomerSchema = z.object({
 	id: z.number().int().nullable().describe('Customer ID (null/0 = guest)'),
 	name: z.string().describe('Customer display name'),
+	first_name: z.string().optional().describe('Billing first name, empty when unavailable'),
 	billing_address: z.record(z.string(), z.string()).optional().describe('Billing address fields'),
 	shipping_address: z.record(z.string(), z.string()).optional().describe('Shipping address fields'),
 	tax_ids: z
@@ -570,7 +575,24 @@ export const ReceiptRefundSchema = z.object({
 		.describe('Shipping rows included in this refund'),
 });
 
+export const ReceiptSoftwareSchema = z.object({
+	name: z.string().default('WCPOS'),
+	plugin_version: z.string().default(''),
+	app_version: z.string().default(''),
+	app_build: z.string().default(''),
+});
+export const ReceiptRegisterSchema = z.object({
+	id: z.string().default(''),
+	name: z.string().default(''),
+});
+
 export const ReceiptFiscalSchema = z.object({
+	document_type: z.enum(['sale', 'refund', 'void', 'cancellation']).default('sale').optional(),
+	sale_time: ReceiptDateSchema.nullable().default(null).optional(),
+	sale_tz: z.string().default('').optional(),
+	sale_counter: z.number().int().nullable().default(null).optional(),
+	received_at: ReceiptDateSchema.nullable().default(null).optional(),
+	corrects: z.string().default('').optional(),
 	immutable_id: z.string().optional().describe('Fiscal immutable identifier'),
 	receipt_number: z.string().optional().describe('Fiscal receipt number'),
 	sequence: z.number().int().nullable().optional().describe('Fiscal sequence number'),
@@ -583,6 +605,7 @@ export const ReceiptFiscalSchema = z.object({
 		.optional()
 		.describe('Truncated signature for human-readable display'),
 	document_label: z.string().optional().describe('Document label (e.g. "Tax Invoice")'),
+	is_refund_document: z.boolean().optional(),
 	is_reprint: z.boolean().optional().describe('True if this is a reprint of an existing receipt'),
 	reprint_count: z
 		.number()
@@ -764,6 +787,15 @@ export const ReceiptI18nSchema = z
 		signed_name: z.string().optional(),
 		document_type: z.string().optional(),
 		copy: z.string().optional(),
+		corrects: z.string().optional(),
+		refunded_to: z.string().optional(),
+		reprint: z.string().optional(),
+		register: z.string().optional(),
+		sale_time: z.string().optional(),
+		document_refund: z.string().optional(),
+		document_void: z.string().optional(),
+		document_cancellation: z.string().optional(),
+		software: z.string().optional(),
 		copy_number: z.string().optional(),
 		status: z.string().optional(),
 		completed: z.string().optional(),
@@ -775,6 +807,8 @@ export const ReceiptI18nSchema = z
 /* ──────────────── Top-level schema ──────────────── */
 
 export const ReceiptDataSchema = z.object({
+	software: ReceiptSoftwareSchema.optional(),
+	register: ReceiptRegisterSchema.optional(),
 	order: ReceiptOrderSchema,
 	store: ReceiptStoreMetaSchema,
 	cashier: ReceiptCashierSchema,

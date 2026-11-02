@@ -50,9 +50,13 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundWindowLane,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
-import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
+import {
+	type QueryTotalRetryRunnerInput,
+	runQueryTotalRetryRequests,
+} from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
@@ -84,11 +88,14 @@ export type MaintenanceLaneReport = {
 	error?: string;
 };
 
-/** The host port the query-total retry lane drains through (host-executed fetch). */
+/** The host port the query-total retry lane drains through: a host-executed fetch on
+ * the engine's `engineRequest`, which carries the lane's label and its one deadline
+ * (`request` already names the probe itself). */
 export type QueryTotalPort = {
 	fetchWooQueryTotal: (input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
+		engineRequest: (url: string, init?: RequestInit) => Promise<Response>;
 	}) => Promise<number | null>;
 };
 
@@ -136,6 +143,7 @@ export const COVERAGE_COMPACTION_MIN_EXPIRED_DOCUMENTS = 1;
 type MaintenanceLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -143,7 +151,11 @@ type MaintenanceLaneDeps = {
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
-	fetcher: (url: string, init?: { signal?: AbortSignal }, lane?: string) => Promise<Response>;
+	fetcher: (
+		url: string,
+		init?: { signal?: AbortSignal },
+		options?: { lane?: MaintenanceLaneName }
+	) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	withCollectionActivity?: <T>(
@@ -154,7 +166,8 @@ type MaintenanceLaneDeps = {
 	ownerId: () => string;
 	/** Current facade-configured record cap for scheduler data requests. */
 	pullBatchSize?: () => number | undefined;
-	queryTotal?: QueryTotalPort;
+	/** The host's port with the engine's request already handed to it. */
+	queryTotal?: Pick<QueryTotalRetryRunnerInput, 'fetchWooQueryTotal'>;
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	censusTotals: () => Promise<CensusTotals>;
@@ -181,7 +194,6 @@ type MaintenanceLaneDeps = {
 	 * maintenance/customer-trickle.ts.
 	 */
 	currentCustomerBrowseWindowKey?: () => string | null;
-	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	hostVisible?: () => boolean;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -394,7 +406,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								signal.addEventListener('abort', abort, { once: true });
 							}
 							try {
-								return await deps.fetcher(url, { ...init, signal: combined.signal }, name);
+								return await deps.fetcher(
+									url,
+									{ ...init, signal: combined.signal },
+									{ lane: name }
+								);
 							} finally {
 								ticketSignal?.removeEventListener('abort', abort);
 								signal.removeEventListener('abort', abort);
@@ -530,6 +546,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				? undefined
 				: () => deps.barcodeSelectorsFor!(_scopeId) ?? undefined;
 		const result = await runEngineSchedulerDrain({
+			scope: { storeId: deps.storeIdFor?.(_scopeId) },
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
@@ -637,6 +654,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	});
 
 	const referenceSeed = lane('reference-seed', async (db) => {
+		const nowMs = now();
+		const result = await seedRefundWindowLane({
+			database: db,
+			nowMs,
+			completedDedupeForMs: REFERENCE_SAFETY_REFRESH_MS,
+		});
 		const counts = await Promise.all(
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
@@ -649,10 +672,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		});
 		const collections = [...materialized, ...backfill];
 		if (collections.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
+			return seedSummary('Refund history refresh', result);
 		}
-		const result = { inserted: 0, requeued: 0, claimLost: 0 };
-		const nowMs = now();
+
 		for (const [group, completedDedupeForMs] of [
 			[materialized, REFERENCE_SAFETY_REFRESH_MS],
 			[backfill, REFERENCE_REFRESH_DEDUPE_MS],
@@ -668,7 +690,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.requeued += seeded.requeued;
 			result.claimLost += seeded.claimLost;
 		}
-		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+		const label = `Reference refresh (refunds + categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
 		return seedSummary(label, result);
 	});
 
@@ -785,7 +807,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
 				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
-					if (result.timedOut === result.failed) throw result.lastFailure;
+					if (result.timedOut === result.failed && result.lastTimeout) throw result.lastTimeout;
 					throw new Error(
 						forced === undefined
 							? 'Census refresh failed during full refresh'
@@ -807,9 +829,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -837,9 +856,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 		const result = await tickProductTrickle({
 			baseUrl: deps.syncBaseUrl,
@@ -872,9 +888,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined

@@ -28,10 +28,17 @@
         "simulator": true
       }
     },
+    "development-device": {
+      "extends": "development",
+      "ios": {
+        "simulator": false
+      }
+    },
     "production": {
       "extends": "monorepo",
       "channel": "production",
       "distribution": "store",
+      "uploadSourceMaps": true,
       "android": {
         "buildType": "app-bundle"
       },

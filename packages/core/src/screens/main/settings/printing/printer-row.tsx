@@ -1,19 +1,17 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
@@ -86,23 +84,14 @@ export function PrinterRow({
 	const showMenu = true; // the setup report is always offered
 
 	return (
-		<View
+		<DeviceRow
 			testID={`printer-row-${profile.id}`}
-			className="web:hover:bg-accent flex-row flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2 py-2.5"
+			icon={printerIconName(profile)}
+			name={profile.name}
+			tag={profile.isDefault ? t('common.default') : undefined}
+			identifiers={[connectionLabel]}
 		>
-			<View className="bg-muted rounded-md p-2">
-				<Icon name={printerIconName(profile)} variant="muted" size="lg" />
-			</View>
-			<VStack className="min-w-40 flex-1 gap-0.5">
-				<Text className="text-sm font-medium" numberOfLines={1}>
-					{profile.name}
-				</Text>
-				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-					{connectionLabel}
-				</Text>
-			</VStack>
-			<HStack className="ml-auto flex-wrap items-center gap-2">
-				{profile.isDefault && <StatusBadge variant="default" label={t('common.default')} />}
+			<DeviceRowActions>
 				<Button
 					variant="outline"
 					size="sm"
@@ -116,7 +105,7 @@ export function PrinterRow({
 					<Button
 						variant="outline"
 						size="sm"
-						leftIcon="penToSquare"
+						leftIcon="edit"
 						onPress={() => onEdit(profile)}
 						testID={`printer-row-${profile.id}-edit`}
 					>
@@ -126,7 +115,11 @@ export function PrinterRow({
 				{showMenu && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
+							<IconButton
+								name="more"
+								accessibilityLabel={t('common.more_actions')}
+								testID={`printer-row-${profile.id}-menu`}
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem
@@ -146,7 +139,7 @@ export function PrinterRow({
 								}
 								testID={`printer-row-${profile.id}-copy-report`}
 							>
-								<Icon name="circleInfo" />
+								<Icon name="info" />
 								<Text>{t('settings.setup_copy_report')}</Text>
 							</DropdownMenuItem>
 							{canSetDefault && (
@@ -154,9 +147,13 @@ export function PrinterRow({
 									onPress={() => onSetDefault(profile.id)}
 									testID={`printer-row-${profile.id}-set-default`}
 								>
-									<Icon name="star" />
+									<Icon name="featured" />
 									<Text>{t('settings.set_default')}</Text>
 								</DropdownMenuItem>
+							)}
+							{canDelete && (
+								// The red row is last and set apart from the actions above it.
+								<DropdownMenuSeparator />
 							)}
 							{canDelete && (
 								<DropdownMenuItem
@@ -165,7 +162,7 @@ export function PrinterRow({
 									testID={`printer-row-${profile.id}-delete`}
 								>
 									<Icon
-										name="trash"
+										name="delete"
 										className="fill-destructive web:group-focus:fill-accent-foreground"
 									/>
 									<Text>{t('common.delete')}</Text>
@@ -174,7 +171,7 @@ export function PrinterRow({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
-			</HStack>
-		</View>
+			</DeviceRowActions>
+		</DeviceRow>
 	);
 }

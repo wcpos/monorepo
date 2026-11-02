@@ -70,6 +70,7 @@ export function buildTemplateData(data: unknown): Record<string, any> {
  * Single-call render helper. Runs the full pipeline and returns both the
  * formatted template data (for diagnostics / parity checks) and the rendered
  * output (HTML for both engines, plus ESC/POS bytes for thermal).
+ * Callers must `await loadBarcodeLibrary()` first.
  */
 export function renderForStudio(options: RenderForStudioOptions): RenderForStudioResult {
 	const { template, engine, encodeOptions, sanitize = true } = options;

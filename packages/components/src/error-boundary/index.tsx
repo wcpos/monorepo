@@ -59,3 +59,7 @@ export function ErrorBoundary({ FallbackComponent = DefaultFallback, onError, ..
 
 	return <Boundary FallbackComponent={FallbackComponent} onError={handleError} {...props} />;
 }
+
+// FallbackScreen lives on its own subpath (`@wcpos/components/error-boundary/fallback-screen`):
+// it draws the gate, and the gate draws the Logo through react-native-svg. Re-exporting it here
+// made every ErrorBoundary import pull the SVG runtime, which core's native jest cannot load.

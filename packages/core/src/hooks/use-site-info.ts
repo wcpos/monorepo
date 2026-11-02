@@ -6,13 +6,14 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
 
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: ReadonlySiteRecord;
 }
 
 interface SiteInfoResult {
@@ -91,23 +92,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 
-				// Only patch if we have at least one valid field to update
-				const hasValidData =
-					data.wp_version ||
-					data.wc_version ||
-					data.wcpos_version ||
-					data.wcpos_pro_version ||
-					data.license;
-				if (hasValidData) {
-					const patch: Record<string, unknown> = {
-						wp_version: data?.wp_version ?? '',
-						wc_version: data?.wc_version ?? '',
-						wcpos_version: data?.wcpos_version ?? '',
-						wcpos_pro_version: data?.wcpos_pro_version ?? '',
-					};
-					if (data.license !== undefined) patch.license = data.license || {};
-					await site.incrementalPatch(patch);
-				}
+				await recordSiteInfo(site, data);
 			} catch (err) {
 				if (isAsleepBlock(err)) {
 					deferredRef.current = true;

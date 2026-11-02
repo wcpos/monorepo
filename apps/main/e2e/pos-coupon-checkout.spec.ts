@@ -20,9 +20,18 @@ import {
 	request as playwrightRequest,
 } from '@playwright/test';
 
-import { getStoreUrl, getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
-	isPushOrdersResponse,
+	closeOrderSheet,
+	ensureRegisterOpen,
+	getStoreUrl,
+	getStoreVariant,
+	listStoreIds,
+	openOrderSheet,
+	storeRequestOptions,
+} from './fixtures';
+import {
+	checkoutSurfaceLocator,
+	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -167,6 +176,7 @@ for (const targetStoreId of storeTargets) {
 					const captureConsole = (message: ConsoleMessage) => consoleLines.push(message.text());
 					page.on('console', captureConsole);
 					try {
+						await ensureRegisterOpen(page);
 						const label = newRunLabel();
 						// The fixture's own tax-exempt product, found by its run-private token (the
 						// same search-then-add path checkout-probe uses for run-private products).
@@ -189,12 +199,13 @@ for (const targetStoreId of storeTargets) {
 						await stampRunLabel(page, label);
 						await page.getByTestId('add-cart-item-menu').click();
 						await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
-						const menuItem = page.getByTestId('menu-add-coupon');
+						const menuItem = page.getByTestId('menu-add-discount');
 						couponTest.skip(
 							(await menuItem.count()) === 0,
-							'Pro coupon capability absent (menu-add-coupon)'
+							'Pro coupon capability absent (menu-add-discount)'
 						);
 						await menuItem.click();
+						await page.getByTestId('add-discount-kind-coupon').click();
 						await page.getByTestId('add-coupon-combobox').click();
 						const search = page.getByTestId('add-coupon-search-input');
 						await expect(search).toBeVisible({ timeout: 15_000 });
@@ -209,7 +220,9 @@ for (const targetStoreId of storeTargets) {
 						const cart = await readCartMoney(page, { discounted: true });
 						expect(Number(cart.discountTotal)).toBeGreaterThan(0);
 
-						const saved = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+						const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+							timeout: 90_000,
+						});
 						saved.catch(() => {}); // Await below still fails; avoid an orphan rejection if click fails.
 						await page.getByTestId('checkout-button').click();
 						const response = await saved;
@@ -247,7 +260,7 @@ for (const targetStoreId of storeTargets) {
 						await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
 							timeout: 60_000,
 						});
-						await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
+						await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 						// UUID IDs already exist; shared-store tab counts would include other cashiers' orders.
 						const orderTab = page.getByTestId(`open-order-tab-${envelope.recordId}`);
 						await expect(orderTab).toBeAttached({ timeout: 30_000 });
@@ -262,10 +275,14 @@ for (const targetStoreId of storeTargets) {
 								line.includes('Checkout order snapshot was not applied')
 							)
 						).toEqual([]);
-						// 2. Dismiss an auto-shown receipt so hidden modal background cannot fake tab removal.
-						if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
-							await page.getByTestId('receipt-close-button').click();
-						}
+						// 2. Dismiss the receipt (in-pane stage or routed modal) so a hidden modal background cannot fake tab removal.
+						const dismissReceipt = page
+							.getByTestId('receipt-new-sale')
+							.or(page.getByTestId('receipt-close-button'))
+							.filter({ visible: true })
+							.first();
+						await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+						await dismissReceipt.click();
 						await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 						await expect(orderTab).not.toBeVisible({ timeout: 30_000 });
 						// 3. Read the acked order with readOrder's dp=6, not a stub or another cashier's sale.
@@ -304,6 +321,7 @@ for (const targetStoreId of storeTargets) {
 					couponTest.slow();
 					const label = newRunLabel();
 					const product = probeCoupon!.product;
+					await ensureRegisterOpen(page);
 					await searchAndWaitForServer(
 						page,
 						page.getByTestId('search-products'),
@@ -322,12 +340,13 @@ for (const targetStoreId of storeTargets) {
 					await stampRunLabel(page, label);
 					await page.getByTestId('add-cart-item-menu').click();
 					await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
-					const menuItem = page.getByTestId('menu-add-coupon');
+					const menuItem = page.getByTestId('menu-add-discount');
 					couponTest.skip(
 						(await menuItem.count()) === 0,
-						'Pro coupon capability absent (menu-add-coupon)'
+						'Pro coupon capability absent (menu-add-discount)'
 					);
 					await menuItem.click();
+					await page.getByTestId('add-discount-kind-coupon').click();
 					await page.getByTestId('add-coupon-combobox').click();
 					const search = page.getByTestId('add-coupon-search-input');
 					await expect(search).toBeVisible({ timeout: 15_000 });
@@ -345,8 +364,12 @@ for (const targetStoreId of storeTargets) {
 					// 1. Save: the coupon line comes back from the store WITH an id. That id is the
 					// precondition — a coupon removed before the first save is deleted outright and
 					// never carried the marker.
-					const saved = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+						timeout: 90_000,
+					});
 					saved.catch(() => {});
+					// On `next` Save lives in the order sheet, not the cart (c446efb5b).
+					await openOrderSheet(page);
 					await page.getByTestId('save-to-server-button').click();
 					const saveResponse = await saved;
 					const saveEnvelope = (saveResponse.request().postDataJSON() ?? {}) as {
@@ -377,6 +400,8 @@ for (const targetStoreId of storeTargets) {
 					);
 					// The save button re-enables when the round trip (ack adoption) completes.
 					await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+					// The sheet is modal; its scrim covers the cart's remove-coupon button.
+					await closeOrderSheet(page);
 
 					// 2. Remove the coupon from the cart and wait for the discount to settle to zero.
 					const removeButton = page.getByTestId(`remove-coupon-${probeCoupon!.code}`);
@@ -391,7 +416,9 @@ for (const targetStoreId of storeTargets) {
 						.toBe(0);
 
 					// 3. Checkout pushes the full document with the removal; the store must take it.
-					const pushed = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+					const pushed = page.waitForResponse(createPushOrdersResponseMatcher(), {
+						timeout: 90_000,
+					});
 					pushed.catch(() => {});
 					await page.getByTestId('checkout-button').click();
 					const response = await pushed;
@@ -434,11 +461,17 @@ for (const targetStoreId of storeTargets) {
 					await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
 						timeout: 60_000,
 					});
-					await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
+					await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 					await processPayment(page);
-					if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
-						await page.getByTestId('receipt-close-button').click();
-					}
+					// Dismiss the receipt (in-pane stage or routed modal), as the first coupon test does.
+					const dismissReceipt = page
+						.getByTestId('receipt-new-sale')
+						.or(page.getByTestId('receipt-close-button'))
+						// The in-pane stage can stay mounted under the routed dialog: take the visible one.
+						.filter({ visible: true })
+						.first();
+					await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+					await dismissReceipt.click();
 					await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 					const authorization = await resolveProbeAuthorization(
 						request,

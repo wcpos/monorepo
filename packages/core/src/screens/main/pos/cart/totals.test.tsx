@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Totals } from './totals';
 
@@ -18,8 +18,14 @@ import { Totals } from './totals';
  * `0.00`) when the order has not settled one. A spec must be able to tell "no
  * total yet" from "a total of zero".
  */
+const mockRemoveCoupon = jest.fn();
 let orderPayload: Record<string, unknown> = {};
-let couponLines: { code?: string; discount?: string; discount_tax?: string }[] = [];
+let couponLines: {
+	code?: string;
+	discount?: string;
+	discount_tax?: string;
+	meta_data?: { key: string; value: unknown }[];
+}[] = [];
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (order: unknown) => unknown) => select(record),
@@ -40,17 +46,57 @@ jest.mock('@wcpos/components/vstack', () => {
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/button', () => {
-	const { Text, View } = jest.requireActual('react-native');
-	return { ButtonPill: View, ButtonText: Text };
+jest.mock('@wcpos/components/chip', () => {
+	const React = jest.requireActual('react');
+	// Expose the remove control's accessible name so the label assertions can see it.
+	function Chip({
+		clearLabel,
+		label,
+		onClear,
+	}: {
+		clearLabel?: string;
+		label: string;
+		onClear: () => void;
+	}) {
+		return React.createElement(
+			'button',
+			{ 'aria-label': clearLabel, onClick: onClear, 'data-testid': 'coupon-chip' },
+			label
+		);
+	}
+	return { Chip };
 });
 
-jest.mock('./totals/customer-note', () => ({ CustomerNote: () => null }));
-jest.mock('./totals/taxes', () => ({ Taxes: () => null }));
+const mockTaxes = jest.fn();
+let mockTotalTax = '0';
+jest.mock('./totals/taxes', () => ({
+	Taxes: (props: unknown) => {
+		mockTaxes(props);
+		return null;
+	},
+}));
 
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => {
+	const i18n = jest.requireActual('i18next').createInstance();
+	i18n.init({
+		lng: 'en',
+		initImmediate: false,
+		keySeparator: false,
+		resources: {
+			en: {
+				translation: jest.requireActual('../../../../contexts/translations/locales/en/core.json'),
+			},
+		},
+		interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+	});
+	return { useT: () => i18n.t };
+});
 jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+}));
+// A comma-locale store: the percent inside the discount label must follow it.
+jest.mock('../../hooks/use-number-format', () => ({
+	useNumberFormat: () => ({ format: (value: number) => String(value).replace('.', ',') }),
 }));
 jest.mock('../../hooks/use-tax-incl-or-excl', () => ({
 	useTaxInclOrExcl: () => ({ inclOrExcl: 'excl' }),
@@ -62,7 +108,7 @@ jest.mock('../hooks/use-order-totals', () => ({
 		fee_total: '0',
 		fee_tax: '0',
 		tax_lines: [],
-		total_tax: '0',
+		total_tax: mockTotalTax,
 		shipping_tax: '0',
 		shipping_total: '0',
 	}),
@@ -71,7 +117,7 @@ jest.mock('../hooks/use-cart-lines', () => ({
 	useCartLines: () => ({ coupon_lines: couponLines }),
 }));
 jest.mock('../hooks/use-remove-coupon', () => ({
-	useRemoveCoupon: () => ({ removeCoupon: jest.fn() }),
+	useRemoveCoupon: () => ({ removeCoupon: mockRemoveCoupon }),
 }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { payload: orderPayload } }),
@@ -116,5 +162,107 @@ describe('the cart money markers', () => {
 
 		expect(screen.getByTestId('cart-order-total')).toBeTruthy();
 		expect(screen.getByTestId('cart-discount-total')).toBeTruthy();
+	});
+});
+
+it.each([
+	['fixed_cart', '10.00', 'Discount'],
+	['percent', '10.00', 'Discount (10%)'],
+	// The store formats numbers with a comma; the label follows the store, not the wire.
+	['percent', '12.5', 'Discount (12,5%)'],
+])('labels %s %s pills and keeps plain coupon codes', (discount_type, amount, label) => {
+	couponLines = [
+		{
+			code: 'pos-discount',
+			discount: '10',
+			meta_data: [{ key: '_wcpos_quick_discount', value: { discount_type, amount } }],
+		},
+		{ code: 'SAVE10', discount: '1' },
+	];
+	render(<Totals />);
+	expect(screen.getByText(label)).toBeTruthy();
+	expect(screen.getByLabelText(`Remove ${label}`)).toBeTruthy();
+	expect(screen.getByText('SAVE10')).toBeTruthy();
+	expect(screen.queryByText('pos-discount')).toBeNull();
+});
+
+it('has no visible Total row and clears a coupon chip', () => {
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	render(<Totals />);
+	expect(screen.queryByText(/^Total:?$/)).toBeNull();
+	expect(screen.getByTestId('cart-subtotal')).toBeTruthy();
+	fireEvent.click(screen.getByLabelText('Remove coupon SAVE10'));
+	expect(mockRemoveCoupon).toHaveBeenCalledWith('SAVE10');
+});
+
+it('read-only (the stilled cart) shows the coupon with no remove control', () => {
+	mockRemoveCoupon.mockClear();
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	render(<Totals readOnly />);
+	fireEvent.click(screen.getByTestId('coupon-chip'));
+	expect(mockRemoveCoupon).not.toHaveBeenCalled();
+});
+
+it('prints every row as label then amount, the refunds and the net payment last', () => {
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	orderPayload = { total: '27.97', refunds: [{ id: 5, total: '-2.00' }] };
+	const { container } = render(<Totals />);
+	const text = container.textContent ?? '';
+	for (const row of ['Subtotal$29.97', 'SAVE10$-1.00', 'Refund #5$-2.00', 'Net Payment$25.97']) {
+		expect(text).toContain(row);
+	}
+	expect(text.indexOf('Net Payment')).toBeGreaterThan(text.indexOf('Refund #5'));
+});
+
+describe('a tax exempt order', () => {
+	const exemptMeta = [{ key: 'is_vat_exempt', value: 'yes' }];
+	const untaxed = {
+		meta_data: exemptMeta,
+		line_items: [
+			{ product_id: 1, taxes: [] },
+			// A removed line (tombstone) is not counted.
+			{ product_id: null, taxes: [{ id: 1, total: '1.00' }] },
+		],
+		fee_lines: [{ name: 'Fee', taxes: [{ id: 1, total: '0' }] }],
+		shipping_lines: [{ method_id: 'flat_rate', taxes: [] }],
+	};
+	beforeEach(() => {
+		mockTaxes.mockClear();
+		mockTotalTax = '0';
+		couponLines = [];
+	});
+
+	it('with every line untaxed hands Taxes the exemption, at zero tax', () => {
+		orderPayload = untaxed;
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(expect.objectContaining({ exempt: true }));
+	});
+
+	it('with a line still carrying tax (repair pending) shows the real rows', () => {
+		mockTotalTax = '0.50';
+		orderPayload = {
+			...untaxed,
+			shipping_lines: [{ method_id: 'flat_rate', taxes: [{ id: 1, total: '0.50' }] }],
+		};
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(
+			expect.objectContaining({ exempt: false, totalTax: '0.50' })
+		);
+	});
+
+	it('with a line whose tax lives only in total_tax (no rate rows yet) shows the real rows', () => {
+		mockTotalTax = '0.50';
+		orderPayload = {
+			...untaxed,
+			line_items: [{ product_id: 1, total_tax: '0.50', taxes: [] }],
+		};
+		render(<Totals />);
+		expect(mockTaxes).toHaveBeenLastCalledWith(expect.objectContaining({ exempt: false }));
+	});
+
+	it('is not exempt without the flag', () => {
+		orderPayload = { ...untaxed, meta_data: [] };
+		render(<Totals />);
+		expect(mockTaxes).not.toHaveBeenCalled();
 	});
 });

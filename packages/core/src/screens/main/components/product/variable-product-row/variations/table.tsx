@@ -1,29 +1,37 @@
 import * as React from 'react';
 
 import { flexRender } from '@tanstack/react-table';
-import { useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
 import { matchesStockStatusFilter } from '../../stock-filter';
 import { RecordTextCell } from '../../../../components/record-text-cell';
-import { getColumnStyle } from '../../../data-table';
+import { getColumnStyle } from '../../../data-table/column-style';
+import { DataTableRow } from '../../../data-table/rows';
+import { useDrawnHandle, useQuerySnapshot } from '../../../../../../query';
 
 import type { DataTableFeatures } from '../../../data-table';
+import type { SnapshotFields } from '../../../../../../query';
 import type { Cell, CellContext, Row } from '../../../../../../table-types';
 
 interface Props {
-	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
+	/** The variations handle the row owns: the table reads its snapshot, the footer its fields. */
+	handle: QueryHandle;
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
+	/** The products page's variation opener: the caret's, and the row's while the Actions column is hidden. */
+	openVariation?: (record: EngineRecord<'variations'>) => void;
 }
+
+// The rows re-render for the answer only; the footer reads its own fields.
+const ANSWER_ONLY: SnapshotFields = [];
 
 interface TableCellRow {
 	record: EngineRecord<'variations'>;
@@ -35,14 +43,7 @@ interface VariationHit {
 }
 
 const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeatures>) => {
-	const meta = props.table.options.meta as
-		| {
-				variationRenderCell?: (
-					props: CellContext<TableCellRow, unknown, DataTableFeatures>
-				) => React.ComponentType<CellContext<TableCellRow, unknown, DataTableFeatures>> | null;
-		  }
-		| undefined;
-	const Cell = meta?.variationRenderCell?.(props);
+	const Cell = props.table.options.meta?.variationRenderCell?.(props);
 
 	if (Cell) {
 		return (
@@ -60,7 +61,7 @@ const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeature
 /**
  *
  */
-export function VariationsTable({ binding, row, stockStatus }: Props) {
+export function VariationsTable({ handle, row, stockStatus, openVariation }: Props) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
 	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
@@ -73,7 +74,9 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 	 */
 	// eslint-disable-next-line react-compiler/react-compiler -- directive is load-bearing under babel-plugin-react-compiler 1.0.0
 	'use no memo';
-	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
+	// A changed search keeps the current variations while the new handle answers.
+	const shown = useDrawnHandle(handle);
+	const result = useQuerySnapshot(shown, ANSWER_ONLY).result as unknown as { hits: VariationHit[] };
 	const hits = React.useMemo(
 		() =>
 			stockStatus
@@ -82,6 +85,23 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 		[stockStatus, result.hits]
 	);
 
+	const subrowContext = (
+		cell: Cell<{ record: EngineRecord<'products'> }, unknown, DataTableFeatures>,
+		hit: VariationHit
+	) =>
+		/**
+		 * Create a context for the subrow using the parent's cell definitions
+		 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
+		 */
+		({
+			...cell.getContext(),
+			row: Object.assign(Object.create(row), {
+				parentId: row.id,
+				getParentRow: () => row,
+				original: hit,
+			}),
+		}) as unknown as CellContext<TableCellRow, unknown, DataTableFeatures>;
+
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
@@ -89,61 +109,52 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 	return (
 		<VStack className="gap-0">
 			{hits.map((hit: VariationHit, index: number) => {
+				/**
+				 * Id-bearing so a test can name WHICH variation rendered. Counting generic
+				 * cells cannot tell "the filter hid the right row" from "the filter hid a
+				 * row" — and the stock filter's whole job is which row.
+				 */
+				const testID = hit.record.remoteId
+					? `data-table-row-variation-${hit.record.remoteId}`
+					: undefined;
+				if (openVariation) {
+					return (
+						<DataTableRow
+							key={index}
+							item={row}
+							testID={testID ?? `data-table-row-variation-${hit.record.uuid}`}
+							pressWhenActionsHidden={() => openVariation(hit.record)}
+							renderCell={(cell) => flexRender(cellRenderer, subrowContext(cell, hit))}
+						/>
+					);
+				}
 				return (
-					<TableRow
-						key={index}
-						index={index}
-						/**
-						 * Id-bearing so a test can name WHICH variation rendered. Counting generic
-						 * cells cannot tell "the filter hid the right row" from "the filter hid a
-						 * row" — and the stock filter's whole job is which row.
-						 */
-						testID={
-							hit.record.remoteId ? `data-table-row-variation-${hit.record.remoteId}` : undefined
-						}
-					>
+					<TableRow key={index} index={index} testID={testID}>
 						{row
 							.getVisibleCells()
 							.map(
 								(
 									cell: Cell<{ record: EngineRecord<'products'> }, unknown, DataTableFeatures>,
 									cellIndex: number
-								) => {
-									/**
-									 * Create a context for the subrow using the parent's cell definitions
-									 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
-									 */
-									const subrowCellContext = {
-										...cell.getContext(),
-										row: Object.assign(Object.create(row), {
-											parentId: row.id,
-											getParentRow: () => row,
-											original: hit,
-										}),
-									};
-
-									return (
-										<TableCell
-											key={cellIndex}
-											className={cn(cell.column.id === 'image' && 'relative')}
-											style={getColumnStyle(cell.column.columnDef.meta)}
-										>
-											{flexRender(
-												cellRenderer,
-												subrowCellContext as unknown as CellContext<
-													TableCellRow,
-													unknown,
-													DataTableFeatures
-												>
-											)}
-										</TableCell>
-									);
-								}
+								) => (
+									<TableCell
+										key={cellIndex}
+										className={cn(cell.column.id === 'image' && 'relative')}
+										style={getColumnStyle(cell.column.columnDef.meta)}
+									>
+										{flexRender(cellRenderer, subrowContext(cell, hit))}
+									</TableCell>
+								)
 							)}
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter binding={binding} parent={row.original.record} count={hits.length} />
+			<VariationTableFooter
+				handle={handle}
+				shown={shown}
+				parent={row.original.record}
+				drawnCount={hits.length}
+			/>
 		</VStack>
 	);
 }

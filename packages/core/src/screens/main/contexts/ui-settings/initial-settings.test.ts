@@ -1,8 +1,8 @@
-import { wooOrderbyFor } from '@wcpos/query/collection-map';
+import { wooOrderbyFor } from '@wcpos/query';
+import { normalizeQuerySortField } from '@wcpos/query/query-state';
 
 import { defaultProductBrowseSort } from './default-product-browse-sort';
 import initialSettings from './initial-settings.json';
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
 describe('pos-products initial settings', () => {
 	// Paul's ruling 2026-08-19 (issue #1372): name ascending — what a cashier
@@ -149,3 +149,14 @@ describe('pos-cart initial settings', () => {
 		);
 	});
 });
+
+it.each(['orders', 'reports-orders'] as const)(
+	'%s offers an unsortable hidden register column',
+	(grid) => {
+		expect(initialSettings[grid].columns).toContainEqual({
+			key: 'register',
+			show: false,
+			disableSort: true,
+		});
+	}
+);

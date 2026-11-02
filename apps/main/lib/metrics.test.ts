@@ -199,6 +199,8 @@ describe('collectionFromSyncUrl', () => {
 		['https://s.test/wp-json/wcpos/v2/orders/pull?limit=50', 'orders'],
 		['https://s.test/wp-json/wcpos/v2/customers', 'customers'],
 		['https://s.test/wp-json/wcpos/v2/coupons', 'coupons'],
+		['https://s.test/wp-json/wcpos/v2/refunds', 'refunds'],
+		['https://s.test/?rest_route=/wcpos/v2/refunds', 'refunds'],
 		['https://s.test/wp-json/wcpos/v2/taxes', 'taxRates'],
 		['https://s.test/wp-json/wc/v3/orders?page=1', 'orders'],
 	] as const)('maps %s to %s', (url, collection) => {

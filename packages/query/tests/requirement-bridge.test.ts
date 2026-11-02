@@ -1,3 +1,4 @@
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import type { EngineRequirement, RequirementHandle } from '@wcpos/sync-engine';
 
 import { declareRequirements } from '../src/requirement-bridge';
@@ -29,7 +30,7 @@ describe('declareRequirements', () => {
 				id: 'b',
 				collection: 'products',
 				kind: 'targeted-records',
-				remoteIds: ['1'],
+				remoteIds: [remoteIdOrNull('1')!],
 			},
 		];
 		const unhandled = jest.fn();

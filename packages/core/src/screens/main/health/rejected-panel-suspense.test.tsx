@@ -12,22 +12,22 @@
  * every Suspense retry gets a freshly-constructed resource that suspends again on
  * its own async first emission, forever.
  *
- * This test drives that exact shape: `db$` hands back a database synchronously,
- * the rejected-rows query emits, and the resident read resolves on a microtask —
+ * This test drives that exact shape: the named described-rows read resolves on a microtask —
  * so the full pipeline's first value is asynchronous and the panel suspends
  * before it can commit. With the bug the row never appears; with the fix it does.
  */
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { BehaviorSubject, throwError } from 'rxjs';
+import { defer, throwError } from 'rxjs';
 
 import { useRejectedMutations } from './use-rejected-mutations';
 
 let engineStub: unknown;
 
 jest.mock('@wcpos/query', () => ({
-	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
+	REJECTED_QUEUE_STATUSES: ['rejected'],
+	observeDescribedQueueRows: (engine: { read: () => unknown }) => engine.read(),
 	useQueryRuntime: () => ({ engine: engineStub }),
 }));
 
@@ -49,50 +49,23 @@ const deadLetterRow = {
 	rejectedAt: '2026-08-06T16:01:11.000Z',
 };
 
-/** A mock engine whose async shape matches the live one the diagnostic measured. */
-function makeEngine(
-	options: { residentRead?: () => Promise<unknown>; queryErrors?: boolean } = {}
-) {
+/** Preserve the named read's async first emission, so React really suspends. */
+function makeEngine(options: { residentRead?: 'failed'; queryErrors?: boolean } = {}) {
 	let subscribeCount = 0;
-	const residentDoc = {
-		toJSON: () => ({
-			id: UUID_A,
-			remoteId: null,
-			number: '',
-			total: '25.00',
-			payload: { status: 'pos-open', total: '25.00' },
-		}),
-	};
-	const database = {
-		collections: {
-			recordMutations: {
-				find: () => {
-					const subject = new BehaviorSubject<unknown[]>([{ toJSON: () => deadLetterRow }]);
-					return {
-						get $() {
-							subscribeCount += 1;
-							return options.queryErrors
-								? throwError(() => new Error('storage query failed'))
-								: subject.asObservable();
-						},
-					};
-				},
-			},
-			orders: {
-				findOne: () => ({
-					// Resident read resolves on a microtask, like RxDB — so the pipeline's
-					// first value is async and the panel suspends before committing.
-					exec: options.residentRead ?? (() => Promise.resolve(residentDoc)),
-				}),
-			},
-		},
-	};
 	const engine = {
-		db$: (cb: (db: unknown) => void) => {
-			cb(database);
-			return () => undefined;
-		},
-		active: () => ({ database }),
+		read: () =>
+			defer(() => {
+				subscribeCount += 1;
+				if (options.queryErrors) return throwError(() => new Error('storage query failed'));
+				return Promise.resolve([
+					{
+						...deadLetterRow,
+						resident: options.residentRead === 'failed' ? null : { total: '25.00' },
+						residentRead: options.residentRead === 'failed' ? 'failed' : 'ok',
+						discard: options.residentRead === 'failed' ? 'unknown' : 'destroys-record',
+					},
+				]);
+			}),
 	};
 	return { engine, subscriptions: () => subscribeCount };
 }
@@ -128,7 +101,7 @@ describe('RejectedMutationsPanel Suspense lifecycle (#40/#832)', () => {
 
 	it('renders the row even when the resident read FAILS — never a hang', async () => {
 		const { engine } = makeEngine({
-			residentRead: () => Promise.reject(new Error('storage read failed')),
+			residentRead: 'failed',
 		});
 		engineStub = engine;
 

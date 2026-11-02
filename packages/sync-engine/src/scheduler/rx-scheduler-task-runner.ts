@@ -1,4 +1,3 @@
-import { isLedgerReconciliationRefusalError } from '../local-coverage/ledger-storage-recovery';
 import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
@@ -66,6 +65,7 @@ export type PersistedSchedulerTaskOutcomeKind =
 
 /** One task's own verdict and its own document/request counts. */
 export type PersistedSchedulerTaskOutcome = {
+	appliedRecordIds?: string[];
 	taskId: string;
 	requirementId: string;
 	collection: string;
@@ -271,7 +271,7 @@ function failedState(
 function recordFetchResult(
 	result: PersistedSchedulerTaskRunnerResult,
 	fetchResult: FetchTaskResult,
-	taskTotals: { documents: number; requests: number }
+	taskTotals: { documents: number; requests: number; appliedRecordIds: string[] }
 ): void {
 	result.totalDocuments += fetchResult.documentCount;
 	result.totalRequests += fetchResult.requestCount;
@@ -279,6 +279,7 @@ function recordFetchResult(
 	// reports ITS OWN transfer rather than the whole tick's.
 	taskTotals.documents += fetchResult.documentCount;
 	taskTotals.requests += fetchResult.requestCount;
+	taskTotals.appliedRecordIds.push(...(fetchResult.appliedRecordIds ?? []));
 }
 
 function maxRequestsForTask(
@@ -360,7 +361,7 @@ export async function runPersistedSchedulerTasks(
 		const maxRequests = maxRequestsForTask(input, task, runnableState);
 		let taskCompleted = false;
 		let requests = 0;
-		const taskTotals = { documents: 0, requests: 0 };
+		const taskTotals = { documents: 0, requests: 0, appliedRecordIds: [] as string[] };
 		const recordOutcome = (
 			kind: PersistedSchedulerTaskOutcomeKind,
 			requestStatus?: number
@@ -373,6 +374,7 @@ export async function runPersistedSchedulerTasks(
 				kind,
 				documents: taskTotals.documents,
 				requests: taskTotals.requests,
+				appliedRecordIds: taskTotals.appliedRecordIds,
 				...(requestStatus !== undefined ? { requestStatus } : {}),
 			});
 		};
@@ -485,13 +487,6 @@ export async function runPersistedSchedulerTasks(
 				}
 				throw error;
 			}
-
-			// A tagged ledger refusal is not a task failure: the derivable ledger
-			// (including this runner's own claim rows) is about to be rebuilt, so
-			// marking the task failed would write into the store the rebuild drops.
-			// Rethrow so withSchedulerDrainLedgerRecovery aborts the whole tick
-			// cleanly (#956; #1187 review).
-			if (isLedgerReconciliationRefusalError(error)) throw error;
 
 			const failedAtMs = currentTime(input);
 			const failed = await input.repository.markFailed(

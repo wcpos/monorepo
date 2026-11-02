@@ -3,17 +3,18 @@ import { View } from 'react-native';
 
 import { Slot } from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
-import { useCSSVariable } from 'uniwind';
 
+import { currentRowMark } from '../lib/current-row';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
+import { TEXT_LADDER } from '../text/ladder';
 import { PulseTableRow } from './pulse-row';
 
 import type { SlottableViewProps } from '@rn-primitives/types';
 
 function Table({ className, ...props }: TablePrimitive.RootProps) {
 	return (
-		<TablePrimitive.Root className={cn('w-full caption-bottom text-sm', className)} {...props} />
+		<TablePrimitive.Root className={cn('w-full caption-bottom text-base', className)} {...props} />
 	);
 }
 
@@ -36,23 +37,35 @@ function TableBody({ className, style, ...props }: TablePrimitive.BodyProps) {
 function TableFooter({ className, ...props }: TablePrimitive.FooterProps) {
 	return (
 		<TablePrimitive.Footer
-			className={cn('bg-footer font-medium [&>tr]:last:border-b-0', className)}
+			className={cn('font-medium [&>tr]:last:border-b-0', className)}
 			{...props}
 		/>
 	);
 }
 
+type CurrentRowProps = {
+	index?: number;
+	/**
+	 * The current-row mark, as `ListRow selected` draws it (`currentRowMark`): `true` the primary
+	 * bar and `bg-muted`, announced as selected; `false` the bar's room kept transparent; unset
+	 * no bar.
+	 */
+	selected?: boolean;
+};
+
 function PressableTableRow({
 	className,
-	index = 0,
+	index: _index = 0,
+	selected,
 	...props
-}: TablePrimitive.RowProps & { index?: number }) {
+}: TablePrimitive.RowProps & CurrentRowProps) {
 	return (
 		<TablePrimitive.Row
 			role="row"
+			aria-selected={selected}
 			className={cn(
-				'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
-				index % 2 && 'bg-muted/40',
+				'web:transition-colors web:hover:bg-accent web:data-[state=selected]:bg-selected border-border min-h-row flex-row border-b',
+				currentRowMark(selected),
 				className
 			)}
 			{...props}
@@ -63,32 +76,40 @@ function PressableTableRow({
 function TableRow({
 	asChild,
 	className,
-	index = 0,
+	index: _index = 0,
+	selected,
 	...props
-}: SlottableViewProps & { index?: number }) {
+}: SlottableViewProps & CurrentRowProps) {
 	const Component = asChild ? Slot : View;
-	// Use theme-aware colors for alternating rows
-	const [tableRowColor, tableRowAltColor] = useCSSVariable([
-		'--color-table-row',
-		'--color-table-row-alt',
-	]) as string[];
 
 	return (
 		<Component
 			role="row"
-			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
-			style={{ backgroundColor: index % 2 ? tableRowAltColor : tableRowColor }}
+			// RN maps it onto the selected state a native screen reader announces.
+			aria-selected={selected}
+			// A static row: header and plain rows take no hover; the pressable row does.
+			className={cn(
+				'web:transition-colors web:data-[state=selected]:bg-selected border-border min-h-row flex-row border-b',
+				currentRowMark(selected),
+				className
+			)}
 			{...props}
 		/>
 	);
 }
 
+/**
+ * The column-head text: the ladder's caption rank (decision 9, 2026-10-16). Every column heading
+ * reads it through `TableHead`'s text context; the few headings outside a `TableHead` import it.
+ */
+const TABLE_HEAD_TEXT = TEXT_LADDER.caption;
+
 function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 	return (
-		<TextClassContext.Provider value="text-muted-foreground text-xs uppercase text-left font-medium">
+		<TextClassContext.Provider value={cn(TABLE_HEAD_TEXT, 'text-left')}>
 			<TablePrimitive.Head
 				className={cn(
-					'bg-table-header h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
+					'h-9 flex-1 flex-col justify-center px-3 [&:has([role=checkbox])]:pr-0',
 					className
 				)}
 				style={style}
@@ -104,7 +125,10 @@ function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 function TableCell({ className, children, ...props }: TablePrimitive.CellProps) {
 	return (
 		<TablePrimitive.Cell
-			className={cn('flex-1 flex-col justify-center p-2 [&:has([role=checkbox])]:pr-0', className)}
+			className={cn(
+				'flex-1 flex-col justify-center px-3 py-1.5 [&:has([role=checkbox])]:pr-0',
+				className
+			)}
 			{...props}
 		>
 			{children}
@@ -113,6 +137,7 @@ function TableCell({ className, children, ...props }: TablePrimitive.CellProps) 
 }
 
 export {
+	TABLE_HEAD_TEXT,
 	PressableTableRow,
 	PulseTableRow,
 	Table,

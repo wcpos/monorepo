@@ -1,4 +1,10 @@
-import type { LevelKind } from '../health/components/level-indicator';
+import { logRecordRef } from '@wcpos/query/store-local';
+
+/**
+ * Display kind for a log row. Derived, not stored: `action` is a row with an
+ * actor, `sync` is the sync domain, the rest are the record's level.
+ */
+export type LevelKind = 'info' | 'warn' | 'error' | 'action' | 'sync' | 'debug';
 
 /**
  * The plain-data shape of a log row as the ledger consumes it (schema v2,
@@ -58,7 +64,7 @@ function isSyncCategory(category: string | undefined): boolean {
 export function displayKind(row: Pick<LogRow, 'level' | 'actor' | 'category'>): LevelKind {
 	if (row.level === 'error') return 'error';
 	if (row.level === 'warn') return 'warn';
-	if (row.actor && (row.actor.id !== undefined || row.actor.name !== undefined)) return 'action';
+	if (row.actor && (row.actor.id != null || row.actor.name != null)) return 'action';
 	// DEBUG OUTRANKS THE DOMAIN. Debug rows exist only while verbose diagnostics
 	// is on, and that is exactly when someone needs to tell the forensic rows
 	// apart from the running narrative. Ranking the sync domain first painted
@@ -306,14 +312,8 @@ export function formatSkewMagnitude(skewSeconds: number): string {
 }
 
 /** The record a row is about, when its context names one (`collection` + `recordId`). */
-export function recordRefOf(row: LogRow): { collection: string; recordId: string } | null {
-	const context = row.context ?? {};
-	const recordId = context.recordId;
-	const collection = context.collection;
-	if (typeof collection !== 'string' || collection === '') return null;
-	if (typeof recordId !== 'string' && typeof recordId !== 'number') return null;
-	if (String(recordId) === '') return null;
-	return { collection, recordId: String(recordId) };
+export function recordRefOf(row: LogRow): { collectionName: string; recordId: string } | null {
+	return logRecordRef(row.context);
 }
 
 /**
@@ -326,7 +326,7 @@ export type RowDetailData = {
 	/** e.g. `c41a88 · 400 · 500 ms` */
 	request?: string;
 	serverCode?: string;
-	attempts?: { count: number; firstSeen: number; lastSeen: number };
+	attempts?: { times: number; firstSeen: number; lastSeen: number };
 	/**
 	 * The specifics the guidance copy points at ("the field named below", "the
 	 * SKU the store refused", "the fields listed below", "the store's reason") —
@@ -391,7 +391,7 @@ export function rowDetailData(row: LogRow): RowDetailData {
 	const count = Math.max(row.count ?? 1, row.attempt ?? 0);
 	if (count > 1) {
 		detail.attempts = {
-			count,
+			times: count,
 			firstSeen: row.firstSeen ?? row.timestamp,
 			lastSeen: row.lastSeen ?? row.timestamp,
 		};
@@ -527,7 +527,7 @@ export function buildLogEntryReport(row: LogRow): string {
 	if (detail.serverCode) lines.push(`Server code: ${detail.serverCode}`);
 	if (detail.attempts) {
 		lines.push(
-			`Attempts: ${detail.attempts.count} (${new Date(
+			`Attempts: ${detail.attempts.times} (${new Date(
 				detail.attempts.firstSeen
 			).toISOString()} → ${new Date(detail.attempts.lastSeen).toISOString()})`
 		);

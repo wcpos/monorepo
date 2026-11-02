@@ -2,12 +2,13 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { persistPrinterProfile } from '../persist-printer-profile';
+import { savePrinterProfile } from '@wcpos/query';
+
 import { PrinterSetupDialog } from './printer-setup-dialog';
+import { PRINTER_TEXT_WIDTHS } from '../options';
 import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
-	ActivityIndicator: 'Spinner',
 	Linking: { sendIntent: jest.fn(async () => undefined) },
 	Platform: { OS: 'ios' },
 	Pressable: 'Pressable',
@@ -15,30 +16,40 @@ jest.mock('react-native', () => ({
 	ScrollView: 'ScrollView',
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
+// The status rows' spinner is the system Loader now, not the bare ActivityIndicator.
+jest.mock('@wcpos/components/loader', () => ({ Loader: 'Spinner' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));
+jest.mock('@wcpos/components/badge', () => ({ Badge: 'Badge' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: 'Stack' }));
 jest.mock('@wcpos/components/dialog', () => ({
+	...jest.requireActual('../../../../../../jest/footer.test-utils'),
 	Dialog: 'Dialog',
 	DialogBody: 'Body',
 	DialogContent: 'Content',
 	DialogHeader: 'Header',
 	DialogTitle: 'Title',
 }));
-jest.mock('@wcpos/components/form', () => ({ Form: 'Form', FormField: () => null }));
+jest.mock('@wcpos/components/form', () => ({
+	Form: 'Form',
+	FormField: () => null,
+	SavedMark: () => null,
+}));
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: 'Select' }));
+jest.mock('@wcpos/components/segmented-control', () => ({ SegmentedControl: 'SegmentedControl' }));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: 'Collapsible',
 	CollapsibleTrigger: 'Trigger',
 	CollapsibleContent: 'Options',
 }));
 jest.mock('../dialog/connection/web-vendor-segmented', () => ({ WebVendorSegmented: () => null }));
-jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
-jest.mock('../dialog/printer-toggle-group', () => ({ PrinterToggleGroup: () => null }));
+jest.mock('../dialog/printer-rows', () => ({ PrinterToggleRows: () => null }));
 jest.mock('../dialog/test-print-error', () => ({ TestPrintError: () => null }));
-jest.mock('../persist-printer-profile', () => ({ persistPrinterProfile: jest.fn() }));
+jest.mock('@wcpos/query', () => ({
+	savePrinterProfile: jest.fn().mockResolvedValue({ id: 'saved', created: true }),
+}));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: {} }),
 }));
@@ -123,13 +134,56 @@ it('pre-selects the sole printer, prints on the button, then asks with three ans
 	for (const key of ['setup_ok', 'setup_short', 'setup_nothing']) {
 		const button = renderer.root.findByProps({ testID: `printer-setup-${key}` });
 		expect(button.props.disabled).toBe(false);
-		expect(button.findByType('Text' as React.ElementType).props.children).toBe(
-			t(`settings.${key}`)
-		);
+		expect(button.props.children).toBe(t(`settings.${key}`));
 	}
 	expect(renderer.root.findByProps({ testID: 'printer-setup-footer' }).props.children).toBe(
 		'Test page 1 · 48 characters per line'
 	);
+	act(() => renderer.unmount());
+});
+
+it('chooses the paper width with one segmented control', async () => {
+	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+	// A sole USB printer that never says its width: the cashier picks the paper.
+	mockHideNetwork = true;
+	mockUsbPrinters.push({ id: 'usb', name: 'USB', address: 'usb:1:2:3:4', connectionType: 'usb' });
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	mockHideNetwork = false;
+	mockUsbPrinters.length = 0;
+	const paper = () => renderer.root.findByType('SegmentedControl' as React.ElementType);
+	expect(paper().props.segments.map((s: { testID: string }) => s.testID)).toEqual([
+		'printer-setup-setup_paper_32',
+		'printer-setup-setup_paper_48',
+	]);
+	expect(paper().props.segments.every((s: { disabled: boolean }) => !s.disabled)).toBe(true);
+	await act(async () => paper().props.onValueChange('32'));
+	expect(paper().props.value).toBe('32');
+	await act(async () => paper().props.onValueChange('48'));
+	expect(paper().props.value).toBe('48');
+	act(() => renderer.unmount());
+});
+
+it('asks the width with the shared printer text widths after a short test page', async () => {
+	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_print_test' }).props.onPress();
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_short' }).props.onPress();
+	});
+	const widths = renderer.root
+		.findAllByType('Button' as React.ElementType)
+		.map((node) => String(node.props.testID))
+		.filter((testID) => testID.startsWith('printer-setup-setup_width_'))
+		.map((testID) => Number(testID.replace('printer-setup-setup_width_', '')));
+	expect(widths).toEqual([...PRINTER_TEXT_WIDTHS]);
 	act(() => renderer.unmount());
 });
 
@@ -149,7 +203,8 @@ it('shows source labels on result cards', async () => {
 		['usb:1:2:3:4', 'USB'],
 	]) {
 		const card = renderer.root.findByProps({ testID: `printer-setup-result-${address}` });
-		expect(card.findAllByType('Text' as React.ElementType).map((n) => n.props.children)).toContain(
+		// The source tag is a muted Badge beside the address line.
+		expect(card.findAllByType('Badge' as React.ElementType).map((n) => n.props.children)).toContain(
 			label
 		);
 	}
@@ -320,7 +375,7 @@ it('offers the receipt language under More options for ESC/POS and hides it for 
 
 it('saves a generic native BLE printer after the cashier confirms the test page', async () => {
 	mockHideNetwork = true;
-	jest.mocked(persistPrinterProfile).mockClear();
+	jest.mocked(savePrinterProfile).mockClear();
 	mockExtraPrinters.push({
 		id: 'ble-1',
 		name: 'BLE printer',
@@ -340,12 +395,13 @@ it('saves a generic native BLE printer after the cashier confirms the test page'
 				renderer.root.findByProps({ testID: `printer-setup-${action}` }).props.onPress();
 			});
 		}
-		expect(persistPrinterProfile).toHaveBeenCalledWith(
+		expect(savePrinterProfile).toHaveBeenCalledWith(
 			{},
 			expect.objectContaining({
 				vendor: 'generic',
 				address: 'ble:ABC',
-			})
+			}),
+			{ reuseByAddress: true }
 		);
 	} finally {
 		act(() => renderer.unmount());

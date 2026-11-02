@@ -4,8 +4,8 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
+import { observePrinterProfiles } from '@wcpos/query';
 import type { PrinterProfile } from '@wcpos/printer';
-import type { PrinterProfileDocument } from '@wcpos/database';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -33,10 +33,7 @@ export function useAvailablePrinterProfiles() {
 	const [cloudPending, setCloudPending] = React.useState(true);
 
 	const profiles$ = React.useMemo(
-		() =>
-			storeDB.collections.printer_profiles
-				.find()
-				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
+		() => observePrinterProfiles(storeDB).pipe(map((docs) => docs.map(toPrinterProfile))),
 		[storeDB]
 	);
 	const localProfiles = useObservableState<PrinterProfile[] | undefined>(profiles$, undefined);

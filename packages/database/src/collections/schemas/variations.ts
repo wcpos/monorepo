@@ -1,6 +1,6 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 6,
+	version: 0,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',

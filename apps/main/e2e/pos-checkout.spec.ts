@@ -1,19 +1,22 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	becomesVisible,
 	getStoreUrl,
 	isRouteTeardownError,
 	isWcposRestRoute,
+	openOrderSheet,
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
+	checkoutControl,
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectPaymentBlocked,
 	expectRateSetParity,
 	expectTaxParity,
 	liveOrderTest as liveTest,
@@ -96,7 +99,8 @@ async function addTestProductToCart(page: Page) {
 	if (
 		!productsVisible &&
 		(await page
-			.getByTestId('error-boundary-fallback')
+			.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
+			.first()
 			.isVisible()
 			.catch(() => false))
 	) {
@@ -170,14 +174,6 @@ async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
 	});
 }
 
-async function ensureSwitchEnabled(toggle: Locator) {
-	await expect(toggle).toBeVisible({ timeout: 15_000 });
-	if (!(await isSwitchEnabled(toggle))) {
-		await toggle.click();
-	}
-	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(true);
-}
-
 async function ensureSwitchDisabled(toggle: Locator) {
 	await expect(toggle).toBeVisible({ timeout: 15_000 });
 	if (await isSwitchEnabled(toggle)) {
@@ -192,27 +188,15 @@ async function disableAutoShowReceipt(page: Page) {
 	await page.keyboard.press('Escape');
 }
 
-/**
- * Configure POS cart UI settings from the UI itself rather than mutating
- * storage internals. This is resilient across storage backend migrations.
- */
-async function enableAutoReceiptSettings(page: Page) {
-	await page.getByTestId('cart-settings-button').click();
-
-	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-show-receipt').first());
-	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-print-receipt').first());
-
-	// Close settings dialog and continue with updated persisted UI settings.
-	await page.keyboard.press('Escape');
-}
-
 test.describe('POS Cart - Order Actions', () => {
 	test('should save order to server', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
+		await openOrderSheet(page);
 		await page.getByTestId('save-to-server-button').click();
 
 		// Wait for the save button to finish loading (loading state resolves when save completes)
+		await openOrderSheet(page);
 		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({
 			timeout: 30_000,
 		});
@@ -222,26 +206,18 @@ test.describe('POS Cart - Order Actions', () => {
 		});
 	});
 
-	test('should add order note', async ({ posPage: page }) => {
-		await addTestProductToCart(page);
-
-		await page.getByTestId('order-note-button').click();
-
-		const textarea = page.locator('textarea').first();
-		await expect(textarea).toBeVisible({ timeout: 15_000 });
-		await textarea.fill('Test order note from e2e');
-
-		const addNoteButton = page.getByTestId('add-note-button');
-		await expect(addNoteButton).toBeVisible({ timeout: 15_000 });
-		await addNoteButton.click();
-	});
-
-	test('should open order meta dialog', async ({ posPage: page }) => {
+	test('open order details and add a note', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
 		await page.getByTestId('order-meta-button').click();
-
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+
+		const textarea = page.getByTestId('order-note-input');
+		await expect(textarea).toBeVisible({ timeout: 15_000 });
+		await textarea.fill('Test order note from e2e');
+
+		// The note saves as it is typed; the Saved mark beside the label is the write landing.
+		await expect(page.getByTestId('saved-customer_note')).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -249,15 +225,7 @@ test.describe('POS Cart - Multiple Orders', () => {
 	test('should create a new order via tab', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
-		// The new order button is a TabsTrigger with a plus icon
-		// It's a tab element with value="new" containing an Icon with name="plus"
-		// The tooltip text is "Open new order"
-		const newOrderTab = page
-			.getByRole('tab')
-			.filter({ has: page.locator('svg') })
-			.last()
-			.or(page.locator('[role="tab"]').filter({ hasText: '+' }))
-			.or(page.locator('[data-state]').filter({ has: page.locator('[name="plus"]') }));
+		const newOrderTab = page.getByTestId('new-order-tab');
 
 		await expect(newOrderTab).toBeVisible({ timeout: 15_000 });
 		await newOrderTab.click();
@@ -273,18 +241,12 @@ test.describe('POS Cart - Multiple Orders', () => {
 });
 
 test.describe('POS Checkout', () => {
-	test('should open checkout modal', async ({ posPage: page }) => {
-		await addTestProductToCart(page);
-
-		await openCheckout(page);
-	});
-
 	test('should show order total in checkout', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
-		await openCheckout(page);
+		const { surface } = await openCheckout(page);
 
-		// The modal must show the same amount the cart's Pay button shows. The old
+		// Checkout must show the same amount the cart's Pay button shows. The old
 		// assertion here only checked that a cancel button was visible, which would
 		// not have noticed a modal showing 0.00 or one bound to a different order.
 		//
@@ -293,24 +255,26 @@ test.describe('POS Checkout', () => {
 		// moves from 45.00 to 50.07), and the POS mirrors that — comparing against a
 		// pre-save snapshot would be asserting that the server is not allowed to
 		// recalculate, which is the opposite of the house rule.
-		const amount = page.getByTestId('checkout-amount-to-pay');
+		const amount = checkoutControl(page, surface, 'amount');
 		await expect(amount).toBeVisible({ timeout: 15_000 });
 
 		// Compared as digits so the assertion holds in whatever currency and locale
-		// the store under test is configured for.
+		// the store under test is configured for. The cart's figure is its Pay button
+		// behind the modal; beside the pane the cart column is the order's ledger.
 		const shown = digitsOf((await amount.textContent()) ?? '');
-		const cartTotal = digitsOf((await page.getByTestId('checkout-button').textContent()) ?? '');
+		const cartTotalId = surface === 'pane' ? 'checkout-order-total' : 'checkout-button';
+		const cartTotal = digitsOf((await page.getByTestId(cartTotalId).textContent()) ?? '');
 		expect(Number(shown), 'checkout must show a non-zero amount').toBeGreaterThan(0);
 		expect(shown, 'checkout must show the same total as the cart').toBe(cartTotal);
-		await expect(page.getByTestId('cancel-checkout-button')).toBeVisible();
+		await expect(checkoutControl(page, surface, 'close')).toBeVisible();
 	});
 
 	test('should cancel checkout and return to cart', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
-		await openCheckout(page);
+		const { surface } = await openCheckout(page);
 
-		await page.getByTestId('cancel-checkout-button').click();
+		await checkoutControl(page, surface, 'close').click();
 
 		await expect(page.getByTestId('checkout-button')).toBeVisible({
 			timeout: 15_000,
@@ -324,31 +288,14 @@ test.describe('POS Checkout', () => {
 		await addTestProductToCart(page);
 
 		const gatewaysLoaded = gatewaysResponse(page);
-		await openCheckout(page);
-		await gatewaysLoaded;
-		await expect(page.getByTestId('process-payment-button')).toBeDisabled({
-			timeout: 15_000,
-		});
+		const { surface } = await openCheckout(page);
+		await expectPaymentBlocked(page, surface, gatewaysLoaded, 15_000);
 	});
 
-	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {
-		await enableAutoReceiptSettings(page);
-		await page.reload();
-		await expect(page.getByTestId('search-products')).toBeVisible({
-			timeout: 30_000,
-		});
-
-		await addTestProductToCart(page);
-
-		await openCheckout(page);
-		const orderIdMatch = page.url().match(/\/cart\/([^/]+)\/checkout$/);
-		expect(orderIdMatch?.[1]).toBeTruthy();
-
-		await page.goto(`/cart/receipt/${orderIdMatch![1]}`);
-		const printButton = page.getByTestId('receipt-print-button');
-		await expect(printButton).toBeVisible({ timeout: 30_000 });
-		await expect(printButton).toBeDisabled({ timeout: 10_000 });
-	});
+	// Auto-print is covered in checkout-tender.spec.ts, on the checkout's receipt stage: that
+	// is the one surface that auto-prints on `next` (f61fdc7f6); the `/cart/receipt/<id>` modal
+	// never does, so a test asserting the print button disabled there was only ever reading the
+	// new order's sync-in-progress `loading` state.
 });
 
 /**
@@ -382,13 +329,13 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// from the lines, so the push body no longer carries the POS's figure.
 			const cart = await readCartMoney(page);
 
-			const { orderId, sent } = await openCheckout(page, {
+			const { orderId, sent, surface } = await openCheckout(page, {
 				onOrderCreated: (order) => trackOrder({ ...order, label }),
 			});
 
 			// The amount put in front of the cashier, captured before paying.
 			const amountShown = digitsOf(
-				(await page.getByTestId('checkout-amount-to-pay').textContent()) ?? ''
+				(await checkoutControl(page, surface, 'amount').textContent()) ?? ''
 			);
 			expect(Number(amountShown), 'checkout must show a non-zero amount').toBeGreaterThan(0);
 
@@ -618,9 +565,8 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 	await omitPaymentLinkFromPushAcks(page);
 	await addTestProductToCart(page);
 	const gatewaysLoaded = gatewaysResponse(page);
-	await openCheckout(page);
-	await gatewaysLoaded;
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
+	const { surface } = await openCheckout(page);
+	await expectPaymentBlocked(page, surface, gatewaysLoaded, 10_000);
 	expect(contractCheckoutRequested).toBe(false);
 });
 
@@ -650,9 +596,6 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 	await omitPaymentLinkFromPushAcks(page);
 	await addTestProductToCart(page);
 	const gatewaysLoaded = gatewaysResponse(page);
-	await openCheckout(page);
-	await gatewaysLoaded;
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled({
-		timeout: 10_000,
-	});
+	const { surface } = await openCheckout(page);
+	await expectPaymentBlocked(page, surface, gatewaysLoaded, 10_000);
 });

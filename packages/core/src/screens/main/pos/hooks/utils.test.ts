@@ -24,11 +24,15 @@ describe('Utilities', () => {
 					userId: 7,
 					storeId: 11,
 					taxBasedOn: 'billing',
+					registerId: 'register',
+					tillId: 'till',
 				})
 			).toEqual([
 				{ key: 'custom', value: 'keep' },
 				{ key: '_pos_user', value: '7' },
 				{ key: '_pos_store', value: '11' },
+				{ key: '_wcpos_register', value: 'register' },
+				{ key: '_wcpos_till', value: 'till' },
 				{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
 			]);
 		});
@@ -37,6 +41,8 @@ describe('Utilities', () => {
 			const existing = [
 				{ key: '_pos_user', value: '3' },
 				{ key: '_pos_store', value: '4' },
+				{ key: '_wcpos_register', value: 'previous-register' },
+				{ key: '_wcpos_till', value: 'previous-till' },
 				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
 			];
 			expect(
@@ -44,8 +50,25 @@ describe('Utilities', () => {
 					userId: 7,
 					storeId: 11,
 					taxBasedOn: 'billing',
+					registerId: 'register',
+					tillId: 'till',
 				})
 			).toEqual(existing);
+		});
+
+		it('rebinds only the register when an empty cart starts after a switch', () => {
+			const existing = [
+				{ key: '_wcpos_register', value: 'A' },
+				{ key: '_pos_user', value: '3' },
+			];
+			const meta = ensurePosOrderIdentityMeta(
+				existing,
+				{ userId: 7, storeId: 11, registerId: 'B' },
+				true
+			);
+			expect(meta).toContainEqual({ key: '_wcpos_register', value: 'B' });
+			expect(meta).not.toContainEqual({ key: '_wcpos_register', value: 'A' });
+			expect(meta).toContainEqual({ key: '_pos_user', value: '3' });
 		});
 
 		it('omits the store entry for the default store', () => {
@@ -489,5 +512,44 @@ describe('Utilities', () => {
 		it('ignores non-quantity changes on fee lines', () => {
 			expect(detectNewCartLines([fee('f')], [fee('f')])).toEqual([]);
 		});
+	});
+});
+
+describe('lineMetaForWrite', () => {
+	const { lineMetaForWrite: withPos } = jest.requireActual('./utils') as typeof import('./utils');
+	it("replaces the draft's pos_data row with the line's current one and keeps the other rows", () => {
+		const formMeta = [
+			{ key: 'custom', value: 'edited' },
+			{ key: '_woocommerce_pos_data', value: { price: '1', virtual: false } },
+		];
+		const line = {
+			meta_data: [{ key: '_woocommerce_pos_data', value: { price: '2', virtual: true } }],
+		};
+		expect(withPos(formMeta, line)).toEqual([
+			{ key: 'custom', value: 'edited' },
+			{ key: '_woocommerce_pos_data', value: { price: '2', virtual: true } },
+		]);
+	});
+	it('drops a just-added row with no id and no key, keeps a saved row with an empty key', () => {
+		expect(
+			withPos(
+				[
+					{ key: '', value: '' },
+					{ id: 3, key: '', value: 'kept' },
+				],
+				{ meta_data: [] }
+			)
+		).toEqual([{ id: 3, key: '', value: 'kept' }]);
+	});
+	it('drops the draft row when the line has none', () => {
+		expect(
+			withPos(
+				[
+					{ key: '_woocommerce_pos_data', value: {} },
+					{ key: 'a', value: 1 },
+				],
+				{ meta_data: [] }
+			)
+		).toEqual([{ key: 'a', value: 1 }]);
 	});
 });

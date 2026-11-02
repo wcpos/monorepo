@@ -13,7 +13,7 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type ShippingLine = import('@wcpos/query').OrderShippingLine;
 
 /**
  * No `tax_class`: WooCommerce has no per-line shipping tax class, so the POS does not

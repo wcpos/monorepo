@@ -1,4 +1,4 @@
-import type { ServerStorePayload } from '../../utils/merge-stores';
+import type { ServerStorePayload } from '@wcpos/query/user-db';
 
 /**
  * Boot payload injected by the woocommerce-pos plugin (WordPress embedded web

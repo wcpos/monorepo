@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import { type APIRequestContext, expect, request as playwrightRequest } from '@playwright/test';
 
+import { getStoreVariant, listStoreIds, openOrderSheet, storeRequestOptions } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
-import { getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
+	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
-	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -31,7 +31,7 @@ import {
  * trip to the Money-oracle doctrine (TEST-PLAN.md) — coupon_lines recorded,
  * discount parity, totals parity, and no divergence banner.
  *
- * Pro-gated (menu-add-coupon requires a Pro license) and writer-gated (probe
+ * Pro-gated (the coupon picker behind menu-add-discount requires a Pro license) and writer-gated (probe
  * coupons need the shared e2e-product-writer identity): both absences are
  * declared-missing environment → skip with reason, per the store-agnostic
  * policy. A configured-but-failing write is a FAILURE, not a skip.
@@ -142,7 +142,7 @@ for (const targetStoreId of storeTargets) {
 				async ({ posPage: page, trackOrder, probeCoupon }, testInfo) => {
 					couponTest.skip(
 						getStoreVariant(testInfo) === 'free',
-						'coupon application is Pro-gated (menu-add-coupon)'
+						'coupon application is Pro-gated (menu-add-discount)'
 					);
 					couponTest.skip(
 						!probeCoupon,
@@ -156,10 +156,11 @@ for (const targetStoreId of storeTargets) {
 
 					// Apply the probe coupon through the UI.
 					await page.getByTestId('add-cart-item-menu').click();
-					const menuItem = page.getByTestId('menu-add-coupon');
+					const menuItem = page.getByTestId('menu-add-discount');
 					await expect(menuItem).toBeVisible({ timeout: 10_000 });
 					await menuItem.click();
 
+					await page.getByTestId('add-discount-kind-coupon').click();
 					await page.getByTestId('add-coupon-combobox').click();
 					const searchInput = page.getByTestId('add-coupon-search-input');
 					await expect(searchInput).toBeVisible({ timeout: 15_000 });
@@ -203,10 +204,11 @@ for (const targetStoreId of storeTargets) {
 						'the cart must have discounted the applied coupon before saving'
 					).toBeGreaterThan(0);
 
-					const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});
+					await openOrderSheet(page);
 					await page.getByTestId('save-to-server-button').click();
 					const response = await saved;
 					expect(response.status(), 'couponed save must succeed').toBeLessThan(400);
@@ -323,6 +325,7 @@ for (const targetStoreId of storeTargets) {
 					// completes, so the reconciliation that raises this banner has run before
 					// we assert it is down — asserting straight after the response would pass
 					// on the pre-reconciliation rendering.
+					await openOrderSheet(page);
 					await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 					await expect(
 						page.getByTestId('order-totals-changed-banner'),

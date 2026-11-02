@@ -1,0 +1,83 @@
+import * as React from 'react';
+
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
+import { toMinor } from '@wcpos/order-math';
+
+import { useT } from '../../../../../contexts/translations';
+
+import type { TenderFlow } from './use-tender-flow';
+
+interface Props {
+	flow: TenderFlow;
+	format: (minor: number) => string;
+}
+
+/**
+ * Cancelling mid-split is a physical act before it is a database one: the cash in
+ * the drawer has to come back out. So the screen lists what has to be returned or
+ * voided, leg by leg, before it will void anything.
+ */
+export function CancelPaymentView({ flow, format }: Props) {
+	const t = useT();
+
+	return (
+		<VStack space="md" className="mx-auto max-w-md p-4">
+			<Text className="text-lg font-semibold">{t('pos_checkout.cancel_payment_question')}</Text>
+			{flow.liveRows.length === 0 ? (
+				<EmptyState kind="empty" size="inline" title={t('pos_checkout.nothing_taken_yet')} />
+			) : (
+				<VStack space="xs">
+					<Text variant="key">{t('pos_checkout.money_taken_has_to_go_back')}</Text>
+					{flow.liveRows.map((row) => {
+						const amount = format(toMinor(row.amount, flow.dp));
+						const title =
+							flow.tiles.find(({ method }) => method.id === row.method_id)?.method.title ??
+							row.method_id;
+						// The same rule `voidPayments` applies: a captured card leg, or a captured
+						// row a completion counted, is kept and reported `captured_refund_required`,
+						// so the screen says refund, never a void it will not get.
+						const retained = flow.retainedRows.some(({ id }) => id === row.id);
+
+						return (
+							<Text
+								key={row.id}
+								testID={`checkout-cancel-leg-${row.id}`}
+								className="border-border bg-background rounded-md border p-2 text-sm"
+								decodeHtml
+							>
+								{retained
+									? t('pos_checkout.refund_on_method', { amount, title })
+									: row.kind === 'cash' && row.capture_mode !== 'server'
+										? t('pos_checkout.return_cash', { amount })
+										: t('pos_checkout.void_on_method', { amount, title })}
+							</Text>
+						);
+					})}
+				</VStack>
+			)}
+			<HStack className="justify-end gap-2">
+				{/* Keeping the payment is the safe answer this pane exists for; voiding loses it. */}
+				<Button
+					testID="checkout-cancel-keep-going"
+					disabled={flow.busy}
+					onPress={() => flow.dispatch({ type: 'back' })}
+				>
+					<ButtonText>{t('pos_checkout.keep_taking_payment')}</ButtonText>
+				</Button>
+				<Button
+					variant="outline-destructive"
+					testID="checkout-cancel-confirm"
+					loading={flow.running === 'cancelPayment'}
+					disabled={flow.busy}
+					onPress={() => void flow.cancelPayment()}
+				>
+					<ButtonText>{t('pos_checkout.cancel_and_void')}</ButtonText>
+				</Button>
+			</HStack>
+		</VStack>
+	);
+}

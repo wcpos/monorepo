@@ -54,6 +54,7 @@ export type TargetedLaneDescriptor = {
 };
 
 export type SeedTargetedLaneInput = {
+	wakeFailed?: boolean;
 	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
@@ -171,6 +172,7 @@ export async function seedTargetedLane(
 				nowMs,
 				completedDedupeForMs: input.completedDedupeForMs ?? descriptor.defaultCompletedDedupeForMs,
 				coalesceInFlight: input.coalesceInFlight ?? false,
+				wakeFailed: input.wakeFailed,
 			}),
 	});
 }

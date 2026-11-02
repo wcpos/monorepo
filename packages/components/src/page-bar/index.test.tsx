@@ -1,0 +1,343 @@
+import { readFileSync } from 'node:fs';
+
+import * as React from 'react';
+import type { TextProps, ViewProps } from 'react-native';
+
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import { EdgeSurface } from '../edge-surface';
+import { TitleBarStripProvider } from '../edge-surface/title-bar-strip';
+import { DeviceScope } from '../lib/device';
+import { PageBar } from './index';
+
+jest.mock('react-native', () => {
+	const native = jest.requireActual<typeof import('react-native')>('react-native');
+	return {
+		...native,
+		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+		// RN-web drops className without the Uniwind transform; preserve it at this boundary.
+		View: React.forwardRef<HTMLDivElement, ViewProps>(function MockView(
+			{ testID, style, className, children },
+			ref
+		) {
+			return (
+				<div
+					ref={ref}
+					data-testid={testID}
+					className={className}
+					style={native.StyleSheet.flatten(style) as React.CSSProperties}
+				>
+					{children}
+				</div>
+			);
+		}),
+		Text: ({
+			testID,
+			numberOfLines,
+			ellipsizeMode,
+			className,
+			children,
+			'aria-hidden': ariaHidden,
+		}: TextProps) => (
+			<span
+				className={className}
+				aria-hidden={ariaHidden}
+				data-testid={testID}
+				data-lines={numberOfLines}
+				data-ellipsis={ellipsizeMode}
+			>
+				{children}
+			</span>
+		),
+	};
+});
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
+jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('../icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 0, left: 0 }),
+}));
+
+it('renders title, subtitle, real status variant and controls with a safe-area outside the bar row', () => {
+	render(
+		<PageBar
+			testID="bar"
+			title="Products"
+			subtitle="· UK Store"
+			status={{ label: 'Offline', variant: 'warning' }}
+		>
+			<button data-testid="control" />
+		</PageBar>
+	);
+	expect(screen.getByTestId('bar-title')).toHaveTextContent('Products');
+	expect(screen.getByTestId('bar-subtitle')).toHaveTextContent('· UK Store');
+	const status = screen.getByTestId('bar-status');
+	expect(status).toHaveTextContent('Offline');
+	expect(status.firstElementChild).toHaveClass('bg-warning'); // the dot carries the colour (R3)
+	expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: '24px' });
+	// Wide widths: the page's first row, inset by the page gutter at the top and the sides and
+	// no fixed height, with no rule under it (ledger lines 8, 11).
+	const row = screen.getByTestId('bar').firstElementChild;
+	expect(row).toHaveClass('pt-gutter', 'px-gutter');
+	expect(row).not.toHaveClass('h-16', 'pr-2', 'pb-4');
+	expect(row).not.toHaveClass('border-b');
+	// A title-only bar is as tall as one with a control: the title's box is control-height.
+	expect(screen.getByTestId('bar-title').parentElement).toHaveClass('min-h-ctl', 'justify-center');
+	expect(screen.getByTestId('control')).toBeInTheDocument();
+	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-lines', '1');
+	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-ellipsis', 'tail');
+});
+
+it('seats the search beside the title and caps its width; the phone keeps the control-height row', () => {
+	const { unmount } = render(
+		<PageBar testID="bar" title="Orders" search={<input data-testid="search" />}>
+			<button data-testid="control" />
+		</PageBar>
+	);
+	const slot = screen.getByTestId('bar-search');
+	expect(slot).toContainElement(screen.getByTestId('search'));
+	expect(slot).toHaveClass('flex-1', 'max-w-160');
+	// Title, then the search, then the controls: the search is left-aligned, not pushed right.
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	const order = [
+		screen.getByTestId('bar-title'),
+		screen.getByTestId('bar-search'),
+		screen.getByTestId('control'),
+	].map((node) => Array.from(row.querySelectorAll('*')).indexOf(node));
+	expect(order).toEqual([...order].sort((a, b) => a - b));
+	unmount();
+
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Orders" />
+		</DeviceScope>
+	);
+	// The phone's screen edge keeps 16 (`pl-4`), not the window gutter (owner, 2026-10-22).
+	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl', 'pl-4');
+	expect(screen.getByTestId('bar').firstElementChild).not.toHaveClass('pl-gutter');
+});
+
+// Under the desktop title bar no status inset softens the top: the phone row sits the phone
+// ground's gutter (16) under the bar's top, outside its control height, after the inset the bar
+// pads; the search's own row sits directly under it (Paul, 2026-10-30).
+it('sits the phone control row the gutter under the top, and the own-row search adds none', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Orders" search={<input data-testid="search" />} />
+		</DeviceScope>
+	);
+	const bar = screen.getByTestId('bar');
+	const [row, searchRow] = Array.from(bar.children);
+	expect(row).toHaveClass('mt-4', 'h-ctl');
+	expect(row).not.toHaveClass('pt-4', 'pt-gutter');
+	expect(bar).toHaveStyle({ paddingTop: '24px' });
+	expect(searchRow.className.split(' ').filter((name) => /^(p|m)(t|y)-/.test(name))).toEqual([]);
+});
+
+// A bar whose control row holds a title (the management pages) puts the phone search on a
+// row of its own under it (ManagementBar used to draw it).
+it('puts the phone search on its own ruled row under the control row', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Orders" search={<input data-testid="search" />}>
+				<button data-testid="control" />
+			</PageBar>
+		</DeviceScope>
+	);
+	const [row, searchRow] = Array.from(screen.getByTestId('bar').children);
+	expect(row.contains(screen.getByTestId('control'))).toBe(true);
+	expect(row.contains(screen.getByTestId('search'))).toBe(false);
+	expect(searchRow).toBe(screen.getByTestId('bar-search'));
+	expect(searchRow.contains(screen.getByTestId('search'))).toBe(true);
+	expect(searchRow).toHaveClass('h-ctl', 'px-2');
+	// No rule under the search either: the chip row's own spacing separates them (owner, 2026-10-23).
+	expect(searchRow).not.toHaveClass('border-b');
+});
+
+// The POS products column's bar has no title, scope control, crumb or menu: its row is three
+// icons, so the search shares it instead of spending a second row (Paul, 2026-10-28).
+it('keeps the phone search in the row when the row holds only controls', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" search={<input data-testid="search" />}>
+				<button data-testid="control" />
+			</PageBar>
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('bar').children).toHaveLength(1);
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	expect(row).toHaveClass('h-ctl', 'gap-2', 'pr-2', 'pl-4');
+	const slot = screen.getByTestId('bar-search');
+	expect(row.contains(slot)).toBe(true);
+	expect(slot).toContainElement(screen.getByTestId('search'));
+	expect(slot).toHaveClass('flex-1');
+	// The width cap is the wide bar's: a phone row has none to spare.
+	expect(slot).not.toHaveClass('max-w-160');
+	const order = [slot, screen.getByTestId('control')].map((node) =>
+		Array.from(row.querySelectorAll('*')).indexOf(node)
+	);
+	expect(order).toEqual([...order].sort((a, b) => a - b));
+});
+
+// Under the desktop title bar the menu sits beside the search (Paul, 2026-10-30: "the menu icon
+// should go next to the search field"); off the strip a menu still claims the row's place, so
+// the search keeps its own row (owner, 2026-10-23).
+it.each([
+	[28, true],
+	[0, false],
+])(
+	'a phone row with only a menu and search under a strip of %s keeps the search in the row: %s',
+	(height, inRow) => {
+		render(
+			<TitleBarStripProvider value={{ node: null, height }}>
+				<DeviceScope phone>
+					<PageBar
+						testID="bar"
+						onMenu={{ label: 'Menu', onPress: jest.fn() }}
+						search={<input data-testid="search" />}
+					/>
+				</DeviceScope>
+			</TitleBarStripProvider>
+		);
+		const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+		expect(row.contains(screen.getByTestId('bar-menu'))).toBe(true);
+		expect(row.contains(screen.getByTestId('search'))).toBe(inRow);
+		expect(screen.getByTestId('bar').children).toHaveLength(inRow ? 1 : 2);
+		// Inline or not, the row sits the phone gutter under the strip, after the inset the bar
+		// pads (status 24 plus the strip), and keeps the control height (Paul, 2026-10-30).
+		expect(row).toHaveClass('mt-4', 'h-ctl');
+		expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: `${24 + height}px` });
+	}
+);
+
+it.each([false, true])('draws no search row or slot without a search (phone: %s)', (phone) => {
+	render(
+		<DeviceScope phone={phone}>
+			<PageBar testID="bar" title="Settings" />
+		</DeviceScope>
+	);
+	expect(screen.queryByTestId('bar-search')).toBeNull();
+	expect(screen.getByTestId('bar').children).toHaveLength(1);
+});
+
+// A bar inside a column that pads the inset itself (the POS products column).
+it('leaves the top inset to a column that padded it', () => {
+	render(
+		<EdgeSurface edges={['top']}>
+			<PageBar testID="bar" />
+		</EdgeSurface>
+	);
+	expect(screen.getByTestId('bar').style.paddingTop).toBe('');
+});
+
+it('phone scope shows the named menu and fires its callback', () => {
+	const onPress = jest.fn();
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Products" onMenu={{ label: 'Menu', onPress }} />
+		</DeviceScope>
+	);
+	// An icon-only control is unreachable by name without this; the caller translates it.
+	expect(screen.getByTestId('bar-menu')).toHaveAttribute('aria-label', 'Menu');
+	fireEvent.click(screen.getByTestId('bar-menu'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('phone back composes Breadcrumb and wins over the menu', () => {
+	const onPress = jest.fn();
+	render(
+		<DeviceScope phone>
+			<PageBar
+				testID="bar"
+				title="Printers"
+				onMenu={{ label: 'Menu', onPress: jest.fn() }}
+				back={{ label: 'Settings', onPress }}
+			/>
+		</DeviceScope>
+	);
+	expect(screen.queryByTestId('bar-menu')).toBeNull();
+	expect(screen.getByTestId('bar-back')).toHaveTextContent('Settings');
+	fireEvent.click(screen.getByTestId('bar-back-parent-0'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('wide window renders a supplied menu, but keeps back phone-only', () => {
+	const onPress = jest.fn();
+	expect(window.innerWidth).toBeGreaterThanOrEqual(640);
+	render(
+		<PageBar
+			testID="bar"
+			title="Products"
+			onMenu={{ label: 'Menu', onPress }}
+			back={{ label: 'Settings', onPress: jest.fn() }}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('bar-menu'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(screen.queryByTestId('bar-back')).toBeNull();
+});
+
+it('honours explicit child IDs without manufacturing undefined IDs', () => {
+	render(
+		<DeviceScope phone>
+			<PageBar
+				title="Printers"
+				status={{ label: 'Offline', testID: 'status' }}
+				back={{ label: 'Settings', onPress: jest.fn(), testID: 'back' }}
+			/>
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('status')).toHaveTextContent('Offline');
+	expect(screen.getByTestId('back')).toHaveTextContent('Settings');
+	expect(document.querySelector('[data-testid^="undefined-"]')).toBeNull();
+});
+
+it('owns no system bars, theme lookup or store title suffix', () => {
+	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(
+		/SystemBars|useTheme|storeName/
+	);
+});
+
+it('floors the drawer control and lets the subtitle yield before the title', () => {
+	// Read from source: the harness compiles IconButton's and Text's classes away. The icon
+	// plus its padding is under the floor, and an unshrinkable subtitle collapses the page's
+	// own name first (Codex review on #2188).
+	// Per class, not as one string: the formatter sorts class lists (see the breadcrumb test).
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	const menu = source.match(/name="menu"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	expect(menu).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
+	const subtitle =
+		source.match(/id\('subtitle'\)[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	expect(subtitle).toEqual(expect.arrayContaining(['shrink', 'min-w-0']));
+});
+
+it("puts a scoped room's control in the title's place, left of the search and the controls", () => {
+	const { unmount } = render(
+		<PageBar
+			testID="bar"
+			titleSlot={<button data-testid="scope" />}
+			search={<input data-testid="search" />}
+		>
+			<button data-testid="control" />
+		</PageBar>
+	);
+	expect(screen.queryByTestId('bar-title')).toBeNull();
+	expect(screen.getByTestId('bar-title-slot')).toContainElement(screen.getByTestId('scope'));
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	const order = [
+		screen.getByTestId('scope'),
+		screen.getByTestId('bar-search'),
+		screen.getByTestId('control'),
+	].map((node) => Array.from(row.querySelectorAll('*')).indexOf(node));
+	expect(order).toEqual([...order].sort((a, b) => a - b));
+	unmount();
+
+	// A title wins: one title, never a title and a scope control side by side.
+	render(<PageBar testID="bar" title="Reports" titleSlot={<button data-testid="scope" />} />);
+	expect(screen.getByTestId('bar-title')).toHaveTextContent('Reports');
+	expect(screen.queryByTestId('scope')).toBeNull();
+});

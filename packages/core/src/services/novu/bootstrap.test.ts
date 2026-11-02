@@ -1,4 +1,6 @@
-import type { NotificationCollection } from '@wcpos/database';
+import { Subject } from 'rxjs';
+
+import { observeNotificationsReplaced } from '@wcpos/query';
 
 import { getNovuBootstrapStatus, startNovuBootstrap, stopNovuBootstrap } from './bootstrap';
 import {
@@ -57,7 +59,10 @@ function makeMetadata(overrides: Partial<NovuSubscriberMetadata> = {}): NovuSubs
 	};
 }
 
-const collection = {} as NotificationCollection;
+const database = { collections: {} };
+const replacements = new Map<object, Subject<void>>();
+
+jest.mock('@wcpos/query', () => ({ observeNotificationsReplaced: jest.fn() }));
 
 const SUBSCRIBER_ID = 'example.com:1:uuid:web';
 
@@ -69,6 +74,12 @@ async function flush() {
 describe('novu bootstrap', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		replacements.clear();
+		jest.mocked(observeNotificationsReplaced).mockImplementation((db) => {
+			const stream = new Subject<void>();
+			replacements.set(db!, stream);
+			return stream;
+		});
 		mockedFetch.mockResolvedValue([]);
 		mockedWaitForReady.mockResolvedValue(true);
 		mockedSyncSubscriber.mockResolvedValue({ success: true });
@@ -84,12 +95,12 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 
 		await flush();
@@ -104,7 +115,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -112,7 +123,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -128,7 +139,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: metadata,
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -139,14 +150,14 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata({ licenseStatus: 'active' }),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -159,24 +170,19 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
 		expect(mockedFetch).toHaveBeenCalledTimes(1);
 
 		// Clear & Sync drops the RxDB collection and hands back an empty replacement
-		const replacement = {} as NotificationCollection;
-		startNovuBootstrap({
-			subscriberId: SUBSCRIBER_ID,
-			subscriberMetadata: makeMetadata(),
-			notificationsCollection: replacement,
-		});
+		replacements.get(database)!.next();
 		await flush();
 
 		// Re-fetched into the replacement, but still the same session
 		expect(mockedFetch).toHaveBeenCalledTimes(2);
-		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(replacement, SUBSCRIBER_ID, []);
+		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(database, SUBSCRIBER_ID, []);
 		expect(mockedGetNovuClient).toHaveBeenCalledTimes(1);
 		expect(mockedSubscribe).toHaveBeenCalledTimes(1);
 		expect(unsubscribeSpy).not.toHaveBeenCalled();
@@ -194,19 +200,14 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
 		expect(mockedFetch).toHaveBeenCalledTimes(1);
 
 		// Clear & Sync swaps the collection while the initial fetch is still open
-		const replacement = {} as NotificationCollection;
-		startNovuBootstrap({
-			subscriberId: SUBSCRIBER_ID,
-			subscriberMetadata: makeMetadata(),
-			notificationsCollection: replacement,
-		});
+		replacements.get(database)!.next();
 		await flush();
 
 		// Queued behind the open fetch rather than racing it
@@ -218,7 +219,7 @@ describe('novu bootstrap', () => {
 
 		expect(mockedFetch).toHaveBeenCalledTimes(2);
 		expect(mockedSyncToRxDB).toHaveBeenCalledTimes(1);
-		expect(mockedSyncToRxDB).toHaveBeenCalledWith(replacement, SUBSCRIBER_ID, older);
+		expect(mockedSyncToRxDB).toHaveBeenCalledWith(database, SUBSCRIBER_ID, older);
 
 		const newer = [{ id: 'newer' }] as unknown as NovuNotification[];
 		pending[1](newer);
@@ -226,7 +227,7 @@ describe('novu bootstrap', () => {
 
 		// The newer snapshot is written last, so it cannot be rolled back by the older one
 		expect(mockedSyncToRxDB).toHaveBeenCalledTimes(2);
-		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(replacement, SUBSCRIBER_ID, newer);
+		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(database, SUBSCRIBER_ID, newer);
 	});
 
 	it('keeps isLoading set until the last queued fetch settles', async () => {
@@ -241,15 +242,18 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
+		const oldResets = replacements.get(database)!;
+		const nextDatabase = { collections: {} };
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: {} as NotificationCollection,
+			database: nextDatabase,
 		});
+		expect(oldResets.observed).toBe(false);
 		await flush();
 
 		expect(getNovuBootstrapStatus().isLoading).toBe(true);
@@ -264,6 +268,9 @@ describe('novu bootstrap', () => {
 		await flush();
 
 		expect(getNovuBootstrapStatus().isLoading).toBe(false);
+		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(nextDatabase, SUBSCRIBER_ID, []);
+		stopNovuBootstrap();
+		expect(replacements.get(nextDatabase)!.observed).toBe(false);
 	});
 
 	it('defers a repeat metadata sync until the socket readiness check resolves', async () => {
@@ -277,13 +284,13 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		// The effect runs again (StrictMode / new metadata) before the socket is up
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata({ licenseStatus: 'active' }),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -313,7 +320,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -323,7 +330,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata({ licenseStatus: 'active' }),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -348,14 +355,14 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -366,14 +373,14 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
 		startNovuBootstrap({
 			subscriberId: 'example.com:2:uuid:web',
 			subscriberMetadata: makeMetadata({ storeId: 2 }),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -390,7 +397,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -408,7 +415,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 		await flush();
 
@@ -434,7 +441,7 @@ describe('novu bootstrap', () => {
 		startNovuBootstrap({
 			subscriberId: SUBSCRIBER_ID,
 			subscriberMetadata: makeMetadata(),
-			notificationsCollection: collection,
+			database,
 		});
 
 		stopNovuBootstrap();

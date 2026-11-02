@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type GestureResponderEvent, Pressable, type View } from 'react-native';
+import { type GestureResponderEvent, Pressable, type ViewInstance } from 'react-native';
 
 import * as Select from '@radix-ui/react-select';
 import { useComposedRefs } from '@rn-primitives/hooks';
@@ -8,34 +8,6 @@ import { Slot } from '@rn-primitives/slot';
 
 import { shouldToggleFromPress } from './pointer-type';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
-
-import type { SlottableTextProps } from '@rn-primitives/types';
-
-/**
- * I was having problems with the Select.Value component from Radix, so I created this SelectValue component.
- * I think it has something to do with the Presense not working as expected below in SelectContent.
- * Something is not quite right??
- */
-function Value({
-	asChild,
-	placeholder,
-	className,
-	...props
-}: SlottableTextProps & { placeholder: string }) {
-	const { value } = SelectPrimitive.useRootContext();
-	const textClass = React.useContext(TextClassContext);
-	const Component = asChild ? Slot : Text;
-
-	return (
-		<TextClassContext.Provider
-			value={cn(textClass, 'text-sm', !value?.value && 'text-muted-foreground', className)}
-		>
-			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
-			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
-		</TextClassContext.Provider>
-	);
-}
 
 /**
  * Custom Select Trigger that passes onPress to the Pressable component.
@@ -52,6 +24,7 @@ function Value({
  */
 function Trigger({
 	asChild,
+	className,
 	onPress: onPressProp,
 	onPointerDown: onPointerDownProp,
 	onKeyDown: onKeyDownProp,
@@ -60,16 +33,16 @@ function Trigger({
 	ref,
 	...props
 }: SelectPrimitive.TriggerProps & {
-	ref?: React.Ref<View>;
+	ref?: React.Ref<ViewInstance>;
 	onPointerDown?: (ev: React.PointerEvent) => void;
 }) {
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 
-	const localRef = React.useRef<View>(null);
+	const localRef = React.useRef<ViewInstance>(null);
 	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? ({} as View), {
+		Object.assign(localRef.current ?? ({} as ViewInstance), {
 			open() {
 				onOpenChange(true);
 			},
@@ -134,9 +107,10 @@ function Trigger({
 				role="button"
 				disabled={disabled}
 				{...props}
+				className={cn(className, open && 'border-ring')}
 			/>
 		</Select.Trigger>
 	);
 }
 
-export { Trigger, Value };
+export { Trigger };

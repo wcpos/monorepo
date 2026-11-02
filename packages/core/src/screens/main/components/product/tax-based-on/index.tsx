@@ -1,20 +1,38 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/components/hover-card';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
+import { TextClassContext } from '@wcpos/components/text/context';
+import { useDocField } from '@wcpos/query';
 
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';
-import { useTaxLocation } from '../../../contexts/tax-rates';
+import { useExtraData } from '../../../contexts/extra-data';
+import { useTaxLocation, useTaxSettings } from '../../../contexts/tax-rates';
+import { useCartConfig } from '../../../pos/hooks/use-cart-config';
 
 /**
  *
  */
 export function TaxBasedOn() {
-	const { rates, taxBasedOn, location } = useTaxLocation();
+	// `hasOrder` is false on the standalone Products screen: there the address is the shop base
+	// whatever the setting says (`orderTaxLocation`).
+	const { rates, taxBasedOn, location, addressUsed, hasOrder, vatExempt } = useTaxLocation();
+	const { allRates } = useTaxSettings();
 	const t = useT();
+	/**
+	 * Everything the panel reads from the tax, cart and order providers is read HERE and passed
+	 * down: on native the popover's content renders at the app's root PortalHost, outside those
+	 * providers (the portal re-provides only the popover's own context), so a hook inside the
+	 * panel would throw. Web keeps context
+	 * through Radix, which is why only a device shows it.
+	 */
+	const config = useCartConfig();
+	const { extraData } = useExtraData();
+	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as
+		{ slug: string; name: string }[] | undefined;
 
 	/**
 	 *
@@ -26,33 +44,46 @@ export function TaxBasedOn() {
 	if (taxBasedOn === 'shipping') {
 		taxBasedOnSetting = t('common.customer_shipping_address');
 	}
+	const valueLabel =
+		taxBasedOn === 'billing' || taxBasedOn === 'shipping'
+			? taxBasedOnSetting
+			: t('common.shop_base');
+	const none = rates.length === 0;
 	const taxBasedOnLabel = `${t('common.tax_based_on')}: ${taxBasedOnSetting}`;
 
+	// A popover, not a hover card: the chevron promises a press, a touch screen has no hover
+	// (Radix's hover card ignores touch), and a hover card opened under a resting pointer
+	// covered the first product tiles and stayed open while the pointer crossed it.
 	return (
-		<HoverCard>
-			<HoverCardTrigger>
-				{rates.length > 0 ? (
-					<Text variant="link" className="text-xs" numberOfLines={1}>
-						{taxBasedOnLabel}
-					</Text>
-				) : (
-					<HStack space="xs">
-						<Icon size="sm" variant="error" name="triangleExclamation" />
-						<Text variant="link" className="text-error text-xs" numberOfLines={1}>
-							{taxBasedOnLabel}
+		<Popover>
+			<PopoverTrigger accessibilityLabel={taxBasedOnLabel} testID="tax-based-on-trigger">
+				<TextClassContext.Provider value={none ? 'text-bad' : undefined}>
+					<View className="flex-row items-center gap-1">
+						{!none ? (
+							<Icon name="percent" size="sm" className="text-muted-foreground" />
+						) : (
+							<Icon size="sm" name="warning" />
+						)}
+						<Text className="shrink text-sm" numberOfLines={1}>
+							{valueLabel}
 						</Text>
-					</HStack>
-				)}
-			</HoverCardTrigger>
-			<HoverCardContent side="top" align="start" className="w-96">
+						<Icon name="chevronDown" size="sm" className="text-muted-foreground" />
+					</View>
+				</TextClassContext.Provider>
+			</PopoverTrigger>
+			<PopoverContent side="top" align="start" className="w-96" testID="tax-based-on-content">
+				{vatExempt ? <Text className="text-sm">{t('common.order_tax_exempt')}</Text> : null}
 				<DisplayCurrentTaxRates
 					rates={rates}
-					country={location.country}
-					state={location.state}
-					city={location.city}
-					postcode={location.postcode}
+					allRates={allRates}
+					taxBasedOn={taxBasedOn}
+					location={location}
+					addressUsed={addressUsed}
+					hasOrder={hasOrder}
+					config={config}
+					taxClasses={taxClasses}
 				/>
-			</HoverCardContent>
-		</HoverCard>
+			</PopoverContent>
+		</Popover>
 	);
 }

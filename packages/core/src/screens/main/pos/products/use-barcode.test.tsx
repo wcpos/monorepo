@@ -190,7 +190,8 @@ function onlineResponse(input?: {
 	return response({
 		code: 'ABC',
 		found: match !== null,
-		match: match === null ? null : { ...match, payload: {} },
+		// The 2.0.0 plugin serves `match` as a bare record; the resolver wraps it client-side.
+		match,
 		ambiguous: input?.ambiguous ?? [],
 	});
 }
@@ -206,6 +207,7 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 	const document = {
 		uuid: `product-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'products' as const },
@@ -229,7 +231,9 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 	const document = {
 		uuid: `variation-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		parentRemoteId: String(parentId),
+		parentRemoteKey: String(String(parentId) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'variations' as const },
@@ -395,6 +399,28 @@ describe('useBarcode online escalation', () => {
 			);
 		}
 	);
+
+	it('routes a local variable parent to search instead of adding it', async () => {
+		const product = productDocument();
+		product.payload.type = 'variable';
+		engineProducts.push(product);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockAddVariation).not.toHaveBeenCalled();
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+		expect(mockClearSearch).not.toHaveBeenCalled();
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'warning',
+			title: 'pos_products.scan_choose_variation',
+			description: 'Keyboard — ABC',
+			duration: 6000,
+		});
+	});
 
 	it('falls back to resolve/barcode when an old envelope reports no active selectors', async () => {
 		setSelectors('products', []);
@@ -699,6 +725,41 @@ describe('useBarcode online escalation', () => {
 		expect(addedProduct.remoteId).toBe('41');
 		expect(addedProduct.payload.name).toBe('Keyboard');
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
+	});
+
+	it('replaces the searching toast when an online lookup resolves to a variable parent', async () => {
+		const product = productDocument();
+		product.payload.barcode = 'STALE';
+		product.payload.type = 'variable';
+		mockFetcher.mockResolvedValue(
+			onlineResponse({ match: { id: 41, type: 'product', parent_id: 0 } })
+		);
+		engineProducts.push(product);
+		mockEngineRequire.mockImplementation(() => {
+			product.payload.barcode = 'ABC';
+			return {
+				ready: Promise.resolve({
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: 'test',
+				}),
+				release: jest.fn(),
+			};
+		});
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+		const [searching] = mockToastShow.mock.calls[0];
+		expect(searching.title).toBe('common.barcode_searching_online');
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				id: searching.id,
+				title: 'pos_products.scan_choose_variation',
+			})
+		);
 	});
 
 	it('requires a variation and its parent product before adding the hydrated variation', async () => {

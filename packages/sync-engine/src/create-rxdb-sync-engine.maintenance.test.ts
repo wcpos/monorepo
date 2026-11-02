@@ -5,6 +5,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { newRxError } from 'rxdb';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
@@ -35,12 +36,18 @@ afterEach(() => {
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
 
-const refusalError = (reason: string) => new SyntaxError(`index reconciliation refused: ${reason}`);
-
 function freshIdentity(): StoreScopeIdentity {
 	uniqueStore += 1;
 	return { site: SITE, storeId: 5, cashierId: `maint-${uniqueStore}` };
 }
+
+// A census probe the server never answers. The host's port fetches through the request
+// the engine hands it, which carries the query-total deadline.
+const BLACK_HOLE_URL = 'https://census.example.test/never-answers';
+const blackHoleOr = (url: string) =>
+	url === BLACK_HOLE_URL
+		? new Promise<Response>(() => {})
+		: Promise.resolve(new Response(JSON.stringify({ changes: [], complete: true, documents: [] })));
 
 function engineWith(
 	overrides?: Partial<RxdbSyncEnginePorts>,
@@ -161,10 +168,10 @@ describe('maintenance lanes through the public handle', () => {
 		await expect(engine.sync()).resolves.toMatchObject({ lane: 'all', status: 'ran' });
 
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
-		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(9);
+		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(10);
 		expect(requested).not.toContain('a:due');
 		expect(requested).not.toContain('b:due');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
 		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
 		unsubscribe();
 		await engine.dispose();
@@ -225,7 +232,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.sync();
 
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
-		expect(requested).toHaveLength(8);
+		expect(requested).toHaveLength(9);
 		expect(requested).not.toContain('census:products');
 		await expect(states.readForQueryKeys(['census:products'])).resolves.toEqual([
 			expect.objectContaining({
@@ -280,22 +287,30 @@ describe('maintenance lanes through the public handle', () => {
 	});
 
 	it.each(['deadline', 'HTTP 500'])(
-		'classifies a forced census failure from %s without misreporting a task crash',
+		'classifies a forced census failure from %s',
 		async (failure) => {
-			const harness = await createEngineHarness({
-				mode: 'manual',
+			const diagnostics = vi.fn();
+			const engine = engineWith({
+				diagnostics,
+				fetcher: blackHoleOr,
 				queryTotal: {
-					fetchWooQueryTotal: () =>
-						failure === 'deadline' ? new Promise(() => {}) : Promise.reject(new Error('HTTP 500')),
+					fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+						if (failure === 'deadline')
+							return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
+						throw new Error('HTTP 500');
+					},
 				},
 			});
+			await engine.ready;
 			vi.useFakeTimers();
 			try {
-				const check = harness.engine.checkCollection('products');
+				const check = engine.checkCollection('products');
 				await vi.advanceTimersByTimeAsync(25_000);
-				await expect(check).resolves.toMatchObject({ status: 'error' });
-				const error = harness.diagnostics.find((event) => event.type === 'maintenance.lane.error');
-				expect(error?.fields).toEqual({
+				expect(await check).toMatchObject({ status: 'error' });
+				const error = diagnostics.mock.calls.find(
+					([event]) => event.type === 'maintenance.lane.error'
+				);
+				expect(error?.[0].fields).toEqual({
 					lane: 'query-total-retry',
 					...(failure === 'deadline' ? { status: 0 } : {}),
 					// A deadline has its own row, so it never advances the local-crash streak.
@@ -303,7 +318,7 @@ describe('maintenance lanes through the public handle', () => {
 				});
 			} finally {
 				vi.useRealTimers();
-				await harness.dispose();
+				await engine.dispose();
 			}
 		}
 	);
@@ -312,9 +327,12 @@ describe('maintenance lanes through the public handle', () => {
 		let hang = true;
 		const harness = await createEngineHarness({
 			mode: 'manual',
+			fetch: blackHoleOr,
 			queryTotal: {
-				fetchWooQueryTotal: () =>
-					hang ? new Promise(() => {}) : Promise.reject(new Error('census store write failed')),
+				fetchWooQueryTotal: async ({ engineRequest, signal }) => {
+					if (hang) return (await engineRequest(BLACK_HOLE_URL, { signal })).status;
+					throw new Error('census store write failed');
+				},
 			},
 		});
 		vi.useFakeTimers();
@@ -516,7 +534,7 @@ describe('maintenance lanes through the public handle', () => {
 			fresh: true,
 		},
 	])('$name', async ({ total, fresh }) => {
-		const nowMs = 1_000_000;
+		let nowMs = 1_000_000;
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async (url: string) => {
 			if (new URL(url).pathname.endsWith('/products/categories')) {
@@ -555,15 +573,28 @@ describe('maintenance lanes through the public handle', () => {
 			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/products/categories'))
 		).toHaveLength(expectedPulls);
 		await expect(scope.database.collections.categories.count().exec()).resolves.toBe(expectedPulls);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(1);
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(1);
+		nowMs += 30 * 60_000 + 1;
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(2);
 		if (expectedPulls === 1) {
 			expect(report.status).toBe('ran');
 			expect(diagnostics.mock.calls.map(([event]) => event.message)).toContain(
-				'Reference refresh (categories + brands + tags + coupons; backfilled: categories): 1 inserted, 0 requeued'
+				'Reference refresh (refunds + categories + brands + tags + coupons; backfilled: categories): 2 inserted, 0 requeued'
 			);
 		} else {
 			expect(report).toMatchObject({
-				status: 'skipped',
-				reason: 'no reference collections need seeding',
+				status: 'ran',
 			});
 		}
 		await engine.dispose();
@@ -604,9 +635,9 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.ready;
 
 		await engine.sync('reference-seed');
-		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual(
-			[]
-		);
+		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual([
+			expect.objectContaining({ collectionName: 'refunds', queryKey: 'refunds:history:days=92' }),
+		]);
 
 		const opened = await engine.require({
 			id: 'category-picker',
@@ -870,7 +901,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const report = await engine.sync('query-total-retry');
 		expect(report.status).toBe('ran');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(11);
 		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
 			'orders:total:test'
 		);
@@ -910,6 +941,7 @@ describe('maintenance lanes through the public handle', () => {
 			'census:customers',
 			'census:orders',
 			'census:products',
+			'census:refunds',
 			'census:tags',
 			'census:taxRates',
 			'census:variations',
@@ -968,7 +1000,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const freshRevision = ordersState?.['_rev'];
 		await engine.sync('query-total-retry');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
 		expect((await readOrdersState())?.['_rev']).toBe(freshRevision);
 
 		let previousRevisionHeight = Number(String(freshRevision).split('-')[0]);
@@ -981,7 +1013,7 @@ describe('maintenance lanes through the public handle', () => {
 			expect(revisionHeight).toBeGreaterThan(previousRevisionHeight);
 			previousRevisionHeight = revisionHeight;
 		}
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(27);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(30);
 
 		unsubscribe();
 		await engine.dispose();
@@ -1020,6 +1052,7 @@ describe('maintenance lanes through the public handle', () => {
 			'census:customers',
 			'census:orders',
 			'census:products',
+			'census:refunds',
 			'census:tags',
 			'census:taxRates',
 			'census:variations',
@@ -1057,7 +1090,19 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('dispose cancels an in-flight maintenance probe before closing the scope database', async () => {
+	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+		let releaseWrite!: () => void;
+		const writeBarrier = new Promise<void>((resolve) => {
+			releaseWrite = resolve;
+		});
+		const markFailed = RxQueryTotalRequestStateRepository.prototype.markFailed;
+		// Cancellation settles the host call immediately; keep its final database write pending.
+		vi.spyOn(RxQueryTotalRequestStateRepository.prototype, 'markFailed').mockImplementation(
+			async function (this: RxQueryTotalRequestStateRepository, ...args) {
+				await writeBarrier;
+				return markFailed.apply(this, args);
+			}
+		);
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'orders:total:guarded-dispose'
@@ -1101,12 +1146,13 @@ describe('maintenance lanes through the public handle', () => {
 		);
 		const disposing = engine.dispose();
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const closeStartedBeforeFetchFinished = close.mock.calls.length > 0;
+		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
 
 		releaseFetch(42);
+		releaseWrite();
 		const report = await tick;
 		await disposing;
-		expect(closeStartedBeforeFetchFinished).toBe(true);
+		expect(closeStartedBeforeTickFinished).toBe(false);
 		expect(report.status).toBe('ran');
 	});
 
@@ -1209,12 +1255,13 @@ describe('maintenance lanes through the public handle', () => {
 				expect(events[1]).toMatchObject({
 					type: 'lane-finish',
 					lane,
-					status: lane === 'reference-seed' ? 'skipped' : 'ran',
+					status: 'ran',
 				});
 			}
 			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
 			expect(fetchedUrls.some((url) => new URL(url).pathname.endsWith('/products'))).toBe(false);
 			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
+			expect(fetchedUrls).toContainEqual(expect.stringContaining('/refunds?'));
 		} finally {
 			await engine.dispose();
 		}
@@ -1244,7 +1291,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('keeps coverage subscribers live after a ledger rebuild replaces their collections', async () => {
+	it('keeps coverage subscribers live after COL21 reattaches ledger collections', async () => {
 		const diagnostics = vi.fn();
 		const engine = engineWith({ diagnostics, now: () => 1_000_000 });
 		await engine.ready;
@@ -1254,14 +1301,14 @@ describe('maintenance lanes through the public handle', () => {
 			(verdict) => verdicts.push(verdict)
 		);
 		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
-			refusalError('unsorted-primary')
+			newRxError('COL21', { collection: 'coverageRecords' })
 		);
 
 		await expect(engine.sync('coverage-compaction')).resolves.toMatchObject({ status: 'ran' });
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
-				type: 'coverage.ledger-rebuilt',
-				fields: { reason: 'unsorted-primary', trigger: 'coverage' },
+				type: 'coverage.ledger-reattached',
+				fields: { reason: 'COL21', trigger: 'coverage' },
 			})
 		);
 		const emissionsAfterRebuild = verdicts.length;
@@ -1322,8 +1369,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const report = await engine.sync('reference-seed');
 		expect(report).toMatchObject({
-			status: 'skipped',
-			reason: 'no reference collections need seeding',
+			status: 'ran',
 		});
 		const lifecycle = events.filter(
 			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
@@ -1333,8 +1379,7 @@ describe('maintenance lanes through the public handle', () => {
 			{
 				type: 'lane-finish',
 				lane: 'reference-seed',
-				status: 'skipped',
-				detail: 'no reference collections need seeding',
+				status: 'ran',
 			},
 		]);
 		await engine.dispose();

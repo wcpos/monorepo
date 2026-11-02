@@ -28,11 +28,18 @@ module.exports = {
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(tsx?|ts?)$'],
 	verbose: true,
 	testEnvironment: 'jsdom',
+	globals: { __DEV__: true },
 	moduleNameMapper: {
+		'^@wcpos/database/create-db$': '<rootDir>/tests/__mocks__/create-db.ts',
+		'^expo-crypto$': '<rootDir>/tests/__mocks__/expo-crypto.ts',
 		'^@wcpos/utils/src/logger$': '<rootDir>/tests/__mocks__/logger.ts',
+		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',
 		'^@wcpos/utils/logger$': '<rootDir>/tests/__mocks__/logger.ts',
 		'^@wcpos/hooks/use-http-client/parse-wp-error$': '<rootDir>/tests/__mocks__/http.ts',
 		'^@wcpos/database$': '<rootDir>/tests/helpers/db.ts',
 		'^@wcpos/database/plugins/reset-collection$': '<rootDir>/tests/__mocks__/reset-collection.ts',
+		// The web anchor, against jsdom's localStorage (the native one needs expo-file-system).
+		'^@wcpos/database/till-anchor$': '<rootDir>/../database/src/till-anchor.web.ts',
+		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 	},
 };

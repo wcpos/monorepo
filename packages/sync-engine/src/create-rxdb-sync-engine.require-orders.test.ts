@@ -125,6 +125,9 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 			orderId: id,
 			revision: `revision-${id}`,
 			sequence: id,
+			epoch: 'scripted-epoch',
+			head: batchCount,
+			horizon: 0,
 		};
 		return new Response(
 			JSON.stringify({
@@ -132,6 +135,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					{
 						uuid: `77777777-7777-4777-8777-${String(id).padStart(12, '0')}`,
 						remoteId: remoteId(id),
+						remoteKey: String(remoteId(id) ?? ''),
 						payload: {
 							id,
 							date_modified_gmt: checkpoint.updatedAtGmt,
@@ -152,7 +156,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					},
 				],
 				checkpoint,
-				hasMore: state.pulls < batchCount,
+				complete: state.pulls >= batchCount,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);

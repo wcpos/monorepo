@@ -45,4 +45,18 @@ describe('reportRestoreFailure', () => {
 			expect.objectContaining({ code: 'AUTH101', showToast: true })
 		);
 	});
+
+	it('writes the same coded row without a toast when the surface shows the failure inline', () => {
+		reportRestoreFailure(
+			logger,
+			Object.assign(new Error('500'), { isAxiosError: true, response: { status: 500 } }),
+			t,
+			{ toast: false }
+		);
+
+		expect(logger.error).toHaveBeenCalledWith('Failed to restore server settings', {
+			code: 'SYNC131',
+			context: { error: '500' },
+		});
+	});
 });

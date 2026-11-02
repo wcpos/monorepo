@@ -2,158 +2,41 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@wcpos/components/alert-dialog';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
-import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import type { EngineRecord } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-const syncLogger = getLogger(['wcpos', 'products', 'actions', 'sync']);
+type Props = CellContext<{ record: EngineRecord<'products'> }, 'actions'>;
 
-export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
+// The orders caret (#2897): on a fine pointer it is the one control that opens the product, a
+// variable product's too (its variations open from the button under its name); the row is no
+// press target (Paul, 2026-10-27). Sync and Delete live in the modal's footer.
+export function Actions({ row }: Props) {
 	const router = useRouter();
-	const record = row.original.record;
-	const product = useRecordField(record, ({ payload }) => ({
-		id: payload.id,
-		name: payload.name,
-	}));
-	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-
-	const handleRefresh = React.useCallback(() => {
-		if (!product.id) return;
-		const handle = runtime.engine.require({
-			id: `product-actions:refresh:${product.id}`,
-			collection: 'products',
-			kind: 'targeted-records',
-			remoteIds: [product.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		void handle.ready
-			.finally(() => handle.release())
-			.catch((error) => {
-				// The engine already wrote the coded row for this require (SYNC321), and the
-				// device's copy is untouched: the cashier only needs to know it didn't refresh.
-				syncLogger.debug('Failed to refresh product', {
-					showToast: true,
-					toast: { title: t('common.refresh_failed'), type: 'warning' },
-					context: {
-						productId: product.id,
-						error: getErrorMessage(error),
-					},
-				});
-			});
-	}, [runtime, product.id, t]);
-
-	/**
-	 * Handle delete button click
-	 */
-	const handleDelete = React.useCallback(async () => {
-		await requestServerDelete(runtime.engine, {
-			collection: 'products',
-			recordId: record.uuid,
-		});
-	}, [runtime, record.uuid]);
-
-	if (readOnly) {
-		return null;
-	}
-
-	/**
-	 *
-	 */
+	const editable = !readOnly && caps.canEditProducts;
 	return (
-		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" testID="product-actions-button" />
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<CapabilityTooltip show={!caps.canEditProducts} hint="editProducts">
-						<DropdownMenuItem
-							testID="product-actions-edit"
-							disabled={!caps.canEditProducts}
-							onPress={() => {
-								router.push({
-									pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-									params: { productId: record.uuid },
-								});
-							}}
-						>
-							<Icon name="penToSquare" />
-							<Text>{t('common.edit')}</Text>
-						</DropdownMenuItem>
-					</CapabilityTooltip>
-					{product.id && (
-						<DropdownMenuItem testID="product-actions-sync" onPress={handleRefresh}>
-							<Icon name="arrowRotateRight" />
-							<Text>{t('common.sync')}</Text>
-						</DropdownMenuItem>
-					)}
-					{caps.canDeleteProducts && (
-						<>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								testID="product-actions-delete"
-								variant="destructive"
-								onPress={() => setDeleteDialogOpened(true)}
-							>
-								<Icon
-									name="trash"
-									className="fill-destructive web:group-focus:fill-accent-foreground"
-								/>
-								<Text>{t('common.delete')}</Text>
-							</DropdownMenuItem>
-						</>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
-			{caps.canDeleteProducts && (
-				<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>{t('products.delete', { product: product.name })}</AlertDialogTitle>
-							<AlertDialogDescription>
-								{t('products.are_you_sure_you_want_to')}
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" onPress={handleDelete}>
-								{t('common.delete')}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
-			)}
-		</>
+		<CapabilityTooltip show={!caps.canEditProducts} hint="editProducts">
+			<IconButton
+				testID="product-open-button"
+				name="chevronRight"
+				size="sm"
+				accessibilityLabel={t('products.open_product', { _: 'Open product' })}
+				disabled={!editable}
+				onPress={() =>
+					router.push({
+						pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+						params: { productId: row.original.record.uuid },
+					})
+				}
+			/>
+		</CapabilityTooltip>
 	);
 }

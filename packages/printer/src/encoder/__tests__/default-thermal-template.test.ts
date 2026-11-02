@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { encodeReceipt } from '../encode-receipt';
@@ -77,4 +79,26 @@ describe('DEFAULT_THERMAL_TEMPLATE Total saved row', () => {
 		);
 		expect(text).not.toContain('Total saved');
 	});
+});
+
+it('prints a refund as a credit note with correction identity and payment heading', () => {
+	const text = encodeToText({
+		...sampleReceiptData,
+		fiscal: {
+			document_type: 'refund',
+			document_label: 'Refund',
+			corrects: 'SALE-1',
+			is_refund_document: true,
+		},
+	});
+	expect(text).toContain('Refund');
+	expect(text).not.toContain('SALES RECEIPT');
+	expect(text).toContain('Corrects SALE-1');
+	expect(text).toContain('Refunded to');
+});
+
+it('preserves the sale receipt bytes recorded before refund support', () => {
+	expect(createHash('sha256').update(encodeReceipt(sampleReceiptData)).digest('hex')).toBe(
+		'8c5ce7e0c6c9f753d1633a18b31e2da7b6b5a7463fc94d74a69146b09742bbfe'
+	);
 });

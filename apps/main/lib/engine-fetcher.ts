@@ -24,7 +24,6 @@ import {
 } from './metrics';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
-const envelopeTransportByFetcher = new WeakMap<EngineFetcher, ResponseEnvelopeTransportState>();
 // Six consecutive 429s approximates all lanes being rejected across multiple
 // ticks, beyond the automatic-backoff regime that already handles brief bursts.
 const PERSISTENT_RATE_LIMIT_THRESHOLD = 6;
@@ -192,6 +191,7 @@ export function createEngineFetcher(input: {
 		(parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname).split('/').includes('push');
 
 	/** Execute one logical request arc, including any authentication retry. */
+	const envelopeTransport: ResponseEnvelopeTransportState = { responseHeadersReadable: true };
 	const fetcher: EngineFetcher = async (url, init) => {
 		const clockSkewGeneration = input.clockSkew.generation;
 		let tokenUsed: string | undefined;
@@ -373,18 +373,12 @@ export function createEngineFetcher(input: {
 			// Scoped to 2xx: the server never envelopes errors or 304s, and the
 			// auth-retry path must keep un-consumed 401 bodies clone-able.
 			if (response.ok) {
-				let transportState = envelopeTransportByFetcher.get(fetcher);
-				if (!transportState) {
-					transportState = { responseHeadersReadable: true };
-					envelopeTransportByFetcher.set(fetcher, transportState);
-				}
-				const state = transportState;
 				response = await hydrateResponse(response, {
 					envelopeRequested,
-					transportState: state,
+					transportState: envelopeTransport,
 					onDiagnostic: (kind) =>
 						engineLogger.debug(`Response envelope metadata is ${kind}`, {
-							context: { responseHeadersReadable: state.responseHeadersReadable },
+							context: { responseHeadersReadable: envelopeTransport.responseHeadersReadable },
 						}),
 				});
 			}
@@ -581,7 +575,7 @@ export function createEngineFetcher(input: {
 
 export async function fetchWooQueryTotal(
 	input: { request: QueryTotalWooRequest; signal?: AbortSignal },
-	fetcher: EngineFetcher,
+	request: EngineFetcher,
 	wpJsonRoot: string
 ): Promise<number | null> {
 	if (!isSyncCollectionName(input.request.endpoint)) return null;
@@ -593,25 +587,12 @@ export async function fetchWooQueryTotal(
 	}
 	url.searchParams.set('page', '1');
 	url.searchParams.set('per_page', '1');
-	const rawResponse = await fetcher(
+	// The handed request already hydrates the envelope (the engine transport, and
+	// createEngineFetcher beneath it), so the total header is readable here.
+	const response = await request(
 		url.toString(),
 		input.signal !== undefined ? { signal: input.signal } : undefined
 	);
-	let transportState = envelopeTransportByFetcher.get(fetcher);
-	if (!transportState) {
-		transportState = { responseHeadersReadable: true };
-		envelopeTransportByFetcher.set(fetcher, transportState);
-	}
-	const response = await hydrateResponse(rawResponse, {
-		envelopeRequested: true,
-		transportState,
-		onDiagnostic: (kind) =>
-			engineLogger.debug(`Response envelope metadata is ${kind}`, {
-				context: {
-					responseHeadersReadable: transportState.responseHeadersReadable,
-				},
-			}),
-	});
 	if (!response.ok) {
 		throw new Error(`Query total request failed: ${response.status}`);
 	}

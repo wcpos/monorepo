@@ -88,6 +88,8 @@ export function collectionFromSyncUrl(url: string): string | undefined {
 			return 'orders';
 		case 'customers':
 			return 'customers';
+		case 'refunds':
+			return 'refunds';
 		case 'coupons':
 			return 'coupons';
 		case 'taxes':

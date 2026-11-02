@@ -5,6 +5,8 @@ import path from 'node:path';
 
 import { resolve as metroResolve, type ResolutionContext } from 'metro-resolver';
 
+import * as mutations from '../src/mutations';
+
 const repoRoot = path.resolve(__dirname, '../../..');
 const querySourceRoot = path.join(repoRoot, 'packages/query/src');
 const requireFromMain = createRequire(path.join(repoRoot, 'apps/main/package.json'));
@@ -38,7 +40,7 @@ const metroContext: ResolutionContext = {
 	nodeModulesPaths: [path.join(repoRoot, 'node_modules')],
 	originModulePath: path.join(
 		repoRoot,
-		'packages/core/src/screens/main/pos/contexts/current-order/use-open-orders-resource.ts'
+		'packages/core/src/screens/main/pos/contexts/current-order/use-open-orders-handle.ts'
 	),
 	preferNativePlatform: true,
 	redirectModulePath: (modulePath) => modulePath,
@@ -54,6 +56,15 @@ const metroContext: ResolutionContext = {
 };
 
 describe('package exports', () => {
+	it('exports the void and restore commands from mutations', () => {
+		expect(mutations).toEqual(
+			expect.objectContaining({
+				voidOrder: expect.any(Function),
+				restoreVoidedOrder: expect.any(Function),
+			})
+		);
+	});
+
 	it('resolves the root entry identically through Node exports and Metro', () => {
 		const nodeResolved = requireFromMain.resolve('@wcpos/query');
 		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'index'), 'ios');
@@ -69,6 +80,88 @@ describe('package exports', () => {
 		const metroResolved = metroResolve(
 			metroContext,
 			path.join(querySourceRoot, 'collection-map'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the register-session subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/register-session');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'register-session'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the temporary-order subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/temporary-order');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'temporary-order'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it.each([
+		'mutations',
+		'store-local',
+		'record-readers',
+		'query-state',
+		'local-data-reset',
+		'storage-health',
+	])('resolves the %s subpath identically through Node exports and Metro', (subpath) => {
+		const nodeResolved = requireFromMain.resolve(`@wcpos/query/${subpath}`);
+		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, subpath), 'ios');
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the receipt-email-queue subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/receipt-email-queue');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'receipt-email-queue'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('resolves the user-db subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/user-db');
+		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'user-db'), 'ios');
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+	it('resolves the user-db bootstrap subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/user-db/bootstrap');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'user-db/bootstrap'),
 			'ios'
 		);
 

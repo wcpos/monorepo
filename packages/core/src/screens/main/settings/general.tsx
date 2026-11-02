@@ -1,10 +1,14 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import * as Alert from '@wcpos/components/alert-dialog';
+import { Button } from '@wcpos/components/button';
+import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Form,
@@ -13,28 +17,34 @@ import {
 	FormInput,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
+	savedKeys,
+	SavedMark,
 	useFormChangeHandler,
+	useMarkSaved,
 } from '@wcpos/components/form';
+import { PropertyRow } from '@wcpos/components/property-row';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
+import {
+	getServerOwnedStorePatch,
+	patchStoreSettings,
+	SERVER_OWNED_STORE_FIELDS,
+} from '@wcpos/query/user-db';
 import { useDocField } from '@wcpos/query';
 
+import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
-import { SettingsRow } from './components/settings-row';
+import { ClearLocalData } from '../pos/cart/clear-local-data';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
-import { CountryCombobox } from '../components/country-state-select/country-combobox';
-import { StateFormInput } from '../components/country-state-select/state-forminput';
-import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
+import { FormAmountField } from '../components/amount-field';
 import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
-import { ThousandsStyleSelect } from '../components/thousands-style-select';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { useOptionLists } from '../components/option-lists';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -52,13 +62,16 @@ const formSchema = z.object({
 	store_city: z.string().optional(),
 	store_postcode: z.string().optional(),
 	locale: z.string().optional(),
-	default_customer: z.number().default(0),
+	// The customer select hands back a string id; the gate in useFormChangeHandler validates
+	// before it writes, so the schema coerces what the control gives (the write is unchanged).
+	default_customer: z.coerce.number().default(0),
 	default_customer_is_cashier: z.boolean().default(false),
 	currency: z.string().default('USD'),
 	currency_pos: z.string().default('left'),
 	price_thousand_sep: z.string().default(','),
 	price_decimal_sep: z.string().default('.'),
-	price_num_decimals: z.number().default(2),
+	// Woo's own field is a number with min 0, step 1 and no max (class-wc-settings-general.php).
+	price_num_decimals: z.coerce.number().int().min(0).default(2),
 	thousands_group_style: z.enum(['thousand', 'lakh', 'wan']).default('thousand'),
 });
 
@@ -70,7 +83,7 @@ const formSchema = z.object({
  *
  * Built in the component that also READS it, the resource would be discarded with the aborted
  * render and rebuilt by every Suspense retry, which never ends (#1707): the customers query's
- * first emission is always async, and `SettingsPage`'s boundary sits ABOVE this component, so
+ * first emission is always async, and `AreaPage`'s boundary sits ABOVE this component, so
  * it cannot help. Above a boundary of its own, this component commits alongside the fallback
  * and the retry reads back the resource the first attempt already subscribed.
  */
@@ -79,7 +92,11 @@ export function GeneralSettings() {
 
 	return (
 		<Suspense>
-			<GeneralSettingsForm defaultCustomerResource={defaultCustomerResource} />
+			<CountriesProvider>
+				<SavedFieldProvider>
+					<GeneralSettingsForm defaultCustomerResource={defaultCustomerResource} />
+				</SavedFieldProvider>
+			</CountriesProvider>
 		</Suspense>
 	);
 }
@@ -89,7 +106,20 @@ function GeneralSettingsForm({
 }: {
 	defaultCustomerResource: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'];
 }) {
-	const { store } = useStoreSession();
+	const { store, site } = useStoreSession();
+	const sep = useDocField(store, (value) => value.price_thousand_sep);
+	const thousandsStyles = React.useMemo(
+		() => [
+			{ value: 'thousand', label: ['123', '456', '789'].join(sep) },
+			{ value: 'lakh', label: ['12', '34', '56', '789'].join(sep) },
+			{ value: 'wan', label: ['1', '2345', '6789'].join(sep) },
+		],
+		[sep]
+	);
+	const countries = useCountries();
+	const markSaved = useMarkSaved();
+	const [restoreOpen, setRestoreOpen] = React.useState(false);
+	const [restoreFailed, setRestoreFailed] = React.useState(false);
 	const formData = useDocField(store, (latest) => {
 		return {
 			name: latest.name,
@@ -114,10 +144,13 @@ function GeneralSettingsForm({
 	const defaultCustomerData =
 		'getLatest' in defaultCustomer ? defaultCustomer.getLatest().payload : defaultCustomer;
 	const t = useT();
-	const { localPatch } = useLocalMutation();
+	const { currencyPositions } = useOptionLists();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const http = useRestHttpClient();
+	// Set in WooCommerce (property rows rule 6): the base address's rows link to its settings.
+	const wooUrl = site.url && `${site.url.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings`;
+	const woo = { where: t('settings.set_in_woocommerce'), href: wooUrl || undefined };
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -133,13 +166,20 @@ function GeneralSettingsForm({
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data: z.infer<typeof formSchema>) => {
-			await localPatch({
-				document: store,
-				data,
-			});
+		async ({
+			store_country,
+			store_state,
+			store_city,
+			store_postcode,
+			...changes
+		}: Partial<z.infer<typeof formSchema>>) => {
+			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
+			// `patchStoreSettings` logs and toasts a failed write and resolves undefined.
+			const keys = savedKeys(store.getLatest?.() ?? store, changes);
+			const result = await patchStoreSettings(store, changes, t);
+			if (result && keys.length > 0) markSaved(keys);
 		},
-		[localPatch, store]
+		[t, store, markSaved]
 	);
 
 	useFormChangeHandler({
@@ -156,18 +196,11 @@ function GeneralSettingsForm({
 	});
 
 	/**
-	 * Get country code
-	 */
-	const countryCode = useWatch({
-		control: form.control,
-		name: 'store_country',
-		defaultValue: form.getValues('store_country'),
-	});
-
-	/**
 	 * Restore server settings
 	 */
 	const handleRestoreServerSettings = React.useCallback(async () => {
+		setRestoreOpen(false);
+		setRestoreFailed(false);
 		setLoading(true);
 		try {
 			const response = await http.get(`stores/${store.id}`);
@@ -178,14 +211,19 @@ function GeneralSettingsForm({
 				SERVER_OWNED_STORE_FIELDS
 			);
 			if (Object.keys(patch).length > 0) {
-				await localPatch({ document: store, data: patch as never });
+				const result = await patchStoreSettings(store, patch, t);
+				if (!result) throw new Error('Restore: the local patch did not apply');
 			}
+			markSaved(['restore']);
 		} catch (error) {
-			reportRestoreFailure(uiLogger, error, t);
+			setRestoreFailed(true);
+			// The inline line below shows the failure with its own Try again: the row
+			// carries the code of what the store answered (offline: SYNC121), no toast.
+			reportRestoreFailure(uiLogger, error, t, { toast: false });
 		} finally {
 			setLoading(false);
 		}
-	}, [http, localPatch, store, t]);
+	}, [http, t, store, markSaved]);
 
 	/**
 	 *
@@ -199,50 +237,45 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="name"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.store_name')}>
-								<FormInput {...field} />
-							</SettingsRow>
+							<PropertyRow name="name" label={t('settings.store_name')}>
+								<FormInput testID="settings-general-name" {...field} />
+							</PropertyRow>
 						)}
 					/>
-					<FormField
-						name="store_country"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_country')}>
-								<FormCombobox customComponent={CountryCombobox} {...field} disabled />
-							</SettingsRow>
+					<PropertyRow
+						label={t('settings.store_base_country')}
+						locked={woo}
+						testID="settings-general-locked-country"
+					>
+						{decode(countries.find(({ code }) => code === formData.store_country)?.name ?? '')}
+					</PropertyRow>
+					<PropertyRow
+						label={t('settings.store_base_state')}
+						locked={woo}
+						testID="settings-general-locked-state"
+					>
+						{decode(
+							countries
+								.find(({ code }) => code === formData.store_country)
+								?.states?.find(({ code }) => code === formData.store_state)?.name ??
+								formData.store_state ??
+								''
 						)}
-					/>
-					<FormField
-						name="store_state"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_state')}>
-								<FormInput
-									customComponent={StateFormInput}
-									{...field}
-									{...({ countryCode } as Record<string, unknown>)}
-									disabled
-								/>
-							</SettingsRow>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="store_city"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_city')}>
-								<FormInput {...field} disabled />
-							</SettingsRow>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="store_postcode"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_postcode')}>
-								<FormInput {...field} disabled />
-							</SettingsRow>
-						)}
-					/>
+					</PropertyRow>
+					<PropertyRow
+						label={t('settings.store_base_city')}
+						locked={woo}
+						testID="settings-general-locked-city"
+					>
+						{formData.store_city}
+					</PropertyRow>
+					<PropertyRow
+						label={t('settings.store_base_postcode')}
+						locked={woo}
+						testID="settings-general-locked-postcode"
+					>
+						{formData.store_postcode}
+					</PropertyRow>
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.localization')}>
@@ -250,23 +283,24 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="locale"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.language')}>
+							<PropertyRow name="locale" label={t('settings.language')}>
 								<FormSelect
 									customComponent={LanguageSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="default_customer"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow
+							<PropertyRow
+								name="default_customer"
 								label={t('settings.default_customer')}
-								description={t('settings.default_customer_description')}
+								help={t('settings.default_customer_description')}
 							>
 								<FormCombobox
 									customComponent={CustomerSelect}
@@ -278,16 +312,18 @@ function GeneralSettingsForm({
 									value={{ value: String(value), label: format(defaultCustomerData) }}
 									disabled={toggleCustomerSelect}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="default_customer_is_cashier"
 						render={({ field }) => (
-							<SettingsRow inline label={t('settings.default_customer_is_cashier')}>
-								<FormSwitch {...field} />
-							</SettingsRow>
+							<PropertyRow
+								name="default_customer_is_cashier"
+								label={t('settings.default_customer_is_cashier')}
+								control={<FormSwitch {...field} />}
+							/>
 						)}
 					/>
 				</SettingsSection>
@@ -297,80 +333,122 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="currency"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('common.currency')}>
-								<FormCombobox
+							<PropertyRow name="currency" label={t('common.currency')}>
+								<FormSelect
 									customComponent={CurrencySelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="currency_pos"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.currency_position')}>
+							<PropertyRow name="currency_pos" label={t('settings.currency_position')}>
 								<FormSelect
-									customComponent={CurrencyPositionSelect}
+									options={currencyPositions}
+									placeholder={t('common.select_a_currency_position')}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.decimal_separator')}>
+							<PropertyRow name="price_decimal_sep" label={t('settings.decimal_separator')}>
 								<FormInput {...field} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
-						render={({ field: { value, ...rest } }) => (
-							<SettingsRow label={t('settings.number_of_decimals')}>
-								<FormInput type="numeric" value={value ?? undefined} {...rest} />
-							</SettingsRow>
+						render={({ field }) => (
+							<PropertyRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
+								<FormAmountField kind="count" testID="settings-general-decimals" {...field} />
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.thousand_separator')}>
+							<PropertyRow name="price_thousand_sep" label={t('settings.thousand_separator')}>
 								<FormInput {...field} />
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="thousands_group_style"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.thousands_group_style')}>
+							<PropertyRow name="thousands_group_style" label={t('settings.thousands_group_style')}>
 								<FormSelect
-									customComponent={ThousandsStyleSelect}
+									options={thousandsStyles}
+									placeholder={t('common.select_thousands_style')}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</SettingsRow>
+							</PropertyRow>
 						)}
 					/>
 				</SettingsSection>
 
 				<SettingsDangerZone
-					description={t('settings.restore_server_settings_description')}
+					description={t('settings.restore_server_settings_line')}
 					buttonLabel={t('settings.restore_server_settings')}
-					onPress={handleRestoreServerSettings}
+					onPress={() => setRestoreOpen(true)}
 					loading={loading}
 					testID="settings-general-restore-server"
 				/>
+				<SavedMark name="restore" label={t('settings.restored')} />
+				{restoreFailed && (
+					<VStack>
+						<Text variant="help">{t('settings.restore_failed')}</Text>
+						{/* Try again after a refusal is the one action this line exists for. */}
+						<Button testID="settings-general-restore-retry" onPress={() => setRestoreOpen(true)}>
+							{t('settings.try_again')}
+						</Button>
+					</VStack>
+				)}
+				{/* The device's repair tool, beside the store's: it left the cashier sheet on 2026-10-23. */}
+				<ClearLocalData
+					trigger={(onPress) => (
+						<SettingsDangerZone
+							description={t('common.clear_all_local_data_body')}
+							buttonLabel={t('common.clear_all_local_data')}
+							onPress={onPress}
+							testID="settings-general-clear-local-data"
+						/>
+					)}
+				/>
+				<Alert.AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
+					<Alert.AlertDialogContent>
+						<Alert.AlertDialogHeader>
+							<Alert.AlertDialogTitle>{t('settings.restore_confirm_title')}</Alert.AlertDialogTitle>
+							<Alert.AlertDialogDescription>
+								{t('settings.restore_server_settings_description')}
+							</Alert.AlertDialogDescription>
+						</Alert.AlertDialogHeader>
+						<Alert.AlertDialogFooter
+							cancel={{ testID: 'settings-general-restore-cancel' }}
+							confirm={{
+								label: t('settings.restore_server_settings'),
+								destructive: true,
+								testID: 'settings-general-restore-confirm',
+								onPress: () => void handleRestoreServerSettings(),
+							}}
+						/>
+					</Alert.AlertDialogContent>
+				</Alert.AlertDialog>
 			</VStack>
 		</Form>
 	);

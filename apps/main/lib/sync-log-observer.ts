@@ -1,3 +1,4 @@
+import { SERVER_SENTENCE_MAX_CHARS } from '@wcpos/sync-core';
 import type {
 	SyncEvent,
 	SyncEventFields,
@@ -165,7 +166,9 @@ function sanitizeReason(value: unknown): string | undefined {
 		// space, which ends the match.
 		.replace(/\?[^\s)]+/g, '[redacted]')
 		.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted]');
-	return sanitized.length > 200 ? `${sanitized.slice(0, 199)}…` : sanitized;
+	return sanitized.length > SERVER_SENTENCE_MAX_CHARS
+		? `${sanitized.slice(0, SERVER_SENTENCE_MAX_CHARS - 1)}…`
+		: sanitized;
 }
 
 /**
@@ -272,7 +275,8 @@ export const CONFORMANCE_TABLE = {
 		outcome: 'failed',
 		code: ERROR_CODES.SYNC_UNREACHABLE,
 		level: (_event, fields) => streakLevel(fields.consecutiveDeadlines),
-		message: (_event, fields) => `Request deadline exceeded after ${num(fields.elapsedMs)} ms`,
+		message: (_event, fields) =>
+			`Engine request deadline exceeded after ${num(fields.elapsedMs)} ms`,
 	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
@@ -741,6 +745,21 @@ export const CONFORMANCE_TABLE = {
 	},
 	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	// Void-path recovery (monorepo#2607): a crashed sibling's fence or a resident that gained
+	// server identity during the fence; recovered arcs, not failures.
+	'void.recovery.identity-appeared': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	'void.cleanup-failed': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+		message: recordMessage('void cleanup failed; expiry recovery finishes it'),
+	},
+	'write.admission-release-failed': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+		message: recordMessage('writer admission release failed; the sweep clears it'),
+	},
 	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	// The write drain's next tick re-runs it, so a crash alarms only once it has
 	// repeated (the lane stamps `consecutiveFailures`). Conflict resolution's
@@ -853,18 +872,6 @@ export const CONFORMANCE_TABLE = {
 	},
 	// decided: invisible — scheduling a catch-up tick after reconnect is internal narration.
 	'engine.reconnect.retick': INVISIBLE,
-	// decided: visible — explains multi-tab degradation to support.
-	// Info, and not CLIENT121: without Web Locks this tab becomes a writer of its
-	// own (web-write-leader.ts), the opposite of "one tab syncs for all". Its
-	// sales still send, and a second such tab is fenced by the drain's claim
-	// lease and the server's mutationId dedupe — nothing for the merchant to do.
-	'engine.write-leader.degraded': {
-		operationType: 'sync.lifecycle',
-		outcome: 'unknown',
-		code: null,
-		level: 'info',
-		didWork: () => true,
-	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
 	// The lane re-runs on its next tick: a failed request is the transport/deadline
 	// row's incident, and a local crash alarms once it has repeated.

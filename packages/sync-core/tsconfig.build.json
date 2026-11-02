@@ -1,0 +1,15 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"outDir": "dist",
+		"rootDir": ".",
+		"declaration": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"target": "es2022",
+		"skipLibCheck": true
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["src/**/*.test.ts", "node_modules", "dist"]
+}

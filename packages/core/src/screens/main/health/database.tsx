@@ -1,43 +1,52 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
+import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
+import { Notice } from '@wcpos/components/notice';
+import { Progress } from '@wcpos/components/progress';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { cn } from '@wcpos/components/lib/utils';
-import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { resetCollectionsAndRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { HISTORY_DAYS } from '@wcpos/sync-core';
+import { Stat, StatHeader } from '@wcpos/components/stat';
 
+import { collectionLabel } from './collection-label';
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
 import { useCollectionCheck, useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useUnresolvedConflictKeys } from './use-unresolved-conflicts';
 import { useT } from '../../../contexts/translations';
+import { AreaPage } from '../components/navigation-area/area-page';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
 import { useCensusTotals } from '../hooks/use-census-totals';
@@ -46,15 +55,6 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import {
-	Callout,
-	CoverageBar,
-	HairlineHeaderCell,
-	HairlineHeaderRow,
-	Pill,
-	Stat,
-	StatHeader,
-} from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,
@@ -69,6 +69,7 @@ import {
 	totalLocalRecords,
 } from './database-logic';
 import { QueuedEmailsPanel } from './queued-emails';
+import { RegistersPanel } from './registers-panel';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -86,6 +87,7 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'products',
 	'variations',
 	'orders',
+	'refunds',
 	'customers',
 	'categories',
 	'brands',
@@ -93,15 +95,6 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'coupons',
 	'taxRates',
 ]);
-
-/** Engine row key → the legacy collection key the reset funnel speaks. */
-const ROW_TO_LEGACY = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.legacyName])
-) as Record<CollectionKey, string>;
-
-const ROW_LABEL_KEYS = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.labelKey])
-) as Record<CollectionKey, string>;
 
 type RowPhase = 'idle' | 'clearing';
 
@@ -114,6 +107,9 @@ type RowCoverage =
 	  };
 
 type RowStory = { serverText: string; coverage: RowCoverage };
+
+/** Coverage is quiet: the accent while partial, green once everything is local. */
+const coverageTone = (percent: number) => (percent >= 100 ? 'ok' : undefined);
 
 /**
  * The "on server" + "coverage" story for one row, shared by the table (md+)
@@ -150,6 +146,12 @@ function useRowStory(row: CollectionRow, phase: RowPhase, backingOff: boolean): 
 		return {
 			serverText: '0',
 			coverage: { kind: 'empty', label: '—' },
+		};
+	}
+	if (row.key === 'refunds') {
+		return {
+			serverText: row.serverTotal.toLocaleString(),
+			coverage: { kind: 'none', label: t('health.database.window_short') },
 		};
 	}
 	if (row.windowed) {
@@ -199,7 +201,7 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 			return (
 				<HStack className="items-center justify-end gap-2">
 					<Loader size="sm" />
-					<Text className="text-muted-foreground text-xs">{coverage.label}</Text>
+					<Text variant="help">{coverage.label}</Text>
 				</HStack>
 			);
 		case 'complete':
@@ -209,7 +211,11 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 				<Tooltip showOnNative>
 					<TooltipTrigger asChild>
 						<Pressable accessibilityLabel={coverage.tooltip} className="items-end py-1">
-							<CoverageBar percent={coverage.percent} />
+							<Progress
+								value={coverage.percent}
+								tone={coverageTone(coverage.percent)}
+								className="w-16"
+							/>
 						</Pressable>
 					</TooltipTrigger>
 					<TooltipContent>
@@ -218,7 +224,11 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 				</Tooltip>
 			);
 		default:
-			return <Text className="text-muted-foreground text-right text-xs">{coverage.label}</Text>;
+			return (
+				<Text variant="help" className="text-right">
+					{coverage.label}
+				</Text>
+			);
 	}
 }
 
@@ -228,9 +238,12 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
  * Below this width the collection column wrapped one character per line (portrait iPad
  * with the drawer rail open). The choice used to be the `md:` window breakpoint, but the
  * width that matters is the table's own: a tablet rail or an open drawer narrows the
- * content column without changing the window.
+ * content column without changing the window. 600 (the collection column keeps 120): inside
+ * the page card (2026-10-18) the table measures about 638 in a 1024 window (rail 56, area
+ * rail 224, page and card padding 106), which must keep the table, with room for a web
+ * scrollbar; a 768 window measures about 382 and takes the compact rows, as it did before.
  */
-const TABLE_LAYOUT_MIN_WIDTH = 640;
+const TABLE_LAYOUT_MIN_WIDTH = 600;
 
 /** Measured container width → whether the table layout fits; compact until measured. */
 function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent) => void } {
@@ -241,6 +254,22 @@ function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent)
 	}, []);
 	return { wide, onLayout };
 }
+
+/**
+ * The wide layout's columns, shared by the heads, the collection rows and the storage
+ * lines so they line up. The shared table's cells, flush (`px-0`): the row's `gap-3` is
+ * the gutter, as the hairline layout had it, and the actions column is the menu button's
+ * own width (`w-ctl`), so the heads no longer sit 8 px right of the numbers under them.
+ */
+const DB_ROW = 'items-center gap-3 py-2';
+const DB_COLUMN = {
+	name: 'min-w-0 px-0 py-0',
+	local: 'w-20 flex-none items-end px-0 py-0',
+	server: 'w-24 flex-none items-end px-0 py-0',
+	coverage: 'w-32 flex-none items-end px-0 py-0',
+	size: 'w-20 flex-none items-end px-0 py-0',
+	actions: 'w-ctl flex-none px-0 py-0',
+} as const;
 
 function CollectionRowView({
 	row,
@@ -258,7 +287,7 @@ function CollectionRowView({
 	wide: boolean;
 }) {
 	const t = useT();
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const { syncing, busy } = useManualSync();
 	const { checking, check } = useCollectionCheck();
 	const [confirming, setConfirming] = React.useState(false);
@@ -277,30 +306,22 @@ function CollectionRowView({
 		setConfirming(false);
 		setPhase('clearing');
 		try {
-			// Clearing products must also clear the separate variations collection, or
-			// stale child docs survive — the same pairing the app-wide reset funnel uses.
-			const engineNames: CollectionKey[] =
-				row.key === 'products' ? ['variations', 'products'] : [row.key];
-			const legacyNames = engineNames.map((name) => ROW_TO_LEGACY[name]);
-			// Reseed + drain the dropped collections immediately (the merchant expects
-			// a re-download, not just a delete) — the established refill path.
-			for (const name of engineNames) {
-				// The dialog IS the queue-destroy confirmation, so force past it.
-				await engine.scope.resetCollection(name, { confirmDestroyQueue: true });
-			}
-			await runResetRefill(engine, legacyNames);
+			// The dialog IS the queue-destroy confirmation, so force past it.
+			await resetCollectionsAndRefill(runtime.engine, row.key, { confirmDestroyQueue: true });
 			const successMessage =
-				row.key === 'products'
-					? t('health.database.redownload_done_products', {
-							label,
-						})
-					: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
-						? t('health.database.redownload_done_lazy', {
+				row.key === 'refunds'
+					? t('health.database.redownload_done_refunds')
+					: row.key === 'products'
+						? t('health.database.redownload_done_products', {
 								label,
 							})
-						: t('health.database.redownload_done', {
-								label,
-							});
+						: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
+							? t('health.database.redownload_done_lazy', {
+									label,
+								})
+							: t('health.database.redownload_done', {
+									label,
+								});
 			Toast.show({
 				type: 'success',
 				text1: successMessage,
@@ -326,22 +347,27 @@ function CollectionRowView({
 	const menu = (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
+				<IconButton
+					name="more"
+					accessibilityLabel={t('common.more_actions')}
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
 					loading={syncing || checking === row.key}
-				>
-					<Icon name="ellipsisVertical" className="text-muted-foreground" />
-				</Button>
+				/>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent align="end">
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
+					<Icon name="refresh" />
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem testID={`db-row-clear-${row.key}`} onPress={() => setConfirming(true)}>
-					<Text className="text-destructive">{t('health.database.clear_redownload')}</Text>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					testID={`db-row-clear-${row.key}`}
+					variant="destructive"
+					onPress={() => setConfirming(true)}
+				>
+					<Icon name="delete" className="text-destructive" />
+					<Text>{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -349,7 +375,7 @@ function CollectionRowView({
 
 	const clearingSub =
 		phase === 'clearing' ? (
-			<Text className="text-muted-foreground text-xs">
+			<Text variant="help">
 				{t('health.database.redownloading_count', {
 					count: row.local.toLocaleString(),
 				})}
@@ -359,45 +385,48 @@ function CollectionRowView({
 	return (
 		<>
 			{/* wide — table row */}
-			<HStack
-				testID={`db-row-${row.key}`}
-				className={cn('border-border items-center gap-3 border-b py-2', wide ? 'flex' : 'hidden')}
-			>
-				<View className={isVariations ? 'min-w-0 flex-1 pl-4' : 'min-w-0 flex-1'}>
+			<TableRow testID={`db-row-${row.key}`} className={cn(DB_ROW, wide ? 'flex' : 'hidden')}>
+				<TableCell className={cn(DB_COLUMN.name, isVariations && 'pl-4')}>
 					<HStack className="items-center gap-2">
 						<Text className={isVariations ? undefined : 'font-medium'}>
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-${row.key}`}>
+							<Badge variant="bad" testID={`db-stuck-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					{isVariations ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.variations_policy')}
-						</Text>
+						<Text variant="help">{t('health.database.variations_policy')}</Text>
 					) : null}
-					{row.key === 'orders' ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.orders_policy')}
+					{row.key === 'orders' || row.key === 'refunds' ? (
+						<Text variant="help">
+							{row.key === 'refunds'
+								? t('health.database.refunds_policy', { days: HISTORY_DAYS })
+								: t('health.database.orders_policy')}
 						</Text>
 					) : null}
 					{clearingSub}
-				</View>
-				<Text className="w-20 text-right tabular-nums">{row.local.toLocaleString()}</Text>
-				<Text className="text-muted-foreground w-24 text-right text-sm tabular-nums">
-					{story.serverText}
-				</Text>
-				<View className="w-32 items-end">
+				</TableCell>
+				<TableCell className={DB_COLUMN.local}>
+					<Text className="text-right tabular-nums">{row.local.toLocaleString()}</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.server}>
+					<Text variant="key" tabular className="text-right">
+						{story.serverText}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.coverage}>
 					<CoverageCell coverage={story.coverage} />
-				</View>
-				<Text className="text-muted-foreground w-20 text-right text-sm tabular-nums">
-					{sizeText ? `≈ ${sizeText}` : '—'}
-				</Text>
-				{menu}
-			</HStack>
+				</TableCell>
+				<TableCell className={DB_COLUMN.size}>
+					<Text variant="key" tabular className="text-right">
+						{sizeText ? `≈ ${sizeText}` : '—'}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.actions}>{menu}</TableCell>
+			</TableRow>
 
 			{/* compact — two-line list row */}
 			<HStack
@@ -410,21 +439,19 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-sm-${row.key}`}>
+							<Badge variant="bad" testID={`db-stuck-sm-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
-					<Text
-						className={`text-muted-foreground text-xs tabular-nums ${isVariations ? 'pl-4' : ''}`}
-					>
+					<Text variant="help" tabular className={isVariations ? 'pl-4' : undefined}>
 						{phase === 'clearing'
 							? t('health.database.redownloading_count', {
 									count: row.local.toLocaleString(),
 								})
 							: isVariations
 								? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.with_products')}`
-								: row.key === 'orders'
+								: row.key === 'orders' || row.key === 'refunds'
 									? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.window_short')}`
 									: story.coverage.kind === 'empty'
 										? '0'
@@ -437,11 +464,15 @@ function CollectionRowView({
 					</Text>
 				</View>
 				<View className="items-end">
-					<Text className="text-muted-foreground text-sm tabular-nums">
+					<Text variant="key" tabular>
 						{sizeText ? `≈ ${sizeText}` : '—'}
 					</Text>
 					{story.coverage.kind === 'partial' || story.coverage.kind === 'windowed' ? (
-						<CoverageBar percent={story.coverage.percent} className="mt-1 w-11" />
+						<Progress
+							value={story.coverage.percent}
+							tone={coverageTone(story.coverage.percent)}
+							className="mt-1 w-11"
+						/>
 					) : null}
 				</View>
 				{menu}
@@ -468,25 +499,24 @@ function CollectionRowView({
 										? t('health.database.clear_body_customers', {
 												...clearBodyValues,
 											})
-										: row.key === 'orders'
-											? t('health.database.clear_body_orders')
+										: row.key === 'orders' || row.key === 'refunds'
+											? row.key === 'refunds'
+												? t('health.database.clear_body_refunds', { days: HISTORY_DAYS })
+												: t('health.database.clear_body_orders')
 											: t('health.database.clear_body', {
 													...clearBodyValues,
 												})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID={`db-row-clear-confirm-${row.key}`}
-							onPress={() => void resetCollection()}
-						>
-							<Text>{t('health.database.clear_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						cancel={true}
+						confirm={{
+							label: t('health.database.clear_confirm'),
+							destructive: true,
+							testID: `db-row-clear-confirm-${row.key}`,
+							onPress: () => void resetCollection(),
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</>
@@ -511,14 +541,16 @@ function FootprintRow({
 	const text = formatBytes(bytes);
 	if (bytes <= 0 || !text) return null;
 	return (
-		<HStack testID={testID} className="border-border items-center gap-3 border-b py-2">
-			<View className="min-w-0 flex-1">
+		<TableRow testID={testID} className={DB_ROW}>
+			<TableCell className={DB_COLUMN.name}>
 				<Text className="text-muted-foreground">{label}</Text>
 				{sub ? <Text className="text-muted-foreground/80 text-xs">{sub}</Text> : null}
-			</View>
-			<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
-			<View className="w-9" />
-		</HStack>
+			</TableCell>
+			<TableCell className="flex-none items-end px-0 py-0">
+				<Text variant="key" tabular className="text-right">{`≈ ${text}`}</Text>
+			</TableCell>
+			<TableCell className={DB_COLUMN.actions} />
+		</TableRow>
 	);
 }
 
@@ -532,7 +564,7 @@ function HowSyncingWorksLink() {
 			testID="db-how-syncing-works"
 			href={HOW_SYNCING_WORKS_DOCS_URL}
 			// Indented to sit in the freshness station's text column, under the status lines.
-			className="mt-0.5 ml-3.5"
+			className="mt-0.5 ml-3"
 		>
 			{t('health.database.how_title')}
 		</DocsLink>
@@ -600,13 +632,12 @@ export function DatabaseScreen() {
 	const censusProgress = censusWindowProgress(censusWindow, nowMs);
 
 	return (
-		<ScrollView className="flex-1">
-			<VStack
-				testID="screen-health-database"
-				className="mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8"
-			>
-				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
-
+		<AreaPage
+			title={t('common.database')}
+			description={t('health.database.subtitle')}
+			testID="screen-health-database"
+		>
+			<VStack className="gap-4">
 				{/* Summary strip — shared Store health stat header */}
 				<StatHeader testID="db-stats">
 					<Stat
@@ -659,73 +690,69 @@ export function DatabaseScreen() {
 				) : null}
 
 				{stats.clockSkew ? (
-					<Callout tone="warning" testID="db-clock-skew">
-						<Text className="text-warning text-sm">
-							{`${
-								stats.clockSkew.skewSeconds > 0
-									? t('health.database.clock_skew_ahead', {
-											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
-										})
-									: t('health.database.clock_skew_behind', {
-											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
-										})
-							} ${t('health.database.clock_skew_hint')}`}
-						</Text>
-					</Callout>
+					<Notice
+						tone="warning"
+						testID="db-clock-skew"
+						title={`${
+							stats.clockSkew.skewSeconds > 0
+								? t('health.database.clock_skew_ahead', {
+										amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+									})
+								: t('health.database.clock_skew_behind', {
+										amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+									})
+						} ${t('health.database.clock_skew_hint')}`}
+					/>
 				) : null}
 
 				{status.connectivity === 'offline' ? (
-					<Callout tone="warning">
-						<Text className="text-warning text-sm">
-							{readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')}
-						</Text>
-					</Callout>
+					<Notice
+						tone="warning"
+						title={
+							readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')
+						}
+					/>
 				) : null}
 
 				{/* Per-collection rows (table header in the wide layout only; rows render both
 				    layouts and show one, chosen by the measured table width) */}
-				<VStack testID="db-table" className="gap-0" onLayout={tableLayout.onLayout}>
-					<HairlineHeaderRow className={tableLayout.wide ? 'flex' : 'hidden'}>
-						<HairlineHeaderCell className="flex-1">
-							{t('health.database.col_collection')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_on_device')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-24 text-right">
-							{t('health.database.col_on_server')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-32 text-right">
-							{t('health.database.col_coverage')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_size')}
-						</HairlineHeaderCell>
-						<View className="w-9" />
-					</HairlineHeaderRow>
+				<Table testID="db-table" onLayout={tableLayout.onLayout}>
+					<TableHeader className={tableLayout.wide ? 'flex' : 'hidden'}>
+						<TableRow className="items-center gap-3">
+							<TableHead className={DB_COLUMN.name}>
+								<Text>{t('health.database.col_collection')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.local}>
+								<Text>{t('health.database.col_on_device')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.server}>
+								<Text>{t('health.database.col_on_server')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.coverage}>
+								<Text>{t('health.database.col_coverage')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.size}>
+								<Text>{t('health.database.col_size')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.actions} />
+						</TableRow>
+					</TableHeader>
 					{rows.map((row) => (
 						<CollectionRowView
 							key={row.key}
 							row={row}
 							sizeBytes={sizes[row.key]}
 							stuckCount={stuckByRow[row.key] ?? 0}
-							label={t(ROW_LABEL_KEYS[row.key])}
+							label={collectionLabel(row.key, t)}
 							wide={tableLayout.wide}
 							backingOff={backingOff}
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket
-					    is real bytes from the platform's storage layer, split so search
-					    indexes never masquerade as store data. Aggregates only: other
-					    stores show a count and a size, never names. */}
+					    is real bytes from the platform's storage layer. Aggregates only:
+					    other stores show a count and a size, never names. */}
 					{footprint ? (
 						<>
-							<FootprintRow
-								testID="db-row-search-indexes"
-								label={t('health.database.storage_search_indexes')}
-								sub={t('health.database.storage_search_indexes_sub')}
-								bytes={footprint.breakdown.searchIndexBytes}
-							/>
 							<FootprintRow
 								testID="db-row-cached-images"
 								label={t('health.database.storage_cached_images')}
@@ -762,10 +789,7 @@ export function DatabaseScreen() {
 								bytes={footprint.unattributedBytes}
 							/>
 							{showBrowserEstimateNote && browserEstimateText ? (
-								<Text
-									testID="db-note-browser-estimate"
-									className="text-muted-foreground py-2 text-xs"
-								>
+								<Text testID="db-note-browser-estimate" variant="help" className="py-2">
 									{t('health.database.storage_browser_estimate_note', {
 										size: browserEstimateText,
 									})}
@@ -773,7 +797,7 @@ export function DatabaseScreen() {
 							) : null}
 						</>
 					) : null}
-				</VStack>
+				</Table>
 
 				{/* Receipt emails that have not gone out yet (#165). Unlike the dead
 				    letters above there is no cheap precomputed count to gate on, so the
@@ -786,25 +810,20 @@ export function DatabaseScreen() {
 				{/* Freshness station */}
 				<HStack className="flex-wrap items-end justify-between gap-3 pt-1">
 					<VStack className="gap-0.5">
-						<HStack className="items-center gap-1.5">
-							<View
-								className={
-									lastCheck?.status === 'error'
-										? 'bg-warning h-2 w-2 rounded-full'
-										: 'bg-success h-2 w-2 rounded-full'
-								}
-							/>
-							<Text className="text-muted-foreground text-xs">
-								{lastCheck === null
+						<StatusBadge
+							size="caption"
+							variant={lastCheck?.status === 'error' ? 'warning' : 'ok'}
+							label={
+								lastCheck === null
 									? t('health.database.first_check_pending')
 									: lastCheck.status === 'error'
 										? t('health.database.last_check_error')
 										: t('health.database.watching', {
 												ago: relative(lastCheck.atMs, nowMs),
-											})}
-							</Text>
-						</HStack>
-						<Text className="text-muted-foreground pl-3.5 text-xs">
+											})
+							}
+						/>
+						<Text variant="help" className="pl-3">
 							{censusWindow.updatedAtMs === null
 								? t('health.database.totals_pending')
 								: backingOff
@@ -821,12 +840,11 @@ export function DatabaseScreen() {
 											})}
 						</Text>
 						{censusProgress !== null && !censusRefreshDue(censusWindow, nowMs) ? (
-							<View className="bg-muted mt-1 ml-3.5 h-0.5 w-40 overflow-hidden rounded-full">
-								<View
-									className="bg-border h-0.5 rounded-full"
-									style={{ width: `${Math.round(censusProgress * 100)}%` }}
-								/>
-							</View>
+							<Progress
+								value={Math.round(censusProgress * 100)}
+								tone="muted"
+								className="mt-1 ml-3 w-40"
+							/>
 						) : null}
 						<HowSyncingWorksLink />
 					</VStack>
@@ -846,8 +864,8 @@ export function DatabaseScreen() {
 					</Button>
 				</HStack>
 
-				<View className="h-4" />
+				<RegistersPanel />
 			</VStack>
-		</ScrollView>
+		</AreaPage>
 	);
 }

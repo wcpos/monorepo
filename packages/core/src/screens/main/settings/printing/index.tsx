@@ -1,33 +1,35 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
+import { DeviceList } from '@wcpos/components/device-row';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { HStack } from '@wcpos/components/hstack';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import {
+	type ActiveTemplate,
+	deletePrinterProfile,
+	observeTemplatePrinterOverrides,
+	setDefaultPrinterProfile,
+	setTemplatePrinterOverride,
+} from '@wcpos/query';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 import { getLogger } from '@wcpos/utils/logger';
-import type {
-	PrinterProfileDocument,
-	TemplateDocument,
-	TemplatePrinterOverrideDocument,
-} from '@wcpos/database';
 
 import { PrinterRow } from './printer-row';
-import { PrintersEmptyState } from './printers-empty-state';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE, laneAcknowledgesPrint } from './utils';
 import { SettingsSection } from '../components/settings-section';
 import { PrinterDialog } from '../printer/add-printer';
-import { describePrinterError } from '../printer/describe-printer-error';
+import { describePrinterError, printerErrorText } from '../printer/describe-printer-error';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -42,6 +44,10 @@ const printingLogger = getLogger(['wcpos', 'settings', 'printing']);
 export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useStoreSession();
+	// The dialog is open while `pendingDelete` is set; `deleteTarget` outlives it so the title
+	// keeps naming the printer through the exit animation instead of reading "Delete ?".
+	const [pendingDelete, setPendingDelete] = React.useState<PrinterProfile>();
+	const [deleteTarget, setDeleteTarget] = React.useState<PrinterProfile>();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
 	const [prefilledPrinter, setPrefilledPrinter] = React.useState<
@@ -57,7 +63,9 @@ export function PrintingSettings() {
 		() => new PrinterService({ cloudEnqueueFactory }),
 		[cloudEnqueueFactory]
 	);
-	const templates = useActiveTemplates();
+	const receiptTemplates = useActiveTemplates('receipt');
+	const reportTemplates = useActiveTemplates('report');
+	const closureTemplates = useActiveTemplates('closure');
 	const { printers, isLoading } = useAvailablePrinterProfiles();
 
 	useEnsureSystemPrinter(storeDB);
@@ -68,15 +76,13 @@ export function PrintingSettings() {
 		};
 	}, [printerService]);
 
-	// Subscribe to all overrides
+	// Subscribe to all overrides through the reset-following named read (CodeRabbit, #2694).
 	const overrides$ = React.useMemo(
 		() =>
-			storeDB.collections.template_printer_overrides.find().$.pipe(
+			observeTemplatePrinterOverrides(storeDB).pipe(
 				map((docs) => {
 					const m = new Map<string, string>();
-					for (const doc of docs as TemplatePrinterOverrideDocument[]) {
-						m.set(doc.template_id, doc.printer_profile_id);
-					}
+					for (const doc of docs) m.set(doc.template_id, doc.printer_profile_id);
 					return m;
 				})
 			),
@@ -85,7 +91,7 @@ export function PrintingSettings() {
 	const overrides = useObservableState(overrides$, new Map<string, string>());
 
 	const autoMatchLabel = React.useCallback(
-		(tmpl: TemplateDocument) => {
+		(tmpl: ActiveTemplate) => {
 			const templateInfo = {
 				id: String(tmpl.id),
 				output_type: tmpl.output_type ?? 'html',
@@ -105,50 +111,26 @@ export function PrintingSettings() {
 	);
 
 	const handleRoutingChange = React.useCallback(
-		async (templateId: string, printerId: string) => {
-			const collection = storeDB.collections.template_printer_overrides;
-
-			if (printerId === AUTO_VALUE) {
-				const existing = await collection.findOne(templateId).exec();
-				if (existing) {
-					await existing.remove();
-				}
-			} else {
-				await collection.upsert({
-					template_id: templateId,
-					printer_profile_id: printerId,
-				});
-			}
-		},
+		(templateId: string, printerId: string) =>
+			setTemplatePrinterOverride(storeDB, templateId, printerId === AUTO_VALUE ? null : printerId),
 		[storeDB]
 	);
 
-	const handleDelete = React.useCallback(
-		async (id: string) => {
-			const doc = await storeDB.collections.printer_profiles.findOne(id).exec();
-			if (doc && !doc.isBuiltIn) {
-				await doc.remove();
-			}
-		},
-		[storeDB]
-	);
+	const handleDelete = (id: string) => {
+		const printer = printers.find((candidate) => candidate.id === id);
+		setDeleteTarget(printer);
+		setPendingDelete(printer);
+	};
+
+	const confirmDelete = React.useCallback(async () => {
+		if (!pendingDelete) return;
+		const id = pendingDelete.id;
+		setPendingDelete(undefined);
+		await deletePrinterProfile(storeDB, id);
+	}, [storeDB, pendingDelete]);
 
 	const handleSetDefault = React.useCallback(
-		async (id: string) => {
-			const allDocs = (await storeDB.collections.printer_profiles
-				.find()
-				.exec()) as PrinterProfileDocument[];
-			if (!allDocs.some((doc) => doc.id === id)) {
-				return;
-			}
-			for (const doc of allDocs) {
-				if (doc.id === id && !doc.isDefault) {
-					await doc.patch({ isDefault: true });
-				} else if (doc.id !== id && doc.isDefault) {
-					await doc.patch({ isDefault: false });
-				}
-			}
-		},
+		(id: string) => setDefaultPrinterProfile(storeDB, id),
 		[storeDB]
 	);
 
@@ -168,10 +150,9 @@ export function PrintingSettings() {
 				}
 				// Only a lane that answers proves the paper moved; everything else was merely sent.
 				Toast.show({
-					title: t(
-						laneAcknowledgesPrint(profile)
-							? 'settings.test_print_done'
-							: 'settings.test_print_dispatched'
+					title: (laneAcknowledgesPrint(profile)
+						? t('settings.test_print_done')
+						: t('settings.test_print_dispatched')
 					).replace('%s', profile.name),
 					type: 'success',
 				});
@@ -179,7 +160,7 @@ export function PrintingSettings() {
 				logTestPrintFailure(printingLogger, err, { source: 'printing-settings' });
 				const { key } = describePrinterError(err);
 				Toast.show({
-					title: t(key),
+					title: printerErrorText(key, t),
 					// The generic line names no next step; the specific ones already do.
 					...(key === 'settings.setup_err_generic'
 						? { description: t('settings.setup_err_generic_hint') }
@@ -209,6 +190,60 @@ export function PrintingSettings() {
 		setDialogOpen(true);
 	}, []);
 
+	const renderTemplateSection = (
+		type: 'receipt' | 'report' | 'closure',
+		templates: ActiveTemplate[]
+	) => (
+		<SettingsSection
+			title={
+				{
+					receipt: t('receipt.receipt_templates'),
+					report: t('settings.report_templates'),
+					closure: t('settings.closure_templates'),
+				}[type]
+			}
+			description={t('settings.templates_description')}
+		>
+			{templates.length === 0 ? (
+				<EmptyState kind="empty" size="inline" title={t('settings.no_templates')} />
+			) : (
+				<DeviceList>
+					{templates.map((tmpl) => {
+						const tmplId = String(tmpl.id);
+						const currentOverride = overrides.get(tmplId);
+						const autoLabel = autoMatchLabel(tmpl);
+						const selectedPrinter = currentOverride
+							? printers.find((p) => p.id === currentOverride)
+							: null;
+						const isUnavailableOverride = Boolean(currentOverride && !selectedPrinter);
+						const currentValue =
+							currentOverride && (selectedPrinter || isUnavailableOverride)
+								? currentOverride
+								: AUTO_VALUE;
+						const selectedLabel = selectedPrinter
+							? selectedPrinter.name
+							: isUnavailableOverride
+								? t('settings.printer_unavailable')
+								: autoLabel;
+
+						return (
+							<TemplateRow
+								key={tmplId}
+								template={tmpl}
+								currentValue={currentValue}
+								selectedLabel={selectedLabel}
+								autoLabel={autoLabel}
+								printers={printers}
+								unavailablePrinterId={isUnavailableOverride ? currentOverride : undefined}
+								onRoutingChange={handleRoutingChange}
+							/>
+						);
+					})}
+				</DeviceList>
+			)}
+		</SettingsSection>
+	);
+
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
 	// A Windows winspool queue is also `connectionType: 'system'`; only the Print Dialog is invisible.
 	const hasVisiblePrinterTargets = printers.some((p) => !usesSystemPrintDialog(p));
@@ -222,89 +257,83 @@ export function PrintingSettings() {
 				description={t('settings.printers_description')}
 			>
 				{isLoading ? null : !hasVisiblePrinterTargets ? (
-					<PrintersEmptyState onAddPrinter={openAddDialog} />
+					<EmptyState
+						testID="printers-empty-state"
+						kind="empty"
+						icon="print"
+						title={t('settings.no_printers_configured')}
+						description={t('settings.no_printers_body')}
+						docs={{
+							label: t('settings.setup_open_guide'),
+							href: PRINTER_DOCS_URL,
+							testID: 'printing-printer-guide-link',
+						}}
+					/>
 				) : (
-					<>
-						<View>
-							{printers.map((profile) => (
-								<PrinterRow
-									key={profile.id}
-									profile={profile}
-									isTesting={testingPrinterIds.has(profile.id)}
-									onTest={handleTestPrint}
-									onEdit={openEditDialog}
-									onSetDefault={handleSetDefault}
-									onDelete={handleDelete}
-								/>
-							))}
-						</View>
-						<HStack className="gap-2 pt-2">
-							<Button
-								variant="outline"
-								size="sm"
-								leftIcon="plus"
-								className="self-start"
-								onPress={openAddDialog}
-								testID="printing-add-printer-button"
-							>
-								<Text>{t('settings.add_printer')}</Text>
-							</Button>
-						</HStack>
-					</>
+					<DeviceList>
+						{printers.map((profile) => (
+							<PrinterRow
+								key={profile.id}
+								profile={profile}
+								isTesting={testingPrinterIds.has(profile.id)}
+								onTest={handleTestPrint}
+								onEdit={openEditDialog}
+								onSetDefault={handleSetDefault}
+								onDelete={handleDelete}
+							/>
+						))}
+					</DeviceList>
+				)}
+				{/* The page's add control, not the empty state's: primary until a printer exists. */}
+				{isLoading ? null : (
+					<Button
+						variant={hasVisiblePrinterTargets ? 'outline' : 'default'}
+						size="sm"
+						leftIcon="plus"
+						className="self-start"
+						onPress={openAddDialog}
+						testID="printing-add-printer-button"
+					>
+						<Text>{t('settings.add_printer')}</Text>
+					</Button>
 				)}
 				<DocsLink testID="printing-having-trouble" href={PRINTER_DOCS_URL}>
 					{t('settings.having_trouble')}
 				</DocsLink>
 			</SettingsSection>
 
-			{/* Receipt Templates section */}
-			<SettingsSection
-				title={t('receipt.receipt_templates')}
-				description={t('settings.templates_description')}
+			{renderTemplateSection('receipt', receiptTemplates)}
+			{renderTemplateSection('report', reportTemplates)}
+			{renderTemplateSection('closure', closureTemplates)}
+
+			<Alert.AlertDialog
+				open={!!pendingDelete}
+				onOpenChange={(open) => !open && setPendingDelete(undefined)}
 			>
-				{templates.length === 0 ? (
-					<Text className="text-muted-foreground text-sm">{t('settings.no_templates')}</Text>
-				) : (
-					<View>
-						{templates.map((tmpl) => {
-							const tmplId = String(tmpl.id);
-							const currentOverride = overrides.get(tmplId);
-							const autoLabel = autoMatchLabel(tmpl);
-							const selectedPrinter = currentOverride
-								? printers.find((p) => p.id === currentOverride)
-								: null;
-							const isUnavailableOverride = Boolean(currentOverride && !selectedPrinter);
-							const currentValue =
-								currentOverride && (selectedPrinter || isUnavailableOverride)
-									? currentOverride
-									: AUTO_VALUE;
-							const selectedLabel = selectedPrinter
-								? selectedPrinter.name
-								: isUnavailableOverride
-									? t('settings.printer_unavailable')
-									: autoLabel;
-
-							return (
-								<TemplateRow
-									key={tmplId}
-									template={tmpl}
-									currentValue={currentValue}
-									selectedLabel={selectedLabel}
-									autoLabel={autoLabel}
-									printers={printers}
-									unavailablePrinterId={isUnavailableOverride ? currentOverride : undefined}
-									onRoutingChange={handleRoutingChange}
-								/>
-							);
-						})}
-					</View>
-				)}
-			</SettingsSection>
-
+				<Alert.AlertDialogContent>
+					<Alert.AlertDialogHeader>
+						<Alert.AlertDialogTitle>
+							{t('settings.delete_printer_title', { name: deleteTarget?.name })}
+						</Alert.AlertDialogTitle>
+						<Alert.AlertDialogDescription>
+							{t('settings.delete_printer_description')}
+						</Alert.AlertDialogDescription>
+					</Alert.AlertDialogHeader>
+					<Alert.AlertDialogFooter
+						cancel={{ testID: `printer-row-${deleteTarget?.id}-delete-cancel` }}
+						confirm={{
+							label: t('common.delete'),
+							destructive: true,
+							testID: `printer-row-${deleteTarget?.id}-delete-confirm`,
+							onPress: () => void confirmDelete(),
+						}}
+					/>
+				</Alert.AlertDialogContent>
+			</Alert.AlertDialog>
 			<PrinterDialog
 				open={dialogOpen}
 				onOpenChange={setDialogOpen}
-				onSave={() => {
+				onClose={() => {
 					setDialogOpen(false);
 					setEditingPrinter(undefined);
 					setPrefilledPrinter(undefined);

@@ -54,6 +54,7 @@ describe('stripOrderManifestDigest', () => {
 		const document = {
 			uuid: 'uuid-77',
 			remoteId: '77',
+			remoteKey: '77',
 			payload: { id: 77, status: 'processing', _rxdb_digest: 'd77' },
 			sync: { revision: 'r', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },

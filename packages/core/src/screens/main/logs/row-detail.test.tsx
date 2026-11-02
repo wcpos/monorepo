@@ -17,6 +17,7 @@ const mockWriteText = jest.fn().mockResolvedValue(undefined);
 
 const mockOpenURL = jest.fn().mockResolvedValue(undefined);
 
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	Share: { share: jest.fn() },
@@ -72,7 +73,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
-jest.mock('../health/components', () => ({
+jest.mock('@wcpos/components/kv-grid', () => ({
 	KVGrid: ({ entries }: { entries: { label: string; value: string }[] }) => (
 		<div>
 			{entries.map(({ label, value }) => (
@@ -419,7 +420,7 @@ describe('RowDetail', () => {
 				'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.'
 			)
 		).toBeNull();
-		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
+		expect(screen.queryByText(/Clear & re-download/)).toBeNull();
 	});
 
 	it('pairs the local-data warning with the per-code action on a local-only code', () => {
@@ -477,6 +478,10 @@ describe('RowDetail', () => {
 			)
 		).toBeNull();
 		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
+		expect(screen.queryByText(/^Clear the local database/)).toBeNull();
+		// The registry docs body renders on the linked docs page, not in the app.
+		expect(screen.queryByText(/clearing the local database and reopening fixes it/)).toBeNull();
+		expect(screen.queryByText(/Clear & re-download/)).toBeNull();
 	});
 
 	describe('names the record and links to where it is fixed', () => {

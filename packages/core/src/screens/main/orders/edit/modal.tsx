@@ -1,71 +1,54 @@
 import * as React from 'react';
 
+import { useLocalSearchParams } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
-import { Text } from '@wcpos/components/text';
-import { Tree } from '@wcpos/components/tree';
+import { Dialog } from '@wcpos/components/dialog';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
+import { OrderView } from './view';
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
+import { RecordDialog, type RecordTab } from '../../components/record-dialog';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
-export function EditOrderModal({ resource }: Props) {
+/** The one order surface: View (the default), Edit and JSON. */
+export function OrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
-	const [value, setValue] = React.useState('form');
+	// The modal is its own route, outside the list page's Pro guard and its provider: the
+	// guard's own derivation, as the attention notice reads it. Free browses; it never edits.
+	const readOnly = !useAppInfo().license?.isPro;
+	// The route's `tab` picks the tab it opens on (a read-only modal has no Edit, so opens on View).
+	const { tab } = useLocalSearchParams<{ tab?: string }>();
 	const payload = useRecordField(order, (record) => record.payload);
-
-	if (!order) {
-		return (
-			<Modal>
-				<ModalContent size="xl">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
-		);
-	}
+	const number = payload?.number || payload?.id;
+	const view: RecordTab<EngineRecord<'orders'>> = {
+		value: 'view',
+		label: t('common.view'),
+		render: (record) => <OrderView order={record} readOnly={readOnly} />,
+	};
+	const edit: RecordTab<EngineRecord<'orders'>> = {
+		value: 'edit',
+		label: t('common.edit'),
+		render: (record) => <EditOrderForm key={record.uuid} order={record} />,
+	};
 
 	return (
-		<Modal>
-			<ModalContent size="xl">
-				<ModalHeader>
-					<ModalTitle>
-						<Text>
-							{payload?.number || payload?.id
-								? t('orders.edit_order_2', { number: payload.number || payload.id })
-								: t('orders.edit_order')}
-						</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="w-full flex-row">
-							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('common.form')}</Text>
-							</TabsTrigger>
-							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('common.json')}</Text>
-							</TabsTrigger>
-						</TabsList>
-						<TabsContent value="form">
-							<EditOrderForm order={order} />
-						</TabsContent>
-						<TabsContent value="json">
-							<Tree value={payload} />
-						</TabsContent>
-					</Tabs>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+		<Dialog route>
+			<RecordDialog
+				title={number ? t('orders.order_title', { number }) : t('common.order')}
+				record={order}
+				notFound={t('common.no_order_found')}
+				form={readOnly ? [view] : [view, edit]}
+				initialTab={tab}
+				payload={payload}
+				testID="order-modal"
+			/>
+		</Dialog>
 	);
 }

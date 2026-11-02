@@ -1,26 +1,36 @@
 import * as React from 'react';
 
-import { useRouter } from 'expo-router';
-
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import {
+	type EngineRecord,
+	resolveStockOwnerId,
+	useQueryRuntime,
+	useRecordField,
+} from '@wcpos/query';
+import { refreshStockRecords } from '@wcpos/query/record-readers';
 import { getLogger } from '@wcpos/utils/logger';
 import {
 	ERROR_CATALOGUE,
 	ERROR_CODES,
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { RegisterSessionRequiredError, requireOpenSession } from '@wcpos/query/register-session';
 
+import { presentSessionRequired } from '../session-required';
+import { presentTenderRefusal } from '../present-tender-refusal';
+import { commitGatewaySale } from '../commit-gateway-sale';
+import { useSaleContext } from './use-sale-context';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useT } from '../../../../../contexts/translations';
 import {
 	PaymentGatewayContract,
 	supportsCheckoutContract,
 } from '../../../hooks/payment-gateway-contract';
-import { useUISettings } from '../../../contexts/ui-settings';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import {
 	clearStockRejection,
@@ -28,10 +38,8 @@ import {
 	setStockRejection,
 	stockRejection$,
 } from '../../hooks/stock-rejection';
-import { useCurrentOrderActions } from '../../contexts/current-order';
-import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
-import { refreshOrderBounded } from '../bounded-order-refresh';
-import { returnToTill } from '../till-route';
+import { isActionRefusal } from '../../../../../extensions/actions';
+import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -121,6 +129,16 @@ export function classifyCheckoutFailure(
 			title: t('pos_checkout.sign_in_nothing_charged'),
 		};
 	}
+	// The store refusing the chosen gateway itself (not enabled for the POS, gone): no
+	// money moved and the outcome is known — PAYMENT301, pointing at the gateway settings.
+	if (isGatewayRefusal(error)) {
+		const code = ERROR_CODES.GATEWAY_UNAVAILABLE;
+		return {
+			level: ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn',
+			code,
+			title: serverSentence(error),
+		};
+	}
 	if (phase === 'settled') {
 		return {
 			level: 'warn',
@@ -163,6 +181,25 @@ export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
 	return supportsCheckoutContract(gateway) && !LEGACY_WEBVIEW_GATEWAY_IDS.has(gateway?.id || '');
 }
 
+/**
+ * The store refusing the chosen gateway itself: it is not enabled for the POS or
+ * cannot run the checkout contract (`_not_available`), or it no longer exists
+ * (`_not_found`, from the bootstrap or the checkout POST). Both are returned
+ * before the store claims the attempt, so no money moved and the outcome is
+ * KNOWN — that is PAYMENT301, not CHECKOUT201's "could not confirm", which sent
+ * the cashier checking for a charge instead of to the gateway settings.
+ */
+const GATEWAY_REFUSAL_CODES = new Set([
+	'wcpos_payment_gateway_not_available',
+	'wcpos_payment_gateway_not_found',
+]);
+
+export function isGatewayRefusal(error: unknown): boolean {
+	const body = (error as { response?: { data?: unknown } } | null)?.response?.data ?? error;
+	const code = (body as { code?: unknown } | null)?.code;
+	return typeof code === 'string' && GATEWAY_REFUSAL_CODES.has(code);
+}
+
 export function createCheckoutIdempotencyKey(
 	orderId: number,
 	gatewayId: string,
@@ -173,21 +210,27 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
+	const ctx = useSaleContext();
+	const { status: bindingStatus } = useRegisterBinding();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const runtime = useQueryRuntime();
-	const { stockAdjustment } = useStockAdjustment();
-	const { setCurrentOrderID } = useCurrentOrderActions();
-	const { uiSettings } = useUISettings('pos-cart');
-	const router = useRouter();
 	const t = useT();
-	const { resolveStockOwnerId } = useCartStockGuard();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
+	const preparationRef = React.useRef(new AbortController());
+	// The gate unmounts checkout on handover: cancel preparation, never an in-flight capture.
+	React.useEffect(() => {
+		const controller = new AbortController();
+		preparationRef.current = controller;
+		return () => controller.abort();
+	}, []);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
+	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 
 	const gatewayId = React.useMemo(
 		() => orderData.payment_method || 'pos_cash',
@@ -222,44 +265,6 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		checkoutAttemptIdRef.current = null;
 	}, [gatewayId, orderId]);
 
-	const completeOrderFlow = React.useCallback(async () => {
-		if (!orderId) {
-			throw new Error('checkout_refresh_requires_persisted_order');
-		}
-		// Route FIRST; the local refresh is catch-up, never a gate (#1685). The
-		// receipt binds the order by uuid and fetches its own receipt data, so it
-		// does not need the refresh to have landed. Drop the paid order from the
-		// cart first: until the refresh lands it is still pos-open locally, and the
-		// cart would keep adding items to it.
-		setCurrentOrderID('');
-		if (uiSettings.autoShowReceipt) {
-			router.replace({
-				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-				params: { orderId: order.uuid! },
-			});
-		} else {
-			returnToTill(router);
-		}
-
-		await refreshOrderBounded(runtime.engine, orderId);
-
-		const latest = order.getLatest().payload;
-		const reducedStockItems = (latest.line_items || []).filter((item) =>
-			(item.meta_data as { key: string }[] | undefined)?.some(
-				(meta) => meta.key === '_reduced_stock'
-			)
-		);
-		stockAdjustment(reducedStockItems);
-	}, [
-		runtime,
-		order,
-		orderId,
-		router,
-		setCurrentOrderID,
-		stockAdjustment,
-		uiSettings.autoShowReceipt,
-	]);
-
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {
 			const rejectedItems = parseInsufficientStockError(error);
@@ -273,34 +278,16 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const variationIds = [
 				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
 			];
-			const refreshes: Promise<void>[] = [];
-			for (const [collection, wooIds] of [
-				['products', productIds],
-				['variations', variationIds],
-			] as const) {
-				if (wooIds.length === 0) continue;
-				const handle = runtime.engine.require({
-					id: `checkout:stock-rejection:${collection}:${orderId}`,
-					collection,
-					kind: 'targeted-records',
-					remoteIds: wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
-				});
-				refreshes.push(
-					handle.ready
-						.then(
-							() => undefined,
-							() => undefined
-						)
-						.finally(() => handle.release())
-				);
-			}
-			void Promise.all(refreshes)
+			void refreshStockRecords(runtime.engine, { id: orderId, productIds, variationIds })
 				.then(() =>
 					Promise.all(
 						rejectedItems.map(async (item) => ({
 							...item,
-							stock_owner_id: await resolveStockOwnerId(item.product_id, item.variation_id),
+							stock_owner_id: await resolveStockOwnerId(
+								runtime.engine,
+								item.product_id,
+								item.variation_id
+							),
 						}))
 					)
 				)
@@ -312,11 +299,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				.catch(() => undefined);
 			return true;
 		},
-		[runtime, orderId, order.uuid, resolveStockOwnerId]
+		[runtime, orderId, order.uuid]
 	);
 
 	const startCheckout = React.useCallback(async () => {
-		if (!orderId || !gatewayResolved) return;
+		const { signal } = preparationRef.current;
+		if (signal.aborted || !orderId || !gatewayResolved) return;
 		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 		setLoading(true);
 		setError(null);
@@ -326,7 +314,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const gateways = await refetch();
 			resolvedGateway = gateways.find((item) => item.id === gatewayId) || null;
 		}
-		if (!resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
+		if (signal.aborted || !resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
 			setLoading(false);
 			return;
 		}
@@ -334,14 +322,66 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		let phase: CheckoutPhase = 'bootstrap';
 		let providerMessage: string | undefined;
 		try {
+			let registerId: string | null = null;
+			let sessionId: string | null = null;
+			try {
+				// The tender commit's gates decide whether this sale may start; its handler journals
+				// the attempt and, online, puts the provenance on the store before the gateway runs.
+				const committed = await commitGatewaySale(ctx, {
+					order,
+					source: 'gateway-contract',
+					methodId: resolvedGateway.id,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					online,
+					settledOrderStatus: resolvedGateway.settled_order_status ?? null,
+				});
+				if (isActionRefusal(committed)) {
+					// A checkout closed while the dispatch waited has nothing to show.
+					if (!signal.aborted) presentTenderRefusal(ctx.actionCtx, committed, checkoutLogger, t);
+					return;
+				}
+				registerId = committed.registerId;
+				sessionId = committed.sessionId;
+			} catch (error) {
+				if (signal.aborted) {
+					// The checkout closed before the commit settled; nothing else reports this push.
+					checkoutLogger.debug('Contract checkout preparation failed after it closed', {
+						context: { error: error instanceof Error ? error.message : String(error) },
+					});
+					return;
+				}
+				if (error instanceof LiveTabNotOwnedError) throw error;
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(checkoutLogger, t);
+					return;
+				}
+				const message = t('pos_cart.checkout_failed');
+				setError(message);
+				checkoutLogger.error(message, {
+					// The provenance push reports nothing itself; a refused session keeps AUTH101.
+					code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
+					showToast: true,
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
+				return;
+			}
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			}
 
-			await http.post(`payment-gateways/${resolvedGateway.id}/bootstrap`, {
-				context: { order_id: orderId },
-			});
+			if (signal.aborted) return;
+			await http.post(
+				`payment-gateways/${resolvedGateway.id}/bootstrap`,
+				{
+					context: { order_id: orderId },
+				},
+				{ signal }
+			);
+			if (signal.aborted) return;
 
+			// Recheck after bootstrap without a second journal write (the commit made the first).
+			if ((await requireOpenSession(ctx.storeDB, registerId, ctx.sessionsOn)) !== sessionId)
+				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
 			// under, so re-read the latch here rather than trusting the check made
@@ -349,26 +389,33 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			// the gateway and the client cannot recall it — see the PR body.
 			if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 
-			phase = 'start';
-			const response = await http.post(
-				`orders/${orderId}/checkout`,
-				{
-					gateway_id: resolvedGateway.id,
-					action: 'start',
-					payment_data: {},
-				},
-				{
-					headers: {
-						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
-							orderId,
-							resolvedGateway.id,
-							checkoutAttemptIdRef.current
-						),
+			if (signal.aborted) return;
+			let state: CheckoutState;
+			const release = holdLiveTab('payment');
+			try {
+				phase = 'start';
+				const response = await http.post(
+					`orders/${orderId}/checkout`,
+					{
+						gateway_id: resolvedGateway.id,
+						action: 'start',
+						payment_data: {},
 					},
-				}
-			);
+					{
+						headers: {
+							'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
+								orderId,
+								resolvedGateway.id,
+								checkoutAttemptIdRef.current
+							),
+						},
+					}
+				);
 
-			let state = (response?.data || {}) as CheckoutState;
+				state = (response?.data || {}) as CheckoutState;
+			} finally {
+				release();
+			}
 			phase = 'poll';
 			let attempts = 0;
 			while (!isTerminalCheckoutStatus(state.status) && !state.terminal) {
@@ -400,7 +447,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 						},
 					}
 				);
-				await completeOrderFlow();
+				await completeOrderFlow({ source: 'gateway-contract', status: state.status });
 				return;
 			}
 
@@ -419,6 +466,15 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			}
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (signal.aborted) return;
+			if (err instanceof LiveTabNotOwnedError) {
+				preparationRef.current.abort();
+				checkoutLogger.info(err.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
+			if (err instanceof RegisterSessionRequiredError) {
+				return presentSessionRequired(checkoutLogger, t);
+			}
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
@@ -453,11 +509,15 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			setLoading(false);
 		}
 	}, [
+		ctx,
+		order,
+		online,
 		blockIfDegraded,
 		completeOrderFlow,
 		gateway,
 		gatewayId,
 		gatewayResolved,
+		bindingStatus,
 		handleStockRejection,
 		http,
 		orderId,
@@ -477,6 +537,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		error,
 		gateway,
 		gatewayResolved,
+		gatewayError,
+		refetch,
 		gatewayId,
 		settledOrderStatuses,
 		mode,

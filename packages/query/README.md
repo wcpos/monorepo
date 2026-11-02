@@ -3,8 +3,9 @@
 Low-level reactive read and demand primitives for WCPOS.
 
 The package no longer owns a fluent query model or replication state machine. Engine-backed
-screen reads are composed by `packages/core/src/query/query-bindings.ts`; local logs and receipt
-templates remain dedicated local-only paths.
+screen reads are query handles (`query-handle.ts`: one object per query, shared by every
+reader), built by `packages/core/src/query/query-handles.ts`; local logs and receipt templates
+remain dedicated local-only paths.
 
 ## Public surface
 
@@ -14,9 +15,10 @@ The package root exports:
   `{ localDB, engine, locale }`.
 - `observeEngineQuery` and `observeEngineDatabases` — direct engine-resident reads through the
   adapter execution path.
-- requirement declaration/reset-refill helpers used by core bindings.
+- the query handle (`createQueryHandle`, `acquireQueryHandle`, `createDemand`) and its
+  projections, and the requirement declaration/reset-refill helpers the handles use.
 - legacy-document boundary functions used by core.
-- `useLocalQuery` and logs-storage recovery for the standalone logs collection.
+- `useLocalQuery$` and logs-storage recovery for the standalone logs collection.
 - `awaitWriteOutcome` for engine mutation acknowledgements.
 
 All other engine-adapter modules are package-private.
@@ -25,8 +27,8 @@ All other engine-adapter modules are package-private.
 
 - Engine-backed collections are read from the current engine `db$` resident database.
 - Search, targeted-record, and order-query demand is declared through engine requirement handles.
-- Coverage-aware totals are projected from engine coverage collections by core bindings.
-- Relational product search joins product and variation residents in the core binding layer.
+- Coverage-aware totals are projected from engine coverage collections by the query handle.
+- Relational product search joins product and variation residents in core's products handle.
 - Logs query only `localDB.collections.logs`; receipt templates query their dedicated local
   collection after `useTemplatesSync` performs its best-effort refresh.
 

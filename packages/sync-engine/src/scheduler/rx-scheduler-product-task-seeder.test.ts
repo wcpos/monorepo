@@ -321,4 +321,35 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 			})
 		);
 	});
+
+	it('keeps the price range and product type in the task identity', async () => {
+		// The require plane spreads the parsed descriptor into this seeder; a dimension the
+		// seeder drops rebuilds an UNFILTERED key, so the filtered demand can never be met.
+		mocks.RxSchedulerTaskStateRepository.mockImplementation(
+			function RxSchedulerTaskStateRepositoryMock() {
+				return { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
+			}
+		);
+		mocks.seedPersistedSchedulerTasks.mockResolvedValue({ inserted: 1 });
+
+		await seedProductBrowseWindowSchedulerTask({
+			database: MOCK_DATABASE,
+			limit: 100,
+			on_sale: true,
+			min_price: 5,
+			max_price: 50.5,
+			type: 'variable',
+		});
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tasks: [
+					expect.objectContaining({
+						queryKey:
+							'products:browse-window:limit=100:on_sale=1:min_price=5:max_price=50.5:type=variable',
+					}),
+				],
+			})
+		);
+	});
 });

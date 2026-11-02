@@ -5,7 +5,6 @@ import {
 	createMetricsCollector,
 	NOOP_OBSERVER,
 	type SyncEvent,
-	type SyncEventFields,
 } from './telemetry';
 
 // The metrics collector is deliberately vocabulary-agnostic — it keys its Maps by
@@ -218,10 +217,8 @@ describe('NOOP_OBSERVER hot-path tripwire', () => {
 	});
 });
 
-it('types maintenance lane errors with an optional numeric transport status and a streak', () => {
-	expectTypeOf<SyncEventFields<'maintenance.lane.error'>>().toEqualTypeOf<{
-		readonly lane: string;
-		readonly status?: number;
-		readonly consecutiveFailures: number;
-	}>();
+it('types maintenance lane failures, with their streak, for the log observer', () => {
+	expectTypeOf<Extract<SyncEvent, { type: 'maintenance.lane.error' }>['fields']>().toEqualTypeOf<
+		Readonly<{ lane: string; status?: number; consecutiveFailures: number }> | undefined
+	>();
 });

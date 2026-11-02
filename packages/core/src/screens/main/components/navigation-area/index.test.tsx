@@ -5,54 +5,66 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { NavigationAreaIndex, NavigationAreaLayout } from './index';
+import { AreaPage, NavigationAreaIndex, NavigationAreaLayout } from './index';
 
 import type { NavigationAreaItem } from './index';
 
 const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 let mockPathname = '/settings/tax';
-let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
+let mockScreenSize: 'sm' | 'lg' = 'lg';
 
 jest.mock('expo-router', () => ({
 	Redirect: ({ href }: { href: string }) => <div data-testid="redirect">{href}</div>,
 	usePathname: () => mockPathname,
-	useRouter: () => ({ push: mockPush }),
+	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+	useNavigation: () => ({ openDrawer: jest.fn() }),
 }));
 
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockScreenSize }),
+jest.mock('expo-haptics', () => ({}));
+// The entry hosts the register panel off the till; its derivation drags the table's worklets.
+jest.mock('../../pos/cart/register-panel', () => ({ RegisterPanel: () => null }));
+// The index re-exports `AreaPage`, whose boundary's fallback pulls the overlay stack in.
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		onPress,
-		testID,
-		accessibilityState,
-	}: {
-		children: React.ReactNode;
-		onPress: () => void;
-		testID: string;
-		accessibilityState?: { selected: boolean };
-	}) => (
-		<button
-			data-testid={testID}
-			aria-selected={accessibilityState?.selected ?? false}
-			onClick={onPress}
-		>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => mockScreenSize === 'sm',
+	usePointer: () => 'fine',
 }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/lib/utils', () => ({
-	cn: (...values: (string | false | undefined)[]) => values.filter(Boolean).join(' '),
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({
+		site: { wcpos_login_url: 'login' },
+		wpCredentials: { display_name: 'Jane' },
+	}),
+}));
+jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
+	takeRedirectReturn: () => false,
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../notification-bell/notification-bell', () => ({
+	NotificationBell: ({ testID }: { testID: string }) => <div data-testid={testID} />,
+}));
+jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
+let mockHeld = false;
+jest.mock('../session-hold-banner', () => ({
+	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
+	useSessionHeld: () => mockHeld,
+}));
+jest.mock('../../pos/cart/user-sheet', () => ({
+	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
 }));
 
 const items: NavigationAreaItem[] = [
@@ -67,8 +79,10 @@ const items: NavigationAreaItem[] = [
 describe('NavigationAreaLayout', () => {
 	beforeEach(() => {
 		mockPush.mockClear();
+		mockNavigate.mockClear();
 		mockPathname = '/settings/tax';
 		mockScreenSize = 'lg';
+		mockHeld = false;
 	});
 
 	it('shows a wide-screen rail, marks the current item, and navigates between pages', () => {
@@ -79,23 +93,28 @@ describe('NavigationAreaLayout', () => {
 				areaLabel="Settings"
 				testID="settings-navigation"
 				screenTestID="settings-screen"
+				barTestID="settings-bar"
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
 
+		// No bar on `lg`: the page carries its heading (and the bar's controls, tested below).
+		expect(screen.queryByTestId('settings-bar')).toBeNull();
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
 		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
 		expect(screen.getByTestId('settings-screen')).toBeTruthy();
 		expect(screen.getByTestId('settings-nav-tax').getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByTestId('settings-nav-general').getAttribute('aria-selected')).toBe('false');
 
 		fireEvent.click(screen.getByTestId('settings-nav-general'));
 		expect(mockPush).toHaveBeenCalledWith('/settings/general');
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 	});
 
-	it('shows content with a back bar to the area index on narrow leaf pages', () => {
-		mockScreenSize = 'sm';
-
+	// The narrowest wide screen (a tablet in portrait) is `lg` too: still the rail, no crumb.
+	it('keeps the rail beside the screen with no crumb on the bar on a wide screen', () => {
+		mockScreenSize = 'lg';
 		render(
 			<NavigationAreaLayout
 				items={items}
@@ -103,21 +122,155 @@ describe('NavigationAreaLayout', () => {
 				areaLabel="Settings"
 				testID="settings-navigation"
 				screenTestID="settings-screen"
+				barTestID="settings-bar"
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
 
+		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
+		expect(screen.getByTestId('settings-content')).toBeTruthy();
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
+		expect(screen.queryByTestId('settings-bar')).toBeNull();
+	});
+
+	// The bar's other jobs outlive it on `lg`: the upgrade notice and a held session still show
+	// above the rail (the area pages carry no cashier entry; a redirect login is a bar's to claim).
+	it('keeps the notice and the held-session banner on lg', () => {
+		mockHeld = true;
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/health"
+				areaLabel="Store health"
+				testID="health-navigation"
+				screenTestID="health-screen"
+				barTestID="health-bar"
+				barNotice={<div data-testid="upgrade-notice" />}
+				leafPagesCarryTitle
+			>
+				<div data-testid="health-content" />
+			</NavigationAreaLayout>
+		);
+		expect(screen.queryByTestId('health-bar')).toBeNull();
+		const banner = screen.getByTestId('session-hold-banner');
+		const notice = screen.getByTestId('upgrade-notice');
+		const area = screen.getByTestId('health-navigation');
+		// Banner, then notice, then the rail and page row: the order the bar gave them.
+		const rows = Array.from(area.parentElement!.children);
+		expect(rows.indexOf(banner)).toBe(0);
+		// After the hold banner the notice is the next row, in a wrapper that carries the
+		// page gutter between them (it is flush when it is the column's first row).
+		expect(rows[1]).toBe(notice.parentElement);
+		expect(rows.indexOf(area)).toBe(2);
+	});
+
+	// The area pages carry neither the bell nor the avatar on wide (Paul, 2026-10-30): the page
+	// heading is the title alone. A phone's bar carries them, once.
+	it.each([
+		['lg', 0],
+		['sm', 1],
+	] as const)('on %s the bar alone carries the avatar and the bell, %i time(s)', (size, count) => {
+		mockScreenSize = size;
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID="settings-bar"
+			>
+				<AreaPage title="Tax" testID="settings-tax">
+					<div />
+				</AreaPage>
+			</NavigationAreaLayout>
+		);
+		expect(screen.queryAllByTestId('settings-bar-avatar')).toHaveLength(count);
+		expect(screen.queryAllByTestId('settings-bar-bell')).toHaveLength(count);
+		expect(screen.queryByTestId('settings-bar-status')).toBeNull();
+		for (const node of screen.queryAllByTestId(/^settings-bar-(avatar|bell)$/)) {
+			expect(screen.getByTestId('settings-bar').contains(node)).toBe(true);
+		}
+	});
+
+	it('shows no bar title and a single bar crumb to navigate a phone deep link to the index', () => {
+		mockScreenSize = 'sm';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID="settings-bar"
+				leafPagesCarryTitle
+			>
+				<div data-testid="settings-content" />
+			</NavigationAreaLayout>
+		);
+		// The leaf page carries its own heading; the bar shows only the way back (one title).
+		expect(screen.queryByTestId('settings-bar-title')).toBeNull();
+		const back = screen.getByTestId('settings-navigation-back');
+		expect(screen.getByTestId('settings-bar').contains(back)).toBe(true);
+		expect(back.textContent).toContain('Settings');
+		expect(screen.queryByTestId('settings-bar-menu')).toBeNull();
 		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
-		expect(screen.getByTestId('settings-navigation-back')).toBeTruthy();
-		expect(screen.getByTestId('settings-screen')).toBeTruthy();
+		fireEvent.click(back);
+		expect(mockNavigate).toHaveBeenCalledWith('/settings');
+	});
+
+	it('keeps the area title and chevron list on the phone index with no back crumb', () => {
+		mockScreenSize = 'sm';
+		mockPathname = '/settings';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				barTestID="settings-bar"
+			>
+				<NavigationAreaIndex
+					items={items}
+					defaultHref="/settings/general"
+					testID="screen-settings"
+				/>
+			</NavigationAreaLayout>
+		);
+		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
+		expect(screen.getByTestId('screen-settings')).toBeTruthy();
+		expect(
+			screen.getByTestId('settings-nav-general').querySelector('[data-icon="chevronRight"]')
+		).toBeTruthy();
+		fireEvent.click(screen.getByTestId('settings-nav-tax'));
+		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
+	});
+
+	it('marks the current page selected in the rail (the shared nav row lifts it onto the card)', () => {
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID="settings-bar"
+			>
+				<div />
+			</NavigationAreaLayout>
+		);
+		expect(screen.getByTestId('settings-nav-tax').getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByTestId('settings-nav-general').getAttribute('aria-selected')).toBe('false');
 	});
 });
 
 describe('NavigationAreaIndex', () => {
 	beforeEach(() => {
 		mockPush.mockClear();
+		mockNavigate.mockClear();
 		mockScreenSize = 'sm';
 	});
 
@@ -131,7 +284,7 @@ describe('NavigationAreaIndex', () => {
 	});
 
 	it('redirects the area root to its default page on wide screens', () => {
-		mockScreenSize = 'md';
+		mockScreenSize = 'lg';
 
 		render(
 			<NavigationAreaIndex items={items} defaultHref="/settings/general" testID="settings-index" />
@@ -140,3 +293,5 @@ describe('NavigationAreaIndex', () => {
 		expect(screen.getByTestId('redirect').textContent).toBe('/settings/general');
 	});
 });
+
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));

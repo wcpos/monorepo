@@ -7,6 +7,8 @@ import registry from './error-registry.json';
 
 const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
 DOMAINS.push('HOST');
+DOMAINS.push('DISPLAY');
+DOMAINS.push('REGISTER');
 const SEVERITIES = ['info', 'warn', 'error'];
 /**
  * Required of every registry entry. Wider than what the generator EMITS: the
@@ -65,6 +67,8 @@ const SEED_SYMBOLS = [
 	'CACHE_SHARED_REPLAY',
 	'CART_LINE_PRICE_BASIS_UNREADABLE',
 	'CART_UPDATE_FAILED',
+	'CASH_MOVEMENT_REFUSED',
+	'CASH_MOVEMENT_VOID_REFUSED',
 	'CHECKOUT_EMPTY_RESPONSE',
 	'CHECKOUT_FAILED_CART_SAFE',
 	'CHECKOUT_OUTCOME_UNKNOWN',
@@ -73,6 +77,7 @@ const SEED_SYMBOLS = [
 	'CORS_MISCONFIGURED',
 	'CORS_PREFLIGHT_BLOCKED',
 	'CREDENTIALS_REJECTED',
+	'CUSTOMER_DISPLAY_SNAPSHOT_FAILED',
 	'DEMAND_REQUEST_FLOOD',
 	'GATEWAY_UNAVAILABLE',
 	'HOST_RATE_LIMITED',
@@ -89,9 +94,17 @@ const SEED_SYMBOLS = [
 	'NATIVE_CRASH',
 	'ORDER_TAX_RATE_UNKNOWN',
 	'OUT_OF_MEMORY',
+	'PAYMENT_ALREADY_PAID_ONLINE',
+	'PAYMENT_CAPTURED_ORDER_UNFINISHED',
+	'PAYMENT_EXCEEDS_BALANCE',
+	'PAYMENT_GATEWAY_REFUSED',
+	'PAYMENT_INVOICE_NOT_MIRRORED',
 	'PAYMENT_OK_STATUS_CHECK_FAILED',
 	'PAYMENT_OUTCOME_UNKNOWN',
+	'PAYMENT_RECORDED_NOT_MIRRORED',
+	'PAYMENT_TERMINAL_REFUSED',
 	'PAYMENT_UNEXPECTED',
+	'PAYMENT_VOID_REFUSED',
 	'PRINTER_UNREACHABLE',
 	'PRINT_JOB_FAILED',
 	'PRINT_UNEXPECTED',
@@ -105,6 +118,12 @@ const SEED_SYMBOLS = [
 	'RECORD_REVERTED',
 	'RECORD_SENT_UNRECORDED',
 	'REFUND_OUTCOME_UNKNOWN',
+	'REGISTER_APPROVAL_REFUSED',
+	'REGISTER_CARRY_FAILED',
+	'REGISTER_CLOSE_REFUSED',
+	'REGISTER_OPEN_REFUSED',
+	'REGISTER_TAB_NOT_OWNED',
+	'REGISTER_TAKEN_OVER',
 	'REQUEST_QUEUE_OVERFLOW',
 	'RESPONSE_HEADERS_REJECTED',
 	'REST_ROUTE_MISSING',
@@ -119,6 +138,7 @@ const SEED_SYMBOLS = [
 	'SEARCH_NO_RESULTS_REASON',
 	'SESSION_EXPIRED',
 	'SIGNED_IN_AS_WRONG_USER',
+	'SITE_IDENTITY_CLASH',
 	'SKU_DUPLICATE',
 	'STOCK_STALE',
 	'STORE_EDIT_OVERWRITTEN',
@@ -196,6 +216,12 @@ describe('error registry', () => {
 		}
 	});
 
+	it('keeps PAYMENT501 method- and connectivity-neutral', () => {
+		const entry = entryFor('PAYMENT501');
+		const guidance = [entry.actionHint, entry.summary, entry.docsBody].join(' ');
+		expect(guidance).not.toMatch(/\bcash\b|\boffline\b/i);
+	});
+
 	it('covers non-record local write failures in SYNC101 guidance', () => {
 		const guidance = entryFor('SYNC101').troubleshooting.join(' ');
 		expect(guidance).toContain('Site and credential writes');
@@ -213,6 +239,16 @@ describe('error registry', () => {
 		const guidance = entryFor('SYNC211').troubleshooting.join(' ');
 		expect(guidance).toContain('settings, authentication or other non-record request');
 		expect(guidance).toContain("If it is not a record request, follow the server's message");
+	});
+
+	// A needs-current-version row shows Send again with Discard device change in its
+	// menu; SYNC221's rows show Use server version. SYNC211 names its own workflow.
+	it("gives SYNC211's current-version case its own row actions, not SYNC221's", () => {
+		const guidance = entryFor('SYNC211').troubleshooting.join(' ');
+		expect(guidance).toContain('Press Send again');
+		expect(guidance).toContain("choose Discard device change from the row's ⋮ menu");
+		expect(guidance).not.toContain('as described for SYNC221');
+		expect(guidance).not.toContain('Use server version');
 	});
 
 	it('covers email and PDF paths in PRINT311 guidance', () => {
@@ -280,8 +316,43 @@ describe('error registry', () => {
 		const entry = entryFor('SYNC331');
 		const guidance = entry.troubleshooting.join(' ');
 		expect(entry.summary).not.toContain('downloading');
-		expect(guidance).toContain('deleted record');
-		expect(guidance).toContain('must not be downloaded');
+		expect(guidance).toContain('must be removed from this device');
+		expect(guidance).toContain('a deleted record is removed rather than downloaded');
+	});
+
+	// Clearing local data deletes sales that never reached the store, and on a
+	// database that cannot open there is no way to send them first. The in-app
+	// hint is one line (toast and log row), so it must never say "clear" without
+	// sending the cashier to the help page's unsent-sales check first, and the
+	// troubleshooting steps must put that check before the clear (docs#444).
+	it.each(['CLIENT101', 'SYNC311'])(
+		'never tells a cashier to clear local data without the unsent-sales check (%s)',
+		(code) => {
+			const entry = entryFor(code);
+			// The in-app action never offers clearing (main #2669); the ordered steps live on the help page.
+			expect(entry.actionHint).toMatch(
+				/contact support before clearing anything|tap Copy debug info and contact support/
+			);
+			const steps = entry.troubleshooting;
+			const check = steps.findIndex((step) => step.includes('contact support before clearing'));
+			const clear = steps.findIndex((step) => /clear the local database and reopen/i.test(step));
+			expect(check).toBeGreaterThanOrEqual(0);
+			expect(clear).toBeGreaterThan(check);
+		}
+	);
+
+	// SYNC111's fix is a per-collection Clear & re-download…, which is safe only
+	// once nothing is waiting to send and every open cart is saved (clearing
+	// Orders deletes a never-saved cart). A one-line hint cannot carry both
+	// checks, and toasts show it without the steps, so it points at the page.
+	it('sends SYNC111 to the help page before any Clear & re-download', () => {
+		const entry = entryFor('SYNC111');
+		// The in-app action sends the merchant to support (main #2669); Clear & re-download stays on the help page.
+		expect(entry.actionHint).toMatch(/^Tap Copy debug info at the top of Logs/);
+		expect(entry.actionHint).not.toMatch(/Clear & re-download/);
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('changes waiting to send is 0');
+		expect(guidance).toContain('save every open cart with Sync order');
 	});
 
 	// A device that cannot open its data, or cannot start, may be holding the

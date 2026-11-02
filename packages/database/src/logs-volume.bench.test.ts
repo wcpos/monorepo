@@ -5,16 +5,12 @@
  *
  * Seeds a real in-memory RxDB `logs` collection built from the REAL store
  * collection creator, then times every path the Logs screen runs. The user
- * path (search = bounded substring scan) must stay under BUDGET_MS. The
- * FlexSearch build that used to run instead is measured only on request
- * (`LOGS_VOLUME_BENCH_INDEX=1`) so the comparison stays reproducible without
- * costing CI twenty seconds and a gigabyte.
+ * path (search = bounded substring scan) must stay under BUDGET_MS.
  *
  * Measured 2026-09-15 (Apple Silicon, memory storage, in-process):
  *   stuck$ find 258 ms · derive 54 ms · retention scan 9 ms
  *   $regex scan find 40 ms · count 37 ms
- *   FlexSearch index build 21.5 s, heap +340 MB (forward 19.4 s, strict 18.8 s,
- *   message-only 19.6 s — the pipeline's per-row cost, not the tokenizer)
+ *   FlexSearch index build (the path #2411 removed) 21.5 s, heap +340 MB
  *
  * Opt in with LOGS_VOLUME_BENCH=1; PROBE_IDS / PROBE_SWEEPS shrink the seed;
  * PROBE_PROGRESS=<file> streams progress (jest buffers console output).
@@ -22,14 +18,12 @@
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { filter, firstValueFrom } from 'rxjs';
 
 import { buildScanSearchSelector, foldSearchText } from '@wcpos/sync-core';
 
 import { storeCollections } from './collections';
-import { searchPlugin } from './plugins/search';
 
 import type { RxCollection, RxDocument } from 'rxdb';
 
@@ -50,11 +44,6 @@ const BUDGET_MS = 1000;
 const SEARCH_TERM = 'pull escalation';
 
 type LogRow = Record<string, any>;
-type SearchIndex = {
-	pipeline: { awaitIdle(): Promise<void> };
-	find(query: string): Promise<RxDocument[]>;
-};
-
 // Faithful copy of packages/core/src/screens/main/logs/logs-logic.ts deriveStuckRecords
 // (the bench lives in the database package, which cannot import core).
 function deriveStuckRecords(rows: LogRow[]) {
@@ -154,9 +143,7 @@ describeBench('logs volume bench', () => {
 
 	beforeAll(() => {
 		setPremiumFlag();
-		addRxPlugin(RxDBFlexSearchPlugin);
 		addRxPlugin(RxDBMigrationSchemaPlugin);
-		addRxPlugin(searchPlugin);
 	});
 
 	it('keeps every Logs-screen path under budget on a 46k-row day', async () => {
@@ -202,9 +189,8 @@ describeBench('logs volume bench', () => {
 			collection.find({ sort: [{ timestamp: 'asc' }] }).exec()
 		);
 
-		// (4) the user path: the collection refuses an index, the screen scans —
-		//     the production selector, so a slower builder shows up here.
-		await expect((collection as any).initSearch('en')).resolves.toBeNull();
+		// (4) the user path: the screen scans with the production selector, so a
+		//     slower builder shows up here.
 		const logsOptions = storeCollections.logs.options as {
 			searchFields: string[];
 			searchFoldedField: string;
@@ -221,22 +207,6 @@ describeBench('logs volume bench', () => {
 		[results.scanCount] = await timed('$regex scan count', () =>
 			collection.count({ selector }).exec()
 		);
-
-		// (5) what the screen used to do: build the FlexSearch index (opt-in)
-		if (process.env.LOGS_VOLUME_BENCH_INDEX) {
-			const { indexed } = await db.addCollections({
-				indexed: {
-					...storeCollections.logs,
-					options: { searchFields: fields },
-				},
-			});
-			await (indexed as unknown as RxCollection).bulkInsert(rows);
-			const [ms] = await timed('FlexSearch index build (the old path)', async () => {
-				const instance = (await (indexed as any).initSearch('en')) as SearchIndex;
-				await instance.pipeline.awaitIdle();
-			});
-			progress(`index build: ${ms} ms — reported, not budgeted`);
-		}
 
 		await db.close();
 

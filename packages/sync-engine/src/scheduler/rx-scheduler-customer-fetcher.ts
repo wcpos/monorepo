@@ -6,7 +6,12 @@
  * sentinel, the search-lane queryKey grammar, and the browse-window walk.
  */
 
-import { customerDocumentId, remoteIdOrNull, type SyncObserver } from '@wcpos/sync-core';
+import {
+	customerDocumentId,
+	remoteIdOrNull,
+	remoteKeyFor,
+	type SyncObserver,
+} from '@wcpos/sync-core';
 
 import {
 	type LocalCustomerDocument,
@@ -59,10 +64,6 @@ function customerTargetFromDocumentId(id: string): CollectionTarget {
 	return { documentId: customerDocumentId(remoteId), remoteId };
 }
 
-function revisionFromCustomer(payload: WooCustomerPayload): string {
-	return String(payload.date_modified_gmt ?? payload.date_modified ?? '');
-}
-
 function customerDocumentFromWooPayload(
 	payload: WooCustomerPayload
 ): Materialized<LocalCustomerDocument> {
@@ -83,6 +84,7 @@ function defaultCustomerDocument(target: CollectionTarget): LocalCustomerDocumen
 	return {
 		uuid: target.documentId,
 		remoteId: null,
+		remoteKey: remoteKeyFor(null),
 		payload: {},
 		sync: { revision: '', partial: true, source: 'woo-rest' },
 		local: { dirty: false, pendingMutationIds: [] },

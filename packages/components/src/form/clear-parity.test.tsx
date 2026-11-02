@@ -8,7 +8,6 @@ import { FormProvider, useForm } from 'react-hook-form';
 
 import { FormCombobox } from './combobox';
 import { FormFieldContext } from './context';
-import { FormSelect } from './select';
 
 /**
  * `./common` pulls in react-native-reanimated, which this preset does not transform,
@@ -28,12 +27,11 @@ jest.mock('./common', () => {
 	};
 });
 
-jest.mock('../select', () => ({ Select: () => null }));
 jest.mock('../combobox', () => ({ Combobox: () => null }));
 
 /**
  * Stands in for the Select/Combobox control via the `customComponent` seam, so the
- * test drives the real FormSelect/FormCombobox change handlers rather than a mock of
+ * test drives the real FormCombobox change handler rather than a mock of
  * them. The clear button emits what a control emits when its selection is removed:
  * `undefined`.
  */
@@ -80,10 +78,7 @@ function Harness({
 	);
 }
 
-describe.each([
-	['FormSelect', FormSelect],
-	['FormCombobox', FormCombobox],
-] as const)('%s', (_name, Field) => {
+describe.each([['FormCombobox', FormCombobox]] as const)('%s', (_name, Field) => {
 	it('emits the empty string when the selection is cleared, never undefined', () => {
 		const onChange = jest.fn();
 		render(<Harness Field={Field} onChange={onChange} />);

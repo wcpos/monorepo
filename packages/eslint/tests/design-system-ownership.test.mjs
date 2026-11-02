@@ -5,7 +5,9 @@ import test from 'node:test';
 
 import { ESLint } from 'eslint';
 
+import mainConfig from '../../../apps/main/eslint.config.mjs';
 import componentsConfig from '../../components/eslint.config.mjs';
+import coreConfig from '../../core/eslint.config.mjs';
 import { config } from '../index.js';
 
 // Type-aware linting is on for **/*.{ts,tsx}, so a synthetic path would be
@@ -16,6 +18,8 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..'
 const IN_APP = join(REPO_ROOT, 'packages/core/src/screens/main/health/database.tsx');
 const IN_DESIGN_SYSTEM = join(REPO_ROOT, 'packages/components/src/button/index.tsx');
 const COMPONENTS_ROOT = join(REPO_ROOT, 'packages/components');
+const CORE_ROOT = join(REPO_ROOT, 'packages/core');
+const MAIN_ROOT = join(REPO_ROOT, 'apps/main');
 
 async function lint(code, filePath, ruleId, baseConfig = config, cwd = REPO_ROOT) {
 	// cwd must be the repo root: ESLint silently skips any file outside its base
@@ -31,6 +35,47 @@ async function lint(code, filePath, ruleId, baseConfig = config, cwd = REPO_ROOT
 
 const variantOwnership = (code) => lint(code, IN_APP, 'no-restricted-syntax');
 
+test('rejects a button in a footer aside through the core and main package configs', async () => {
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(
+			'export const Bad = () => <DialogFooter aside={<Button/>} close />;',
+			file,
+			'no-restricted-syntax',
+			base,
+			cwd
+		);
+		assert.equal(
+			messages.filter((m) => m.message.includes("A footer's buttons are its slots")).length,
+			1
+		);
+	}
+});
+
+for (const markup of [
+	"<Alert.AlertDialogFooter confirm={{ label: 'Delete' }} aside={<Button/>} />",
+	'<DialogFooter aside={<UI.Button/>} close />',
+]) {
+	test(`rejects a button inside a namespace-qualified footer or button: ${markup}`, async () => {
+		const messages = await variantOwnership(`export const Bad = () => ${markup};`);
+		assert.equal(
+			messages.filter((m) => m.message.includes("A footer's buttons are its slots")).length,
+			1
+		);
+	});
+}
+
+for (const markup of [
+	"<DialogFooter close intent={{ label: 'Send' }} />",
+	"<Alert.AlertDialogFooter confirm={{ label: 'Delete' }} />",
+]) {
+	test(`allows footer actions expressed as slots: ${markup}`, async () => {
+		assert.deepEqual(await variantOwnership(`export const Fine = () => ${markup};`), []);
+	});
+}
+
 test('rejects colour utilities on components that own colour as a variant', async () => {
 	// The Store Health regression this rule exists to prevent: a destructive label
 	// painted onto a `default` (blue) confirm button.
@@ -38,18 +83,53 @@ test('rejects colour utilities on components that own colour as a variant', asyn
 		export function Bad() {
 			return (
 				<>
-					<AlertDialogAction>
-						<Text className="text-destructive">Clear</Text>
-					</AlertDialogAction>
-					<ModalAction><Text className="text-destructive">Remove</Text></ModalAction>
-					<Button className="bg-transparent rounded-none">Menu</Button>
+					<Button className="bg-transparent">Menu</Button>
 					<Badge className="border-destructive">3</Badge>
 				</>
 			);
 		}
 	`);
 
-	assert.equal(messages.length, 4);
+	assert.equal(messages.length, 2);
+});
+
+test('rejects height and radius utilities on Button and IconButton: the size prop owns them', async () => {
+	// Ruled 2026-10-16: three sizes (sm 36, default 44, lg 56) and no height class on a
+	// Button — `min-h-14` beside size="lg" was how one Pay button grew three heights.
+	const messages = await variantOwnership(`
+		export function Bad() {
+			return (
+				<>
+					<Button size="lg" className="min-h-14 w-full">Pay</Button>
+					<Button className="h-11 w-11 p-0">Menu</Button>
+					<Button className="flex-1 rounded-t-none">Void</Button>
+					<IconButton name="plus" className="size-12" />
+					<Button className="max-h-9">Retry</Button>
+					<Button className="self-end web:h-20">Prefixed</Button>
+					<Button className="web:!rounded-none">Important</Button>
+				</>
+			);
+		}
+	`);
+
+	assert.equal(messages.filter((m) => m.message.includes('owned by its size prop')).length, 7);
+});
+
+test('allows width and layout utilities on a Button, which no size models', async () => {
+	const messages = await variantOwnership(`
+		export function Fine() {
+			return (
+				<>
+					<Button size="lg" className="w-full">Pay</Button>
+					<Button variant="ghost" className="aspect-square px-0">Avatar</Button>
+					<Button className="min-w-11 shrink self-end">Store</Button>
+					<Text className="min-h-row">Not a button</Text>
+				</>
+			);
+		}
+	`);
+
+	assert.deepEqual(messages, []);
 });
 
 test('rejects font-size utilities that duplicate or fight the size prop', async () => {
@@ -159,4 +239,246 @@ test('packages/components still enforces the reanimated v4 import restriction', 
 	);
 
 	assert.equal(messages.length, 1);
+});
+
+// Lint runs per package (`eslint src` from packages/core, `eslint app components` from
+// apps/main), where the shared repo-root globs match nothing. These lint the way CI does:
+// the package's own config, from the package's own directory.
+const PAINTED_BUTTON = `export function Bad() { return <Button className="bg-primary">Pay</Button>; }`;
+const SERVER_DELETE = `export const write = { operation: 'delete' };`;
+const restrictedSyntax = (messages, fragment) =>
+	messages.filter((m) => m.message.includes(fragment));
+
+test('enforces variant ownership on packages/core screens under per-package lint', async () => {
+	// src/screens/** has its own no-restricted-syntax (#1093), which REPLACES the shared one
+	// in flat config: the ownership selectors must be restated there to apply at all.
+	const messages = await lint(
+		PAINTED_BUTTON,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
+});
+
+test('keeps the #1093 server-delete guard firing beside the ownership rule on core screens', async () => {
+	const messages = await lint(
+		`${SERVER_DELETE}\n${PAINTED_BUTTON}`,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'SERVER delete (#1093)').length, 1);
+	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
+});
+
+test('enforces variant ownership outside core screens under per-package lint', async () => {
+	const messages = await lint(
+		PAINTED_BUTTON,
+		join(CORE_ROOT, 'src/contexts/theme/index.tsx'),
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+
+	assert.equal(messages.length, 1);
+});
+
+test('enforces size ownership on packages/core screens under per-package lint', async () => {
+	const messages = await lint(
+		`export function Bad() { return <Button className="min-h-12">Retry</Button>; }`,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its size prop').length, 1);
+});
+
+test('enforces variant ownership in apps/main under per-package lint', async () => {
+	const messages = await lint(
+		PAINTED_BUTTON,
+		join(MAIN_ROOT, 'components/health/uptime-strip.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(messages.length, 1);
+});
+
+// A screen that replaces the whole app is a GateScreen; the hand-rolled shape it replaced is
+// refused under screens/ and app/. The fixture is the old update-required.tsx root.
+const HAND_CENTRED = `
+	export function UpdateRequired() {
+		return (
+			<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+				<Text>Update</Text>
+			</View>
+		);
+	}
+`;
+const SCRIM = `
+	export function Scrim() {
+		return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'black', opacity: 0.4 }]} />;
+	}
+`;
+const GATE = 'never a hand-centred absoluteFill';
+
+test('rejects a hand-centred absoluteFill on a core screen (the old update-required shape)', async () => {
+	const perPackage = await lint(
+		HAND_CENTRED,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+	const fromRoot = await lint(HAND_CENTRED, IN_APP, 'no-restricted-syntax');
+
+	assert.equal(restrictedSyntax(perPackage, GATE).length, 1);
+	assert.equal(restrictedSyntax(fromRoot, GATE).length, 1);
+});
+
+test('rejects the object form of a hand-centred absoluteFill in apps/main/app', async () => {
+	const messages = await lint(
+		`export default function Gone() {
+			return <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center' }} />;
+		}`,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, GATE).length, 1);
+});
+
+test('allows an absoluteFill scrim without justifyContent', async () => {
+	const messages = await lint(SCRIM, IN_APP, 'no-restricted-syntax', coreConfig, CORE_ROOT);
+
+	assert.deepEqual(restrictedSyntax(messages, GATE), []);
+});
+
+test('keeps variant ownership firing beside the gate guard in apps/main/app', async () => {
+	const messages = await lint(
+		PAINTED_BUTTON,
+		join(MAIN_ROOT, 'app/+not-found.tsx'),
+		'no-restricted-syntax',
+		mainConfig,
+		MAIN_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its variant/size props').length, 1);
+});
+
+const NOTICE = 'A tinted alert box is the Notice component';
+const TINTS = `export function Bad({ active }) { return <>
+	<View className="border bg-destructive/10" />
+	<View className={'bg-warning/10 p-2'} />
+	<View className={\`p-2 bg-attention/10 \${active}\`} />
+	<View className={\`\${active} bg-info/10\`} />
+	<View className={cn('p-2', active && 'bg-success/10')} />
+</>; }`;
+
+test('rejects every hand-rolled notice tint in literal and template classNames', async () => {
+	assert.equal(restrictedSyntax(await variantOwnership(TINTS), NOTICE).length, 5);
+});
+
+test('keeps the notice ratchet under core screen and app config overrides', async () => {
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(CORE_ROOT, 'src/contexts/theme/index.tsx'), coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'app/+not-found.tsx'), mainConfig, MAIN_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(TINTS, file, 'no-restricted-syntax', base, cwd);
+		assert.equal(restrictedSyntax(messages, NOTICE).length, 5, file);
+	}
+});
+
+test('enforces the notice ratchet in other packages too', async () => {
+	const messages = await lint(
+		'export const Bad = () => <View className="bg-info/10" />;',
+		join(REPO_ROOT, 'packages/hooks/notice-fixture.jsx'),
+		'no-restricted-syntax'
+	);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 1);
+});
+
+test('allows the design system to own notice surfaces from root and package lint', async () => {
+	for (const [base, cwd] of [
+		[config, REPO_ROOT],
+		[componentsConfig, COMPONENTS_ROOT],
+	]) {
+		const messages = await lint(TINTS, IN_DESIGN_SYSTEM, 'no-restricted-syntax', base, cwd);
+		assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+	}
+});
+
+test('does not mistake prose, other opacities or Notice for a tinted alert box', async () => {
+	const messages = await variantOwnership(`export const Fine = () => <>
+		<Notice tone="warn" title="bg-warning/10" />
+		<View className="bg-info/100" />
+		<View className="bg-info/20" />
+		<View className="hover:bg-destructive/10 active:bg-warning/10" />
+	</>;`);
+	assert.deepEqual(restrictedSyntax(messages, NOTICE), []);
+});
+
+test('allows only the highlighted-row class pair, not generic tint boxes', async () => {
+	const messages = await variantOwnership(`export const Fine = ({ highlight }) => <>
+		<ListItem className={\`border-border rounded-none border-b \${highlight ? 'bg-success/10' : ''}\`} />
+		<View className="rounded-lg bg-destructive/10" />
+		<View className={\`border-border rounded-none border-b \${highlight ? 'bg-warning/10' : ''}\`} />
+	</>;`);
+	assert.equal(restrictedSyntax(messages, NOTICE).length, 2);
+});
+
+const FIELD_CONTROL = 'the form draws the one label';
+
+test('rejects a bare SegmentedControl in a FormField render under the core and main configs', async () => {
+	// Walk 1 (2026-10-29): the hand-rolled field drew its label as body text beside muted form keys.
+	for (const [file, base, cwd] of [
+		[IN_APP, coreConfig, CORE_ROOT],
+		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
+	]) {
+		const messages = await lint(
+			`export const Bad = () => <FormField name="mode" render={({ field }) => <View><Text>Mode</Text><SegmentedControl value={field.value} segments={[]} /></View>} />;`,
+			file,
+			'no-restricted-syntax',
+			base,
+			cwd
+		);
+		assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 1);
+	}
+});
+
+test('allows FormSegmentedControl in a FormField, and a SegmentedControl outside one', async () => {
+	const messages = await variantOwnership(
+		`export const Fine = () => <><FormField name="mode" render={({ field }) => <FormSegmentedControl label="Mode" segments={[]} {...field} />} /><SegmentedControl value="a" segments={[]} /></>;`
+	);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 0);
+});
+
+test('rejects a bare Select in a FormField render', async () => {
+	const messages = await variantOwnership(
+		`export const Bad = () => <FormField name="type" render={({ field }) => <Select {...field} />} />;`
+	);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 1);
+});
+
+test('allows FormSelect and an accessible bare Select supplied as its customComponent', async () => {
+	const messages = await variantOwnership(`
+		const CustomSelect = (props) => <Select {...props} aria-labelledby="type-label" />;
+		export const Fine = () => <>
+			<FormField name="type" render={({ field }) => <FormSelect label="Type" {...field} />} />
+			<FormField name="custom" render={({ field }) => <FormSelect label="Type" customComponent={CustomSelect} {...field} />} />
+		</>;
+	`);
+	assert.equal(restrictedSyntax(messages, FIELD_CONTROL).length, 0);
 });

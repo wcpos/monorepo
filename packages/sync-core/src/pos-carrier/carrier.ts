@@ -1,21 +1,39 @@
 import { RECORD_UUID_META_KEY } from '../recordIdentity';
+import { SERVER_OWNED_ORDER_META_KEYS } from '../woo/orderWriteContract';
 
-export type PosIdentity = { cashierId: string | null; storeId: string | null };
+export type PosIdentity = {
+	cashierId: string | null;
+	storeId: string | null;
+	registerId?: string;
+	tillId?: string;
+};
 export type MetaDataEntry = { id?: number; key?: string; value?: unknown };
 
 export interface PosCarrier {
 	readIdentity(meta: MetaDataEntry[] | undefined): PosIdentity;
 	stampIdentity(
 		meta: MetaDataEntry[] | undefined,
-		identity: { userId: string | number; storeId: string | number }
+		identity: {
+			userId: string | number;
+			storeId: string | number;
+			/** A string replaces the register; `undefined` (or '') leaves it; `null` clears it. */
+			registerId?: string | null;
+			tillId?: string;
+		}
 	): MetaDataEntry[];
 	taxBasedOnOverride(meta: MetaDataEntry[] | undefined): string | null;
+	vatExempt(meta: MetaDataEntry[] | undefined): boolean;
+	stampVatExempt(meta: MetaDataEntry[] | undefined, exempt: boolean): MetaDataEntry[];
 	lineUuid(line: { meta_data?: MetaDataEntry[] }): string | null;
 	ensureLineUuid<L extends { meta_data?: MetaDataEntry[] }>(line: L, mintUuid: () => string): L;
-	identityFilter(identity: { cashierId?: string; storeId?: string }): Record<string, unknown>;
+	identityFilter(identity: {
+		cashierId?: string;
+		storeId?: string;
+		registerId?: string;
+	}): Record<string, unknown>;
 	decodeIdentityFilter(
 		selector: Record<string, unknown>
-	): { cashierId?: string; storeId?: string } | null;
+	): { cashierId?: string; storeId?: string; registerId?: string } | null;
 }
 
 /**
@@ -26,12 +44,31 @@ export interface PosCarrier {
 export const NO_STORE = 0;
 
 export const POS_META_KEYS = {
+	// Keep aligned with PAYMENT_METHOD_INDEX_META_KEY in order-math/src/payments/ledger.ts.
+	paymentMethod: '_wcpos_payment_method',
 	user: '_pos_user',
 	store: '_pos_store',
+	register: '_wcpos_register',
+	session: '_wcpos_session',
+	reducedStock: '_reduced_stock',
+	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
+	vatExempt: 'is_vat_exempt',
 	lineUuid: RECORD_UUID_META_KEY,
 	posData: '_woocommerce_pos_data',
 } as const;
+
+/** Server-owned keys: server adoption replaces them; till mutations retain the resident value. */
+export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
+	...SERVER_OWNED_ORDER_META_KEYS,
+	POS_META_KEYS.user,
+	POS_META_KEYS.store,
+	POS_META_KEYS.register,
+	POS_META_KEYS.till,
+	POS_META_KEYS.vatExempt,
+	RECORD_UUID_META_KEY,
+	'_wcpos_money_owner_hint',
+];
 
 function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string | null {
 	if (!Array.isArray(meta)) return null;
@@ -45,29 +82,77 @@ function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string
 	return null;
 }
 
+/**
+ * The identity is STAMPED as a string, but `readIdentity` (via `scalarMetaValue`) also
+ * accepts an integer a server-side writer left behind. A condition that reaches storage
+ * cannot coerce, so a numeric-looking identity matches both spellings (#2249 review).
+ */
 function identityCondition(key: string, value: string): Record<string, unknown> {
-	return { meta_data: { $elemMatch: { key, value } } };
+	const spellings = /^\d+$/.test(value) ? { $in: [value, Number(value)] } : value;
+	return { meta_data: { $elemMatch: { key, value: spellings } } };
 }
 
 function decodeSingleIdentityCondition(
 	selector: Record<string, unknown>
-): { cashierId?: string; storeId?: string } | null {
+): { cashierId?: string; storeId?: string; registerId?: string } | null {
 	const metaData = selector.meta_data;
 	if (metaData === null || typeof metaData !== 'object') return null;
 	const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
 	if (elemMatch === null || typeof elemMatch !== 'object') return null;
-	const { key, value } = elemMatch as Record<string, unknown>;
+	const { key, value: spellings } = elemMatch as Record<string, unknown>;
+	const value =
+		spellings !== null &&
+		typeof spellings === 'object' &&
+		Array.isArray((spellings as { $in?: unknown }).$in)
+			? (spellings as { $in: unknown[] }).$in.find((entry) => typeof entry === 'string')
+			: spellings;
 	if (typeof value !== 'string') return null;
 	if (key === POS_META_KEYS.user) return { cashierId: value };
 	if (key === POS_META_KEYS.store) return { storeId: value };
+	if (key === POS_META_KEYS.register) return { registerId: value };
 	return null;
 }
 
+/** Indexed spelling of the carrier identity; no store attribution is the empty string. */
+export function identityColumns(identity: Pick<PosIdentity, 'cashierId' | 'storeId'>) {
+	return { posUserId: identity.cashierId ?? '', posStoreId: identity.storeId ?? '' };
+}
+
+export function identityColumnFilter(identity: { cashierId?: string; storeId?: string }) {
+	return {
+		...(identity.cashierId === undefined ? {} : { posUserId: identity.cashierId }),
+		...(identity.storeId === undefined ? {} : { posStoreId: identity.storeId }),
+	};
+}
+
 export const wooMetaCarrier: PosCarrier = {
+	vatExempt(meta) {
+		return (
+			Array.isArray(meta) &&
+			meta.find((entry) => entry?.key === POS_META_KEYS.vatExempt)?.value === 'yes'
+		);
+	},
+	stampVatExempt(meta, exempt) {
+		const stamped: MetaDataEntry[] = [];
+		let replaced = false;
+		const value = exempt ? 'yes' : 'no';
+		for (const entry of Array.isArray(meta) ? meta : []) {
+			if (entry?.key !== POS_META_KEYS.vatExempt) {
+				stamped.push(entry);
+			} else if (!replaced) {
+				stamped.push({ ...entry, value });
+				replaced = true;
+			}
+		}
+		if (!replaced) stamped.push({ key: POS_META_KEYS.vatExempt, value });
+		return stamped;
+	},
 	readIdentity(meta) {
 		return {
 			cashierId: scalarMetaValue(meta, POS_META_KEYS.user),
 			storeId: scalarMetaValue(meta, POS_META_KEYS.store),
+			registerId: scalarMetaValue(meta, POS_META_KEYS.register) ?? undefined,
+			tillId: scalarMetaValue(meta, POS_META_KEYS.till) ?? undefined,
 		};
 	},
 
@@ -76,6 +161,14 @@ export const wooMetaCarrier: PosCarrier = {
 			[POS_META_KEYS.user, String(identity.userId)],
 			[POS_META_KEYS.store, String(identity.storeId)],
 		]);
+		if (typeof identity.registerId === 'string' && identity.registerId)
+			values.set(POS_META_KEYS.register, identity.registerId);
+		// Cleared as a value, never dropped: a missing row or a null tombstone cannot erase a
+		// protected identity row on the local write (`mergeProtectedOrderMeta`), so the register row
+		// holds '' (keeping its id, or added) and reads as no register. A write that may meet a
+		// register this meta never had (a rollback) clears it that way too.
+		if (identity.registerId === null) values.set(POS_META_KEYS.register, '');
+		if (identity.tillId) values.set(POS_META_KEYS.till, identity.tillId);
 		const stamped: MetaDataEntry[] = [];
 		const replaced = new Set<string>();
 		for (const entry of Array.isArray(meta) ? meta : []) {
@@ -88,7 +181,8 @@ export const wooMetaCarrier: PosCarrier = {
 			}
 		}
 		for (const [key, value] of values) {
-			if (!replaced.has(key)) stamped.push({ key, value });
+			if (!replaced.has(key) && (value !== '' || key === POS_META_KEYS.register))
+				stamped.push({ key, value });
 		}
 		return stamped;
 	},
@@ -140,6 +234,9 @@ export const wooMetaCarrier: PosCarrier = {
 			identity.storeId === undefined
 				? undefined
 				: identityCondition(POS_META_KEYS.store, identity.storeId),
+			identity.registerId === undefined
+				? undefined
+				: identityCondition(POS_META_KEYS.register, identity.registerId),
 		].filter((condition): condition is Record<string, unknown> => condition !== undefined);
 		if (conditions.length === 0) return {};
 		if (conditions.length === 1) return conditions[0];
@@ -151,13 +248,14 @@ export const wooMetaCarrier: PosCarrier = {
 		if (single) return single;
 		if (Object.keys(selector).length === 0) return {};
 		if (!Array.isArray(selector.$and)) return null;
-		const identity: { cashierId?: string; storeId?: string } = {};
+		const identity: { cashierId?: string; storeId?: string; registerId?: string } = {};
 		for (const condition of selector.$and) {
 			if (condition === null || typeof condition !== 'object') return null;
 			const decoded = decodeSingleIdentityCondition(condition as Record<string, unknown>);
 			if (!decoded) return null;
 			if (decoded.cashierId !== undefined) identity.cashierId = decoded.cashierId;
 			if (decoded.storeId !== undefined) identity.storeId = decoded.storeId;
+			if (decoded.registerId !== undefined) identity.registerId = decoded.registerId;
 		}
 		return identity;
 	},

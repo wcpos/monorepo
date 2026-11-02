@@ -7,25 +7,17 @@ import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 
 import { useLoginHandler } from './use-login-handler';
 
-const mockInsert = jest.fn();
+const mockSaveLoginCredentials = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { canGoBack: () => false, back: jest.fn() } }));
-jest.mock('@wcpos/database', () => ({ sanitizeWPCredentialsData: (data: unknown) => data }));
-jest.mock('../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		userDB: {
-			wp_credentials: {
-				findOne: () => ({ exec: async () => null }),
-				insert: (...args: unknown[]) => mockInsert(...args),
-			},
-		},
-	}),
+jest.mock('@wcpos/query/user-db', () => ({
+	saveLoginCredentials: (...args: unknown[]) => mockSaveLoginCredentials(...args),
 }));
-jest.mock('../../../utils/site-writes', () => ({
-	linkCredentialsToSite: jest.fn(async () => true),
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({ userDB: {} }),
 }));
 
-const site = { name: 'Store' } as never;
+const site = { uuid: 's-1', name: 'Store' } as never;
 const logger = getLogger([]) as unknown as Record<'error' | 'warn', jest.Mock>;
 const params = {
 	access_token: 'a',
@@ -37,7 +29,14 @@ const params = {
 };
 
 describe('useLoginHandler', () => {
-	beforeEach(() => jest.clearAllMocks());
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSaveLoginCredentials.mockResolvedValue({
+			created: true,
+			linked: true,
+			credentials: { stores: [] },
+		});
+	});
 
 	it('reports an invalid login response once and rethrows it, so no caller says "Session renewed"', async () => {
 		const { result } = renderHook(() => useLoginHandler(site));
@@ -63,7 +62,7 @@ describe('useLoginHandler', () => {
 	});
 
 	it('reports a failed credential write once as SYNC101 and rethrows it marked', async () => {
-		mockInsert.mockRejectedValueOnce(new Error('disk full'));
+		mockSaveLoginCredentials.mockRejectedValueOnce(new Error('disk full'));
 		const { result } = renderHook(() => useLoginHandler(site));
 
 		let thrown: unknown;

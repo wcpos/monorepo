@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -7,25 +8,31 @@ import * as z from 'zod';
 import {
 	Form,
 	FormField,
-	FormInput,
+	FormSegmentedControl,
+	FormSelect,
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { useT } from '../../../../contexts/translations';
 import {
 	columnsFormSchema,
 	UISettingsColumnsForm,
 	useDialogContext,
 } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
+import { QuickDiscountKeys } from './quick-discount-keys';
 
 export const schema = z.object({
+	position: z.enum(['left', 'right']),
+	openOrdersPosition: z.enum(['top', 'bottom']),
 	autoShowReceipt: z.boolean(),
+	sortLines: z.enum(['newest_bottom', 'newest_top', 'name', 'price']).optional(),
 	autoPrintReceipt: z.boolean(),
-	// quickDiscounts: z.array(z.number()).optional(),
-	quickDiscounts: z.string().optional(),
+	quickDiscounts: z.array(z.number()).max(3).optional(),
 	...columnsFormSchema.shape,
 });
 
@@ -33,6 +40,13 @@ export const schema = z.object({
  *
  */
 export function UISettingsForm() {
+	const t = useT();
+	const sortOptions = [
+		{ value: 'newest_bottom', label: t('pos_cart.sort_newest_bottom') },
+		{ value: 'newest_top', label: t('pos_cart.sort_newest_top') },
+		{ value: 'name', label: t('pos_cart.sort_by_name') },
+		{ value: 'price', label: t('pos_cart.sort_by_price') },
+	];
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useDocField(uiSettings, (value) => value) as unknown as z.infer<typeof schema>;
 	const { setButtonPressHandler } = useDialogContext();
@@ -70,6 +84,66 @@ export function UISettingsForm() {
 				<VStack>
 					<FormField
 						control={form.control}
+						name="position"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('position')}
+								testID="cart-setting-panel-position"
+								segments={[
+									{ value: 'left', label: t('pos_cart.cart_left') },
+									{ value: 'right', label: t('pos_cart.cart_right') },
+								]}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="openOrdersPosition"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('openOrdersPosition')}
+								testID="open-orders-position"
+								segments={[
+									{ value: 'top', label: t('common.top') },
+									{ value: 'bottom', label: t('common.bottom') },
+								]}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="sortLines"
+						render={({ field }) => (
+							<View className="gap-1">
+								<FormSelect
+									{...field}
+									label={t('pos_cart.sort_items')}
+									value={field.value ?? 'newest_top'}
+									options={sortOptions}
+									placeholder={t('pos_cart.sort_items')}
+									triggerTestID="cart-sort-items"
+									portalHost="pos"
+								/>
+								<Text variant="key">{t('pos_cart.sort_fees_shipping_last')}</Text>
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="quickDiscounts"
+						render={({ field }) => (
+							<QuickDiscountKeys
+								value={field.value}
+								onChange={field.onChange}
+								label={getUILabel('quickDiscounts')}
+								testID="cart-setting-quick-discount"
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
 						name="autoShowReceipt"
 						render={({ field }) => (
 							<FormSwitch
@@ -89,11 +163,6 @@ export function UISettingsForm() {
 								{...field}
 							/>
 						)}
-					/>
-					<FormField
-						control={form.control}
-						name="quickDiscounts"
-						render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
 					/>
 					<UISettingsColumnsForm getUILabel={getUILabel} />
 				</VStack>

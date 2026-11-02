@@ -1,79 +1,79 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { useEdgeInsets } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
-import { VStack } from '@wcpos/components/vstack';
-import { useTheme } from '@wcpos/core/contexts/theme';
+import { PortalHost } from '@wcpos/components/portal';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
+import { useGround } from '@wcpos/components/lib/ground';
 
-import { Chart } from './chart';
-import { FilterBar } from './filter-bar';
-import { Orders } from './orders';
-import { Report } from './report';
+import { useReportsScope } from './context';
+import { DetailPanel } from './panels/panel';
+import { Hero, SalesScope } from './hero';
+import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
 
-/**
- *
- */
-export function Reports() {
-	const { screenSize } = useTheme();
-	const { bottom } = useSafeAreaInsets();
+const BOTTOM = ['bottom'] as const;
 
-	/**
-	 *
-	 */
+export function Reports({
+	date,
+	header,
+}: {
+	date: React.ReactNode;
+	/** The till strip: the page's first row, scrolling with it (owner, 2026-10-18). */
+	header?: React.ReactNode;
+}) {
+	const bottomInset = useEdgeInsets(BOTTOM);
+	const ground = useGround();
+	const { detail } = useReportsScope(),
+		phone = useIsPhone();
+	const phonePanel = !!detail && phone;
+	const registerContainer = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer(
+			'reports',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
 	return (
-		<VStack
+		<View
+			ref={registerContainer}
 			testID="screen-reports"
-			className="h-full"
-			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+			className="h-full gap-2"
+			// A phone panel in the page's place pads the home indicator in its own colour.
+			style={phonePanel ? undefined : bottomInset}
 		>
-			<ErrorBoundary>
-				<FilterBar />
-			</ErrorBoundary>
-			<ErrorBoundary>
-				<ReportsSyncProgress />
-			</ErrorBoundary>
-			<View className="flex-1">
+			{!phonePanel && (
 				<ErrorBoundary>
-					{screenSize === 'sm' ? (
-						<VStack className="h-full gap-0">
-							<View className="flex-1 pr-2">
-								<Orders />
-							</View>
-							<View className="flex-1 pl-2">
-								<Report />
-							</View>
-						</VStack>
-					) : (
-						<PanelGroup direction="vertical">
-							<Panel defaultSize={40}>
-								<View className="h-full w-full px-2">
-									<Chart />
-								</View>
-							</Panel>
-							<PanelResizeHandle />
-							{/* Complementary defaultSize — see the POS (columns) layout: an
-							    unsized panel beside a sized one renders flexGrow 40:1 until
-							    the group layout lands, and on slow devices that pre-layout
-							    style can stick. */}
-							<Panel defaultSize={60}>
-								<PanelGroup direction="horizontal">
-									<Panel>
-										<Orders />
-									</Panel>
-									<PanelResizeHandle />
-									<Panel>
-										<Report />
-									</Panel>
-								</PanelGroup>
-							</Panel>
-						</PanelGroup>
-					)}
+					<ReportsSyncProgress />
 				</ErrorBoundary>
+			)}
+			<View className="min-h-0 flex-1 flex-row">
+				{phonePanel ? (
+					<ErrorBoundary>
+						<DetailPanel key={detail} />
+					</ErrorBoundary>
+				) : (
+					// The page gutter around and between the strip, the hero and the cards.
+					<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
+						{/* The strip stays outside the report's boundary: it is the only way into
+						    Closures, so a failed hero or card must not take it down (Codex, #2720). */}
+						{header}
+						<SalesScope date={date} settled />
+						<ErrorBoundary>
+							<Hero />
+							<PeriodSection />
+						</ErrorBoundary>
+					</ScrollView>
+				)}
+				{detail && !phonePanel && (
+					<ErrorBoundary>
+						<DetailPanel key={detail} />
+					</ErrorBoundary>
+				)}
 			</View>
-		</VStack>
+			<PortalHost name="reports" />
+		</View>
 	);
 }

@@ -3,15 +3,18 @@
  */
 import * as React from 'react';
 
-import { render, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject, throwError } from 'rxjs';
 
-import { useUnresolvedConflicts } from './use-unresolved-conflicts';
+import { useUnresolvedConflictKeys, useUnresolvedConflicts } from './use-unresolved-conflicts';
 
 let engineStub: unknown;
+const mockRows = new BehaviorSubject<{ collectionName: string; recordId: string }[]>([]);
 
 jest.mock('@wcpos/query', () => ({
-	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
+	PARKED_QUEUE_STATUSES: ['conflicted', 'needs-revision'],
+	observeDescribedQueueRows: (engine: { read: () => unknown }) => engine.read(),
+	observeQueueRows: () => mockRows.asObservable(),
 	useQueryRuntime: () => ({ engine: engineStub }),
 }));
 
@@ -22,11 +25,13 @@ function makeEngine({
 	operation = 'create',
 	resident = { remoteId: null, number: '1042', total: '25.00' },
 	failFirstQuery = false,
+	discard = 'destroys-record',
 }: {
 	collectionName?: string;
 	operation?: 'create' | 'update' | 'delete';
 	resident?: Record<string, unknown> | null;
 	failFirstQuery?: boolean;
+	discard?: 'destroys-record' | 'may-destroy-record';
 } = {}) {
 	let subscriptions = 0;
 	const heldRow = {
@@ -40,32 +45,21 @@ function makeEngine({
 		queuedAt: '2026-08-14T16:30:00.000Z',
 		status: 'conflicted' as const,
 	};
-	const rows$ = new BehaviorSubject<unknown[]>([{ toJSON: () => heldRow }]);
-	const database = {
-		collections: {
-			recordMutations: {
-				find: () => ({
-					get $() {
-						subscriptions += 1;
-						return failFirstQuery && subscriptions === 1
-							? throwError(() => new Error('storage query failed'))
-							: rows$.asObservable();
-					},
-				}),
-			},
-			[collectionName]: {
-				findOne: () => ({
-					exec: () => Promise.resolve(resident === null ? null : { toJSON: () => resident }),
-				}),
-			},
+	const rows$ = new BehaviorSubject([
+		{
+			...heldRow,
+			resident,
+			residentRead: 'ok',
+			discard,
 		},
-	};
+	]);
 	const engine = {
-		db$: (callback: (database: unknown) => void) => {
-			callback(database);
-			return () => undefined;
+		read: () => {
+			subscriptions += 1;
+			return failFirstQuery && subscriptions === 1
+				? throwError(() => new Error('storage query failed'))
+				: rows$.asObservable();
 		},
-		active: () => ({ database }),
 	};
 	return { engine, subscriptions: () => subscriptions };
 }
@@ -114,10 +108,25 @@ describe('useUnresolvedConflicts', () => {
 			collectionName: 'products',
 			operation: 'update',
 			resident: { remoteId: '501', name: 'Aether Gym Pant' },
+			discard: 'may-destroy-record',
 		});
 		engineStub = engine;
 
 		const screen = renderProbe();
 		await waitFor(() => expect(screen.getByTestId('result').textContent).toBe('MAY-DESTROY'));
 	});
+});
+
+it('keeps conflict keys distinct by collection and record and releases its read', () => {
+	mockRows.next([
+		{ collectionName: 'orders', recordId: 'a' },
+		{ collectionName: 'orders', recordId: 'a' },
+		{ collectionName: 'products', recordId: 'a' },
+	]);
+	const { result, unmount } = renderHook(() => useUnresolvedConflictKeys());
+	expect(result.current).toEqual(new Set(['orders:a', 'products:a']));
+	act(() => mockRows.next([]));
+	expect(result.current.size).toBe(0);
+	unmount();
+	expect(mockRows.observed).toBe(false);
 });

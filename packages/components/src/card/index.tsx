@@ -1,50 +1,32 @@
 import * as React from 'react';
-import { Text, TextProps, View, ViewProps } from 'react-native';
+import { View, ViewProps } from 'react-native';
 
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
-function Card({ className, ...props }: ViewProps) {
+// The inset is the card's job, not each caller's: `row` for a device or list row card (12),
+// `body` for a card's body (16, the gutter table's "inside a surface").
+const paddings = { none: '', row: 'p-3', body: 'p-4' } as const;
+
+function Card({
+	padding = 'none',
+	className,
+	...props
+}: ViewProps & { padding?: keyof typeof paddings }) {
 	return (
 		<View
-			className={cn('border-border bg-card rounded-lg border shadow-md', className)}
+			className={cn('border-border bg-card rounded-lg border', paddings[padding], className)}
 			{...props}
 		/>
 	);
-}
-
-function CardHeader({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-col rounded-t-lg p-6', className)} {...props} />;
-}
-
-function CardTitle({ className, ...props }: TextProps) {
-	return (
-		<Text
-			role="heading"
-			aria-level={3}
-			className={cn(
-				'text-card-foreground text-2xl leading-none font-semibold tracking-tight',
-				className
-			)}
-			{...props}
-		/>
-	);
-}
-
-function CardDescription({ className, ...props }: TextProps) {
-	return <Text className={cn('text-muted-foreground text-sm', className)} {...props} />;
 }
 
 function CardContent({ className, ...props }: ViewProps) {
 	return (
 		<TextClassContext.Provider value="text-card-foreground">
-			<View className={cn('p-6 pt-0', className)} {...props} />
+			<View className={cn('p-4 pt-0', className)} {...props} />
 		</TextClassContext.Provider>
 	);
 }
 
-function CardFooter({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-row items-center p-6 pt-0', className)} {...props} />;
-}
-
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };
+export { Card, CardContent };

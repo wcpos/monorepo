@@ -1,15 +1,17 @@
 import * as React from 'react';
-import { Platform, Pressable, StyleSheet } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import { Slot } from '@rn-primitives/slot';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { Checkbox } from '../checkbox';
+import { fieldBox } from '../field-box';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
+import { AnchoredOverlay } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type {
 	Option,
@@ -86,12 +88,12 @@ function SelectMultiTrigger({
 	disabled: disabledProp,
 	...props
 }: PopoverPrimitive.TriggerProps) {
-	const { disabled: rootDisabled } = useMultiSelectContext();
+	const { disabled: rootDisabled, open } = useMultiSelectContext();
 	const disabled = Boolean(rootDisabled || disabledProp);
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(fieldBox({ state: disabled ? 'disabled' : open ? 'open' : 'rest' }), className)}
 			disabled={disabled}
 			{...props}
 		>
@@ -121,7 +123,7 @@ function SelectMultiValue({
 
 	return (
 		<TextClassContext.Provider
-			value={cn(textClass, 'text-sm', !hasValue && 'text-muted-foreground', className)}
+			value={cn(textClass, 'text-base', !hasValue && 'text-muted-foreground', className)}
 		>
 			<Component {...props}>{displayText}</Component>
 		</TextClassContext.Provider>
@@ -129,44 +131,28 @@ function SelectMultiValue({
 }
 
 function SelectMultiContent({
-	className,
 	children,
-	align = 'start',
-	sideOffset = 4,
-	portalHost,
 	...props
-}: PopoverPrimitive.ContentProps & { portalHost?: string }) {
+}: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useMultiSelectContext();
-
+	// The popover root owns the open state; the multi context mirrors it. A dismiss must go
+	// through the root, or the trigger's next press closes a popover that is already hidden.
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
 	if (!context.open) return null;
-
 	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn.duration(200)}
-					exiting={FadeOut}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<PopoverPrimitive.Content
-							align={align}
-							sideOffset={sideOffset}
-							className={cn(
-								'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
-								className
-							)}
-							{...props}
-						>
-							<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
-						</PopoverPrimitive.Content>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
+			open={open}
+			onOpenChange={onOpenChange}
+			size="max-h-96 min-w-32 p-1.5"
+			content={{
+				align: 'start',
+				...props,
+				children: (
+					<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
+				),
+			}}
+		/>
 	);
 }
 
@@ -176,7 +162,6 @@ function SelectMultiItem({
 	value,
 	label,
 	disabled,
-	...props
 }: {
 	value: string;
 	label: string;
@@ -199,25 +184,14 @@ function SelectMultiItem({
 	}, [onValueChange, value, label, currentValue]);
 
 	return (
-		<Pressable
+		<MenuRow
+			checkbox
+			selected={selected}
 			onPress={handlePress}
-			className={cn(
-				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center gap-2 rounded-sm py-1.5 pr-2 pl-2',
-				itemDisabled && 'web:pointer-events-none opacity-50',
-				className
-			)}
 			disabled={itemDisabled}
-			{...props}
-		>
-			<Checkbox
-				checked={selected}
-				onCheckedChange={() => handlePress()}
-				className="pointer-events-none"
-			/>
-			<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
-				{children ?? label}
-			</Text>
-		</Pressable>
+			className={className}
+			label={children ?? label}
+		/>
 	);
 }
 

@@ -8,6 +8,14 @@ import { useHidScan } from './use-hid-scan.web';
 
 const mockUpsert = jest.fn(async (_row: unknown) => undefined);
 const mockRequestDevice = jest.fn();
+const mockStoreDB = {
+	collections: {
+		scanner_profiles: {
+			find: () => ({ exec: async () => [] }),
+			upsert: (row: unknown) => mockUpsert(row),
+		},
+	},
+};
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: () => 3,
@@ -24,16 +32,7 @@ jest.mock('@wcpos/scanner', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: {} }),
-}));
-
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => ({
-		collection: {
-			find: () => ({ exec: async () => [] }),
-			upsert: (row: unknown) => mockUpsert(row),
-		},
-	}),
+	useAppState: () => ({ store: {}, storeDB: mockStoreDB }),
 }));
 
 describe('useHidScan (web)', () => {

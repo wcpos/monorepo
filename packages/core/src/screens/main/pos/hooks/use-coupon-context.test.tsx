@@ -1,20 +1,30 @@
 /**
  * @jest-environment jsdom
  */
+import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
-import { useCouponContext } from './use-coupon-context';
+import { useQueryRuntime } from '@wcpos/query';
+
+import { readCouponContext, useCouponContext } from './use-coupon-context';
 
 const engine = { active: jest.fn() };
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useQueryRuntime: () => ({ engine }),
+	observeCatalogByWooIds: () =>
+		of({
+			available: true,
+			products: [{ remoteId: '82', payload: { tax_status: 'none' } }],
+			variations: [],
+		}),
 }));
 
 const engineRecord = (remoteId: string, payload: Record<string, unknown>) => ({
 	uuid: `record-${remoteId}`,
 	remoteId,
+	remoteKey: String(remoteId ?? ''),
 	payload,
 });
 
@@ -72,4 +82,62 @@ it('builds lowercase coupons, raw product categories, and category parents from 
 			[17, 16],
 		])
 	);
+});
+
+it.each(['missing', 'mixed', 'collision'])('resolves virtual context: %s', async (mode) => {
+	const records =
+		mode === 'missing'
+			? []
+			: [
+					engineRecord('501', {
+						code: mode === 'collision' ? 'pos-discount' : 'real',
+						discount_type: 'fixed_cart',
+						amount: '99',
+					}),
+				];
+	engine.active().database.collections.coupons.find = () => ({ exec: async () => records });
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext(
+		[],
+		[
+			{
+				code: 'pos-discount',
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			},
+		]
+	);
+	expect(context.coupons.get('pos-discount')).toEqual(
+		expect.objectContaining({
+			discount_type: 'percent',
+			amount: '10',
+			individual_use: false,
+		})
+	);
+	expect(context.coupons.size).toBe(mode === 'mixed' ? 2 : 1);
+	if (mode === 'mixed') expect(context.coupons.get('real')?.amount).toBe('99');
+});
+
+it.each([0, null])(
+	'readCouponContext issues no product query for misc-only or tombstoned lines: %s',
+	async (product_id) => {
+		const productFind = jest.fn(() => {
+			throw new Error('unexpected product query');
+		});
+		engine.active().database.collections.products.find = productFind;
+		const { result } = renderHook(() => useQueryRuntime());
+		const context = await readCouponContext(result.current, {
+			lineItems: [{ product_id }],
+			couponLines: [],
+		});
+		expect(context.productCategories.size).toBe(0);
+		expect(productFind).not.toHaveBeenCalled();
+	}
+);
+
+it('provides catalog tax status on the coupon context', async () => {
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext([{ product_id: 82 }]);
+	expect(context.taxStatusFor?.({ product_id: 82 })).toBe('none');
 });

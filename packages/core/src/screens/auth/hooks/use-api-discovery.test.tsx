@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 import { useApiDiscovery } from './use-api-discovery';
 
@@ -49,7 +50,11 @@ const siteData = {
 };
 
 const siteRequestOptions = {
-	params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
+	params: {
+		wcpos: 1,
+		wcpos_protocol: SYNC_PROTOCOL_VERSION,
+		wcpos_client: 'web/0.0.0 payments=1.3',
+	},
 	timeout: 15_000,
 };
 const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
@@ -120,6 +125,68 @@ describe('useApiDiscovery', () => {
 		}
 	);
 
+	it('a wcpos_update_required body during discovery reports SYNC341 with the update message, not AUTH_UNEXPECTED', async () => {
+		const wpApiUrl = 'https://example.com/wp-json/';
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 426'), {
+				response: {
+					status: 426,
+					headers: { 'content-type': 'application/json' },
+					data: {
+						code: 'wcpos_update_required',
+						message: 'This store requires a newer version of WCPOS.',
+						data: { status: 426, min_protocol: 4, server_protocol: 4 },
+					},
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			// The code rides the rejection: the connect screen links SYNC341's docs from it.
+			await expect(result.current.discoverApiEndpoints(wpApiUrl)).rejects.toMatchObject({
+				name: 'ApiDiscoveryError',
+				message: 'This store needs a newer version of WCPOS.',
+				errorCode: ERROR_CODES.APP_UPDATE_REQUIRED,
+			});
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledTimes(1);
+		const [message, options] = mockLoggerError.mock.calls[0] as [
+			string,
+			{ code?: string; showToast?: boolean; context?: Record<string, unknown> },
+		];
+		expect(message).toBe('This store needs a newer version of WCPOS.');
+		expect(options.code).toBe(ERROR_CODES.APP_UPDATE_REQUIRED);
+		expect(options.code).not.toBe(ERROR_CODES.AUTH_UNEXPECTED);
+		expect(options.showToast).toBe(true);
+		expect(options.context).toEqual({ wpApiUrl, minProtocol: 4, serverProtocol: 4 });
+		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+
+	it('a REST API blocked by a security plugin rejects with AUTH_PLUGIN_CONFLICT for the connect screen', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 401'), {
+				response: {
+					status: 401,
+					headers: { 'content-type': 'application/json' },
+					data: { code: 'rest_forbidden', message: 'Only logged in users can access the API.' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({
+				name: 'ApiDiscoveryError',
+				message: 'Only logged in users can access the API.',
+				errorCode: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
+			});
+		});
+	});
+
 	it('reports a bot challenge blocking the API', async () => {
 		mockGet.mockRejectedValue(
 			Object.assign(new Error('Request failed with status code 403'), {
@@ -174,6 +241,14 @@ describe('useApiDiscovery', () => {
 		});
 
 		expect(result.current.error).toBe('Please update your WCPOS plugin');
+
+		const [, options] = mockLoggerError.mock.calls.at(-1) as [
+			string,
+			{ code?: string; showToast?: boolean; toast?: unknown },
+		];
+		expect(options.code).toBe(ERROR_CODES.WCPOS_PLUGIN_OUTDATED);
+		expect(options).not.toHaveProperty('showToast');
+		expect(options).not.toHaveProperty('toast');
 	});
 
 	/**
@@ -195,7 +270,7 @@ describe('useApiDiscovery', () => {
 
 	it('reports hidden routes, not an outdated plugin, when the version is compatible', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.10.0' },
+			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '2.0.0' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -204,11 +279,19 @@ describe('useApiDiscovery', () => {
 				result.current.discoverApiEndpoints('https://example.com/wp-json/')
 			).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
 		});
+
+		const [, options] = mockLoggerError.mock.calls.at(-1) as [
+			string,
+			{ code?: string; showToast?: boolean; toast?: unknown },
+		];
+		expect(options.code).toBe(ERROR_CODES.REST_ROUTE_MISSING);
+		expect(options).not.toHaveProperty('showToast');
+		expect(options).not.toHaveProperty('toast');
 	});
 
 	it('lets a compatible version override a visible legacy namespace', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.10.0' },
+			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '2.0.0' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -220,14 +303,14 @@ describe('useApiDiscovery', () => {
 	});
 
 	it.each([
-		['routes stripped from a compatible plugin', ['wc/v3'], '1.10.0'],
+		['routes stripped from a compatible plugin', ['wc/v3'], '2.0.0'],
 		['no WCPOS evidence at all', ['wc/v3'], undefined],
 	])(
 		'shows the merchant the API message, not the dev diagnosis (%s)',
 		async (_case, namespaces, wcposVersion) => {
-			// showToast with no toast.title makes the raw log message the merchant's
-			// toast (logger/index.ts: `title: options.toast?.title ?? message`), and
-			// the log message names one of the two faults this branch serves.
+			// The log message names one of the two faults and is written for us.
+			// The merchant string travels in the thrown error's message; the error
+			// no longer toasts (wcpos/roadmap#382).
 			const { wcpos_version, ...withoutVersion } = siteData;
 			mockGet.mockResolvedValue({
 				data: wcposVersion
@@ -239,14 +322,19 @@ describe('useApiDiscovery', () => {
 			await act(async () => {
 				await expect(
 					result.current.discoverApiEndpoints('https://example.com/wp-json/')
-				).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
+				).rejects.toMatchObject({
+					errorCode: ERROR_CODES.REST_ROUTE_MISSING,
+					message: 'WCPOS API not found',
+				});
 			});
 
 			const [, options] = mockLoggerError.mock.calls.at(-1) as [
 				string,
-				{ toast?: { title?: string } },
+				{ code?: string; showToast?: boolean; toast?: unknown },
 			];
-			expect(options.toast?.title).toBe('WCPOS API not found');
+			expect(options.code).toBe(ERROR_CODES.REST_ROUTE_MISSING);
+			expect(options).not.toHaveProperty('showToast');
+			expect(options).not.toHaveProperty('toast');
 		}
 	);
 

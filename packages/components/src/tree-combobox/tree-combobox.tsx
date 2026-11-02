@@ -1,30 +1,36 @@
 import * as React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 
 import { Platform } from '@wcpos/utils/platform';
 
-import { Checkbox } from '../checkbox';
+import { FieldBox } from '../field-box';
 import { Icon } from '../icon';
 import { Input } from '../input';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
-import { applyCascadeToggle, useHierarchy } from '../lib/use-hierarchy';
+import { applyCascadeToggle, useHierarchy } from './use-hierarchy';
 import {
 	getNativeListHeight,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
+	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
+import { useIsPhone } from '../lib/device';
+import { AnchoredOverlay } from '../lib/overlay';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
-import { INDENT_PX } from '../tree-select/tree-item';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
+import { Text } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
-import type { FlatTreeItem } from '../lib/use-hierarchy';
+import type { FlatTreeItem } from './use-hierarchy';
 import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
+
+const INDENT_PX = 16;
 
 type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 
@@ -234,11 +240,43 @@ function TreeComboboxTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(className, disabled && 'web:cursor-not-allowed opacity-45')}
 			disabled={disabled}
 			onLayout={handleLayout}
 			{...props}
 		/>
+	);
+}
+
+// --- Value ---
+
+interface TreeComboboxValueProps {
+	/** The text the closed control shows: the selection, or the placeholder when `hasValue` is false. */
+	children: string;
+	hasValue: boolean;
+	className?: string;
+}
+
+/**
+ * The closed face of the control: the field box, as `ComboboxValue` draws it, so a
+ * category picker and a customer picker read as one control. Reads the popover's
+ * `open` so the box lights up while the tree is open.
+ */
+function TreeComboboxValue({ children, hasValue, className }: TreeComboboxValueProps) {
+	const { open } = PopoverPrimitive.useRootContext();
+	return (
+		<FieldBox
+			state={open ? 'open' : 'rest'}
+			empty={!hasValue}
+			className={cn('w-full px-3', className)}
+		>
+			<View className="flex-1">
+				<Text numberOfLines={1} decodeHtml>
+					{children}
+				</Text>
+			</View>
+			<Icon name="chevronDown" className="text-muted-foreground" />
+		</FieldBox>
 	);
 }
 
@@ -278,14 +316,17 @@ function TreeComboboxContent<T>({
 	portalHost,
 	className,
 	matchWidth,
+	inline,
 	searchPlaceholder = 'Search...',
 	emptyMessage = 'No results found',
 	estimatedItemSize = 36,
 	renderItem,
-}: TreeComboboxContentProps<T>) {
+}: TreeComboboxContentProps<T> & { inline?: boolean }) {
 	const ctx = useTreeComboboxContext();
 	const widthCtx = React.useContext(TreeComboboxWidthContext);
-	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
+	const phone = useIsPhone();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const isAndroid = Platform.OS === 'android';
 
@@ -322,49 +363,37 @@ function TreeComboboxContent<T>({
 				<VirtualizedListPrimitive.Item>
 					<View className="flex flex-row items-center">
 						<View style={{ width: flatItem.depth * INDENT_PX }} />
-						<Pressable
+						<MenuRow
 							onPress={handlePress}
 							// Keyed by the option's VALUE, not its label: the labels are server-supplied
 							// and localized, and E2E may not select by text (see the repo's E2E selector
 							// policy). Only one tree popover can be open at a time, so the value alone
 							// addresses the row unambiguously.
 							testID={`tree-combobox-item-${flatItem.value}`}
-							className="web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5"
-						>
-							{ctx.multiple ? (
-								<Checkbox
-									checked={selected}
-									onCheckedChange={() => handlePress()}
-									className="pointer-events-none"
-								/>
-							) : (
-								<View className="h-4 w-4 items-center justify-center">
-									{selected && <Icon name="check" className="text-popover-foreground" size="xs" />}
-								</View>
-							)}
-							<View className="flex-1">
-								<Text className="text-popover-foreground text-sm" decodeHtml>
-									{flatItem.label}
-								</Text>
-								{ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId && (
-									<Text className="text-muted-foreground text-xs" decodeHtml>
-										{ctx.hierarchy.getBreadcrumb(flatItem.value)}
-									</Text>
-								)}
-							</View>
-						</Pressable>
+							role="option"
+							checkbox={ctx.multiple}
+							choice={!ctx.multiple}
+							selected={selected}
+							className="flex-1"
+							label={<MenuRow.Label decodeHtml>{flatItem.label}</MenuRow.Label>}
+							description={
+								ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId ? (
+									<Text decodeHtml>{ctx.hierarchy.getBreadcrumb(flatItem.value)}</Text>
+								) : undefined
+							}
+						/>
 						{flatItem.hasChildren ? (
 							<Pressable
 								onPress={handleToggle}
 								testID={`tree-combobox-toggle-${flatItem.value}`}
 								className="h-6 w-6 items-center justify-center"
-								hitSlop={4}
 							>
 								<Icon
 									name={flatItem.isExpanded ? 'chevronDown' : 'chevronRight'}
 									size="xs"
 									className="text-muted-foreground"
 								/>
+								<MinTargetBand />
 							</Pressable>
 						) : (
 							<View className="w-6" />
@@ -379,76 +408,74 @@ function TreeComboboxContent<T>({
 		[ctx, onOpenChange, renderItem]
 	);
 
-	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn.duration(200)}
-					exiting={FadeOut}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<PopoverPrimitive.Content
-							align="center"
-							sideOffset={4}
-							style={contentStyle}
-							className={cn(
-								'border-border bg-popover web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
-								className
-							)}
-						>
-							{children}
-							<TreeComboboxSearchInput
-								key={ctx.searchResetKey}
-								onFilterChange={ctx.onFilterChange}
-								placeholder={searchPlaceholder}
+	const content = (
+		<>
+			{children}
+			<TreeComboboxSearchInput
+				key={ctx.searchResetKey}
+				onFilterChange={ctx.onFilterChange}
+				placeholder={searchPlaceholder}
+			/>
+			{ctx.displayItems.length > 0 ? (
+				isNative ? (
+					<View
+						style={{
+							height: getNativeListHeight(
+								ctx.displayItems.length,
+								estimatedItemSize,
+								phone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT
+							),
+							maxHeight: phone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT,
+						}}
+					>
+						<VirtualizedListPrimitive.Root className="flex-1">
+							<VirtualizedListPrimitive.List
+								data={ctx.displayItems}
+								estimatedItemSize={estimatedItemSize}
+								renderItem={renderTreeItem as any}
+								parentProps={{ style: { height: '100%' } }}
+								renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
 							/>
-							{ctx.displayItems.length > 0 ? (
-								isNative ? (
-									<View
-										style={{
-											height: getNativeListHeight(ctx.displayItems.length, estimatedItemSize),
-											maxHeight: NATIVE_LIST_MAX_HEIGHT,
-										}}
-									>
-										<VirtualizedListPrimitive.Root className="flex-1">
-											<VirtualizedListPrimitive.List
-												data={ctx.displayItems}
-												estimatedItemSize={estimatedItemSize}
-												renderItem={renderTreeItem as any}
-												parentProps={{ style: { height: '100%' } }}
-												renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
-											/>
-										</VirtualizedListPrimitive.Root>
-									</View>
-								) : (
-									<VirtualizedListPrimitive.Root className="flex-1">
-										<VirtualizedListPrimitive.List
-											data={ctx.displayItems}
-											estimatedItemSize={estimatedItemSize}
-											renderItem={renderTreeItem as any}
-											parentProps={{
-												style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
-											}}
-										/>
-									</VirtualizedListPrimitive.Root>
-								)
-							) : (
-								ctx.isSearching && (
-									<View className="px-2 py-1.5">
-										<Text className="text-popover-foreground text-sm">{emptyMessage}</Text>
-									</View>
-								)
-							)}
-						</PopoverPrimitive.Content>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+						</VirtualizedListPrimitive.Root>
+					</View>
+				) : (
+					<VirtualizedListPrimitive.Root className="flex-1">
+						<VirtualizedListPrimitive.List
+							data={ctx.displayItems}
+							estimatedItemSize={estimatedItemSize}
+							renderItem={renderTreeItem as any}
+							parentProps={{
+								style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+							}}
+						/>
+					</VirtualizedListPrimitive.Root>
+				)
+			) : (
+				ctx.isSearching && (
+					<View className="px-2 py-1.5">
+						<Text className="text-foreground text-base">{emptyMessage}</Text>
+					</View>
+				)
+			)}
+		</>
+	);
+	return (
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
+			open={open}
+			onOpenChange={onOpenChange}
+			size="web:cursor-auto web:outline-none max-h-75 w-80"
+			content={{ style: contentStyle, className, inline, portalHost, children: content }}
+			// The shell pads the safe area; the sheet adds only its own inset.
+			sheetStyle={{ maxHeight: sheet.maxHeight }}
+		/>
 	);
 }
 
-export { TreeCombobox, TreeComboboxTrigger, TreeComboboxContent, useTreeComboboxContext };
+export {
+	TreeCombobox,
+	TreeComboboxTrigger,
+	TreeComboboxValue,
+	TreeComboboxContent,
+	useTreeComboboxContext,
+};

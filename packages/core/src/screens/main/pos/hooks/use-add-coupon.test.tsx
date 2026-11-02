@@ -6,9 +6,13 @@ import { of } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { useAddCoupon } from './use-add-coupon';
 
 jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
+
+const mockWcVersion = jest.fn(() => '11.3.0');
+jest.mock('../commands/use-tax-exempt', () => ({ useWcVersion: () => mockWcVersion }));
 
 const engine = { active: jest.fn() };
 const localPatch = jest.fn();
@@ -65,7 +69,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('./use-recalculate-coupons', () => ({
@@ -80,13 +86,8 @@ jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
 
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => {
-		throw new Error('legacy storeDB read');
-	},
-}));
-
 const baseOrderSnapshot = {
+	meta_data: [] as { key: string; value: string }[],
 	uuid: 'order-uuid',
 	id: 99,
 	number: '99',
@@ -104,7 +105,14 @@ const baseOrderSnapshot = {
 			],
 		},
 	],
-	coupon_lines: [{ code: 'solo', discount: '0', discount_tax: '0', meta_data: [] }],
+	coupon_lines: [
+		{
+			code: 'solo',
+			discount: '0',
+			discount_tax: '0',
+			meta_data: [] as { key: string; value: unknown }[],
+		},
+	],
 	billing: { email: 'shopper@example.com' },
 	customer_id: 7,
 };
@@ -119,6 +127,22 @@ const currentOrderRecord = {
 	},
 	getLatest: () => currentOrderRecord,
 };
+
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string, params?: Record<string, unknown>) =>
+				params ? `${key} ${JSON.stringify(params)}` : key,
+			now: Date.now,
+			read: { catalog: async () => null, paymentMethod: () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false, priceDecimals: 2 },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
@@ -160,11 +184,15 @@ function couponPayload(
 	};
 }
 
-function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
+function mockEngineData(
+	coupons: ReturnType<typeof engineDocument>[],
+	categories: ReturnType<typeof engineDocument>[] = []
+) {
 	const products = [
 		engineDocument({
 			uuid: 'product-82',
 			remoteId: '82',
+			remoteKey: '82',
 			payload: { id: 82, categories: [{ id: 17 }] },
 		}),
 	];
@@ -173,7 +201,7 @@ function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
 			collections: {
 				coupons: { find: jest.fn(() => ({ exec: async () => coupons })) },
 				products: { find: jest.fn(() => ({ exec: async () => products })) },
-				categories: { find: jest.fn(() => ({ exec: async () => [] })) },
+				categories: { find: jest.fn(() => ({ exec: async () => categories })) },
 			},
 		},
 	});
@@ -181,6 +209,7 @@ function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
 
 describe('useAddCoupon engine reads', () => {
 	beforeEach(() => {
+		mockWcVersion.mockReturnValue('11.3.0');
 		localPatch.mockReset();
 		recalculate.mockReset();
 		orderSnapshot = { ...baseOrderSnapshot };
@@ -188,10 +217,143 @@ describe('useAddCoupon engine reads', () => {
 			engineDocument({
 				uuid: 'coupon-bonus',
 				remoteId: '1',
+				remoteKey: '1',
 				payload: couponPayload('bonus', false),
 			}),
-			engineDocument({ uuid: 'coupon-solo', remoteId: '2', payload: couponPayload('solo', true) }),
+			engineDocument({
+				uuid: 'coupon-solo',
+				remoteId: '2',
+				remoteKey: '2',
+				payload: couponPayload('solo', true),
+			}),
 		]);
+	});
+
+	it('shows the exempt coupon version refusal inline without writing', async () => {
+		mockWcVersion.mockReturnValue('11.2.1');
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [],
+			meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
+		};
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'pos_cart.tax_exempt_wc_version',
+		});
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('returns the closed-order refusal instead of coupon success', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, ...{ status: 'completed' }, coupon_lines: [] };
+		recalculate.mockResolvedValue({
+			couponLines: [{ code: 'bonus' }],
+			lineItems: orderSnapshot.line_items,
+		});
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'pos_checkout.order_changed_retry',
+		});
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('rejects when an applied mixed-case code is individual_use', async () => {
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [{ ...baseOrderSnapshot.coupon_lines[0], code: 'SoLo' }],
+		};
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: "SoLo is already on the order, and it can't be combined with other coupons.",
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('validates a parent-category coupon against a child-category product', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData(
+			[
+				engineDocument({
+					uuid: 'coupon-parent',
+					remoteId: '3',
+					payload: couponPayload('parent', false, { product_categories: [16] }),
+				}),
+			],
+			[engineDocument({ uuid: 'category-child', remoteId: '17', payload: { id: 17, parent: 16 } })]
+		);
+		recalculate.mockResolvedValue({
+			couponLines: [{ code: 'parent', discount: '1.8' }],
+			lineItems: orderSnapshot.line_items,
+		});
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('parent')).resolves.toEqual({ success: true });
+		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('matches a mixed-case stored candidate code', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData([
+			engineDocument({
+				uuid: 'coupon-bonus',
+				remoteId: '1',
+				payload: couponPayload('BoNuS', false),
+			}),
+		]);
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('  BONUS ')).resolves.toEqual({ success: true });
+		// The new line carries the lowercase code, not the catalog's case.
+		expect(recalculate).toHaveBeenCalledWith(expect.anything(), [
+			expect.objectContaining({ code: 'bonus' }),
+		]);
+	});
+
+	it('returns not found for an unknown discount_type without dispatching', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData([
+			engineDocument({
+				uuid: 'coupon-broken',
+				remoteId: '1',
+				payload: couponPayload('broken', false, { discount_type: 'unknown' }),
+			}),
+		]);
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('broken')).resolves.toEqual({
+			success: false,
+			error: 'Coupon not found',
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('does not inherit individual_use from a catalog collision with a virtual line', async () => {
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [
+				{
+					code: 'solo',
+					discount: '0',
+					discount_tax: '0',
+					meta_data: [
+						{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+					],
+				},
+			],
+		};
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({ success: true });
+		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
 	it('preserves trimmed lowercase lookup and rejects against an applied individual-use coupon', async () => {
@@ -268,12 +430,14 @@ describe('useAddCoupon per-user usage limits', () => {
 	const GUEST_EMAIL = 'shopper@example.com';
 
 	beforeEach(() => {
+		mockWcVersion.mockReturnValue('11.3.0');
 		localPatch.mockReset();
 		recalculate.mockReset();
 		mockEngineData([
 			engineDocument({
 				uuid: 'coupon-once',
 				remoteId: '3',
+				remoteKey: '3',
 				payload: couponPayload('once', false, {
 					usage_limit_per_user: 1,
 					used_by: [GUEST_EMAIL, '7'],
@@ -347,3 +511,11 @@ describe('useAddCoupon per-user usage limits', () => {
 		await expect(result.current.addCoupon('once')).resolves.toEqual({ success: true });
 	});
 });
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+jest.mock('../commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));

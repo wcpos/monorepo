@@ -1,0 +1,209 @@
+import * as React from 'react';
+
+import { render } from '@testing-library/react';
+
+import { mockState } from '../cards/test-utils';
+import { Reports } from '../reports';
+import { calculateTotals } from '../report/utils';
+
+import type * as Context from '../context';
+
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+
+// Native portal/animation primitives are not transformed by this Jest preset; keep shell state real.
+jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
+jest.mock('@wcpos/components/dialog', () => {
+	const Close = React.createContext(() => {});
+	return {
+		DialogTitle: ({ children }: React.PropsWithChildren) => <div role="heading">{children}</div>,
+		Dialog: ({
+			children,
+			onOpenChange,
+			open = true,
+		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void; open?: boolean }>) => (
+			<Close.Provider value={() => onOpenChange(false)}>{open ? children : null}</Close.Provider>
+		),
+		DialogContent: ({
+			children,
+			testID,
+			side,
+			portalHost,
+		}: React.PropsWithChildren<{
+			testID: string;
+			side: string;
+			portalHost: string;
+		}>) => (
+			<div data-testid="dialog-shell" data-side={side} data-host={portalHost}>
+				<div data-testid={testID}>{children}</div>
+				<button data-testid={`${testID}-close`} onClick={React.useContext(Close)} />
+			</div>
+		),
+		DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+		DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+		DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+		DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+		DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
+	};
+});
+jest.mock('@wcpos/components/table', () => {
+	const tags = {
+		Table: 'table',
+		TableHeader: 'thead',
+		TableHead: 'th',
+		TableBody: 'tbody',
+		TableRow: 'tr',
+		TableCell: 'td',
+		TableFooter: 'tfoot',
+	};
+	return Object.fromEntries(
+		Object.entries(tags).map(([name, tag]) => [
+			name,
+			({
+				children,
+				testID,
+				className,
+			}: React.PropsWithChildren<{ testID?: string; className?: string }>) =>
+				React.createElement(tag, { 'data-testid': testID, className }, children),
+		])
+	);
+});
+jest.mock('../closures/save-or-share-csv', () => ({ saveOrShareCsv: jest.fn(async () => {}) }));
+jest.mock('../hero', () => ({
+	Hero: () => <div data-testid="hero-total">Hero</div>,
+	SalesScope: ({ date }: { date: React.ReactNode }) => (
+		<div data-testid="reports-scope-strip">{date}</div>
+	),
+}));
+jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
+}));
+
+// Only native controls are replaced; selection and report aggregation stay real.
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({
+		testID,
+		checked,
+		indeterminate,
+		onCheckedChange,
+		accessibilityLabel,
+		disabled,
+	}: {
+		testID: string;
+		checked: boolean;
+		indeterminate?: boolean;
+		onCheckedChange: (checked: boolean) => void;
+		accessibilityLabel?: string;
+		disabled?: boolean;
+	}) => (
+		<button
+			role="checkbox"
+			aria-label={accessibilityLabel}
+			aria-checked={indeterminate ? 'mixed' : checked}
+			data-testid={testID}
+			disabled={disabled}
+			onClick={() => onCheckedChange(!checked)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/select', () => ({
+	Select: ({ children }: React.PropsWithChildren) => children,
+	SelectContent: ({ children }: React.PropsWithChildren) => children,
+	SelectGroup: ({ children }: React.PropsWithChildren) => children,
+	SelectTrigger: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<button data-testid={testID}>{children}</button>
+	),
+	SelectValue: () => null,
+	SelectItem: ({ label, testID }: { label: string; testID: string }) => (
+		<span data-testid={testID}>{label}</span>
+	),
+}));
+const Selection = React.createContext<Context.ReportsSelection | undefined>(undefined);
+const context = jest.requireMock<typeof Context>('../context');
+export const real = jest.requireActual<typeof Context>('../context');
+export function preparePanel() {
+	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
+	jest.spyOn(context, 'useIncludedStatus').mockImplementation(real.useIncludedStatus);
+	jest.spyOn(context, 'useReportsHandles').mockImplementation(
+		() =>
+			({
+				handle: mockSalesHandle,
+				comparisonHandle: mockSalesHandle,
+				refundsHandle: mockRefundsHandle,
+			}) as unknown as Context.ReportsHandles
+	);
+	jest.spyOn(context, 'useReportsSelection').mockImplementation(() => React.useContext(Selection)!);
+	jest.spyOn(context, 'useReportsData').mockImplementation(() => {
+		const included = real.useIncludedStatus();
+		const { unselectedRowIds } = React.useContext(Selection)!;
+		const selectedOrders = mockState.data.allOrders.filter(
+			(order) => included(order) && !unselectedRowIds[order.uuid]
+		);
+		return {
+			...mockState.data,
+			selectedOrders,
+			totals: calculateTotals({ orders: selectedOrders }),
+		};
+	});
+}
+function SelectionProvider({ children }: React.PropsWithChildren) {
+	const [unselectedRowIds, setUnselectedRowIds] = React.useState<
+		Context.ReportsSelection['unselectedRowIds']
+	>({ hidden: true });
+	const { statusMode, setStatusMode } = real.useReportsScope();
+	return (
+		<Selection.Provider value={{ unselectedRowIds, setUnselectedRowIds }}>
+			<button
+				data-testid="widen"
+				onClick={() => setStatusMode(statusMode === 'all' ? 'done' : 'all')}
+			/>
+			<span data-testid="excluded">{JSON.stringify(unselectedRowIds)}</span>
+			{children}
+		</Selection.Provider>
+	);
+}
+export const room = () =>
+	render(
+		<real.ReportsScopeProvider>
+			<SelectionProvider>
+				<Reports date="Sales" />
+			</SelectionProvider>
+		</real.ReportsScopeProvider>
+	);
+
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+/** The sales and refunds handles; a test drives `set({ laneProgress })` (null: range complete). */
+export const mockSalesHandle = fakeQueryHandle({}, 'sales');
+export const mockRefundsHandle = fakeQueryHandle({}, 'refunds');
+export const mockPrintDocument = {
+	templates: [{ id: 7, title: 'Sales', offline_capable: true }],
+	templatesReady: true,
+	mismatch: null as string | null,
+	resolvedPrinter: null as { id: string } | null,
+	allPrinters: [] as { id: string; name: string }[],
+	printerSelection: { type: 'auto' },
+	setPrinterSelection: jest.fn(),
+	selectedTemplateId: 7,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	isPrinting: false,
+	isSyncing: false,
+	printedTo: null,
+	printHeld: false,
+	previewProps: { renderedHtml: '<b>Report</b>', previewPaperWidth: 'a4' },
+	documentError: null as Error | null,
+	print: jest.fn<Promise<boolean>, []>().mockResolvedValue(true),
+};
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: jest.fn(() => mockPrintDocument),
+}));
+
+jest.mock('@wcpos/components/webview', () => ({
+	WebView: ({ testID }: { testID?: string }) => (
+		<iframe data-testid={testID} title="Report preview" />
+	),
+}));
+jest.mock('../../receipt/components/receipt-preview-viewport', () => ({
+	ReceiptPreviewViewport: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('../../receipt/mismatch-badge', () => ({ MismatchBadge: () => null }));

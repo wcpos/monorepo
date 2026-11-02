@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -51,9 +53,36 @@ describe('DocsLink', () => {
 		const link = screen.getByTestId('docs-link');
 		expect(link.getAttribute('role')).toBe('link');
 		expect(link.textContent).toContain('How syncing works');
-		expect(link.querySelector('[data-icon="arrowUpRight"]')).not.toBeNull();
+		expect(link.querySelector('[data-icon="openExternal"]')).not.toBeNull();
+
+		const parts = link.querySelectorAll('span');
+		expect(parts).toHaveLength(2);
+		expect(parts[0].textContent).toBe('How syncing works');
+		expect(parts[1]).toHaveAttribute('data-icon', 'openExternal');
 
 		fireEvent.click(link);
 		expect(mockOpenExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/products/sync');
 	});
+});
+
+it('renders code after the label in muted colour with the arrow last', () => {
+	const { container } = render(
+		<DocsLink href="https://docs.wcpos.com" code="HOST121">
+			Learn more
+		</DocsLink>
+	);
+	const parts = container.querySelectorAll('span');
+	expect(parts).toHaveLength(3);
+	expect(parts[0].textContent).toBe('Learn more');
+	expect(parts[1].textContent).toBe('· HOST121');
+	expect(parts[1]).toHaveClass('text-muted-foreground');
+	expect(parts[2]).toHaveAttribute('data-icon', 'openExternal');
+});
+
+it('wraps a long label instead of truncating it', () => {
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toContain('flex-wrap');
+	expect(source.match(/numberOfLines=\{0\}/g)).toHaveLength(2);
+	// Yoga's default flexShrink is 0: without `shrink` a long label overflows on native.
+	expect(source.match(/className="[^"]*\bshrink\b/g)).toHaveLength(2);
 });

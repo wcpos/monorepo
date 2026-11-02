@@ -1,17 +1,20 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { StatusBadge, type StatusBadgeProps } from '@wcpos/components/status-badge';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { displayStockStatus } from '../../components/product/resolve-stock';
+import { StatusFilterCell } from '../../components/status-filter-cell';
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
-import type { QueryStateActions } from '../../../../query';
+const stockTones: Record<string, StatusBadgeProps['variant']> = {
+	instock: 'ok',
+	outofstock: 'bad',
+	lowstock: 'warning',
+	onbackorder: 'warning',
+};
 
-/**
- *
- */
 export function StockStatus({
 	table,
 	row,
@@ -22,35 +25,31 @@ export function StockStatus({
 	const stockStatus = useRecordField(row.original.record, (product) =>
 		displayStockStatus(product.payload)
 	);
-	const { getLabel } = useStockStatusLabel();
-	const meta = table.options.meta as unknown as {
-		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
-	};
-
-	const variant = React.useMemo(() => {
-		switch (stockStatus) {
-			case 'instock':
-				return 'ghost-success';
-			case 'outofstock':
-				return 'ghost-destructive';
-			case 'onbackorder':
-				return 'ghost-warning';
-			case 'lowstock':
-				return 'ghost-warning';
-			default:
-				return 'ghost';
-		}
-	}, [stockStatus]);
-
+	const { items } = useStockStatusLabel();
 	return (
-		<ButtonPill
-			size="xs"
-			variant={variant}
-			onPress={() => {
-				if (stockStatus) meta.actions.setFilter('stock_status', stockStatus);
-			}}
-		>
-			{getLabel(stockStatus ?? '')}
-		</ButtonPill>
+		<StatusFilterCell
+			table={table}
+			field="stock_status"
+			value={stockStatus}
+			options={items}
+			tones={stockTones}
+			testID="product-stock-status"
+		/>
+	);
+}
+
+export function ProductStockBadge({
+	status,
+	quantity,
+}: {
+	status?: string;
+	quantity?: number | null;
+}) {
+	const { getLabel } = useStockStatusLabel();
+	return (
+		<StatusBadge
+			variant={stockTones[status ?? ''] ?? 'default'}
+			label={`${quantity == null ? '' : `${quantity} · `}${getLabel(status ?? '')}`}
+		/>
 	);
 }

@@ -1,0 +1,58 @@
+import * as React from 'react';
+
+import { useRouter } from 'expo-router';
+
+import { Toast } from '@wcpos/components/toast';
+import type { ReadonlyStoreRecord } from '@wcpos/query/user-db';
+import { Platform } from '@wcpos/utils/platform';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+import { useStoreSession } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
+
+export function useSwitchStore() {
+	const { switchStore } = useStoreSession();
+	const router = useRouter();
+	const t = useT();
+	const [isSwitching, setIsSwitching] = React.useState(false);
+	const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
+	const handleSwitchStore = async (nextStore: ReadonlyStoreRecord): Promise<boolean> => {
+		setIsSwitching(true);
+		try {
+			await switchStore(nextStore);
+			// The router owns the URL: passing the server store id as a param writes
+			// `/?store=<id>` on web (so a refresh boots into the new store) without
+			// clobbering Expo Router's own history state the way a manual
+			// history.replaceState would. Boot-time `?store=` handling consumes and
+			// removes the param as before.
+			if (Platform.isWeb) {
+				router.replace({
+					pathname: '/',
+					params: { store: String(nextStore.id) },
+				});
+			} else {
+				router.replace('/');
+			}
+			return true;
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				title: t('common.store_switch_failed'),
+				// The raw message rides the row below; the cashier gets what to do.
+				description: t('common.store_switch_failed_hint'),
+			});
+			// The same incident as the engine's failed scope switch: CLIENT181, so the
+			// row says what the toast says.
+			uiLogger.error('Store switch failed', {
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
+				context: { error },
+			});
+			return false;
+		} finally {
+			setIsSwitching(false);
+		}
+	};
+
+	return { handleSwitchStore, isSwitching };
+}

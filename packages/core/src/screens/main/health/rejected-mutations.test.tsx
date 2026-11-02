@@ -16,6 +16,32 @@ let rows: RejectedMutation[] = [];
 type Kids = { children?: React.ReactNode };
 type PressProps = Kids & { testID?: string; disabled?: boolean; onPress?: () => void };
 
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ testID }: { testID?: string }) => <button data-testid={testID} />,
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/alert-dialog', () => {
 	function Passthrough({ children }: Kids) {
 		return <>{children}</>;
@@ -26,17 +52,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialog: ({ children, open }: Kids & { open?: boolean }) => (open ? <>{children}</> : null),
 		AlertDialogContent: Passthrough,
 		AlertDialogDescription: Passthrough,
-		AlertDialogFooter: Passthrough,
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 		AlertDialogHeader: Passthrough,
 		AlertDialogTitle: Passthrough,
-		AlertDialogCancel: ({ children, testID }: PressProps) => (
-			<button data-testid={testID}>{children}</button>
-		),
-		AlertDialogAction: ({ children, testID, onPress }: PressProps) => (
-			<button data-testid={testID} onClick={onPress}>
-				{children}
-			</button>
-		),
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
@@ -56,6 +74,12 @@ jest.mock('@wcpos/components/vstack', () => ({
 // Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
 // panel that forgets the prop renders the raw entity here exactly as it would on
 // a till. A mock that swallowed the prop would make the entity test unfailable.
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => {
 	const { decode } = jest.requireActual('html-entities');
 	return {
@@ -65,10 +89,6 @@ jest.mock('@wcpos/components/text', () => {
 	};
 });
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
-jest.mock('./components', () => ({
-	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
-	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
-}));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { resolveConflict: mockResolveConflict } }),

@@ -1,0 +1,255 @@
+import * as React from 'react';
+import { View } from 'react-native';
+
+import { useRouter } from 'expo-router';
+
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Image } from '@wcpos/components/image';
+import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
+import { Text } from '@wcpos/components/text';
+import { Suspense } from '@wcpos/components/suspense';
+import { type EngineRecord, type QueryHandle, useRecordField } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
+
+import { useProAccess } from '../contexts/pro-access';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
+import { useImageAttachment } from '../hooks/use-image-attachment';
+import { ProductStockBadge } from './cells/stock-status';
+import { displayStockStatus } from '../components/product/resolve-stock';
+import { resolveImageSrc } from '../components/product/resolve-image-src';
+import { resolveVariationName } from '../components/product/resolve-variation-name';
+import { PriceWithTax } from '../components/product/price-with-tax';
+import { getVariablePrices } from '../components/product/get-variable-prices';
+import { PRODUCT_IMAGE_PLACEHOLDER } from '../components/product/product-image-placeholder';
+import { VariationRowProvider } from '../components/product/variable-product-row/context';
+import { useRowExpansion } from '../components/product/variable-product-row/use-row-expansion';
+import { VariationsButton } from '../components/product/attributes';
+import { VariationsFilterBar } from '../components/product/variable-product-row/variations/filters';
+import { VariationTableFooter } from '../components/product/variable-product-row/variations/footer';
+import { matchesStockStatusFilter } from '../components/product/stock-filter';
+import {
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useQuerySnapshot,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
+
+import type { SnapshotFields } from '../../../query';
+import type { Row, Table } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
+
+type Product = {
+	record: EngineRecord<'products'>;
+	childrenSearchCount?: number;
+	parentSearchTerm?: string;
+};
+export function ProductRow({
+	record,
+	expanded,
+	className,
+}: {
+	record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	expanded?: boolean;
+	className?: string;
+}) {
+	const product = useRecordField(record, ({ payload }) => payload);
+	const router = useRouter();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const variable = product.type === 'variable';
+	const variation = product.type === 'variation';
+	const editable = !readOnly && (variation ? caps.canEditVariations : caps.canEditProducts);
+	const source = resolveImageSrc(product);
+	const { uri, error } = useImageAttachment(record, source ?? '');
+	const range = variable
+		? getVariablePrices(product.meta_data, {
+				recordId: record.uuid,
+				remoteId: record.remoteId,
+				name: product.name,
+				sku: product.sku,
+				price: product.price,
+			})?.price
+		: undefined;
+	const price = (value: string) => (
+		<PriceWithTax
+			price={value}
+			taxClass={product.tax_class ?? ''}
+			taxStatus={product.tax_status || 'none'}
+			taxDisplay="none"
+		/>
+	);
+	return (
+		<ListRow
+			testID={`products-row-${record.uuid}`}
+			className={className}
+			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
+			// lost the expanded state of a variable product.
+			// The drill style's row (no `expanded`) is no expander.
+			aria-expanded={variable && expanded !== undefined ? expanded : undefined}
+			// The press opens the record, a variable product's too; a row the cashier cannot open is
+			// inert, as the customers and coupons rows are.
+			onPress={
+				editable
+					? () =>
+							router.push(
+								variation
+									? {
+											pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+											params: { variationId: record.uuid },
+										}
+									: {
+											pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+											params: { productId: record.uuid },
+										}
+							)
+					: undefined
+			}
+			leading={
+				<Image
+					source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
+					recyclingKey={record.uuid}
+					className="size-10 rounded"
+				/>
+			}
+			trailing={
+				<>
+					<View className="items-end gap-1 tabular-nums">
+						<View className="flex-row items-center gap-1">
+							{price(range?.min ?? product.price ?? '')}
+							{range && range.min !== range.max && (
+								<>
+									<Text>–</Text>
+									{price(range.max)}
+								</>
+							)}
+						</View>
+						<ProductStockBadge
+							status={displayStockStatus(product)}
+							quantity={product.manage_stock === true ? product.stock_quantity : undefined}
+						/>
+					</View>
+					<Icon name="chevronRight" className="text-muted-foreground" />
+				</>
+			}
+		>
+			<Text decodeHtml numberOfLines={1}>
+				{variation ? resolveVariationName(product) : product.name}
+			</Text>
+			<Text variant="key" numberOfLines={1}>
+				{product.sku}
+			</Text>
+		</ListRow>
+	);
+}
+
+type VariableRowProps = {
+	item: Row<Product, DataTableFeatures>;
+	table: Table<Product, DataTableFeatures>;
+};
+export function VariableRow(props: VariableRowProps) {
+	const meta = props.table.options.meta;
+	return (
+		<VariationRowProvider row={props.item} setRowExpanded={meta?.setRowExpanded}>
+			<VariableRowContent {...props} />
+		</VariationRowProvider>
+	);
+}
+function VariableRowContent({ item, table }: VariableRowProps) {
+	const meta = table.options.meta;
+	const { expanded } = useRowExpansion(item, table);
+	// The drill style slides the variations in from the button; nothing renders under the row.
+	const inline = !meta?.drill;
+	return (
+		<>
+			<ProductRow
+				record={item.original.record}
+				expanded={inline ? expanded : undefined}
+				className="border-b-0"
+			/>
+			{/* The button sits under the row, not in it: a button may not nest in the row's button. */}
+			{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
+			<View className="border-border border-b pb-2 pl-16">
+				<VariationsButton row={item} table={table} />
+			</View>
+			{inline && expanded && (
+				<InlineVariations row={item} stockStatus={meta?.variationStockStatus} />
+			)}
+		</>
+	);
+}
+export function InlineVariations({
+	row,
+	stockStatus,
+}: {
+	row: Row<Product, DataTableFeatures>;
+	stockStatus?: string;
+}) {
+	const state = useQueryState<'variations'>();
+	const actions = useQueryStateActions<'variations'>();
+	const ids = useRecordField(row.original.record, ({ payload }) => payload.variations) ?? [];
+	const handle = useCollectionQueryHandle('variations', state, {
+		remoteIds: ids.map(remoteIdOrNull).filter((id) => id !== null),
+	});
+	// The expansion's handle, not a later one: the refresh runs once per expansion.
+	const initialHandle = React.useRef(handle);
+	React.useEffect(() => {
+		// Same expansion refresh and row-scoped cleanup as the shared inline variations view.
+		void initialHandle.current.sync().catch(() => undefined);
+		return () => {
+			actions.clearSearch();
+			actions.resetFilters();
+		};
+	}, [actions]);
+	return (
+		<View>
+			<VariationsFilterBar row={row} />
+			{/* A failed variations read stays inside the row: past here it would reach the products
+			    list's boundary, replace the whole list, retry the products handle (which has not
+			    failed) and remount the list collapsed. A changed query clears it on its own. */}
+			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+				<Suspense>
+					<VariationRows handle={handle} parent={row.original.record} stockStatus={stockStatus} />
+				</Suspense>
+			</ErrorBoundary>
+		</View>
+	);
+}
+// The rows re-render for the answer only; the footer reads its own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
+function VariationRows({
+	handle,
+	parent,
+	stockStatus,
+}: {
+	handle: QueryHandle;
+	parent: EngineRecord<'products'>;
+	stockStatus?: string;
+}) {
+	// A changed search keeps the current variations while the new handle answers.
+	const shown = useDrawnHandle(handle);
+	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
+	const hits = result.hits.filter((hit) =>
+		matchesStockStatusFilter(hit.record.payload, stockStatus)
+	);
+	return (
+		<View>
+			{hits.map(({ record }) => (
+				<View
+					key={record.uuid}
+					testID={`data-table-row-variation-${record.remoteId ?? record.uuid}`}
+				>
+					<ProductRow record={record} />
+				</View>
+			))}
+			<VariationTableFooter
+				handle={handle}
+				shown={shown}
+				parent={parent}
+				drawnCount={hits.length}
+			/>
+		</View>
+	);
+}

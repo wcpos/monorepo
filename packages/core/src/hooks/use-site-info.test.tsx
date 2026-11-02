@@ -5,6 +5,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useSiteInfo } from './use-site-info';
 
+jest.mock('@wcpos/query/user-db', () => jest.requireActual('../../../query/src/user-db/sites'));
+
 const mockGet = jest.fn();
 const mockIncrementalPatch = jest.fn();
 const mockError = jest.fn();
@@ -14,6 +16,7 @@ const mockSite = {
 	wp_api_url: 'https://store.example.test/wp-json/',
 	url: 'https://store.example.test',
 	incrementalPatch: mockIncrementalPatch,
+	getLatest: () => ({ deleted: false }),
 };
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
@@ -69,6 +72,26 @@ describe('useSiteInfo', () => {
 		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
 
 		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('license');
+	});
+
+	it('patches search_meta_keys when the index carries them, and leaves them alone when it does not', async () => {
+		mockGet.mockResolvedValueOnce({
+			status: 200,
+			data: {
+				wcpos_version: '2.0.0',
+				search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+			},
+		});
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).toMatchObject({
+			search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+		});
+
+		mockIncrementalPatch.mockClear();
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('search_meta_keys');
 	});
 
 	it('does not report an error when the request is blocked by the asleep pre-flight check', async () => {
@@ -147,4 +170,15 @@ describe('useSiteInfo', () => {
 		});
 		expect(mockGet).toHaveBeenCalledTimes(callsAfterRetry);
 	});
+});
+
+it('reports a site removed while its info request was in flight', async () => {
+	mockGet.mockResolvedValue({ status: 200, data: { wcpos_version: 'new' } });
+	const latest = jest.spyOn(mockSite, 'getLatest').mockReturnValue({ deleted: true });
+	mockError.mockClear();
+	const { result } = renderHook(() => useSiteInfo({ site: mockSite as never }));
+	await waitFor(() => expect(result.current.isLoading).toBe(false));
+	expect(result.current.error).toBe('Cannot update a removed site');
+	expect(mockError).toHaveBeenCalled();
+	latest.mockRestore();
 });

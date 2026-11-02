@@ -13,6 +13,7 @@ const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 type DownloadReceiptPdfOptions = {
 	orderId?: number;
 	templateId?: number | string | null;
+	document?: string;
 };
 
 type PdfResponse = {
@@ -28,18 +29,18 @@ export function useDownloadReceiptPdf() {
 	const [isDownloading, setIsDownloading] = React.useState(false);
 
 	const download = React.useCallback(
-		async ({ orderId, templateId }: DownloadReceiptPdfOptions): Promise<void> => {
+		async ({ orderId, templateId, document }: DownloadReceiptPdfOptions): Promise<void> => {
 			if (!orderId || templateId == null || templateId === '') {
 				return;
 			}
 
 			const normalizedTemplateId = String(templateId);
-			const filename = `receipt-${orderId}.pdf`;
+			const filename = document ? `refund-${document.split(':')[1]}.pdf` : `receipt-${orderId}.pdf`;
 
 			try {
 				setIsDownloading(true);
 				const { data } = (await http.get(`/receipts/${orderId}/pdf`, {
-					params: { template_id: normalizedTemplateId },
+					params: { template_id: normalizedTemplateId, ...(document ? { document } : {}) },
 					responseType: 'arraybuffer',
 				})) as PdfResponse;
 

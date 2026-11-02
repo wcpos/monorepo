@@ -8,9 +8,11 @@ import type {
 	ProductDocument,
 	ProductTagDocument,
 	ProductVariationDocument,
+	RefundDocument,
 	TaxRateDocument,
 } from '@wcpos/database';
 
+import type { ReadonlyEngineRecord } from './readonly-engine-record';
 import type { RxDocument } from 'rxdb';
 
 /**
@@ -42,10 +44,12 @@ export type EngineRecordCollectionName =
 	| 'categories'
 	| 'tags'
 	| 'brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 type LegacyDocumentByCollection = {
 	orders: OrderDocument;
+	refunds: RefundDocument;
 	products: ProductDocument;
 	variations: ProductVariationDocument;
 	customers: CustomerDocument;
@@ -101,3 +105,19 @@ export type EngineRecordShape<C extends EngineRecordCollectionName> = {
 
 /** An engine record: the RxDocument itself, typed. */
 export type EngineRecord<C extends EngineRecordCollectionName> = RxDocument<EngineRecordShape<C>>;
+
+export function isVariationRecord(
+	record: ReadonlyEngineRecord<'products'> | ReadonlyEngineRecord<'variations'>
+): record is ReadonlyEngineRecord<'variations'> {
+	return recordCollectionName(record) === 'variations';
+}
+
+/** Also accepts temporary-database documents, which share the collection lifecycle. */
+export function isRecordClosed(record: object): boolean {
+	return (record as { collection?: { closed?: boolean } }).collection?.closed === true;
+}
+
+/** The collection a record lives in. The record IS the RxDocument (ADR 0028); only its read-only type hides `collection` from UI (ADR 0033 item 3). */
+export function recordCollectionName(record: object): string | undefined {
+	return (record as { collection?: { name?: string } }).collection?.name;
+}

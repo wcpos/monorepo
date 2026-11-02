@@ -1,10 +1,10 @@
 import type { PrinterProfile } from '@wcpos/printer';
-import type { PrinterProfileDocument } from '@wcpos/database';
+import type { LocalPrinterProfile } from '@wcpos/query';
 
 /**
  * Converts an RxDB printer profile document into a plain PrinterProfile object.
  */
-export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
+export function toPrinterProfile(doc: LocalPrinterProfile): PrinterProfile {
 	return {
 		id: doc.id,
 		name: doc.name,

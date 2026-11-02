@@ -15,6 +15,11 @@ const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
+const mockShowAddedToCartToast = jest.fn();
+
+jest.mock('./added-to-cart-toast', () => ({
+	showAddedToCartToast: (...args: unknown[]) => mockShowAddedToCartToast(...args),
+}));
 
 type TestOrder = {
 	isNew: boolean;
@@ -104,11 +109,11 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
-jest.mock('./use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ incrementLineItem: mockIncrementLineItem }),
+jest.mock('./use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ incrementLineItem: mockIncrementLineItem }),
 }));
 
 jest.mock('./utils', () => ({
@@ -180,6 +185,24 @@ describe('useAddProduct', () => {
 				subtotal: '5',
 			})
 		);
+		// One log entry per add; the visible toast is the shared, coalescing one (#2370).
+		expect(mockLoggerSuccess).toHaveBeenCalledTimes(1);
+		expect(mockLoggerSuccess.mock.calls[0][1]).not.toHaveProperty('showToast');
+		expect(mockShowAddedToCartToast).toHaveBeenCalledWith(expect.any(Function), 'Plain product');
+	});
+
+	it('leaves a silent (scan-driven) add to the scan feedback toast', async () => {
+		const { result } = renderHook(() => useAddProduct());
+
+		await act(async () => {
+			await result.current.addProduct(
+				engineDocument({ id: 101, name: 'Plain product', type: 'simple' }, '101') as never,
+				{ silent: true }
+			);
+		});
+
+		expect(mockLoggerSuccess).toHaveBeenCalledTimes(1);
+		expect(mockShowAddedToCartToast).not.toHaveBeenCalled();
 	});
 
 	it('refuses a misfiled variation-typed products document instead of writing a malformed line', async () => {

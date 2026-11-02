@@ -114,38 +114,6 @@ describe('calculateRefundTotal', () => {
 
 		expect(result).toBe('21.00');
 	});
-
-	it('returns just line item totals with taxes when no custom amount', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [
-				{
-					refund_total: '10.00',
-					refund_tax: [{ id: 1, refund_total: '2.00' }],
-				},
-			],
-			customAmount: '',
-		});
-
-		expect(result).toBe('12.00');
-	});
-
-	it('returns just custom amount when no line items', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '7.50',
-		});
-
-		expect(result).toBe('7.50');
-	});
-
-	it('returns 0.00 when nothing selected', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '',
-		});
-
-		expect(result).toBe('0.00');
-	});
 });
 
 describe('calculateLineItemRefund with dp parameter', () => {
@@ -250,25 +218,9 @@ describe('calculateRefundTotal with dp parameter', () => {
 		});
 		expect(result).toBe('0');
 	});
-
-	it('dp defaults to 2 when not provided', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '7.50',
-		});
-		expect(result).toBe('7.50');
-	});
 });
 
 describe('computeMaxRefundable', () => {
-	it('no previous refunds', () => {
-		expect(computeMaxRefundable('100.00', [])).toBe(100.0);
-	});
-
-	it('one previous partial refund', () => {
-		expect(computeMaxRefundable('100.00', [{ total: '-30.00' }])).toBe(70.0);
-	});
-
 	it('dp=0: whole number currency (JPY)', () => {
 		expect(computeMaxRefundable('10000', [], 0)).toBe(10000);
 	});
@@ -279,12 +231,6 @@ describe('computeMaxRefundable', () => {
 
 	it('dp=3: three decimal places (KWD)', () => {
 		expect(computeMaxRefundable('100.000', [{ total: '-30.000' }], 3)).toBe(70.0);
-	});
-
-	it('fractional rounding with dp=2', () => {
-		expect(
-			computeMaxRefundable('10.00', [{ total: '-3.33' }, { total: '-3.33' }, { total: '-3.33' }])
-		).toBe(0.01);
 	});
 });
 

@@ -78,6 +78,15 @@ _Avoid_: queryKey grammar, descriptor string (in caller-facing documentation)
 
 ## Language — Logs
 
+**Server sentence**:
+The one plain-text sentence a WordPress REST error body gives for its cause — a
+PHP fatal's first line plus its WordPress-relative location on a 5xx, else each
+invalid param's reason, else the top-level message without its HTML. The fatal
+form is built to fit the 200-character quote cap; the ledger observer caps the
+rest when it quotes them.
+_Avoid_: server message (the field `serverMessage` keeps its name), error message,
+reason (`reason` is the body's `code`).
+
 **Error code**:
 A registry code (`SYNC104` style) from `error-registry.json`; a SPECIFIC code
 exists iff the merchant response differs, and generic codes are the explicit
@@ -225,6 +234,26 @@ _Avoid_: plugin (for anything app-side), add-on (product-domain term — product
 **Plugin**:
 A WordPress plugin, only — the free/Pro plugins and Woo extensions. Never an app-side unit.
 
+**Who writes what** (ruled 2026-10-08, wcpos/roadmap#121 amendment):
+Merchants customise with templates and settings; they never write React. Extension
+developers write code, JS or React, against host components, and never ship their own
+renderer or markup into the POS. The app owns the pixels of anything an extension adds to
+the app's own screens; a mini-app or display page draws its own, inside its frame.
+
+**Host component**:
+One of the closed, versioned set of app components an extension may compose — field,
+checkbox, button, banner, list and so on — rendered by the app with its theme, spacing and
+touch targets. The only UI an extension can add to the app's own screens, whether it
+arrives as declared UI or from sandboxed extension code (Shopify's POS UI Extensions shape).
+_Avoid_: accepting markup, styles or a render function from an extension (the WooCommerce
+Blocks checkout mistake)
+
+**Declared UI**:
+A static host-component tree carried in a server descriptor and rendered by the app with no
+extension code — the config-class case of composing host components, defined as the static
+case of the sandboxed-code tier so both share one schema. First consumer: the fields of a
+payment-method descriptor (the email invoice gateway).
+
 **Delivery class**:
 How an extension reaches the app. Three classes under one umbrella, each with its own
 integration surface: **config** (declarative arrangement — layout, settings), **web**
@@ -244,9 +273,52 @@ sees the broadcast data), and re-renders the active display template on every ev
 Shares the envelope with the bridge, not the contract.
 
 **Slot**:
-A named UI insertion point in the app, identified by a dotted id (`pos.cart.block`).
-Extensions register UI into slots. Woo SlotFill dialect, Shopify-style identity.
+A named UI insertion point in the app, identified by a closed dotted id with the entry kind
+last (`pos.columns.panel`, `pos.products.filter-bar.item`). First-party code registers
+entries into slots in order via a static, typed registry (`@wcpos/core/extensions/slots`);
+an extension's entry arrives as declared UI or a sandboxed host-component tree, never as a
+component (ruled 2026-10-08; first-party registration stands for 2.0);
+an entry receives a readonly subscribable value and an enumerated set of async methods the
+host may reject, and never a database object. The name knowingly overlaps Expo Router's
+`<Slot />` and Radix / `@rn-primitives/slot`; ours is disambiguated by module path. Ruled
+wcpos/roadmap#139, 2026-09-03.
 _Avoid_: target (Shopify's word for the same thing)
+
+**Action event**:
+A named thing the POS is about to do (`cart.line.add`), dispatched through a chain of hooks
+before its one writer runs. Closed dotted list (`<domain>.<noun>.<verb>`, imperative); a new
+event needs one writer function already in place, a typed result and a waiting consumer.
+Complementary to RxDB: intent, the moment before the write and the power to refuse live here;
+the fact of a change is an RxDB subscription. Ruled wcpos/roadmap#421, 2026-10-09;
+`@wcpos/core/extensions/actions`.
+_Avoid_: filter, event bus, "fire" (a bus is fire-and-forget; here the hook owns the result)
+
+**Hook**:
+A function `(ctx, e, next)` registered on an action event that observes (`next(e)`), rewrites
+(`next({ ...e, payload })`) or refuses (`{ deny: { reasonKey } }` without `next`) it. `e` is
+frozen plain data stamped with `actor` and `source`; `ctx` is read-only until the writer runs.
+_Avoid_: listener (RxDB's side), middleware (we say hook), RxDB's own `preSave` for this
+
+**Guard**:
+A first-party hook (`tier: 'guard'`) that may refuse and fails closed: a timeout, a throw, a
+return without `next`, or a disabled guard refuses the dispatch. Guards run last, right before
+the writer, so they judge the payload after every extension's rewrite. An extension-tier hook
+may only observe and rewrite and fails open.
+
+**Bottom handler**:
+The one function that writes for an action event; nothing else writes that collection for that
+action. Every dispatch runs inside the order's mutation queue, so a rewrite lands on an
+unchanged target.
+
+**Command**:
+A named thing the POS can be told to do (`pos.checkout.open`), raised by a key, a button, a
+macro or a palette; it dispatches an action event or calls a host verb and never writes. Closed
+dotted list. Ruled wcpos/roadmap#428, 2026-10-13; `@wcpos/core/extensions/commands`.
+_Avoid_: shortcut (that is the key), action (that is the event)
+
+**Hotkey**:
+A chord bound to a command by the hotkeys module.
+_Avoid_: hot key, keybinding
 
 **Bridge**:
 The versioned JSON postMessage channel between the host app and a mini-app:
@@ -293,6 +365,12 @@ The state machine a display page exposes to templates: `idle`, `cart`, `payment`
 **Signaling**:
 The one-time exchange that lets two WebRTC peers (POS and display) find each other,
 carried by the merchant's WordPress site as a mailbox; not the data path.
+
+**Sale commit**:
+The one dispatch of `checkout.tender.commit` for an order, made inside the order's queue
+slot: it reads the balance there, counts the conditions, runs the tender guards and hands
+the writer the session the gate stamped, re-verified.
+_Avoid_: tender (as a noun), tender flow, checkout preparation, `prepareSale`
 
 ## Language — Cashiers & till
 
@@ -566,3 +644,18 @@ administrators and shop managers by default, not by cashiers — covering the se
 well. Audited by "rung up by" and an order note. A reassignment **never reopens or amends a
 closure**: the closure reads as at close; live reports read the current cashier on the sale.
 _Avoid_: transfer, change server, edit cashier
+
+## Language — Products browse
+
+**Tile grid**:
+The products stage's fixed-column grid of Poster tiles. Columns come from the grid-columns
+setting, widths are equal, order is kept, and a short last row is padded with empty tile
+frames, never wrapped.
+_Avoid_: wrap, flow layout, masonry, column grid.
+
+## Language — POS panels
+
+**Panel side**:
+the edge a POS panel enters from, derived from its subject (cart → over the products,
+products → over the cart, shell → right).
+_Avoid_: overlay side, POS overlay side, products side.

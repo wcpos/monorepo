@@ -26,6 +26,13 @@ on:
         description: Skip E2E tests
         type: boolean
         default: false
+      quarantine_only:
+        description: Run only e2e/quarantine.json's tests on next, then comment on #2284 (target=preview)
+        type: boolean
+        default: false
+  # Weekly quarantine-only run of `next` (#2284). Schedules run from main; checkouts pin `next`.
+  schedule:
+    - cron: '17 22 * * 0'
   push:
     branches: [main]
   pull_request:
@@ -48,11 +55,16 @@ on:
 #   `cold-start` coalesce — a newer main run cancels an OLDER run's
 #   verification, so a merge burst verifies only the artifact that is live.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
-# newer SHA. There is deliberately NO cross-run store serialization — see the
-# comment above e2e.
+# newer SHA. There is deliberately NO cross-run store serialization except the
+# dev-next queue — see the comment above e2e.
+# Lane-next E2E runs (schedule, and dispatches that test on dev-next) get a
+# RUN-UNIQUE group and are never cancelled: a shared `deploy-<ref>` group with
+# cancel-in-progress would let a newer dispatch from `next` kill the run that
+# holds the dev-next queue, and a shared store group keeps only one pending
+# run, silently dropping a third. The queue alone orders them.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && format('deploy-next-dispatch-{0}', github.run_id) || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -72,7 +84,21 @@ jobs:
       native: ${{ steps.plan.outputs.native }}
       self: ${{ steps.plan.outputs.self }}
       reason: ${{ steps.plan.outputs.reason }}
+      # `main`, `next`, or EMPTY when the run belongs to neither trunk. Every
+      # lane-dependent value below reads this one output; nothing else may
+      # look at base_ref / ref_name to pick a store.
+      lane: ${{ steps.lane.outputs.lane }}
     steps:
+      # Front desk's weekly cron dispatches quarantine-only runs (#2284); a wrong ref or
+      # target must never reach production or main's concurrency groups.
+      - name: 🛑 Refuse a quarantine-only dispatch off next or not preview
+        if: github.event_name == 'workflow_dispatch' && inputs.quarantine_only && (github.ref_name != 'next' || inputs.target != 'preview')
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          echo "::error::Quarantine-only run (ref=$REF_NAME target=$TARGET) must be dispatched on next with target=preview."
+          exit 1
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -80,6 +106,40 @@ jobs:
         id: plan
         with:
           base-sha: ${{ github.event.pull_request.base.sha }}
+      # Lane → E2E store is decided ONCE, here. The old inline expression
+      # (`base_ref == 'next' || ref_name == 'next'`, else main) defaulted every
+      # run it did not recognise to the MAIN-lane stores. A PR whose base was a
+      # feature branch stacked on `next` (#1997 while it still sat on
+      # `codex/tender-pane-surface`) therefore ran a next-lane app against
+      # dev-free/dev-pro, a plugin generation older than the app supports; 126
+      # cases passed against the wrong store and the one that could not
+      # (the quick-discount coupon line, a 2.0.0 server feature) was read as a
+      # plugin bug (roadmap#277). A run that belongs to neither trunk has NO
+      # store; the e2e job refuses it before spending a runner on it.
+      #
+      # `inputs.lane` wins when a human dispatches: base_ref is empty and
+      # ref_name is the feature branch, so `auto` cannot see the lane of a
+      # feature branch and must not guess one either. A quarantine-only run is always `next`.
+      - name: 🛤 Resolve E2E lane
+        id: lane
+        env:
+          INPUT_LANE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'next' || inputs.lane }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$INPUT_LANE" in
+            main|next) lane="$INPUT_LANE" ;;
+            *)
+              if [ "$EVENT_NAME" = "pull_request" ]; then ref="$BASE_REF"; else ref="$REF_NAME"; fi
+              case "$ref" in
+                main|next) lane="$ref" ;;
+                *) lane="" ;;
+              esac
+              ;;
+          esac
+          echo "lane=${lane:-<unresolved>} (event=$EVENT_NAME base_ref=${BASE_REF:-} ref_name=$REF_NAME input=${INPUT_LANE:-auto})"
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: 🚀 Deploy
@@ -90,8 +150,9 @@ jobs:
     # one running + one pending job per group and REPLACES the pending one when
     # a third arrives — so a superseded deploy is dropped before `eas deploy`
     # ever starts, and the ledger reads that as superseded, not red.
+    # A schedule carries the main ref but previews `next`: no main group, no turbo cache save.
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
       cancel-in-progress: false
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
@@ -100,6 +161,7 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -109,7 +171,7 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           # main saves the day's turbo cache from the full build; PRs restore read-only.
-          cache-save: ${{ github.ref == 'refs/heads/main' }}
+          cache-save: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' }}
 
       # A wedged turbo build has no timeout of its own: on 2026-09-02 two PR
       # deploys (runs 33664427747, 33687923179) sat in this step for 40–75 min
@@ -123,11 +185,16 @@ jobs:
       - name: 🌐 Export apps/main for web
         timeout-minutes: 20
         working-directory: apps/main
+        env:
+          # Preview deploys are the web E2E target: expose the live-tab hold hook
+          # (`__wcposLiveTabHold`, live-tab-gate.web.tsx) so live-tab.spec.ts can
+          # exercise the write-deferral ceiling. Production exports never get it.
+          EXPO_PUBLIC_WCPOS_E2E: ${{ (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event.inputs.target == 'preview') && '1' || '' }}
         run: pnpm expo export --platform web --output-dir ./build
 
       - name: 🚀 Deploy preview
         id: deploy-preview
-        if: github.event_name == 'pull_request' || github.event.inputs.target == 'preview'
+        if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event.inputs.target == 'preview'
         working-directory: apps/main
         run: |
           # Deploy and capture output
@@ -168,13 +235,104 @@ jobs:
       - name: 📝 Get deployment URL
         id: get-url
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event.inputs.target }}" = "preview" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.target }}" = "preview" ]; then
             echo "url=${{ steps.deploy-preview.outputs.preview_url }}" >> $GITHUB_OUTPUT
             echo "is_production=false" >> $GITHUB_OUTPUT
           else
             echo "url=https://wcpos.expo.app" >> $GITHUB_OUTPUT
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
+
+  # One login + sync per cashier per run, serially: six shards doing it at once
+  # saturated dev-next three times on 2026-09-30 (#2321). It replaces the daily
+  # per-shard cache, which never hit (saved only on green jobs, per branch).
+  # Only ciphertext leaves the runner; without the key each shard sets up alone.
+  e2e-setup:
+    name: 🔑 E2E shared setup
+    needs: [changes, deploy]
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    runs-on: ubuntu-latest
+    # The queue step lists runs.
+    permissions:
+      contents: read
+      actions: read
+    # The queue may wait up to 4 h on next; main keeps 30.
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 290 || 30 }}
+    outputs:
+      state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
+      queue: ${{ steps.queue.outcome }}
+      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
+    steps:
+      - name: 🔑 Check for the auth-state key
+        id: key
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        run: echo "present=$([ -n "$E2E_AUTH_CACHE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 🎭 Install Playwright browsers
+        run: cd apps/main && npx playwright install chromium --only-shell
+
+      # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait here,
+      # before the first dev-next request, until no other web or native run
+      # holds it. The shards refuse to start if this did not succeed.
+      - name: 🚦 Queue for dev-next
+        id: queue
+        if: needs.changes.outputs.lane == 'next'
+        timeout-minutes: 250
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
+
+      # globalSetup runs before tests load, so a grep matching nothing runs only
+      # the setup. If it fails, the shards set up by themselves, as before.
+      - name: 🔑 Log in and sync every shard's cashier, one at a time
+        id: setup
+        if: steps.key.outputs.present == 'true'
+        continue-on-error: true
+        timeout-minutes: 20
+        working-directory: apps/main
+        run: npx playwright test --pass-with-no-tests --grep '@e2e-shared-setup-runs-no-tests' --reporter=list
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
+          CI: true
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          # Must match the e2e matrix's shard count.
+          E2E_SHARED_SETUP_SHARDS: ${{ (needs.changes.outputs.only_specs != '' || github.event_name == 'schedule' || inputs.quarantine_only) && '1' || '6' }}
+          E2E_LANE: ${{ needs.changes.outputs.lane }}
+          E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
+
+      - name: 🔐 Encrypt the shared auth state
+        if: steps.key.outputs.present == 'true'
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
+        working-directory: apps/main
+        run: |
+          [ "$SETUP_OUTCOME" != "success" ] || tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
+          rm -rf e2e/.auth-state
+
+      - name: 📤 Upload the encrypted auth state
+        id: upload
+        if: steps.setup.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: e2e-auth-state
+          path: apps/main/e2e/auth-state.enc
+          if-no-files-found: error
+          retention-days: 1
 
   # E2E runs from concurrent PRs hit the shared dev store WITHOUT any
   # cross-run serialization. A global FIFO queue job lived here from
@@ -186,6 +344,16 @@ jobs:
   # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
   # spec flakes under concurrency, fix THAT spec's isolation; do not
   # reintroduce a cross-run mutex here.
+  # Exception, dev-next only (Front desk ruling B, 2026-10-01): six web shards
+  # and two native dispatches together saturated its six php-fpm workers
+  # (1,898 499s, every device failed at the connect screen). Next-lane runs
+  # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
+  # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
+  # scheduled runs reach dev-next — PRs to next skip this suite — so the
+  # queue cannot starve a merge gate. The main lane is not queued.
+  # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
+  # stores, no fourth). Six shards logging in at once saturated it on
+  # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
   # PRs targeting `next` skip the web E2E suite (owner ruling 2026-09-03):
   # the dev lane is where performance and behaviour are explored by hand on
   # dev-next, and the store cannot serve several PR runs at once (six php-fpm
@@ -194,32 +362,61 @@ jobs:
   # The e2e-gate below treats this skip as legitimate.
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    needs: [changes, deploy, e2e-setup]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # Four shards on BOTH lanes. The two-shard main cap (2026-08-18) guarded
+        # Six shards on BOTH lanes. The two-shard main cap (2026-08-18) guarded
         # dev-pro's write capacity, but the load it feared was the per-test
         # catalogue re-sync removed in #1288 — post-fix, four shards' store
-        # traffic is below the old two-shard baseline. Cross-run safety stays
-        # the specs' job (run-private probes); cashier slots 1-16 exist on
-        # every dev store.
+        # traffic is below the old two-shard baseline. Four became six (#2291):
+        # the #2253 pair hit Playwright's 50-minute cap on shards 2 and 4 with
+        # about 120 specs unrun per side. Six still fit each 8-slot cashier
+        # band (PR 1-8, other runs 9-16). Cross-run safety stays the specs' job
+        # (run-private probes); cashier slots 1-16 exist on every dev store.
         # A narrowed (spec-only) run uses ONE shard on purpose. Splitting two
         # spec files across four shards would leave shards with nothing to run,
         # and a shard that runs zero tests still exits 0 — a green that means
-        # nothing. One shard cannot produce that.
-        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4]') }}
-        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[4]') }}
+        # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
+        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
+        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
       cancel-in-progress: true
     steps:
+      # First, before any setup: a run that belongs to neither trunk has no
+      # store to test against, and guessing one is how a next-lane app was
+      # verified against the main-lane plugin (see the lane step in `changes`).
+      - name: 🛤 Refuse an unresolved lane
+        if: needs.changes.outputs.lane == ''
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error::No E2E lane for this run (event=$EVENT_NAME base_ref=${BASE_REF:-<none>} ref_name=$REF_NAME). Web E2E runs only for main or next: retarget the PR at a trunk, or dispatch with the 'lane' input set. Refusing to guess a store."
+          exit 1
+
+      # A next-lane shard may touch dev-next only after e2e-setup's queue step
+      # admitted this run (cancelled or timed out reads as not admitted).
+      - name: 🚦 Refuse dev-next without the queue
+        if: needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
+        env:
+          QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
+          QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SETUP_RESULT: ${{ needs.e2e-setup.result }}
+        run: |
+          echo "::error::The dev-next queue did not admit this run (queue=${QUEUE_OUTCOME:-<none>}, e2e-setup=$SETUP_RESULT). Refusing to load dev-next alongside another E2E run. Queue attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
+          exit 1
+
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -229,40 +426,24 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
-      - name: 📅 Cache date
-        id: cache-date
-        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
-
-      - name: 💾 Cache E2E auth state
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      # Without them (no key, failed setup) each shard logs in and syncs itself, loudly.
+      - name: 📥 Download the shared auth state
+        if: needs.e2e-setup.outputs.state == 'ready'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          # ONLY the encrypted archive is ever cached: the snapshot embeds the
-          # cashier's access + refresh tokens and this repo is public, so the
-          # plaintext state must never reach the Actions cache (review on
-          # #1297). Forks have no E2E_AUTH_CACHE_KEY — they skip decryption and
-          # pay full auth, which is also their secretless status quo.
-          #
-          # globalSetup validates a restored state by booting the app from it
-          # AND observing an authenticated 2xx from the store, falling back to
-          # full re-auth otherwise — the cache saves time, never poisons runs.
-          # Day-keyed so same-day runs hit the exact key and skip re-saving
-          # (bounds generations); restore-keys still serve older states, gated
-          # by the same validation.
-          path: apps/main/e2e/auth-state.enc
-          key: e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
-          restore-keys: |
-            e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-
+          name: e2e-auth-state
+          path: apps/main/e2e
 
-      - name: 🔓 Decrypt cached auth state
-        if: env.E2E_AUTH_CACHE_KEY != ''
+      - name: 🔓 Decrypt the shared auth state
+        if: needs.e2e-setup.outputs.state == 'ready' && env.E2E_AUTH_CACHE_KEY != ''
         env:
           E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
         working-directory: apps/main
         run: |
-          if [ -f e2e/auth-state.enc ]; then
-            mkdir -p e2e/.auth-state
-            openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || rm -rf e2e/.auth-state
-          fi
+          mkdir -p e2e/.auth-state
+          openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || { echo "::warning::Shared auth state did not decrypt; this shard sets up by itself"; rm -rf e2e/.auth-state; }
+          rm -f e2e/auth-state.enc
 
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
@@ -311,8 +492,8 @@ jobs:
       - name: 🌡 Probe store health (pre-flight)
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -321,6 +502,8 @@ jobs:
 
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
+        # backstop behind playwright.config's 50-min globalTimeout; keeps the always() report uploads inside the 60-min job
+        timeout-minutes: 55
         # Not `--shard`: that splits by TEST COUNT, which on run 31429108622 gave
         # every shard exactly 26 tests and workloads of 64s .. 473s — the gate
         # waits for the 473s one. e2e-shard-plan bin-packs whole spec files by
@@ -354,45 +537,40 @@ jobs:
           CI: true
           # Lane → store. Owner ruling (2026-08-18): main may test against
           # dev-free and dev-pro and NOTHING else; next has exactly one site,
-          # dev-next, which runs the next branch of both plugins and therefore
-          # serves both variants (the free matrix gets its licence masked by
-          # stubStoreVersionForE2E, as it already does on every lane).
+          # dev-next. Owner ruling (2026-10-19): lane next runs the PRO matrix
+          # only, on dev-next; lane main runs free on dev-free and pro on
+          # dev-pro. dev-next is one site, and both variants on six shards
+          # saturated its php-fpm pool (run 39248125270). Free is
+          # polished on dev-free once the work reaches main. The free matrix
+          # is opt-in by naming a store (playwright.config.ts), so the EMPTY
+          # E2E_STORE_URL_FREE on lane next below is the switch, not a gap.
           #
-          # `inputs.lane` wins when a human dispatches: for workflow_dispatch,
-          # base_ref is empty and ref_name is the feature branch, so `auto` would
-          # read every next-lane feature branch as main and recreate exactly the
-          # cross-lane testing this change removes.
+          # The lane itself is resolved once, in the `changes` job (which is
+          # also where `inputs.lane` wins for a manual dispatch). An unresolved
+          # lane never reaches this step: the first step of this job refuses it.
           #
           # These MUST be set here. playwright.config used to fall back to
           # dev-next when they were absent, and since this job never set them,
           # the whole main lane silently gated 1.9.x against the 1.10 store
           # while dev-free coverage was switched off entirely. The config now
           # fails the job rather than guessing, so an unset value is loud.
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
           # Naming a free store is what enables the free matrix (#1277). The
           # 2026-08-18 timeouts that deferred it came from the app never issuing
           # the awaited server requests against dev-free's 18-product catalogue;
           # the catalogue has since been rebuilt to match dev-pro's scale.
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
           E2E_SHARD_INDEX: ${{ matrix.shardIndex }}
+          # playwright.config gives the next lane one retry and main two.
+          E2E_LANE: ${{ needs.changes.outputs.lane }}
+          # `only` runs just the tests in e2e/quarantine.json (#2284); empty keeps them fixme'd.
+          E2E_QUARANTINE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'only' || '' }}
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
-
-      - name: 🔐 Encrypt auth state for cache
-        if: always() && env.E2E_AUTH_CACHE_KEY != ''
-        env:
-          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
-        working-directory: apps/main
-        run: |
-          if [ -d e2e/.auth-state ]; then
-            tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
-          fi
-          # The plaintext must never reach the cache post-step or artifacts.
-          rm -rf e2e/.auth-state
 
       # Same probe again on failure: a store that was healthy at the start can
       # be saturated by the time the run fails, and that distinction is the
@@ -401,8 +579,8 @@ jobs:
         if: failure()
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -648,7 +826,7 @@ jobs:
     if: always() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
       cancel-in-progress: true
     outputs:
       result: ${{ needs.e2e.result }}
@@ -725,6 +903,41 @@ jobs:
             playwright-report/
             test-results.json
           retention-days: 30
+
+  # Tells #2284 which quarantined tests now pass, so entries cannot rot. No gate reads it.
+  quarantine-report:
+    name: 🧫 Quarantine report
+    needs: [e2e-report]
+    if: always() && needs.e2e-report.result == 'success' && (github.event_name == 'schedule' || inputs.quarantine_only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: merged-report
+
+      - name: 💬 Comment the quarantined specs that passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          node apps/main/scripts/e2e-quarantine-check.mjs --report merged-report/test-results.json > report.txt 2>&1
+          status=$?
+          set -e
+          cat report.txt
+          # 0: none passed; 1: some passed, named at the end; anything else is a broken report.
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          headline=$([ "$status" -eq 0 ] && echo 'none passed.' || echo 'some PASSED; remove their entries.')
+          printf 'Quarantine-only run %s: %s\n\n```\n%s\n```\n' "$RUN_URL" "$headline" "$(cat report.txt)" > comment.md
+          gh issue comment "$(jq -r .issue apps/main/e2e/quarantine.json)" --body-file comment.md
 
   comment:
     name: 💬 PR Comment

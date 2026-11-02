@@ -43,6 +43,30 @@ const COMPONENT_PATTERN = /^[a-z0-9-]+$/;
 const SCOPE_DATABASE_NAME_SOURCE = 'pos_v\\d+_[a-f0-9]{12}_s[a-z0-9-]+_c[a-z0-9-]+';
 const SCOPE_DATABASE_NAME_PATTERN = new RegExp(`^${SCOPE_DATABASE_NAME_SOURCE}`);
 const SCOPE_DATABASE_NAME_ANYWHERE = new RegExp(SCOPE_DATABASE_NAME_SOURCE);
+const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
+	SCOPE_DATABASE_NAME_SOURCE.replace('pos_v\\d+', 'pos_v(\\d+)')
+);
+
+/**
+ * The scope-database generation this build opens. Every lower generation is
+ * legacy: the purge that runs after a store is sale-ready removes it (#2242) —
+ * EXCEPT the drainable one (`DRAINABLE_SCOPE_DATABASE_GENERATION`), which only
+ * the drain removes, once its queue is empty. History is on
+ * `scopeDatabaseName`.
+ *
+ * A bump also means rewriting `sync-engine/src/collections/drainable-generation.ts`
+ * to the schemas the generation being left behind shipped (its stamp and the
+ * pinned digests in `schema-behaviour.test.ts` fail until it is), and rebuild the drain against
+ * protocol 3 (`legacy-scope-drain.ts` parks unconditionally; the protocol-2 drain is at
+ * 2017d7b901). And any
+ * database of the generation BEFORE that one that a drain still keeps — unsent
+ * work it could not send — becomes unreachable: it is neither drainable nor
+ * opened again. So a bump should follow a quiet period in which kept databases
+ * have drained.
+ */
+// 6: products promoted `tagIds` (promoted membership, not index-backed) — every resident re-ingests.
+// 7: protocol 3 (ADR 0040) — a protocol-2 queue is parked, never drained. No schema moved.
+export const SCOPE_DATABASE_GENERATION = 7;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,
@@ -123,12 +147,14 @@ export function scopeKeyFor(identity: StoreScopeIdentity): string {
  * and the sync-checkpoint `checkpointKey`) were renamed in place, so a
  * generation-3 database is abandoned wholesale rather than migrated (house
  * ruling: no migrations for unreleased schema; 1.10 ships a fresh database).
+ * v5 = the 2.0 storage engine: promoted scope/sort columns and indexes (#2242).
+ * v6 = products promote `tagIds`, so a tag filter is numeric membership, not a payload scan.
  */
 export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
 	options?: ScopeDatabaseNameOptions
 ): string {
-	const generation = options?.generation ?? 4;
+	const generation = options?.generation ?? SCOPE_DATABASE_GENERATION;
 	const suffix = options?.namespace === undefined ? '' : `_${options.namespace}`;
 	return `pos_v${generation}_${scopeKeyFor(identity)}${suffix}`;
 }
@@ -140,9 +166,37 @@ export function isScopeDatabaseName(name: string): boolean {
 
 /**
  * True when a storage entry EMBEDS a scope database name — rxdb internal
- * stores and paired FlexSearch index stores derive their names from the
- * database name, so full-reset cleanup must match by containment.
+ * stores (and the pre-2.0 `_flexsearch` index stores a reset may still find)
+ * derive their names from the database name, so full-reset cleanup must match
+ * by containment.
  */
 export function containsScopeDatabaseName(name: string): boolean {
 	return SCOPE_DATABASE_NAME_ANYWHERE.test(name);
+}
+
+/**
+ * True when a storage entry embeds a scope database name of an OLDER
+ * generation than this build opens — what the legacy purge deletes. The
+ * current and any future generation are never legacy.
+ */
+export function containsLegacyScopeDatabaseName(name: string): boolean {
+	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
+	return match !== null && Number(match[1]) < SCOPE_DATABASE_GENERATION;
+}
+
+/**
+ * The one legacy generation a till DRAINS: its scope database is opened with
+ * that generation's schemas, parked, and removed once empty (`drainLegacyScopeDatabase`). Older
+ * generations cannot be opened by this build's schemas.
+ */
+export const DRAINABLE_SCOPE_DATABASE_GENERATION = SCOPE_DATABASE_GENERATION - 1;
+
+/**
+ * True when a storage entry embeds a scope database name of the DRAINABLE
+ * generation. The legacy purge must never reach one: it may still hold unsent
+ * sales that only the drain can send (and only the drain removes it).
+ */
+export function containsDrainableScopeDatabaseName(name: string): boolean {
+	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
+	return match !== null && Number(match[1]) === DRAINABLE_SCOPE_DATABASE_GENERATION;
 }

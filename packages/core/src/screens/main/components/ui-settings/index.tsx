@@ -6,9 +6,7 @@ import * as z from 'zod';
 
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
-	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -26,7 +24,7 @@ import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 
-type ColumnsOnlySettingsID = 'coupons' | 'customers' | 'orders' | 'reports-orders';
+type ColumnsOnlySettingsID = 'products' | 'coupons' | 'customers' | 'orders' | 'reports-orders';
 
 const columnsOnlyFormSchema = z.object({
 	...columnsFormSchema.shape,
@@ -46,10 +44,17 @@ const useDialogContext = () => {
 	return context;
 };
 
-function UISettingsColumnsOnlyForm({ id }: { id: ColumnsOnlySettingsID }) {
+function UISettingsColumnsOnlyForm({
+	id,
+	before,
+}: {
+	id: ColumnsOnlySettingsID;
+	/** Settings drawn above the columns that belong to another doc, so outside this form. */
+	before?: React.ReactNode;
+}) {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings(id);
 	const formData = useDocField(uiSettings, (value) => value);
-	const { setButtonPressHandler } = useDialogContext();
+	const dialog = React.useContext(DialogContext);
 
 	/**
 	 * The reset button lives in the dialog footer, outside this form's subtree, so the
@@ -58,8 +63,8 @@ function UISettingsColumnsOnlyForm({ id }: { id: ColumnsOnlySettingsID }) {
 	 * plain call. Nothing here derives state; it only registers the callback.
 	 */
 	React.useEffect(() => {
-		setButtonPressHandler(() => void resetUI());
-	}, [setButtonPressHandler, resetUI]);
+		dialog?.setButtonPressHandler(() => void resetUI());
+	}, [dialog, resetUI]);
 
 	const form = useForm<z.infer<typeof columnsOnlyFormSchema>>({
 		resolver: zodResolver(columnsOnlyFormSchema as never) as never,
@@ -71,6 +76,7 @@ function UISettingsColumnsOnlyForm({ id }: { id: ColumnsOnlySettingsID }) {
 	return (
 		<Form {...form}>
 			<VStack>
+				{before}
 				<UISettingsColumnsForm getUILabel={getUILabel} />
 			</VStack>
 		</Form>
@@ -81,12 +87,32 @@ interface Props {
 	title: string;
 	children: React.ReactNode;
 	triggerTestID?: string;
+	/** The trigger's accessible name; the title when absent. */
+	triggerLabel?: string;
+	contentTestID?: string;
+	/** Footer ids, per page where more than one panel can exist; the generic ids otherwise. */
+	closeTestID?: string;
+	restoreTestID?: string;
+	portalHost?: string;
+	side?: 'left' | 'right';
 }
 
 /**
- *
+ * The one chrome for display settings: a side panel with the form in a scrolling body and
+ * Close + Restore defaults in its footer. The POS forms and the pages' columns-only form both
+ * open here.
  */
-function UISettingsDialog({ title, children, triggerTestID }: Props) {
+function UISettingsDialog({
+	title,
+	children,
+	triggerTestID,
+	triggerLabel,
+	contentTestID,
+	closeTestID = 'ui-settings-close',
+	restoreTestID = 'ui-settings-restore-defaults',
+	portalHost,
+	side = 'right',
+}: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -108,28 +134,31 @@ function UISettingsDialog({ title, children, triggerTestID }: Props) {
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" testID={triggerTestID} />
+						<IconButton
+							name="filters"
+							testID={triggerTestID}
+							accessibilityLabel={triggerLabel ?? title}
+						/>
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="lg">
+				<DialogContent side={side} size="lg" portalHost={portalHost} testID={contentTestID}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
 						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
-					<DialogFooter>
-						<DialogClose>{t('common.close')}</DialogClose>
-						<DialogAction
-							{...({ variant: 'destructive' } as Record<string, unknown>)}
-							onPress={handleButtonPress}
-						>
-							{t('common.restore_default_settings')}
-						</DialogAction>
-					</DialogFooter>
+					<DialogFooter
+						destructive={{
+							label: t('common.restore_default_settings'),
+							testID: restoreTestID,
+							onPress: handleButtonPress,
+						}}
+						close={{ testID: closeTestID }}
+					/>
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>

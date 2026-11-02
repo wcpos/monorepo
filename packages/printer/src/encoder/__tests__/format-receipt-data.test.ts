@@ -45,6 +45,50 @@ describe('formatReceiptData', () => {
 		expect(result.payments[0].change_display).toBe('$5.00');
 	});
 
+	it.each([
+		{ decimals: 0, total: '$25', unit: '$5', tax: '$2', adjustment: '$1' },
+		{ decimals: 3, total: '$25.000', unit: '$5.000', tax: '$2.270', adjustment: '$1.234' },
+		{ decimals: undefined, total: '$25.00', unit: '$5.00', tax: '$2.27', adjustment: '$1.23' },
+	])('uses store price_decimals=$decimals across money displays', (expected) => {
+		const data = structuredClone(sampleReceiptData);
+		data.store.price_decimals = expected.decimals;
+		data.fees = [{ label: 'Fee', total_incl: 1.234, total_excl: 1.234 }];
+		data.shipping = [
+			{ label: 'Shipping', method_id: 'flat_rate', total_incl: 1.234, total_excl: 1.234 },
+		];
+		data.discounts = [{ label: 'Discount', total_incl: 1.234, total_excl: 1.234 }];
+		data.lines[0].unit_savings = 1.234;
+		data.lines[0].taxes = [{ code: 'tax', amount: 2.27 }];
+		data.refunds = [
+			{
+				id: 1,
+				amount: 1.234,
+				lines: [{ name: 'Widget', sku: '', qty: 1, total: 1.234 }],
+			},
+		];
+
+		const result = formatReceiptData(data);
+
+		expect(result.totals.total_display).toBe(expected.total);
+		expect(result.lines[0].unit_price_display).toBe(expected.unit);
+		expect(result.lines[0].regular_price_display).toBe(expected.unit);
+		expect(result.lines[0].unit_savings_display).toBe(expected.adjustment);
+		expect(result.lines[0].taxes[0].amount_display).toBe(expected.tax);
+		expect(result.tax_summary[0].tax_amount_display).toBe(expected.tax);
+		expect(result.fees[0].total_display).toBe(expected.adjustment);
+		expect(result.shipping[0].total_display).toBe(expected.adjustment);
+		expect(result.discounts[0].total_display).toBe(expected.adjustment);
+		expect(result.payments[0].amount_display).toBe(expected.total);
+		expect(result.refunds[0].amount_display).toBe(expected.adjustment);
+		expect(result.refunds[0].lines[0].unit_total_display).toBe(expected.adjustment);
+	});
+
+	it('uses the currency default decimals when store precision is absent', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'JPY';
+		expect(formatReceiptData(data).totals.total_display).toBe('¥25');
+	});
+
 	it('keeps the INR symbol in preview formatting', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.order.currency = 'INR';

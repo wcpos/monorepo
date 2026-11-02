@@ -26,12 +26,3 @@ export interface HttpErrorHandler {
 	/** Priority for handler ordering (higher = runs first) */
 	priority?: number;
 }
-
-export interface HttpErrorHandlerResult {
-	/** Whether the error was handled successfully */
-	handled: boolean;
-	/** Response if the error was resolved */
-	response?: AxiosResponse;
-	/** Modified error if handling failed */
-	error?: AxiosError;
-}

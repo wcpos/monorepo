@@ -6,9 +6,10 @@
 # 1. Reads the bundle commit's message for the monorepo SHA it was built from
 #    (`chore(release): build web bundle (@main from monorepo <sha>)`).
 # 2. Reads apps/main/package.json at that SHA; its major.minor is the lane.
-# 3. Runs check-worker-rxdb-lane.sh against the bundle's own build/opfs.worker.js
-#    (RXDB_VERSION must match the rxdb pinned at that SHA and the lane's highest
-#    tag; frozen lanes refused).
+# 3. Runs check-worker-rxdb-lane.sh against every vendored worker the bundle
+#    commit carries (opfs, sqlite, indexeddb): each must match the same worker at
+#    the lane's highest tag, the built ones must match the rxdb pinned at that
+#    SHA, and frozen lanes are refused.
 # 4. Creates v<major.minor>.<N+1> (or .0 on a new lane) at the bundle commit.
 # 5. Refreshes the lane ref and verifies every hashed file by content before
 #    purging metadata. Then purges and verifies metadata, index and workers
@@ -127,7 +128,7 @@ verify_lane_live() {
 }
 
 main() {
-	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane bundle_rxdb tags existing worker action tag
+	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane bundle_rxdb tags existing names name dir action tag workers=()
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--dry-run) dry_run=true ;;
@@ -152,11 +153,17 @@ main() {
 	tags=$(list_bundle_tags)
 	existing=$(gh api --paginate "repos/${WEB_BUNDLE_REPO}/tags" --jq ".[] | select(.commit.sha == \"${sha}\") | .name")
 	action=$(printf '%s\n' "$tags" | tag_action "$lane" "$existing")
-	worker=$(mktemp)
-	trap 'rm -f "$worker"' RETURN
-	fetch_bundle_worker "$sha" > "$worker" || { echo "FAIL: could not read ${WORKER_PATH_IN_BUNDLE} at ${sha}" >&2; return 1; }
-	check_bundle_rxdb "$worker" "$bundle_rxdb"
-	check_worker_lane "$worker" "$version" "$allow_frozen" false "$tags"
+	# A failed listing fails closed; it never reads as "no workers".
+	names=$(list_bundle_build "$sha") || { echo "FAIL: could not list build/ at ${sha}" >&2; return 1; }
+	dir=$(mktemp -d)
+	trap 'rm -rf "$dir"' RETURN
+	for name in "${VENDORED_WORKERS[@]}"; do
+		grep -qx "$name" <<<"$names" || continue
+		fetch_bundle_file "$sha" "$name" > "$dir/$name" || { echo "FAIL: could not read build/${name} at ${sha}" >&2; return 1; }
+		workers+=("$name")
+	done
+	check_bundle_rxdb "$dir" "$bundle_rxdb"
+	check_worker_lane "$dir" "$version" "$allow_frozen" false "$tags"
 
 	tag="${action#* }"
 	if [[ "$dry_run" == true ]]; then

@@ -1,9 +1,28 @@
 import { createFakeCarrier } from './fake';
-import { POS_META_KEYS, type PosCarrier, wooMetaCarrier } from './carrier';
+import {
+	identityColumnFilter,
+	identityColumns,
+	POS_META_KEYS,
+	type PosCarrier,
+	PROTECTED_ORDER_META_KEYS,
+	wooMetaCarrier,
+} from './carrier';
 
 it('freezes POS metadata wire keys', () => {
+	expect(POS_META_KEYS.session).toBe('_wcpos_session');
+	expect(POS_META_KEYS.reducedStock).toBe('_reduced_stock');
 	expect(POS_META_KEYS.posData).toBe('_woocommerce_pos_data');
 	expect(POS_META_KEYS.lineUuid).toBe('_woocommerce_pos_uuid');
+});
+
+it('round-trips a register-scoped identity filter', () => {
+	const identity = { cashierId: '7', storeId: '2', registerId: 'register-a' };
+	const filter = wooMetaCarrier.identityFilter(identity);
+	expect(filter.$and).toHaveLength(3);
+	expect(filter.$and).toContainEqual({
+		meta_data: { $elemMatch: { key: POS_META_KEYS.register, value: 'register-a' } },
+	});
+	expect(wooMetaCarrier.decodeIdentityFilter(filter)).toEqual(identity);
 });
 
 type CarrierFactory = () => PosCarrier;
@@ -14,6 +33,75 @@ const carrierFactories: [string, CarrierFactory][] = [
 ];
 
 describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier) => {
+	describe('VAT exemption metadata', () => {
+		it.each([
+			['yes', true],
+			['no', false],
+			[true, false],
+			[1, false],
+			['YES', false],
+		])('reads %s strictly', (value, expected) => {
+			expect(createCarrier().vatExempt([{ key: 'is_vat_exempt', value }])).toBe(expected);
+		});
+		it('defaults absent metadata to false and protects the key', () => {
+			expect(createCarrier().vatExempt(undefined)).toBe(false);
+			expect(createCarrier().vatExempt([])).toBe(false);
+			expect(createCarrier().vatExempt([{ key: 'other', value: 'yes' }])).toBe(false);
+			expect(POS_META_KEYS.vatExempt).toBe('is_vat_exempt');
+			expect(PROTECTED_ORDER_META_KEYS).toContain('is_vat_exempt');
+		});
+		it.each([true, false])('replaces in place, preserving id and deduplicating: %s', (exempt) => {
+			const input = [
+				{ key: 'before', value: 'keep' },
+				{ id: 42, key: 'is_vat_exempt', value: 'old' },
+				{ key: 'after', value: 'keep' },
+				{ id: 43, key: 'is_vat_exempt', value: 'duplicate' },
+			];
+			const original = structuredClone(input);
+			const result = createCarrier().stampVatExempt(input, exempt);
+			expect(result).toEqual([
+				input[0],
+				{ id: 42, key: 'is_vat_exempt', value: exempt ? 'yes' : 'no' },
+				input[2],
+			]);
+			expect(result).not.toBe(input);
+			expect(input).toEqual(original);
+		});
+		it('appends when absent without mutating', () => {
+			const input = [{ key: 'other', value: 'keep' }];
+			expect(createCarrier().stampVatExempt(input, true)).toEqual([
+				...input,
+				{ key: 'is_vat_exempt', value: 'yes' },
+			]);
+			expect(input).toEqual([{ key: 'other', value: 'keep' }]);
+			expect(createCarrier().stampVatExempt(undefined, false)).toEqual([
+				{ key: 'is_vat_exempt', value: 'no' },
+			]);
+		});
+		it.each([
+			[['no', 'yes'], false],
+			[['yes', 'no'], true],
+		] as const)('reads only the first exemption row: %s', (values, expected) => {
+			expect(
+				createCarrier().vatExempt(values.map((value) => ({ key: 'is_vat_exempt', value })))
+			).toBe(expected);
+		});
+		it('tolerates null entries for reading and stamping', () => {
+			const meta = [null, { key: 'is_vat_exempt', value: 'yes' }] as never;
+			expect(createCarrier().vatExempt(meta)).toBe(true);
+			expect(createCarrier().stampVatExempt(meta, false)).toEqual([
+				null,
+				{ key: 'is_vat_exempt', value: 'no' },
+			]);
+		});
+		it('treats non-array metadata as empty', () => {
+			expect(createCarrier().vatExempt({} as never)).toBe(false);
+			expect(createCarrier().stampVatExempt({} as never, true)).toEqual([
+				{ key: 'is_vat_exempt', value: 'yes' },
+			]);
+		});
+	});
+
 	it('round-trips stamped identity without mutating the input', () => {
 		const carrier = createCarrier();
 		const input = [{ id: 1, key: 'custom', value: 'keep' }];
@@ -112,11 +200,16 @@ describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier)
 		const carrier = createCarrier();
 		const filter = carrier.identityFilter({ cashierId: '7', storeId: '3' });
 
+		// A numeric-looking identity matches the stamped string AND a server-side integer,
+		// the two spellings `readIdentity` accepts.
 		expect(filter).toEqual({
 			$and: [
-				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
+				{ meta_data: { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } } },
+				{ meta_data: { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } } },
 			],
+		});
+		expect(carrier.identityFilter({ storeId: 'woocommerce-pos' })).toEqual({
+			meta_data: { $elemMatch: { key: '_pos_store', value: 'woocommerce-pos' } },
 		});
 		expect(carrier.decodeIdentityFilter(filter)).toEqual({
 			cashierId: '7',
@@ -164,4 +257,77 @@ it('uses initial fake state without requiring Woo metadata fixtures', () => {
 	const line = carrier.ensureLineUuid({}, () => 'new-line');
 	expect(carrier.lineUuid(line)).toBe('new-line');
 	expect(carrier.state.lineUuids).toEqual(['existing-line', 'new-line']);
+});
+
+it('stamps and reads the register without losing existing metadata', () => {
+	const meta = [
+		{ key: 'custom', value: 'keep' },
+		{ id: 8, key: '_wcpos_register', value: 'old' },
+	];
+	const stamped = wooMetaCarrier.stampIdentity(meta, { userId: 1, storeId: 2, registerId: 'new' });
+	expect(wooMetaCarrier.readIdentity(stamped).registerId).toBe('new');
+	expect(stamped).toContainEqual(meta[0]);
+	expect(stamped).toContainEqual({ ...meta[1], value: 'new' });
+	for (const registerId of [undefined, '']) {
+		expect(
+			wooMetaCarrier
+				.stampIdentity([], { userId: 1, storeId: 2, registerId })
+				.some(({ key }) => key === '_wcpos_register')
+		).toBe(false);
+	}
+});
+
+// A hand-over to a store with no registers: the order's register must not travel with it.
+it('a null register clears the row to an empty value that reads as none, adding one if missing', () => {
+	const meta = [
+		{ key: 'custom', value: 'keep' },
+		{ id: 8, key: '_wcpos_register', value: 'old' },
+	];
+	const stamped = wooMetaCarrier.stampIdentity(meta, { userId: 1, storeId: 2, registerId: null });
+	expect(stamped).toContainEqual({ id: 8, key: '_wcpos_register', value: '' });
+	expect(wooMetaCarrier.readIdentity(stamped).registerId).toBeUndefined();
+	expect(
+		wooMetaCarrier.stampIdentity(meta, { userId: 1, storeId: 2 }).find(({ id }) => id === 8)
+	).toEqual(meta[1]);
+	const added = wooMetaCarrier.stampIdentity([], { userId: 1, storeId: 2, registerId: null });
+	expect(added).toContainEqual({ key: '_wcpos_register', value: '' });
+	expect(wooMetaCarrier.readIdentity(added).registerId).toBeUndefined();
+});
+
+it('stamps and reads distinct till and bound register identities', () => {
+	const meta = wooMetaCarrier.stampIdentity([], {
+		userId: 7,
+		storeId: 2,
+		tillId: 'installation',
+		registerId: 'server-register',
+	});
+	expect(meta).toContainEqual({ key: '_wcpos_till', value: 'installation' });
+	expect(meta).toContainEqual({ key: '_wcpos_register', value: 'server-register' });
+	expect(wooMetaCarrier.readIdentity(meta)).toMatchObject({
+		tillId: 'installation',
+		registerId: 'server-register',
+	});
+	const unbound = wooMetaCarrier.stampIdentity([], {
+		userId: 7,
+		storeId: 2,
+		tillId: 'installation',
+	});
+	expect(unbound.some(({ key }) => key === '_wcpos_register')).toBe(false);
+	expect(wooMetaCarrier.readIdentity(unbound).tillId).toBe('installation');
+});
+
+it('projects identity columns and filters without conflating absent and no-store spellings', () => {
+	expect(identityColumns({ cashierId: '7', storeId: 'woocommerce-pos' })).toEqual({
+		posUserId: '7',
+		posStoreId: 'woocommerce-pos',
+	});
+	expect(identityColumns({ cashierId: null, storeId: null })).toEqual({
+		posUserId: '',
+		posStoreId: '',
+	});
+	expect(identityColumnFilter({ cashierId: '7' })).toEqual({ posUserId: '7' });
+	expect(identityColumnFilter({ cashierId: '7', storeId: '2' })).toEqual({
+		posUserId: '7',
+		posStoreId: '2',
+	});
 });

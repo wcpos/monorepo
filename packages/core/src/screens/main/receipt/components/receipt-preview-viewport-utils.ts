@@ -36,19 +36,23 @@ export function getReceiptPreviewPaperWidth({
 	return 'a4';
 }
 
-export function pickAutoFitZoom(
-	paperW: number,
-	paperH: number,
-	availW: number,
-	availH: number
-): PreviewZoom {
-	if (availW <= 0 || availH <= 0) return 100;
-	const candidates = PREVIEW_ZOOM_STEPS.filter((z) => z <= 100)
-		.slice()
-		.reverse();
-	for (const z of candidates) {
-		const s = z / 100;
-		if (paperW * s <= availW && paperH * s <= availH) return z;
-	}
-	return candidates[candidates.length - 1];
+export const MIN_PREVIEW_ZOOM: PreviewZoom = PREVIEW_ZOOM_STEPS[0];
+export const MAX_PREVIEW_ZOOM: PreviewZoom = PREVIEW_ZOOM_STEPS[PREVIEW_ZOOM_STEPS.length - 1];
+
+/**
+ * The zoom that fills the viewport's width. A receipt is read top to bottom, so the height
+ * scrolls and the width is the fit, on every print preview (Paul, 2026-10-30): fitting the
+ * height too left an A4 page at 60% in a pane that held 70%. A whole percent, rounded down, so
+ * the frame never overflows the width by a sub-pixel; bounded by the control's own range.
+ */
+export function pickAutoFitZoom(paperW: number, availW: number): number {
+	if (availW <= 0 || paperW <= 0) return 100;
+	const fill = Math.floor((availW / paperW) * 100);
+	return Math.max(MIN_PREVIEW_ZOOM, Math.min(MAX_PREVIEW_ZOOM, fill));
+}
+
+/** The step above or below a zoom that need not be a step itself (the width fit rarely is). */
+export function stepPreviewZoom(zoom: number, delta: 1 | -1): PreviewZoom {
+	if (delta > 0) return PREVIEW_ZOOM_STEPS.find((z) => z > zoom) ?? MAX_PREVIEW_ZOOM;
+	return [...PREVIEW_ZOOM_STEPS].reverse().find((z) => z < zoom) ?? MIN_PREVIEW_ZOOM;
 }

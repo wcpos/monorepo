@@ -1,9 +1,18 @@
 import { getElectronNewStorage } from '../storage/index.electron';
+import {
+	STORAGE_TIMING_PROBE_ENABLED,
+	withStorageTimingProbe,
+} from '../../plugins/storage-timing-probe';
 import { wrappedErrorHandlerStorage } from '../../plugins/wrapped-error-handler-storage';
 
 const rendererStorage = getElectronNewStorage();
 
-export const storage = wrappedErrorHandlerStorage({ storage: rendererStorage });
+// Always wrap with error handler (catches/logs raw RxDB errors before they reach UI).
+// Deadline behaviour: ../../plugins/STORAGE-CALL-DEADLINE-POLICY.md.
+const errorHandlerStorage = wrappedErrorHandlerStorage({ storage: rendererStorage });
+export const storage = STORAGE_TIMING_PROBE_ENABLED
+	? withStorageTimingProbe(errorHandlerStorage, 'wrapped')
+	: errorHandlerStorage;
 
 const devStorage = __DEV__
 	? require('rxdb/plugins/validate-z-schema').wrappedValidateZSchemaStorage({ storage })

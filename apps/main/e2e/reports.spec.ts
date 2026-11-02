@@ -30,53 +30,45 @@ test.describe('Reports Page (Pro)', () => {
 		expect(hasButtons || hasTable).toBeTruthy();
 	});
 
-	test('should show filter pills', async ({ posPage: page }) => {
+	// The Sales room (roadmap#332) replaced the filtered order report: scope lives in the hero's
+	// chips, the figures in the period cards, and printing on the hero's own button.
+	test('should show the scope chips', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		const screen = page.getByTestId('screen-reports');
-
-		// Wait for the reports page to fully load
 		await expect(screen).toBeVisible({ timeout: 30_000 });
-		await page.waitForTimeout(3_000);
-
-		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByTestId('hero-chips')).toBeVisible({ timeout: 30_000 });
 	});
 
-	test('should show report content', async ({ posPage: page }) => {
+	test('should show the period cards', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		const screen = page.getByTestId('screen-reports');
 		await expect(screen).toBeVisible({ timeout: 30_000 });
-		await page.waitForTimeout(3_000);
-
-		await expect(screen.getByTestId('reports-content')).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByTestId('reports-period-section')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show print button', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		const screen = page.getByTestId('screen-reports');
 		await expect(screen).toBeVisible({ timeout: 30_000 });
-		await page.waitForTimeout(3_000);
-
-		await expect(screen.getByTestId('reports-print-button')).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByTestId('hero-print')).toBeVisible({ timeout: 30_000 });
 	});
 });
 
 /**
- * Free users should see the blurred preview overlay when navigating to Reports.
+ * Free has the Sales room too, held to today and the bound register (reports/index.tsx); the
+ * blurred upgrade overlay no longer guards the route. reports-closures covers the locked dates.
  */
 test.describe('Reports Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
-		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
+		test.skip(variant !== 'free', 'Free-only view of the Sales room');
 	});
 
-	test('should show upgrade overlay on Reports', async ({ posPage: page }) => {
+	test('should show the day report, not an upgrade overlay', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
-	});
-
-	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {
-		await navigateToPage(page, 'reports');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByTestId('view-demo-button')).toBeVisible();
+		const screen = page.getByTestId('screen-reports');
+		await expect(screen).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('reports-period-section')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('upgrade-title')).toHaveCount(0);
 	});
 });

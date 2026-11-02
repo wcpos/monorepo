@@ -1,4 +1,4 @@
-import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
+import { toOrderWirePayload } from '@wcpos/sync-core';
 
 import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
 
@@ -26,16 +26,19 @@ import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
  *    payload and would otherwise put the aggregate back on the wire behind a
  *    caller that never asked to send it.
  *
- *    Taking it off the WIRE does not take it out of the CHECK. The cashier must
+ *  - everything else ADR 0040 makes the server's (rule 2, D4): the server-owned
+ *    payment fields and meta (`_wcpos_payments` and the rest) and a status the
+ *    server would refuse with 422. The coalesced snapshot carries the resident's
+ *    ledger and its paid status; neither may reach the wire.
+ *
+ *    Taking money off the WIRE does not take it out of the CHECK. The cashier must
  *    still be told when the store's `total` is not the total they charged, so
  *    the drain carries the till's aggregate beside the payload — see
  *    write-path/order-till-aggregate.ts. Deleting that capture would silence
  *    the alarm on the one number a cashier reads out loud.
  */
 export function sanitizeOutboundOrderPayload<T extends Record<string, unknown>>(payload: T): T {
-	return stripServerAuthoredOrderMoney(
-		stripEmptyBillingEmail(stripNonStringMetaDisplayFields(payload))
-	);
+	return toOrderWirePayload(stripEmptyBillingEmail(stripNonStringMetaDisplayFields(payload)));
 }
 
 function stripEmptyBillingEmail<T extends Record<string, unknown>>(payload: T): T {

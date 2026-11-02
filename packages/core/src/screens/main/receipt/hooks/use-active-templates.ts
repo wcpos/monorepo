@@ -1,10 +1,8 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
-import type { TemplateDocument } from '@wcpos/database';
-import { useDocField } from '@wcpos/query';
+import { type ActiveTemplate, observeActiveTemplates, useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
@@ -17,7 +15,18 @@ import { useTemplatesSync } from './use-templates-sync';
  * Pro + store has active_templates: returns only those templates, in assigned sort order.
  * Otherwise: returns all published + virtual templates, sorted by menu_order.
  */
-export function useActiveTemplates(): TemplateDocument[] {
+export function useActiveTemplates(
+	type: 'receipt' | 'report' | 'closure' = 'receipt',
+	storeId?: number
+): ActiveTemplate[] {
+	return useActiveTemplatesState(type, storeId).templates;
+}
+
+/** Template rows and the readiness of the same sync run, for local document hosts. */
+export function useActiveTemplatesState(
+	type: 'receipt' | 'report' | 'closure' = 'receipt',
+	storeId?: number
+): { templates: ActiveTemplate[]; synced: boolean } {
 	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
@@ -26,7 +35,7 @@ export function useActiveTemplates(): TemplateDocument[] {
 	// endpoint returns the full set in a single response (posts_per_page=-1) and
 	// ignores include/exclude, so greedy pagination is unnecessary and would loop
 	// forever re-fetching the same set. A single sync pass per poll is enough.
-	useTemplatesSync();
+	const { synced } = useTemplatesSync(type, storeId ?? store.id);
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };
@@ -35,28 +44,15 @@ export function useActiveTemplates(): TemplateDocument[] {
 		(value) => value.active_templates ?? []
 	) as TemplateAssignment[];
 
-	// Query all receipt templates from RxDB
-	const query = React.useMemo(() => {
-		return storeDB.templates.find({
-			selector: { type: 'receipt' },
-			sort: [{ menu_order: 'asc' }],
-		});
-	}, [storeDB]);
-
 	const allTemplates$ = React.useMemo(
-		() =>
-			query.$.pipe(
-				map((docs: TemplateDocument[]) =>
-					docs.filter((doc) => doc.is_virtual || doc.status === 'publish')
-				)
-			),
-		[query]
+		() => observeActiveTemplates(storeDB, { type, storeId: storeId ?? store.id }),
+		[storeDB, type, storeId, store.id]
 	);
-	const allTemplates = useObservableState(allTemplates$, [] as TemplateDocument[]);
+	const allTemplates = useObservableState(allTemplates$, [] as ActiveTemplate[]);
 
 	// Apply per-store filtering for Pro users
-	return React.useMemo(() => {
-		if (!isPro || !activeTemplates || activeTemplates.length === 0) {
+	const templates = React.useMemo(() => {
+		if (type === 'closure' || !isPro || !activeTemplates || activeTemplates.length === 0) {
 			return allTemplates;
 		}
 
@@ -73,5 +69,6 @@ export function useActiveTemplates(): TemplateDocument[] {
 			});
 
 		return filtered.length > 0 ? filtered : allTemplates;
-	}, [isPro, activeTemplates, allTemplates]);
+	}, [type, isPro, activeTemplates, allTemplates]);
+	return { templates, synced };
 }

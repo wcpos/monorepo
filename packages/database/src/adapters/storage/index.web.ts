@@ -1,18 +1,155 @@
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
+import { RXDB_VERSION } from 'rxdb/plugins/utils';
 
-import { getRepairOwnershipChannelName } from '../../plugins/repair-ownership';
+import {
+	STORAGE_TIMING_PROBE_ENABLED,
+	withStorageTimingProbe,
+} from '../../plugins/storage-timing-probe';
+import {
+	WEB_STORAGE_ENGINE,
+	WEB_WORKER_BASENAME_BY_ENGINE,
+	WEB_WORKER_PATH_BY_ENGINE,
+} from './storage-engines';
+
+import type { RxStorage } from 'rxdb';
 
 export function getWebStorageWorkerPaths() {
 	const runtime = globalThis as typeof globalThis & { opfsWorker?: string };
+	const enginePath = WEB_WORKER_PATH_BY_ENGINE[WEB_STORAGE_ENGINE];
+	const override = runtime.opfsWorker;
+
+	// An override is normal: the page bootstrap sets `globalThis.opfsWorker`, and the
+	// WordPress host may supply a CDN URL. Its directory is not ours to
+	// predict, but its BASENAME says which engine's worker it is — and an override
+	// naming the WRONG engine is worse than no override at all, because the app would
+	// run the previous storage engine while `multiInstance` and everything else are
+	// configured for the current one. Refuse it and use the engine's own path.
+	if (override !== undefined && !endsWithWorkerFile(override, WEB_STORAGE_ENGINE)) {
+		console.error(
+			`[storage] Ignoring globalThis.opfsWorker ${JSON.stringify(override)}: it does not name ` +
+				`the worker required by the '${WEB_STORAGE_ENGINE}' engine ` +
+				`(${WEB_WORKER_BASENAME_BY_ENGINE[WEB_STORAGE_ENGINE]}). Update the page bootstrap.`
+		);
+
+		return { targetOpfsWorker: enginePath };
+	}
 
 	return {
-		targetOpfsWorker: runtime.opfsWorker ?? '/opfs.worker.js',
+		targetOpfsWorker: override ?? enginePath,
 	};
 }
 
-export function getWebNewStorage() {
-	return getRxStorageWorker({
-		workerInput: getWebStorageWorkerPaths().targetOpfsWorker,
-		workerOptions: { name: getRepairOwnershipChannelName() },
+/** True when `path` names the worker file the given engine requires, at any URL or directory. */
+function endsWithWorkerFile(path: string, engine: typeof WEB_STORAGE_ENGINE): boolean {
+	const basename = WEB_WORKER_BASENAME_BY_ENGINE[engine];
+	// Strip a query string or hash before comparing — a cache-busted CDN URL keeps the
+	// file name but not the final character.
+	const withoutSuffix = path.split(/[?#]/, 1)[0];
+
+	return withoutSuffix === basename || withoutSuffix.endsWith(`/${basename}`);
+}
+
+export const STORAGE_WORKER_NAME = 'wcpos-sqlite';
+let storageWorker: Worker | undefined;
+let retired = false;
+let innerStorage: ReturnType<typeof getRxStorageWorker> | undefined;
+const workerLostListeners = new Set<(message: string) => void>();
+
+export function onStorageWorkerLost(listener: (message: string) => void): () => void {
+	workerLostListeners.add(listener);
+	return () => {
+		workerLostListeners.delete(listener);
+	};
+}
+
+export function terminateStorageWorker(): void {
+	retired = true;
+	storageWorker?.terminate();
+	storageWorker = undefined;
+	// Do not reset innerStorage: recovery requires reload, never an in-tab restart.
+}
+
+function createStorageWorker(): Worker {
+	const worker = new Worker(getWebStorageWorkerPaths().targetOpfsWorker, {
+		type: 'module',
+		name: STORAGE_WORKER_NAME,
 	});
+	storageWorker = worker;
+	// terminate() emits no error: the watchdog alone detects silent death. These
+	// listeners catch script-load failures and crashes that DO report (#2242).
+	for (const type of ['error', 'messageerror']) {
+		worker.addEventListener(type, (event) => {
+			const message = `Storage worker ${type}: ${'message' in event ? event.message : 'connection lost'}`;
+			for (const listener of workerLostListeners) listener(message);
+		});
+	}
+	return worker;
+}
+
+// RxDB's code for "the worker runs a different rxdb than the page" (RxError RM1).
+const WORKER_VERSION_MISMATCH_CODE = 'RM1';
+// How RxStorageRemote.createStorageInstance rethrows an error the worker answered with:
+// `new Error('could not create instance ' + JSON.stringify(error))` — a plain Error whose
+// MESSAGE carries the serialised RxError (rxdb 17.5, plugins/storage-remote/rx-storage-remote.js).
+const REMOTE_CREATE_FAILED_PREFIX = 'could not create instance ';
+
+type RxErrorShape = {
+	code?: string;
+	parameters?: { args?: { mainVersion?: string; remoteVersion?: string } };
+};
+
+/** The RxError the worker answered with, whether thrown as is or serialised into a message. */
+function workerRxError(error: unknown): RxErrorShape | null {
+	if (typeof error !== 'object' || error === null) return null;
+	if ('code' in error) return error as RxErrorShape;
+	const message = (error as { message?: unknown }).message;
+	if (typeof message !== 'string' || !message.startsWith(REMOTE_CREATE_FAILED_PREFIX)) return null;
+	try {
+		return JSON.parse(message.slice(REMOTE_CREATE_FAILED_PREFIX.length)) as RxErrorShape;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * RM1 as RxDB throws it says only `mainVersion 17.5.0, remoteVersion 17.4.0`. The page
+ * cannot be the wrong half: it IS the bundle. The worker is served by whatever host the
+ * page bootstrap pointed at (on a WordPress site, the plugin — on a Pro site, Pro's
+ * vendored copy of the free plugin), and a host that was not redeployed after the bundle's
+ * rxdb moved is exactly what the two versions describe. Name the URL, so the next reader
+ * knows which deploy is behind without diagnosing it (dev-next, 2026-10-05: the page
+ * said nothing and the wrong plugin was redeployed twice).
+ */
+export function describeWorkerVersionMismatch(error: unknown, workerUrl: string): unknown {
+	const rxError = workerRxError(error);
+	if (rxError?.code !== WORKER_VERSION_MISMATCH_CODE) return error;
+	const main = rxError.parameters?.args?.mainVersion ?? 'unknown';
+	const remote = rxError.parameters?.args?.remoteVersion ?? 'unknown';
+	return new Error(
+		`Storage worker at ${workerUrl} runs rxdb ${remote} but the page runs rxdb ${main}: ` +
+			`the host serving that worker is behind the bundle. Redeploy the plugin that serves it ` +
+			`(on a Pro site that is woocommerce-pos-pro's vendored copy of the free plugin).`,
+		{ cause: error }
+	);
+}
+
+export function getWebNewStorage() {
+	const rawStorage: RxStorage<unknown, unknown> = {
+		name: 'worker',
+		rxdbVersion: RXDB_VERSION,
+		createStorageInstance(params) {
+			if (retired) return Promise.reject(new Error('Storage worker retired; reload required'));
+			// mode: one constructs a Worker eagerly; defer the entire client until
+			// the first open so a parked tab can import the adapter without OPFS.
+			innerStorage ??= getRxStorageWorker({
+				workerInput: createStorageWorker,
+				workerOptions: { type: 'module', name: STORAGE_WORKER_NAME },
+				mode: 'one',
+			});
+			return innerStorage.createStorageInstance(params).catch((error: unknown) => {
+				throw describeWorkerVersionMismatch(error, getWebStorageWorkerPaths().targetOpfsWorker);
+			});
+		},
+	};
+	return STORAGE_TIMING_PROBE_ENABLED ? withStorageTimingProbe(rawStorage, 'raw') : rawStorage;
 }

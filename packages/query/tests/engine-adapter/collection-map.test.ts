@@ -4,7 +4,6 @@ import {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
 	collectionMap,
-	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	readLegacyField,
 	resolveLegacyField,
@@ -63,19 +62,6 @@ describe('variation attribute read boundary (#811)', () => {
 });
 
 describe('engine adapter collection map', () => {
-	it('pins legacy search fields after the shadow collections are retired', () => {
-		expect(LEGACY_SEARCH_FIELDS.products).toEqual(['name', 'sku', 'barcode']);
-		expect(LEGACY_SEARCH_FIELDS.variations).toEqual(['sku', 'barcode']);
-		expect(LEGACY_SEARCH_FIELDS.orders).toEqual([
-			'number',
-			'billing.first_name',
-			'billing.last_name',
-			'billing.email',
-			'billing.company',
-			'billing.phone',
-		]);
-	});
-
 	it('pins collection-name facts to the previous hand-written maps', () => {
 		const entries = Object.entries(COLLECTION_VOCABULARY);
 		expect(Object.fromEntries(entries.map(([name, row]) => [row.telemetryName, name]))).toEqual({
@@ -87,6 +73,7 @@ describe('engine adapter collection map', () => {
 			brands: 'brands',
 			tags: 'tags',
 			coupons: 'coupons',
+			refunds: 'refunds',
 			tax_rates: 'taxRates',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.legacyName]))).toEqual({
@@ -98,18 +85,8 @@ describe('engine adapter collection map', () => {
 			brands: 'products/brands',
 			tags: 'products/tags',
 			coupons: 'coupons',
+			refunds: 'refunds',
 			taxRates: 'taxes',
-		});
-		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.labelKey]))).toEqual({
-			products: 'common.products',
-			variations: 'common.variations',
-			orders: 'common.orders',
-			customers: 'common.customers',
-			categories: 'common.categories',
-			brands: 'common.brands',
-			tags: 'common.tags',
-			coupons: 'common.coupons',
-			taxRates: 'common.tax_rates',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [row.legacyName, name]))).toEqual({
 			products: 'products',
@@ -121,6 +98,7 @@ describe('engine adapter collection map', () => {
 			'products/tags': 'tags',
 			'products/brands': 'brands',
 			coupons: 'coupons',
+			refunds: 'refunds',
 		});
 		expect(Object.fromEntries(SYNC_COLLECTION_NAMES.map((name) => [name, null]))).toEqual({
 			orders: null,
@@ -132,6 +110,7 @@ describe('engine adapter collection map', () => {
 			brands: null,
 			tags: null,
 			coupons: null,
+			refunds: null,
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.censusRoute]))).toEqual({
 			orders: 'wcpos/v2/orders',
@@ -143,6 +122,7 @@ describe('engine adapter collection map', () => {
 			brands: 'wcpos/v2/products/brands',
 			tags: 'wcpos/v2/products/tags',
 			coupons: 'wcpos/v2/coupons',
+			refunds: 'wcpos/v2/refunds',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.writeable]))).toEqual({
 			orders: true,
@@ -154,6 +134,7 @@ describe('engine adapter collection map', () => {
 			brands: false,
 			tags: false,
 			coupons: true,
+			refunds: false,
 		});
 	});
 
@@ -168,6 +149,10 @@ describe('engine adapter collection map', () => {
 		});
 		expect(resolveLegacyField('orders', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('customers', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('refunds', 'id').enginePath).toBe('remoteId');
+		// Revert session_id mapping: the indexed lookup falls back to payload.session_id.
+		expect(resolveLegacyField('refunds', 'session_id').enginePath).toBe('sessionId');
+		expect(resolveLegacyField('refunds', 'parent_id').enginePath).toBe('payload.parent_id');
 		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('remoteId');
 	});
@@ -187,6 +172,7 @@ describe('engine adapter collection map', () => {
 			'products/tags': 'tags',
 			'products/brands': 'brands',
 			coupons: 'coupons',
+			refunds: 'refunds',
 		});
 	});
 
@@ -223,6 +209,7 @@ describe('engine adapter collection map', () => {
 			);
 
 		expect(declaredValues('products', sortAliasFor)).toEqual({
+			name: 'sortName',
 			price: 'sortable_price',
 		});
 		expect(declaredValues('orders', sortAliasFor)).toEqual({
@@ -230,12 +217,11 @@ describe('engine adapter collection map', () => {
 		});
 		expect(declaredValues('products', sortTiebreakFor)).toEqual({
 			menu_order: ['id'],
-			// name gained the same Woo-id tiebreak when it became the authored
-			// default (Paul 2026-08-19): tied titles must render in one order on
-			// every till, not in client-minted-uuid order.
-			name: ['id'],
+			name: ['uuid'],
+			sortName: ['uuid'],
 		});
 		expect(declaredValues('variations', sortTiebreakFor)).toEqual({
+			name: ['uuid'],
 			menu_order: ['id'],
 		});
 		expect(declaredValues('orders', sortTiebreakFor)).toEqual({});
@@ -245,6 +231,8 @@ describe('engine adapter collection map', () => {
 			menu_order: 'menu_order',
 			id: 'id',
 			name: 'title',
+			// The storage alias keeps the UI sort's wire spelling (the boot seed derives it).
+			sortName: 'title',
 			price: 'price',
 			sortable_price: 'price',
 			total_sales: 'popularity',
@@ -308,6 +296,8 @@ describe('engine adapter collection map', () => {
 				customer_id: '42',
 			})
 		).toEqual({
+			posUserId: '',
+			posStoreId: '',
 			number: '17',
 			dateCreatedGmt: '',
 			status: '',
@@ -323,16 +313,19 @@ describe('engine adapter collection map', () => {
 				stock_status: null,
 				type: 7,
 				categories: [{ id: '3' }, 5, { id: 0 }, null],
+				tags: [{ id: 8 }, 'nope'],
 				brands: undefined,
 				on_sale: 0,
 				featured: 'yes',
 				stock_quantity: '',
 			})
 		).toEqual({
+			sortName: '',
 			price: 12.35,
 			stockStatus: '',
 			type: '7',
 			categoryIds: [3, 5],
+			tagIds: [8],
 			brandIds: [],
 			onSale: false,
 			featured: true,
@@ -352,6 +345,8 @@ describe('engine adapter collection map', () => {
 			})
 		).toEqual({
 			parentRemoteId: null,
+			parentRemoteKey: '',
+			sortName: '',
 			price: -4.25,
 			stockStatus: 'instock',
 			attributes: [{ id: 2, name: 'Size', option: 'Large' }],
@@ -366,6 +361,7 @@ describe('engine adapter collection map', () => {
 			'uuid',
 			'sortable_total',
 			'cashier',
+			'register',
 			'select',
 		]);
 		expect(adapterDerivedFieldsFor('customers')).toEqual(['uuid']);
@@ -415,4 +411,32 @@ describe('census routes stay on the POS lane (#1400)', () => {
 			expect([name, row.censusRoute.split('/')[0]]).toEqual([name, 'wcpos']);
 		}
 	});
+});
+
+it('reads the register dimension from order metadata', () => {
+	const register = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	expect(
+		readLegacyField(
+			'orders',
+			{ uuid: 'order-1', payload: { meta_data: [{ key: '_wcpos_register', value: register }] } },
+			'register'
+		)
+	).toBe(register);
+	expect(readLegacyField('orders', { uuid: 'order-2', payload: {} }, 'register')).toBeUndefined();
+});
+
+it('keeps payment method payload reads and sorting while exposing a browse dimension', () => {
+	expect(collectionMap.orders.fields.payment_method).toMatchObject({
+		kind: 'payload',
+		wireFace: 'dimension',
+		enginePath: 'payload.payment_method',
+		sort: { wooOrderby: 'payment_method' },
+	});
+	expect(
+		readLegacyField(
+			'orders',
+			{ uuid: 'order', payload: { payment_method: 'MyGateway' } },
+			'payment_method'
+		)
+	).toBe('MyGateway');
 });

@@ -6,11 +6,28 @@ import {
 	findExpoMisalignments,
 	formatMisalignments,
 	satisfies,
+	SDK_VERSIONED_UNLISTED,
+	withUnlistedSdkPackages,
 } from './check-expo-alignment.mjs';
 
 test('satisfies handles exact versions', () => {
 	assert.equal(satisfies('19.2.3', '19.2.3'), true);
 	assert.equal(satisfies('19.2.7', '19.2.3'), false);
+});
+
+test('satisfies accepts only identical exact prerelease versions', () => {
+	assert.equal(satisfies('0.88.0-rc.2', '0.88.0-rc.2'), true);
+	assert.equal(satisfies('0.88.0-rc.3', '0.88.0-rc.2'), false);
+	assert.equal(satisfies('0.88.0', '0.88.0-rc.2'), false);
+	assert.equal(satisfies('0.88.0-rc.2', '0.88.0'), false);
+});
+
+test('satisfies rejects prereleases in tilde and caret ranges', () => {
+	for (const operator of ['~', '^']) {
+		assert.equal(satisfies('0.88.0-rc.2', `${operator}0.88.0`), false);
+		assert.equal(satisfies('0.88.0-rc.2', `${operator}0.88.0-rc.2`), false);
+		assert.equal(satisfies('0.88.0', `${operator}0.88.0-rc.2`), false);
+	}
 });
 
 test('satisfies handles tilde ranges', () => {
@@ -80,25 +97,46 @@ test('findExpoMisalignments accepts in-range tilde resolutions', () => {
 	);
 });
 
+// expo-blob is not in bundledNativeModules.json; a 57.x left behind by an SDK
+// 58 bump crashes Android at module init, so it is held to the SDK major.
+test('withUnlistedSdkPackages pins the unlisted SDK packages to the installed SDK major', () => {
+	assert.deepEqual(SDK_VERSIONED_UNLISTED, ['expo-blob']);
+	const extended = withUnlistedSdkPackages({ expo: '~58.0.0' }, '58.0.0-preview.8');
+	assert.equal(extended['expo-blob'], '^58.0.0');
+	assert.equal(extended.expo, '~58.0.0');
+	// Expo's own entry wins the day it appears in the list.
+	assert.equal(withUnlistedSdkPackages({ 'expo-blob': '~58.0.2' }, '58.0.1')['expo-blob'], '~58.0.2');
+	assert.deepEqual(withUnlistedSdkPackages({}, 'not-a-version'), {});
+});
+
+test('a previous-SDK expo-blob is flagged; the current SDK line is accepted', () => {
+	const extended = withUnlistedSdkPackages({}, '58.0.0-preview.8');
+	const stale = findExpoMisalignments(
+		{ 'apps/main': { 'expo-blob': { specifier: '~57.0.1', version: '57.0.1' } } },
+		extended,
+		new Map()
+	);
+	assert.equal(stale.length, 1);
+	assert.equal(stale[0].name, 'expo-blob');
+	assert.equal(stale[0].prescribed, '^58.0.0');
+	const current = findExpoMisalignments(
+		{ 'apps/main': { 'expo-blob': { specifier: '~58.0.2', version: '58.0.2' } } },
+		extended,
+		new Map()
+	);
+	assert.deepEqual(current, []);
+});
+
 test('findExpoMisalignments respects the allowlist', () => {
 	const allowed = new Map([['react', 'testing']]);
 	assert.deepEqual(findExpoMisalignments(importers, bundled, allowed), []);
 });
 
-test('default allowlist permits the intentional Sentry SDK override', () => {
-	const sentryImporters = {
-		'apps/main': {
-			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
-		},
-		'packages/utils': {
-			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
-		},
-	};
-
-	assert.match(ALLOWED_EXPO_MISMATCHES.get('@sentry/react-native'), /8\.25\.0.*#6630/);
+test('default allowlist is empty and does not suppress mismatches', () => {
+	assert.equal(ALLOWED_EXPO_MISMATCHES.size, 0);
 	assert.deepEqual(
-		findExpoMisalignments(sentryImporters, { '@sentry/react-native': '~7.11.0' }),
-		[]
+		findExpoMisalignments(importers, bundled),
+		findExpoMisalignments(importers, bundled, new Map())
 	);
 });
 

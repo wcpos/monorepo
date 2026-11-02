@@ -9,7 +9,11 @@ import packageJson from './package.json';
  * $1 Android) for a client whose JS comes from Metro anyway. Move it only when
  * a native change forces a new dev-client build regardless.
  */
-const DEV_CLIENT_NATIVE_VERSION = '1.10.3';
+const DEV_CLIENT_NATIVE_VERSION = '1.10.4';
+
+// One camera string for every plugin that writes NSCameraUsageDescription (expo-camera and
+// react-native-webrtc both do); the barcode scanner is the only camera user.
+const CAMERA_USAGE_DESCRIPTION = 'WCPOS uses the camera to scan product barcodes.';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
@@ -26,7 +30,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	// The former `e2e-test` profile is gone: native E2E drives the same
 	// `development`-profile dev client developers use, with Metro serving the
 	// JS (e2e-native.yml, 2026-08-28).
-	const isDev = easProfile === 'development';
+	// `development-device` is the same dev client built for a registered iPhone
+	// instead of the simulator (eas.json): Tap to Pay on iPhone only runs on a device.
+	const isDev = easProfile === 'development' || easProfile === 'development-device';
 	const isAdhoc = easProfile === 'adhoc';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)
@@ -42,10 +48,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		version: isDev ? DEV_CLIENT_NATIVE_VERSION : packageJson.version,
 
 		// Fingerprint hashes native deps and config; a package.json version bump
-		// alone does NOT move it (verified with @expo/fingerprint 0.20.8, 2026-09-15).
+		// alone does NOT move it (verified with @expo/fingerprint 0.21.5, 2026-10-17).
 		// One store binary receives every JS-only patch until a native change lands.
 		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
 		// applies on the next cold start.
+		// maxUpdatesToKeep: reaper target for downloaded updates kept on disk, not a strict bound (newer and embedded updates stay).
+		// 2 is expo-updates' default and minimum (58.0.11+); set explicitly so the value is ours.
 		// CI resolves once before Metro: Expo otherwise fingerprints every manifest,
 		// exceeding the iOS launcher's 10 s timeout (expo/expo#46415).
 		runtimeVersion: (process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
@@ -54,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			url: 'https://u.expo.dev/eb1b6e66-92d7-47f5-b93f-95bf51287f60',
 			checkAutomatically: 'ON_LOAD',
 			fallbackToCacheTimeout: 0,
+			maxUpdatesToKeep: 2,
 		},
 
 		orientation: 'default',
@@ -77,19 +86,32 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					? 'com.wcpos.main.adhoc'
 					: 'com.wcpos.main',
 			buildNumber: '1',
+			// Tap to Pay on iPhone. Apple granted the DEVELOPMENT entitlement on
+			// 2026-10-06 (roadmap#113): it provisions only for devices registered to
+			// the team, and a TestFlight or App Store build carrying it is refused
+			// until Apple grants the publishing entitlement after reviewing the
+			// mandated flows. So dev clients only, until that review passes.
+			...(isDev
+				? {
+						entitlements: {
+							...config.ios?.entitlements,
+							'com.apple.developer.proximity-reader.payment.acceptance': true,
+						},
+					}
+				: {}),
 			infoPlist: {
 				...iosInfoPlist,
 				ITSAppUsesNonExemptEncryption: false,
 				// Keep in step with the react-native-ble-plx plugin entry below — the
 				// plugin's withInfoPlist mod runs after this static merge, so both must
-				// carry the same combined printers+scanners wording.
+				// carry the same combined readers+printers+scanners wording.
 				NSBluetoothAlwaysUsageDescription:
 					iosInfoPlist.NSBluetoothAlwaysUsageDescription ??
-					'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+					'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				// Local network access for printer discovery
 				NSLocalNetworkUsageDescription:
 					iosInfoPlist.NSLocalNetworkUsageDescription ??
-					'WCPOS needs local network access to discover and connect to receipt printers.',
+					'WCPOS uses the local network to connect card readers and receipt printers.',
 				// Bonjour services for printer discovery
 				NSBonjourServices: Array.from(
 					new Set([...bonjourServices, '_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'])
@@ -119,6 +141,25 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					'android.permission.BLUETOOTH_SCAN',
 					'android.permission.INTERNET',
 				]),
+			],
+			// Stripped from the merged manifest (`tools:node="remove"`). The audit of the
+			// 2026-10-01 dev client (aapt2 on the EAS APK, 2026-10-05) found these declared
+			// by libraries for features the app never uses:
+			// - RECORD_AUDIO / MODIFY_AUDIO_SETTINGS: @config-plugins/react-native-webrtc
+			//   adds them unconditionally; WebRTC here carries only the customer-display
+			//   data channel (no media). RECORD_AUDIO is a dangerous permission that would
+			//   list "Microphone" on the Play listing. expo-audio (scan sounds,
+			//   play-scan-sound.ts) declares MODIFY_AUDIO_SETTINGS too, but only its
+			//   setAudioModeAsync / recording paths touch audio routing; plain playback
+			//   never does, and Android ignores rather than throws without it.
+			// - SYSTEM_ALERT_WINDOW ("display over other apps"): the same plugin plus
+			//   Expo's template. Only React Native's debug overlay uses it, so the dev
+			//   client keeps it and store/ad-hoc builds drop it.
+			// WAKE_LOCK stays: androidx.work (transitive) runs its jobs under it.
+			blockedPermissions: [
+				'android.permission.RECORD_AUDIO',
+				'android.permission.MODIFY_AUDIO_SETTINGS',
+				...(isDev ? [] : ['android.permission.SYSTEM_ALERT_WINDOW']),
 			],
 		},
 
@@ -151,8 +192,63 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					disableAutoUpload: easProfile !== 'production',
 				},
 			],
+			// Expo 57 already supplies compile/target SDK >= 35; only the minimum must move.
+			// Printer, SumUp and WebRTC use reflection; enabling R8 is a separate ticket.
+			[
+				'expo-build-properties',
+				{
+					android: {
+						minSdkVersion: 26,
+						enableMinifyInReleaseBuilds: false,
+						// The dev client only ever runs on 64-bit hardware: arm64-v8a on real devices,
+						// x86_64 on the E2E emulators. Building the two 32-bit ABIs as well is what
+						// pushed the SDK 58 (React Native 0.88) native compile past EAS's medium
+						// worker on 2026-09-28: the Gradle daemon was killed mid-C++ after 57 minutes
+						// (EAS build 8c72b2ba). Store and adhoc builds keep the template's four ABIs.
+						...(isDev ? { buildArchs: ['arm64-v8a', 'x86_64'] } : {}),
+					},
+				},
+			],
+			[
+				'@stripe/stripe-terminal-react-native',
+				{
+					// Tap to Pay on Android reads the card in a separate process of this app. Stripe
+					// requires TerminalApplicationDelegate.onCreate in MainApplication.onCreate() and
+					// an early return in that subprocess; the plugin injects both at prebuild. The
+					// guard sits before React Native and Expo start-up, so the subprocess skips them
+					// and the printer, SumUp and WebRTC modules' native start-up. The plugin puts the delegate
+					// call ahead of the guard (Stripe's Expo example gets the same order); the device
+					// check on roadmap#429 settles whether that matters.
+					appDelegate: true,
+					tapToPayCheck: true,
+					bluetoothBackgroundMode: true,
+					locationWhenInUsePermission:
+						'WCPOS uses your location to connect card readers and accept payments.',
+					bluetoothPeripheralPermission: 'WCPOS uses Bluetooth to connect card readers.',
+					bluetoothAlwaysUsagePermission:
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
+					localNetworkUsagePermission:
+						'WCPOS uses the local network to connect card readers and receipt printers.',
+				},
+			],
 			'./plugins/with-printer-support',
+			// Every DEVICE build needs this (store builds included): the Star pod drops React's
+			// framework search path on iphoneos and fails to compile. See the plugin.
+			'./plugins/with-star-io10-device-frameworks',
 			'./plugins/with-wedge-key-events',
+			'./plugins/with-sumup-reader',
+			[
+				'@config-plugins/react-native-webrtc',
+				{
+					// WebRTC requires native declarations; the app never opens the microphone
+					// (its Android RECORD_AUDIO is blocked above). This plugin's withInfoPlist
+					// runs AFTER expo-camera's below (an earlier entry in this list wins), so
+					// the camera string must be the barcode scanner's — the webrtc default
+					// shipped as "WCPOS does not use the camera." on the scanner's prompt.
+					cameraPermission: CAMERA_USAGE_DESCRIPTION,
+					microphonePermission: 'WCPOS does not use the microphone.',
+				},
+			],
 			// Android trusts user-installed CAs on dev/adhoc builds ONLY (ruling
 			// 2026-08-21, #1415): self-signed/enterprise dev stores become testable
 			// on-device; production keeps the platform default (system CAs only).
@@ -163,10 +259,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// menu itself remains reachable and the defaults can be re-enabled in
 			// its settings; see the plugin.
 			...(isDev ? ['./plugins/with-quiet-dev-menu'] : []),
+			// Dev-client builds cap Gradle at one worker: the 64-bit-only ABI list
+			// above was not enough on its own — EAS's medium Android worker still
+			// OOM-killed the daemon with several modules compiling C++ at once
+			// (EAS build ace57765, 2026-09-30). See the plugin for the numbers.
+			...(isDev ? ['./plugins/with-dev-gradle-workers'] : []),
 			[
 				'expo-camera',
 				{
-					cameraPermission: 'WCPOS uses the camera to scan product barcodes.',
+					cameraPermission: CAMERA_USAGE_DESCRIPTION,
 					recordAudioAndroid: false,
 				},
 			],
@@ -174,11 +275,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				'react-native-ble-plx',
 				{
 					// iOS app-mode scanning for supported BLE barcode scanners (#1461).
-					// Foreground only — no background modes requested. This overwrites the
+					// Scanner discovery is foreground-only; Stripe enables background Bluetooth.
+					// This overwrites the
 					// static infoPlist NSBluetoothAlwaysUsageDescription above at prebuild;
-					// both carry the same combined printers+scanners wording.
+					// both carry the same combined readers+printers+scanners wording.
 					bluetoothAlwaysPermission:
-						'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				},
 			],
 			[

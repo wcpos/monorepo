@@ -44,8 +44,7 @@ test('POS products scroll position survives a Settings round-trip', async ({ pos
 		.catch(() => null);
 
 	// POS → Settings (drawer page on next; POS stays mounted, display:none).
-	await page.getByTestId('user-menu-trigger').click();
-	await page.getByTestId('settings-menu-item').click();
+	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
 
 	// Dwell long enough for a hidden-measure cascade / phantom fetch to fire.

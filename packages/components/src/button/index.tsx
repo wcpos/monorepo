@@ -1,15 +1,14 @@
 import React from 'react';
-import { Platform, Pressable, View, ViewProps } from 'react-native';
-import type { PressableStateCallbackType } from 'react-native';
+import type { Pressable, PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';
-import * as Haptics from 'expo-haptics';
 
 import { HStack } from '../hstack';
 import { Icon, type IconName, type IconProps } from '../icon';
-import { cn } from '../lib/utils';
 import { Loader } from '../loader';
-import { Text, TextClassContext } from '../text';
+import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
+import { Text } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { VariantProps } from 'class-variance-authority';
 
@@ -20,11 +19,16 @@ import type { VariantProps } from 'class-variance-authority';
  * (`<Button size="sm"><ButtonText className="text-sm">` is redundant, and
  * `className="text-destructive"` on a solid variant paints red text on a
  * primary fill). Reach for a different `variant`/`size`, or add one here.
+ *
+ * One line by default: a label never wraps inside a fixed-height button, in
+ * any locale. A caller that wants more passes `numberOfLines` itself.
  */
-const ButtonText = Text;
+function ButtonText(props: React.ComponentProps<typeof Text>) {
+	return <Text numberOfLines={1} {...props} />;
+}
 
 const buttonVariants = cva(
-	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-md',
+	'web:transition-colors flex max-w-full shrink items-center justify-center',
 	{
 		variants: {
 			variant: {
@@ -33,66 +37,23 @@ const buttonVariants = cva(
 				 */
 				default: 'bg-primary web:hover:opacity-90 active:opacity-90',
 				destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
-				muted: 'bg-muted web:hover:opacity-80 active:opacity-80',
-				success: 'bg-success web:hover:opacity-90 active:opacity-90',
-				info: 'bg-info web:hover:opacity-90 active:opacity-90',
-				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
-				warning: 'bg-warning web:hover:opacity-90 active:opacity-90',
-				error: 'bg-error web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
 				 */
-				outline:
-					'border-border bg-card web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent border',
-				'outline-primary':
-					'border-primary bg-card web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary border',
-				'outline-secondary':
-					'border-secondary bg-card web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary border',
-				'outline-muted':
-					'border-muted bg-card web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted border',
-				'outline-success':
-					'border-success bg-card web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success border',
+				// The outline IS the variant, so it stays 1 px in every theme: Bold money's 0 px control
+				// outline is for fields and chips, and would make this button vanish on a card (CodeRabbit, #3139).
+				outline: 'border-border bg-card web:hover:bg-accent active:bg-accent border',
 				'outline-destructive':
-					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
-				'outline-info':
-					'border-info bg-card web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info border',
-				'outline-attention':
-					'border-attention bg-card web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention border',
-				'outline-warning':
-					'border-warning bg-card web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
-				'outline-error':
-					'border-error bg-card web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
+					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
 				/**
-				 * Ghost buttons
+				 * Ghost buttons. Plain `ghost` is the quiet button: no surface at rest,
+				 * a muted label that turns to the foreground with the hover/press
+				 * surface — navigation, escapes and "more" sitting after the primary.
 				 */
-				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
-				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
-				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
-				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted',
-				'ghost-success': 'bg-success/15 web:hover:bg-success active:bg-success',
+				ghost: 'web:hover:bg-accent active:bg-accent',
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
-				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info',
-				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
-				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
-				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error',
-
-				/**
-				 * Transparent, de-emphasised label. Distinct from `ghost-muted`,
-				 * which tints its surface — `ghost-quiet` keeps the surface clear and
-				 * quietens only the text, for secondary actions sitting beside a
-				 * primary one in a row.
-				 */
-				'ghost-quiet': 'web:hover:bg-accent/90 active:bg-accent',
-
-				/**
-				 * For buttons living on the sidebar / header surface, which is dark in
-				 * every theme. Square by design — these sit flush in the header bar.
-				 */
-				sidebar:
-					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
 
 				/**
 				 * Reads as a link, behaves as a button — no surface at all. For
@@ -100,108 +61,101 @@ const buttonVariants = cva(
 				 * ghost's hover surface would be too much furniture.
 				 */
 				link: 'bg-transparent',
+				/** A title-bar item (Paul, 2026-10-30): no surface on hover or press; the label lifts. */
+				bare: '',
 			},
+			/**
+			 * Three sizes, by role (ruled 2026-10-16): `sm` (36) in rows and toolbars,
+			 * `default` (44, the control token) everywhere else, `lg` (56) for the
+			 * pane's one sale/commit button — Pay, Take payment, Open/Close register,
+			 * New sale. A Button never carries its own height class. A small pill is a
+			 * `Chip size="sm"`, never a Button.
+			 */
 			size: {
-				default: 'h-10 px-4 py-2',
-				xs: 'h-6 px-2',
-				compact: 'h-9 px-3',
-				sm: 'h-9 px-3',
-				lg: 'h-11 px-8',
-				xl: 'h-14 px-10',
+				default: 'h-ctl rounded-control px-4 py-2',
+				sm: 'rounded-control h-9 px-3',
+				lg: 'rounded-commit h-14 px-6',
 			},
 		},
 		defaultVariants: {
 			variant: 'default',
 			size: 'default',
 		},
-		compoundVariants: [],
+		compoundVariants: [
+			// The commit shadow and its press belong to the solid commit buttons only (Pay, Take payment,
+			// a destructive confirm); an outline or ghost lg keeps the pill without the lift.
+			{
+				variant: ['default', 'destructive'],
+				size: 'lg',
+				class:
+					'shadow-commit active:shadow-commit-press active:translate-y-[var(--shape-commit-press-y)]',
+			},
+		],
 	}
 );
 
-const buttonTextVariants = cva(
-	'web:whitespace-nowrap text-foreground web:transition-colors truncate text-base',
-	{
-		variants: {
-			variant: {
-				/**
-				 * Solid buttons
-				 */
-				default: 'text-primary-foreground',
-				destructive: 'text-destructive-foreground',
-				secondary: 'text-secondary-foreground group-active:text-secondary-foreground',
-				muted: 'text-muted-foreground group-active:text-muted-foreground',
-				success: 'text-success-foreground',
-				info: 'text-info-foreground',
-				attention: 'text-attention-foreground',
-				warning: 'text-warning-foreground',
-				error: 'text-error-foreground',
+const buttonTextVariants = cva('text-foreground web:transition-colors font-ui text-base', {
+	variants: {
+		pressed: { true: '', false: '' },
+		hovered: { true: '', false: '' },
+		variant: {
+			/**
+			 * Solid buttons
+			 */
+			default: 'text-primary-foreground font-strong',
+			destructive: 'text-destructive-foreground',
 
-				/**
-				 * Outline buttons
-				 */
-				outline: 'group-active:text-accent-foreground',
-				'outline-primary': 'group-active:text-primary-foreground',
-				'outline-secondary': 'group-active:text-secondary-foreground',
-				'outline-muted': 'group-active:text-muted-foreground',
-				'outline-success': 'group-active:text-success-foreground',
-				'outline-destructive': 'group-active:text-destructive-foreground',
-				'outline-info': 'group-active:text-info-foreground',
-				'outline-attention': 'group-active:text-attention-foreground',
-				'outline-warning': 'group-active:text-warning-foreground',
-				'outline-error': 'group-active:text-error-foreground',
+			/**
+			 * Outline buttons
+			 */
+			outline: '',
+			'outline-destructive': '',
 
-				/**
-				 * Ghost buttons
-				 */
-				ghost: 'web:group-hover:text-accent-foreground group-active:text-accent-foreground',
-				'ghost-primary':
-					'text-primary web:group-hover:text-primary-foreground group-active:text-primary-foreground',
-				'ghost-secondary':
-					'text-secondary web:group-hover:text-secondary-foreground group-active:text-secondary-foreground',
-				'ghost-muted':
-					'text-muted web:group-hover:text-muted-foreground group-active:text-muted-foreground',
-				'ghost-success':
-					'text-success web:group-hover:text-success-foreground group-active:text-success-foreground',
-				'ghost-destructive':
-					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
-				'ghost-info':
-					'text-info web:group-hover:text-info-foreground group-active:text-info-foreground',
-				'ghost-attention':
-					'text-attention web:group-hover:text-attention-foreground group-active:text-attention-foreground',
-				'ghost-warning':
-					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
-				'ghost-error':
-					'text-error web:group-hover:text-error-foreground group-active:text-error-foreground',
-				'ghost-quiet':
-					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
-				sidebar: 'text-sidebar-foreground',
-				link: 'text-primary web:hover:underline',
-			},
-			size: {
-				default: '',
-				xs: 'text-xs',
-				compact: 'text-xs',
-				sm: 'text-sm',
-				lg: 'text-lg',
-				xl: 'text-xl',
-			},
+			/**
+			 * Ghost buttons
+			 */
+			ghost: 'text-muted-foreground',
+			'ghost-destructive': 'text-destructive',
+			link: 'text-primary web:hover:underline',
+			// The key rank (13), muted at rest, as a macOS title bar's text.
+			bare: 'text-muted-foreground text-sm font-normal',
 		},
-		defaultVariants: {
-			variant: 'default',
-			size: 'default',
+		size: {
+			default: '',
+			sm: 'text-sm',
+			lg: 'font-commit text-lg',
 		},
-	}
-);
+	},
+	compoundVariants: [
+		{ variant: 'outline', pressed: true, class: 'text-foreground' },
+		{ variant: 'outline', hovered: true, class: 'text-foreground' },
+		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
+		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
+		{ variant: 'bare', pressed: true, class: 'text-foreground' },
+		{ variant: 'bare', hovered: true, class: 'text-foreground' },
+		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-destructive', hovered: true, class: 'text-destructive-foreground' },
+	],
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
 
 /**
- *
+ * The instance a `Button`'s `ref` reaches: the props spread onto the
+ * `Pressable`, so the ref lands on it. A Dialog's `asChild` trigger and a
+ * caller returning focus use it.
  */
-type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
+type ButtonRef = React.ComponentRef<typeof Pressable>;
+
+type ButtonProps = Omit<PressableSurfaceProps, 'wash' | 'minTarget' | 'selected' | 'dimmed'> &
 	VariantProps<typeof buttonVariants> & {
 		leftIcon?: IconName | React.ReactNode;
 		rightIcon?: IconName | React.ReactNode;
 		loading?: boolean;
-		disableHaptics?: boolean;
 	};
 
 function Button({
@@ -212,8 +166,6 @@ function Button({
 	rightIcon,
 	loading,
 	children,
-	disableHaptics = false,
-	onPress,
 	...props
 }: ButtonProps) {
 	// Always a real boolean, never undefined: on Android, RN only calls
@@ -224,6 +176,7 @@ function Button({
 	// (opacity is className-driven) and to JS touch handling, but TalkBack
 	// announces the button as disabled and E2E `enabled: true` waits never
 	// pass (monorepo#1614, defect 1).
+	const [hovered, setHovered] = React.useState(false);
 	const disabled = !!(props.disabled || loading);
 
 	/**
@@ -254,39 +207,37 @@ function Button({
 		return children;
 	};
 
-	// Create a wrapped onPress handler that includes haptics
-	const handlePress = React.useCallback(
-		(e: any) => {
-			if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
-				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			}
-			onPress?.(e);
-		},
-		[disabled, disableHaptics, onPress]
-	);
-
 	return (
-		<TextClassContext.Provider
-			value={buttonTextVariants({
-				variant,
-				size,
-				className: 'web:pointer-events-none',
-			})}
+		<PressableSurface
+			className={buttonVariants({ variant, size, className })}
+			role="button"
+			// Each variant carries its own wash and lifts its label colour below.
+			wash="none"
+			// `sm` is drawn under 44 to sit in a row; the finger still gets 44 (§ Design 2).
+			minTarget={size === 'sm'}
+			{...props}
+			onHoverIn={(event) => {
+				setHovered(true);
+				props.onHoverIn?.(event);
+			}}
+			onHoverOut={(event) => {
+				setHovered(false);
+				props.onHoverOut?.(event);
+			}}
+			aria-disabled={disabled}
+			disabled={disabled}
 		>
-			<Pressable
-				className={cn(
-					buttonVariants({ variant, size, className }),
-					disabled &&
-						'web:pointer-events-none web:cursor-not-allowed web:hover:opacity-50 opacity-50 active:opacity-50'
-				)}
-				role="button"
-				{...props}
-				onPress={handlePress}
-				aria-disabled={disabled}
-				disabled={disabled}
-			>
-				{(pressableState) =>
-					leftIcon || rightIcon || loading ? (
+			{(pressableState) => (
+				<TextClassContext.Provider
+					value={buttonTextVariants({
+						variant,
+						size,
+						pressed: pressableState.pressed,
+						hovered,
+						className: 'web:pointer-events-none',
+					})}
+				>
+					{leftIcon || rightIcon || loading ? (
 						<HStack className="max-w-full">
 							{loading ? (
 								<Loader
@@ -301,143 +252,12 @@ function Button({
 						</HStack>
 					) : (
 						renderChildren(pressableState)
-					)
-				}
-			</Pressable>
-		</TextClassContext.Provider>
+					)}
+				</TextClassContext.Provider>
+			)}
+		</PressableSurface>
 	);
 }
 
-/**
- *
- */
-const separatorVariants = cva('w-px self-stretch opacity-80', {
-	variants: {
-		variant: {
-			default: 'bg-primary',
-			destructive: 'bg-destructive',
-			outline: 'bg-background',
-			secondary: 'bg-secondary',
-			muted: 'bg-muted',
-			success: 'bg-success',
-			ghost: 'bg-accent',
-			attention: 'bg-attention',
-		},
-	},
-	defaultVariants: {
-		variant: 'default',
-	},
-});
-
-type ButtonSeparatorProps = ViewProps & VariantProps<typeof separatorVariants>;
-
-function ButtonGroupSeparator({ variant, className, ...props }: ButtonSeparatorProps) {
-	return <View className={cn(separatorVariants({ variant }), className)} {...props} />;
-}
-
-/**
- *
- */
-type ButtonGroupProps = {
-	children: React.ReactElement<ButtonProps>[];
-};
-
-function ButtonGroup({ children }: ButtonGroupProps) {
-	const buttons = React.Children.toArray(children).filter(
-		(child): child is React.ReactElement<ButtonProps> => React.isValidElement(child)
-	);
-
-	return (
-		<HStack className="gap-0">
-			{buttons.map((button, index) => {
-				let classNames = button.props.className || '';
-
-				if (index === 0) {
-					// first
-					classNames = cn(classNames, 'rounded-r-none pr-2');
-				} else if (index === buttons.length - 1) {
-					// last
-					classNames = cn(classNames, 'rounded-l-none pl-2');
-				} else {
-					// middle
-					classNames = cn(classNames, 'rounded-none px-2');
-				}
-
-				return (
-					<React.Fragment key={index}>
-						{index > 0 && (
-							<ButtonGroupSeparator
-								variant={button.props.variant as ButtonSeparatorProps['variant']}
-							/>
-						)}
-						{React.cloneElement(button, {
-							className: classNames,
-						})}
-					</React.Fragment>
-				);
-			})}
-		</HStack>
-	);
-}
-
-/**
- *
- */
-type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
-	VariantProps<typeof buttonVariants> & {
-		leftIcon?: IconName;
-		rightIcon?: IconName;
-		removable?: boolean;
-		onRemove?: () => void;
-		removeAccessibilityLabel?: string;
-		removeTestID?: string;
-	};
-
-function ButtonPill({
-	className,
-	removable,
-	onRemove,
-	removeAccessibilityLabel,
-	removeTestID,
-	...props
-}: ButtonPillProps) {
-	const handleRemovePress = React.useCallback(
-		(event: any) => {
-			event?.preventDefault?.();
-			event?.stopPropagation?.();
-			onRemove?.();
-		},
-		[onRemove]
-	);
-
-	// NOTE: props (including onPress) must be spread onto the label Button.
-	// Slot-based wrappers like DialogTrigger asChild inject onPress to control
-	// open/close state — stripping it breaks that composition pattern.
-	return removable ? (
-		<ButtonGroup>
-			<Button className={cn('rounded-full', className)} {...props} />
-			<Button
-				className={cn('rounded-full', className)}
-				variant={props.variant}
-				size={props.size}
-				leftIcon="xmark"
-				onPress={handleRemovePress}
-				accessibilityLabel={removeAccessibilityLabel ?? 'Remove'}
-				testID={removeTestID}
-			/>
-		</ButtonGroup>
-	) : (
-		<Button className={cn('rounded-full', className)} {...props} />
-	);
-}
-
-export {
-	Button,
-	ButtonText,
-	ButtonGroup,
-	ButtonPill,
-	ButtonGroupSeparator,
-	buttonTextVariants,
-	buttonVariants,
-};
-export type { ButtonProps };
+export { Button, ButtonText, buttonTextVariants, buttonVariants };
+export type { ButtonProps, ButtonRef };

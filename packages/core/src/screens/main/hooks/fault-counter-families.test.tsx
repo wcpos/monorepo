@@ -24,14 +24,15 @@ import { join } from 'node:path';
 import { renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { MUTATION_QUEUE_RXDB_COLLECTION, OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
-import type { HoldCandidate, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
+import type { QueueRow as EngineQueueRow, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { observeUnsentWorkCount } from '@wcpos/query';
 import { forgetUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { useMutationCounts } from './use-engine-monitor';
 import { countUnsentChanges } from './use-unsent-changes';
 
-type QueueRow = HoldCandidate & { mutationId: string };
+type QueueRow = Omit<EngineQueueRow, 'payload' | 'queuedAt' | 'origin' | 'baseRevision'>;
 type FakeDatabase = { collections: Record<string, unknown> };
 
 /** The record a cart is open on — the row the two families disagree about. */
@@ -87,7 +88,13 @@ const QUEUE: QueueRow[] = [
 ];
 
 const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
+const mockQueueRows$ = new BehaviorSubject<readonly EngineQueueRow[] | null>(null);
 const mockEngine = {
+	queueRows$: (cb: (rows: readonly EngineQueueRow[] | null) => void) => {
+		const subscription = mockQueueRows$.subscribe(cb);
+		return () => subscription.unsubscribe();
+	},
+	ready: new Promise(() => {}),
 	active: () => {
 		const database = mockDatabase$.value;
 		return database ? { database } : null;
@@ -99,36 +106,32 @@ const mockEngine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	observeUnsentWorkCount: jest.fn(jest.requireActual('@wcpos/query').observeUnsentWorkCount),
+	observeQueueCounts: jest.fn(jest.requireActual('@wcpos/query').observeQueueCounts),
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 
-/**
- * A queue collection that answers BOTH readers off the same rows: `count()` (no
- * selector — how Unsent work reads it) and `find({selector})` (how the backlog
- * and needs-a-decision families read it). A row with no `status` counts as
- * pending, exactly as the queue schema treats it.
- */
+/** The unsent-work read still consumes stored rows; counts use the typed door below. */
 function fakeQueue(rows: readonly QueueRow[]) {
-	// The selector parameter is honoured rather than ignored on purpose: a reader
-	// that starts passing one must make the WHOLE-queue count wrong, not just the
-	// call-shape assertion below.
-	const count = jest.fn((query?: { selector?: { status?: { $in: string[] } } }) => {
-		const statuses = query?.selector?.status?.$in;
-		const counted = statuses
-			? rows.filter((row) => statuses.includes(row.status ?? 'pending'))
-			: rows;
+	const count = jest.fn((query?: { selector?: { status?: string | { $in: string[] } } }) => {
+		const status = query?.selector?.status;
+		const counted =
+			typeof status === 'string'
+				? rows.filter((row) => row.status === status)
+				: status?.$in
+					? rows.filter((row) => status.$in.includes(row.status ?? 'pending'))
+					: rows;
 		return {
 			$: new BehaviorSubject(counted.length),
 			exec: () => Promise.resolve(counted.length),
 		};
 	});
-	const find = jest.fn((query: { selector: { status: { $in: string[] } } }) => ({
-		$: new BehaviorSubject(
-			rows
-				.filter((row) => query.selector.status.$in.includes(row.status ?? 'pending'))
-				.map((row) => ({ toJSON: () => row }))
-		),
-	}));
+	const find = jest.fn((query?: { selector: { status: { $in: string[] } } }) => {
+		const selected = rows
+			.filter((row) => !query || query.selector.status.$in.includes(row.status ?? 'pending'))
+			.map((row) => ({ ...row, toJSON: () => row }));
+		return { $: new BehaviorSubject(selected), exec: async () => selected };
+	});
 	return { count, find };
 }
 
@@ -136,7 +139,7 @@ function fakeQueue(rows: readonly QueueRow[]) {
 function fakeOrders(uuids: readonly string[]) {
 	return {
 		find: jest.fn(() => ({
-			$: new BehaviorSubject(uuids.map((uuid) => ({ toJSON: () => ({ uuid }) }))),
+			$: new BehaviorSubject(uuids.map((uuid) => ({ uuid }))),
 		})),
 	};
 }
@@ -149,13 +152,17 @@ function mountQueue(rows: readonly QueueRow[], openCartRecordIds: readonly strin
 			orders: fakeOrders(openCartRecordIds),
 		},
 	};
+	mockQueueRows$.next(
+		rows.map((row) => ({
+			...row,
+			payload: {},
+			queuedAt: '',
+			origin: 'existing',
+			baseRevision: null,
+		}))
+	);
 	mockDatabase$.next(database);
 	return { queue, engine: mockEngine as unknown as RxdbSyncEngine };
-}
-
-/** The `$in` list the hook used for the family whose selector names `status`. */
-function statusSelectors(queue: ReturnType<typeof fakeQueue>): string[][] {
-	return queue.find.mock.calls.map((call) => call[0].selector.status.$in);
 }
 
 beforeEach(() => {
@@ -164,6 +171,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	mockDatabase$.next(null);
+	mockQueueRows$.next(null);
 });
 
 describe('Unsent work — "is it safe to reset?"', () => {
@@ -178,16 +186,14 @@ describe('Unsent work — "is it safe to reset?"', () => {
 		});
 	});
 
-	it('applies NO selector — this family’s exclusion rule is "none at all"', async () => {
-		// The pin: `count()` is called bare. `status` is optional in the queue
-		// schema (absent means pending), so ANY status selector both hides those
-		// rows and quietly adopts another family's exclusions.
+	it('the named read counts all rows minus internal coordination rows', async () => {
+		// Bare find preserves status-less legacy rows; exclusion happens in one snapshot.
 		const { engine, queue } = mountQueue(QUEUE, [OPEN_CART_RECORD]);
 
 		await countUnsentChanges(engine);
 
-		expect(queue.count).toHaveBeenCalled();
-		for (const call of queue.count.mock.calls) expect(call).toEqual([]);
+		expect(observeUnsentWorkCount).toHaveBeenCalledWith(engine, { snapshot: true });
+		expect(queue.find.mock.calls).toEqual([[]]);
 	});
 });
 
@@ -204,11 +210,14 @@ describe('Sync backlog — "is sync healthy?"', () => {
 	});
 
 	it('never selects a terminal status', () => {
-		const { queue } = mountQueue(QUEUE, [OPEN_CART_RECORD]);
-		const { unmount } = renderHook(() => useMutationCounts());
+		mountQueue(
+			QUEUE.filter((row) => TERMINAL_STATUSES.includes(row.status)),
+			[]
+		);
+		const { result, unmount } = renderHook(() => useMutationCounts());
 
-		const backlog = statusSelectors(queue).find((statuses) => statuses.includes('pending'));
-		expect(backlog).toEqual(['pending', 'claimed']);
+		expect(result.current.syncBacklog).toBe(0);
+		expect(result.current.syncBacklogSales).toBe(0);
 
 		unmount();
 	});
@@ -233,26 +242,17 @@ describe('Needs a decision — "what must someone act on?"', () => {
 	});
 
 	it('splits the same status list the whole family selects', () => {
-		const { queue } = mountQueue(QUEUE, [OPEN_CART_RECORD]);
-		const { unmount } = renderHook(() => useMutationCounts());
-
-		const selectors = statusSelectors(queue);
-		const whole = selectors.find(
-			(statuses) => statuses.includes('rejected') && statuses.length > 1
-		);
-		const rejected = selectors.find(
-			(statuses) => statuses.length === 1 && statuses[0] === 'rejected'
-		);
-		const unresolved = selectors.find(
-			(statuses) => statuses.includes('conflicted') && !statuses.includes('rejected')
-		);
-
-		expect([...(whole ?? [])].sort()).toEqual([...TERMINAL_STATUSES].sort());
-		expect([...(rejected ?? []), ...(unresolved ?? [])].sort()).toEqual(
-			[...TERMINAL_STATUSES].sort()
-		);
-
-		unmount();
+		for (const status of TERMINAL_STATUSES) {
+			mountQueue(
+				QUEUE.filter((row) => row.status === status),
+				[]
+			);
+			const { result, unmount } = renderHook(() => useMutationCounts());
+			expect(result.current.needsDecision).toBe(1);
+			expect(result.current.needsDecisionRejected).toBe(status === 'rejected' ? 1 : 0);
+			expect(result.current.needsDecisionUnresolved).toBe(status === 'rejected' ? 0 : 1);
+			unmount();
+		}
 	});
 });
 

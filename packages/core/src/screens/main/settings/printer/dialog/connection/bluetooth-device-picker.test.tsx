@@ -15,6 +15,17 @@ import { UsbDevicePicker } from './usb-device-picker';
 import type { PrinterFormValues } from '../../schema';
 import type { Resolver } from 'react-hook-form';
 
+// ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
+// ListItem reads the pointer, and this suite's react-native mock has no Platform.
+// The library empty state pulls uniwind and expo-linking into Jest; its title is what this suite reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID, title }: { testID?: string; title: string }) => (
+		<span data-testid={testID}>{title}</span>
+	),
+}));
+jest.mock('@wcpos/components/form', () => ({ SavedMark: () => null }));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: jest.fn(async () => ({ columns: 48, source: 'printer' })),
 	usePrinterDiscovery: () => ({
@@ -43,6 +54,8 @@ jest.mock('react-hook-form', () => ({
 	useWatch: () => '',
 }));
 jest.mock('react-native', () => ({
+	// The shared rows' press haptic reads it (native only).
+	Platform: { OS: 'web' },
 	Pressable: ({
 		children,
 		onPress,

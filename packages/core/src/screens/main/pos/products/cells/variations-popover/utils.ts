@@ -1,5 +1,4 @@
-import type { ProductDocument } from '@wcpos/database';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, ProductPayload } from '@wcpos/query';
 
 import { matchesStockStatusFilter } from '../../../../components/product/stock-filter';
 
@@ -108,7 +107,7 @@ function hitMatchesOption(
  * @returns Array of attribute data with option counts and auto-selected values
  */
 export const parseAttributes = (
-	attributes: ProductDocument['attributes'],
+	attributes: ProductPayload['attributes'],
 	selectedAttributes: SelectedAttribute[] | undefined,
 	hits: VariationHit[]
 ) => {
@@ -173,7 +172,7 @@ export const parseAttributes = (
  * while the store prevents overselling, and sells it (like a simple product) when it does not.
  */
 export function getDisabledVariationOptions(
-	attribute: NonNullable<ProductDocument['attributes']>[number],
+	attribute: NonNullable<ProductPayload['attributes']>[number],
 	selectedAttributes: SelectedAttribute[] | undefined,
 	hits: VariationHit[],
 	stockStatus: string | undefined

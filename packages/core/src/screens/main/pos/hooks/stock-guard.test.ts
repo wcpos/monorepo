@@ -1,48 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { act, renderHook } from '@testing-library/react';
-
-import { getLogger } from '@wcpos/utils/logger';
-import { catalogDocumentId } from '@wcpos/sync-core';
-
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
-import { useCartStockGuard } from './use-cart-stock-guard';
-
-const mockFindOneExec = jest.fn();
-const mockFindDocumentsById = jest.fn();
-
-jest.mock('observable-hooks', () => ({ useObservableEagerState: () => true }));
-jest.mock('@wcpos/query', () => ({
-	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({
-		engine: {
-			active: () => ({
-				database: {
-					collections: {
-						products: {
-							findOne: () => ({ exec: mockFindOneExec }),
-							storageInstance: { findDocumentsById: mockFindDocumentsById },
-						},
-						variations: {
-							findOne: () => ({ exec: mockFindOneExec }),
-							storageInstance: { findDocumentsById: mockFindDocumentsById },
-						},
-					},
-				},
-			}),
-		},
-	}),
-	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
-		database?.collections?.[name] ?? null,
-	resolveLegacyField: () => ({ enginePath: 'remoteId' }),
-}));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: { prevent_overselling$: {} } }),
-}));
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string) => key,
-}));
 
 describe('evaluateStockForCartChange', () => {
 	const managedProduct = {
@@ -200,119 +159,26 @@ describe('aggregateExistingCartQuantity', () => {
 			})
 		).toBe(1);
 	});
-});
-
-describe('useCartStockGuard', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		mockFindOneExec.mockResolvedValue(null);
-		mockFindDocumentsById.mockResolvedValue([]);
-	});
 
 	it.each([
-		[true, 11],
-		['parent', 10],
-		[null, 11],
-	] as const)(
-		'resolves variation stock ownership for manage_stock=%s',
-		async (manageStock, ownerId) => {
-			mockFindDocumentsById.mockResolvedValue(
-				manageStock === null ? [] : [{ payload: { manage_stock: manageStock } }]
-			);
-			const { result } = renderHook(() => useCartStockGuard());
-
-			await expect(result.current.resolveStockOwnerId(10, 11)).resolves.toBe(ownerId);
+		['3', 0],
+		['1', 2],
+		[1, 2],
+		['abc', 3],
+		[null, 3],
+		['-2', 3], // a negative value never inflates demand
+	])(
+		'counts a sibling of 3 net of its _reduced_stock %p as %p',
+		(reduced: unknown, expected: number) => {
+			expect(
+				aggregateExistingCartQuantity({
+					lineItems: [
+						{ product_id: 10, quantity: 3, meta_data: [{ key: '_reduced_stock', value: reduced }] },
+					],
+					productId: 10,
+					product: { manage_stock: true },
+				})
+			).toBe(expected);
 		}
 	);
-
-	it('fails closed when the enabled guard cannot load the product record', async () => {
-		const { result } = renderHook(() => useCartStockGuard());
-		const stockLogger = getLogger(['wcpos', 'pos', 'cart', 'stock']);
-		let stockResult;
-
-		await act(async () => {
-			stockResult = await result.current.checkCartStock({
-				lineItems: [],
-				productId: 10,
-				requestedQuantity: 1,
-				name: 'Deleted product',
-			});
-		});
-
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: null,
-			name: 'Deleted product',
-		});
-		// Not "out of stock": the stock record has not reached this device yet.
-		expect(stockLogger.info).toHaveBeenCalledWith(
-			'Stock record is not on this device yet',
-			expect.objectContaining({
-				showToast: true,
-				toast: { title: 'pos_cart.stock_not_loaded', type: 'warning' },
-			})
-		);
-	});
-
-	it('evaluates a soft-deleted product tombstone', async () => {
-		mockFindDocumentsById.mockResolvedValue([
-			{
-				payload: {
-					id: 10,
-					name: 'Deleted product',
-					manage_stock: true,
-					stock_quantity: 0,
-					stock_status: 'outofstock',
-					backorders: 'no',
-				},
-			},
-		]);
-		const { result } = renderHook(() => useCartStockGuard());
-
-		const stockResult = await result.current.checkCartStock({
-			lineItems: [],
-			productId: 10,
-			requestedQuantity: 1,
-		});
-
-		expect(mockFindDocumentsById).toHaveBeenCalledWith(
-			[catalogDocumentId('product', '10' as never)],
-			true
-		);
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: 0,
-			name: 'Deleted product',
-		});
-	});
-
-	it('fails closed when the enabled guard cannot load the variation record', async () => {
-		const { result } = renderHook(() => useCartStockGuard());
-		let stockResult;
-
-		await act(async () => {
-			stockResult = await result.current.checkCartStock({
-				lineItems: [],
-				productId: 10,
-				variationId: 11,
-				requestedQuantity: 1,
-				product: {
-					manage_stock: true,
-					stock_quantity: 5,
-					stock_status: 'instock',
-					backorders: 'no',
-				},
-				name: 'Deleted variation',
-			});
-		});
-
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: null,
-			name: 'Deleted variation',
-		});
-	});
 });

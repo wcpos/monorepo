@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -14,13 +14,16 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	classifyEmailSendError,
+	type EmailSendFailure,
+	enqueueReceiptEmail,
+} from '@wcpos/query/receipt-email-queue';
 
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { classifyEmailSendError, type EmailSendFailure } from './email-queue/classify';
-import { enqueueReceiptEmail, type ReceiptEmailQueuePort } from './email-queue/queue';
-import { useReceiptEmailQueueCollection } from './email-queue/use-receipt-email-queue-collection';
+import { useAppState } from '../../../contexts/app-state';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 const queueLogger = getLogger(['wcpos', 'receipt', 'emailQueue']);
@@ -32,6 +35,8 @@ const formSchema = z.object({
 
 interface Props {
 	order: EngineRecord<'orders'>;
+	/** The receipt document's local-only rule: a sale the store has not heard queues as offline. */
+	localOnly?: boolean;
 }
 
 /**
@@ -45,9 +50,9 @@ interface Props {
  * with time — a rejected address earns the same 400 forever, and hiding it
  * behind "queued" would be a lie.
  */
-export function EmailForm({ order }: Props) {
+export function EmailForm({ order, localOnly = false }: Props) {
 	const http = useRestHttpClient();
-	const queueCollection = useReceiptEmailQueueCollection();
+	const { storeDB } = useAppState();
 	const { status } = useOnlineStatus();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
@@ -58,15 +63,13 @@ export function EmailForm({ order }: Props) {
 
 	// 'online-website-unavailable' counts as offline here: the device has a
 	// network but the store cannot be reached, which fails exactly the same way.
-	const isOffline = status !== 'online-website-available';
-	const queue = queueCollection as unknown as ReceiptEmailQueuePort | undefined;
-	const { onOpenChange } = useRootContext();
+	const isOffline = localOnly || status !== 'online-website-available';
 	/**
 	 * Sent or queued is the dialog's job done; it closes itself (a merchant on 1.11.6
 	 * found it open after every Send). A failure keeps it open, with the address
 	 * still in the field, so the cashier can correct it and try again.
 	 */
-	const closeDialog = React.useCallback(() => onOpenChange(false), [onOpenChange]);
+	const { close: closeDialog } = useDialog();
 
 	/**
 	 * Persist the send so it survives an app restart, and tell the cashier what
@@ -80,17 +83,17 @@ export function EmailForm({ order }: Props) {
 			reason: string,
 			failure?: EmailSendFailure
 		): Promise<boolean> => {
-			if (!queue || typeof orderID !== 'number') return false;
+			if (!storeDB || typeof orderID !== 'number') return false;
 			try {
 				await enqueueReceiptEmail(
-					{ collection: queue, logger: queueLogger },
 					{
 						orderId: orderID,
 						orderNumber: typeof orderNumber === 'string' ? orderNumber : undefined,
 						email,
 						saveTo: saveEmail ? 'billing' : '',
 						...(failure ? { failure } : {}),
-					}
+					},
+					{ storeDB, logger: queueLogger }
 				);
 				Toast.show({
 					type: 'success',
@@ -112,7 +115,7 @@ export function EmailForm({ order }: Props) {
 				return false;
 			}
 		},
-		[orderID, orderNumber, queue, t]
+		[orderID, orderNumber, storeDB, t]
 	);
 
 	/**
@@ -200,36 +203,40 @@ export function EmailForm({ order }: Props) {
 	 *
 	 */
 	return (
-		<VStack className="gap-4">
-			<Form {...form}>
-				<FormErrors />
-				<VStack>
-					<FormField
-						control={form.control}
-						name="email"
-						render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
-					/>
-					<FormField
-						control={form.control}
-						name="saveEmail"
-						render={({ field }) => (
-							<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
-						)}
-					/>
-				</VStack>
-			</Form>
-			{isOffline ? (
-				<Text testID="receipt-email-offline-notice" className="text-muted-foreground text-xs">
-					{t('receipt.email_offline_notice')}
-				</Text>
-			) : null}
-			<DialogFooter className="px-0">
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				{/* @ts-expect-error: loading prop is forwarded to Button via rest props but not in SlottablePressableProps type */}
-				<DialogAction testID="receipt-email-send" onPress={sendEmail} loading={loading}>
-					{isOffline ? t('receipt.send_when_online') : t('receipt.send')}
-				</DialogAction>
-			</DialogFooter>
-		</VStack>
+		<>
+			<DialogBody className="gap-4">
+				<Form {...form}>
+					<FormErrors />
+					<VStack>
+						<FormField
+							control={form.control}
+							name="email"
+							render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
+						/>
+						<FormField
+							control={form.control}
+							name="saveEmail"
+							render={({ field }) => (
+								<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
+							)}
+						/>
+					</VStack>
+				</Form>
+				{isOffline ? (
+					<Text testID="receipt-email-offline-notice" variant="help">
+						{t('receipt.email_offline_notice')}
+					</Text>
+				) : null}
+			</DialogBody>
+			<DialogFooter
+				close
+				intent={{
+					label: isOffline ? t('receipt.send_when_online') : t('receipt.send'),
+					testID: 'receipt-email-send',
+					onPress: () => void sendEmail(),
+					loading,
+				}}
+			/>
+		</>
 	);
 }

@@ -24,6 +24,7 @@ const UNIT_PACKAGES = new Set([
 	'receipt-renderer',
 	'scanner',
 	'main',
+	'template-studio',
 ]);
 const WEB_SPEC = /^apps\/main\/e2e\/([A-Za-z0-9._-]+\.spec\.ts)$/;
 
@@ -55,14 +56,11 @@ export function classify(file) {
 		return 'web-helper';
 	// A package manifest keeps the dependency plan even in a leaf package (#1986 review).
 	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
+	if (file.startsWith('apps/template-studio/')) return 'studio-src';
 	// Leaf packages have no unit lane (their node:test files run as script tests in
 	// Lint), so their test files must not schedule the unit job: a narrowed run that
 	// selects nothing fails the "prove narrowed unit tests ran" guard (#1984).
-	if (
-		file.startsWith('packages/virtual-printer/') ||
-		file.startsWith('packages/eslint/') ||
-		file.startsWith('apps/template-studio/')
-	)
+	if (file.startsWith('packages/virtual-printer/') || file.startsWith('packages/eslint/'))
 		return 'leaf-package';
 	if (
 		!file.startsWith('scripts/') &&
@@ -101,6 +99,7 @@ export function classify(file) {
 	if (/^\.github\/workflows\/[^/]+\.yml$/.test(file)) return 'workflow';
 	if (file.startsWith('.github/actions/') || file.startsWith('.github/scripts/'))
 		return 'github-shared';
+	// Includes build-sqlite-worker.mjs and the SQLite worker source/probe: full web coverage.
 	if (file.startsWith('scripts/')) return 'scripts';
 	if (file === 'apps/web') return 'submodule';
 	return 'fallback';
@@ -108,6 +107,7 @@ export function classify(file) {
 
 function everythingPlan(detail) {
 	return {
+		gallery: true,
 		lint: true,
 		unit: 'all',
 		web: 'full',
@@ -193,6 +193,7 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (nonBehavioural) {
 			const detail = 'only documentation or comment-only code changed';
 			return {
+				gallery: false,
 				lint: false,
 				unit: 'none',
 				web: 'none',
@@ -206,6 +207,25 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (fallback !== -1) return everythingPlan(`${changedFiles[fallback]} matched no rule`);
 
 		const plan = {
+			gallery: changedFiles.some(
+				(file) =>
+					/^(packages\/components\/|packages\/core\/src\/screens\/|apps\/main\/(app\/\(gallery\)\/|components\/gallery\/|gallery\/))/.test(
+						file
+					) ||
+					[
+						'apps/main/global.css',
+						'apps/main/package.json',
+						'packages/components/package.json',
+						'pnpm-lock.yaml',
+						'pnpm-workspace.yaml',
+						'apps/main/app/_layout.tsx',
+						'apps/main/metro.config.js',
+						'apps/main/playwright.gallery.config.ts',
+						'.github/workflows/test.yml',
+						'.github/actions/ci-plan/action.yml',
+						'scripts/ci-plan.mjs',
+					].includes(file)
+			),
 			lint: false,
 			unit: 'none',
 			web: 'none',
@@ -256,6 +276,9 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 				const match = /^(?:packages\/([^/]+)|apps\/main)\//.exec(file);
 				if (!match) plan.unit = 'all';
 				else units.add(match[1] ?? 'main');
+				reasons.unit.add(rule);
+			} else if (rule === 'studio-src') {
+				units.add('template-studio');
 				reasons.unit.add(rule);
 			} else if (rule === 'package-src') {
 				// No native on a main-targeting PR for plain app/package source (owner ruling
@@ -371,7 +394,7 @@ function emit(plan) {
 	// $GITHUB_OUTPUT is one `key=value` per line; a newline inside a value (a
 	// multi-line git error in `reason`) would corrupt the file and fail the
 	// changes job instead of falling back to the everything-plan.
-	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'reason'])
+	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'gallery', 'reason'])
 		console.log(`${key}=${String(plan[key]).replace(/[\r\n]+/g, ' ')}`);
 }
 

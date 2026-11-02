@@ -1,4 +1,4 @@
-import type { FlatTreeItem, HierarchicalOption, HierarchyConfig } from '../lib/use-hierarchy';
+import type { FlatTreeItem, HierarchicalOption, HierarchyConfig } from './use-hierarchy';
 import type { Option } from '../combobox/types';
 
 // --- Root props ---

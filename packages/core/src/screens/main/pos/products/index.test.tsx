@@ -7,18 +7,15 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { cellsForRow, POSProducts } from './index';
-import { ProductImage } from '../../components/product/image';
-import { VariableProductImage } from '../../components/product/variable-image';
+import { invokeSurface, resetSurfaces } from '../../../../extensions/commands/surfaces';
+import { PersistedStateProvider } from '../../../../contexts/persisted-state';
+import { PosProductImage } from './cells/image';
+import { PosVariableProductImage } from './cells/variable-image';
 
 import type { QueryStateOf } from '../../../../query';
 
-const mockBinding = {
-	resource: { kind: 'pos-products-resource' },
-	active$: of(false),
-	total$: of(40),
-	sync: jest.fn(async () => undefined),
-};
-const mockUseRelationalCollectionBinding = jest.fn((_state: unknown) => mockBinding);
+const mockHandle = { key: 'pos-products-handle', sync: jest.fn(async () => undefined) };
+const mockUseProductsQueryHandle = jest.fn((_state: unknown) => mockHandle);
 const mockUseBarcode = jest.fn(
 	(_setSearch: (search: string) => void, _clearSearch: () => void) => ({
 		onKeyPress: jest.fn(),
@@ -27,17 +24,69 @@ const mockUseBarcode = jest.fn(
 let mockDataTableProps: Record<string, unknown> = {};
 let mockGridProps: Record<string, unknown> = {};
 let mockFilterBarProps: Record<string, unknown> = {};
+let mockBrowseStageProps: Record<string, unknown> | null = null;
+let mockBrowseStageMounts = 0;
+let mockScopeKey = '0:0';
 let mockShowOutOfStock = false;
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
 let mockViewMode = 'table';
 let mockGridColumns = 4;
+let mockBrowseBy: string | undefined;
+let mockSession: { status: string } | null = null;
+let mockSessionsOn = false;
 
+// The state primitives pull in Button (expo-haptics) and Icon (uniwind), both ESM-only under
+// jest; the doubles keep the props this screen reads.
+const mockNavigate = jest.fn();
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: mockNavigate }) }));
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+// The frame imports the Pro guard (the POS column passes no `pro`); the guard pulls expo-blur
+// and app-state (ESM), which jest cannot require.
+jest.mock('../../components/pro-guard', () => ({
+	withProAccess: (Component: unknown) => Component,
+}));
+// The column's bar and frame read the insets (the register column pads them).
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({
+		title,
+		description,
+		testID,
+	}: {
+		title: string;
+		description?: string;
+		testID?: string;
+	}) => (
+		<section data-testid={testID}>
+			<h2>{title}</h2>
+			{description ? <p>{description}</p> : null}
+		</section>
+	),
+}));
+// The grid's loading rows are Poster placeholders (their own suite covers the shape).
+jest.mock('@wcpos/components/poster-tile', () => ({
+	PosterPlaceholder: ({ testID }: { testID?: string }) => <div data-testid={testID} />,
+}));
+jest.mock('@wcpos/components/skeleton', () => ({
+	Skeleton: ({ shape }: { shape?: string }) => <div data-testid="skeleton" data-shape={shape} />,
+	skeletonCount: () => 3,
+	SKELETON_MAX_ROWS: 12,
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: mockSession, sessionsOn: mockSessionsOn }),
+}));
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {
 		...actual,
-		useRelationalCollectionBinding: (state: unknown) => mockUseRelationalCollectionBinding(state),
+		useProductsQueryHandle: (state: unknown) => mockUseProductsQueryHandle(state),
+		// The empty state's census; the fake handle has no snapshot to read.
+		useQueryHandleFields: () => ({ ready: false, total: null }),
+		useScopeKey: () => mockScopeKey,
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -50,10 +99,18 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 	useObservableRef: (value: unknown) => [{ current: value }, of(value)],
 }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
+}));
+// Notice imports native SVG and external-link runtimes; this band has neither actions nor docs.
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -91,19 +148,24 @@ jest.mock('../../components/data-table', () => ({
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
 }));
-jest.mock('./grid', () => ({
+jest.mock('./tiles/product-grid', () => ({
 	ProductGrid: (props: Record<string, unknown>) => {
 		mockGridProps = props;
 		return <div />;
 	},
 }));
-jest.mock('../../components/product/filter-bar', () => ({
-	FilterBar: (props: Record<string, unknown>) => {
+jest.mock('./filter-bar/filter-bar', () => ({
+	POSFilterBar: (props: Record<string, unknown>) => {
 		mockFilterBarProps = props;
 		return null;
 	},
+	useActiveConditionLabels: () => [],
 }));
-jest.mock('../../components/query-search-input', () => ({ QuerySearchInput: () => null }));
+jest.mock('../../components/query-search-input', () => ({
+	QuerySearchInput: ({ ref, testID }: { ref?: React.Ref<HTMLInputElement>; testID?: string }) => (
+		<input data-testid={testID} ref={ref} />
+	),
+}));
 jest.mock('../../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -118,7 +180,9 @@ jest.mock('../../contexts/ui-settings', () => ({
 			showOutOfStock$: mockShowOutOfStock,
 			viewMode$: mockViewMode,
 			gridColumns$: mockGridColumns,
+			browseBy$: mockBrowseBy,
 		},
+		getUILabel: (id: string) => id,
 	}),
 }));
 jest.mock('../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
@@ -129,7 +193,9 @@ jest.mock('./use-barcode', () => ({
 	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
 		mockUseBarcode(setSearch, clearSearch),
 }));
-jest.mock('./storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
+// The bar's menu reads the drawer; its module brings the bell and the online status (NetInfo).
+jest.mock('../../components/bar-controls', () => ({ useBarMenu: () => undefined }));
+jest.mock('../components/storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
 jest.mock('./camera-scan-button', () => ({ CameraScanButton: () => null }));
 jest.mock('./camera-scanner-panel', () => ({ CameraScannerPanel: () => null }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
@@ -144,9 +210,18 @@ jest.mock('./cells/variable-actions', () => ({ VariableActions: () => null }));
 jest.mock('./cells/variation-actions', () => ({ ProductVariationActions: () => null }));
 jest.mock('./cells/variation-name', () => ({ ProductVariationName: () => null }));
 jest.mock('../../components/product/image', () => ({ ProductImage: () => null }));
+// The POS table's own cells (2026-10-14): the Poster thumbs and the from-price.
+jest.mock('./cells/image', () => ({ PosProductImage: () => null }));
+jest.mock('./cells/variable-image', () => ({ PosVariableProductImage: () => null }));
+jest.mock('./cells/variable-price', () => ({ PosVariablePrice: () => null }));
+jest.mock('./cells/variation-image', () => ({ PosVariationImage: () => null }));
 jest.mock('../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
-jest.mock('../../components/product/variable-image', () => ({ VariableProductImage: () => null }));
-jest.mock('../../components/product/variable-price', () => ({ VariableProductPrice: () => null }));
+jest.mock('../../components/product/variable-image', () => ({
+	VariableProductImage: () => null,
+}));
+jest.mock('../../components/product/variable-price', () => ({
+	VariableProductPrice: () => null,
+}));
 jest.mock('../../components/product/variable-product-row', () => ({
 	VariableProductRow: () => null,
 }));
@@ -156,8 +231,8 @@ jest.mock('../../components/product/variation-image', () => ({
 jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
 function latestState(): QueryStateOf<'products'> {
-	const call = mockUseRelationalCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('POS products binding was not called');
+	const call = mockUseProductsQueryHandle.mock.calls.at(-1);
+	if (!call) throw new Error('POS products handle was not called');
 	return call[0] as QueryStateOf<'products'>;
 }
 
@@ -166,8 +241,8 @@ describe('cellsForRow', () => {
 		const row = (type: 'simple' | 'variable') =>
 			({ original: { record: { payload: { type } } } }) as Parameters<typeof cellsForRow>[0];
 
-		expect(cellsForRow(row('variable')).image).toBe(VariableProductImage);
-		expect(cellsForRow(row('simple')).image).toBe(ProductImage);
+		expect(cellsForRow(row('variable')).image).toBe(PosVariableProductImage);
+		expect(cellsForRow(row('simple')).image).toBe(PosProductImage);
 	});
 });
 
@@ -177,11 +252,69 @@ describe('POSProducts query-state wiring', () => {
 		mockDataTableProps = {};
 		mockGridProps = {};
 		mockFilterBarProps = {};
+		mockBrowseStageProps = null;
+		mockBrowseStageMounts = 0;
+		mockScopeKey = '0:0';
+		// Stated, not left to the default: a till that never chose browses by categories.
+		mockBrowseBy = 'all';
 		mockShowOutOfStock = false;
 		mockSortBy = 'name';
 		mockSortDirection = 'asc';
 		mockViewMode = 'table';
 		mockGridColumns = 4;
+		mockSession = null;
+		mockSessionsOn = false;
+		mockFocused = true;
+		resetSurfaces();
+	});
+
+	it('the search surface focuses the input at once while the Products tab is focused', async () => {
+		render(<POSProducts />);
+		await act(() => invokeSurface('search'));
+		expect(mockNavigate).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(screen.getByTestId('search-products'));
+	});
+
+	it('the search surface brings an unfocused Products tab forward, then focuses once it is', async () => {
+		mockFocused = false;
+		const { rerender } = render(<POSProducts />);
+		await act(() => invokeSurface('search'));
+		expect(mockNavigate).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+		mockFocused = true;
+		rerender(<POSProducts />);
+		expect(document.activeElement).toBe(screen.getByTestId('search-products'));
+	});
+
+	it('shows price-check guidance only before a session opens with sessions enabled', () => {
+		mockSessionsOn = true;
+		const { rerender } = render(<POSProducts />);
+		expect(screen.getByTestId('products-locked-notice').textContent).toBe(
+			'pos_products.price_check_only_until_open'
+		);
+		expect(
+			screen.getByTestId('products-locked-notice').querySelector('[data-testid="icon-lock"]')
+		).toBeTruthy();
+		mockSession = { status: 'open' };
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+		mockSession = null;
+		mockSessionsOn = false;
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+	});
+
+	it('shows counting guidance instead of price-check guidance while counting', () => {
+		mockSessionsOn = true;
+		mockSession = { status: 'counting' };
+		const { rerender } = render(<POSProducts />);
+		expect(screen.getByText('pos_products.counting_items_after_count')).toBeTruthy();
+		expect(
+			screen.getByTestId('products-locked-notice').querySelector('[data-testid="icon-info"]')
+		).toBeTruthy();
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+		mockSession = { status: 'open' };
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.counting_items_after_count')).toBeNull();
 	});
 
 	it('binds table mode, barcode fallback, and the shared filter bar without a fluent Query', () => {
@@ -199,16 +332,19 @@ describe('POSProducts query-state wiring', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		});
+		// The table reads the products handle (roadmap#423).
 		expect(mockDataTableProps).toMatchObject({
 			collectionName: 'products',
-			resource: mockBinding.resource,
+			handle: mockHandle,
 			sort: { field: 'name', direction: 'asc' },
-			active$: mockBinding.active$,
-			total$: mockBinding.total$,
-			sync: mockBinding.sync,
 		});
+		expect(mockDataTableProps).not.toHaveProperty('resource');
 		expect(mockDataTableProps).not.toHaveProperty('query');
-		expect(mockFilterBarProps).toEqual({});
+		expect(mockFilterBarProps).toEqual({
+			level: 'products',
+			initialFilters: { status: 'publish', stock_status: 'instock' },
+			place: null,
+		});
 
 		const setSearch = mockUseBarcode.mock.calls[0]?.[0];
 		act(() => setSearch?.('ABC-123'));
@@ -346,13 +482,246 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'name', direction: 'desc' });
 	});
 
-	it('serves grid mode from the same binding and pagination action', () => {
+	it('serves grid mode from the products handle and the same pagination action', () => {
 		mockViewMode = 'grid';
 		render(<POSProducts />);
 
-		expect(mockGridProps).toMatchObject({ binding: mockBinding });
+		expect(mockGridProps).toMatchObject({ handle: mockHandle });
+		// Tiles drill in on the deal stage; rows keep the sliding pane.
+		expect(document.querySelector('[data-testid="deal-stage"]')).not.toBeNull();
 		const actions = mockGridProps.actions as { extendLimit: () => void };
 		act(() => actions.extendLimit());
 		expect(latestState().limit).toBe(20);
+	});
+
+	it('puts the browse stage in place of the products in a browse mode', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories', viewMode: 'table' });
+		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
+		// The filter bar is the same in every mode until a level opens.
+		expect(mockFilterBarProps).toEqual({
+			level: 'products',
+			initialFilters: { status: 'publish', stock_status: 'instock' },
+			place: null,
+		});
+	});
+
+	it('hands the browse stage the screen’s plumbing, and its drill sets the filter bar’s level', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		expect(mockBrowseStageProps).toMatchObject({
+			handle: mockHandle,
+			variationsStyle: 'drill',
+			stockStatus: 'instock',
+			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),
+			actions: expect.objectContaining({ extendLimit: expect.any(Function) }),
+			tableConfig: expect.objectContaining({
+				meta: expect.objectContaining({ variationStockStatus: 'instock' }),
+			}),
+		});
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+		render(mockBrowseStageProps?.empty as React.ReactElement);
+		expect(screen.getByTestId('no-data-message')).toBeTruthy();
+
+		const onDrilledChange = mockBrowseStageProps?.onDrilledChange as (drilled: boolean) => void;
+		act(() => onDrilledChange(true));
+		expect(mockFilterBarProps.level).toBe('variations');
+		act(() => onDrilledChange(false));
+		expect(mockFilterBarProps.level).toBe('products');
+		// A level open hands the filter bar its place: the crumb is the source's own condition.
+		const onLevelChange = mockBrowseStageProps?.onLevelChange as (place: unknown) => void;
+		act(() => onLevelChange({ field: 'categories' }));
+		expect(mockFilterBarProps.place).toEqual({ field: 'categories' });
+		act(() => onLevelChange(null));
+		expect(mockFilterBarProps.place).toBeNull();
+	});
+
+	// The stage owns search: it drops its path and shows the catalogue-wide products itself, so
+	// a search never swaps the stage out (a shortcut's own search would bounce it otherwise).
+	it('keeps the browse stage, not the products stack, under a search', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		mockBrowseStageProps = null;
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
+		expect(latestState().search).toBe('lat');
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
+	});
+
+	it('drops a product drill when a browse source takes over, and does not bring it back', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockBrowseBy = 'categories';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+
+		mockBrowseBy = 'all';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
+
+	// A same-site store or cashier switch keeps the source, search, filters and path, and changes
+	// the database the products are read from: the stage's drill and held answers are stale.
+	it('remounts the browse stage when the scope changes, and only then', () => {
+		mockBrowseBy = 'categories';
+		const { rerender } = render(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(2);
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+	});
+
+	it('Android back closes the All products drill, and is left alone without one', () => {
+		mockViewMode = 'grid';
+		render(<POSProducts />);
+		expect(mockSystemBack!()).toBe(false);
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+		let handled: boolean | undefined;
+		act(() => {
+			handled = mockSystemBack!();
+		});
+		expect(handled).toBe(true);
+		expect(mockFilterBarProps.level).toBe('products');
+		expect(mockSystemBack!()).toBe(false);
+	});
+
+	it('drops a product drill when the scope changes', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
+});
+
+// The new rows and tiles are tested in their own suites.
+jest.mock('./rows/product-row', () => ({ ProductRow: () => null }));
+jest.mock('./rows/variable-product-row', () => ({ VariableProductRow: () => null }));
+jest.mock('./tiles/product-tile', () => ({ ProductTile: () => null }));
+jest.mock('./tiles/variable-product-tile', () => ({ VariableProductTile: () => null }));
+jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }));
+// Android's back: the screen's handler, as its last render registered it.
+let mockSystemBack: (() => boolean) | undefined;
+jest.mock('./browse/use-system-back', () => ({
+	useSystemBack: (handle: () => boolean) => {
+		mockSystemBack = handle;
+	},
+}));
+// Browse by is off unless a test stores it (no value reads as All products); the stage has its
+// own suite, so here it only reports what it was handed.
+jest.mock('./browse/browse-stage', () => ({
+	BrowseStage: (props: Record<string, unknown>) => {
+		mockBrowseStageProps = props;
+		// A mount is a fresh stage: its drill, held answers and snapshots start empty.
+		const { useEffect } = jest.requireActual('react');
+		useEffect(() => {
+			mockBrowseStageMounts += 1;
+		}, []);
+		return null;
+	},
+}));
+// The stage's own behaviour is tested beside it; here it only has to hold both panes.
+jest.mock('@wcpos/components/pane-stack', () => ({
+	PaneStack: <T,>({
+		children,
+		detail,
+		renderDetail,
+		testID,
+	}: React.PropsWithChildren<{
+		detail: T | null;
+		renderDetail: (detail: T) => React.ReactNode;
+		testID?: string;
+	}>) => (
+		<div data-testid={testID}>
+			{children}
+			{detail !== null && renderDetail(detail)}
+		</div>
+	),
+}));
+jest.mock('./deal-stack', () => ({
+	DealStack: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="deal-stage">{children}</div>
+	),
+	useCopyPicture: () => undefined,
+}));
+jest.mock('./footer', () => ({ ProductsFooter: () => null }));
+jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (n: number) => n }));
+
+jest.mock('../../components/data-table/skeleton', () => ({
+	DataTableSkeleton: () => <div data-testid="table-skeleton" />,
+}));
+
+// The register's layout switching trees unmounts the screen and mounts it again; under the
+// POS layout's PersistedStateProvider the query store is kept. A setting changed while the
+// screen was unmounted must still reach the kept store, and one that did not must not
+// overwrite what the cashier set.
+describe('a kept query store', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockDataTableProps = {};
+		mockGridProps = {};
+		mockFilterBarProps = {};
+		mockBrowseStageProps = null;
+		mockBrowseStageMounts = 0;
+		mockScopeKey = '0:0';
+		mockBrowseBy = 'all';
+		mockShowOutOfStock = false;
+		mockSortBy = 'name';
+		mockSortDirection = 'asc';
+		mockViewMode = 'table';
+		mockGridColumns = 4;
+		mockSession = null;
+	});
+	const host = (child: React.ReactNode) => <PersistedStateProvider>{child}</PersistedStateProvider>;
+
+	it('keeps the cashier’s stock pill across a remount, and follows a setting that moved meanwhile', () => {
+		const { rerender } = render(host(<POSProducts />));
+		expect(latestState().filters.stock_status).toBe('instock');
+		// The cashier clears the In-stock pill; a remount under the SAME setting keeps that.
+		fireEvent.click(screen.getByTestId('clear-stock-filter'));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		rerender(host(null));
+		rerender(host(<POSProducts />));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		// The setting moved while the screen was unmounted: the kept store follows it.
+		rerender(host(null));
+		mockShowOutOfStock = true;
+		rerender(host(<POSProducts />));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		rerender(host(null));
+		mockShowOutOfStock = false;
+		rerender(host(<POSProducts />));
+		expect(latestState().filters.stock_status).toBe('instock');
+	});
+
+	it('keeps a sort the cashier set across a remount, and follows a settings sort that moved meanwhile', () => {
+		const { rerender } = render(host(<POSProducts />));
+		const actions = mockDataTableProps.actions as {
+			setSort: (field: string, direction: 'asc' | 'desc') => void;
+		};
+		act(() => actions.setSort('sortable_price', 'desc'));
+		rerender(host(null));
+		rerender(host(<POSProducts />));
+		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+		rerender(host(null));
+		mockSortBy = 'sku';
+		mockSortDirection = 'asc';
+		rerender(host(<POSProducts />));
+		expect(latestState().sort).toEqual({ field: 'sku', direction: 'asc' });
 	});
 });

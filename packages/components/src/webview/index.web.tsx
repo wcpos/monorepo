@@ -6,26 +6,13 @@ import { WebViewProps as RNWebViewProps } from 'react-native-webview';
 
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
+import { withBase } from './with-base';
 
-/**
- * react-native-webview types `onContentSizeChange` without the `contentSize`
- * payload it actually delivers — declare the real shape so the host can size
- * itself to the rendered document.
- */
-export interface WebViewContentSizeChangeEvent {
-	nativeEvent: { contentSize: { width: number; height: number } };
-}
+import type { WebViewLoadErrorEvent, WebViewProps } from './types';
 
 export type WebViewHandle = HTMLIFrameElement & { postMessage(message: any): void };
 
-export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'> {
-	ref: React.RefObject<WebViewHandle | null>;
-	src?: string;
-	srcDoc?: string;
-	targetOrigin?: string;
-	onMessage: (event: { nativeEvent: { data: any } }) => void;
-	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
-}
+export type { WebViewLoadErrorEvent };
 
 /**
  *
@@ -41,7 +28,7 @@ function WebView({
 	targetOrigin,
 	className,
 	...props
-}: WebViewProps) {
+}: WebViewProps<WebViewHandle>) {
 	const [loading, setLoading] = React.useState(true);
 
 	const localRef = React.useRef<HTMLIFrameElement>(null);
@@ -168,8 +155,13 @@ function WebView({
 		<View className={cn('relative', className)}>
 			<iframe
 				ref={composedRef}
-				src={(source && 'uri' in source ? source.uri : undefined) || src}
-				srcDoc={srcDoc}
+				data-testid={props.testID}
+				// srcDoc wins over src; with both, src is only the document's base and the frame never
+				// navigates to it.
+				src={
+					srcDoc != null ? undefined : (source && 'uri' in source ? source.uri : undefined) || src
+				}
+				srcDoc={srcDoc != null && src ? withBase(srcDoc, src) : srcDoc}
 				onLoad={handleLoaded}
 				frameBorder="0"
 				sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-modals"
@@ -177,13 +169,11 @@ function WebView({
 				onError={(error) => {
 					console.error('WebView error:', error);
 					// Web-specific: iframe error events don't match RN WebView error events
-					props.onError?.(
-						error as unknown as Parameters<NonNullable<RNWebViewProps['onError']>>[0]
-					);
+					props.onError?.(error as unknown as WebViewLoadErrorEvent);
 				}}
 			/>
 			{loading && (
-				<View className="bg-opacity-75 absolute inset-0 flex items-center justify-center bg-white">
+				<View className="bg-background/75 absolute inset-0 flex items-center justify-center">
 					<Loader />
 				</View>
 			)}

@@ -4,34 +4,39 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { useModal } from '@wcpos/components/modal';
-import type { EngineRecord } from '@wcpos/query';
-import { getLogger, isErrorReported } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useDialog } from '@wcpos/components/dialog';
+import { SavedFieldProvider } from '@wcpos/components/form';
+import type { CustomerPayload, ReadonlyEngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useAppInfo } from '../../../../hooks/use-app-info';
+import { asShipping } from '../../components/customer/address-rows';
+import { useRecordAutosave } from '../../components/use-record-autosave';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
-import { reportPushFailure } from '../../contexts/push-failure-code';
-import { usePushDocument } from '../../contexts/use-push-document';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
+import { useCustomerRecord } from '../commands/use-customer-record';
+import { DeleteCustomerDialog, useCustomerActions } from '../customer-actions';
 
 interface Props {
-	customer: EngineRecord<'customers'>;
+	customer: ReadonlyEngineRecord<'customers'>;
 }
 
 /**
  *
  */
-export function EditCustomerForm({ customer }: Props) {
+export function EditCustomerForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditCustomerFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditCustomerFormFields({ customer }: Props) {
 	const t = useT();
-	const [loading, setLoading] = React.useState(false);
-	const { localPatch } = useLocalMutation();
-	const pushDocument = usePushDocument();
-	const { format } = useCustomerNameFormat();
-	const { close } = useModal();
+	const { saveCustomerFields } = useCustomerRecord();
+	const { close } = useDialog();
+	// The modal route sits outside the list's ProAccessProvider, so it reads the licence itself.
+	const readOnly = !(useAppInfo().license?.isPro ?? false);
 
 	/**
 	 *
@@ -42,62 +47,92 @@ export function EditCustomerForm({ customer }: Props) {
 			...customer.toMutableJSON().payload,
 		} as z.infer<typeof customerFormSchema>,
 	});
-
-	/**
-	 * Save to server
-	 *
-	 * NOTE: There's an issue if we just patch the form changes, other changes such as customer or if the
-	 * order has been reopened will be lost. We need to push the whole order object.
-	 */
-	const handleSave = React.useCallback(
-		async (data: z.infer<typeof customerFormSchema>) => {
-			setLoading(true);
-			try {
-				const patched = await localPatch({
-					document: customer,
-					data: data as Partial<import('@wcpos/database').CustomerDocument>,
-				});
-				// localPatch reports its own failure (row + toast) and resolves undefined.
-				// Pushing anyway would sync the unchanged resident and report success;
-				// reporting it again put a second row and toast on one failed save.
-				if (!patched?.document) return;
-				await pushDocument(customer).then((savedDoc: unknown) => {
-					if (savedDoc) {
-						const saved = customer.getLatest().payload;
-						mutationLogger.success(
-							t('common.saved', {
-								name: format(saved),
-							}),
-							{
-								showToast: true,
-								context: {
-									customerId: saved.id,
-									customerName: format(saved),
-								},
-							}
-						);
-						close();
+	// The billing identity follows the top-level one (ledger line 9) while it is empty OR still equal
+	// to the value the record held before the write: an autosave writes on every pause, so "fill when
+	// empty" alone would pin the first partial word ("Jo") into billing for good. It rides in the SAME
+	// patch, so a close or a Sync cannot drop it. Writes overlap (even two of one root), so each
+	// write's capture lives in its own `after` closure, never in a shared slot.
+	type Identity = 'first_name' | 'last_name' | 'email';
+	// While the Shipping row reads "Same as billing" (the row's own `linked`) the stored shipping is
+	// billing's copy (rule 5), in the SAME patch as billing. The draft's shipping is never levelled:
+	// a reset would cancel a pending edit and re-read the link against a billing typed ahead.
+	const shippingLinked = React.useRef(true);
+	const withShipping = (data: Partial<CustomerPayload>) =>
+		shippingLinked.current
+			? ({ ...data, shipping: asShipping(data.billing as Record<string, string>) } as typeof data)
+			: data;
+	const { flush } = useRecordAutosave({
+		form,
+		readOnly,
+		stored: () => customer.getLatest().payload,
+		persist: (data) => saveCustomerFields(customer, data),
+		compose: async (root, value) => {
+			const identity = root === 'first_name' || root === 'last_name' || root === 'email';
+			const mirrored = identity ? String(form.getValues(`billing.${root}`) ?? '') : null;
+			const follows =
+				identity &&
+				(mirrored === '' || mirrored === String(customer.getLatest().payload[root] ?? ''));
+			if (root === 'billing') return withShipping({ billing: value } as Partial<CustomerPayload>);
+			if (!follows) return { [root]: value } as Partial<CustomerPayload>;
+			const key = root as Identity;
+			const was = mirrored as string;
+			// The mirror rides on the billing draft only while that draft is valid; otherwise on the
+			// stored billing, so an invalid email left in the draft never enters by the side door.
+			const base = (await form.trigger('billing'))
+				? form.getValues('billing')
+				: customer.getLatest().payload.billing;
+			return {
+				data: withShipping({ [root]: value, billing: { ...base, [root]: value } }),
+				after: (written: boolean) => {
+					// Level the draft only if the cashier has not typed into the billing field meanwhile.
+					if (written && String(form.getValues(`billing.${key}`) ?? '') === was) {
+						form.setValue(`billing.${key}`, value as string);
 					}
-				});
-			} catch (error) {
-				// A localPatch rethrow (the scope moved twice) is already reported.
-				if (isErrorReported(error)) return;
-				// The customer push only enqueues (it does not await the store), so what
-				// fails here is the local write, not a store refusal: SYNC101, not SYNC999.
-				reportPushFailure(mutationLogger, 'Failed to save customer', error, {
-					fallback: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-					title: t('common.failed_to_save_customer'),
-					context: { customerId: customer.getLatest().payload.id },
-				});
-			} finally {
-				setLoading(false);
-			}
+				},
+			};
 		},
-		[localPatch, customer, pushDocument, t, format, close]
-	);
+	});
+	// Sync flushes pending edits before taking the store's copy.
+	const actions = useCustomerActions(customer, {
+		onDeleted: close,
+		beforeSync: flush,
+		onSynced: () =>
+			form.reset({ ...customer.getLatest().payload } as z.infer<typeof customerFormSchema>),
+	});
 
-	/**
-	 *
-	 */
-	return <CustomerForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
+	return (
+		<>
+			<CustomerForm
+				form={form}
+				onShippingLink={(linked) => {
+					shippingLinked.current = linked;
+				}}
+				footer={{
+					destructive: !readOnly &&
+						actions.canDelete && {
+							label: t('common.delete'),
+							testID: 'customer-modal-delete',
+							onPress: actions.requestDelete,
+						},
+					record: !readOnly &&
+						actions.canSync && {
+							label: t('common.sync'),
+							testID: 'customer-modal-sync',
+							onPress: actions.sync,
+						},
+					close: { testID: 'customer-form-close' },
+				}}
+			/>
+			{!readOnly && actions.canDelete && (
+				<DeleteCustomerDialog
+					record={customer}
+					open={actions.deleteOpen}
+					onOpenChange={actions.setDeleteOpen}
+					force={actions.force}
+					onForceChange={actions.setForce}
+					onConfirm={() => void actions.confirmDelete()}
+				/>
+			)}
+		</>
+	);
 }

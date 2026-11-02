@@ -20,8 +20,8 @@ export function SyncingBadge({ isSyncing }: SyncingBadgeProps) {
 	return (
 		<View className="bg-muted self-center rounded-full px-3 py-1">
 			<HStack className="items-center gap-1.5">
-				<Icon name="arrowRotateRight" size="xs" variant="muted" />
-				<Text className="text-muted-foreground text-xs font-medium">
+				<Icon name="refresh" size="xs" variant="muted" />
+				<Text variant="help" className="font-medium">
 					{t('receipt.syncing_with_server')}
 				</Text>
 			</HStack>

@@ -5,6 +5,15 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'jsdom',
 	transform: {
+		// rn-primitives ships JSX and flash-list ships ESM; transform both to CommonJS.
+		'/node_modules/(@rn-primitives|@shopify/flash-list)/.+\\.js$': [
+			'babel-jest',
+			{
+				babelrc: false,
+				configFile: false,
+				plugins: ['@babel/plugin-transform-react-jsx', '@babel/plugin-transform-modules-commonjs'],
+			},
+		],
 		'^.+\\.(ts|tsx)$': [
 			'ts-jest',
 			{
@@ -16,6 +25,7 @@ module.exports = {
 			},
 		],
 	},
+	transformIgnorePatterns: ['node_modules/(?!@rn-primitives/|@shopify/flash-list/)'],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,
@@ -30,7 +40,16 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.ts'],
 	moduleNameMapper: {
+		'\\.(ttf|otf)$': '<rootDir>/jest/__mocks__/font.js',
 		'^react-native$': 'react-native-web',
+		// ESM only; see the mock. Every pressable surface imports it through `lib/haptics`.
+		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',
+		// react-native-svg's web elements import `@react-native/assets-registry/registry`, a package
+		// React Native 0.88 no longer depends on and whose 0.88 build is ESM, which this CommonJS
+		// runner cannot load. These suites already run react-native as react-native-web, so use its
+		// CommonJS build of the same registry. Drop when react-native-svg imports the registry from
+		// `react-native/asset-registry`.
+		'^@react-native/assets-registry/registry$': 'react-native-web/dist/cjs/modules/AssetRegistry',
 	},
 	globals: {
 		__DEV__: true,

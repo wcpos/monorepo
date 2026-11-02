@@ -3,12 +3,15 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
+import { foldSearchText } from '@wcpos/sync-core';
 import {
+	createOrderRevisionDoor,
 	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
 	memoryEngineStorage,
 	orderBrowserQueryKey,
 	productBrowseWindowQueryKeyFromDimensions,
+	refundBrowserQueryKey,
 	searchLaneQueryKey,
 } from '@wcpos/sync-engine/testing';
 import type {
@@ -21,15 +24,20 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
-import { GUEST_CUSTOMER_ID, remoteIdOrNull } from '@wcpos/sync-core';
-
-import { searchPlugin } from './search';
+import {
+	GUEST_CUSTOMER_ID,
+	HISTORY_DAYS,
+	identityColumns,
+	type MetaDataEntry,
+	remoteIdOrNull,
+	remoteKeyFor,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 
 import type { RxDatabase } from 'rxdb';
 
 addRxPlugin(RxDBMigrationSchemaPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
-addRxPlugin(searchPlugin);
 
 let sequence = 0;
 
@@ -46,7 +54,8 @@ type DataCollection =
 	| 'categories'
 	| 'tags'
 	| 'brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 /**
  * A standalone RxDB database carrying the ENGINE schemas — the same recipe the
@@ -54,7 +63,7 @@ type DataCollection =
  * speed. This is what `executeAdapterQuery` reads (`collection.database`).
  */
 /** Re-exported so lane-identity tests can assert on the canonical key the engine builds. */
-export { orderBrowserQueryKey };
+export { orderBrowserQueryKey, refundBrowserQueryKey };
 
 export async function createEngineDatabase(
 	collections: readonly DataCollection[] = ['products', 'variations', 'orders']
@@ -100,7 +109,7 @@ export interface FakeEngine extends RxdbSyncEngine {
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
 	/**
-	 * Every target `coverageChanges` has been subscribed for. A binding that must NOT read
+	 * Every target `coverageChanges` has been subscribed for. A handle that must NOT read
 	 * coverage — an unrepresented selector, a search — is proved by this staying empty, which
 	 * is stronger than watching for a `'coverage'` value that could simply be late.
 	 */
@@ -116,7 +125,7 @@ export interface FakeEngine extends RxdbSyncEngine {
 		state: Partial<EngineStatus['collections'][SyncCollectionName]>
 	): void;
 	/**
-	 * How many times `censusChanges` has been subscribed. A binding that must NOT read the
+	 * How many times `censusChanges` has been subscribed. A handle that must NOT read the
 	 * whole-collection census — anything filtered, searched or targeted — is proved by this
 	 * staying 0, the same never-asked discipline `coverageSubscribeCalls` pins for coverage.
 	 */
@@ -135,6 +144,7 @@ export interface RecordedSearchRequirement {
 
 const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
+	if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 	if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 	if (requirement.kind === 'product-browse') {
 		return productBrowseWindowQueryKeyFromDimensions(requirement);
@@ -142,9 +152,12 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'customer-browse') {
 		return customerBrowseWindowQueryKeyFromDimensions(requirement);
 	}
+	if (requirement.kind === 'refunds-by-parent')
+		return `refunds:parent:${requirement.parentRemoteId}`;
 	if (requirement.kind === 'refresh') {
 		const refreshLaneKeys: Partial<Record<SyncCollectionName, string>> = {
 			taxRates: 'taxRates:all',
+			refunds: `refunds:history:days=${HISTORY_DAYS}`,
 			categories: 'categories:all',
 			brands: 'brands:all',
 			tags: 'tags:all',
@@ -158,7 +171,7 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 /**
  * The engine keys a verdict by (collection, queryKey) — or by (collection, reference lane) when
  * it resolves the key itself. The fake keys its seeded verdicts the same way, so a fixture that
- * seeds `{lane:'reference'}` proves the binding took the reference arm rather than spelling out
+ * seeds `{lane:'reference'}` proves the handle took the reference arm rather than spelling out
  * a lane key of its own.
  */
 const coverageTargetKey = (target: CoverageTarget): string =>
@@ -209,10 +222,13 @@ export function engineProduct(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(wooId),
+		remoteKey: remoteKeyFor(remoteIdOrNull(wooId)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		type: type ?? 'simple',
 		categoryIds: (categories ?? []).map((c) => c.id),
+		tagIds: (tags ?? []).map((t) => t.id),
 		brandIds: (brands ?? []).map((b) => b.id),
 		onSale: input.on_sale ?? false,
 		featured: input.featured ?? false,
@@ -249,6 +265,8 @@ export function engineOrder(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(wooId),
+		remoteKey: remoteKeyFor(remoteIdOrNull(wooId)),
+		...identityColumns(wooMetaCarrier.readIdentity(rest.meta_data as MetaDataEntry[])),
 		number: number ?? String(wooId),
 		dateCreatedGmt: date_created_gmt ?? '2026-01-01T00:00:00',
 		status: status ?? 'processing',
@@ -285,7 +303,10 @@ export function engineVariation(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(id),
+		remoteKey: remoteKeyFor(remoteIdOrNull(id)),
 		parentRemoteId: remoteIdOrNull(parent_id),
+		parentRemoteKey: remoteKeyFor(remoteIdOrNull(parent_id)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		stockQuantity: input.stock_quantity ?? null,
@@ -349,6 +370,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		'brands',
 		'tags',
 		'coupons',
+		'refunds',
 	];
 	const activityCounts = new Map<SyncCollectionName, number>();
 	let collections = Object.fromEntries(
@@ -491,6 +513,10 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
+		orderRevision: createOrderRevisionDoor({
+			resolveDatabase: async () => database,
+			require: (requirement: EngineRequirement): RequirementHandle => engine.require(requirement),
+		}),
 		dispose: async () => undefined,
 	} as unknown as FakeEngine;
 
@@ -530,6 +556,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 				'brands',
 				'tags',
 				'coupons',
+				'refunds',
 			] as SyncCollectionName[]
 		).map((collection) => [collection, { active: false, coverageGeneration: 0 }])
 	) as EngineStatus['collections'];
@@ -616,3 +643,9 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 		},
 	};
 }
+
+/** How many query handles an engine's registry holds: a started handle is registered, a stopped one is not. */
+export { queryHandleCount } from './query-handle';
+
+/** The money journal's writers and raw read: suites build and assert journal state; core reads meanings. */
+export { CLAIM_LEASE_MS, claimRoute, readOrderCommands } from './store-local/money-commands';

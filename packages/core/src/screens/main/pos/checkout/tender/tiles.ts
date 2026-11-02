@@ -1,0 +1,206 @@
+import {
+	FIELDS_SCHEMA,
+	KNOWN_CAPTURE_MODES,
+	type PaymentMethodDescriptor,
+	type PaymentTransport,
+} from '@wcpos/order-math';
+
+import { getDriver } from '../../../../../services/payment-drivers/registry';
+
+export function deviceTransports(method: PaymentMethodDescriptor | null) {
+	const hardware = method?.capture.hardware;
+	return hardware && 'transports' in hardware
+		? hardware.transports.filter((item): item is typeof item & { transport: PaymentTransport } =>
+				['bluetooth', 'usb', 'network', 'tap_to_pay'].includes(item.transport)
+			)
+		: [];
+}
+
+/** Why a tile cannot be tapped. The UI turns each into a cashier-facing line. */
+export type TileDisabledReason =
+	/** The descriptor names a capture mode this build has never heard of. */
+	| 'unsupported_mode'
+	/** A known mode whose driver has not shipped yet: device, stored_value. */
+	| 'no_driver'
+	| 'driver_web'
+	| 'driver_permission'
+	| 'driver_bluetooth_off'
+	| 'driver_not_logged_in'
+	/** The method needs the network and the till is offline. */
+	| 'offline'
+	/** A gateway runs the whole order; it cannot be one leg beside money already held. */
+	| 'not_with_split'
+	/** The `fields` block names a schema with value-bearing components this build cannot post. */
+	| 'unsupported_fields'
+	| 'no_readers'
+	| { type: 'reader_in_use'; number: string };
+
+type ReadersInUse = ReadonlyMap<string, { orderUuid: string; orderNumber: string }>;
+export function selectableReaders(
+	method: PaymentMethodDescriptor | null,
+	readersInUse: ReadersInUse = new Map(),
+	currentOrderUuid?: string
+) {
+	const hardware = method?.capture.hardware;
+	const lockToDefault = Boolean(
+		method?.capture.mode === 'server' &&
+		hardware &&
+		'readers' in hardware &&
+		hardware.lock_to_default
+	);
+	const readers =
+		method?.capture.mode === 'server' && hardware && 'readers' in hardware
+			? hardware.readers
+					.filter(
+						(reader) =>
+							reader.status === 'online' &&
+							(!lockToDefault || reader.id === hardware.default_reader)
+					)
+					.map((reader) => {
+						const holder = readersInUse.get(reader.id);
+						return {
+							id: reader.id,
+							label: reader.label,
+							isDefault: reader.id === hardware.default_reader || reader.default,
+							inUseBy: holder && holder.orderUuid !== currentOrderUuid ? holder.orderNumber : null,
+						};
+					})
+			: [];
+	return { readers, lockToDefault };
+}
+
+/** The till's last confirmed choice wins unless the store has locked its default. */
+export function initialReaderId(
+	readers: readonly ReturnType<typeof selectableReaders>['readers'][number][],
+	lockToDefault: boolean,
+	remembered: string | null
+): string | null {
+	if (lockToDefault) return readers.find((reader) => reader.isDefault)?.id ?? null;
+	return (
+		readers.find((reader) => reader.id === remembered && reader.inUseBy === null)?.id ??
+		readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ??
+		null
+	);
+}
+
+export interface TenderTile {
+	method: PaymentMethodDescriptor;
+	disabled: boolean;
+	reason: TileDisabledReason | null;
+	/** capabilities.offline === 'record' — the tile carries a "works offline" flag. */
+	worksOffline: boolean;
+	/** Enabled offline: journaled, sent on reconnect; the tile must say so (ADR 0040 D1 rule 1). */
+	settlesLater: boolean;
+}
+/** The order the POS settings page assigns, then title, so the grid never reshuffles itself. */
+function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDescriptor): number {
+	if (left.order !== right.order) return left.order - right.order;
+	return left.title < right.title ? -1 : left.title > right.title ? 1 : 0;
+}
+
+export function buildTenderTiles(
+	methods: readonly PaymentMethodDescriptor[],
+	options: {
+		online: boolean;
+		readersInUse?: ReadersInUse;
+		currentOrderUuid?: string;
+		transports?: Record<string, PaymentTransport>;
+		/** The ledger holds pending, authorized or captured money. */
+		hasLiveLeg?: boolean;
+		/** false: the store has never seen the order (no `payload.id`). */
+		hasServerId?: boolean;
+	}
+): TenderTile[] {
+	return methods
+		.filter((method) => method.pos_enabled && method.capture.mode !== 'webview')
+		.sort(byOrderThenTitle)
+		.map((method) => {
+			let reason: TileDisabledReason | null = null;
+			const transport =
+				deviceTransports(method).find(
+					(item) => item.transport === options.transports?.[method.id]
+				) ?? deviceTransports(method)[0];
+			if (!KNOWN_CAPTURE_MODES.some((mode) => mode === method.capture.mode)) {
+				reason = 'unsupported_mode';
+			} else if (method.capture.mode === 'device') {
+				const driver = getDriver(method.capture.provider);
+				const availability = driver?.availability();
+				const holder = options.readersInUse?.get(`device:${method.capture.provider}`);
+				if (
+					!driver ||
+					!transport ||
+					(!availability?.available && availability?.reason === 'unsupported')
+				)
+					reason = 'no_driver';
+				// SDK-owned login is reached through Connect Reader inside the selected tile.
+				else if (
+					availability &&
+					!availability.available &&
+					!(availability.reason === 'not_logged_in' && driver?.capabilities.discovery === 'sdk_ui')
+				)
+					reason = `driver_${availability.reason}` as TileDisabledReason;
+				else if (!options.online) reason = 'offline';
+				else if (holder && holder.orderUuid !== options.currentOrderUuid)
+					reason = { type: 'reader_in_use', number: holder.orderNumber };
+			} else if (method.capture.mode === 'stored_value') {
+				reason = 'no_driver';
+			} else if (method.capture.mode === 'gateway') {
+				if (!appCanDrive(method)) reason = 'unsupported_fields';
+				else if (!options.online) reason = 'offline';
+				else if (options.hasLiveLeg) reason = 'not_with_split';
+			} else if (method.capture.mode === 'server') {
+				const { readers } = selectableReaders(
+					method,
+					options.readersInUse,
+					options.currentOrderUuid
+				);
+				if (!options.online) reason = 'offline';
+				else if (!readers.length) reason = 'no_readers';
+				else if (readers.every((reader) => reader.inUseBy !== null))
+					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
+			} else if (
+				!options.online &&
+				(method.capabilities.offline !== 'record' || options.hasServerId === false)
+			) {
+				// ADR 0040 Decided 1 rule 2: a gateway with no offline option cannot complete offline;
+				// `record` journals and completes. Rule 1: the enabled offline tile carries
+				// `settlesLater`, which the pane renders as "Sent later · Store may refuse". An order
+				// the store has never seen has no route for the record (orders created offline are a
+				// later slice), so it is never offered, never confirmed, never refused later.
+				reason = 'offline';
+			}
+			const worksOffline =
+				method.capture.mode === 'manual' && method.capabilities.offline === 'record';
+			return {
+				method,
+				disabled: reason !== null,
+				reason,
+				worksOffline,
+				settlesLater: !options.online && reason === null && worksOffline,
+			};
+		});
+}
+/**
+ * A `gateway` method the app can drive: its `fields` block (if any) is a schema this build
+ * knows, so every value the gateway expects can be posted. A higher schema may carry a
+ * value-bearing component this build would silently omit (contract 1.2 §1.2).
+ */
+export function appCanDrive(method: PaymentMethodDescriptor): boolean {
+	return (
+		method.capture.mode === 'gateway' && (method.fields?.schema ?? FIELDS_SCHEMA) <= FIELDS_SCHEMA
+	);
+}
+
+/** The methods the Legacy tab offers: webview mode or a declared webview fallback the app cannot drive itself. */
+export function legacyPaymentMethods(
+	methods: readonly PaymentMethodDescriptor[]
+): PaymentMethodDescriptor[] {
+	return methods
+		.filter(
+			(method) =>
+				method.pos_enabled &&
+				(method.capture.mode === 'webview' ||
+					(method.capture.webview_available && !appCanDrive(method)))
+		)
+		.sort(byOrderThenTitle);
+}

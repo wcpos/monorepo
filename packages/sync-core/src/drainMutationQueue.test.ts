@@ -48,6 +48,231 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it('refuses a late writer receipt after durable admission-lost rejection', async () => {
+		const q = await queueWith(mut());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'swept' });
+		expect(await drainMutationQueue({ queue: q, push: async (m) => ok(m) })).toMatchObject({
+			pushed: 0,
+			rejected: [{ reason: 'admission-lost' }],
+		});
+		await expect(q.recordWriterReceipt('m1')).rejects.toThrow();
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			rejectedReason: 'admission-lost',
+		});
+		expect((await q.all())[0].admissionReleased).toBeUndefined();
+		expect(await q.pending()).toEqual([]);
+	});
+
+	it('does not count a delete-ack abort as failure and drains it on reactivation', async () => {
+		const q = await queueWith(mut({ operation: 'delete' }));
+		const controller = new AbortController();
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (m) => ok(m),
+			signal: controller.signal,
+			applyAck: async () => {
+				controller.abort();
+				throw Object.assign(new Error('lookup aborted'), { name: 'AbortError' });
+			},
+		});
+		expect(result).toMatchObject({ pushed: 0, failed: 0 });
+		expect((await q.all())[0]).toMatchObject({ status: 'claimed' });
+		expect((await q.all())[0].attempts ?? 0).toBe(0);
+		expect((await q.all())[0].nextAttemptAt).toBeUndefined();
+		expect(await drainMutationQueue({ queue: q, push: async (m) => ok(m) })).toMatchObject({
+			pushed: 1,
+			failed: 0,
+		});
+		expect(await q.all()).toEqual([]);
+	});
+
+	it('keeps the receipted replacement when receipt wins the recovery removal CAS', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		let ids = ['next'];
+		const q = new RecordMutationQueue(storage, {
+			restoreCoalesced: async () => {
+				ids = ['prior'];
+			},
+		});
+		const prior = await q.enqueue(mut({ mutationId: 'prior' }));
+		await q.admitWriter('products', 'rec-A', 'next', 0);
+		await q.coalesceInto('prior', { ...prior, mutationId: 'next', admittedBy: 'next' }, 1);
+		const remove = storage.removeIfUnchanged.bind(storage);
+		vi.spyOn(storage, 'removeIfUnchanged').mockImplementation(async (id, rev) => {
+			if (id === 'next') await q.recordWriterReceipt(id);
+			return remove(id, rev);
+		});
+		await q.clearExpiredAnnihilation(30_001);
+		expect(ids).toEqual(['next']);
+		const pushed: string[] = [];
+		await drainMutationQueue({
+			queue: q,
+			now: () => 30_001,
+			push: async (m) => {
+				pushed.push(m.mutationId);
+				ids = ids.filter((id) => id !== m.mutationId);
+				return ok(m);
+			},
+		});
+		expect(pushed).toEqual(['next']);
+		expect(ids).toEqual([]);
+		expect(await q.all()).toEqual([]);
+	});
+
+	it.each(['marked', 'appended', 'released'])('coalesce crash: %s', async (phase) => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const prior = await q.enqueue(mut({ mutationId: 'prior', payload: { name: 'receipted' } }));
+		await q.admitWriter('products', 'rec-A', 'writer', 0);
+		if (phase === 'marked') {
+			const append = storage.appendIfUnchanged.bind(storage);
+			vi.spyOn(storage, 'appendIfUnchanged').mockImplementation(async (row, rev) => {
+				if (row.mutationId === 'replacement') throw new Error('crash');
+				return append(row, rev);
+			});
+		}
+		const coalescing = q.coalesceInto(
+			'prior',
+			{
+				...prior,
+				mutationId: 'replacement',
+				admittedBy: 'writer',
+				payload: { name: 'unreceipted' },
+			},
+			1
+		);
+		if (phase === 'marked') await expect(coalescing).rejects.toThrow('crash');
+		else await coalescing;
+		if (phase === 'released') await q.releaseWriter('products', 'rec-A', 'writer', 2);
+		const restarted = new RecordMutationQueue(storage);
+		const push = vi.fn(async (m: RecordMutation) => ok(m));
+		const result = await drainMutationQueue({ queue: restarted, push, now: () => 30_001 });
+		expect(result.rejected).toEqual([]);
+		expect(result.pushed).toBe(1);
+		expect(push.mock.calls[0][0]).toMatchObject({
+			mutationId: phase === 'released' ? 'replacement' : 'prior',
+			payload: { name: phase === 'released' ? 'unreceipted' : 'receipted' },
+		});
+		expect(await restarted.all()).toEqual([]);
+	});
+
+	it.each(['live', 'released', 'release interrupted', 'release during scan', 'expired', 'fenced'])(
+		'delivers only completed admissions: %s',
+		async (state) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const q = new RecordMutationQueue(storage);
+			await q.admitWriter('products', 'rec-A', 'writer', 0);
+			const row = { ...mut(), admittedBy: 'writer' };
+			if (state === 'fenced') await q.fenceForVoid('products', 'rec-A', 'void', 30_001);
+			await q.enqueue(row);
+			if (state === 'released') await q.releaseWriter('products', 'rec-A', 'writer', 1);
+			if (state === 'release interrupted') {
+				const append = storage.appendIfUnchanged.bind(storage);
+				vi.spyOn(storage, 'appendIfUnchanged').mockImplementation(async (m, rev) => {
+					if (m.admissionReleased) throw new Error('disk');
+					return append(m, rev);
+				});
+				await expect(q.releaseWriter('products', 'rec-A', 'writer', 1)).rejects.toThrow('disk');
+				vi.restoreAllMocks();
+				expect(await q.fenceForVoid('products', 'rec-A', 'void', 60_000)).toBe(false);
+				await q.clearExpiredAnnihilation(60_000);
+			}
+
+			if (state === 'release during scan') {
+				const classify = q.admissionState.bind(q);
+				let reads = 0;
+				vi.spyOn(q, 'admissionState').mockImplementation(async (...args) => {
+					if (++reads === 2) await q.releaseWriter('products', 'rec-A', 'writer', 1);
+					return classify(...args);
+				});
+			}
+			const push = vi.fn(async (m: RecordMutation) => {
+				expect((await q.all())[0].admissionReleased).toBe('writer');
+				return ok(m);
+			});
+			const now = state === 'expired' || state === 'fenced' ? 30_001 : 1;
+			const result = await drainMutationQueue({ queue: q, push, now: () => now });
+			expect(result.pushed).toBe(state.startsWith('release') ? 1 : 0);
+			if (state === 'expired' || state === 'fenced') {
+				expect(await q.all()).toMatchObject([
+					{ status: 'rejected', rejectedReason: 'admission-lost' },
+				]);
+				expect(await q.pendingResetCount(now)).toBe(1);
+			}
+		}
+	);
+
+	it.each([
+		'admission',
+		'expired fence',
+		'revision',
+		'remote identity',
+		'identity after marking',
+		'resolution claim',
+		'pushed after snapshot',
+	])('does not annihilate across %s', async (race) => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		let now = Date.now();
+		let pulled = false;
+		await q.enqueue(mut({ operation: 'create', origin: 'minted' }));
+		await q.enqueue(mut({ mutationId: 'delete', operation: 'delete' }));
+		if (race === 'admission') await other.admitWriter('products', 'rec-A', 'writer', now);
+		if (race === 'resolution claim')
+			await other.replace({
+				...mut({ mutationId: 'dead' }),
+				status: 'rejected',
+				resolutionClaimBy: 'resolver',
+				resolutionClaimUntil: new Date(now + 60_000).toISOString(),
+			});
+		const mark = q.markForAnnihilation.bind(q);
+		vi.spyOn(q, 'markForAnnihilation').mockImplementation(async (id, ...args) => {
+			if (race === 'pushed after snapshot' && id === 'm1') {
+				await other.replace({
+					...(await other.all()).find((row) => row.mutationId === id)!,
+					attempts: 1,
+				});
+			}
+			const marked = await mark(id, ...args);
+			if (race === 'identity after marking') pulled = true;
+			if (race === 'expired fence' && id === 'm1') {
+				now += 120_001;
+				expect(await other.admitWriter('products', 'rec-A', 'writer', now)).toBe(true);
+				await other.enqueue(mut({ mutationId: 'newcomer' }));
+			}
+			return marked;
+		});
+		const removeResident = vi.fn(async () => {});
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (m) => ok(m),
+			removeResident,
+			limit: 0,
+			now: () => now,
+			currentRevision: async () => (race === 'revision' ? 'server-revision' : null),
+			hasServerIdentity: async () => pulled || race === 'remote identity',
+		});
+		expect(result.annihilated).toBe(0);
+		expect(removeResident).not.toHaveBeenCalled();
+		expect((await q.pending()).map((row) => row.mutationId)).toEqual(
+			race === 'expired fence' ? ['m1', 'delete', 'newcomer'] : ['m1', 'delete']
+		);
+	});
+
+	it('skips a marked row and its successors, then resumes after unmark', async () => {
+		const q = await queueWith(mut(), mut({ mutationId: 'later' }));
+		const [row] = await q.pending();
+		await q.replace({ ...row, supersededBy: 'void', markedAt: Date.now() });
+		const push = vi.fn(async (mutation: RecordMutation) => ok(mutation));
+		expect((await drainMutationQueue({ queue: q, push })).pushed).toBe(0);
+		expect(await q.pending()).toHaveLength(2);
+		await q.unmarkForAnnihilation('m1', 'void');
+		expect((await drainMutationQueue({ queue: q, push })).pushed).toBe(2);
+		expect(await q.pending()).toEqual([]);
+	});
+
 	it('holds a mutation without claiming it or applying backoff', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'held' }),
@@ -1168,6 +1393,198 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(await q.pending()).toEqual([]); // the record is syncable again
 		expect((await q.all()).map((m) => ({ id: m.mutationId, status: m.status }))).toEqual([
 			{ id: 'm1', status: 'rejected' },
+		]);
+	});
+
+	describe('a later acknowledged write of the same record supersedes its dead letter', () => {
+		// The cashier's own retry: a decimal quantity the store refused (400), then the
+		// line set back to a whole number and the order synced again. The accepted write
+		// carries every field the dead letter carried, so there is nothing left for a
+		// requeue to recover (`fieldsOwnedByLiveRows` would subtract it to nothing) and
+		// the hold it keeps on the checkout is stale.
+		const refused = async () => {
+			throw Object.assign(new Error('Invalid parameter(s): line_items'), {
+				status: 400,
+				code: 'rest_invalid_param',
+			});
+		};
+		const order = (mutationId: string, payload: Record<string, unknown>) =>
+			mut({
+				mutationId,
+				collectionName: 'orders',
+				recordId: 'order-A',
+				payload: { id: 'order-A', ...payload },
+			});
+
+		it('settles the rejected row once a write carrying every field it carried is acknowledged', async () => {
+			const q = await queueWith(order('dead', { line_items: [{ quantity: 1.5 }], total: '15' }));
+			await drainMutationQueue({ queue: q, push: refused });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue(order('again', { line_items: [{ quantity: 2 }], total: '20' }));
+			const events: SyncEvent[] = [];
+			const result = await drainMutationQueue({
+				queue: q,
+				push: async (m) => ok(m),
+				observe: (e) => events.push(e),
+			});
+			expect(result.pushed).toBe(1);
+			expect(await q.all()).toEqual([]);
+			expect(events.find((e) => e.type === 'queue.write.resolve')?.fields).toMatchObject({
+				recordId: 'order-A',
+				mutationId: 'dead',
+				resolution: 'superseded-by-ack',
+				supersededBy: 'again',
+			});
+		});
+
+		it('keeps a dead letter that still carries a field the acknowledged write did not', async () => {
+			// A refused cancellation names a PUSHABLE `status`; a plain re-sync of the lines
+			// does not carry one (ADR 0040 strips it), so that intent is still only in the
+			// dead letter and a requeue would still send it.
+			const q = await queueWith(order('dead', { status: 'cancelled', line_items: [] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it('judges coverage by the fields ON THE WIRE, not the queue row (Codex, #2939)', async () => {
+			// A refused cancellation queued again WITHOUT its status: the row that is
+			// accepted carries `status` on neither its row nor the wire, so the dead
+			// letter's `status: 'cancelled'` — which a requeue would still send — is not
+			// covered and it stays. (A NON-pushable status such as `completed` is stripped
+			// from the refused push too, so it keeps nothing alive: see the snapshot case.)
+			const q = await queueWith(order('dead', { status: 'cancelled', line_items: [] }));
+			const server = createFakeWriteServer();
+			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
+			server.script((env) =>
+				env.mutationId === 'dead'
+					? { kind: 'invalid_param', code: 'rest_invalid_param', message: 'refused' }
+					: undefined
+			);
+			const push = (mutation: RecordMutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: server.fetch,
+				});
+			await drainMutationQueue({ queue: q, push });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue({ ...order('again', { line_items: [] }), baseRevision: 'sha256:r0' });
+			const result = await drainMutationQueue({ queue: q, push });
+			expect(result.pushed).toBe(1);
+			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('status');
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it("settles a REAL order snapshot: the dead letter's own server-authored fields never reached the wire either", async () => {
+			// What the till actually queues is the whole resident payload — `total`,
+			// `payment_method`, `date_paid` and friends included. The adapter strips those
+			// from every push, the refused one as much as the accepted one, so coverage must
+			// be judged wire against wire: a dead letter is not kept alive by fields it never
+			// sent itself (2026-10-25: the first cut compared the raw row and never settled).
+			const snapshot = (quantity: number) => ({
+				line_items: [{ product_id: 3, quantity }],
+				billing: { first_name: 'A' },
+				customer_id: 0,
+				payment_method: 'pos_cash',
+				payment_method_title: 'Cash',
+				date_paid: null,
+				total: '15.00',
+				total_tax: '0.00',
+				discount_total: '0.00',
+				tax_lines: [],
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'order-A' }],
+			});
+			const q = await queueWith(order('dead', snapshot(1.5)));
+			const server = createFakeWriteServer();
+			server.seed('order-A', { id: 7, revision: 'sha256:r0', collection: 'orders' });
+			server.script((env) =>
+				env.mutationId === 'dead'
+					? { kind: 'invalid_param', code: 'rest_invalid_param', message: 'not integer' }
+					: undefined
+			);
+			const push = (mutation: RecordMutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: server.fetch,
+				});
+			await drainMutationQueue({ queue: q, push });
+			expect((await q.all()).map((row) => row.status)).toEqual(['rejected']);
+
+			await q.enqueue({ ...order('again', snapshot(2)), baseRevision: 'sha256:r0' });
+			const result = await drainMutationQueue({ queue: q, push });
+			expect(result.pushed).toBe(1);
+			expect(Object.keys(server.received[1]?.payload ?? {})).not.toContain('total');
+			expect(await q.all()).toEqual([]);
+		});
+
+		it('does not count a born-twice create (200: payload ignored) as acceptance (Codex, #2939)', async () => {
+			const q = await queueWith(order('dead', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue({ ...order('again', { line_items: [] }), operation: 'create' });
+			await drainMutationQueue({
+				queue: q,
+				push: async (m) => ({ ...ok(m), outcome: 'created', httpStatus: 200 }),
+			});
+			expect((await q.all()).map((row) => ({ id: row.mutationId, status: row.status }))).toEqual([
+				{ id: 'dead', status: 'rejected' },
+			]);
+		});
+
+		it('ignores `meta_data`, which no recovery ever takes from a dead letter', async () => {
+			const q = await queueWith(order('dead', { line_items: [], meta_data: [{ key: 'x' }] }));
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect(await q.all()).toEqual([]);
+		});
+
+		it("leaves another record's dead letter and a refused delete alone", async () => {
+			const q = await queueWith(
+				mut({ mutationId: 'other', recordId: 'rec-B', payload: { id: 'rec-B', name: 'x' } }),
+				order('dead-delete', {})
+			);
+			await q.replace({ ...(await q.all())[1], operation: 'delete' });
+			await drainMutationQueue({ queue: q, push: refused });
+			await q.enqueue(order('again', { line_items: [] }));
+			await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+			expect((await q.all()).map((row) => row.mutationId).sort()).toEqual(['dead-delete', 'other']);
+		});
+	});
+
+	it("a rejected push keeps the server's error data", async () => {
+		// ADR 0040: a refused reopen names the leg in `data`; the cashier's toast needs it.
+		const q = await queueWith(mut({ mutationId: 'm-reopen', collectionName: 'orders' }));
+		const data = { status: 422, payment_id: 'pay-1', attempt_id: 'att-1' };
+		const result = await drainMutationQueue({
+			queue: q,
+			push: (mutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+					fetcher: async () =>
+						jsonResponse(422, {
+							code: 'wcpos_money_in_motion',
+							message: 'Payment pay-1 is still in motion.',
+							data,
+						}),
+				}),
+		});
+		expect(result.rejected).toEqual([
+			expect.objectContaining({
+				status: 422,
+				reason: 'wcpos_money_in_motion',
+				serverMessage: 'Payment pay-1 is still in motion.',
+				data,
+			}),
 		]);
 	});
 

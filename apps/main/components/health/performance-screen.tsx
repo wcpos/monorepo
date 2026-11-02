@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -13,9 +13,10 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
-import { Section } from '@wcpos/core/screens/main/health/components';
+import { AreaPage } from '@wcpos/core/screens/main/components/navigation-area/area-page';
+import { Section } from '@wcpos/components/section';
 import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
-import { useLocalMutation } from '@wcpos/core/screens/main/hooks/mutations/use-local-mutation';
+import { patchStoreSettings } from '@wcpos/query/user-db';
 import { useEngineStatus } from '@wcpos/core/screens/main/hooks/use-engine-monitor';
 
 import { getMetricsBuckets } from '../../lib/metrics';
@@ -46,14 +47,22 @@ const formatCount = (value: number) => value.toLocaleString();
 
 /**
  * Store health · Performance — what the POS asks of the server and the #559
- * tuning controls. Layout follows the settings pages: centered max-w column
- * with generous padding. Lives in apps/main because the measured actuals
+ * tuning controls. An area page like Settings (`AreaPage`: one card, heading
+ * inside). Lives in apps/main because the measured actuals
  * (hourly metrics buckets) are host-level state.
  */
 export function PerformanceScreen() {
 	const t = useT();
+	const paceWords = {
+		'rate-limited': t('health.performance.pace_reason_rate_limited'),
+		'server-error': t('health.performance.pace_reason_server_error'),
+		timeout: t('health.performance.pace_reason_timeout'),
+		slow: t('health.performance.pace_reason_slow'),
+		'server-pressure': t('health.performance.pace_reason_server_pressure'),
+		elevated: t('health.performance.pace_level_elevated'),
+		high: t('health.performance.pace_level_high'),
+	};
 	const { store } = useStoreSession();
-	const { localPatch } = useLocalMutation();
 	const status = useEngineStatus();
 
 	const storedCheckIntervalMs =
@@ -110,7 +119,7 @@ export function PerformanceScreen() {
 		sync_pull_batch_size?: number;
 	}) => {
 		// The SyncConfigBridge observes these fields and re-arms the engine live.
-		await localPatch({ document: store, data });
+		await patchStoreSettings(store, data, t);
 	};
 
 	const persistDebounced = (data: {
@@ -177,19 +186,16 @@ export function PerformanceScreen() {
 	};
 
 	return (
-		<ScrollView className="flex-1">
-			<VStack
-				testID="screen-health-performance"
-				className="mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8"
-			>
+		<AreaPage title={t('common.performance')} testID="screen-health-performance">
+			<VStack className="gap-6">
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
-					<Text className={healthy ? 'text-success font-semibold' : 'text-warning font-semibold'}>
+					<Text className={cn('font-semibold', healthy ? 'text-ok' : 'text-warning-text')}>
 						{healthy
 							? t('health.performance.status_normal')
 							: t('health.performance.status_attention')}
 					</Text>
-					<Text className="text-muted-foreground text-sm" testID="performance-summary">
+					<Text variant="key" testID="performance-summary">
 						{hasHistory
 							? t('health.performance.summary', {
 									requests: summary.requests.toLocaleString(),
@@ -260,9 +266,7 @@ export function PerformanceScreen() {
 										</HStack>
 										<VStack className="gap-0.5 pt-1.5">
 											<Text className="text-sm">{hint}</Text>
-											<Text className="text-muted-foreground text-xs">
-												{describeCadence(value)}
-											</Text>
+											<Text variant="help">{describeCadence(value)}</Text>
 										</VStack>
 									</View>
 								))}
@@ -290,12 +294,8 @@ export function PerformanceScreen() {
 								/>
 							</View>
 							<HStack className="justify-between">
-								<Text className="text-muted-foreground text-xs">
-									{t('health.performance.seconds_short', { s: 5 })}
-								</Text>
-								<Text className="text-muted-foreground text-xs">
-									{t('health.performance.minutes_short', { m: 5 })}
-								</Text>
+								<Text variant="help">{t('health.performance.seconds_short', { s: 5 })}</Text>
+								<Text variant="help">{t('health.performance.minutes_short', { m: 5 })}</Text>
 							</HStack>
 						</VStack>
 
@@ -318,13 +318,13 @@ export function PerformanceScreen() {
 								/>
 							</View>
 							<HStack className="justify-between">
-								<Text className="text-muted-foreground text-xs">10</Text>
-								<Text className="text-muted-foreground text-xs">100</Text>
+								<Text variant="help">10</Text>
+								<Text variant="help">100</Text>
 							</HStack>
 						</VStack>
 
 						<HStack className="flex-wrap items-center justify-between gap-2">
-							<Text className="text-muted-foreground text-sm" testID="settings-math-line">
+							<Text variant="key" testID="settings-math-line">
 								{nextCheck !== null
 									? `${t('health.performance.right_now', {
 											every:
@@ -356,9 +356,8 @@ export function PerformanceScreen() {
 						    advisory line claims nothing about measured speed: at x1 the engine
 						    may still be inside its ten-sample slow window. */}
 						<Text
-							className={
-								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warning text-sm'
-							}
+							variant="key"
+							className={cn(pace.kind !== 'normal' && 'text-warning-text')}
 							testID="server-pace"
 						>
 							{pace.kind === 'paused'
@@ -371,12 +370,12 @@ export function PerformanceScreen() {
 								: pace.kind === 'easing'
 									? t('health.performance.pace_easing', {
 											factor: pace.factor,
-											reason: t(`health.performance.pace_reason_${pace.reason.replace('-', '_')}`),
+											reason: paceWords[pace.reason],
 										})
 									: pace.reported === null
 										? t('health.performance.pace_normal')
 										: t('health.performance.pace_normal_reported_advisory', {
-												level: t(`health.performance.pace_level_${pace.reported}`),
+												level: paceWords[pace.reported],
 											})}
 						</Text>
 						{/* Three states, kept distinct. Asked and never told = a missing
@@ -384,7 +383,7 @@ export function PerformanceScreen() {
 						    frame says so. Not yet asked = we know nothing about this server
 						    yet, so claim nothing — the frame covers that too. */}
 						{loadUnavailable ? (
-							<Text className="text-muted-foreground text-sm" testID="server-load-unavailable">
+							<Text variant="key" testID="server-load-unavailable">
 								{t('health.performance.load_unavailable')}
 							</Text>
 						) : (
@@ -412,8 +411,7 @@ export function PerformanceScreen() {
 				<DocsLink testID="performance-docs-link" href={DOCS_URL}>
 					{t('health.performance.learn_more_in_docs')}
 				</DocsLink>
-				<View className="h-4" />
 			</VStack>
-		</ScrollView>
+		</AreaPage>
 	);
 }

@@ -36,6 +36,20 @@ describe('decideWritePlacement', () => {
 		});
 	});
 
+	it.each([false, true])('a live delete is terminal (recovery=%s)', (isRecovery) => {
+		for (const status of [undefined, 'pending', 'claimed'] as const) {
+			expect(decide([row({ operation: 'delete', status })], { isRecovery }).kind).toBe(
+				'refuse-recovery-superseded-by-delete'
+			);
+		}
+		const deleted = row({ operation: 'delete' });
+		expect(decide([deleted], { isRecovery, operation: 'delete' }).kind).toBe('coalesce');
+		for (const inactive of [{ status: 'rejected' }, { supersededBy: 'coalesce:new' }] as const)
+			expect(decide([row({ ...deleted, ...inactive })], { isRecovery }).kind).not.toBe(
+				'refuse-recovery-superseded-by-delete'
+			);
+	});
+
 	it.each([
 		[
 			'coalescing disabled',
@@ -150,11 +164,11 @@ describe('coalescedPayload', () => {
 		expect(
 			coalescedPayload({
 				operation: 'update',
-				residentPayload: { status: 'pending' },
+				residentPayload: { customer_note: 'resident' },
 				prior,
 				incomingPayload: { total: '12.00' },
 			})
-		).toEqual({ status: 'pending', total: '12.00' });
+		).toEqual({ customer_note: 'resident', total: '12.00' });
 		expect(
 			coalescedPayload({
 				operation: 'delete',
@@ -163,5 +177,26 @@ describe('coalescedPayload', () => {
 				incomingPayload: { id: 'order-1' },
 			})
 		).toEqual({ id: 'order-1' });
+	});
+
+	// ADR 0040: a stale resident `pending` on a paid order is a reopen; only a write
+	// that named the status may send it.
+	it('a coalesce never takes status from the resident layer', () => {
+		expect(
+			coalescedPayload({
+				operation: 'update',
+				residentPayload: { status: 'pending', customer_note: 'resident' },
+				prior: row({ payload: { customer_note: 'prior' } }),
+				incomingPayload: { customer_note: 'incoming' },
+			})
+		).toEqual({ customer_note: 'incoming' });
+		expect(
+			coalescedPayload({
+				operation: 'update',
+				residentPayload: { status: 'pending' },
+				prior: row({ payload: { status: 'on-hold' } }),
+				incomingPayload: {},
+			})
+		).toEqual({ status: 'on-hold' });
 	});
 });

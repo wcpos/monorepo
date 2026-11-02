@@ -2,38 +2,38 @@ import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
-
 import { Button, ButtonText } from '@wcpos/components/button';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
-import { Loader } from '@wcpos/components/loader';
-import { Suspense } from '@wcpos/components/suspense';
-import { Text } from '@wcpos/components/text';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
+import { readRecentErrorLogs } from '@wcpos/query/store-local';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
+import { Stat, StatHeader } from '@wcpos/components/stat';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import {
 	QueryStateProvider,
-	useLogsBinding,
+	useDrawnHandle,
+	useLogsQueryHandle,
+	useQueryHandleFields,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
+import { AreaPage } from '../components/navigation-area/area-page';
 import { QuerySearchInput } from '../components/query-search-input';
-import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
-import { Ledger, LedgerFooter, useLevelLabel } from './ledger';
+import { LedgerFooter, LedgerPane, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
+	type LevelKind,
 	type LogPreset,
-	type LogRow,
 	presetFilters,
 	shouldExtendLedger,
 } from './logs-logic';
@@ -59,14 +59,6 @@ const NOW_TICK_MS = 5_000;
  * spelling both out).
  */
 const HEADER_BLOCK_STYLE = { flexGrow: 0, flexShrink: 1 } as const;
-
-type LogsCollectionLike = {
-	find(query: {
-		selector: Record<string, unknown>;
-		sort: Record<string, 'asc' | 'desc'>[];
-		limit: number;
-	}): { exec(): Promise<{ toJSON(): LogRow }[]> };
-};
 
 /**
  * The live line the retired grey "Sync status" box collapses into: watching
@@ -108,18 +100,12 @@ function StatusLine() {
 					});
 
 	return (
-		<HStack testID="logs-status-line" className="items-center gap-1.5">
-			<View
-				className={
-					lastTick?.status === 'error'
-						? 'bg-warning h-2 w-2 rounded-full'
-						: 'bg-success h-2 w-2 rounded-full'
-				}
-			/>
-			<Text className="text-muted-foreground text-xs">
-				{cadenceText ? `${watching} · ${cadenceText}` : watching}
-			</Text>
-		</HStack>
+		<StatusBadge
+			testID="logs-status-line"
+			size="caption"
+			variant={lastTick?.status === 'error' ? 'warning' : 'ok'}
+			label={cadenceText ? `${watching} · ${cadenceText}` : watching}
+		/>
 	);
 }
 
@@ -127,19 +113,15 @@ function LogsScreenContent() {
 	const t = useT();
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
-	const binding = useLogsBinding(state);
-	const runtime = useQueryRuntime();
+	const handle = useLogsQueryHandle(state);
 	const status = useEngineStatus();
 	const stats = useLogStats();
 	const mutations = useMutationCounts();
 	const { appVersion, platform, platformVersion, site } = useAppInfo();
-	const { store } = useAppState();
+	const { store, storeDB } = useAppState();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const { verbose, setVerbose } = useVerboseDiagnostics();
 	const [preset, setPreset] = React.useState<LogPreset>('all');
-
-	const logsCollection = (runtime.localDB as { collections?: Record<string, unknown> })?.collections
-		?.logs as LogsCollectionLike | undefined;
 
 	const applyFilters = React.useCallback(
 		(nextPreset: LogPreset, verboseOn: boolean) => {
@@ -182,11 +164,13 @@ function LogsScreenContent() {
 	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
 	// materialized window (#1132) — and it re-arms when the query identity
 	// changes, because filters/search reset the window to page one.
-	// Logs is a local-only collection: its count IS the whole set, so this stream never
-	// publishes the "no denominator" null that server-backed collections can (see
-	// QueryBinding.total$). Coalesced so the pagination guard below keeps a number.
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const total = useObservableState(binding.total$, 0) ?? 0;
+	// Logs is a local-only collection: its result's count IS the whole set (the local count of
+	// every matching row), so the footer prints it as the total — never the "no denominator"
+	// null a server-backed query can report. Read from the handle the ledger draws, so the total
+	// stays the shown rows' while a changed filter's handle answers; 0 before the first answer.
+	const drawn = useDrawnHandle(handle);
+	const answered = useQueryHandleFields(drawn, []);
+	const total = answered.ready ? answered.count : 0;
 	// State mirror of the rendered-row count: the pinned footer lives outside
 	// the ledger's Suspense boundary, so it can't read rows.length itself.
 	const [renderedCount, setRenderedCount] = React.useState(0);
@@ -290,15 +274,7 @@ function LogsScreenContent() {
 	// workstream (spec §7). No button until it exists — no dead buttons.
 	const handleCopy = React.useCallback(async () => {
 		try {
-			const docs = logsCollection
-				? await logsCollection
-						.find({
-							selector: { level: { $eq: 'error' } },
-							sort: [{ timestamp: 'desc' }],
-							limit: 10,
-						})
-						.exec()
-				: [];
+			const recentErrors = await readRecentErrorLogs(storeDB);
 			const lane = status.lanes['change-signal'];
 			const text = buildDebugInfo({
 				generatedAt: new Date().toISOString(),
@@ -317,7 +293,7 @@ function LogsScreenContent() {
 				stuckRecords: stats.stuck,
 				verboseDiagnostics: verbose,
 				lastCheck: lane?.lastTick ?? null,
-				recentErrors: docs.map((doc) => doc.toJSON()),
+				recentErrors,
 			});
 			if (canShare) {
 				// The share sheet is its own confirmation UI — no toast on this path.
@@ -338,7 +314,7 @@ function LogsScreenContent() {
 	}, [
 		appVersion,
 		canShare,
-		logsCollection,
+		storeDB,
 		mutations.syncBacklog,
 		platform,
 		platformVersion,
@@ -351,11 +327,11 @@ function LogsScreenContent() {
 	]);
 
 	return (
-		<View className="flex-1">
-			<VStack
-				testID="screen-logs"
-				className="mx-auto min-h-0 w-full max-w-4xl flex-1 gap-3 p-4 md:p-6"
-			>
+		// `fill`: the card takes the column's height and its body is a flex column, so this
+		// stack keeps the scroll contract above — header block sized to content, the ledger
+		// owning the scroll, the footer and status line pinned under it, inside the card.
+		<AreaPage title={t('common.logs')} testID="screen-logs" mode="fill">
+			<VStack className="min-h-0 flex-1 gap-3">
 				{/* Compact-height escape hatch: the pinned controls yield to the
 				    ledger (which keeps a min-h floor) and scroll internally instead
 				    of squeezing the rows out of reach on short viewports. On normal
@@ -417,64 +393,70 @@ function LogsScreenContent() {
 						/>
 
 						<HStack className="flex-wrap items-center gap-2">
-							<Chip on={preset === 'all'} onPress={() => applyPreset('all')} testID="logs-chip-all">
-								{t('health.logs.preset_all')}
-							</Chip>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_all')}
+								on={preset === 'all'}
+								onPress={() => applyPreset('all')}
+								testID="logs-chip-all"
+							/>
+							<Chip
+								size="sm"
+								label={t('health.logs.preset_actions')}
 								on={preset === 'actions'}
 								onPress={() => applyPreset('actions')}
 								testID="logs-chip-actions"
-							>
-								{t('health.logs.preset_actions')}
-							</Chip>
+							/>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_errors')}
 								on={preset === 'errors'}
 								onPress={() => applyPreset('errors')}
 								testID="logs-chip-errors"
-							>
-								{t('health.logs.preset_errors')}
-							</Chip>
+							/>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_sync')}
 								on={preset === 'sync'}
 								onPress={() => applyPreset('sync')}
 								testID="logs-chip-sync"
-							>
-								{t('health.logs.preset_sync')}
-							</Chip>
+							/>
 							{activeKind ? (
-								<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
-									{`${levelLabel(activeKind)} ×`}
-								</Chip>
+								// The level filter set from a ledger row: pressing it or its clear control
+								// drops the filter, as the "×" it used to carry promised.
+								<Chip
+									size="sm"
+									label={levelLabel(activeKind)}
+									on
+									onPress={() => actions.clearFilter('kind')}
+									onClear={() => actions.clearFilter('kind')}
+									clearLabel={t('common.remove')}
+									testID="logs-chip-kind"
+								/>
 							) : null}
 							<View className="flex-1" />
-							<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
-								{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
-							</Chip>
+							<Chip
+								size="sm"
+								label={verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
+								on={verbose}
+								onPress={toggleVerbose}
+								testID="logs-chip-verbose"
+							/>
 						</HStack>
 					</VStack>
 				</ScrollView>
 
 				<View className="min-h-32 flex-1">
-					<ErrorBoundary>
-						<Suspense
-							fallback={
-								<View className="min-h-0 flex-1 items-center justify-center py-8">
-									<Loader />
-								</View>
-							}
-						>
-							<Ledger
-								resource={binding.resource}
-								activeKind={activeKind}
-								onKindPress={toggleKind}
-								onRenderedCount={handleRenderedCount}
-								onScroll={handleScroll}
-								onContentSizeChange={handleContentSizeChange}
-								onLayout={handleLayout}
-								scrollEventThrottle={64}
-							/>
-						</Suspense>
-					</ErrorBoundary>
+					<LedgerPane
+						handle={handle}
+						activeKind={activeKind}
+						onKindPress={toggleKind}
+						onRenderedCount={handleRenderedCount}
+						onScroll={handleScroll}
+						onContentSizeChange={handleContentSizeChange}
+						onLayout={handleLayout}
+						scrollEventThrottle={64}
+					/>
 				</View>
 
 				{/* Outside the ledger's boundaries on purpose: the honest count and
@@ -482,7 +464,7 @@ function LogsScreenContent() {
 				    loading or broken (Codex P2, PR #1421). */}
 				<LedgerFooter shown={renderedCount} total={total} accessory={<StatusLine />} />
 			</VStack>
-		</View>
+		</AreaPage>
 	);
 }
 

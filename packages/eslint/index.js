@@ -381,16 +381,116 @@ const appCodeFiles = cwd.endsWith('/packages/core')
 		? ['**/*.{js,jsx,ts,tsx}']
 		: ['**/packages/core/src/**/*.{ts,tsx}', '**/apps/main/**/*.{js,jsx,ts,tsx}'];
 
+// Shared by the broad ratchet and the ownership blocks that replace its rule.
+export const tintedAlertSelector = {
+	selector:
+		// Highlighted register rows (border-b + green) are not alerts.
+		'JSXAttribute[name.name="className"]' +
+		':not(:has(TemplateElement[value.raw=/^border-border rounded-none border-b $/]):has(Literal[value="bg-success/10"])):has(:matches(' +
+		'Literal[value=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/], ' +
+		'TemplateElement[value.raw=/(^|\\s)bg-(destructive|bad|warning|attention|info|success|ok)\\u002F10(\\s|$)/]))',
+	message:
+		'A tinted alert box is the Notice component (@wcpos/components/notice); success is a line with a check, never a green band (CODING_STANDARDS § Design, wcpos/roadmap#465).',
+};
+
+/**
+ * A component that models an axis as a variant OWNS that axis. Setting it from
+ * a className gives one pixel two sources of truth, and the winner is decided by
+ * class-merge order rather than by design — that is how a `destructive` label
+ * ended up painted on a `default` (blue) confirm button in Store Health.
+ *
+ * Layout is deliberately NOT restricted: no component models its own margin.
+ *
+ * Exported because `no-restricted-syntax` blocks OVERRIDE rather than merge in
+ * flat config: a package config that adds its own `no-restricted-syntax` for a
+ * subtree (packages/core's #1093 guard on `src/screens/**`) must spread these in
+ * beside its own selector, or this rule silently stops applying there.
+ */
+export const designSystemOwnershipSelectors = [
+	{
+		selector:
+			'JSXElement:has(> JSXOpeningElement:matches([name.name=/^(DialogFooter|AlertDialogFooter)$/],[name.property.name=/^(DialogFooter|AlertDialogFooter)$/])) JSXOpeningElement:matches([name.name=/^(Button|IconButton|Pressable|TouchableOpacity)$/],[name.property.name=/^(Button|IconButton|Pressable|TouchableOpacity)$/])',
+		message:
+			"A footer's buttons are its slots (intent/secondary/record/destructive/close; confirm/cancel); never a Button inside a footer (CODING_STANDARDS § Footers, ruled 2026-10-25).",
+	},
+	tintedAlertSelector,
+	{
+		// A field's label is the form's (walk 1, 2026-10-29): a bare SegmentedControl in a
+		// FormField's render came with a hand-rolled body-text label above it.
+		selector:
+			'JSXOpeningElement:matches([name.name="FormField"],[name.property.name="FormField"]) > JSXAttribute[name.name="render"] JSXOpeningElement:matches([name.name=/^(Input|Select|Textarea|Combobox|TreeCombobox|Switch|Checkbox|SegmentedControl)$/],[name.property.name=/^(Input|Select|Textarea|Combobox|TreeCombobox|Switch|Checkbox|SegmentedControl)$/])',
+		message:
+			"A field's control is its Form* wrapper: the form draws the one label (use FormInput, FormSelect, …).",
+	},
+	{
+		// `>` (direct child) deliberately limits this to the STATIC form,
+		// className="…". A cn(…, selected && 'text-primary') is conditional
+		// STATE styling, which no variant currently models — flagging it would
+		// only buy eslint-disable comments. Every instance of the bug class this
+		// rule was written for (PR: red label on a blue confirm) was a static
+		// literal. If Button ever grows a state axis, widen this to a descendant
+		// selector and sweep the cn() call sites.
+		selector:
+			'JSXOpeningElement[name.name=/^(Button|ButtonText|Badge|IconButton|StatusBadge)$/]' +
+			' > JSXAttribute[name.name="className"]' +
+			' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
+		message:
+			'Colour and type on this component are owned by its variant/size props. Use the right variant (e.g. variant="destructive", variant="ghost", size="xs") — or add the missing variant in packages/components — instead of a className.',
+	},
+	{
+		// Height and radius are the size prop's (ruled 2026-10-16: three sizes, no
+		// height class on a Button). Same static-literal scope as the colour selector
+		// above; width (`w-`, `min-w-`, `aspect-`) and layout stay the caller's.
+		selector:
+			'JSXOpeningElement[name.name=/^(Button|IconButton)$/]' +
+			' > JSXAttribute[name.name="className"]' +
+			// `:` as well as whitespace before the utility: a variant prefix (`web:h-20`) still
+			// overrides, and so does the legacy leading important marker (`!h-20`).
+			' > Literal[value=/(^|\\s|:)!?(h-|min-h-|max-h-|size-|rounded)/]',
+		message:
+			'Height and radius on this component are owned by its size prop; pick a size (sm/default/lg) or add one in packages/components.',
+	},
+];
+
+/**
+ * A screen that replaces the whole app is a `GateScreen`. The hand-rolled shape it replaced
+ * (update-required, upgrade-required: a red headline centred by hand in an absoluteFill) is
+ * refused where screens live. An absoluteFill without `justifyContent` (a scrim, an overlay
+ * layer) is not this shape and stays allowed.
+ */
+export const gateScreenSelector = {
+	selector:
+		'JSXOpeningElement[name.name="View"] > JSXAttribute[name.name="style"]' +
+		':has(MemberExpression[object.name="StyleSheet"][property.name=/^absoluteFill(Object)?$/])' +
+		':has(Property[key.name="justifyContent"][value.value="center"])',
+	message:
+		'A centred full-screen state is a GateScreen (@wcpos/components/gate-screen), never a hand-centred absoluteFill.',
+};
+
+/**
+ * Where screens live, as repo-root globs; each package config rebases this array by identity,
+ * as it does `designSystemOwnershipFiles`.
+ */
+export const gateScreenFiles = [
+	'**/packages/core/src/screens/**/*.tsx',
+	'**/apps/main/app/**/*.tsx',
+];
+
+/**
+ * The app code the ownership rule covers, as repo-root globs (lint-staged runs
+ * from the root). Lint also runs per package (`eslint src` from packages/core,
+ * `eslint app components` from apps/main), where flat-config globs resolve
+ * against THAT package's config directory and these match nothing: each package
+ * config rebases the block by this array's identity (see packages/core and
+ * apps/main `eslint.config`), as packages/components does for its own block.
+ */
+export const designSystemOwnershipFiles = ['**/packages/core/**/*.tsx', '**/apps/main/**/*.tsx'];
+
 export const config = [
 	{
 		ignores: [
 			// Git submodules manage their own linting.
 			'apps/web/**',
-			// Targeted recovery is vendored three ways, and the electron copy lives in
-			// another repository. Never let eslint --fix break their byte identity.
-			// Matched by filename, not path: packages lint with `eslint src` from
-			// their own directory, so a repo-relative pattern silently misses.
-			'**/opfs-targeted-recovery*.mjs',
 		],
 	},
 	eslintPluginPrettierRecommended,
@@ -400,9 +500,9 @@ export const config = [
 		// codegen and CI checks that legitimately use Node globals. Without this they
 		// report `'Buffer' is not defined` once the prettier glob covers them.
 		files: ['**/*.{mjs,cjs}'],
-		// These modules form the browser-bundled OPFS worker graph, so Node globals
+		// These modules form the browser-bundled storage worker graph, so Node globals
 		// must remain unavailable even though they use the `.mjs` extension.
-		ignores: ['**/opfs-worker-entry.mjs', '**/opfs-targeted-recovery*.mjs'],
+		ignores: ['**/sqlite-worker-entry.mjs', '**/sqlite-basics-oo1.mjs'],
 		languageOptions: {
 			globals: {
 				Buffer: 'readonly',
@@ -533,47 +633,29 @@ export const config = [
 		},
 	},
 
-	// A component that models an axis as a variant OWNS that axis. Setting it from
-	// a className gives one pixel two sources of truth, and the winner is decided by
-	// class-merge order rather than by design — that is how a `destructive` label
-	// ended up painted on a `default` (blue) confirm button in Store Health.
-	//
-	// Layout is deliberately NOT restricted: no component models its own margin.
-	//
+	// Every workspace inherits this; narrower ownership blocks restate the selector.
+	{
+		files: ['**/*.{js,jsx,ts,tsx}'],
+		rules: { 'no-restricted-syntax': ['error', tintedAlertSelector] },
+	},
+	// The design-system ownership rule (see `designSystemOwnershipSelectors`).
 	// NOTE: `no-restricted-syntax` blocks OVERRIDE rather than merge in flat config.
 	// This block and the e2e block below must never share a `files` glob, or one
 	// set of selectors silently disappears.
 	{
-		files: ['**/packages/core/**/*.tsx', '**/apps/main/**/*.tsx'],
+		files: designSystemOwnershipFiles,
 		ignores: ['**/*.test.tsx'],
 		rules: {
-			'no-restricted-syntax': [
-				'error',
-				{
-					// `>` (direct child) deliberately limits this to the STATIC form,
-					// className="…". A cn(…, selected && 'text-primary') is conditional
-					// STATE styling, which no variant currently models — flagging it would
-					// only buy eslint-disable comments. Every instance of the bug class this
-					// rule was written for (PR: red label on a blue confirm) was a static
-					// literal. If Button ever grows a state axis, widen this to a descendant
-					// selector and sweep the cn() call sites.
-					selector:
-						'JSXOpeningElement[name.name=/^(Button|ButtonText|Badge|IconButton|StatusBadge)$/]' +
-						' > JSXAttribute[name.name="className"]' +
-						' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
-					message:
-						'Colour and type on this component are owned by its variant/size props. Use the right variant (e.g. variant="destructive", variant="ghost-quiet", size="xs") — or add the missing variant in packages/components — instead of a className.',
-				},
-				{
-					selector:
-						'JSXElement:has(> JSXOpeningElement[name.name=/^(AlertDialogAction|ModalAction)$/])' +
-						' > JSXElement > JSXOpeningElement[name.name="Text"]' +
-						' > JSXAttribute[name.name="className"]' +
-						' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
-					message:
-						'Colour and type on an action label are owned by the action variant/size props. Use the right variant or size instead of a Text className.',
-				},
-			],
+			'no-restricted-syntax': ['error', ...designSystemOwnershipSelectors],
+		},
+	},
+	// The gate-screen guard, under screens/ and app/ only. It restates the ownership selectors
+	// because this block REPLACES the one above for these files (flat config does not merge).
+	{
+		files: gateScreenFiles,
+		ignores: ['**/*.test.tsx'],
+		rules: {
+			'no-restricted-syntax': ['error', ...designSystemOwnershipSelectors, gateScreenSelector],
 		},
 	},
 
@@ -593,6 +675,7 @@ export const config = [
 	{
 		files: ['**/packages/components/**/*.{js,jsx,ts,tsx}'],
 		rules: {
+			'no-restricted-syntax': 'off',
 			'no-restricted-imports': [
 				'error',
 				{
@@ -624,6 +707,7 @@ export const config = [
 		rules: {
 			'no-restricted-syntax': [
 				'error',
+				tintedAlertSelector,
 				{
 					selector: "CallExpression[callee.property.name='getByText']",
 					message: 'E2E tests must use getByTestId(), not localized visible text.',

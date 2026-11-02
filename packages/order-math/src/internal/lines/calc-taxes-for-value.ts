@@ -6,7 +6,7 @@ import type { CartConfig } from '../../config';
 
 /**
  * Pure port of `useCalculateTaxesFromValue` (packages/core/src/screens/main/hooks/
- * use-calculate-taxes-from-value.ts).
+ * use-calculate-taxes-from-value.ts), which was deleted on 2026-10-14.
  *
  * Substitutions vs the hook:
  * - context reads (`rates`, `calcTaxes`, `priceNumDecimals`) -> `config` fields

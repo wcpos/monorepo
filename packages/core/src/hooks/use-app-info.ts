@@ -22,7 +22,7 @@
  */
 import * as React from 'react';
 
-import type { SiteDocument } from '@wcpos/database';
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { useDocField } from '@wcpos/query';
 
@@ -105,14 +105,14 @@ export interface AppInfoResult extends StaticAppInfo {
  */
 interface UseAppInfoOptions {
 	/** Optional site document (for use on auth screen before context is available) */
-	site?: SiteDocument;
+	site?: ReadonlySiteRecord;
 }
 
 /**
  * Internal hook that subscribes to site observables.
  * Always calls hooks in the same order regardless of whether site exists.
  */
-function useSiteObservables(site: SiteDocument | undefined) {
+function useSiteObservables(site: ReadonlySiteRecord | undefined) {
 	// These hooks must always be called in the same order; useDocField handles an absent site.
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version);
 	const wcposProVersion = useDocField(site, (value) => value.wcpos_pro_version);

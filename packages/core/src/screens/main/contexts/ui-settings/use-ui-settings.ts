@@ -14,7 +14,7 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 		throw new Error(`useUISettings must be called within UISettingsProvider`);
 	}
 
-	const { resources, getLabel, reset, patch } = context;
+	const { resources, getLabel, reset, patchSettings, modifySettings } = context;
 
 	/**
 	 * Get UI Label
@@ -33,6 +33,10 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 		uiSettings,
 		getUILabel,
 		resetUI: () => reset(id),
-		patchUI: (data: Partial<UISettingSchema<T>>) => patch(id, data),
+		patchUI: (data: Partial<UISettingSchema<T>>) => patchSettings(id, data),
+		modifyUI: <K extends keyof UISettingSchema<T>>(
+			key: K,
+			modifier: (old: UISettingSchema<T>[K] | undefined) => UISettingSchema<T>[K]
+		) => modifySettings(id, key, modifier),
 	};
 };

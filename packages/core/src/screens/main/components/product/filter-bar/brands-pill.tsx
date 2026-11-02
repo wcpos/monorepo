@@ -2,14 +2,15 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { decode } from 'html-entities';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../../query';
-import { BrandSearch } from '../brand-select';
+import { CollectionSearch } from '../collection-search';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'brands'> | null>;
@@ -42,24 +43,22 @@ export function BrandsPill({ resource, selectedID }: Props) {
 	return (
 		<Combobox onValueChange={handleSelect}>
 			<ComboboxTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="folder"
-					variant={isActive ? undefined : 'muted'}
+				<Chip
+					icon="category"
+					on={isActive}
 					testID="filter-pill-brands"
-					removable={isActive}
-					removeTestID="filter-pill-remove-brands"
-					onRemove={() => actions.clearFilter('brands')}
-				>
-					<ButtonText decodeHtml>
-						{isActive
+					clearTestID="filter-pill-remove-brands"
+					onClear={isActive ? () => actions.clearFilter('brands') : undefined}
+					clearLabel={t('common.remove')}
+					label={decode(
+						isActive
 							? brand?.payload.name || t('common.id_2', { id: selectedID })
-							: t('common.brand')}
-					</ButtonText>
-				</ButtonPill>
+							: t('common.brands')
+					)}
+				/>
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<BrandSearch />
+				<CollectionSearch collection="brand" />
 			</ComboboxContent>
 		</Combobox>
 	);

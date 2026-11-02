@@ -68,6 +68,11 @@ function serializePayload(payload: Record<string, LedgerValue>): string {
 /** Create the opt-in, best-effort native E2E sync-event ledger observer. */
 export function createE2eEngineLedgerObserver(): SyncObserver | null {
 	if (process.env.EXPO_PUBLIC_WCPOS_E2E !== '1') return null;
+	// A spec can tell a ledger-enabled bundle from a production one (which the main-push
+	// E2E runs test) and fall back to a network-silence wait instead of waiting for a
+	// `cadence.start` line that never prints (e2e/fixtures.ts waitForCadenceStart).
+	(globalThis as typeof globalThis & { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger =
+		true;
 
 	return (event) => {
 		try {

@@ -20,8 +20,8 @@ const mockLoggerWarn = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
-jest.mock('uuid', () => ({
-	v4: () => 'born-local-uuid',
+jest.mock('../../../../../../query/src/mint-uuid', () => ({
+	mintUuid: () => 'born-local-uuid',
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -38,6 +38,16 @@ jest.mock('./use-local-mutation', () => ({
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+}));
+
+jest.mock('../../../../../../query/src/mutations/resident', () => ({
+	...jest.requireActual('../../../../../../query/src/mutations/resident'),
+	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
+	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
+}));
+jest.mock('../../../../../../query/src/await-write-outcome', () => ({
+	...jest.requireActual('../../../../../../query/src/await-write-outcome'),
+	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -57,10 +67,6 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: () => '2026-07-14T00:00:00',
-}));
-
-jest.mock('../use-collection', () => ({
-	useCollection: () => ({ collectionLabel: 'Order' }),
 }));
 
 /**
@@ -190,6 +196,16 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('names the collection, not "#undefined", when a queued create has no store id yet', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith('common.saved', expect.anything());
+		expect(mockLoggerSuccess).not.toHaveBeenCalledWith('common.saved_2', expect.anything());
+	});
+
 	it('preserves an engine record UUID when a customer patch does not update', async () => {
 		const customer = {
 			uuid: 'customer-local-uuid',
@@ -199,7 +215,9 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: customer,
@@ -221,7 +239,9 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLoggerSuccess).toHaveBeenCalledWith(
 			'common.saved_2',
@@ -258,7 +278,9 @@ describe('useMutation', () => {
 		);
 
 		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLoggerSuccess).toHaveBeenCalledTimes(2);
 		for (const [, options] of mockLoggerSuccess.mock.calls) {

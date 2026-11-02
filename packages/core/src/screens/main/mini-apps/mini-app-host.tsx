@@ -4,7 +4,13 @@ import { Platform as RNPlatform, View } from 'react-native';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Button } from '@wcpos/components/button';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
@@ -140,7 +146,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				>
 					<Text>{t('common.retry')}</Text>
 				</Button>
-				<Button variant="secondary" onPress={() => close('cancelled')}>
+				<Button variant="outline" onPress={() => close('cancelled')}>
 					<Text>{t('settings.open_printer_settings')}</Text>
 				</Button>
 			</VStack>
@@ -170,15 +176,14 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 		);
 
 	return (
-		<Modal onClose={() => close('cancelled')}>
-			<ModalContent testID="mini-app-host" size="xl" className="h-full">
-				<ModalHeader>
-					<ModalTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</ModalTitle>
-				</ModalHeader>
-				<ModalBody contentContainerStyle={{ height: '100%' }}>
-					<View className="flex-1">{content}</View>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+		<Dialog route onClose={() => close('cancelled')}>
+			<DialogContent side="right" testID="mini-app-host" size="xl">
+				<DialogHeader>
+					<DialogTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</DialogTitle>
+				</DialogHeader>
+				<View className="flex-1">{content}</View>
+				<DialogFooter />
+			</DialogContent>
+		</Dialog>
 	);
 }

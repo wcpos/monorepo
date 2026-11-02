@@ -1,8 +1,13 @@
+import { APP_PAYMENTS_CONTRACT } from './payments-contract';
+
 /**
- * Sending this value is the client's claim that it tolerates the 1.11.0 boundary
- * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
+ * Sending this value is the client's claim that it tolerates the server's wire
+ * shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
+ * 3 is the ADR 0040 D1 break: the server derives paid from its own payment rows
+ * and refuses client-written money, and the `next` plugin's
+ * `Protocol_Gate::MIN_PROTOCOL = 3` since wcpos/woocommerce-pos#2349.
  */
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
 
 export const PROTOCOL_HEADER = 'X-WCPOS-Protocol';
 export const CLIENT_HEADER = 'X-WCPOS-Client';
@@ -55,6 +60,24 @@ export function protocolHeadersSupported(echo: EchoCorsCapability | null | undef
 	);
 }
 
+/**
+ * Whether custom `X-WCPOS-*` request headers actually reach PHP on this store.
+ * The echo probe sends the plain `X-WCPOS: 1` marker; a host whose edge strips
+ * custom headers (dev-free's Cloudflare path, 2026-11-02: `authorization` and
+ * every `x-wcpos-*` name arrived as `received: false` while the floor still
+ * listed them) reports it unreceived, and the protocol signal headers would be
+ * stripped the same way. Floor membership proves the preflight; this proves the
+ * path. Missing evidence means "unknown", which keeps the query twins.
+ */
+export function customHeadersReachServer(echo: EchoCorsCapability | null | undefined): boolean {
+	const marker = echo?.headers?.['x-wcpos'];
+	return (
+		typeof marker === 'object' &&
+		marker !== null &&
+		(marker as { received?: unknown }).received === true
+	);
+}
+
 /** INSTANCE_HEADER is outside the frozen floor: reflection needs a successful path probe. */
 export function instanceHeaderSupported(
 	echo: EchoCorsCapability | null | undefined,
@@ -92,8 +115,9 @@ export function sendsProtocolQueryTwins(
 	return platform !== 'web' || useProtocolHeaders !== true;
 }
 
+/** Platform/app version and the independent payments=<major.minor> contract token. */
 export function formatClientSignal(platform: string, version: string): string {
-	return `${platform}/${version.trim() || 'unknown'}`;
+	return `${platform}/${version.trim() || 'unknown'} payments=${APP_PAYMENTS_CONTRACT}`;
 }
 
 /**

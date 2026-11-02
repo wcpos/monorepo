@@ -1,5 +1,7 @@
 import round from 'lodash/round';
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
+
 import {
 	calculateCouponDiscount,
 	type CouponDiscountConfig,
@@ -16,9 +18,12 @@ import { sumStoredLineTax } from '../money/sum-taxes';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
 import { normalizeTaxClass } from '../tax-class';
 
+import type { TaxStatus } from '../../retax-line';
 import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
 
 export interface RecalculateInput {
+	vatExempt?: boolean;
+	taxStatusFor?: (line: LineItem) => TaxStatus | undefined;
 	lineItems: LineItem[];
 	couponLines: CouponLine[];
 	/** Map of coupon code (lowercase) -> coupon config from RxDB */
@@ -56,14 +61,16 @@ function rederiveOrderItemTaxes(
 		pricesIncludeTax,
 		taxRoundAtSubtotal,
 		dp,
+		statusOf,
 	}: {
 		pricesIncludeTax: boolean;
 		taxRoundAtSubtotal: boolean;
 		dp: number;
+		statusOf: (line: LineItem) => TaxStatus;
 	}
 ): LineItem[] {
 	return items.map((item) => {
-		if (getLineItemTaxStatus(item) !== 'taxable') return item;
+		if (statusOf(item) !== 'taxable') return item;
 		const normalizedClass = normalizeTaxClass(item.tax_class);
 		const itemRates = taxRates.filter((r) => normalizeTaxClass(r.class) === normalizedClass);
 		if (itemRates.length === 0) return item;
@@ -157,13 +164,13 @@ function serializeLineItemTaxes<T extends LineItem>(items: T[], roundingPrecisio
  * Determine whether a line item represents a POS-discounted (on sale) product
  * by comparing the POS price against the regular price in _woocommerce_pos_data.
  */
-function isLineItemOnSale(item: LineItem | null | undefined): boolean {
+export function isLineItemOnSale(item: LineItem | null | undefined): boolean {
 	if (!item) return false;
 	const posData = parsePosData(item);
 	if (posData?.price == null || posData.regular_price == null) return false;
 	const price = parseFloat(String(posData.price));
 	const regularPrice = parseFloat(String(posData.regular_price));
-	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	if (!Number.isFinite(price) || !Number.isFinite(regularPrice) || regularPrice <= 0) return false;
 	return price < regularPrice;
 }
 
@@ -182,13 +189,30 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		lineItems,
 		couponLines,
 		couponConfigs,
+		taxRates,
 		pricesIncludeTax,
 		calcDiscountsSequentially,
-		taxRates,
 		productCategories,
 		taxRoundAtSubtotal = false,
 		dp = 2,
 	} = input;
+
+	const statusOf = (item: LineItem): TaxStatus =>
+		(!item.meta_data?.some(({ key }) => key === POS_META_KEYS.posData)
+			? input.taxStatusFor?.(item)
+			: undefined) ?? getLineItemTaxStatus(item);
+	const finish = (result: RecalculateResult): RecalculateResult =>
+		input.vatExempt
+			? {
+					lineItems: result.lineItems.map((item) => ({
+						...item,
+						taxes: [],
+						total_tax: '0',
+						subtotal_tax: '0',
+					})),
+					couponLines: result.couponLines.map((cl) => ({ ...cl, discount_tax: '0' })),
+				}
+			: result;
 
 	// Filter to active coupon lines (code is not null/undefined)
 	const activeCouponLines = couponLines.filter(
@@ -211,7 +235,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			// For product line items tax_status lives in _woocommerce_pos_data, so
 			// filtering by tax_class alone would wrongly tax a 'none' item that
 			// happens to sit in the standard class — the very bug this guards against.
-			const taxStatus = getLineItemTaxStatus(item);
+			const taxStatus = statusOf(item);
 
 			// Determine which tax rates apply to this item's tax class
 			const normalizedClass = normalizeTaxClass(item.tax_class);
@@ -271,10 +295,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
-		return {
+		return finish({
 			lineItems: serializeLineItemTaxes(resetItems, getRoundingPrecision(dp)),
 			couponLines,
-		};
+		});
 	}
 
 	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
@@ -385,7 +409,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 					// Non-taxable items carry no embedded tax, so the inclusive
 					// discount is already ex-tax — skip extraction.
-					if (getLineItemTaxStatus(li) !== 'taxable') return entry;
+					if (statusOf(li) !== 'taxable') return entry;
 
 					// Get the applicable tax rates for this item's tax class
 					const itemTaxClass = normalizeTaxClass(li.tax_class);
@@ -438,7 +462,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			discountResult.perItem,
 			resetItems,
 			taxRates,
-			{ pricesIncludeTax, taxRoundAtSubtotal, dp }
+			{ pricesIncludeTax, taxRoundAtSubtotal, dp, statusOf }
 		);
 
 		return { ...cl, discount, discount_tax };
@@ -451,6 +475,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		getRoundingPrecision(dp)
 	);
 	const taxedLineItems = rederiveOrderItemTaxes(discountedLineItems, taxRates, {
+		statusOf,
 		pricesIncludeTax,
 		taxRoundAtSubtotal,
 		dp,
@@ -465,8 +490,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return updated || cl;
 	});
 
-	return {
+	return finish({
 		lineItems: serializeLineItemTaxes(taxedLineItems, getRoundingPrecision(dp)),
 		couponLines: finalCouponLines,
-	};
+	});
 }

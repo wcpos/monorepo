@@ -1,13 +1,16 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
+import { HStack } from '@wcpos/components/hstack';
+import { SavedMark } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { ListItem } from '@wcpos/components/list-item';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { hasTargetKind, type OsPrinterTargetKind } from './discovered-printer-filters';
+import { useT } from '../../../../../../contexts/translations';
 
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
@@ -52,6 +55,7 @@ export function OsPrintersSection({
 	loadingText,
 	testIdPrefix,
 }: OsPrintersSectionProps) {
+	const t = useT();
 	const selectedAddress = useWatch({ control: form.control, name: 'address' });
 	const filtered = printers.filter((p) => hasTargetKind(p, targetKind));
 
@@ -64,33 +68,29 @@ export function OsPrintersSection({
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{heading}</Text>
-			<Text className="text-muted-foreground text-xs">{hint}</Text>
-			{scanning && <Text className="text-muted-foreground text-xs">{loadingText}</Text>}
-			{!scanning && filtered.length === 0 && (
-				<Text className="text-muted-foreground text-xs">{emptyText}</Text>
-			)}
+			<HStack className="justify-between">
+				<Text variant="subheading">{heading}</Text>
+				<SavedMark name="address" label={t('settings.saved')} />
+			</HStack>
+			<Text variant="help">{hint}</Text>
+			{scanning && <Text variant="help">{loadingText}</Text>}
+			{!scanning && filtered.length === 0 && <Text variant="help">{emptyText}</Text>}
 			{filtered.map((p) => {
 				const selected = p.address === selectedAddress;
 				return (
-					<Pressable
+					<ListItem
 						key={p.id}
 						testID={`${testIdPrefix}-${p.id}`}
 						onPress={() => {
 							form.setValue('address', p.address ?? '', { shouldValidate: true });
 							form.setValue('name', p.name);
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
-							selected ? 'border-primary bg-primary/5' : 'border-border'
-						}`}
+						selected={selected}
+						role="radio"
+						aria-checked={selected}
 					>
-						<View
-							className={`h-4 w-4 rounded-full border-2 ${
-								selected ? 'border-primary bg-primary' : 'border-border'
-							}`}
-						/>
 						<Text className="text-sm">{p.name}</Text>
-					</Pressable>
+					</ListItem>
 				);
 			})}
 		</VStack>

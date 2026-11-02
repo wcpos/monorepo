@@ -1,0 +1,304 @@
+/**
+ * @jest-environment jsdom
+ *
+ * The header's store switcher carried the same two defects the Orders filter bar did (#1707):
+ * the stores `ObservableResource` was built in a `useMemo` during render, and `StoreSubMenu`
+ * read it with `useObservableSuspense` with no `Suspense` of its own.
+ *
+ * `ObservableResource` subscribes in its constructor and `read()` throws a FRESH promise until
+ * the first value lands. A component that suspends before its subtree has ever committed makes
+ * React unwind to the boundary and throw the work-in-progress fibers away, `useMemo` included,
+ * so the retry builds another resource that suspends for exactly the reason its predecessor
+ * did — a loop, not a load. And with no boundary of its own the suspension escaped the header
+ * entirely, to expo-router's per-route `Suspense`, whose production fallback is `null`.
+ *
+ * Separate from `user-menu.test.tsx` because that file stubs `@wcpos/components/suspense` to a
+ * pass-through and renders `DropdownMenuSubContent` as `null`, so nothing in it can suspend.
+ */
+import * as React from 'react';
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { BehaviorSubject, Observable, startWith } from 'rxjs';
+
+import type { StoreDocument } from '@wcpos/database';
+
+import { UserSheet } from './user-sheet';
+// The hand-over door imports the print sheet and the session report; neither renders here, and the
+// real sheet drags the receipt encoder (ImageData) into jsdom.
+jest.mock('../../receipt/print-sheet', () => ({ PrintSheet: () => null }));
+jest.mock('../../../../services/register-session/use-session-report', () => ({
+	useSessionReport: () => ({ print: jest.fn(), doc: { documentError: null } }),
+}));
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: (credentials: {
+		populate$: (key: string) => Observable<StoreDocument[]>;
+	}) => credentials.populate$('stores').pipe(startWith([])),
+}));
+
+jest.mock('expo-haptics', () => ({}));
+// The sheet's guards (3b) read these two; the real online-status module pulls in NetInfo.
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../checkout/payments/payment-in-flight', () => ({ usePaymentInFlight: () => false }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: passthrough,
+	DialogContent: passthrough,
+	DialogHeader: passthrough,
+	DialogTitle: passthrough,
+	DialogDescription: passthrough,
+	DialogBody: passthrough,
+	DialogFooter: passthrough,
+}));
+jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: passthrough }));
+
+let populateCalls = 0;
+let storesSource$: Observable<StoreDocument[]>;
+
+/**
+ * A fresh credentials document per test: `storeListResource` caches per document by design, so
+ * sharing one across tests would serve the previous test's already-settled resource.
+ */
+let wpCredentials: Record<string, unknown>;
+
+const freshCredentials = () => ({
+	uuid: 'creds-1',
+	display_name: 'Ada Lovelace',
+	display_name$: new BehaviorSubject<string | undefined>('Ada Lovelace'),
+	avatar_url$: new BehaviorSubject<string | undefined>(undefined),
+	// Two stores, so the switcher renders at all.
+	stores$: new BehaviorSubject<unknown[]>([{ localID: 'store-1' }, { localID: 'store-2' }]),
+	populate$: (field: string) => {
+		expect(field).toBe('stores');
+		populateCalls++;
+		return storesSource$;
+	},
+});
+
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
+		wpCredentials,
+		site: { name: 'Test Site' },
+		store: { localID: 'store-1', name: 'Test Store' },
+		logout: jest.fn(),
+		switchStore: jest.fn(),
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+	useSegments: () => [],
+}));
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => false,
+}));
+// One engine for the suite: a fresh object per render would rebuild the sales observable every
+// render, and its object-valued emission never bails out of setState the way the old `0` did.
+const mockEngine = {};
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	observeCashierSalesTotal: () =>
+		new (jest.requireActual('rxjs').BehaviorSubject)({ total: 0, count: 0 }),
+	observeOpenCartCount: () => new (jest.requireActual('rxjs').BehaviorSubject)(0),
+}));
+jest.mock('@wcpos/query/local-data-reset', () => ({
+	clearLocalDataNow: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
+	scheduleLocalDataReset: jest.fn(),
+}));
+jest.mock('@wcpos/utils/unsent-changes', () => ({ forgetUnsentChanges: jest.fn() }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('../../../../utils/reload-app', () => ({ reloadApp: jest.fn() }));
+jest.mock('@wcpos/utils/platform', () => ({
+	Platform: { OS: 'web', isWeb: true, isNative: false, isElectron: false },
+}));
+jest.mock('../../hooks/use-image-attachment', () => ({
+	useImageAttachment: () => ({ uri: undefined }),
+}));
+
+function passthrough({ children }: { children?: React.ReactNode }) {
+	return <div>{children}</div>;
+}
+
+jest.mock('@wcpos/components/avatar', () => ({
+	Avatar: ({ fallback }: { fallback?: string }) => <span data-testid="avatar">{fallback}</span>,
+	getInitials: (name?: string) => (name ?? '').slice(0, 1),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	// The Store row's Switch verb is a Button; the test presses it to reach the pane.
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<div data-testid={testID} onClick={onPress}>
+			{children}
+		</div>
+	),
+	ButtonText: ({ children }: { children?: React.ReactNode }) => (
+		<span data-testid="trigger-label">{children}</span>
+	),
+}));
+jest.mock('@wcpos/components/alert-dialog', () => ({
+	AlertDialog: passthrough,
+	AlertDialogAction: passthrough,
+	AlertDialogCancel: passthrough,
+	AlertDialogContent: passthrough,
+	AlertDialogDescription: passthrough,
+	AlertDialogFooter: passthrough,
+	AlertDialogHeader: passthrough,
+	AlertDialogTitle: passthrough,
+	DialogDescription: passthrough,
+	DialogBody: passthrough,
+	DialogFooter: passthrough,
+}));
+// Unlike `user-menu.test.tsx`, the menu bodies RENDER here: the suspending consumer lives
+// inside `DropdownMenuSubContent`, and a stub that returns `null` is exactly what kept this
+// out of the existing test.
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: passthrough,
+	DropdownMenuContent: passthrough,
+	DropdownMenuItem: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DropdownMenuSeparator: () => null,
+	DropdownMenuSub: passthrough,
+	DropdownMenuSubContent: passthrough,
+	DropdownMenuSubTrigger: passthrough,
+	DropdownMenuTrigger: passthrough,
+}));
+jest.mock('@wcpos/components/hstack', () => ({ HStack: passthrough }));
+jest.mock('@wcpos/components/vstack', () => ({ VStack: passthrough }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/components/portal', () => ({ Portal: passthrough }));
+jest.mock('@wcpos/components/text', () => ({
+	...jest.requireActual('@wcpos/components/text'),
+	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+// PropertyRow imports Switch, whose uniwind import is ESM and cannot load here.
+jest.mock('@wcpos/components/switch', () => ({ Switch: () => null }));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: passthrough },
+	FadeIn: { duration: () => ({}) },
+	// The sheet's PropertyRow reaches the components' motion module, which builds its eases on load.
+	Easing: { bezier: () => 'ease', linear: 'linear' },
+}));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Linking: { openURL: jest.fn() },
+	Text: passthrough,
+	ScrollView: passthrough,
+	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
+}));
+
+/** Lets every pending microtask (and the React retry it schedules) run. */
+const settle = async () => {
+	for (let i = 0; i < 25; i++) {
+		await React.act(async () => {
+			await Promise.resolve();
+		});
+	}
+};
+
+/** Emits one microtask after each subscribe — the shape of an RxDB `populate$`. */
+const asyncStores = (): Observable<StoreDocument[]> =>
+	new Observable<StoreDocument[]>((subscriber) => {
+		void Promise.resolve().then(() =>
+			subscriber.next([
+				{ localID: 'store-1', name: 'One' } as unknown as StoreDocument,
+				{ localID: 'store-2', name: 'Two' } as unknown as StoreDocument,
+			])
+		);
+	});
+
+const renderMenu = () =>
+	render(
+		<React.Suspense fallback={<div data-testid="route-fallback" />}>
+			<UserSheet open onOpenChange={jest.fn()} />
+		</React.Suspense>
+	);
+
+beforeEach(() => {
+	populateCalls = 0;
+	wpCredentials = freshCredentials();
+});
+
+describe('user menu store switcher', () => {
+	it('subscribes the stores resource once, however many times the menu re-renders', async () => {
+		// The retry loop is only visible as a COUNT: each attempt built its own resource, and
+		// each resource subscribed `populate$('stores')` again. One subscription means the
+		// second attempt read back the resource the first one already had in flight, which is
+		// what lets the first emission end the wait instead of starting the next one.
+		storesSource$ = asyncStores();
+		renderMenu();
+		await settle();
+
+		// The Store row draws its Switch verb only once the resource has resolved with more than
+		// one store; the pane it pushes lists one row per store, so 'Two' can only be on screen
+		// if the resource resolved and StoreRows committed.
+		fireEvent.click(await screen.findByTestId('user-sheet-store-switch'));
+		expect(await screen.findByText('Two')).toBeTruthy();
+		expect(populateCalls).toBe(1);
+	});
+
+	it('keeps the rest of the menu on screen while the store list is still loading', async () => {
+		// A switcher that has not got its stores yet is a switcher-sized problem. Escaping to
+		// the route boundary — production fallback `null` — is how it became a screen-sized one.
+		storesSource$ = new Observable<StoreDocument[]>(() => {
+			/* never emits */
+		});
+		renderMenu();
+		await settle();
+
+		expect(screen.queryByTestId('route-fallback')).toBeNull();
+		expect(screen.getByText('Ada Lovelace')).toBeTruthy();
+		expect(screen.queryByText('Two')).toBeNull();
+	});
+});
+
+jest.mock('../../../../hooks/user-db-list-resources', () => ({
+	credentialsListResource: () => 'credentials',
+}));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registers: [], status: 'unbound' }),
+	useRegisterDirectory: () => ({ registerId: null, registers: [] }),
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	// The real hook always returns `expected` (an empty object with no drawer); the door's figure reads it.
+	useRegisterSession: () => ({ binding: { status: 'unbound' }, expected: {} }),
+}));
+jest.mock('../contexts/current-order/context', () => ({
+	useCurrentOrderOptional: () => undefined,
+}));
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
+	useOpenOrdersHandle: () => mockOpenOrdersHandle,
+}));
+jest.mock('../checkout/use-awaiting-store', () => ({ useAwaitingStoreCount: () => 0 }));
+jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: String }),
+}));
+
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: (resource: unknown) =>
+		resource === 'credentials'
+			? []
+			: jest.requireActual('observable-hooks').useObservableSuspense(resource),
+}));
+
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));

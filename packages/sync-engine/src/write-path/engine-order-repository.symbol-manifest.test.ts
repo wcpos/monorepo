@@ -16,10 +16,40 @@ import { EngineOrderRepository, type OrderRepositoryDatabase } from './engine-or
  */
 
 function orderDatabase() {
+	const localDocs = new Map<string, { counts: Record<string, number> }>();
 	const orderUpserts: unknown[][] = [];
 	const manifestUpserts: unknown[][] = [];
 	const db = {
+		refunds: { find: () => ({ exec: async () => [] }), bulkRemove: async () => [] },
 		orders: {
+			getLocal: async (id: string) =>
+				localDocs.has(id)
+					? {
+							get: () => localDocs.get(id)!.counts,
+							remove: async () => localDocs.delete(id),
+							incrementalModify: async (
+								modify: (data: { counts: Record<string, number> }) => {
+									counts: Record<string, number>;
+								}
+							) => {
+								localDocs.set(
+									id,
+									structuredClone(await modify(structuredClone(localDocs.get(id)!)))
+								);
+							},
+						}
+					: null,
+			insertLocal: async (id: string, data: { counts: Record<string, number> }) => {
+				if (localDocs.has(id)) throw new Error('conflict');
+				localDocs.set(id, structuredClone(data));
+			},
+			upsertLocal: async (id: string, data: { counts: Record<string, number> }) => {
+				localDocs.set(id, structuredClone(data));
+			},
+			bulkInsert: async (documents: unknown[]) => {
+				await db.orders.bulkUpsert(documents);
+				return { error: [] };
+			},
 			bulkUpsert: async (documents: unknown[]) => {
 				orderUpserts.push(documents);
 				return [];
@@ -71,6 +101,7 @@ describe('EngineOrderRepository — the manifest boundary after the Symbol', () 
 			{
 				uuid: 'uuid-78',
 				remoteId: '78',
+				remoteKey: '78',
 				payload: { id: 78, status: 'completed', _rxdb_digest: 'd78' },
 				sync: { revision: 'r', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -94,3 +125,204 @@ describe('EngineOrderRepository — the manifest boundary after the Symbol', () 
 		]);
 	});
 });
+
+it('retains the till receipt count when a clean order is refreshed from the server', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	await new EngineOrderRepository(db).upsertMany([
+		{ ...storedDocument, payload: { ...storedDocument.payload, status: 'completed' } },
+	]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { status: 'completed' },
+		local: { receiptPrintCount: 2, dirty: false, pendingMutationIds: [] },
+	});
+});
+
+it('retains the till receipt count across reset-for-resync and repull', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	// The upsert lands the document (retirement checks the materialised order holds the count).
+	const upsert = db.orders.bulkUpsert.bind(db.orders);
+	db.orders.bulkUpsert = async (documents: unknown[]) => {
+		for (const document of documents as { uuid: string }[]) {
+			rows.set(document.uuid, { toJSON: () => document as typeof resident });
+		}
+		return upsert(documents);
+	};
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect(rows.size).toBe(0);
+	await repository.upsertMany([storedDocument]);
+
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 2 } });
+	// Once restored, a later unrelated removal must not reuse the saved count.
+	rows.delete(storedDocument.uuid);
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
+});
+
+it('a larger stashed count survives a reset-for-resync that reads a lower resident count', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 1 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	// The previous-generation drain stashed 3 for this order before the reset read its resident (1).
+	await db.orders.insertLocal('resync-receipt-print-counts', {
+		counts: { [storedDocument.uuid]: 3 },
+	});
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect((await db.orders.getLocal('resync-receipt-print-counts'))?.get('counts')).toEqual({
+		[storedDocument.uuid]: 3,
+	});
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 3 } });
+});
+
+it('restores resync print counts in a new repository and consumes the stash', async () => {
+	const { createEngineHarness } = await import('../engine-harness');
+	const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+	setPremiumFlag();
+	const harness = await createEngineHarness({ captureTimers: true });
+	try {
+		const orders = harness.collection('orders');
+		const db = orders.database as unknown as OrderRepositoryDatabase;
+		const { storedDocument } = materializedOrder();
+		const printed = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+		await new EngineOrderRepository(db).upsertMany([printed]);
+		await new EngineOrderRepository(db).resetForResync();
+		expect(await orders.findOne(storedDocument.uuid).exec()).toBeNull();
+
+		const nextBatch = new EngineOrderRepository(db);
+		await nextBatch.upsertMany([storedDocument]);
+		expect((await orders.findOne(storedDocument.uuid).exec())?.toJSON()).toMatchObject({
+			local: { receiptPrintCount: 2 },
+		});
+		expect(await orders.getLocal('resync-receipt-print-counts')).toBeNull();
+		// An unrelated removal must not let a later repull reuse the consumed count.
+		await orders.bulkRemove([storedDocument.uuid]);
+		await nextBatch.upsertMany([storedDocument]);
+		expect((await orders.findOne(storedDocument.uuid).exec())?.toJSON()).not.toMatchObject({
+			local: { receiptPrintCount: 2 },
+		});
+	} finally {
+		await harness.dispose();
+	}
+});
+
+it.each([undefined, 'server', null])(
+	'clears an absent server stamp, retaining the resident hint over pull value %s',
+	async (value) => {
+		const { db, orderUpserts } = orderDatabase();
+		const { storedDocument } = materializedOrder();
+		const hint = { id: 8, key: '_wcpos_money_owner_hint', value: 'server' };
+		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+		const resident = structuredClone(storedDocument);
+		resident.payload.meta_data = [...meta, hint, { key: '_wcpos_money_owner', value: 'server' }];
+		db.orders.findByIds = () => ({
+			exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+		});
+		storedDocument.payload.meta_data = [
+			...meta,
+			...(value === undefined ? [] : [{ ...hint, value }]),
+		];
+		await new EngineOrderRepository(db).upsertMany([storedDocument]);
+		expect(orderUpserts[0][0]).toMatchObject({ payload: { meta_data: [...meta, hint] } });
+	}
+);
+
+it('lets an incoming server hint replace a local tombstone (Codex on #2688)', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+	const resident = structuredClone(storedDocument);
+	// This till tombstoned the hint in an older meta edit; the diverging till wrote `server`.
+	resident.payload.meta_data = [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: null }];
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	storedDocument.payload.meta_data = [
+		...meta,
+		{ id: 8, key: '_wcpos_money_owner_hint', value: 'server' },
+	];
+	await new EngineOrderRepository(db).upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { meta_data: [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: 'server' }] },
+	});
+});
+
+it('keeps the server-assigned id when the resident protected entry has none (Codex on #2688)', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+	const resident = structuredClone(storedDocument);
+	// The till's first hint write is id-less; the acknowledgement comes back with Woo's id.
+	resident.payload.meta_data = [...meta, { key: '_wcpos_money_owner_hint', value: 'server' }];
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	storedDocument.payload.meta_data = [
+		...meta,
+		{ id: 8, key: '_wcpos_money_owner_hint', value: 'server' },
+	];
+	await new EngineOrderRepository(db).upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { meta_data: [...meta, { id: 8, key: '_wcpos_money_owner_hint', value: 'server' }] },
+	});
+});
+
+it.each(['resident', 'insert conflict'])(
+	'keeps a money hint arriving after the pull snapshot through the %s modifier',
+	async (route) => {
+		const { db, orderUpserts } = orderDatabase();
+		const { storedDocument } = materializedOrder();
+		const hint = { key: '_wcpos_money_owner_hint', value: 'server' };
+		const meta = [{ key: '_woocommerce_pos_uuid', value: storedDocument.uuid }];
+		let residentExists = route === 'resident';
+		const resident = {
+			toJSON: () => storedDocument,
+			incrementalModify: async (modify: (current: Record<string, unknown>) => unknown) => {
+				// The hint write has drained since the snapshot; only the modifier sees it.
+				const current = {
+					...storedDocument,
+					payload: { ...storedDocument.payload, meta_data: [...meta, hint] },
+				};
+				await db.orders.bulkUpsert([await modify(current)]);
+			},
+		};
+		db.orders.findByIds = () => ({
+			exec: async () => new Map(residentExists ? [[storedDocument.uuid, resident]] : []),
+		});
+		db.orders.bulkInsert = async () => {
+			residentExists = true;
+			return { error: [{ status: 409, documentId: storedDocument.uuid }] };
+		};
+		await new EngineOrderRepository(db).upsertMany([
+			{ ...storedDocument, payload: { ...storedDocument.payload, status: 'completed' } },
+		]);
+		expect(orderUpserts).toHaveLength(1);
+		expect(orderUpserts[0][0]).toMatchObject({
+			payload: { status: 'completed', meta_data: [...meta, hint] },
+		});
+	}
+);

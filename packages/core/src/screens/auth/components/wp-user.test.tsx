@@ -1,16 +1,20 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WpUser } from './wp-user';
 
+let mockValid = false;
 const mockWarn = jest.fn();
 const mockError = jest.fn();
 const mockHandleLoginSuccess = jest.fn().mockResolvedValue(undefined);
 const mockSetRefreshedToken = jest.fn();
 const mockSetAuthFailed = jest.fn();
 
+// ListItem reads the pointer, and this suite's react-native mock has no Platform.
+jest.mock('@wcpos/query/user-db', () => ({ removeCredentials: jest.fn() }));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: () => null,
 	AlertDialogAction: () => null,
@@ -22,10 +26,55 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogTitle: () => null,
 }));
 jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null, getInitials: () => 'AU' }));
-jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
-jest.mock('@wcpos/components/list-item', () => ({ ListItem: () => null }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children, variant }: React.PropsWithChildren<{ variant: string }>) => (
+		<button data-variant={variant}>{children}</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+jest.mock('react-native', () => ({
+	Pressable: ({
+		children,
+		className,
+		testID,
+		role,
+		'aria-checked': ariaChecked,
+		onKeyDown,
+		tabIndex,
+	}: React.PropsWithChildren<{
+		className?: string;
+		testID?: string;
+		role?: string;
+		'aria-checked'?: boolean;
+		onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+		tabIndex?: number;
+	}>) => (
+		<div
+			data-testid={testID}
+			className={className}
+			role={role}
+			aria-checked={ariaChecked}
+			onKeyDown={onKeyDown}
+			tabIndex={tabIndex}
+		>
+			{children}
+		</div>
+	),
+	View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
+		<button aria-label={accessibilityLabel} />
+	),
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
-jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
+}));
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	requestStateManager: {
 		setRefreshedToken: (...args: unknown[]) => mockSetRefreshedToken(...args),
@@ -47,7 +96,7 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('../../../hooks/use-user-validation', () => ({
-	useUserValidation: () => ({ isValid: false, isLoading: false }),
+	useUserValidation: () => ({ isValid: mockValid, isLoading: false }),
 }));
 jest.mock('../../../hooks/use-wcpos-auth', () => ({
 	useWcposAuth: () => ({
@@ -88,5 +137,58 @@ describe('WpUser re-authentication', () => {
 		);
 		expect(mockSetRefreshedToken).not.toHaveBeenCalled();
 		expect(mockSetAuthFailed).not.toHaveBeenCalled();
+	});
+});
+
+describe('user row status', () => {
+	const site = { name: 'Store' } as import('@wcpos/database').SiteDocument;
+	const wpUser = {
+		id: 1,
+		uuid: 'u',
+		display_name: 'Alice',
+	} as import('@wcpos/database').WPCredentialsDocument;
+	it.each([true, false])('shows the valid=%s badge beneath the name', async (valid) => {
+		mockValid = valid;
+		render(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByText(valid ? 'auth.signed_in' : 'auth.sign_in_again')).toBeTruthy()
+		);
+		if (!valid)
+			expect(
+				screen.getByText('auth.re_authenticate').closest('button')?.getAttribute('data-variant')
+			).toBe('outline');
+	});
+	it('is a radio, not a button, so its × and Re-authenticate buttons are not nested in one', async () => {
+		mockValid = false;
+		const { rerender } = render(
+			<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />
+		);
+		const row = await screen.findByTestId('wp-user-button');
+		expect(row.getAttribute('role')).toBe('radio');
+		// Roving tab stop: only the selected user's radio is in the tab order.
+		expect(row.getAttribute('tabindex')).toBe('0');
+		rerender(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={jest.fn()} />);
+		expect(screen.getByTestId('wp-user-button').getAttribute('tabindex')).toBe('-1');
+		rerender(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
+		expect(row.getAttribute('aria-checked')).toBe('true');
+		expect(row.contains(screen.getByRole('button', { name: 'auth.remove_2' }))).toBe(false);
+		expect(row.contains(screen.getByText('auth.re_authenticate'))).toBe(false);
+	});
+	it('selects the row on Space, as Enter does, without scrolling the page', async () => {
+		mockValid = true;
+		const onSelect = jest.fn();
+		render(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={onSelect} />);
+		const row = await screen.findByTestId('wp-user-button');
+		const notPrevented = fireEvent.keyDown(row, { key: ' ' });
+		expect(onSelect).toHaveBeenCalledTimes(1);
+		expect(notPrevented).toBe(false);
+	});
+	it('keeps border-primary on the selected invalid row', async () => {
+		mockValid = false;
+		render(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('wp-user-row').className).toContain('border-primary')
+		);
+		expect(screen.getByTestId('wp-user-row').className).not.toContain('border-warning');
 	});
 });
