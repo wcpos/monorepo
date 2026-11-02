@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { View } from 'react-native';
 
 import { Button } from './index';
 
@@ -34,5 +35,14 @@ const examples: ({ id: string } & Props)[] = [
 ];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,
-	render: () => <Button {...props} testID={`gallery-button-${id}`} />,
+	render: () =>
+		// `on-warning` lives on the solid warning ground (the Free strip on dark themes); the cell's
+		// page colour would show an outline the variant never stands on (CodeRabbit, #3204).
+		props.variant === 'on-warning' ? (
+			<View className="bg-warning rounded-lg p-2">
+				<Button {...props} testID={`gallery-button-${id}`} />
+			</View>
+		) : (
+			<Button {...props} testID={`gallery-button-${id}`} />
+		),
 }));
