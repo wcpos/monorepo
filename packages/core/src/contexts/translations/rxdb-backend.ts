@@ -6,7 +6,9 @@ export const TRANSLATION_VERSION = '2026.11.2';
 
 // A rolling ref must be re-fetched because its content changes under the same name.
 // (Named REF, not VERSION, so the release bump regex `TRANSLATION_VERSION = '…'` cannot match it.)
-const ROLLING_TRANSLATION_REF = 'next';
+// Typed as string: on main TRANSLATION_VERSION is a CalVer literal and the `===` below would
+// otherwise be a TypeScript no-overlap error (TS2367) on every release.
+const ROLLING_TRANSLATION_REF: string = 'next';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
