@@ -473,9 +473,11 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chip-status').click();
 	await expect(page.getByTestId('hero-status-menu')).toBeVisible();
 	await page.getByTestId('hero-status-all').click();
-	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/border-primary/);
+	// A selected Chip is a tinted block (#3068, Paul 2026-10-29): `bg-selected border-selected`,
+	// never a primary border. The class is the only selection signal the chip exposes.
+	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/\bborder-selected\b/);
 	await page.getByTestId('hero-chip-status-clear').click();
-	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/border-primary/);
+	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/\bborder-selected\b/);
 	await page.getByTestId('hero-chip-compare').click();
 	await expect(page.getByTestId('hero-compare-menu')).toBeVisible();
 	await page.getByTestId('hero-compare-yesterday').click();
