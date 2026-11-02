@@ -10,6 +10,7 @@ import {
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 import {
+	customHeadersReachServer,
 	INSTANCE_HEADER,
 	instanceHeaderSupported,
 	protocolHeadersSupported,
@@ -611,7 +612,9 @@ export async function testAuthorizationMethod(
 		const pingUrl = pingProbeUrl(pathRoot);
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
-			const useProtocolHeaders = protocolHeadersSupported(echo);
+			// Both the preflight (floor) and the path (the marker header arrived) must hold:
+			// a header-stripping edge answers every sync with 426 when the twins are withheld.
+			const useProtocolHeaders = protocolHeadersSupported(echo) && customHeadersReachServer(echo);
 			// One harmless request per site negotiation proves this header's actual CORS path.
 			let instanceProbe: HeaderEchoResult | null = null;
 			if (Platform.isWeb && echo.cors?.reflects_request_headers === true) {

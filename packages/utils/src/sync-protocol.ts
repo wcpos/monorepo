@@ -60,6 +60,24 @@ export function protocolHeadersSupported(echo: EchoCorsCapability | null | undef
 	);
 }
 
+/**
+ * Whether custom `X-WCPOS-*` request headers actually reach PHP on this store.
+ * The echo probe sends the plain `X-WCPOS: 1` marker; a host whose edge strips
+ * custom headers (dev-free's Cloudflare path, 2026-11-02: `authorization` and
+ * every `x-wcpos-*` name arrived as `received: false` while the floor still
+ * listed them) reports it unreceived, and the protocol signal headers would be
+ * stripped the same way. Floor membership proves the preflight; this proves the
+ * path. Missing evidence means "unknown", which keeps the query twins.
+ */
+export function customHeadersReachServer(echo: EchoCorsCapability | null | undefined): boolean {
+	const marker = echo?.headers?.['x-wcpos'];
+	return (
+		typeof marker === 'object' &&
+		marker !== null &&
+		(marker as { received?: unknown }).received === true
+	);
+}
+
 /** INSTANCE_HEADER is outside the frozen floor: reflection needs a successful path probe. */
 export function instanceHeaderSupported(
 	echo: EchoCorsCapability | null | undefined,

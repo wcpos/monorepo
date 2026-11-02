@@ -453,6 +453,23 @@ describe('testAuthorizationMethod', () => {
 		});
 	});
 
+	it('keeps the protocol query twins when the edge strips custom headers (dev-free, 2026-11-02)', async () => {
+		// The floor lists both signal names, but the probe's own X-WCPOS marker never reached
+		// PHP: the same edge strips X-WCPOS-Protocol, and withholding the twins answers 426.
+		const body = echoBody();
+		Object.assign(body.headers, {
+			authorization: { received: false, length: 0 },
+			'x-wcpos': { received: false, length: 0 },
+			'x-wcpos-protocol': { received: false, length: 0 },
+			'x-wcpos-client': { received: false, length: 0 },
+		});
+		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toMatchObject({ ok: true, useJwtAsParam: true, useProtocolHeaders: false });
+	});
+
 	it('enables protocol headers when both signal names are in the echo header floor', async () => {
 		const body = echoBody();
 		Object.assign(body.headers, {

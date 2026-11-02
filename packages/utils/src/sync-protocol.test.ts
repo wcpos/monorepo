@@ -1,5 +1,6 @@
 import { buildRequestPreamble } from './request-preamble';
 import {
+	customHeadersReachServer,
 	formatClientSignal,
 	instanceHeaderSupported,
 	parseUpdateRequiredBody,
@@ -79,6 +80,26 @@ describe('protocolHeadersSupported', () => {
 		['a null headers map beside null cors', { headers: null, cors: null }],
 	])('rejects %s without throwing', (_name, echo) => {
 		expect(protocolHeadersSupported(echo)).toBe(false);
+	});
+});
+
+describe('customHeadersReachServer', () => {
+	it('is true only when the probe marker header was received', () => {
+		expect(
+			customHeadersReachServer({ headers: { 'x-wcpos': { received: true, length: 1 } } })
+		).toBe(true);
+	});
+
+	it.each([
+		[
+			'a stripped marker (dev-free, 2026-11-02)',
+			{ headers: { 'x-wcpos': { received: false, length: 0 } } },
+		],
+		['no marker entry', { headers: { 'x-wcpos-protocol': { received: true } } }],
+		['a null headers map', { headers: null }],
+		['a null echo', null],
+	])('is false for %s', (_name, echo) => {
+		expect(customHeadersReachServer(echo)).toBe(false);
 	});
 });
 
