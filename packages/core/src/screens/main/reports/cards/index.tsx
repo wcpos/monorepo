@@ -44,7 +44,10 @@ export function PeriodSection() {
 		)
 	);
 	const enabled = cogsEnabled(selectedOrders, products ?? []);
-	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled);
+	// Brands follows the brands, not the costs: a store that labels its products by brand expects
+	// the card whether or not it enters costs; a store with neither sees no empty slot.
+	const branded = (products ?? []).some((product) => product.brands?.length);
+	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled || branded);
 	const t = useT(),
 		{ roomy } = useTheme(),
 		phone = useIsPhone();
