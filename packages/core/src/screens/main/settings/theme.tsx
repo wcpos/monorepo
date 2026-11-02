@@ -16,6 +16,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { FONT_FACES, fontFamilyStyle } from '@wcpos/components/lib/fonts';
 import {
+	SYSTEM_TYPE,
 	ThemeTraitsContext,
 	type ThemeType,
 	useThemeTraits,
@@ -285,7 +286,6 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 }
 
 const FONT_OPTIONS = [TYPE_SETTING_AUTO, ...TYPE_SET_IDS] as const;
-let sampleFonts: Promise<void> | undefined;
 
 /** One row per type set, with body, numbers and display specimens in its own faces. */
 function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
@@ -303,11 +303,23 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 		manrope: t('settings.fonts.manrope'),
 	};
 
-	// Register the specimen faces once across mounts; a failed load leaves their system fallback.
+	// The specimens draw their faces only once every face is registered: a native Text mounted
+	// before registration keeps its fallback typeface and never redraws (Codex on #3205). A failed
+	// load leaves the system fallback. expo-font skips faces already loaded, so a remount is instant.
+	const [facesReady, setFacesReady] = React.useState(false);
 	React.useEffect(() => {
-		sampleFonts ??= loadAsync(Object.values(FONT_FACES)).catch((error) => {
-			console.warn('Failed to load font samples', error);
-		});
+		let stale = false;
+		loadAsync(Object.values(FONT_FACES)).then(
+			() => {
+				if (!stale) setFacesReady(true);
+			},
+			(error) => {
+				if (!stale) console.warn('Failed to load font samples', error);
+			}
+		);
+		return () => {
+			stale = true;
+		};
 	}, []);
 
 	const handleFontsChange = React.useCallback(
@@ -335,6 +347,7 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 			>
 				{FONT_OPTIONS.map((id) => {
 					const set: ThemeType = TYPE_SETS[id === TYPE_SETTING_AUTO ? typeSetForTheme(theme) : id];
+					const drawn = facesReady ? set : SYSTEM_TYPE;
 					return (
 						<RadioGroupOption
 							key={id}
@@ -344,7 +357,7 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 							className="items-center py-2"
 							labelClassName="text-sm font-medium"
 							right={
-								<ThemeTraitsContext.Provider value={{ ...traits, type: set }}>
+								<ThemeTraitsContext.Provider value={{ ...traits, type: drawn }}>
 									<HStack className="ml-auto gap-3" testID={`settings-fonts-${id}-samples`}>
 										<Text className="text-foreground text-lg">Aa</Text>
 										<Text className="text-foreground text-lg" tabular>
@@ -352,7 +365,7 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 										</Text>
 										<Text
 											className={`text-foreground font-strong text-lg ${set.displayItalic ? 'italic' : ''}`}
-											style={fontFamilyStyle(set.display)}
+											style={fontFamilyStyle(drawn.display)}
 										>
 											Total
 										</Text>

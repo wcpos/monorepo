@@ -2,6 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
+import { loadAsync } from 'expo-font';
 import { Uniwind } from 'uniwind';
 
 import * as TextComponents from '@wcpos/components/text';
@@ -292,9 +293,25 @@ describe('the Fonts section', () => {
 		expect(getByTestId('saved-fonts').textContent).toBe('settings.saved');
 	});
 
-	it('draws instrument body, numeric and italic display specimens in their own faces', () => {
+	it('keeps the system faces until every face is registered', async () => {
+		let registered!: () => void;
+		jest.mocked(loadAsync).mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				registered = resolve;
+			})
+		);
+		const { getByTestId } = render(<ThemeSettings />);
+		const face = () =>
+			(getByTestId('settings-fonts-manrope-samples').children[0] as HTMLElement).style.fontFamily;
+		expect(face()).toBe('');
+		await act(async () => registered());
+		expect(face()).toContain('Manrope');
+	});
+
+	it('draws instrument body, numeric and italic display specimens in their own faces', async () => {
 		const text = jest.spyOn(TextComponents, 'Text');
 		const { getByTestId } = render(<ThemeSettings />);
+		await act(async () => {});
 		const samples = getByTestId('settings-fonts-instrument-samples').children;
 		expect((samples[0] as HTMLElement).style.fontFamily).toContain('DM Sans');
 		expect((samples[1] as HTMLElement).style.fontFamily).toContain('JetBrains Mono');
@@ -310,10 +327,11 @@ describe('the Fonts section', () => {
 		text.mockRestore();
 	});
 
-	it('draws Match theme samples in the theme set, independently of the saved choice', () => {
+	it('draws Match theme samples in the theme set, independently of the saved choice', async () => {
 		store.theme = 'market';
 		store.fonts = 'instrument';
 		const { getByTestId } = render(<ThemeSettings />);
+		await act(async () => {});
 		const samples = getByTestId('settings-fonts-auto-samples');
 		expect(samples.textContent).toBe('Aa12.50Total');
 		Array.from(samples.children).forEach((sample) => {
