@@ -3,8 +3,11 @@ import { RxDBBackend, TRANSLATION_VERSION } from './rxdb-backend';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-const itPinned = TRANSLATION_VERSION === 'next' ? it.skip : it;
-const itRolling = TRANSLATION_VERSION === 'next' ? it : it.skip;
+// Widened to string: on main the version is a CalVer literal and `=== 'next'` would be a
+// TypeScript no-overlap error (TS2367); the comparison still decides which cases run.
+const rolling = (TRANSLATION_VERSION as string) === 'next';
+const itPinned = rolling ? it.skip : it;
+const itRolling = rolling ? it : it.skip;
 
 function createBackend(options: { translationsState?: any } = {}) {
 	const backend = new RxDBBackend();
