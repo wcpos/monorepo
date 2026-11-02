@@ -78,6 +78,7 @@ export function Bar({
 		[wpCredentials]
 	);
 	const stores = useObservableState(source, []);
+	const allStores = room === 'sales' && scope.storeId === 0;
 	const directory = useRegisterDirectory(
 		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
 	);
@@ -91,7 +92,9 @@ export function Bar({
 		setLocked('');
 		const next = { ...scope, ...changes };
 		const destination =
-			next.storeId === store.id ? store : stores.find((row) => row.id === next.storeId);
+			(room === 'sales' && next.storeId === 0) || next.storeId === store.id
+				? store
+				: stores.find((row) => row.id === next.storeId);
 		const destinationZone = resolveDayTimezone(destination, site).timezone;
 		onScopeChange(
 			changes.storeId === undefined
@@ -155,7 +158,7 @@ export function Bar({
 									    Store · Register: the larger container first, as every line that names both reads. */}
 									<Text numberOfLines={1} className="text-foreground min-w-0 shrink font-semibold">
 										{stores.length > 1
-											? `${stores.find((row) => row.id === scope.storeId)?.name ?? store.name} · `
+											? `${allStores ? t('reports.all_stores') : (stores.find((row) => row.id === scope.storeId)?.name ?? store.name)} · `
 											: ''}
 										{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 											(scope.registerId && binding.registerId
@@ -176,9 +179,12 @@ export function Bar({
 								)}
 								{stores.length > 1 && (
 									<MenuRowGroup accessibilityLabel={t('common.store')}>
-										{stores.map((row) =>
+										{[
+											...(room === 'sales' ? [{ id: 0, name: t('reports.all_stores') }] : []),
+											...stores,
+										].map((row) =>
 											option(
-												`reports-store-${row.id}`,
+												`reports-store-${row.id === 0 ? 'all' : row.id}`,
 												row.name ?? '',
 												{
 													storeId: row.id,
@@ -186,15 +192,17 @@ export function Bar({
 													// register, or `unbound` on an unbound Free till); returning to it from another store
 													// restores the binding, so another store's register never rides along.
 													registerId:
-														row.id === store.id
-															? (scope.storeId ?? store.id) === store.id
-																? scope.registerId
-																: (binding.registerId ?? '')
-															: '',
+														row.id === 0
+															? ''
+															: row.id === store.id
+																? (scope.storeId ?? store.id) === store.id
+																	? scope.registerId
+																	: (binding.registerId ?? '')
+																: '',
 												},
-												row.id === store.id,
-												t('reports.other_stores'),
-												row.id === (scope.storeId ?? store.id)
+												row.id !== 0 && row.id === store.id,
+												row.id === 0 ? t('reports.all_stores') : t('reports.other_stores'),
+												row.id === 0 ? scope.storeId === 0 : row.id === (scope.storeId ?? store.id)
 											)
 										)}
 									</MenuRowGroup>
@@ -203,16 +211,18 @@ export function Bar({
 									<Text className="text-muted-foreground p-2">{t('common.register')}</Text>
 								)}
 								<MenuRowGroup accessibilityLabel={t('common.register')}>
-									{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map(
-										(row) =>
-											option(
-												`reports-register-${row.id || 'all'}`,
-												row.name,
-												{ registerId: row.id },
-												!!row.id && row.id === binding.registerId,
-												t('reports.other_registers'),
-												row.id === scope.registerId
-											)
+									{[
+										{ id: '', name: t('reports.all_registers') },
+										...(allStores ? [] : directory.registers),
+									].map((row) =>
+										option(
+											`reports-register-${row.id || 'all'}`,
+											row.name,
+											{ registerId: row.id },
+											!!row.id && row.id === binding.registerId,
+											t('reports.other_registers'),
+											row.id === scope.registerId
+										)
 									)}
 								</MenuRowGroup>
 								<ScopeHint locked={license?.isPro ? '' : locked} />

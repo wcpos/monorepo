@@ -136,7 +136,9 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const refundsHandle = useCollectionQueryHandle('refunds', refundsState);
 	const storeId = Number.isFinite(Number(state.filters.store))
 		? Number(state.filters.store)
-		: undefined;
+		: state.filters.store === 'woocommerce-pos'
+			? 0
+			: undefined;
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
 	const { wpCredentials, store, site } = useAppState();
 	const storesSource = React.useMemo(
@@ -166,7 +168,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const select = (next: ClosureScope) => {
 		const nextStoreId = next.storeId ?? storeId;
 		const nextStore =
-			nextStoreId === undefined || nextStoreId === store?.id
+			nextStoreId === undefined || nextStoreId === 0 || nextStoreId === store?.id
 				? store
 				: stores.find((row) => row.id === nextStoreId);
 		// A store switch must use the new zone before the query rerenders useStoreDay.

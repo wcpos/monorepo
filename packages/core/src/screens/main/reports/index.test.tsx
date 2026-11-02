@@ -252,7 +252,10 @@ jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
 		site: { timezone_string: 'UTC', gmt_offset: '0' },
-		store: mockStoreID === undefined ? undefined : { id: mockStoreID },
+		store:
+			mockStoreID === undefined
+				? undefined
+				: { id: mockStoreID, timezone: mockStoreID === 21 ? 'America/New_York' : 'UTC' },
 	}),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
@@ -780,3 +783,15 @@ it.each([false, true])(
 		expect(mockReadClosure).not.toHaveBeenCalled();
 	}
 );
+
+it('All stores writes the sentinel and keeps the bound store day', () => {
+	mockStoreID = 21;
+	mockNextStoreID = 0;
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('past-scope'));
+	expect(latestState().filters).toMatchObject({
+		store: 'woocommerce-pos',
+		dateRange: { from: '2026-07-14T04:00:00.000Z', to: '2026-07-15T03:59:59.999Z' },
+	});
+	expect(mockBarScope).toHaveBeenLastCalledWith(expect.objectContaining({ storeId: 0 }));
+});

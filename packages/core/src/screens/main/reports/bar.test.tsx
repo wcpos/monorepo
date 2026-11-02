@@ -491,3 +491,67 @@ it.each([
 	expect(change).not.toHaveBeenCalled();
 	expect(get).not.toHaveBeenCalled();
 });
+
+it('puts All stores first in Sales only and names its Free lock', () => {
+	const view = render(<Bar room="sales" scope={scope} onScopeChange={change} onBack={room} />);
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	const all = screen.getByTestId('reports-store-all');
+	expect(all.closest('[role="radiogroup"]')?.querySelector('[role="radio"]')).toBe(all);
+	expect(all.querySelector('[data-icon="lock"]')).toBeTruthy();
+	fireEvent.click(all);
+	expect(change).not.toHaveBeenCalled();
+	expect(screen.getByTestId('reports-lock-hint').textContent).toBe('All stores are in WCPOS Pro');
+	view.rerender(<Bar room="closures" scope={scope} onScopeChange={change} onBack={room} />);
+	expect(screen.queryByTestId('reports-store-all')).toBeNull();
+});
+it('selects All stores, uses the bound day, collapses registers, and restores store rules', () => {
+	isPro = true;
+	function Browse() {
+		const [selected, select] = React.useState<ClosureScope>({
+			...scope,
+			storeId: 2,
+			from: '2026-09-17',
+			to: '2026-09-17',
+		});
+		return (
+			<Bar
+				room="sales"
+				scope={selected}
+				onBack={room}
+				onScopeChange={(next) => {
+					change(next);
+					select(next);
+				}}
+			/>
+		);
+	}
+	render(<Browse />);
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	fireEvent.click(screen.getByTestId('reports-store-all'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, storeId: 0, registerId: '' });
+	expect(screen.getByTestId('reports-scope').textContent).toBe('All stores · All registers');
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	expect(screen.getByTestId('reports-store-all').getAttribute('aria-checked')).toBe('true');
+	expect(screen.getAllByTestId(/^reports-register-/)).toHaveLength(1);
+	fireEvent.click(screen.getByTestId('reports-store-2'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, storeId: 2, registerId: '' });
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	expect(screen.getByTestId('reports-register-remote')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('reports-store-all'));
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	fireEvent.click(screen.getByTestId('reports-store-1'));
+	expect(change).toHaveBeenLastCalledWith(scope);
+});
+
+it('does not offer All stores on a single-store site', () => {
+	const spy = jest
+		.spyOn(session.wpCredentials, 'populate$')
+		.mockReturnValue(of([{ id: 1, name: 'Shop' }]));
+	try {
+		render(<Bar room="sales" scope={scope} onScopeChange={change} onBack={room} />);
+		fireEvent.click(screen.getByTestId('reports-scope'));
+		expect(screen.queryByTestId('reports-store-all')).toBeNull();
+	} finally {
+		spy.mockRestore();
+	}
+});

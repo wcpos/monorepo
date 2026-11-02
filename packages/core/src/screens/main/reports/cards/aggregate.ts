@@ -238,6 +238,21 @@ export function registers(orders: ReportOrder[], totals: Totals) {
 		.map((row) => ({ ...row, share: totals.total ? row.amount / totals.total : 0 }))
 		.sort((a, b) => b.amount - a.amount);
 }
+export function stores(orders: ReportOrder[], totals: Totals) {
+	const parts = new Map<string, { key: string; amount: number; orders: number }>();
+	for (const order of orders) {
+		const storeId = wooMetaCarrier.readIdentity(order.meta_data).storeId;
+		const key =
+			order.created_via !== 'woocommerce-pos' ? 'online' : storeId ? String(storeId) : 'unassigned';
+		const part = parts.get(key) ?? { key, amount: 0, orders: 0 };
+		part.amount += Number(order.total || 0);
+		part.orders++;
+		parts.set(key, part);
+	}
+	return [...parts.values()]
+		.map((row) => ({ ...row, share: totals.total ? row.amount / totals.total : 0 }))
+		.sort((a, b) => b.amount - a.amount);
+}
 export function cashiers(totals: Totals) {
 	const parts = new Map<string, { key: string; amount: number; orders: number }>();
 	for (const row of totals.userStoreArray) {

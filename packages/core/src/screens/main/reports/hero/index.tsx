@@ -7,7 +7,11 @@ import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import {
+	observeCredentialStores,
+	observeSiteCredentials,
+	PENDING_USER_DB_READ,
+} from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
@@ -241,18 +245,30 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const registerId = useQueryState<'orders'>().filters.register;
+	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
 	const names = useRegisterNames(storeId),
 		namesLoaded = useRegisterNamesReady(storeId);
 	const binding = useRegisterBinding();
-	const register = registerId
-		? names[registerId] ||
-			(binding.registerId === registerId ? binding.registerName : '') ||
-			t('common.unknown')
-		: t('reports.all_registers');
+	const { site, wpCredentials } = useStoreSession();
+	const storesSource = React.useMemo(
+		() =>
+			observeCredentialStores(wpCredentials).pipe(
+				filter((value) => value !== PENDING_USER_DB_READ)
+			),
+		[wpCredentials]
+	);
+	const storeDirectory = useObservableState(storesSource);
+	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
+	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
+	const register = allStores
+		? t('reports.all_stores')
+		: registerId
+			? names[registerId] ||
+				(binding.registerId === registerId ? binding.registerName : '') ||
+				t('common.unknown')
+			: t('reports.all_registers');
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
-	const { site } = useStoreSession();
 	const source = React.useMemo(
 		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
 		[site]

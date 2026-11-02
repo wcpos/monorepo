@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { BehaviorSubject, type Observable } from 'rxjs';
 
+import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+
 import { calculateTotals } from '../report/utils';
 
 import type { LocalProduct } from './aggregate';
@@ -9,8 +11,12 @@ import type { ReportOrder, ReportsData } from '../context';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeSiteCredentials: () => mockCredentials,
+	observeCredentialStores: () => mockStores,
 }));
 
+export const mockStores = new BehaviorSubject<
+	{ id: number; name: string }[] | typeof PENDING_USER_DB_READ | undefined
+>([]);
 export const mockCategories = new BehaviorSubject<
 	{ id: number; name: string; parent: number }[] | undefined
 >([]);
@@ -21,6 +27,7 @@ export const mockCredentials = new BehaviorSubject<
 const mockSite = {};
 const mockRuntime = { engine: {}, locale: 'en' };
 export const mockState = {
+	storeFilter: '9' as string | undefined,
 	register: undefined as string | undefined,
 	names: {} as Record<string, string>,
 	namesReady: true,
@@ -95,7 +102,7 @@ jest.mock('../../../../contexts/theme', () => ({
 	useTheme: () => ({ roomy: mockState.screenSize === 'lg' }),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ site: mockSite, store: mockState.store }),
+	useStoreSession: () => ({ site: mockSite, store: mockState.store, wpCredentials: mockSite }),
 	useAppState: () => ({ store: mockState.store }),
 }));
 jest.mock('@wcpos/query', () => ({
@@ -174,7 +181,9 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('../../../../query', () => ({
-	useQueryState: () => ({ filters: { register: mockState.register } }),
+	useQueryState: () => ({
+		filters: { register: mockState.register, store: mockState.storeFilter },
+	}),
 	// The panel reads its lanes from the handles the tests drive.
 	useQueryHandleFields: (...args: unknown[]) =>
 		jest.requireActual('@wcpos/query/query-state').useQueryHandleFields(...args),
