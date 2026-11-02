@@ -13,12 +13,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import {
-	type APIRequestContext,
-	type ConsoleMessage,
-	expect,
-	request as playwrightRequest,
-} from '@playwright/test';
+import { type ConsoleMessage, expect, request as playwrightRequest } from '@playwright/test';
 
 import {
 	closeOrderSheet,
@@ -29,6 +24,7 @@ import {
 	openOrderSheet,
 	storeRequestOptions,
 } from './fixtures';
+import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
 import {
 	checkoutSurfaceLocator,
 	createPushOrdersResponseMatcher,
@@ -51,20 +47,6 @@ import {
 	searchAndWaitForServer,
 	type SearchProbe,
 } from './search-probe';
-
-async function couponRequest(
-	request: APIRequestContext,
-	method: 'post' | 'delete',
-	storeUrl: string,
-	id: number | undefined,
-	options: Record<string, unknown>
-) {
-	const base = storeUrl.replace(/\/+$/, '');
-	const path = id === undefined ? 'coupons' : `coupons/${id}`;
-	const pretty = await request[method](`${base}/wp-json/wc/v3/${path}`, options);
-	if (pretty.status() !== 404) return pretty;
-	return request[method](`${base}/?rest_route=/wc/v3/${path}`, options);
-}
 
 type CouponProbe = { code: string; id: number; product: SearchProbe };
 
@@ -92,6 +74,7 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				writer = await productWriterAuthorization(request, storeUrl);
 				if (!writer) throw new Error('Configured coupon writer did not authorize');
 				writerAuth = storeRequestOptions(writer);
+				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
 				// The bug's trigger is a coupon discount whose shortest JS string has fewer than
 				// six decimals (the client wrote "7.5", the server acked "7.500000"). A percent
 				// coupon discounts the EX-TAX price, so on a tax-inclusive store a taxable 25.00
