@@ -70,6 +70,7 @@ export type StoreDocument = RxDocument<StoreDocumentType>;
 export type StoreCollection = RxCollection<StoreDocumentType>;
 const stores: RxCollectionCreator<StoreDocumentType> = {
 	schema: storeSchema,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
 };
 
 /**

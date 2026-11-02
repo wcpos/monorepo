@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 
+import { loadAsync } from 'expo-font';
 import { Uniwind, useUniwind } from 'uniwind';
 
 import {
@@ -13,7 +14,21 @@ import {
 } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { useIsPhone } from '@wcpos/components/lib/device';
-import { iconSetForTheme } from '@wcpos/components/lib/themes';
+import { FONT_FACES, fontFamilyStyle } from '@wcpos/components/lib/fonts';
+import {
+	ThemeTraitsContext,
+	type ThemeType,
+	useThemeTraits,
+} from '@wcpos/components/lib/theme-traits';
+import {
+	iconSetForTheme,
+	TYPE_SET_IDS,
+	TYPE_SETS,
+	TYPE_SETTING_AUTO,
+	typeSetForTheme,
+	type TypeSetId,
+} from '@wcpos/components/lib/themes';
+import { Text } from '@wcpos/components/text';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
@@ -269,6 +284,89 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	);
 }
 
+const FONT_OPTIONS = [TYPE_SETTING_AUTO, ...TYPE_SET_IDS] as const;
+let sampleFonts: Promise<void> | undefined;
+
+/** One row per type set, with body, numbers and display specimens in its own faces. */
+function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
+	const { store } = useStoreSession();
+	const markSaved = useMarkSaved();
+	const fonts = useDocField(store, (latest) => latest.fonts) ?? TYPE_SETTING_AUTO;
+	const theme = useDocField(store, (latest) => latest.theme);
+	const traits = useThemeTraits();
+	const labels: Record<TypeSetId | typeof TYPE_SETTING_AUTO, string> = {
+		auto: t('settings.fonts.auto'),
+		system: t('settings.fonts.system'),
+		instrument: t('settings.fonts.instrument'),
+		grotesk: t('settings.fonts.grotesk'),
+		fraunces: t('settings.fonts.fraunces'),
+		manrope: t('settings.fonts.manrope'),
+	};
+
+	// Register the specimen faces once across mounts; a failed load leaves their system fallback.
+	React.useEffect(() => {
+		sampleFonts ??= loadAsync(Object.values(FONT_FACES)).catch((error) => {
+			console.warn('Failed to load font samples', error);
+		});
+	}, []);
+
+	const handleFontsChange = React.useCallback(
+		async (value: TypeSetId | typeof TYPE_SETTING_AUTO) => {
+			try {
+				const result = await patchStoreSettings(store, { fonts: value }, t);
+				if (result) markSaved(['fonts']);
+			} catch (error) {
+				console.error('Failed to persist selected fonts', error);
+			}
+		},
+		[t, store, markSaved]
+	);
+
+	return (
+		<SettingsSection title={t('settings.fonts')}>
+			<PropertyRow stacked name="fonts" label={t('settings.fonts.description')} />
+			<RadioGroup
+				value={fonts}
+				onValueChange={(value) => {
+					void handleFontsChange(value as TypeSetId | typeof TYPE_SETTING_AUTO);
+				}}
+				aria-label={t('settings.fonts')}
+				className="gap-0 pt-2"
+			>
+				{FONT_OPTIONS.map((id) => {
+					const set: ThemeType = TYPE_SETS[id === TYPE_SETTING_AUTO ? typeSetForTheme(theme) : id];
+					return (
+						<RadioGroupOption
+							key={id}
+							value={id}
+							testID={`settings-fonts-${id}`}
+							label={labels[id]}
+							className="items-center py-2"
+							labelClassName="text-sm font-medium"
+							right={
+								<ThemeTraitsContext.Provider value={{ ...traits, type: set }}>
+									<HStack className="ml-auto gap-3" testID={`settings-fonts-${id}-samples`}>
+										<Text className="text-foreground text-lg">Aa</Text>
+										<Text className="text-foreground text-lg" tabular>
+											12.50
+										</Text>
+										<Text
+											className={`text-foreground font-strong text-lg ${set.displayItalic ? 'italic' : ''}`}
+											style={fontFamilyStyle(set.display)}
+										>
+											Total
+										</Text>
+									</HStack>
+								</ThemeTraitsContext.Provider>
+							}
+						/>
+					);
+				})}
+			</RadioGroup>
+		</SettingsSection>
+	);
+}
+
 /**
  * Theme Settings Component
  *
@@ -388,6 +486,7 @@ function ThemeSettingsContent() {
 			</SettingsSection>
 			<ScaleSection t={t} />
 			<IconsSection t={t} />
+			<FontsSection t={t} />
 		</VStack>
 	);
 }

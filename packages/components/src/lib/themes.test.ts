@@ -1,14 +1,18 @@
-import { DEFAULT_TRAITS } from './theme-traits';
+import { DEFAULT_TRAITS, SYSTEM_TYPE } from './theme-traits';
 import {
-	familiesForTheme,
+	familiesForType,
 	hasDarkRail,
 	iconSetForTheme,
 	isLightTheme,
 	THEME_ICON_SET,
 	THEME_TRAITS,
 	THEME_TYPE,
+	THEME_TYPE_SET,
 	THEMES,
 	traitsForTheme,
+	TYPE_SET_IDS,
+	TYPE_SETS,
+	typeSetForTheme,
 } from './themes';
 import { DEFAULT_ICON_SET } from '../icon/sets';
 
@@ -21,16 +25,27 @@ it.each(THEMES)('defines type for %s', (theme) => {
 	expect(THEME_TYPE[theme]).toBeDefined();
 });
 
-it.each([
-	['paper', ['DM Sans', 'JetBrains Mono', 'Instrument Serif']],
-	['bold', ['Space Grotesk']],
-	['warm', ['DM Sans', 'Fraunces']],
-	['market', ['Manrope']],
-	['light', []],
-	['nope', []],
-	[undefined, []],
-])('lists only the distinct families for %p', (theme, families) => {
-	expect(familiesForTheme(theme as string | undefined)).toEqual(families);
+it.each(THEMES)('maps %s to its type set', (theme) => {
+	expect(TYPE_SET_IDS).toContain(THEME_TYPE_SET[theme]);
+	expect(THEME_TYPE[theme]).toBe(TYPE_SETS[THEME_TYPE_SET[theme]]);
+});
+
+it.each(['system', undefined, 'nope', 'toString'])('uses system type for %p', (theme) => {
+	expect(typeSetForTheme(theme)).toBe('system');
+});
+
+it('keeps system type and de-duplicates faces in body, numbers, display order', () => {
+	expect(TYPE_SETS.system).toBe(SYSTEM_TYPE);
+	expect(familiesForType(SYSTEM_TYPE)).toEqual([]);
+	expect(familiesForType({ body: 'DM Sans', num: 'DM Sans', display: 'Fraunces' })).toEqual([
+		'DM Sans',
+		'Fraunces',
+	]);
+	expect(familiesForType(TYPE_SETS.instrument)).toEqual([
+		'DM Sans',
+		'JetBrains Mono',
+		'Instrument Serif',
+	]);
 });
 
 it.each(THEMES)('maps the drawn theme %s to an icon family', (theme) => {

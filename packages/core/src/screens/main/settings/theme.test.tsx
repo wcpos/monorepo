@@ -4,11 +4,14 @@ import * as React from 'react';
 import { act, fireEvent, render } from '@testing-library/react';
 import { Uniwind } from 'uniwind';
 
+import * as TextComponents from '@wcpos/components/text';
+
 import { themeColumns, ThemeSettings } from './theme';
 
 jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../jest/property-row.test-utils')
 );
+jest.mock('expo-font', () => ({ loadAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
@@ -77,7 +80,7 @@ jest.mock('@wcpos/components/radio-group', () => {
 });
 
 const mockLocalPatch = jest.fn().mockResolvedValue({});
-const store: { theme: string; scale?: string; icons?: string } = { theme: 'light' };
+const store: { theme: string; scale?: string; icons?: string; fonts?: string } = { theme: 'light' };
 const mockIconSets = ['tabler', 'hugeicons', 'phosphor'];
 
 let mockTheme = 'light';
@@ -115,6 +118,7 @@ beforeEach(() => {
 	store.theme = 'light';
 	store.scale = undefined;
 	store.icons = undefined;
+	store.fonts = undefined;
 	mockTheme = 'light';
 	mockAdaptive = false;
 });
@@ -245,6 +249,76 @@ describe('the Icons section', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { icons: 'hugeicons' } });
 		expect(getByTestId('saved-icons').textContent).toBe('settings.saved');
+	});
+});
+
+describe('the Fonts section', () => {
+	const options = ['auto', 'system', 'instrument', 'grotesk', 'fraunces', 'manrope'];
+
+	it('is a titled section whose description keys the list', () => {
+		const { getByRole } = render(<ThemeSettings />);
+		const section = getByRole('region', { name: 'settings.fonts' });
+		expect(section.textContent).toContain('settings.fonts.description');
+		expect(section.querySelector('[data-testid="settings-fonts-auto"]')).not.toBeNull();
+	});
+
+	it('offers Match theme first and selected by default, followed by the five sets', () => {
+		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
+		expect(
+			getAllByTestId(/^settings-fonts-(?!.*-samples$)/).map((row) => row.dataset.testid)
+		).toEqual(options.map((id) => `settings-fonts-${id}`));
+		expect(
+			getByRole('radiogroup', { name: 'settings.fonts' }).querySelectorAll('[role="radio"]')
+		).toHaveLength(6);
+		options.forEach((id) => {
+			const row = getByTestId(`settings-fonts-${id}`);
+			expect(row.getAttribute('aria-checked')).toBe(String(id === 'auto'));
+			expect(row.textContent).toBe(`settings.fonts.${id}`);
+		});
+	});
+
+	it('shows the stored set', () => {
+		store.fonts = 'grotesk';
+		const { getByTestId } = render(<ThemeSettings />);
+		expect(getByTestId('settings-fonts-grotesk').getAttribute('aria-checked')).toBe('true');
+		expect(getByTestId('settings-fonts-auto').getAttribute('aria-checked')).toBe('false');
+	});
+
+	it.each(options)('persists %s through localPatch and marks fonts saved', async (id) => {
+		store.fonts = id === 'auto' ? 'manrope' : 'auto';
+		const { getByTestId } = render(<ThemeSettings />);
+		await act(async () => fireEvent.click(getByTestId(`settings-fonts-${id}`)));
+		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { fonts: id } });
+		expect(getByTestId('saved-fonts').textContent).toBe('settings.saved');
+	});
+
+	it('draws instrument body, numeric and italic display specimens in their own faces', () => {
+		const text = jest.spyOn(TextComponents, 'Text');
+		const { getByTestId } = render(<ThemeSettings />);
+		const samples = getByTestId('settings-fonts-instrument-samples').children;
+		expect((samples[0] as HTMLElement).style.fontFamily).toContain('DM Sans');
+		expect((samples[1] as HTMLElement).style.fontFamily).toContain('JetBrains Mono');
+		expect((samples[2] as HTMLElement).style.fontFamily).toContain('Instrument Serif');
+		// RN Web drops className without Uniwind's transform; inspect the real Text's input.
+		expect(text.mock.calls.map(([props]) => props)).toContainEqual(
+			expect.objectContaining({
+				children: 'Total',
+				className: expect.stringMatching(/\bitalic\b/),
+				style: expect.objectContaining({ fontFamily: expect.stringContaining('Instrument Serif') }),
+			})
+		);
+		text.mockRestore();
+	});
+
+	it('draws Match theme samples in the theme set, independently of the saved choice', () => {
+		store.theme = 'market';
+		store.fonts = 'instrument';
+		const { getByTestId } = render(<ThemeSettings />);
+		const samples = getByTestId('settings-fonts-auto-samples');
+		expect(samples.textContent).toBe('Aa12.50Total');
+		Array.from(samples.children).forEach((sample) => {
+			expect((sample as HTMLElement).style.fontFamily).toContain('Manrope');
+		});
 	});
 });
 
