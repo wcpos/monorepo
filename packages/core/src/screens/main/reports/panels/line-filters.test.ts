@@ -48,6 +48,16 @@ it('offers first categories and their ancestors once, sorted by their full chain
 	]);
 	expect(categoryChoices([products[0]], tree, ' / ', 'Unknown')).toHaveLength(2);
 });
+it('labels a category the local tree has not cached from the product, never blank', () => {
+	const uncached: LocalProduct[] = [
+		{ id: 5, categories: [{ id: 77, name: 'Pop-up' }] },
+		{ id: 6, categories: [{ id: 78 }] },
+	];
+	expect(categoryChoices(uncached, tree, ' / ', 'Unknown')).toEqual([
+		{ value: '77', label: 'Pop-up' },
+		{ value: '78', label: 'Unknown' },
+	]);
+});
 it('offers only first brands, deduplicated and sorted by label', () => {
 	expect(brandChoices(products)).toEqual([
 		{ value: '1', label: 'Alpha' },

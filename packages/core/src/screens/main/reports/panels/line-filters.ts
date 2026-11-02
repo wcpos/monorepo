@@ -10,14 +10,21 @@ export function categoryChoices(
 	unknown: string
 ): { value: string; label: string }[] {
 	const ids = new Set<number>();
+	// The product carries its category's name: a category the local tree has not cached (an
+	// empty local read passes the panel's readiness gate) still labels its row, never a blank one.
+	const embedded = new Map<number, string>();
 	for (const product of products) {
-		const id = product.categories?.[0]?.id;
-		if (id == null) continue;
-		ids.add(id);
-		for (const node of categoryChain(id, tree)) ids.add(node.id);
+		const category = product.categories?.[0];
+		if (category?.id == null) continue;
+		ids.add(category.id);
+		if (category.name) embedded.set(category.id, category.name);
+		for (const node of categoryChain(category.id, tree)) ids.add(node.id);
 	}
 	return [...ids]
-		.map((id) => ({ value: String(id), label: chainLabel(id, tree, separator, unknown) }))
+		.map((id) => ({
+			value: String(id),
+			label: chainLabel(id, tree, separator, unknown) || embedded.get(id) || unknown,
+		}))
 		.sort((a, b) => a.label.localeCompare(b.label));
 }
 export function brandChoices(products: LocalProduct[]): { value: string; label: string }[] {
