@@ -452,6 +452,16 @@ test("gamut mapping matches Chromium's rendered pixels", () => {
 // Text contrast 4.5:1 (CODING_STANDARDS § Design 7). The light theme's --ok read 4.16:1 under
 // its own success-foreground at L 0.55; every success green is drawn from it.
 const TEXT_CONTRAST = 4.5;
+// Market's primary is the mockup's coral fill, kept below the floor on Paul's word (2026-11-02,
+// market-commit-button-2026-10-30.html, "use the colour as we had in the mockup"): white words on it
+// read 2.96:1 and it reads 3.08:1 as ink on card. The three primary pairs pin that value for Market
+// instead of the floor, so a later "fix" to 4.5:1 fails here and reads why.
+const MARKET_COMMIT_CORAL = 'oklch(0.686 0.205 34)';
+const MARKET_CORAL_PAIRS = [
+	'primary on card',
+	'primary on background',
+	'primary-foreground on primary',
+];
 // Warning washes appear in register-count, legacy-tab, Badge, ListItem, Avatar
 // and log-view; destructive/10 with destructive words appears in legacy-tab and log-view.
 for (const name of themeNames) {
@@ -514,6 +524,14 @@ for (const name of themeNames) {
 			const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
 			assert.ok(body, `Missing ${name} theme`);
 			if (ground === 'price-chip' && themeToken(body, ground) === 'transparent') return;
+			if (name === 'market' && MARKET_CORAL_PAIRS.includes(`${text} on ${ground}`)) {
+				assert.equal(
+					themeToken(body, 'primary'),
+					MARKET_COMMIT_CORAL,
+					'Market keeps the mockup coral'
+				);
+				return;
+			}
 			const ratio = contrast(themeToken(body, text), themeToken(body, ground));
 			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${text} on ${ground} is ${ratio.toFixed(2)}:1`);
 		});

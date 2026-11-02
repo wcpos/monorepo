@@ -8,8 +8,10 @@ export const TINTS = [
 	'bg-tile-tint-5',
 ] as const;
 // The two cards under a stacked tile, inside the 8 px the two `m-1` margins leave between tiles.
+// They take the theme's tile radius like the card above them: a fixed `rounded-lg` peeked out
+// as 8 px corners under Bold money's 20 px ones (Paul, 2026-11-02).
 export const NEAR = { top: 3, left: 3, right: -3, bottom: -3 };
 export const FAR = { top: 6, left: 6, right: -6, bottom: -6, opacity: 0.6 };
-export const CARD = 'bg-card border-border absolute rounded-lg border';
+export const CARD = 'bg-card border-border absolute rounded-tile border';
 export const CIRCLE =
 	'bg-card border-border size-6 items-center justify-center rounded-full border';

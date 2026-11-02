@@ -379,7 +379,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 export function PosterPlaceholder({ testID, grow }: { testID?: string; grow?: boolean }) {
 	return (
 		<View
-			className={`bg-muted m-1 ${grow ? 'grow' : 'flex-1'} rounded-lg`}
+			className={`bg-muted m-1 ${grow ? 'grow' : 'flex-1'} rounded-tile`}
 			aria-busy
 			testID={testID}
 		>
