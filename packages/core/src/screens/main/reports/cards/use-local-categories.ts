@@ -7,6 +7,7 @@ import { observeLocalRecordsById, useQueryRuntime } from '@wcpos/query';
 
 import type { CategoryTree, LocalCategory } from '../margin';
 
+const ANCESTOR_ROUNDS = 10;
 export function useLocalCategories(ids: number[]) {
 	const runtime = useQueryRuntime();
 	const key = [...new Set(ids)].sort((a, b) => a - b).join(',');
@@ -33,7 +34,10 @@ export function useLocalCategories(ids: number[]) {
 							)
 						),
 					];
-					return round < 3 ? read(parents, tree, round + 1) : of(tree);
+					// Ten rounds, the same bound as `categoryChain`: a chain deeper than the rounds would
+					// lose its root from the rollup and the filter choices, and a filter on an offered
+					// ancestor would drop descendants whose middle was never read.
+					return round < ANCESTOR_ROUNDS ? read(parents, tree, round + 1) : of(tree);
 				})
 			);
 		};
