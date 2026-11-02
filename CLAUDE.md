@@ -128,12 +128,15 @@ E2E specs must pass against **any** store — never against one store's remember
 
 ## Branch lanes
 
-This repo has two permanent trunks:
+Three trunks during the 2.0 beta period (from the 2.0 promotion in November 2026 until 2.0 GA):
 
-- **`main`** — the **stable**, released line (1.11.x now: the app, the plugins and the web lane `@1.11`; patches ship from here).
-- **`next`** — the **in-development** major (2.0, versioned `2.0.0` in `apps/main/package.json`).
+- **`1.11.x`** — the stable patch line; this branch. A fix for a merchant on 1.11 branches from `origin/1.11.x` and targets `1.11.x`; a patch release (`1.11.N`) is cut from its tip. It has no dev site (Paul, 2026-11-01: *"1.11.x does not get a dev site"*): a patch is verified by its unit lanes plus a local run against a 1.11 wp-env store. Nothing flows from `1.11.x` into `main`; a fix that 2.0 also needs is re-applied to `main` in its own PR.
+- **`main`** — 2.0 (beta, then GA). dev-free and dev-pro run it.
+- **`next`** — frozen until 2.0 GA; nothing targets it.
 
-Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
+A 1.11 web bundle is published from a `1.11.x` SHA: `publish-web-bundle.yml` with `monorepo_ref=<SHA>`, `bundle_branch=main`, `allow_frozen_lane=true` and the override phrase (there is no push Deploy for a `1.11.x` SHA, so the bundle gate can never be green), then `scripts/release/tag-web-bundle.sh <web-bundle-sha> --allow-frozen-lane` (the `@1.11` lane is frozen once `@2.0` exists). The push Deploy and both E2E suites do not run for `1.11.x`.
+
+Never commit directly to a trunk — branch off the right one in a worktree and target the PR's base at the same lane. When the lane is not explicit, ask "1.11.x or main?" rather than defaulting.
 
 ### Web bundle ref per lane (jsDelivr)
 

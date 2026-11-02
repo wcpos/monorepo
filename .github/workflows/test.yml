@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
   push:
-    branches: [main, next]
+    branches: [main, next, 1.11.x]
 
 permissions:
   contents: read
@@ -36,7 +36,7 @@ jobs:
     # turbo-driven; a healthy run is ~10 min (lint + typecheck + script tests + translations). On 2026-09-02 a wedged Lint held the Merge Gate for its whole 1h14 budget (PR #1787, run 33684523571).
     timeout-minutes: 30
     needs: changes
-    if: needs.changes.outputs.lint == 'true' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next')
+    if: needs.changes.outputs.lint == 'true' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || github.ref == 'refs/heads/1.11.x')
     steps:
       - name: "\U0001F3D7 Setup repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
