@@ -179,7 +179,10 @@ const NONE = [] as const;
 
 function ThemedSystemBars({ stripShown }: { stripShown: boolean }) {
 	const { theme } = useUniwind();
-	return <SystemBars style={stripShown || isLightTheme(theme) ? 'dark' : 'light'} />;
+	const themed = isLightTheme(theme) ? 'dark' : 'light';
+	// Only the status bar sits on the strip (the amber is light in every theme); the Android
+	// navigation bar still sits on the page, so it keeps the theme's glyphs (Codex, #3204).
+	return <SystemBars style={{ statusBar: stripShown ? 'dark' : themed, navigationBar: themed }} />;
 }
 
 function DrawerLayoutContent() {
