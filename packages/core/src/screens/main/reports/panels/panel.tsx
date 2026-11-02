@@ -288,12 +288,15 @@ function DetailPanelContent() {
 		count: formats.quantity(selectedOrders.length),
 		total: formats.money(totals.total),
 	};
-	const productStatus = {
-		n: formats.quantity(spec.rows.length),
-		total: spec.total[spec.keys.indexOf('amount')],
-		k: status.n,
-		m: status.m,
-	};
+	// Read only while a filter is on: a spec a test stubs without rows must not throw here.
+	const productStatus = filtering
+		? {
+				n: formats.quantity(spec.rows.length),
+				total: spec.total[spec.keys.indexOf('amount')],
+				k: status.n,
+				m: status.m,
+			}
+		: status;
 	const exportCsv = async () => {
 		if (busy) return;
 		setBusy(true);
