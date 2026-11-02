@@ -20,10 +20,18 @@ beforeEach(() => {
 	] as ReportOrder[]);
 });
 // A slot left behind when off, dropping unbranded sales, or concealing a missing join breaks these.
-it('absent when the feature is off', () => {
+it('absent when the feature is off and no product carries a brand', () => {
 	setOrders([{ uuid: 'a', total: '10' }] as ReportOrder[]);
 	render(<PeriodSection />);
 	expect(screen.queryByTestId('card-brands')).toBeNull();
+});
+it('present from a branded product alone, with the feature off', () => {
+	setOrders([
+		{ uuid: 'a', total: '10', line_items: [{ product_id: 1, total: '10', quantity: 1 }] },
+	] as ReportOrder[]);
+	mockProducts.next([{ id: 1, brands: [{ id: 2, name: 'Acme' }] }]);
+	render(<PeriodSection />);
+	expect(screen.getByTestId('card-brands-donut-row-2').textContent).toContain('Acme');
 });
 it('No brand and the empty line when no product has a brand', () => {
 	render(<PeriodSection />);
