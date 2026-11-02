@@ -564,6 +564,12 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 * including its echoed intent, not just the client's discount calculation.
 	 * Per-rate taxes live on `line_items`, not `coupon_lines`.
 	 * See wcpos/roadmap#91, woocommerce-pos#1927, monorepo#1932.
+	 *
+	 * WooCommerce allocates a coupon in whole cents per line, so the discounted base is always a
+	 * whole-cent amount and a rate that divides it evenly (dev-free: one 10% rate on a 25.00 probe
+	 * product → 2.25) leaves every per-rate tax whole and the discriminating guard NOT COVERED.
+	 * The 9.99 misc line (0.899 at 10%, 1.798 at 20%) keeps one sub-cent tax on the sale under
+	 * any whole-percent rate, so the rounding leg is exercised on every lane (2026-11-02).
 	 */
 	liveTest(
 		'a percent quick discount is a coupon line: pro-rata across a mixed taxable / non-taxable cart',
@@ -571,6 +577,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
+			await addMiscProduct(page, ADVERSARIAL.miscProduct);
 			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
 			await addQuickDiscount(page, '10', true);
 			await stampRunLabel(page, label);
@@ -599,6 +606,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
+			await addMiscProduct(page, ADVERSARIAL.miscProduct);
 			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
 			await addQuickDiscount(page, ADVERSARIAL.fee);
 			await stampRunLabel(page, label);

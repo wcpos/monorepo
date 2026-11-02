@@ -190,7 +190,9 @@ test.describe('Orders Page (Pro)', () => {
 		const screen = await navigateToOrders(page);
 		const createdRow = screen.getByTestId(`data-table-row-${uuid}`);
 		await expect(createdRow).toBeVisible({ timeout: 30_000 });
-		await createdRow.click();
+		// On a fine pointer the row is no press target: the actions caret is the one control that
+		// opens the order (#2993, Paul 2026-10-27; `orders/cells/actions.tsx`).
+		await createdRow.getByTestId('order-open-button').click();
 
 		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByTestId('order-modal-delete')).toBeVisible({ timeout: 15_000 });

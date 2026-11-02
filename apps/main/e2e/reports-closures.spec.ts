@@ -459,7 +459,8 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 	},
 });
 
-async function openClosures(page: Page) {
+// Sales is the same page on both plans: the till strip, the scope strip, the hero and the cards.
+async function walkSales(page: Page) {
 	if ((page.viewportSize()?.width ?? 0) < 640) {
 		await page.getByTestId('pos-drawer-open-button').first().click();
 	}
@@ -473,9 +474,11 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chip-status').click();
 	await expect(page.getByTestId('hero-status-menu')).toBeVisible();
 	await page.getByTestId('hero-status-all').click();
-	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/border-primary/);
+	// A selected Chip is a tinted block (#3068, Paul 2026-10-29): `bg-selected border-selected`,
+	// never a primary border. The class is the only selection signal the chip exposes.
+	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/\bborder-selected\b/);
 	await page.getByTestId('hero-chip-status-clear').click();
-	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/border-primary/);
+	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/\bborder-selected\b/);
 	await page.getByTestId('hero-chip-compare').click();
 	await expect(page.getByTestId('hero-compare-menu')).toBeVisible();
 	await page.getByTestId('hero-compare-yesterday').click();
@@ -485,8 +488,9 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chart-toggle-hour').click();
 	await expect(page.getByTestId('hero-chart-toggle-hour')).toHaveAttribute('aria-checked', 'true');
 	await expect(page.getByTestId('hero-chart-comparison-total')).toHaveCount(0);
-	await expect(page.getByTestId('reports-period-title')).toBeVisible();
-	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
+	// #3098 put one scope strip above every card and dropped the period title; the
+	// period section is the anchor now (cards/index.test.tsx pins the title's absence).
+	await expect(page.getByTestId('reports-period-section')).toBeVisible();
 	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
 	// The refund amount is zero regardless of store currency or locale.
@@ -495,20 +499,21 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
 	// No COGS on the stub order; its custom line joins no catalogue product.
 	await expect(page.getByTestId('card-brands')).toHaveCount(0);
+	// A non-Orders panel is the report document's preview over its print footer (panels/panel.tsx,
+	// PrintSheetInner); the rows are drawn inside the document, so the panel itself is the anchor.
 	await page.getByTestId('card-products-open').click();
-	await expect(page.getByTestId('detail-products')).toBeVisible();
-	await expect(page.getByTestId('detail-products-head-cost')).toHaveCount(0);
+	await expect(page.getByTestId('detail-panel')).toBeVisible();
 	if ((page.viewportSize()?.width ?? 0) < 640) await page.getByTestId('detail-panel-back').click();
 	else await page.getByTestId('detail-panel-close').click();
 	await page.getByTestId('card-taxes-open').click();
-	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
+	await expect(page.getByTestId('detail-panel')).toBeVisible();
 	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
 	// The stub has no templates route: Print must be usable or visibly explain its wait.
 	await expect(async () => {
 		const print = page.getByTestId('detail-panel-print');
 		await expect(print).toBeVisible();
 		if (await print.isEnabled()) return;
-		const waiting = page.getByTestId('detail-panel-print-waiting');
+		const waiting = page.getByTestId('detail-panel').getByTestId('print-sheet-waiting');
 		await expect(waiting).toBeVisible();
 		await expect(waiting).toHaveText(/\S/);
 	}).toPass();
@@ -518,7 +523,7 @@ async function openClosures(page: Page) {
 	} else {
 		await page.getByTestId('detail-panel-close').click();
 	}
-	await expect(page.getByTestId('detail-panel-body')).toHaveCount(0);
+	await expect(page.getByTestId('detail-panel')).toHaveCount(0);
 	await page.getByTestId('card-orders-open').click();
 	await expect(page.getByTestId('orders-list')).toBeVisible();
 	// The stub answers every range with one order, so a row is there; an empty period would
@@ -542,6 +547,11 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(page.getByTestId('reports-till')).toBeVisible();
+}
+
+// Pro only: the till strip is the one door into the Closures room (reports LEDGER line 21).
+async function openClosures(page: Page) {
+	await walkSales(page);
 	await page.getByTestId('till-closures').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
 	await page.getByTestId('reports-back-sales').click();
@@ -568,18 +578,24 @@ for (const viewport of viewports) {
 			await page.getByTestId('reports-period-lastMonth').click();
 			expect((await listResponse).status()).toBe(200);
 			await page.keyboard.press('Escape');
+			// A historical scope hides today's open tills (closure-list.tsx, Codex #3048), so no session
+			// card is drawn here.
 			for (const day of businessDays)
 				await expect(page.getByTestId(`closure-day-${day}`)).toBeVisible();
-			await expect(page.getByTestId('reports-session-print')).toBeVisible();
 			await expect(page.getByTestId(`closure-badge-${probe.ids[1]}`)).toBeVisible();
 			await expect(page.getByTestId(`closure-badge-${probe.ids[0]}`)).toHaveCount(0);
 			await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-list.png`) });
 			await page.getByTestId(`closure-row-${probe.ids[1]}`).click();
 			await expect(page.getByTestId('closure-panel')).toBeVisible();
+			// The document is a fold in the closure body (#3036): open it to read the template.
+			await page.getByTestId('closure-paper').click();
 			await expect(page.getByTestId('receipt-template-select')).toContainText(
 				'Default closure probe'
 			);
-			const preview = page.getByTestId('receipt-preview-frame').contentFrame();
+			const preview = page
+				.getByTestId('closure-panel-body')
+				.getByTestId('receipt-preview-frame')
+				.contentFrame();
 			// Revert: replace the receipt date objects with raw timestamps; these markers disappear.
 			await expect(preview.getByTestId('probe-opened')).toHaveText(
 				/^[A-Z][a-z]{2} 11, \d{4}, 08:00$/
@@ -588,26 +604,33 @@ for (const viewport of viewports) {
 				/^[A-Z][a-z]{2} 11, \d{4}, 17:00$/
 			);
 			await expect(preview.getByTestId('probe-recorded-cash')).toHaveText('$178.00');
-			// This testID's deliberate referent is the Recorded → Settled pair, not a label.
-			await expect(page.getByTestId('closure-settled-counted.cash')).toContainText(/178.*→.*180/);
+			// The settled notice's deliberate referent is its Recorded … Settled pair of amounts; the
+			// regex reads only those two constituents, never the catalogue's wording around them.
+			await expect(page.getByTestId('closure-settled')).toContainText(/178.*180/);
 			await expect(page.getByTestId(`closure-correction-${correctionId}`)).toContainText(
 				'Original probe recount'
 			);
 			await expect(page.getByTestId('closure-recount')).toBeInViewport({ ratio: 1 });
 			await expect(page.getByTestId('closure-reprint')).toBeInViewport({ ratio: 1 });
 			await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-drill-in.png`) });
+			// Reprint opens the closure's print sheet; its Print dispatches the reprint.
+			await page.getByTestId('closure-reprint').click();
+			const printSheet = page.getByTestId('closure-print-sheet');
+			await expect(printSheet).toBeVisible();
 			const printResponse = page.waitForResponse(
 				(response) =>
 					wcposRestRoute(response.url()) === `/wcpos/v2/closures/${probe.ids[1]}/print` &&
 					response.request().method() === 'POST'
 			);
-			await page.getByTestId('closure-reprint').click();
+			await printSheet.getByTestId('print-sheet-print').click();
 			expect((await printResponse).status()).toBe(200);
 			await expect
 				.poll(() => probe.printed)
 				.toEqual([{ copy: 'COPY', count: '2', recorded: '$178.00' }]);
 			expect(probe.printRequests).toHaveLength(1);
 			expect(probe.receiptIntents).toEqual([]);
+			await page.getByTestId('closure-print-sheet-close').click();
+			await expect(printSheet).toHaveCount(0);
 			await page.getByTestId('closure-recount').click();
 			await page.getByTestId('recount-cash').fill('181');
 			await page.getByTestId('recount-card').fill('120');
@@ -628,12 +651,12 @@ for (const viewport of viewports) {
 			await expect(page.getByTestId(`closure-correction-${savedCorrection.id}`)).toContainText(
 				recountReason
 			);
-			await expect(page.getByTestId('closure-settled-counted.cash')).toContainText(/178.*→.*181/);
+			await expect(page.getByTestId('closure-settled')).toContainText(/178.*181/);
 			await expect(preview.getByTestId('probe-recorded-cash')).toHaveText('$178.00');
 			if (viewport.name === 'phone') await page.getByTestId('closure-back').click();
 			else await page.keyboard.press('Escape');
 			await expect(page.getByTestId('closure-panel')).toHaveCount(0);
-			await page.getByTestId('closures-overflow').click();
+			// Export CSV sits on the scope strip; there is no overflow menu.
 			const downloaded = page.waitForEvent('download');
 			await page.getByTestId('closures-export').click();
 			const download = await downloaded;
@@ -647,37 +670,23 @@ for (const viewport of viewports) {
 			test.use({ freeLicense: true });
 			// Revert: allow a non-Today period or activate the Pro server pager for Free;
 			// the named locked hint or zero-request assertion fails under the Pro project too.
+			// Free has no Closures room (Paul 2026-10-28, #3058): the lock is the Sales date button's.
 			test('locks historical dates without issuing a closures request', async ({
 				posPage: page,
 				probe,
 			}, testInfo) => {
-				await openClosures(page);
+				await walkSales(page);
 				await page.getByTestId('reports-period').click();
-				// Phone rows are Buttons dimmed by class; tablet rows are locked MenuRows, so read
-				// the resolved opacity (MenuRow LEDGER line 9: the same 0.45 as a disabled row).
-				const tablet = viewport.name === 'tablet';
-				if (tablet) {
-					await expect(page.getByTestId('reports-period-today')).toHaveCSS('opacity', '1');
-				} else {
-					await expect(page.getByTestId('reports-period-today')).not.toHaveClass(/opacity-50/);
-				}
-				for (const [period, scopeName] of [
-					['yesterday', en['reports.earlier_closures']],
-					['thisWeek', en['reports.earlier_closures']],
-					['lastWeek', en['reports.earlier_closures']],
-					['thisMonth', en['reports.earlier_closures']],
-					['lastMonth', en['reports.earlier_closures']],
-				]) {
+				// Every width draws the presets as MenuRows; a locked row resolves to the same
+				// 0.45 opacity as a disabled one (MenuRow LEDGER line 9).
+				await expect(page.getByTestId('reports-period-today')).toHaveCSS('opacity', '1');
+				for (const period of ['yesterday', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth']) {
 					const option = page.getByTestId(`reports-period-${period}`);
-					if (tablet) {
-						await expect(option).toHaveCSS('opacity', '0.45');
-					} else {
-						await expect(option).toHaveClass(/opacity-50/);
-					}
+					await expect(option).toHaveCSS('opacity', '0.45');
 					await option.click();
 					await expect(page.getByTestId('reports-lock-hint')).toBeVisible();
 					await expect(page.getByTestId('reports-lock-hint')).toHaveText(
-						en['reports.pro_scope'].replace('{scope}', scopeName)
+						en['reports.pro_scope'].replace('{scope}', en['reports.earlier_days'])
 					);
 					await expect(page.getByTestId('reports-see-pro')).toHaveCount(1);
 					await expect(page.getByTestId('reports-see-pro')).toBeVisible();
