@@ -15,30 +15,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "search-terms.spec.ts",
 			"title": "finds a product when the typed words are reordered or separated",
 			"group": "G4"

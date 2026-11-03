@@ -260,8 +260,14 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 												},
 												{
 													id: 3,
+													// The Reports query keeps only orders whose `_pos_store` is the scoped
+													// store (`posStoreId`, sync-core pos-carrier). Every request carries
+													// that store as `store_id`: 0 on dev-free, a real id on dev-pro.
 													key: '_pos_store',
-													value: url.searchParams.get('pos_store') ?? '0',
+													value:
+														url.searchParams.get('store_id') ??
+														url.searchParams.get('pos_store') ??
+														'0',
 												},
 											],
 										},
