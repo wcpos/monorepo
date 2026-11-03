@@ -292,7 +292,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			[
 				'expo-splash-screen',
 				{
-					backgroundColor: '#F0F6FD',
+					// The app's splash token, `--color-splash` in global.css (`@theme static`, always light):
+					// the native splash, the app's own splash screen and the plugin's POS page
+					// (woocommerce-pos templates/pos.php) paint the same colour behind the mark.
+					backgroundColor: '#F0F4F8',
 					image: './assets/images/splash-icon.png',
 					// dark: {
 					// 	image: './assets/splash-icon-dark.png',
