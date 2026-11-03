@@ -12,9 +12,6 @@ import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 
 import { ManagementBar } from '../components/management-bar';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UpgradeNotice } from '../components/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
-import { useAppInfo } from '../../../hooks/use-app-info';
 import { PaymentAttentionNotice } from './attention-notice';
 import { DisplayOptions } from '../components/display-options';
 import { Actions } from './cells/actions';
@@ -264,8 +261,6 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 
 function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
 	const t = useT();
-	const { license } = useAppInfo();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	return (
 		<ListPage
 			testID="screen-orders"
@@ -286,9 +281,6 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 						<DisplayOptions id="orders" />
 					</ManagementBar>
 					<PaymentAttentionNotice />
-					{showUpgrade && !license?.isPro && (
-						<UpgradeNotice setShowUpgrade={setShowUpgrade} underBar />
-					)}
 				</>
 			}
 		>

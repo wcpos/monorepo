@@ -2,12 +2,7 @@ import React from 'react';
 import { Platform, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
-import { SystemBars } from 'react-native-edge-to-edge';
-import { useUniwind } from 'uniwind';
 
-import { isLightTheme } from '@wcpos/components/lib/themes';
-import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useDocField } from '@wcpos/query';
 import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -166,8 +161,6 @@ export default function POSLayout() {
 }
 
 const STRIP = ['strip'] as const;
-const TOP = ['top'] as const;
-const NONE = [] as const;
 
 /**
  * Deliberately does NOT subscribe to the current order.
@@ -179,15 +172,8 @@ const NONE = [] as const;
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { theme } = useUniwind();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	// The root never pads a SYSTEM inset: every surface that touches a screen edge runs its own
-	// background through the inset and pads inside it (`EdgeSurface`: the columns, the phone tab
-	// container; the full-size modal), so the status bar floats over the column it sits on (owner,
-	// iPad, 2026-10-14: a flat grey band under the status bar and the home indicator).
-	// The one exception is the desktop's title-bar strip: it is not a system bar but the till's
-	// topmost row (the register bar portals into it across the full width), so the root takes the
-	// strip alone, as one ground, and the columns below pad only the status bar.
+	// With no app strip above, the till takes only the desktop title-bar strip; its columns
+	// pad their own system edges. EdgeSurface skips any inset the drawer already owns.
 	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
@@ -199,40 +185,31 @@ function POSStack() {
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
 				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
-					<SystemBars style={isLightTheme(theme) ? 'dark' : 'light'} />
-					{/* With the upgrade notice showing, the notice owns the top edge: this column pads
-					    the status bar in the notice's colour, and nothing under it touches the top. */}
-					<EdgeSurface
-						edges={showUpgrade ? TOP : NONE}
-						className={showUpgrade ? 'bg-muted flex-1' : 'flex-1'}
+					<Stack
+						screenOptions={{
+							animation: 'none',
+							headerShown: false,
+							contentStyle: { backgroundColor: screenBackgroundColor },
+						}}
 					>
-						{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
-						<Stack
-							screenOptions={{
-								animation: 'none',
-								headerShown: false,
-								contentStyle: { backgroundColor: screenBackgroundColor },
+						<Stack.Screen name="index" />
+						<Stack.Screen
+							name="(modals)/cart/[orderId]/checkout"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
 							}}
-						>
-							<Stack.Screen name="index" />
-							<Stack.Screen
-								name="(modals)/cart/[orderId]/checkout"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
-								}}
-							/>
-							<Stack.Screen
-								name="(modals)/cart/receipt/[orderId]"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
-								}}
-							/>
-						</Stack>
-					</EdgeSurface>
+						/>
+						<Stack.Screen
+							name="(modals)/cart/receipt/[orderId]"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+					</Stack>
 				</EdgeSurface>
 				{/**
 				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
