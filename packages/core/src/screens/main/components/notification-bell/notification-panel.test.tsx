@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { useDocField } from '@wcpos/query';
 import { Skeleton } from '@wcpos/components/skeleton';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { type Notification, useNovuNotifications } from '../../../../contexts/novu';
@@ -77,7 +78,7 @@ jest.mock('@wcpos/components/list-row', () => ({
 		</div>
 	),
 }));
-jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: passthrough }));
+jest.mock('@wcpos/components/empty-state', () => ({ EmptyState: jest.fn(passthrough) }));
 jest.mock('@wcpos/components/skeleton', () => ({ Skeleton: jest.fn(() => null) }));
 jest.mock('@wcpos/components/notice', () => ({ Notice: passthrough }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: passthrough }));
@@ -132,6 +133,10 @@ describe('NotificationPanelContent', () => {
 	it('shows the shared empty state when there is nothing and nothing is loading', () => {
 		render(<NotificationPanelContent />);
 		expect(screen.getByTestId('notifications-empty')).toBeTruthy();
+		expect(jest.mocked(EmptyState).mock.lastCall?.[0].docs).toEqual({
+			label: 'notifications.about_link',
+			href: 'https://docs.wcpos.com/support/notifications',
+		});
 		expect(Skeleton).not.toHaveBeenCalled();
 	});
 
