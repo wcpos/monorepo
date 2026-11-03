@@ -17,35 +17,55 @@ export const THEMES = [
 ] as const;
 export type ThemeName = (typeof THEMES)[number];
 
-export const THEME_TYPE: Record<ThemeName, ThemeType> = {
-	light: SYSTEM_TYPE,
-	dark: SYSTEM_TYPE,
-	ocean: SYSTEM_TYPE,
-	sunset: SYSTEM_TYPE,
-	monochrome: SYSTEM_TYPE,
-	paper: {
+export const TYPE_SETS = {
+	system: SYSTEM_TYPE,
+	instrument: {
 		body: THEME_FONT_FAMILIES.dmSans,
 		num: THEME_FONT_FAMILIES.jetbrainsMono,
 		display: THEME_FONT_FAMILIES.instrumentSerif,
 		displayItalic: true,
 	},
-	bold: {
+	grotesk: {
 		body: THEME_FONT_FAMILIES.spaceGrotesk,
 		num: THEME_FONT_FAMILIES.spaceGrotesk,
 		display: THEME_FONT_FAMILIES.spaceGrotesk,
 	},
-	warm: {
+	fraunces: {
 		body: THEME_FONT_FAMILIES.dmSans,
 		num: THEME_FONT_FAMILIES.dmSans,
 		display: THEME_FONT_FAMILIES.fraunces,
 		displayItalic: true,
 	},
-	market: {
+	manrope: {
 		body: THEME_FONT_FAMILIES.manrope,
 		num: THEME_FONT_FAMILIES.manrope,
 		display: THEME_FONT_FAMILIES.manrope,
 	},
+} as const satisfies Record<string, ThemeType>;
+export type TypeSetId = keyof typeof TYPE_SETS;
+export const TYPE_SET_IDS = Object.keys(TYPE_SETS) as TypeSetId[];
+export const TYPE_SETTING_AUTO = 'auto';
+
+/** The theme's type is a rule of the theme, as its icon family is (decision 45). */
+export const THEME_TYPE_SET: Record<ThemeName, TypeSetId> = {
+	light: 'system',
+	dark: 'system',
+	ocean: 'system',
+	sunset: 'system',
+	monochrome: 'system',
+	paper: 'instrument',
+	warm: 'fraunces',
+	bold: 'grotesk',
+	market: 'manrope',
 };
+
+export const THEME_TYPE = Object.fromEntries(
+	THEMES.map((name) => [name, TYPE_SETS[THEME_TYPE_SET[name]]])
+) as Record<ThemeName, ThemeType>;
+
+export function typeSetForTheme(theme: string | undefined): TypeSetId {
+	return THEMES.includes(theme as ThemeName) ? THEME_TYPE_SET[theme as ThemeName] : 'system';
+}
 
 export const THEME_TRAITS: Record<ThemeName, Omit<ThemeTraits, 'type'>> = {
 	// DEFAULT_TRAITS is the bare tint, the crossfade and the settle; a personality theme opts into
@@ -66,9 +86,7 @@ export function traitsForTheme(theme: string | undefined): ThemeTraits {
 	return { ...THEME_TRAITS[theme as ThemeName], type: THEME_TYPE[theme as ThemeName] };
 }
 
-export function familiesForTheme(theme: string | undefined): ThemeFontFamily[] {
-	if (!THEMES.includes(theme as ThemeName)) return [];
-	const { body, num, display } = THEME_TYPE[theme as ThemeName];
+export function familiesForType({ body, num, display }: ThemeType): ThemeFontFamily[] {
 	return [...new Set([body, num, display].filter((family) => family !== undefined))];
 }
 

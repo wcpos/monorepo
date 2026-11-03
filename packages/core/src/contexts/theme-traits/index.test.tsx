@@ -7,11 +7,11 @@ import { BehaviorSubject } from 'rxjs';
 
 import { FONT_FACES } from '@wcpos/components/lib/fonts';
 import { SYSTEM_TYPE, useThemeTraits } from '@wcpos/components/lib/theme-traits';
-import { THEME_TYPE } from '@wcpos/components/lib/themes';
+import { THEME_TYPE, TYPE_SETS } from '@wcpos/components/lib/themes';
 
-import { ThemeTraitsSettingProvider } from './index';
+import { resolveTypeSet, ThemeTraitsSettingProvider } from './index';
 
-const store: { theme?: string; $?: BehaviorSubject<{ theme: string }> } = {};
+const store: { theme?: string; fonts?: string; $?: BehaviorSubject<{ theme: string }> } = {};
 jest.mock('../app-state', () => ({ useAppState: () => ({ store }) }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -49,6 +49,7 @@ const drawnType = () => JSON.parse(screen.getByTestId('type').textContent!);
 
 beforeEach(() => {
 	store.theme = undefined;
+	store.fonts = undefined;
 	delete store.$;
 	jest.mocked(loadAsync).mockReset();
 });
@@ -107,4 +108,31 @@ it('loads the next theme and never applies the previous theme result', async () 
 	expect(drawnType()).toEqual(SYSTEM_TYPE);
 	await act(async () => market.resolve());
 	expect(drawnType()).toEqual(THEME_TYPE.market);
+});
+
+it.each([
+	['manrope', 'light', 'manrope'],
+	['system', 'market', 'system'],
+	['auto', 'market', 'manrope'],
+	[undefined, 'paper', 'instrument'],
+	['retired', 'bold', 'grotesk'],
+	['toString', undefined, 'system'],
+])('resolves %p on %p to %s', (value, theme, expected) => {
+	expect(resolveTypeSet(value, theme)).toBe(expected);
+});
+
+it.each([
+	['manrope', 'light'],
+	['auto', 'market'],
+])('loads and publishes Manrope for fonts %s on %s', async (fonts, theme) => {
+	const load = pendingLoad();
+	jest.mocked(loadAsync).mockReturnValue(load.promise);
+	store.fonts = fonts;
+	store.theme = theme;
+	renderType();
+	expect(drawnType()).toEqual(SYSTEM_TYPE);
+	expect(loadAsync).toHaveBeenCalledWith([FONT_FACES.Manrope]);
+	await act(async () => load.resolve());
+	expect(drawnType()).toEqual(TYPE_SETS.manrope);
+	expect(screen.getByTestId('type').dataset.tear).toBe(String(theme === 'market'));
 });
