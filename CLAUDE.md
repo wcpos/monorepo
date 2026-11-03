@@ -124,7 +124,7 @@ The `e2e-product-writer` (shop_manager) identity exists on every dev server with
 
 ## Branch lanes
 
-Three trunks during the 2.0 beta period (from the 2.0 promotion of 2026-11-02 until 2.0 GA):
+Two live trunks during the 2.0 beta period (from the 2.0 promotion of 2026-11-02 until 2.0 GA), and one deleted until GA:
 
 - **`main`** — WCPOS 2.0, this branch: the beta now (`2.0.0` in `apps/main/package.json`; the plugins carry `2.0.0-beta.2`), GA later. dev-free and dev-pro run it; the web lane is `@2.0`. Fixes for 2.0 and work that ships in 2.0.x branch from `origin/main` and target `main`.
 - **`1.11.x`** — the stable patch line for merchants still on 1.11. A 1.11 fix branches from `origin/1.11.x` and targets `1.11.x`; it has no dev site and no E2E. A fix 2.0 also needs is re-applied to `main` through a PR of its own.
