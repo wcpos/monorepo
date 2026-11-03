@@ -27,10 +27,12 @@ on:
         type: boolean
         default: false
       quarantine_only:
-        description: Run only e2e/quarantine.json's tests on next, then comment on #2284 (target=preview)
+        description: Run only e2e/quarantine.json's tests on main, then comment on #2284 (target=preview)
         type: boolean
         default: false
-  # Weekly quarantine-only run of `next` (#2284). Schedules run from main; checkouts pin `next`.
+  # Weekly quarantine-only run of `main` (#2284). Until the 2.0 promotion (#3192) it pinned `next`;
+  # `next` is deleted until the GA re-cut (#3218) and the quarantine list is 2.0's, so the schedule
+  # now tests the ref it runs on.
   schedule:
     - cron: '17 22 * * 0'
   push:
@@ -91,13 +93,13 @@ jobs:
     steps:
       # Front desk's weekly cron dispatches quarantine-only runs (#2284); a wrong ref or
       # target must never reach production or main's concurrency groups.
-      - name: 🛑 Refuse a quarantine-only dispatch off next or not preview
-        if: github.event_name == 'workflow_dispatch' && inputs.quarantine_only && (github.ref_name != 'next' || inputs.target != 'preview')
+      - name: 🛑 Refuse a quarantine-only dispatch off main or not preview
+        if: github.event_name == 'workflow_dispatch' && inputs.quarantine_only && (github.ref_name != 'main' || inputs.target != 'preview')
         env:
           REF_NAME: ${{ github.ref_name }}
           TARGET: ${{ inputs.target }}
         run: |
-          echo "::error::Quarantine-only run (ref=$REF_NAME target=$TARGET) must be dispatched on next with target=preview."
+          echo "::error::Quarantine-only run (ref=$REF_NAME target=$TARGET) must be dispatched on main with target=preview."
           exit 1
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -119,11 +121,11 @@ jobs:
       #
       # `inputs.lane` wins when a human dispatches: base_ref is empty and
       # ref_name is the feature branch, so `auto` cannot see the lane of a
-      # feature branch and must not guess one either. A quarantine-only run is always `next`.
+      # feature branch and must not guess one either. A quarantine-only run is always `main`.
       - name: 🛤 Resolve E2E lane
         id: lane
         env:
-          INPUT_LANE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'next' || inputs.lane }}
+          INPUT_LANE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'main' || inputs.lane }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           REF_NAME: ${{ github.ref_name }}
@@ -150,7 +152,7 @@ jobs:
     # one running + one pending job per group and REPLACES the pending one when
     # a third arrives — so a superseded deploy is dropped before `eas deploy`
     # ever starts, and the ledger reads that as superseded, not red.
-    # A schedule carries the main ref but previews `next`: no main group, no turbo cache save.
+    # A schedule previews main's head for the quarantine run: no main deploy group, no turbo cache save.
     concurrency:
       group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
       cancel-in-progress: false
@@ -161,7 +163,6 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -271,8 +272,6 @@ jobs:
 
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
@@ -416,7 +415,6 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -915,8 +913,6 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
