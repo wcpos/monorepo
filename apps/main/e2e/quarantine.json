@@ -96,6 +96,18 @@
 			"file": "pos-cart.spec.ts",
 			"title": "POS Cart › should absorb twenty rapid adds and paint the exact quantity",
 			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
+			"group": "G7"
 		}
 	]
 }

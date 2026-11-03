@@ -497,8 +497,8 @@ async function walkSales(page: Page) {
 	await expect(page.getByTestId('card-refunds-refunded')).toHaveText(/^[^1-9]*0[^1-9]*$/);
 	await expect(page.getByTestId('card-payments')).toBeVisible();
 	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
-	// No COGS on the stub order; its custom line joins no catalogue product.
-	await expect(page.getByTestId('card-brands')).toHaveCount(0);
+	// The Brands card is not asserted here: since #3191 it follows the brands, not the costs (it shows
+	// when any joined product carries a brand, which dev-pro's catalogue does); cards/index.tsx owns that rule.
 	// A non-Orders panel is the report document's preview over its print footer (panels/panel.tsx,
 	// PrintSheetInner); the rows are drawn inside the document, so the panel itself is the anchor.
 	await page.getByTestId('card-products-open').click();
