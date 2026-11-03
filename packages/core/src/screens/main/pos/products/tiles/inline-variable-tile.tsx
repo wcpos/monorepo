@@ -152,7 +152,7 @@ export function VariableProductTile({ record, gridFields, grow }: VariableProduc
 
 	return (
 		<Popover
-			className={`bg-card border-border m-1 ${grow ? 'grow' : 'flex-1'} overflow-hidden rounded-lg border`}
+			className={`bg-card border-border m-1 ${grow ? 'grow' : 'flex-1'} rounded-tile overflow-hidden border`}
 		>
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">

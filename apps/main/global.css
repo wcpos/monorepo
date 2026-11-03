@@ -1358,10 +1358,11 @@
       --card-foreground: oklch(0.232 0.038 290);
       --popover: var(--card);
       --popover-foreground: var(--card-foreground);
-      /* The prototype's coral (0.686) is a fill colour; as `text-primary` ink it read 3.1:1 on card
-         (Codex, #3124). L 0.52 keeps the hue and passes the 4.5:1 text floor both as ink and under
-         near-white words, so the button words are white again as the prototype drew them. */
-      --primary: oklch(0.52 0.20 34);
+      /* The mockup's coral, as drawn (market-commit-button-2026-10-30.html): white words on it read
+         2.96:1 and it reads 3.08:1 as `text-primary` ink on card. #3124 had darkened it to L 0.52 for
+         the 4.5:1 text floor on a Codex note; Paul put the mockup's fill back (2026-11-02), and the
+         token contract pins this value for Market instead of the floor. */
+      --primary: oklch(0.686 0.205 34);
       --primary-foreground: oklch(0.99 0.01 34);
       --secondary: var(--muted-foreground);
       --secondary-foreground: var(--card);
@@ -1444,7 +1445,7 @@
       --shape-commit-shadow: 0 4px 0 var(--primary-shadow);
       --shape-commit-shadow-press: 0 1px 0 var(--primary-shadow);
       --shape-commit-press-y: 3px;
-      --primary-shadow: oklch(0.46 0.19 34);
+      --primary-shadow: oklch(0.564 0.18 34);
       --type-w-ui: 600;
       --type-w-strong: 800;
       --type-w-commit: 800;
