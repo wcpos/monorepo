@@ -65,8 +65,8 @@ const MAX_RETAINED_OVER_BASELINE = 1.25;
 /** DOM nodes at the end over the plateau: detached-but-referenced rows show up here first. */
 const MAX_NODES_OVER_PLATEAU = 1.5;
 /**
- * Total main-thread long-task time across every committed search (measured: 124 ms in 400). The 1.11
- * budget, unchanged. On the 2.0 web build it swings tenfold between consecutive main runs with nothing
+ * Total main-thread long-task time across every committed search (measured: 124 ms in 400). The 2,000 ms
+ * budget set on the 1.11 release lane, unchanged. On the 2.0 web build it swings tenfold between consecutive main runs with nothing
  * in between but a theme PR: 979 / 595 ms (free / pro, run 41572770186) against 3,764–12,763 ms (runs
  * 41548499724 and 41565438333, every attempt, both projects). Paul, 2026-11-02, on the cart-add gate:
  * "Just lift for the moment, it's a fucking beta." The lift is the quarantine of this test in
