@@ -15,30 +15,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "search-terms.spec.ts",
 			"title": "finds a product when the typed words are reordered or separated",
 			"group": "G4"
@@ -95,6 +71,18 @@
 			"project": "pro-authenticated",
 			"file": "pos-cart.spec.ts",
 			"title": "POS Cart › should absorb twenty rapid adds and paint the exact quantity",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
 			"group": "G7"
 		}
 	]
