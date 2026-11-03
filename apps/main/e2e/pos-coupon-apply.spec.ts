@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { type APIRequestContext, expect, request as playwrightRequest } from '@playwright/test';
+import { expect, request as playwrightRequest } from '@playwright/test';
 
 import { getStoreVariant, listStoreIds, openOrderSheet, storeRequestOptions } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
+import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
 import {
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
@@ -42,20 +43,6 @@ function storeUrlOf(workerInfo: { project: { use: Record<string, unknown> } }): 
 	return (workerInfo.project.use as { storeUrl?: string }).storeUrl || 'https://dev-next.wcpos.com';
 }
 
-async function couponRequest(
-	request: APIRequestContext,
-	method: 'post' | 'delete',
-	storeUrl: string,
-	id: number | undefined,
-	options: Record<string, unknown>
-) {
-	const base = storeUrl.replace(/\/+$/, '');
-	const path = id === undefined ? 'coupons' : `coupons/${id}`;
-	const pretty = await request[method](`${base}/wp-json/wc/v3/${path}`, options);
-	if (pretty.status() !== 404) return pretty;
-	return request[method](`${base}/?rest_route=/wc/v3/${path}`, options);
-}
-
 const couponTest = liveTest.extend<
 	object,
 	{ probeCoupon: { code: string; id: number; amount: string } | null }
@@ -79,6 +66,7 @@ const couponTest = liveTest.extend<
 					return;
 				}
 				writerAuth = storeRequestOptions(writer);
+				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
 				const code =
 					`${mintSearchProbeToken(workerInfo.workerIndex)}${randomUUID().slice(0, 4)}`.toLowerCase();
 				const response = await couponRequest(request, 'post', storeUrl, undefined, {
