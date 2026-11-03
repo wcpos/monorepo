@@ -15,42 +15,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "search-terms.spec.ts",
-			"title": "finds a product when the typed words are reordered or separated",
-			"group": "G4"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "search-terms.spec.ts",
-			"title": "preserves MY in cold and warm Georgian all-term searches",
-			"group": "G4"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "search-terms.spec.ts",
-			"title": "finds a product when the typed words are reordered or separated",
-			"group": "G4"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "search-terms.spec.ts",
-			"title": "preserves MY in cold and warm Georgian all-term searches",
-			"group": "G4"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "pos-filter-bar.spec.ts",
-			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
-			"group": "G6"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "pos-filter-bar.spec.ts",
-			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
-			"group": "G6"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-cart.spec.ts",
 			"title": "POS Cart › should add a product to the cart and show checkout button",
 			"group": "G7"
