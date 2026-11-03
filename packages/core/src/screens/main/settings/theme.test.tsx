@@ -319,7 +319,7 @@ describe('the Fonts section', () => {
 		// RN Web drops className without Uniwind's transform; inspect the real Text's input.
 		expect(text.mock.calls.map(([props]) => props)).toContainEqual(
 			expect.objectContaining({
-				children: 'Total',
+				children: 'common.total',
 				className: expect.stringMatching(/\bitalic\b/),
 				style: expect.objectContaining({ fontFamily: expect.stringContaining('Instrument Serif') }),
 			})
@@ -333,7 +333,7 @@ describe('the Fonts section', () => {
 		const { getByTestId } = render(<ThemeSettings />);
 		await act(async () => {});
 		const samples = getByTestId('settings-fonts-auto-samples');
-		expect(samples.textContent).toBe('Aa12.50Total');
+		expect(samples.textContent).toBe('Aa12.50common.total');
 		Array.from(samples.children).forEach((sample) => {
 			expect((sample as HTMLElement).style.fontFamily).toContain('Manrope');
 		});

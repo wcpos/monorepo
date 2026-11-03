@@ -367,7 +367,7 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 											className={`text-foreground font-strong text-lg ${set.displayItalic ? 'italic' : ''}`}
 											style={fontFamilyStyle(drawn.display)}
 										>
-											Total
+											{t('common.total')}
 										</Text>
 									</HStack>
 								</ThemeTraitsContext.Provider>

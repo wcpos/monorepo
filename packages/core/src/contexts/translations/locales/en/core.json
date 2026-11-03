@@ -1719,7 +1719,7 @@
 	"settings.following_system_theme": "Following system theme",
 	"settings.fonts": "Fonts",
 	"settings.fonts.auto": "Match theme",
-	"settings.fonts.description": "Every candidate type set, while the design settles.",
+	"settings.fonts.description": "The typeface the app's text uses on this device. Match theme follows the theme you chose.",
 	"settings.fonts.fraunces": "DM Sans · Fraunces",
 	"settings.fonts.grotesk": "Space Grotesk",
 	"settings.fonts.instrument": "DM Sans · Instrument Serif",
