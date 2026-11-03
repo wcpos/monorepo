@@ -21,6 +21,8 @@ import { useDateFormat } from '../../hooks/use-date-format';
 import { groupByRecency, type NotificationListItem } from './notification-groups';
 import { actionUrl, kindOf } from './notification-kind';
 
+const NOTIFICATIONS_DOCS_URL = 'https://docs.wcpos.com/support/notifications';
+
 const TONES = {
 	info: { tile: 'bg-info/10', icon: 'text-info' },
 	warn: { tile: 'bg-warning-bg', icon: 'text-warning-text' },
@@ -155,7 +157,7 @@ export function NotificationPanelContent() {
 							icon="notifications"
 							title={t('common.no_notifications')}
 							description={t('notifications.empty_description')}
-							docs={{ label: t('notifications.about_link'), href: 'https://docs.wcpos.com/' }}
+							docs={{ label: t('notifications.about_link'), href: NOTIFICATIONS_DOCS_URL }}
 							testID="notifications-empty"
 						/>
 					)
