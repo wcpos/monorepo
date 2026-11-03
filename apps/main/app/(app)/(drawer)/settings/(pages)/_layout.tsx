@@ -2,9 +2,6 @@ import * as React from 'react';
 
 import { Slot } from 'expo-router';
 
-import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
-import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useT } from '@wcpos/core/contexts/translations';
 import { NavigationAreaLayout } from '@wcpos/core/screens/main/components/navigation-area';
 
@@ -13,8 +10,6 @@ import { useSettingsNavigationItems } from '../../../../../components/area-navig
 export default function SettingsLayout() {
 	const items = useSettingsNavigationItems();
 	const t = useT();
-	const { license } = useAppInfo();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 
 	return (
 		<NavigationAreaLayout
@@ -25,9 +20,6 @@ export default function SettingsLayout() {
 			screenTestID="settings-screen"
 			barTestID="settings-bar"
 			leafPagesCarryTitle
-			barNotice={
-				showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />
-			}
 		>
 			<Slot />
 		</NavigationAreaLayout>

@@ -179,7 +179,6 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
-jest.mock('../components/upgrade-notice', () => ({ UpgradeNotice: () => null }));
 // The page bar has its own suites; here it only seats the scope and the phone crumb.
 jest.mock('../components/management-bar', () => ({
 	ManagementBar: ({

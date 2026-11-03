@@ -134,9 +134,8 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.queryByTestId('settings-bar')).toBeNull();
 	});
 
-	// The bar's other jobs outlive it on `lg`: the upgrade notice and a held session still show
-	// above the rail (the area pages carry no cashier entry; a redirect login is a bar's to claim).
-	it('keeps the notice and the held-session banner on lg', () => {
+	// The held session still shows above the rail on `lg` (the area pages carry no cashier entry; a redirect login is a bar's to claim).
+	it('keeps the held-session banner on lg', () => {
 		mockHeld = true;
 		render(
 			<NavigationAreaLayout
@@ -146,7 +145,6 @@ describe('NavigationAreaLayout', () => {
 				testID="health-navigation"
 				screenTestID="health-screen"
 				barTestID="health-bar"
-				barNotice={<div data-testid="upgrade-notice" />}
 				leafPagesCarryTitle
 			>
 				<div data-testid="health-content" />
@@ -154,15 +152,11 @@ describe('NavigationAreaLayout', () => {
 		);
 		expect(screen.queryByTestId('health-bar')).toBeNull();
 		const banner = screen.getByTestId('session-hold-banner');
-		const notice = screen.getByTestId('upgrade-notice');
 		const area = screen.getByTestId('health-navigation');
-		// Banner, then notice, then the rail and page row: the order the bar gave them.
+		// Banner, then the rail and page row: the order the bar gave them.
 		const rows = Array.from(area.parentElement!.children);
 		expect(rows.indexOf(banner)).toBe(0);
-		// After the hold banner the notice is the next row, in a wrapper that carries the
-		// page gutter between them (it is flush when it is the column's first row).
-		expect(rows[1]).toBe(notice.parentElement);
-		expect(rows.indexOf(area)).toBe(2);
+		expect(rows.indexOf(area)).toBe(1);
 	});
 
 	// The area pages carry neither the bell nor the avatar on wide (Paul, 2026-10-30): the page
