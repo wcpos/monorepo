@@ -2362,16 +2362,16 @@ test('the E2E test step tells playwright.config its lane (next retries once)', (
 	assert.equal(runStep.env.E2E_LANE, '${{ needs.changes.outputs.lane }}');
 });
 
-test('a quarantine-only dispatch refuses off next or not preview', () => {
+test('a quarantine-only dispatch refuses off main or not preview', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const refuse = workflow.jobs.changes.steps[0];
-	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off next or not preview');
+	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off main or not preview');
 	for (const [caseName, values, expected] of [
 		[
 			'wrong target',
 			{
 				event_name: 'workflow_dispatch',
-				ref_name: 'next',
+				ref_name: 'main',
 				quarantine_only: true,
 				target: 'production',
 			},
@@ -2381,7 +2381,7 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 			'wrong ref',
 			{
 				event_name: 'workflow_dispatch',
-				ref_name: 'main',
+				ref_name: 'next',
 				quarantine_only: true,
 				target: 'preview',
 			},
@@ -2391,7 +2391,7 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 			'both wrong',
 			{
 				event_name: 'workflow_dispatch',
-				ref_name: 'main',
+				ref_name: 'next',
 				quarantine_only: true,
 				target: 'production',
 			},
@@ -2401,7 +2401,7 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 			'allowed',
 			{
 				event_name: 'workflow_dispatch',
-				ref_name: 'next',
+				ref_name: 'main',
 				quarantine_only: true,
 				target: 'preview',
 			},
@@ -2430,25 +2430,31 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 	assert.ok([workflow.jobs.deploy.needs].flat().includes('changes'));
 });
 
-test('the weekly quarantine-only run (#2284) tests next in one shard and reports to the issue', () => {
+test('the weekly quarantine-only run (#2284) tests main in one shard and reports to the issue', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const quarantine = "(github.event_name == 'schedule' || inputs.quarantine_only)";
 	assert.deepEqual(workflow.on.schedule, [{ cron: '17 22 * * 0' }]);
 	assert.equal(workflow.on.workflow_dispatch.inputs.quarantine_only.type, 'boolean');
 	const lane = findStep(workflow, 'changes', '🛤 Resolve E2E lane').env.INPUT_LANE;
-	assert.equal(lane, `\${{ ${quarantine} && 'next' || inputs.lane }}`);
+	assert.equal(lane, `\${{ ${quarantine} && 'main' || inputs.lane }}`);
 	const { env } = workflow.jobs.e2e.steps.find(({ name }) => name?.startsWith('🧪 Run E2E'));
 	assert.equal(env.E2E_QUARANTINE, `\${{ ${quarantine} && 'only' || '' }}`);
 	for (const axis of Object.values(workflow.jobs.e2e.strategy.matrix)) {
 		assert.ok(axis.includes(`|| ${quarantine} && '[1]' ||`), axis);
 	}
-	// Schedules run from the default branch: pin `next`, deploy a preview, skip main's groups.
+	// Schedules run from the default branch and test it: no checkout pin (until #3192 they pinned
+	// `next`; #3218 deleted it until the GA re-cut), a preview deploy, and none of main's groups,
+	// for the schedule AND a quarantine-only dispatch, which now also runs on main.
 	for (const job of ['deploy', 'e2e', 'quarantine-report']) {
 		const checkout = workflow.jobs[job].steps.find(({ uses }) => uses?.includes('checkout@'));
-		assert.equal(checkout.with.ref, "${{ github.event_name == 'schedule' && 'next' || '' }}", job);
+		assert.equal(checkout.with?.ref, undefined, job);
 	}
 	for (const job of ['deploy', 'e2e', 'e2e-report']) {
-		assert.match(workflow.jobs[job].concurrency.group, /main' && github\.event_name != 'schedule'/);
+		assert.match(
+			workflow.jobs[job].concurrency.group,
+			/main' && github\.event_name != 'schedule' && !inputs\.quarantine_only &&/,
+			job
+		);
 	}
 	assert.match(findStep(workflow, 'deploy', '🚀 Deploy preview').if, /event_name == 'schedule'/);
 	// Only the commenting job may write issues.

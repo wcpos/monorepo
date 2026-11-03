@@ -152,9 +152,10 @@ jobs:
     # one running + one pending job per group and REPLACES the pending one when
     # a third arrives — so a superseded deploy is dropped before `eas deploy`
     # ever starts, and the ledger reads that as superseded, not red.
-    # A schedule previews main's head for the quarantine run: no main deploy group, no turbo cache save.
+    # A schedule or a quarantine-only dispatch previews main's head for the quarantine run: no main
+    # deploy or verify group (it must neither cancel nor be cancelled by a push's verification), no turbo cache save.
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && !inputs.quarantine_only && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
       cancel-in-progress: false
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
@@ -383,7 +384,7 @@ jobs:
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && !inputs.quarantine_only && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
       cancel-in-progress: true
     steps:
       # First, before any setup: a run that belongs to neither trunk has no
@@ -824,7 +825,7 @@ jobs:
     if: always() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && !inputs.quarantine_only && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
       cancel-in-progress: true
     outputs:
       result: ${{ needs.e2e.result }}
