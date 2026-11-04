@@ -6,6 +6,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import { readPins, recordCapture } from '../capture-manifest';
+import { readAmountMinor } from '../checkout-shared';
 import {
 	applyScale,
 	CAPTURE_DEVICES,
@@ -38,6 +39,20 @@ function hasScaleStyle(page: Page): Promise<boolean> {
 			style.textContent?.startsWith(':root, [style*="--spacing:"]')
 		)
 	);
+}
+
+/**
+ * A whole-50 balance leaves one quick amount, so key the next whole 50 plus 50 instead. The
+ * first digit would replace the pre-filled balance; clear first so the digits shift in either way.
+ */
+async function keyCashAboveBalance(page: Page, balanceText: string): Promise<void> {
+	const balanceMinor = await readAmountMinor(page, 'checkout-entry');
+	const fiftyMinor = 50 * 10 ** (/[.,](\d+)\D*$/.exec(balanceText)?.[1].length ?? 0);
+	const amountMinor = Math.ceil(balanceMinor / fiftyMinor) * fiftyMinor + fiftyMinor;
+	await page.getByTestId('checkout-keypad-key-clear').click();
+	for (const digit of String(amountMinor)) {
+		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
+	}
 }
 
 /** Step 6 waits for the receipt to finish drawing; a store with no receipt to draw counts as drawn. */
@@ -112,12 +127,14 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 								// spec still walks exact cash. Quick amounts sort up from the balance itself; the chip's inner label carries the same prefix.
 								const entry = posPage.getByTestId('checkout-entry');
 								const balanceText = (await entry.textContent()) ?? '';
-								await posPage
-									.locator(
-										'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"]):not([data-testid$="-label"])'
-									)
-									.nth(1)
-									.click();
+								const quick = posPage.locator(
+									'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"]):not([data-testid$="-label"])'
+								);
+								// The exact chip closes the row, so once it shows every quick amount has painted.
+								await expect(posPage.getByTestId('checkout-quick-exact')).toBeVisible();
+								if ((await quick.count()) > 1) await quick.nth(1).click();
+								else await keyCashAboveBalance(posPage, balanceText);
+								// Either path leaves more than the balance in the entry, so the shot shows change due.
 								await expect(entry).not.toHaveText(balanceText);
 								await shoot(5, 'take-cash');
 							},
