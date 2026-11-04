@@ -69,6 +69,8 @@ export interface SellToAGuestContext {
 	trackOrder: (order: TrackedOrder) => void;
 	/** Runs after a step's own assertions pass; the captures caller shoots here. */
 	onStep?: (step: JourneyStep) => Promise<void>;
+	/** Runs in step 5 with the cash entry on screen, before it is confirmed; the captures caller shoots here. */
+	onCashEntry?: () => Promise<void>;
 }
 
 /** What steps 1 to 3 leave: the layout, detected once in step 1. */
@@ -274,6 +276,7 @@ export async function takeCash(ctx: SellToAGuestContext, sale: SaleAtCheckout): 
 		await expect
 			.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 			.toBe(sale.balanceMinor);
+		await ctx.onCashEntry?.();
 		await clickAndExpectPaymentWrite(page, 'checkout-commit', sale.orderId, 'record');
 	});
 }
