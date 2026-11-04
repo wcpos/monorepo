@@ -399,6 +399,27 @@ it.each([
 	expect(columns).toHaveLength(wide ? 3 : 2);
 });
 
+// A row with no key has no key line for a mark to sit on: on a phone the Saved mark stays in
+// flow under the inputs, never absolutely over them (Codex P2, #3229).
+it('on a phone, a row with no label keeps its Saved mark in flow', () => {
+	render(
+		<DeviceScope phone>
+			<SavedFieldProvider>
+				<Save name="meta_data" />
+				<PropertyRow testID="row" name="meta_data" compound>
+					<input data-testid="key" />
+				</PropertyRow>
+			</SavedFieldProvider>
+		</DeviceScope>
+	);
+	fireEvent.click(screen.getByText('save meta_data'));
+	const trailing = screen
+		.getByTestId('saved-meta_data')
+		.closest('[data-classes*="gap-2"]') as HTMLElement;
+	expect(classes(trailing).includes('absolute')).toBe(false);
+	expect(classes(trailing).includes('flex-wrap')).toBe(true);
+});
+
 // A custom field's key is its first input: the row has no key column, the inputs take the width.
 it('a row with no label has no key column and indents its value', () => {
 	render(

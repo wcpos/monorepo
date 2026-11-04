@@ -177,8 +177,9 @@ export function PropertyRow(props: {
 					className={cn(
 						'shrink-0 flex-row items-center gap-2',
 						// A mark or a switch is narrow and sits on the key's line; words would lie over a
-						// long key on a phone, so there they wrap in flow under the value.
-						words ? 'flex-wrap' : !line && 'absolute top-1 right-0'
+						// long key on a phone, so there they wrap in flow under the value. A row with no key
+						// has no key line: its slot stays in flow too, never over the value (Codex P2, #3229).
+						words || !keyed ? 'flex-wrap' : !line && 'absolute top-1 right-0'
 					)}
 				>
 					{end}
