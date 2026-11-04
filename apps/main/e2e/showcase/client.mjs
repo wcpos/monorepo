@@ -12,6 +12,8 @@ import { TARGETS } from './targets.mjs';
 /** The demo store shares its host with production, so writes run one at a time with this gap after each. */
 export const WRITE_GAP_MS = 250;
 const PAGE_SIZE = 100;
+/** The only paths `trash` accepts: one order or one product, no query string. */
+const TRASHABLE_PATH = /^\/wp-json\/wc\/v3\/(orders|products)\/\d+$/;
 
 const maskPath = (path) => path.split('?')[0].replace(/\/\d+(?=\/|$)/g, '/:id');
 
@@ -102,13 +104,20 @@ export function createClient({
 		}
 	}
 
-	const writer = (method) => async (path, body) => {
+	const writer = (method, params) => async (path, body) => {
 		stats.writes += 1;
 		try {
-			return await request(method, path, { body });
+			return await request(method, path, { body, params });
 		} finally {
 			await sleep(WRITE_GAP_MS);
 		}
 	};
-	return { get, getAll, post: writer('POST'), put: writer('PUT'), stats };
+	const toTrash = writer('DELETE', { force: 'false' });
+	/** Moves one order or product to WooCommerce trash. Always force=false: nothing here deletes for good. */
+	const trash = async (path) => {
+		if (typeof path !== 'string' || !TRASHABLE_PATH.test(path))
+			throw new Error('refusing to trash a path that is not one order or one product');
+		return toTrash(path);
+	};
+	return { get, getAll, post: writer('POST'), put: writer('PUT'), trash, stats };
 }

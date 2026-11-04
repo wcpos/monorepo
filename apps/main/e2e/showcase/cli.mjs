@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** The showcase seed's commands (see README.md). Stdout is counts only. Exit 0 ok, 1 store error, 2 safety stop, 64 usage. */
+import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -8,17 +9,20 @@ import { readStoreFacts, runApply, SeedSafetyError, verify } from './apply.mjs';
 import { createClient, readCredentials as defaultReadCredentials, StoreError } from './client.mjs';
 import { planCustomers, planOrders, summarise } from './plan.mjs';
 import { TARGETS } from './targets.mjs';
+import { runTidy } from './tidy.mjs';
 
 /** `plan` runs offline against this many synthetic product ids. */
 const SYNTHETIC_PRODUCT_COUNT = 200;
 const USAGE =
-	'usage: cli.mjs <plan|apply|verify> --target <demo|dev-free> [--credentials-cmd <path>] [--yes] [--limit N] [--through <ISO>]';
+	'usage: cli.mjs <plan|apply|verify|tidy> --target <demo|dev-free> [--credentials-cmd <path>] [--yes] [--limit N] [--through <ISO>] [--first-run] [--record <path>]';
 const OPTIONS = {
 	target: { type: 'string' },
 	'credentials-cmd': { type: 'string' },
 	yes: { type: 'boolean' },
 	limit: { type: 'string' },
 	through: { type: 'string' },
+	'first-run': { type: 'boolean' },
+	record: { type: 'string' },
 };
 
 /** Only messages built from ids, counts, statuses and codes are printed; any other error prints its name. */
@@ -29,7 +33,13 @@ const safeMessage = (err) =>
 
 export async function run(
 	argv,
-	{ fetchImpl = fetch, sleep, log = console.log, readCredentials = defaultReadCredentials } = {}
+	{
+		fetchImpl = fetch,
+		sleep,
+		log = console.log,
+		readCredentials = defaultReadCredentials,
+		now = () => new Date(),
+	} = {}
 ) {
 	let parsed;
 	try {
@@ -42,11 +52,16 @@ export async function run(
 	const through = values.through ? new Date(values.through) : new Date();
 	const limit = values.limit === undefined ? Infinity : Number(values.limit);
 	const usable =
-		['plan', 'apply', 'verify'].includes(command) && target && !Number.isNaN(through.getTime());
+		['plan', 'apply', 'verify', 'tidy'].includes(command) &&
+		target &&
+		!Number.isNaN(through.getTime());
+	const tidyFlags = values['first-run'] !== undefined || values.record !== undefined;
 	if (
 		!usable ||
 		!(limit === Infinity || (Number.isInteger(limit) && limit > 0)) ||
-		(command !== 'plan' && !values['credentials-cmd'])
+		(command !== 'plan' && !values['credentials-cmd']) ||
+		(command !== 'tidy' && tidyFlags) ||
+		(command === 'tidy' && values.yes === true && !values.record)
 	) {
 		log(USAGE);
 		return 64;
@@ -85,6 +100,23 @@ export async function run(
 				through,
 			});
 			log(JSON.stringify(await verify(client, target, orders)));
+		} else if (command === 'tidy') {
+			const write = values.yes === true;
+			const firstRun = values['first-run'] === true;
+			// one line per moved record, flushed as it goes, so a stopped run still lists what it moved
+			const record = ({ type, id }) =>
+				appendFileSync(
+					values.record,
+					`${JSON.stringify({ at: new Date().toISOString(), type, id })}\n`
+				);
+			const { counts } = await runTidy(client, target, {
+				write,
+				firstRun,
+				now: now(),
+				record,
+				log,
+			});
+			log(JSON.stringify({ write, firstRun, counts, stats: client.stats }));
 		} else {
 			const write = values.yes === true;
 			const { counts } = await runApply(client, target, { write, limit, through, log });

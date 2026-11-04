@@ -10,6 +10,8 @@ export const TARGETS = {
 	demo: {
 		url: 'https://demo.wcpos.com',
 		windowStart: '2026-10-05',
+		/** When the full seed began on this target; null means it has not been applied and the tidy refuses to run. */
+		tidyBaselineGmt: '2026-11-04T20:40:08Z',
 		fallbackCashierId: 4,
 		stores: [
 			{
@@ -69,6 +71,8 @@ export const TARGETS = {
 	'dev-free': {
 		url: 'https://dev-free.wcpos.com',
 		windowStart: '2026-10-05',
+		/** When the full seed began on this target; null means it has not been applied and the tidy refuses to run. */
+		tidyBaselineGmt: null,
 		fallbackCashierId: null,
 		stores: [
 			{

@@ -63,3 +63,48 @@ A re-run finds orders by `_wcpos_showcase_key` and does only the steps still mis
 never duplicates one. A failed write stops the run; the next run resumes. Existing customers
 and coupons are left alone. A customer created by the seed gets WooCommerce's new-account mail,
 sent to a reserved `example.com` address nobody reads. A changed cashier or register list updates only the till meta.
+
+## The nightly tidy
+
+```sh
+node apps/main/e2e/showcase/cli.mjs tidy --target demo --credentials-cmd <path> [--yes --record <path>] [--first-run]
+```
+
+Each night runs `apply --yes`, then `tidy --yes --record <path>`. Without `--yes` the tidy only
+reads, and prints what it would move. `--yes` needs `--record`: the file gets one JSON line per
+record moved, `{"at":"<ISO>","type":"order","id":123}`, written as it goes, so a stopped run still
+lists what it moved. Ids only. A restore starts from that file.
+
+What it moves to WooCommerce trash: orders and products created after the target's
+`tidyBaselineGmt` (in `targets.mjs`) that the seed did not create. `--first-run` also moves the
+orders inside the seed's month window that the seed did not create. It is run once per target.
+
+What it leaves: seed orders; everything older than the baseline (the month window too, after the
+first run); anything younger than an hour; all customers; all coupons; and everything that is not
+an order or a product. Removing customers or coupons needs Paul's word.
+
+Trash is not a delete. Anything moved can be restored from WooCommerce until the store empties
+its trash.
+
+## What the tidy refuses
+
+The tidy stops, with exit 2 and before any write, when:
+
+- the target's baseline is null (the seed has not been applied there);
+- an order row has no `meta_data` list, or any row has a creation date that does not parse;
+- it finds fewer than 100 seed orders, so the listing cannot be trusted;
+- it would move more than 500 rows (3000 on the first run).
+
+## Shooting a journey on demo
+
+A journey that shoots on demo:
+
+- buys real catalogue items;
+- sells under a named showcase customer, any customer from `planCustomers`, or as a guest when the
+  journey is the guest sale;
+- never creates products or customers;
+- stamps its orders with a run label (`newRunLabel` and `stampRunLabel` in
+  `apps/main/e2e/order-lifecycle.ts`);
+- deletes its own orders in its last step.
+
+The tidy is the backstop for a run that dies, not the plan. Soak and probes never run on demo.
