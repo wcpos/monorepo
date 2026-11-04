@@ -85,11 +85,12 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 				</PropertyRow>
 			);
 		}
+		// The row's key is its first input: no "Custom field" key column repeated down the list, the
+		// inputs take the width (Paul, 2026-11-04).
 		return (
 			<PropertyRow
 				key={field.id}
 				testID={`${testID}-row-meta-${index}`}
-				label={t('common.custom_field')}
 				compound
 				indent={indent}
 				name={index === host ? name : []}
