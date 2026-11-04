@@ -1,10 +1,12 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
+import { SectionHeading } from '@wcpos/components/section-heading';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -27,9 +29,9 @@ export const META_DATA_DEFAULT_ROW = { key: '', value: '' };
 const isPrivateMetaKey = (key: unknown) => typeof key === 'string' && key.startsWith('_');
 
 /**
- * A record's custom fields as property rows: a Custom field row per public entry with its Remove,
- * a variation's attribute locked, then one Hidden fields row (N fields · Show) for the private
- * entries. Show opens them beneath it, indented, editable, with Remove; Hide puts them away. This is
+ * A record's custom fields as property rows: a "Custom fields" heading over the public entries
+ * (Paul, 2026-11-04), each a key · value row with its Remove, a variation's attribute locked, then
+ * one Hidden fields row (N fields · Show) for the private entries. Show opens them beneath it, indented, editable, with Remove; Hide puts them away. This is
  * the one fold on a record form (Paul, 2026-10-30). Keys in `hiddenKeys` never show and are never
  * counted. The add button is the caller's.
  */
@@ -145,6 +147,15 @@ export function MetaDataForm({ name = 'meta_data', hiddenKeys, testID }: MetaDat
 
 	return (
 		<VStack>
+			{/* The heading names the rows (their key column is gone); the add row's own pt-2 step. */}
+			{shown.length > 0 ? (
+				<View className="pt-2">
+					<SectionHeading
+						testID={`${testID}-custom-fields-heading`}
+						title={t('common.custom_fields')}
+					/>
+				</View>
+			) : null}
 			{shown.map((index) => renderRow(index))}
 			{hidden.length > 0 ? (
 				<PropertyRow
