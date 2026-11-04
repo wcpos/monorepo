@@ -254,9 +254,9 @@ export function OpenOrderTabs({
 		scrollRef.current?.scrollTo({ x: offset, animated: settled.current && !reducedMotion });
 		settled.current = true;
 	}, [activeValue, offset, contentWidth, rowWidth, overflow, reducedMotion, trackProgrammatic]);
-	// A sole tab has nothing to be selected against: no underline (board, "One cart"). The
-	// unfolded New tab counts: with no carts it is the only tab.
-	const solo = entries.length + (fresh ? 1 : 0) === 1;
+	// The open cart is underlined even as the only tab (Paul, 2026-11-04: "when there is only one
+	// tab, there is no bottom border to signify which cart is open"); the 10-09 board's "One cart:
+	// no selected underline" is withdrawn.
 	const renderTab = ({ id, content }: (typeof entries)[number]) => {
 		const active = id === activeValue;
 		return (
@@ -292,7 +292,7 @@ export function OpenOrderTabs({
 					});
 				}}
 				style={{ minWidth: TAB_MIN, flexShrink: 0 }}
-				className={`${TAB} web:hover:bg-accent active:bg-accent ${active && !solo ? 'border-primary' : 'border-transparent'}`}
+				className={`${TAB} web:hover:bg-accent active:bg-accent ${active ? 'border-primary' : 'border-transparent'}`}
 			>
 				{content}
 			</Pressable>
@@ -417,7 +417,7 @@ export function OpenOrderTabs({
 						role="tab"
 						nativeID={NEW_TAB_ID}
 						aria-selected={fresh}
-						className={`${CELL} w-full flex-row gap-1.5 ${fresh ? `border-b-2 ${solo ? 'border-transparent' : 'border-primary'}` : ''}`}
+						className={`${CELL} w-full flex-row gap-1.5 ${fresh ? 'border-primary border-b-2' : ''}`}
 						testID="new-order-tab"
 						accessibilityLabel={t('pos_cart.new_order')}
 						ref={(node) => {
