@@ -72,6 +72,10 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							console.log(`[rescale] ${info.titlePath.at(-2)}: before j2-${number}-${slug}`);
 							unscale = await applyScale(posPage, step);
 						}
+						// A toast covers the header in the shot; wait for every one to leave.
+						await expect(posPage.locator('[data-sonner-toast]')).toHaveCount(0, {
+							timeout: 15_000,
+						});
 						const state = `j2-${number}-${slug}`;
 						const imagePath = await captureViewport(posPage, info, 'j2', state);
 						// Straight after the shot, before anything else moves the page.
@@ -104,6 +108,17 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							trackOrder,
 							onCashEntry: async () => {
 								cashEntryShot = true;
+								// The docs page shows change, so the shot tenders more than the balance; the J2
+								// spec still walks exact cash. Quick amounts sort up from the balance itself.
+								const entry = posPage.getByTestId('checkout-entry');
+								const balanceText = (await entry.textContent()) ?? '';
+								await posPage
+									.locator(
+										'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"])'
+									)
+									.nth(1)
+									.click();
+								await expect(entry).not.toHaveText(balanceText);
 								await shoot(5, 'take-cash');
 							},
 							onStep: async ({ number, slug }) => {
