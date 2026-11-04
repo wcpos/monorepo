@@ -14,9 +14,16 @@ export async function posLayout(page: Page): Promise<'phone' | 'columns'> {
 	return (await phoneTab.count()) > 0 ? 'phone' : 'columns';
 }
 
-/** On a phone the cart and the products grid are separate tabs; only the shown one is visible. */
+/**
+ * On a phone the cart and the products grid are separate tabs; only the shown one is visible.
+ * A tap while the drawer is still sliding shut is lost, so tap until the tab reports selected.
+ */
 export async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promise<void> {
-	await page.getByTestId(`pos-tab-${tab}`).filter({ visible: true }).click();
+	const button = page.getByTestId(`pos-tab-${tab}`).filter({ visible: true });
+	await expect(async () => {
+		await button.click({ timeout: 5_000 });
+		await expect(button).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
+	}).toPass({ timeout: 30_000 });
 }
 
 /** J1 "Open the register" as a shared start state for other journeys. */
