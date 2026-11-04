@@ -169,12 +169,20 @@ export async function setBrowseBy(
  * few seconds for the card: an already-open register resolves as soon as its
  * header renders (this runs several times per checkout), and a slow register
  * hydration still gets the normal readiness budget instead of a short timer
- * that would return just before the card appears.
+ * that would return just before the card appears. A store with several
+ * registers asks the device which one it is at first, and the first row is taken.
  */
 export async function ensureRegisterOpen(page: Page): Promise<void> {
 	const card = page.getByTestId('open-register-card');
 	const cartReady = page.getByTestId('add-cart-item-menu');
-	await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	const picker = page.locator('[data-testid^="register-picker-row-"]');
+	await expect(card.or(cartReady).or(picker.first()).first()).toBeVisible({
+		timeout: CATALOGUE_READY_TIMEOUT_MS,
+	});
+	if (await picker.first().isVisible()) {
+		await picker.first().click();
+		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	}
 	if (!(await card.isVisible())) return;
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
