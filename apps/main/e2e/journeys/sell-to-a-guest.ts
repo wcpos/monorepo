@@ -8,8 +8,7 @@
  * - Soak-loopable: yes, the reset is step 7, which leaves the start state holding again.
  * - Source ruling: wcpos/roadmap#513 and #514.
  *
- * The module never reads the order back from the server: server truth is the caller's job,
- * so a soak loop can choose not to pay for it.
+ * It never reads the order back: server truth is the caller's job, so a soak loop can skip it.
  */
 import {
 	type APIRequestContext,
@@ -20,7 +19,7 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
-import { addCheckoutProbeProduct } from '../checkout-probe';
+import { addCheckoutProbeProduct, addCheckoutProbeProductAgain } from '../checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
 	type Descriptor,
@@ -94,6 +93,8 @@ export interface GuestSale extends SaleAtCheckout {
 
 /** The quantity step 3 keys in. */
 const QUANTITY = 3;
+/** Pages whose columns walk already added the probe once. */
+const probeAddedOn = new WeakSet<Page>();
 
 /** Methods the tender grid can drive: enabled, and captured by the app itself. */
 function manualMethods(descriptors: Descriptor[]): Descriptor[] {
@@ -165,14 +166,15 @@ export async function addProduct(ctx: SellToAGuestContext, sale: SaleInProgress)
 	await journeyStep(ctx, 2, async () => {
 		const { page } = ctx;
 		if (sale.layout === 'phone') {
-			// addCheckoutProbeProduct needs the cart header and the grid on screen at once; a
-			// phone shows one tab at a time, so the add is the tile tap the cashier makes there.
+			// The probe add needs cart and grid on screen at once; a phone shows one tab: tap the tile.
 			await showPhoneTab(page, 'products');
 			await (await sharedProductTile(page)).click();
 			await productsSearch(page, 'phone').clear();
 			await showPhoneTab(page, 'cart');
 		} else {
-			await addCheckoutProbeProduct(page);
+			// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
+			await (probeAddedOn.has(page) ? addCheckoutProbeProductAgain : addCheckoutProbeProduct)(page);
+			probeAddedOn.add(page);
 		}
 		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1, { timeout: 15_000 });
 		await expect(page.getByTestId('cart-quantity-input')).toHaveText('1');
