@@ -34,14 +34,30 @@ export interface CaptureManifest {
 	captures: CaptureEntry[];
 }
 
-/** Each testID's visible box in CSS pixels; one with no visible element is left out. */
+/**
+ * Each testID's box in CSS pixels, recorded only when a reader can see it: its centre lies in
+ * the viewport and the element drawn there is the target, inside it or an ancestor of it.
+ * Playwright's `visible` alone passes a phone's hidden tab or a closed drawer's items.
+ */
 export async function readPins(page: Page, testIDs: readonly string[]): Promise<CapturePin[]> {
 	const pins: CapturePin[] = [];
+	const viewport = page.viewportSize();
 	for (const testID of testIDs) {
 		const target = page.getByTestId(testID).filter({ visible: true }).first();
 		// Counted first: `boundingBox` would wait out the action timeout for a missing element.
 		const box = (await target.count()) ? await target.boundingBox() : null;
 		if (!box) continue;
+		const cx = box.x + box.width / 2;
+		const cy = box.y + box.height / 2;
+		if (!viewport || cx < 0 || cy < 0 || cx >= viewport.width || cy >= viewport.height) continue;
+		const onTop = await target.evaluate(
+			(element, [x, y]) => {
+				const hit = document.elementFromPoint(x, y);
+				return !!hit && (element.contains(hit) || hit.contains(element));
+			},
+			[cx, cy]
+		);
+		if (!onTop) continue;
 		const [x, y, width, height] = [box.x, box.y, box.width, box.height].map(Math.round);
 		pins.push({ testID, box: { x, y, width, height } });
 	}

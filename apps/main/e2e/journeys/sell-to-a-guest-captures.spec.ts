@@ -12,7 +12,7 @@ import {
 	captureViewport,
 	ensureSystemTheme,
 } from '../capture-matrix';
-import { getStoreUrl, getStoreVariant, pinAppLanguageToEnglish } from '../fixtures';
+import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
 import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
@@ -25,8 +25,8 @@ const PINS_BY_STEP: Record<number, readonly string[]> = {
 	1: ['search-products', 'cart-customer-name'],
 	2: ['cart-quantity-input'],
 	3: ['cart-quantity-input', 'cart-order-total'],
-	4: ['checkout-tender-pane'],
-	5: ['checkout-tender-pane'],
+	4: ['checkout-tender-pane', 'checkout-dialog'],
+	5: ['receipt-paid-banner'],
 	6: ['receipt-paid-banner'],
 	7: ['cart-customer-name'],
 };
@@ -52,8 +52,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					trackOrder,
 				}, info) => {
 					test.setTimeout(300_000);
-					await ensureSystemTheme(posPage);
-					await pinAppLanguageToEnglish(posPage);
+					await ensureSystemTheme(posPage, { english: true });
 					let unscale = await applyScale(posPage, step);
 					try {
 						await sellToAGuest({

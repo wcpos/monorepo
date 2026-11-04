@@ -4,7 +4,7 @@
  */
 import { type ScaleStep, scaleVariables } from '@wcpos/components/lib/scale';
 
-import { becomesVisible } from './fixtures';
+import { becomesVisible, selectEnglishLanguage } from './fixtures';
 import { expect } from './test';
 
 import type { Page, TestInfo } from '@playwright/test';
@@ -61,8 +61,12 @@ export async function captureViewport(
  * The store's theme is persisted on its record (`store.theme`); a shared store may carry an
  * explicit light or dark choice, and only "System" lets the emulated colour scheme decide.
  * Set once per test through the theme settings page and return to the POS.
+ * With `english`, the same visit also picks English on General, so no second trip is needed.
  */
-export async function ensureSystemTheme(page: Page) {
+export async function ensureSystemTheme(
+	page: Page,
+	{ english = false }: { english?: boolean } = {}
+) {
 	// The phone keeps its navigation in the front drawer. Its items count as "visible" while
 	// the closed drawer sits off-screen, so the hamburger decides: when one is on screen the
 	// drawer must be opened first (forced, the bar is stacked per tab), and pressed only after
@@ -89,8 +93,18 @@ export async function ensureSystemTheme(page: Page) {
 	await page.getByTestId('theme-option-system').click();
 	await page.waitForTimeout(SETTLE_MS);
 	// The phone's settings leaf carries no menu, only the crumb back to the index, which has one.
-	const back = page.getByTestId('settings-navigation-back').locator('visible=true').first();
-	if (await becomesVisible(back, 1_000)) await back.click();
+	const goBack = async () => {
+		const back = page.getByTestId('settings-navigation-back').locator('visible=true').first();
+		if (await becomesVisible(back, 1_000)) await back.click();
+	};
+	await goBack();
+	if (english) {
+		await page.getByTestId('settings-nav-general').click();
+		await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 15_000 });
+		await selectEnglishLanguage(page);
+		await page.waitForTimeout(SETTLE_MS);
+		await goBack();
+	}
 	const pos = page.getByTestId('drawer-item-pos');
 	await openDrawer();
 	await pos.click();
