@@ -202,6 +202,8 @@ export async function createSoakSampler(page: Page, testInfo: TestInfo): Promise
 		async start() {
 			observersUnavailable = (await page.evaluate(soakObservers, false)).reading.unavailable;
 			track(sampleUaMemory('start'));
+			// A run shorter than the 30 s cadence still has a metrics row.
+			track(sampleMetrics('start'));
 			timers.push(setInterval(() => track(sampleMetrics('30s')), SAMPLE_EVERY_MS));
 			timers.push(setInterval(() => track(sampleUaMemory('10min')), UA_MEMORY_EVERY_MS));
 		},
