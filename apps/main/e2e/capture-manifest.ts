@@ -77,13 +77,25 @@ export function recordCapture(args: {
 	const dir = path.join(args.outputDir, 'captures', page, args.locale);
 	fs.mkdirSync(dir, { recursive: true });
 	const file = path.basename(args.imagePath);
-	fs.copyFileSync(args.imagePath, path.join(dir, file));
 
 	// Read-modify-write without a lock: captures run at one worker.
 	const manifestPath = path.join(dir, 'manifest.json');
 	const existing: CaptureManifest | null = fs.existsSync(manifestPath)
 		? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 		: null;
+	// Filenames carry no variant and published pages depend on them, so a second variant of the
+	// same image would silently replace the first; refuse it before the copy.
+	const clash = existing?.captures.find(
+		(capture) =>
+			capture.file === file &&
+			(capture.variant !== args.entry.variant || capture.store !== args.entry.store)
+	);
+	if (clash) {
+		throw new Error(
+			`${file} is already recorded for ${clash.variant} on ${clash.store}; one manifest holds one variant of an image`
+		);
+	}
+	fs.copyFileSync(args.imagePath, path.join(dir, file));
 	const now = new Date();
 	const manifest: CaptureManifest = {
 		runId: existing?.runId ?? `capture-${now.toISOString().replace(/[-:]|\.\d{3}Z$/g, '')}`,
