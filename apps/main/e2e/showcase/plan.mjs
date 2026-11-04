@@ -223,15 +223,20 @@ function hourWeights(openHour, closeHour) {
 }
 
 function pickLines(r, products, basketScale) {
-	const want = Math.min(pickWeighted(r, LINE_COUNT_WEIGHTS) + 1, products.length);
+	// Every line takes its draws even when the catalogue can't fill it, so a thin catalogue can't move the day's sale times.
+	const want = pickWeighted(r, LINE_COUNT_WEIGHTS) + 1;
 	const used = new Set();
 	const lines = [];
-	while (lines.length < want) {
-		let index = Math.floor(products.length * r() * r());
+	for (let n = 0; n < want; n += 1) {
+		// Two draws multiplied left to right, as before, so the index rounds exactly as it did.
+		const a = r();
+		const b = r();
+		const double = r() < DOUBLE_QUANTITY_SHARE;
+		if (lines.length >= products.length) continue;
+		let index = Math.floor(products.length * a * b);
 		while (used.has(index)) index = (index + 1) % products.length;
 		used.add(index);
-		const quantity = (r() < DOUBLE_QUANTITY_SHARE ? 2 : 1) * basketScale;
-		lines.push({ productId: products[index].id, quantity });
+		lines.push({ productId: products[index].id, quantity: (double ? 2 : 1) * basketScale });
 	}
 	return lines;
 }

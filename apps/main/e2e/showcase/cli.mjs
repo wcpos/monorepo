@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** The showcase seed's commands (see README.md). Stdout is counts only. Exit 0 ok, 1 store error, 2 safety stop, 64 usage. */
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, closeSync, openSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -83,6 +83,8 @@ export async function run(
 	}
 	let client;
 	try {
+		// A record file that can't be written stops the tidy before anything moves.
+		if (command === 'tidy' && values.yes === true) closeSync(openSync(values.record, 'a'));
 		const credentials = await readCredentials(values['credentials-cmd']);
 		client = createClient({
 			url: target.url,

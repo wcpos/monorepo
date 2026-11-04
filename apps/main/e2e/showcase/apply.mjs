@@ -302,9 +302,17 @@ export async function applyOrders(client, target, orders, context, { write, limi
 				if (order.refund && !(ex.refunds ?? []).length) {
 					const line = ex.line_items?.[order.refund.lineIndex];
 					const unit = line ? (Number(line.total) / line.quantity).toFixed(2) : '0.00';
-					const items = [{ id: line?.id, quantity: order.refund.quantity, refund_total: unit }];
+					// One unit's share of each line tax, as calculate-refund.ts sends it from the POS.
+					const tax = (line?.taxes ?? []).map((t) => ({
+						id: t.id,
+						refund_total: (Number(t.total) / line.quantity).toFixed(2),
+					}));
+					const amount = tax.reduce((sum, t) => sum + Number(t.refund_total), Number(unit));
+					const items = [
+						{ id: line?.id, quantity: order.refund.quantity, refund_total: unit, refund_tax: tax },
+					];
 					const body = {
-						amount: unit,
+						amount: amount.toFixed(2),
 						reason: order.refund.reason,
 						line_items: items,
 						api_refund: false,

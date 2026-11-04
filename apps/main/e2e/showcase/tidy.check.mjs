@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -304,7 +304,8 @@ test('the tidy command: --yes needs --record, a null baseline stops, and --recor
 	const stopped = await cli(devFree, ['--target', 'dev-free', '--yes', '--record', file]);
 	assert.equal(stopped.code, 2);
 	assert.equal(devFree.deletes().length, 0);
-	assert.ok(!existsSync(file));
+	// the record file is proved writable before anything moves, so it exists but lists nothing
+	assert.equal(readFileSync(file, 'utf8'), '');
 	const store = fakeStore(rows());
 	const { code, logs } = await cli(store, ['--target', 'demo', '--yes', '--record', file]);
 	assert.equal(code, 0);
@@ -322,6 +323,23 @@ test('the tidy command: --yes needs --record, a null baseline stops, and --recor
 	const out = JSON.parse(logs.at(-1));
 	assert.deepEqual(Object.keys(out), ['write', 'firstRun', 'counts', 'stats']);
 	assert.equal(out.stats.writes, 2);
+});
+
+test('a --record path that cannot be written stops the tidy before any request', async () => {
+	const store = fakeStore({ orders: [order(1001, AFTER_BASELINE)], products: [] });
+	const logs = [];
+	const missing = join(tmpdir(), `showcase-tidy-missing-${process.pid}`, 'moved.jsonl');
+	const argv = ['tidy', '--target', 'demo', '--credentials-cmd', '/unused', '--yes'];
+	const code = await run([...argv, '--record', missing], {
+		fetchImpl: store.fetchImpl,
+		sleep: noSleep,
+		now: () => NOW,
+		log: (l) => logs.push(l),
+		readCredentials: async () => CREDS,
+	});
+	assert.equal(code, 1);
+	assert.equal(store.requests.length, 0);
+	assert.ok(logs.at(-1).startsWith('stopped: '));
 });
 
 test('every DELETE in this file sent force=false, and none sent force=true', () => {

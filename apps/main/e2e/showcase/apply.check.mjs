@@ -28,6 +28,7 @@ function fakeStore({
 	failWhen = () => false,
 	registers = REGISTERS,
 	taxes = [],
+	lineTaxes,
 } = {}) {
 	const s = { requests: [], customers: [], coupons: [], orders: [], nextId: 500, registers, taxes };
 	s.products = [
@@ -68,6 +69,7 @@ function fakeStore({
 			id: (s.nextId += 1),
 			...l,
 			total: (product(l.product_id).price * l.quantity).toFixed(2),
+			...(lineTaxes ? { taxes: lineTaxes } : {}),
 		}));
 		const total = lines.reduce((t, l) => t + Number(l.total), 0).toFixed(2);
 		return update(
@@ -430,4 +432,49 @@ test('verify counts tax lines per store by label and rate', async () => {
 test('no request in any check used DELETE or sent force', () => {
 	assert.ok(ALL.length > 1000);
 	for (const r of ALL) assert.ok(r.method !== 'DELETE' && !/force/i.test(r.query + r.raw), r.path);
+});
+
+test('a refund carries one unit of each line tax, and a line with no taxes refunds its net unit', async () => {
+	const refundOf = async (lineTaxes) => {
+		const store = fakeStore({ lineTaxes });
+		const client = createClient({
+			url: target.url,
+			credentials: CREDS,
+			fetchImpl: store.fetchImpl,
+			sleep: noSleep,
+			log: () => {},
+		});
+		const facts = await readStoreFacts(client, target);
+		const [order] = planOrders(target, {
+			storeFacts: facts.storeFacts,
+			products: facts.products,
+			customers: [],
+			through: THROUGH,
+		})
+			.filter((o) => o.status === 'completed')
+			.map((o) => ({
+				...o,
+				customerKey: null,
+				couponCode: null,
+				refund: { lineIndex: 0, quantity: 1, reason: 'Damaged' },
+				lines: [{ productId: 11, quantity: 2 }],
+			}));
+		const context = { ...facts, customerIds: {}, customers: [], existing: new Map() };
+		await applyOrders(client, target, [order], context, { write: true, log: () => {} });
+		return store.writes().find((r) => r.path.endsWith('/refunds')).body;
+	};
+	const taxed = await refundOf([
+		{ id: 7, total: '4.20' },
+		{ id: 8, total: '1.00' },
+	]);
+	assert.deepEqual(taxed.line_items[0].refund_tax, [
+		{ id: 7, refund_total: '2.10' },
+		{ id: 8, refund_total: '0.50' },
+	]);
+	assert.equal(taxed.line_items[0].refund_total, '10.00');
+	assert.equal(taxed.amount, '12.60');
+	const net = await refundOf(undefined);
+	assert.deepEqual(net.line_items[0].refund_tax, []);
+	assert.equal(net.line_items[0].refund_total, '10.00');
+	assert.equal(net.amount, '10.00');
 });

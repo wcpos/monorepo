@@ -156,3 +156,18 @@ test('uuidFrom is shaped as a v4 uuid', () => {
 		assert.match(uuidFrom(text), re);
 	assert.notEqual(uuidFrom('a'), uuidFrom('b'));
 });
+
+test('a catalogue of three products gives the same sale times as one of four', () => {
+	const timesWith = (n) =>
+		new Map(
+			planOrders(demo, {
+				storeFacts,
+				products: products.slice(0, n),
+				customers,
+				through: new Date('2026-11-04T12:00:00Z'),
+			}).map((o) => [o.key, o.saleTimeUtc])
+		);
+	const [three, four] = [timesWith(3), timesWith(4)];
+	assert.ok(four.size > 0);
+	assert.deepEqual(three, four);
+});
