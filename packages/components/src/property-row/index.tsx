@@ -65,7 +65,8 @@ export function PropertyList(props: {
  * The trailing slot is that mark-or-verb, then `control` (a Switch), which never moves.
  */
 export function PropertyRow(props: {
-	label: string;
+	/** The key; a row without one (a custom field, whose key is its first input) has no key column. */
+	label?: string;
 	children?: React.ReactNode;
 	prefix?: string;
 	id?: string;
@@ -124,6 +125,10 @@ export function PropertyRow(props: {
 		);
 	} else if (locked && !value) value = '—';
 	if (typeof value === 'string' || typeof value === 'number') value = <Text>{value}</Text>;
+	const keyed = props.label !== undefined;
+	// No value (a switch row): in a dialog the key and its help run to the trailing slot; on a
+	// settings page the value column stays so the switches line up (line 12).
+	const bare = keyed && value == null && !wide;
 	return (
 		<FormItem
 			nativeID={item}
@@ -134,28 +139,39 @@ export function PropertyRow(props: {
 				line && (props.align === 'top' ? 'items-start' : 'items-center')
 			)}
 		>
-			<View
-				className={cn(
-					'min-h-9 justify-center',
-					line && (wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
-					props.indent && 'pl-4'
-				)}
-			>
-				<Key nativeID={`${item}-form-item`}>{props.label}</Key>
-				{props.help ? <Text variant="help">{props.help}</Text> : null}
-			</View>
-			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
-			<View className={cn('min-w-0', !phone && 'flex-1', !phone && wide && 'max-w-80')}>
-				<TextClassContext.Provider
-					value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
-				>
-					{props.compound ? (
-						<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
-					) : (
-						value
+			{keyed && (
+				<View
+					className={cn(
+						'min-h-9 justify-center',
+						line && (bare ? 'min-w-0 flex-1' : wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
+						props.indent && 'pl-4'
 					)}
-				</TextClassContext.Provider>
-			</View>
+				>
+					<Key nativeID={`${item}-form-item`}>{props.label ?? ''}</Key>
+					{props.help ? <Text variant="help">{props.help}</Text> : null}
+				</View>
+			)}
+			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
+			{!bare && (
+				<View
+					className={cn(
+						'min-w-0',
+						!phone && 'flex-1',
+						!phone && wide && 'max-w-80',
+						!keyed && props.indent && 'pl-4'
+					)}
+				>
+					<TextClassContext.Provider
+						value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
+					>
+						{props.compound ? (
+							<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
+						) : (
+							value
+						)}
+					</TextClassContext.Provider>
+				</View>
+			)}
 			{end || props.control ? (
 				<View
 					className={cn(

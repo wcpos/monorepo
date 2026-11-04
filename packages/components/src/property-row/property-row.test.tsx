@@ -376,3 +376,40 @@ it('a verb is a small link Button in primary ink', () => {
 		expect.arrayContaining(['text-primary', 'text-sm', 'font-ui'])
 	);
 });
+
+// A switch row with a help line (Tax exempt): the key and its help run to the switch in a dialog;
+// on a settings page the value column stays so every switch sits in the one trailing column.
+it.each([
+	['a dialog', false, ['min-w-0', 'flex-1']],
+	['a settings page', true, ['w-64', 'shrink-0']],
+])('a row with no value lets its key run to the trailing slot in %s', (_case, wide, keyClasses) => {
+	render(
+		<PropertyList wide={wide}>
+			<PropertyRow
+				testID="row"
+				label="Tax exempt"
+				help="Removes all tax from this order."
+				control={<input type="checkbox" readOnly />}
+			/>
+		</PropertyList>
+	);
+	const key = screen.getByText('Tax exempt').parentElement as HTMLElement;
+	expect(classes(key)).toEqual(expect.arrayContaining(keyClasses));
+	const columns = screen.getByTestId('row').children;
+	expect(columns).toHaveLength(wide ? 3 : 2);
+});
+
+// A custom field's key is its first input: the row has no key column, the inputs take the width.
+it('a row with no label has no key column and indents its value', () => {
+	render(
+		<PropertyRow testID="row" compound indent>
+			<input data-testid="key" />
+		</PropertyRow>
+	);
+	const row = screen.getByTestId('row');
+	expect(row.children).toHaveLength(1);
+	expect(classes(row.children[0] as HTMLElement)).toEqual(
+		expect.arrayContaining(['flex-1', 'pl-4'])
+	);
+	expect(row.contains(screen.getByTestId('key'))).toBe(true);
+});
