@@ -114,10 +114,10 @@ test.describe('J2 Sell to a guest', () => {
 			server = await readOrder(request, testInfo, authorization, sale.orderId);
 			expectOrderPaid(server);
 		}
-		// As numbers, then digits: trailing zeros differ between the cart's string and dp=6.
-		expect(digitsOf(String(Number(server.total))), 'server total must equal the cart total').toBe(
-			digitsOf(String(Number(sale.cartTotal)))
-		);
+		// Both sides in minor units at the cart's precision, so the decimal position counts.
+		const dp = /[.,](\d+)\D*$/.exec(sale.cartTotal)?.[1].length ?? 0;
+		const serverMinor = digitsOf(Number(server.total).toFixed(dp));
+		expect(serverMinor, 'server total must equal the cart total').toBe(digitsOf(sale.cartTotal));
 		const lines = server.line_items ?? [];
 		expect(lines, 'the sale has one line').toHaveLength(1);
 		expect(Number(lines[0].quantity), 'the line carries the keyed quantity').toBe(sale.quantity);
@@ -185,10 +185,9 @@ test.describe('J2 Sell to a guest', () => {
 		const { quantityButton, numpad } = await openQuantityKeypad(page);
 		await page.keyboard.type('3');
 		await page.getByTestId('keypad-key-done').click();
-		// A keyboard-wedge scanner's Enter used to press the refocused quantity trigger and reopen
-		// the numpad for the wrong row. The burst is shorter than the store's minimum code length on
-		// purpose: it never reaches the catalog, and the assertion is only that the terminator did
-		// not act on the button.
+		// A wedge scanner's Enter used to press the refocused quantity trigger and reopen the numpad
+		// for the wrong row. The burst is below the store's minimum code length on purpose: it never
+		// reaches the catalog; the assertion is only that the terminator did not act on the button.
 		await expect(numpad).toBeHidden();
 		await expect(quantityButton, 'Done commits the typed quantity').toHaveText('3', {
 			timeout: 15_000,
