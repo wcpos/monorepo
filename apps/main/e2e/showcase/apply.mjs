@@ -105,6 +105,17 @@ export const applyCoupons = (client, target, planned, options) =>
 		options
 	).then(() => {});
 
+/** Adds each of the target's tax rates the site lacks, matched on country, class and name; never changes one. */
+export async function applyTaxRates(client, target, { write, log }) {
+	const rows = await client.getAll(`${WC}/taxes`);
+	const same = (a, b) => ['country', 'class', 'name'].every((k) => a[k] === b[k]);
+	const missing = target.taxRates.filter((rate) => !rows.some((row) => same(row, rate)));
+	for (const rate of write ? missing : [])
+		await client.post(`${WC}/taxes`, { ...rate, shipping: true });
+	const found = target.taxRates.length - missing.length;
+	log(`tax rates: ${found} found, ${missing.length} ${write ? 'created' : 'to create'}`);
+}
+
 export async function indexExistingOrders(client, target, extraFields = '') {
 	const params = {
 		after: `${target.windowStart}T00:00:00`,
@@ -236,6 +247,8 @@ export async function applyOrders(client, target, orders, context, { write, limi
 					meta_data: [
 						{ key: SEED_META_KEY, value: order.key },
 						{ key: '_woocommerce_pos_uuid', value: uuidFrom(order.key) },
+						// A guest's billing address is the store's, so a guest is taxed where the store is and a customer where they live.
+						{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
 					],
 				};
 				ex = await send('post', '/wp-json/wcpos/v1/orders', body, () => ({
@@ -330,6 +343,7 @@ export async function runApply(client, target, { write, limit, through, log }) {
 	const customers = planCustomers(target);
 	const customerIds = await applyCustomers(client, target, customers, { write, log });
 	await applyCoupons(client, target, planCoupons(target), { write, log });
+	await applyTaxRates(client, target, { write, log });
 	const orders = planOrders(target, {
 		storeFacts: facts.storeFacts,
 		products: facts.products,
@@ -350,7 +364,7 @@ export async function runApply(client, target, { write, limit, through, log }) {
 }
 
 export async function verify(client, target, orders) {
-	const index = await indexExistingOrders(client, target, ',total_tax');
+	const index = await indexExistingOrders(client, target, ',total_tax,tax_lines');
 	const perStore = {};
 	for (const o of orders) {
 		const s = (perStore[o.storeKey] ??= {
@@ -363,6 +377,7 @@ export async function verify(client, target, orders) {
 			taxed: 0,
 			wrongDay: 0,
 			byHour: {},
+			taxLabels: {},
 		});
 		const row = index.get(o.key);
 		const local = row?.date_paid_gmt
@@ -382,6 +397,10 @@ export async function verify(client, target, orders) {
 		});
 		for (const [k, hit] of Object.entries(hits)) s[k] += hit ? 1 : 0;
 		if (local) s.byHour[local.hour] = (s.byHour[local.hour] ?? 0) + 1;
+		for (const { label, rate_percent } of row?.tax_lines ?? []) {
+			const k = `${label}@${rate_percent}`;
+			s.taxLabels[k] = (s.taxLabels[k] ?? 0) + 1;
+		}
 	}
 	return { perStore };
 }

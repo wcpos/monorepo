@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { applyOrders, readStoreFacts, runApply, SeedSafetyError } from './apply.mjs';
+import { applyOrders, readStoreFacts, runApply, SeedSafetyError, verify } from './apply.mjs';
 import { run } from './cli.mjs';
 import { createClient } from './client.mjs';
 import { planCustomers, planOrders } from './plan.mjs';
@@ -27,8 +27,9 @@ function fakeStore({
 	reduceStockOnComplete = false,
 	failWhen = () => false,
 	registers = REGISTERS,
+	taxes = [],
 } = {}) {
-	const s = { requests: [], customers: [], coupons: [], orders: [], nextId: 500, registers };
+	const s = { requests: [], customers: [], coupons: [], orders: [], nextId: 500, registers, taxes };
 	s.products = [
 		[11, '10.00', true, 50],
 		[12, '4.50', false, null],
@@ -107,6 +108,8 @@ function fakeStore({
 			'GET /wc/v3/coupons': () => s.coupons.filter((c) => c.code === q.get('code')),
 			'POST /wc/v3/customers': () => add(s.customers, request.body),
 			'POST /wc/v3/coupons': () => add(s.coupons, request.body),
+			'GET /wc/v3/taxes': () => page(s.taxes, q),
+			'POST /wc/v3/taxes': () => add(s.taxes, request.body),
 			'GET /wc/v3/orders': () => page(s.orders, q),
 			'GET /wc/v3/orders/:id': () => order,
 			'POST /wcpos/v1/orders': () => create(request.body),
@@ -360,6 +363,68 @@ test('the stock check stays armed past a first order with no managed line', asyn
 		SeedSafetyError
 	);
 	assert.equal(store.creates().length, 2);
+});
+
+const taxWrites = (store) => store.writes().filter((r) => r.path.endsWith('/taxes'));
+
+test('a missing tax rate is created once, and a second apply creates none', async () => {
+	const store = fakeStore({ taxes: [{ id: 1, ...target.taxRates[0] }] });
+	const { logs } = await apply(store);
+	assert.deepEqual(
+		taxWrites(store).map((r) => r.body),
+		[{ ...target.taxRates[1], shipping: true }]
+	);
+	assert.ok(logs.includes('tax rates: 1 found, 1 created'));
+	await apply(store);
+	assert.equal(taxWrites(store).length, 1);
+});
+
+test('a tax rate that exists is neither updated nor removed', async () => {
+	const taxes = target.taxRates.map((r, i) => ({ id: i + 1, ...r, rate: '5.0000' }));
+	const store = fakeStore({ taxes });
+	assert.ok((await apply(store)).logs.includes('tax rates: 2 found, 0 created'));
+	assert.equal(taxWrites(store).length, 0);
+	assert.deepEqual(
+		store.taxes,
+		target.taxRates.map((r, i) => ({ id: i + 1, ...r, rate: '5.0000' }))
+	);
+});
+
+test('a dry run sends no write to taxes and still counts the rate it would create', async () => {
+	const store = fakeStore({ taxes: [{ id: 1, ...target.taxRates[1] }] });
+	const { logs } = await apply(store, { write: false });
+	assert.equal(taxWrites(store).length, 0);
+	assert.ok(logs.includes('tax rates: 1 found, 1 to create'));
+});
+
+test('every created order is taxed on its billing address', async () => {
+	const store = fakeStore();
+	await apply(store);
+	assert.ok(store.creates().length > 0);
+	for (const r of store.creates())
+		assert.equal(metaValue(r.body, '_woocommerce_pos_tax_based_on'), 'billing');
+});
+
+test('verify counts tax lines per store by label and rate', async () => {
+	const store = fakeStore();
+	const { orders } = await apply(store);
+	const [eu, us] = ['eu', 'us'].map((k) => orders.find((o) => o.storeKey === k).key);
+	store.byKey(eu).tax_lines = [{ label: 'BTW', rate_percent: 21 }];
+	store.byKey(us).tax_lines = [
+		{ label: 'AL', rate_percent: 4 },
+		{ label: 'AL', rate_percent: 4 },
+	];
+	const client = createClient({
+		url: target.url,
+		credentials: CREDS,
+		fetchImpl: store.fetchImpl,
+		sleep: noSleep,
+		log: () => {},
+	});
+	const { perStore } = await verify(client, target, orders);
+	assert.deepEqual(perStore.eu.taxLabels, { 'BTW@21': 1 });
+	assert.deepEqual(perStore.us.taxLabels, { 'AL@4': 2 });
+	assert.deepEqual(perStore.uk.taxLabels, {});
 });
 
 test('no request in any check used DELETE or sent force', () => {

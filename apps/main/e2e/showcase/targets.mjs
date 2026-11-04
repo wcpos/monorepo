@@ -13,6 +13,11 @@ export const TARGETS = {
 		/** When the full seed began on this target; null means it has not been applied and the tidy refuses to run. */
 		tidyBaselineGmt: '2026-11-04T20:40:08Z',
 		fallbackCashierId: 4,
+		/** The rates the seed adds because a store sits where the site has none; existing rates are never changed. */
+		taxRates: [
+			{ country: 'NL', class: 'standard', name: 'BTW', rate: '21.0000' },
+			{ country: 'NL', class: 'reduced-rate', name: 'BTW', rate: '9.0000' },
+		],
 		stores: [
 			{
 				key: 'us',
@@ -74,6 +79,8 @@ export const TARGETS = {
 		/** When the full seed began on this target; null means it has not been applied and the tidy refuses to run. */
 		tidyBaselineGmt: null,
 		fallbackCashierId: null,
+		/** The rates the seed adds because a store sits where the site has none; existing rates are never changed. */
+		taxRates: [],
 		stores: [
 			{
 				key: 'store',

@@ -37,7 +37,7 @@ node apps/main/e2e/showcase/cli.mjs verify --target demo --credentials-cmd <path
 ```
 
 `plan` makes no request. `apply` without `--yes` only reads, and prints what it would write;
-with `--yes` it writes customers, coupons and orders, one write at a time. `verify` only
+with `--yes` it writes customers, coupons, tax rates and orders, one write at a time. `verify` only
 reads, and counts per store what was found, missing, completed, parked, refunded, taxed,
 paid on the wrong day, and orders per hour. `--credentials-cmd` is a program that prints one
 JSON line with `username` and `password`. **The first live run uses `--limit 1`.**
@@ -63,6 +63,17 @@ A re-run finds orders by `_wcpos_showcase_key` and does only the steps still mis
 never duplicates one. A failed write stops the run; the next run resumes. Existing customers
 and coupons are left alone. A customer created by the seed gets WooCommerce's new-account mail,
 sent to a reserved `example.com` address nobody reads. A changed cashier or register list updates only the till meta.
+
+## Tax
+
+Every order the seed creates carries `_woocommerce_pos_tax_based_on` = `billing`, as a till
+order does. A guest's billing address is the store's, so a guest is taxed where the store is,
+and a named customer where they live. The seed adds only the rates in the target's `taxRates`
+(matched on country, class and name) and never changes or removes a rate the site already has.
+`verify` counts each store's tax lines by `<label>@<rate>`.
+
+An order already written keeps its tax lines. Changing the stamp or `taxRates` means trashing
+those orders and applying again.
 
 ## The nightly tidy
 
