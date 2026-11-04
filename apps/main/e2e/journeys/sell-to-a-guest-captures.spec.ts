@@ -109,12 +109,12 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							onCashEntry: async () => {
 								cashEntryShot = true;
 								// The docs page shows change, so the shot tenders more than the balance; the J2
-								// spec still walks exact cash. Quick amounts sort up from the balance itself.
+								// spec still walks exact cash. Quick amounts sort up from the balance itself; the chip's inner label carries the same prefix.
 								const entry = posPage.getByTestId('checkout-entry');
 								const balanceText = (await entry.textContent()) ?? '';
 								await posPage
 									.locator(
-										'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"])'
+										'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"]):not([data-testid$="-label"])'
 									)
 									.nth(1)
 									.click();
