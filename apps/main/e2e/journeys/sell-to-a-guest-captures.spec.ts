@@ -3,6 +3,7 @@
  * The captures are the screenshots for `pos/checkout/index.mdx`, taken by walking the journey
  * module itself, so the docs show the walk the J2 spec proves.
  */
+import { readPins, recordCapture } from '../capture-manifest';
 import {
 	applyScale,
 	CAPTURE_DEVICES,
@@ -11,12 +12,24 @@ import {
 	captureViewport,
 	ensureSystemTheme,
 } from '../capture-matrix';
+import { getStoreUrl, getStoreVariant, pinAppLanguageToEnglish } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
-import { sellToAGuest } from './sell-to-a-guest';
+import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
 import type { Page } from '@playwright/test';
 
 test.skip(process.env.CAPTURES !== '1', 'J2 captures run only with CAPTURES=1');
+
+/** What each step's docs call-outs point at. A testID not on screen is left out of the manifest. */
+const PINS_BY_STEP: Record<number, readonly string[]> = {
+	1: ['search-products', 'cart-customer-name'],
+	2: ['cart-quantity-input'],
+	3: ['cart-quantity-input', 'cart-order-total'],
+	4: ['checkout-tender-pane'],
+	5: ['checkout-tender-pane'],
+	6: ['receipt-paid-banner'],
+	7: ['cart-customer-name'],
+};
 
 /** Whether the scale style tag `applyScale` adds is still in the document. */
 function hasScaleStyle(page: Page): Promise<boolean> {
@@ -40,6 +53,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 				}, info) => {
 					test.setTimeout(300_000);
 					await ensureSystemTheme(posPage);
+					await pinAppLanguageToEnglish(posPage);
 					let unscale = await applyScale(posPage, step);
 					try {
 						await sellToAGuest({
@@ -54,7 +68,28 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 									console.log(`[rescale] ${info.titlePath.at(-2)}: before j2-${number}-${slug}`);
 									unscale = await applyScale(posPage, step);
 								}
-								await captureViewport(posPage, info, 'j2', `j2-${number}-${slug}`);
+								const state = `j2-${number}-${slug}`;
+								const imagePath = await captureViewport(posPage, info, 'j2', state);
+								// Straight after the shot, before anything else moves the page.
+								const pins = await readPins(posPage, PINS_BY_STEP[number]);
+								recordCapture({
+									journey: SELL_TO_A_GUEST.key,
+									docsPage: SELL_TO_A_GUEST.docsPage,
+									locale: 'en',
+									outputDir: info.project.outputDir,
+									imagePath,
+									entry: {
+										step: number,
+										slug,
+										device,
+										colorScheme,
+										scale: step,
+										store: new URL(getStoreUrl(info)).hostname,
+										variant: getStoreVariant(info),
+										viewport,
+										pins,
+									},
+								});
 							},
 						});
 					} finally {

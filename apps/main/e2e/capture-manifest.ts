@@ -1,0 +1,88 @@
+// The capture manifest: one page and locale directory of images, with a manifest.json beside them
+// carrying the run, the device matrix and the pinned testID boxes (rulings roadmap#521 and #522).
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import type { Page } from '@playwright/test';
+
+export interface CapturePin {
+	testID: string;
+	box: { x: number; y: number; width: number; height: number };
+}
+
+export interface CaptureEntry {
+	file: string;
+	step: number;
+	slug: string;
+	device: string;
+	colorScheme: string;
+	scale: string;
+	store: string;
+	variant: string;
+	viewport: { width: number; height: number };
+	pins: CapturePin[];
+}
+
+export interface CaptureManifest {
+	runId: string;
+	commit: string;
+	date: string;
+	journey: string;
+	page: string;
+	locale: string;
+	captures: CaptureEntry[];
+}
+
+/** Each testID's visible box in CSS pixels; one with no visible element is left out. */
+export async function readPins(page: Page, testIDs: readonly string[]): Promise<CapturePin[]> {
+	const pins: CapturePin[] = [];
+	for (const testID of testIDs) {
+		const target = page.getByTestId(testID).filter({ visible: true }).first();
+		// Counted first: `boundingBox` would wait out the action timeout for a missing element.
+		const box = (await target.count()) ? await target.boundingBox() : null;
+		if (!box) continue;
+		const [x, y, width, height] = [box.x, box.y, box.width, box.height].map(Math.round);
+		pins.push({ testID, box: { x, y, width, height } });
+	}
+	return pins;
+}
+
+/** Copy the image into its page and locale directory and record its entry in the manifest. */
+export function recordCapture(args: {
+	journey: string;
+	docsPage: string;
+	locale: string;
+	outputDir: string;
+	imagePath: string;
+	entry: Omit<CaptureEntry, 'file'>;
+}): void {
+	const page = args.docsPage.replace(/\/index\.mdx$/, '');
+	const dir = path.join(args.outputDir, 'captures', page, args.locale);
+	fs.mkdirSync(dir, { recursive: true });
+	const file = path.basename(args.imagePath);
+	fs.copyFileSync(args.imagePath, path.join(dir, file));
+
+	// Read-modify-write without a lock: captures run at one worker.
+	const manifestPath = path.join(dir, 'manifest.json');
+	const existing: CaptureManifest | null = fs.existsSync(manifestPath)
+		? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+		: null;
+	const now = new Date();
+	const manifest: CaptureManifest = {
+		runId: existing?.runId ?? `capture-${now.toISOString().replace(/[-:]|\.\d{3}Z$/g, '')}`,
+		commit:
+			existing?.commit ??
+			process.env.GITHUB_SHA ??
+			execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+		date: existing?.date ?? now.toISOString(),
+		journey: args.journey,
+		page: args.docsPage,
+		locale: args.locale,
+		captures: [
+			...(existing?.captures ?? []).filter((capture) => capture.file !== file),
+			{ file, ...args.entry },
+		].sort((a, b) => a.file.localeCompare(b.file)),
+	};
+	fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
