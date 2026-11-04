@@ -49,6 +49,9 @@ it('a blur after an edit writes the edited value', () => {
 it('a ghost field at rest is one control tall with its text in the middle', () => {
 	render(<EditableField variant="ghost" value="Hat" onChangeText={() => {}} testID="name" />);
 	const classes = screen.getByTestId('name').dataset.classes?.split(' ') ?? [];
-	expect(classes).toEqual(expect.arrayContaining(['min-h-ctl', 'items-center', 'py-3']));
-	expect(classes).not.toContain('items-start');
+	// The button is a column: the middle is `justify-center`, and `items-start` keeps the left edge.
+	expect(classes).toEqual(
+		expect.arrayContaining(['min-h-ctl', 'items-start', 'justify-center', 'py-3'])
+	);
+	expect(classes).not.toContain('justify-start');
 });

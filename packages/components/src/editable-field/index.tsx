@@ -120,9 +120,11 @@ export function EditableField({
 			// A ghost at rest is the editor's box without its border: one control tall (`min-h-ctl`)
 			// with the text in the middle and the textarea's `py-3`, so the press changes nothing
 			// but the border (Paul, 2026-11-04: the hover was 36 tall with the text at the top).
+			// The button is a column, so the middle is `justify-center`; `items-start` keeps the
+			// text on the left where the editor's and the SKU below it are (Codex P2, #3231).
 			className={
 				variant === 'ghost'
-					? 'min-h-ctl -mx-1 h-auto max-w-full items-center justify-start px-1 py-3'
+					? 'min-h-ctl -mx-1 h-auto max-w-full items-start justify-center px-1 py-3'
 					: 'max-w-full items-start'
 			}
 			onPress={() => setEditing(true)}
