@@ -172,7 +172,10 @@ export async function setBrowseBy(
  * that would return just before the card appears. A store with several
  * registers asks the device which one it is at first, and the first row is taken.
  */
-export async function ensureRegisterOpen(page: Page): Promise<void> {
+export async function ensureRegisterOpen(
+	page: Page,
+	{ afterPicking }: { afterPicking?: () => Promise<void> } = {}
+): Promise<void> {
 	const card = page.getByTestId('open-register-card');
 	const cartReady = page.getByTestId('add-cart-item-menu');
 	const picker = page.locator('[data-testid^="register-picker-row-"]');
@@ -181,6 +184,8 @@ export async function ensureRegisterOpen(page: Page): Promise<void> {
 	});
 	if (await picker.first().isVisible()) {
 		await picker.first().click();
+		await expect(picker.first()).toBeHidden({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+		await afterPicking?.();
 		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
 	}
 	if (!(await card.isVisible())) return;

@@ -15,8 +15,8 @@ export async function posLayout(page: Page): Promise<'phone' | 'columns'> {
 }
 
 /**
- * On a phone the cart and the products grid are separate tabs; only the shown one is visible.
- * A tap while the drawer is still sliding shut is lost, so tap until the tab reports selected.
+ * On a phone the cart and the products grid are separate tabs, and both stay mounted, so a pane
+ * can count as visible while off-screen. Tap until the tab reports selected.
  */
 export async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promise<void> {
 	const button = page.getByTestId(`pos-tab-${tab}`).filter({ visible: true });
@@ -30,8 +30,12 @@ export async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promis
 export async function openRegister(page: Page): Promise<void> {
 	await test.step('Open the register', async () => {
 		// The register card lives in the cart, which a phone shows on its Cart tab.
-		if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'cart');
-		// Idempotent: an already-open register resolves on its ready cart header.
-		await ensureRegisterOpen(page);
+		const phone = (await posLayout(page)) === 'phone';
+		if (phone) await showPhoneTab(page, 'cart');
+		// Idempotent: an already-open register resolves on its ready cart header. Choosing a
+		// register takes a phone back to Products, with the card still mounted off-screen.
+		await ensureRegisterOpen(page, {
+			afterPicking: phone ? () => showPhoneTab(page, 'cart') : undefined,
+		});
 	});
 }
