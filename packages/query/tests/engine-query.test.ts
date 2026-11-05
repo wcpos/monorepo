@@ -1197,7 +1197,7 @@ describe('observeEngineQuery', () => {
 
 		try {
 			expect(counts).toEqual([0]);
-			expect(results[0]).toEqual({ count: 0, hits: [] });
+			expect(results[0]).toEqual({ count: 0, hits: [], unbound: true });
 			listeners.forEach((listener) => listener(firstDatabase));
 			await waitFor(() => expect(counts.filter((count) => count === 1)).toHaveLength(1));
 

@@ -267,6 +267,7 @@ jest.mock('./use-coupon-context', () => ({
 }));
 
 let allRates: unknown[] = [];
+let ratesRead = true;
 let taxRoundAtSubtotal = false;
 let priceNumDecimals = 2;
 let pricesIncludeTax = false;
@@ -279,6 +280,7 @@ jest.mock('../../contexts/tax-rates', () => ({
 	useTaxLocation: () => ({ rates: [] }),
 	useTaxSettings: () => ({
 		allRates,
+		ratesRead,
 		shippingTaxClass: '',
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcTaxes: true,
@@ -1391,6 +1393,7 @@ describe('the settle path reports engine warnings', () => {
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		divergenceValue = null;
+		ratesRead = true;
 		couponLines$.next([]);
 		lineItems$.next([]);
 		feeLines$.next([]);
@@ -1398,6 +1401,10 @@ describe('the settle path reports engine warnings', () => {
 		revision = buildRevision();
 		currentOrderRecord = buildCurrentOrderRecord();
 	});
+
+	/** Every coded warning the reporter logged, by error code. */
+	const loggedCodes = () =>
+		mockCartWarn.mock.calls.map(([, options]) => (options as { code?: string } | undefined)?.code);
 
 	it('reports the money pass even when its patch changes nothing', async () => {
 		// The bail this sits in front of is the trap: a cart whose money is ALREADY
@@ -1437,5 +1444,59 @@ describe('the settle path reports engine warnings', () => {
 		expect(settleCart).toHaveBeenCalled();
 		expect(codedWarnings()).toHaveLength(1);
 		expect(codedWarnings()[0][1]).toMatchObject({ context: { site: 'settleCart' } });
+	});
+
+	/**
+	 * #3186: before an engine database is bound the rate set is an empty placeholder, so
+	 * an unknown rate id on that pass is not evidence. Only that code is held back; every
+	 * other warning still reports.
+	 */
+	it('holds back unknown_tax_rate_id on the money pass while the rates are unread', async () => {
+		ratesRead = false;
+		settleAggregate.mockImplementation(() => ({
+			...successfulAggregate(),
+			changed: false,
+			warnings: [
+				{ code: 'unknown_tax_rate_id', rateId: 42 },
+				{ code: 'malformed_pos_data', where: { lineType: 'line_item', index: 0 } },
+			],
+		}));
+
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+
+		expect(settleAggregate).toHaveBeenCalled();
+		expect(codedWarnings()).toHaveLength(0);
+		expect(loggedCodes()).toEqual([ERROR_CODES.CART_LINE_PRICE_BASIS_UNREADABLE]);
+		expect(mockCartWarn.mock.calls[0][1]).toMatchObject({
+			context: { site: 'settleAggregate' },
+		});
+	});
+
+	it('holds back unknown_tax_rate_id on the coupon pass while the rates are unread', async () => {
+		ratesRead = false;
+		settleAggregate.mockImplementation(() => ({ ...successfulAggregate(), changed: false }));
+		settleCart.mockImplementation(() => ({
+			ok: false as const,
+			error: { code: 'missing_coupon', missingCodes: ['save10'] },
+			warnings: [
+				{ code: 'unknown_tax_rate_id', rateId: 42 },
+				{ code: 'malformed_pos_data', where: { lineType: 'coupon_line', index: 0 } },
+			],
+		}));
+		applyCoupon([{ code: 'save10' }]);
+
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+
+		expect(settleCart).toHaveBeenCalled();
+		expect(codedWarnings()).toHaveLength(0);
+		const unreadable = mockCartWarn.mock.calls.filter(
+			([, options]) =>
+				(options as { code?: string } | undefined)?.code ===
+				ERROR_CODES.CART_LINE_PRICE_BASIS_UNREADABLE
+		);
+		expect(unreadable).toHaveLength(1);
+		expect(unreadable[0][1]).toMatchObject({ context: { site: 'settleCart' } });
 	});
 });

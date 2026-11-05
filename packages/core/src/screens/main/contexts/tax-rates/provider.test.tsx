@@ -30,7 +30,10 @@ const mockResource = { hits: allRates.map((payload) => ({ record: { payload } })
 /**
  * Swappable so the address tests can supply country-specific rates; reset in `beforeEach`.
  */
-let activeResource: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResource;
+let activeResource: {
+	hits: { record: { payload: unknown }; document?: unknown }[];
+	unbound?: boolean;
+} = mockResource;
 
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => ({
 	resource: activeResource,
@@ -176,6 +179,27 @@ describe('TaxRatesProvider query-state consumption', () => {
 		);
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('4');
+	});
+
+	it('reports the rates unread while the binding holds the unbound placeholder', () => {
+		function RatesReadProbe() {
+			return <output data-testid="rates-read">{String(useTaxSettings().ratesRead)}</output>;
+		}
+		activeResource = { hits: [], unbound: true };
+		const { rerender } = render(
+			<TaxRatesProvider>
+				<RatesReadProbe />
+			</TaxRatesProvider>
+		);
+		expect(screen.getByTestId('rates-read').textContent).toBe('false');
+
+		activeResource = { hits: [] };
+		rerender(
+			<TaxRatesProvider>
+				<RatesReadProbe />
+			</TaxRatesProvider>
+		);
+		expect(screen.getByTestId('rates-read').textContent).toBe('true');
 	});
 });
 

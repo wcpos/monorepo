@@ -7,6 +7,7 @@ import { settleAggregate, settleCart, snapshotFromOrderJSON } from '@wcpos/order
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useRecordField } from '@wcpos/query';
+import type { EngineWarning } from '@wcpos/order-math';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { useCartConfig } from './use-cart-config';
@@ -16,8 +17,24 @@ import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-or
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
 import { useT } from '../../../../contexts/translations';
+import { useTaxSettings } from '../../contexts/tax-rates';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+
+/**
+ * Until the rates have been read, `unknown_tax_rate_id` is not evidence (#3186): no engine
+ * database was bound, so the empty rate set says nothing about which rates the store holds.
+ * The settle still runs and writes; only this report waits. `ratesRead` is itself an input
+ * of `cartTotal$`, so the cart re-settles when the rates land, and a rate that really was
+ * dropped is reported then.
+ */
+function withoutUnreadRateWarnings(
+	warnings: readonly EngineWarning[],
+	ratesRead: boolean
+): readonly EngineWarning[] {
+	if (ratesRead) return warnings;
+	return warnings.filter((warning) => warning.code !== 'unknown_tax_rate_id');
+}
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
 
@@ -143,6 +160,7 @@ export const useCartSettlement = () => {
 	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
 	const reportEngineWarnings = useReportEngineWarnings();
 	const cartConfig = useCartConfig();
+	const { ratesRead } = useTaxSettings();
 	const t = useT();
 
 	/**
@@ -215,6 +233,9 @@ export const useCartSettlement = () => {
 			shippingLines,
 			couponLines,
 			cartConfig,
+			// The first real read must run a pass even when it finds no rates: a report
+			// held back on the unbound pass has nothing else to bring it back (#3186).
+			ratesRead,
 		]
 	);
 
@@ -270,7 +291,7 @@ export const useCartSettlement = () => {
 			// Before the `changed` bail, not after: a cart whose money is already
 			// correct can still be resting on a tax rate the store has dropped, and
 			// that is precisely the order the cashier must be told about.
-			reportEngineWarnings(result.warnings, {
+			reportEngineWarnings(withoutUnreadRateWarnings(result.warnings, ratesRead), {
 				orderId: freshOrder.uuid,
 				site: 'settleAggregate',
 			});
@@ -286,7 +307,7 @@ export const useCartSettlement = () => {
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[cartConfig, localPatch, reportEngineWarnings]
+		[cartConfig, localPatch, ratesRead, reportEngineWarnings]
 	);
 
 	/**
@@ -322,7 +343,7 @@ export const useCartSettlement = () => {
 				// BOTH branches carry warnings, and the failed one is where they matter
 				// most: the coupon gate stopped the replay, so whatever the engine could
 				// not read is still on the order the cashier is about to charge for.
-				reportEngineWarnings(result.warnings, {
+				reportEngineWarnings(withoutUnreadRateWarnings(result.warnings, ratesRead), {
 					orderId: freshOrder.uuid,
 					site: 'settleCart',
 				});
@@ -393,6 +414,7 @@ export const useCartSettlement = () => {
 			currentOrderRecord,
 			getCouponContext,
 			localPatch,
+			ratesRead,
 			reportEngineWarnings,
 			t,
 		]

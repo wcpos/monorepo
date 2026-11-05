@@ -21,6 +21,7 @@ export type TaxRateData = EngineRecord<'taxRates'>['payload'];
 
 interface QueryResult {
 	hits: { record: EngineRecord<'taxRates'> }[];
+	unbound?: boolean;
 }
 
 /** Address fields used to select the applicable tax rates. */
@@ -40,6 +41,8 @@ export type TaxBasedOn = 'base' | 'shipping' | 'billing';
  */
 export interface TaxSettingsContextProps {
 	allRates: TaxRateData[];
+	/** False while `allRates` is the placeholder emitted before any engine database is bound. */
+	ratesRead: boolean;
 	shippingTaxClass: string;
 	calcTaxes: boolean;
 	pricesIncludeTax: boolean;
@@ -133,6 +136,7 @@ function TaxSettingsFromRates({
 }) {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
+	const ratesRead = !result.unbound;
 
 	const { store } = useStoreSession();
 	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
@@ -175,6 +179,7 @@ function TaxSettingsFromRates({
 	const value = React.useMemo<TaxSettingsContextProps>(
 		() => ({
 			allRates, // all rates are needed sometimes for itemized tax display
+			ratesRead,
 			shippingTaxClass: shippingTaxClass as string,
 			calcTaxes: calcTaxes as boolean,
 			pricesIncludeTax: pricesIncludeTax as boolean,
@@ -184,6 +189,7 @@ function TaxSettingsFromRates({
 		}),
 		[
 			allRates,
+			ratesRead,
 			shippingTaxClass,
 			calcTaxes,
 			pricesIncludeTax,
