@@ -17,6 +17,9 @@ import {
 const logger = getLogger(['wcpos', 'customer-display', 'service']);
 // Five seconds is the POS-side signaling and pairing-registry cadence in contract v1.
 const REGISTRY_POLL_MS = 5000;
+// Two seconds matches the display page's own poll; used only while the server reports a display
+// online but its session is not yet configured, so a switched-off display adds no load.
+const HANDSHAKE_POLL_MS = 2000;
 export interface CustomerDisplayServiceOptions {
 	http: HttpFunction;
 	deviceId: string;
@@ -234,13 +237,17 @@ export class CustomerDisplayService {
 			this.activePairingCode() ||
 			this.displays.some(({ id }) => !this.sessions.get(id)?.isConfigured);
 		if (needsPoll) {
+			const handshaking = this.displays.some(
+				({ id, connected }) => connected && !this.sessions.get(id)?.isConfigured
+			);
+			const delay = handshaking ? HANDSHAKE_POLL_MS : REGISTRY_POLL_MS;
 			this.timer = setTimeout(() => {
 				void this.refreshDisplays().catch((error) => {
 					logger.warn('Customer display registry poll failed', {
 						context: { error: getErrorMessage(error) },
 					});
 				});
-			}, REGISTRY_POLL_MS);
+			}, delay);
 		}
 	}
 
