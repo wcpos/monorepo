@@ -249,11 +249,15 @@ via the toggle if needed):
       (src read from the live payload, then asserted on that variation's row — #1577)
 - [x] Adding the same variation twice increments quantity to 2
 
-### pos-coupon-apply.spec.ts — coupon application parity (pro + writer gated) — 1 test
+### pos-coupon-apply.spec.ts — coupon application parity — 2 tests
 
 - [x] Create-and-find percent probe coupon → apply via cart UI → save → coupon_lines,
       discount/total/cart_tax parity, rate-set equality; banner-absence parked on
-      woocommerce-pos#1548 (see Money-oracle doctrine)
+      woocommerce-pos#1548 (see Money-oracle doctrine) (pro + writer gated)
+- [x] Old session (#3243, free + pro): `page.clock` jumps 16 min so coverage compaction
+      removes the boot-only taxRates lane, then a fixed quick discount → the persisted
+      `discount_total` is non-zero and the Pay button shows the discounted total. Fails on
+      the provider without the per-generation rates latch; passes without the jump.
 
 ### coupons.spec.ts — Coupons drawer page — 6 tests
 
