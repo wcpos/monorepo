@@ -459,6 +459,21 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 	});
 });
 
+it('a no sale whose drawer refused records once: the retry only opens the drawer', async () => {
+	openDrawer.mockRejectedValueOnce(new Error('drawer offline'));
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-no-sale'));
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Wrong change' } });
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	await waitFor(() => expect(screen.getByText('Error: drawer offline')).toBeTruthy());
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	await waitFor(() => expect(openDrawer).toHaveBeenCalledTimes(2));
+	await waitFor(() => expect(screen.queryByTestId('movement-confirm')).toBeNull());
+	// Catches the retry minting a second no-sale row and a second Undo toast.
+	expect(recordMovement).toHaveBeenCalledTimes(1);
+	expect(showToast).toHaveBeenCalledTimes(1);
+});
+
 it('the keypad decimal key stores a canonical point whatever the locale shows', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));

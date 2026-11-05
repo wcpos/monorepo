@@ -140,6 +140,15 @@ export function MovementSheet({
 	const { busy, exclusive } = useExclusive();
 	const noteRef = React.useRef<TextInputInstance>(null);
 	const [error, setError] = React.useState('');
+	// A no-sale already recorded when its drawer refused: the retry only opens the drawer (#2001).
+	const noSaleRecorded = React.useRef(false);
+	React.useEffect(() => {
+		noSaleRecorded.current = false;
+	}, [type]);
+	const handleOpenChange = (open: boolean) => {
+		if (!open) noSaleRecorded.current = false;
+		onOpenChange(open);
+	};
 	const t = useT();
 	const words: Record<string, string> = {
 		paid_in: t('register.question_paid_in'),
@@ -197,17 +206,26 @@ export function MovementSheet({
 		// characters and a trailing space passes here and 400s on arrival if sent raw.
 		const trimmedReason = reason.trim();
 		try {
-			const row = await actions.recordMovement({ type, amount: normalized, reason: trimmedReason });
-			onDone(row.id, type, normalized);
-			if (type === 'no_sale') await openDrawer();
-			onOpenChange(false);
+			if (!noSaleRecorded.current) {
+				const row = await actions.recordMovement({
+					type,
+					amount: normalized,
+					reason: trimmedReason,
+				});
+				onDone(row.id, type, normalized);
+			}
+			if (type === 'no_sale') {
+				noSaleRecorded.current = true;
+				await openDrawer();
+			}
+			handleOpenChange(false);
 		} catch (e) {
 			setError(String(e));
 		}
 	};
 	const confirm = () => exclusive('confirm', runConfirm);
 	return (
-		<Dialog open={!!type} onOpenChange={onOpenChange}>
+		<Dialog open={!!type} onOpenChange={handleOpenChange}>
 			<DialogContent side={side} size="lg" portalHost={portalHost}>
 				<DialogHeader>
 					<DialogTitle>{type ? words[type] : ''}</DialogTitle>

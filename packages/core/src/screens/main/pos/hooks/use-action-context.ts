@@ -23,6 +23,8 @@ export function useActionContext(): {
 	ctx: ActionContext;
 	actor: ActionActor;
 	cashier: Cashier | null;
+	/** Whether the bound register's session is being counted; an event-time read, never a subscription. */
+	readCounting: () => Promise<boolean>;
 } {
 	const runtime = useQueryRuntime();
 	const t = useT();
@@ -73,6 +75,23 @@ export function useActionContext(): {
 							id: String(userId),
 							name: wpCredentials.display_name || wpCredentials.username || '',
 						},
+			// `findOpenSession` matches `status: 'open'` only, so the counting row is read directly.
+			// Every product tile mounts the add hooks: this runs on the tap or scan, not in render.
+			readCounting: async () => {
+				if (!sessionsOn) return false;
+				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
+				if (!registerId) return false;
+				const counting = await storeDB.collections.register_sessions
+					?.findOne({
+						selector: {
+							register_id: registerId,
+							status: 'counting',
+							sync_status: { $ne: 'failed' },
+						},
+					})
+					.exec();
+				return !!counting;
+			},
 		}),
 		[
 			runtime,
