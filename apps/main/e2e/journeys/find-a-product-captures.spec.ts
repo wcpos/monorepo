@@ -47,8 +47,9 @@ const SHOTS: Record<number, { id: CheckpointId; pins: readonly string[] }> = {
 		id: 'done',
 		pins: [
 			'search-products',
-			'products-settings-button',
+			'camera-scan-button',
 			'view-mode-toggle',
+			'products-settings-button',
 			'filter-pill-stock_status',
 			'filter-pill-featured',
 			'filter-pill-on_sale',
