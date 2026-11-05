@@ -3,6 +3,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import {
 	becomesVisible,
 	getStoreUrl,
+	getStoreVariant,
 	isRouteTeardownError,
 	isWcposRestRoute,
 	navigateToPage,
@@ -522,7 +523,9 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 
 	liveTest(
 		're-opening an order from Orders leaves exactly one POS screen',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
+			// The Orders page is Pro-only; free draws the upgrade overlay over the rows.
+			liveTest.skip(getStoreVariant(testInfo) !== 'pro', 'Orders page requires Pro');
 			liveTest.slow();
 			const label = newRunLabel();
 			await addTestProductToCart(page);
