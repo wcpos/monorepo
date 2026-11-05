@@ -26,16 +26,73 @@ export async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promis
 	}).toPass({ timeout: 30_000 });
 }
 
-/** J1 "Open the register" as a shared start state for other journeys. */
-export async function openRegister(page: Page): Promise<void> {
-	await test.step('Open the register', async () => {
+/**
+ * J1 "Open the register" as a shared start state for other journeys. Resolves true only when this
+ * call opened the session; a caller on a shared store closes what it opened with `closeRegister`.
+ */
+export async function openRegister(page: Page): Promise<boolean> {
+	return test.step('Open the register', async () => {
 		// The register card lives in the cart, which a phone shows on its Cart tab.
 		const phone = (await posLayout(page)) === 'phone';
 		if (phone) await showPhoneTab(page, 'cart');
 		// Idempotent: an already-open register resolves on its ready cart header. Choosing a
 		// register takes a phone back to Products, with the card still mounted off-screen.
-		await ensureRegisterOpen(page, {
+		return ensureRegisterOpen(page, {
 			afterPicking: phone ? () => showPhoneTab(page, 'cart') : undefined,
 		});
+	});
+}
+
+/**
+ * The drawer tile's formatted figure as the count field's input: its digits, with the last
+ * separator kept as the decimal point when one or two digits follow it.
+ */
+function cashInput(figure: string): string {
+	const number = /\d[\d.,'\s\u00a0\u202f]*/.exec(figure)?.[0].replace(/[^\d]+$/, '') ?? '';
+	const decimals = /[.,](\d{1,2})$/.exec(number)?.[1];
+	const whole = (decimals ? number.slice(0, -decimals.length - 1) : number).replace(/\D/g, '');
+	return decimals ? `${whole}.${decimals}` : whole;
+}
+
+/**
+ * Close the session through the register's one door (avatar, cashier sheet, In the drawer), as
+ * register-closure.spec.ts does, counting exactly what the drawer expects so a closure on a shared
+ * store never records a variance: `count-exact` must show before anything is closed. A blind
+ * cashier is shown no expected cash, and that fails here rather than guessing a count.
+ */
+export async function closeRegister(page: Page): Promise<void> {
+	await test.step('Close the register', async () => {
+		// The phone mounts a register bar per tab, both "visible", one off-screen: press the
+		// avatar that is on screen (forced, as in register-captures.spec.ts, as the bars stack).
+		if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'cart');
+		const width = page.viewportSize()?.width ?? 0;
+		for (const avatar of await page.getByTestId('register-bar-avatar').all()) {
+			const box = await avatar.boundingBox();
+			if (box && box.x >= 0 && box.x < width) {
+				await avatar.click({ force: true });
+				break;
+			}
+		}
+		await page.getByTestId('user-sheet-drawer').click();
+		const drawer = page.getByTestId('register-panel-drawer');
+		await expect(drawer, 'the expected cash, which a blind cashier is not shown').toBeVisible({
+			timeout: 15_000,
+		});
+		// The figure reads '—' until the session's figures arrive.
+		await expect(drawer).toHaveText(/\d/, { timeout: 30_000 });
+		const expected = cashInput((await drawer.textContent()) ?? '');
+		await page.getByTestId('register-panel-close-register').click();
+		const count = page.getByTestId('count-amount');
+		await expect(count).toBeVisible({ timeout: 15_000 });
+		await count.fill(expected);
+		await expect(
+			page.getByTestId('count-exact'),
+			`a count of ${expected} must match the expected cash`
+		).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('count-close').click();
+		await expect(page.getByTestId('closure-title')).toBeVisible({ timeout: 30_000 });
+		await page.getByTestId('closure-done').click();
+		await expect(page.getByTestId('closure-written')).toHaveCount(0, { timeout: 15_000 });
+		console.log(`[register] closed, counted ${expected}`);
 	});
 }

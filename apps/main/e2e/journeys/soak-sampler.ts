@@ -42,6 +42,8 @@ type SoakBuffer = {
 
 type Stats = { min: number; median: number; p95: number; max: number } | null;
 export interface SoakSummary {
+	/** One per run, on every CSV row too, so files from two runs never mix unseen. */
+	runId: string;
 	loops: number;
 	loopMs: Stats;
 	loopsPer8h: number | null;
@@ -55,6 +57,8 @@ export interface SoakSummary {
 	/** Entry types the browser does not support; empty means every observer ran. */
 	observersUnavailable: string[];
 	cartAddMs: { median: number | null; p95: number | null; max: number | null; nulls: number };
+	/** Orders the per-loop trash could not remove; the teardown tries them again. */
+	ordersNotTrashed: number;
 }
 
 export interface SoakSampler {
@@ -65,7 +69,7 @@ export interface SoakSampler {
 	/** GC checkpoint: forced collect, then one metrics read, labelled. */
 	checkpoint(label: string): Promise<void>;
 	/** Stop timers; attach soak-samples.csv, soak-loops.csv, soak-memory.csv, soak-checkpoints.csv and soak-summary.json. */
-	finish(): Promise<SoakSummary>;
+	finish(totals: { ordersNotTrashed: number }): Promise<SoakSummary>;
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -79,13 +83,15 @@ function stats(values: number[]): Stats {
 }
 const ok = <T extends { error?: string }>(rows: T[]) => rows.filter((r) => r.error === undefined);
 
-function csv(columns: readonly string[], rows: object[]): string {
+/** A first `runId` column carries the run's id on every row. */
+function csv(names: readonly string[], rows: object[], runId: string): string {
+	const columns = ['runId', ...names];
 	const cell = (value: unknown) => {
 		const text = value === undefined || value === null ? '' : String(value);
 		return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 	};
 	const line = (row: Record<string, unknown>) => columns.map((c) => cell(row[c])).join(',');
-	return [columns.join(','), ...rows.map((row) => line(row as Record<string, unknown>))].join('\n');
+	return [columns.join(','), ...rows.map((row) => line({ ...row, runId }))].join('\n');
 }
 
 /**
@@ -155,6 +161,8 @@ export async function createSoakSampler(page: Page, testInfo: TestInfo): Promise
 	await cdp.send('Performance.enable');
 	await cdp.send('HeapProfiler.enable');
 	const startedAt = Date.now();
+	// The format capture-manifest.ts stamps its runs with.
+	const runId = `soak-${new Date(startedAt).toISOString().replace(/[-:]|\.\d{3}Z$/g, '')}`;
 	const row = (label: string): Row => ({
 		label,
 		at: new Date().toISOString(),
@@ -244,7 +252,7 @@ export async function createSoakSampler(page: Page, testInfo: TestInfo): Promise
 			}
 			console.log(`[soak-checkpoint] ${JSON.stringify(checkpoints[checkpoints.length - 1])}`);
 		},
-		async finish() {
+		async finish({ ordersNotTrashed }) {
 			timers.forEach(clearInterval);
 			await Promise.allSettled([...inFlight]);
 			await sampleUaMemory('end');
@@ -259,6 +267,7 @@ export async function createSoakSampler(page: Page, testInfo: TestInfo): Promise
 			const goodMemory = ok(memory);
 			const total = (key: string) => loops.reduce((sum, l) => sum + Number(l[key] ?? 0), 0);
 			const summary: SoakSummary = {
+				runId,
 				loops: loops.length,
 				loopMs,
 				loopsPer8h: loopMs && loopMs.median > 0 ? Math.floor(EIGHT_HOURS_MS / loopMs.median) : null,
@@ -281,14 +290,18 @@ export async function createSoakSampler(page: Page, testInfo: TestInfo): Promise
 				uaMemoryLast,
 				observersUnavailable,
 				cartAddMs: { median, p95, max, nulls: loops.length - cartAdds.length },
+				ordersNotTrashed,
 			};
 			const stamp = ['label', 'at', 'elapsedMs'];
 			const loopColumns = ['journey', 'loop', 'wallMs', 'cartAddMs', ...LOOP_READING.split(' ')];
 			const files: [string, string][] = [
-				['soak-samples.csv', csv([...stamp, ...METRICS, 'error'], samples)],
-				['soak-loops.csv', csv([...loopColumns, 'observersReinstalled', 'error'], loops)],
-				['soak-memory.csv', csv([...stamp, ...MEMORY, 'error'], memory)],
-				['soak-checkpoints.csv', csv([...stamp, 'loopsSoFar', ...METRICS, 'error'], checkpoints)],
+				['soak-samples.csv', csv([...stamp, ...METRICS, 'error'], samples, runId)],
+				['soak-loops.csv', csv([...loopColumns, 'observersReinstalled', 'error'], loops, runId)],
+				['soak-memory.csv', csv([...stamp, ...MEMORY, 'error'], memory, runId)],
+				[
+					'soak-checkpoints.csv',
+					csv([...stamp, 'loopsSoFar', ...METRICS, 'error'], checkpoints, runId),
+				],
 				['soak-summary.json', JSON.stringify(summary, null, 2)],
 			];
 			// Written to disk and attached by path: a list-reporter run keeps no body attachment on disk.

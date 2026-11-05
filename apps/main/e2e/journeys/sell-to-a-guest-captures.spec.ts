@@ -16,9 +16,28 @@ import {
 } from '../capture-matrix';
 import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
+import { closeRegister, openRegister } from './open-register';
 import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
 test.skip(process.env.CAPTURES !== '1', 'J2 captures run only with CAPTURES=1');
+// `recordCapture` read-modifies-writes one manifest per page and locale, and this file runs under
+// `fullyParallel`, so serial is what makes that safe; one `--project` per run.
+test.describe.configure({ mode: 'serial' });
+
+/**
+ * Every cleanup runs even when one before it fails. After a failed walk a cleanup failure is only
+ * logged, so it never hides the walk's own error; after a passed walk the first one fails the test.
+ */
+async function cleanUp(walked: boolean, steps: [string, () => Promise<unknown>][]): Promise<void> {
+	const failures: unknown[] = [];
+	for (const [name, step] of steps) {
+		await step().catch((error: unknown) => {
+			if (walked) failures.push(error);
+			else console.error(`[cleanup] ${name} failed after the walk failed:`, error);
+		});
+	}
+	if (failures.length > 0) throw failures[0];
+}
 
 /** What each step's docs call-outs point at. A testID not on screen is left out of the manifest. */
 const PINS_BY_STEP: Record<number, readonly string[]> = {
@@ -62,9 +81,12 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					storeAuthorization,
 					trackOrder,
 				}, info) => {
-					test.setTimeout(300_000);
-					await ensureSystemTheme(posPage, { english: true });
-					let unscale = await applyScale(posPage, step);
+					// The walk, plus putting the register, theme and language back on the shared store.
+					test.setTimeout(420_000);
+					const restoreSettings = await ensureSystemTheme(posPage, { english: true });
+					let opened = false;
+					let walked = false;
+					let unscale = async () => {};
 					let cashEntryShot = false;
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
@@ -100,6 +122,9 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						});
 					};
 					try {
+						opened = await openRegister(posPage);
+						console.log(`[register] ${info.titlePath.at(-2)}: opened=${opened}`);
+						unscale = await applyScale(posPage, step);
 						await sellToAGuest({
 							page: posPage,
 							request,
@@ -122,8 +147,13 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 								await shoot(number, slug);
 							},
 						});
+						walked = true;
 					} finally {
-						await unscale();
+						await cleanUp(walked, [
+							['unscale', unscale],
+							['closeRegister', async () => opened && closeRegister(posPage)],
+							['restoreSettings', restoreSettings],
+						]);
 					}
 				});
 			});
