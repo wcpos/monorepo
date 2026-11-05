@@ -1,4 +1,10 @@
-import { columnsCheckoutHref, leaveSheet, returnToTill, tillHref } from './till-route';
+import {
+	columnsCheckoutHref,
+	leaveSheet,
+	returnToTill,
+	tillCartHref,
+	tillHref,
+} from './till-route';
 
 it.each([
 	[true, 'products', '/(app)/(drawer)/(pos)/(tabs)'],
@@ -75,4 +81,13 @@ it('builds the columns checkout href for one order', () => {
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
 		params: { orderId: ['o1', 'checkout'] },
 	});
+});
+
+it.each([
+	[true, 'o1', '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]', ['o1']],
+	[false, 'o1', '/cart/[...orderId]', ['o1']],
+	[true, undefined, '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]', []],
+	[false, undefined, '/cart/[...orderId]', []],
+] as const)('tillCartHref(%s, %s) pushes %s', (compact, orderId, pathname, ids) => {
+	expect(tillCartHref(compact, orderId)).toEqual({ pathname, params: { orderId: ids } });
 });

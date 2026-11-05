@@ -60,3 +60,11 @@ export function columnsCheckoutHref(orderId: string): Href {
 		params: { orderId: [orderId, 'checkout'] },
 	};
 }
+
+/** A reopened order's cart: /cart ties to (columns), not the phone's tabs (#2374). */
+export function tillCartHref(compact: boolean, orderId: string | undefined) {
+	return {
+		pathname: compact ? '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]' : '/cart/[...orderId]',
+		params: { orderId: orderId ? [orderId] : [] },
+	} as const;
+}
