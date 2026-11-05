@@ -26,8 +26,47 @@ const metaList = (obj) => Object.entries(obj).map(([key, value]) => ({ key, valu
 const seconds = (iso) => String(Math.floor(Date.parse(iso) / 1000));
 const gmt = (iso) => iso.slice(0, 19);
 
+/** A zone name Intl can convert with; anything else is skipped, as the app skips it. */
+function usableZone(zone) {
+	try {
+		return !!zone && !!new Intl.DateTimeFormat('en-US', { timeZone: zone });
+	} catch {
+		return false;
+	}
+}
+
+/** WordPress's gmt_offset as a zone, as packages/core/.../resolve-store-timezone.ts maps it. */
+function offsetZone(offset) {
+	if (!Number.isFinite(offset) || offset === 0) return 'UTC';
+	if (Math.trunc(offset) !== offset) {
+		const minutes = Math.round(Math.abs(offset) * 60);
+		const pad = (n) => String(n).padStart(2, '0');
+		return `${offset > 0 ? '+' : '-'}${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+	}
+	// POSIX Etc/GMT signs are inverted: UTC-5 is Etc/GMT+5.
+	return `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`;
+}
+
+const trimmed = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+/**
+ * The store's zone as the app's resolveDayTimezone (packages/core/src/hooks/use-store-day.ts)
+ * resolves it: the store's own, else the site's timezone_string, else the site's gmt_offset.
+ * Null when none is usable; the app would fall back to the device zone, the seed stops instead.
+ */
+export function resolveTimeZone(store, site) {
+	const candidates = [
+		trimmed(store?.timezone),
+		trimmed(site?.timezone_string),
+		site?.gmt_offset != null ? offsetZone(Number(site.gmt_offset)) : null,
+	];
+	return candidates.find(usableZone) ?? null;
+}
+
 export async function readStoreFacts(client, target) {
 	const rows = await client.getAll('/wp-json/wcpos/v1/stores');
+	// The REST index carries the site's timezone settings, as the app reads them at connect.
+	const site = await client.get('/wp-json/', { _fields: 'timezone_string,gmt_offset' });
 	const storeFacts = {};
 	const registers = {};
 	for (const store of target.stores) {
@@ -45,7 +84,9 @@ export async function readStoreFacts(client, target) {
 			postcode: r?.store_postcode ?? '',
 			country: r?.store_country ?? '',
 		});
-		storeFacts[store.key] = { timeZone: r?.timezone || 'UTC', address };
+		const timeZone = resolveTimeZone(r, site);
+		if (!timeZone) throw new SeedSafetyError(`store ${store.id} has no usable timezone`);
+		storeFacts[store.key] = { timeZone, address };
 		const list = await client
 			.getAll('/wp-json/wcpos/v2/registers', { store_id: store.id })
 			.catch(() => []);

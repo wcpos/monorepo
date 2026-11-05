@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { applyOrders, readStoreFacts, runApply, SeedSafetyError, verify } from './apply.mjs';
+import {
+	applyOrders,
+	readStoreFacts,
+	resolveTimeZone,
+	runApply,
+	SeedSafetyError,
+	verify,
+} from './apply.mjs';
 import { run } from './cli.mjs';
 import { createClient } from './client.mjs';
 import { planCustomers, planOrders } from './plan.mjs';
@@ -29,6 +36,8 @@ function fakeStore({
 	registers = REGISTERS,
 	taxes = [],
 	lineTaxes,
+	zones = {},
+	site = { timezone_string: 'Europe/London', gmt_offset: '0' },
 } = {}) {
 	const s = { requests: [], customers: [], coupons: [], orders: [], nextId: 500, registers, taxes };
 	s.products = [
@@ -43,7 +52,7 @@ function fakeStore({
 	}));
 	const stores = target.stores.map((st) => ({
 		id: st.id,
-		timezone: st.key === 'eu' ? 'Europe/Amsterdam' : 'America/Los_Angeles',
+		timezone: zones[st.key] ?? (st.key === 'eu' ? 'Europe/Amsterdam' : 'America/Los_Angeles'),
 		store_city: 'Portland',
 	}));
 	const page = (rows, q) =>
@@ -100,6 +109,7 @@ function fakeStore({
 		ALL.push(request);
 		const order = s.orders.find((o) => o.id === Number(u.pathname.split('/')[5]));
 		const routes = {
+			'GET /': () => site,
 			'GET /wcpos/v1/stores': () => page(stores, q),
 			'GET /wcpos/v2/registers': () => page(s.registers, q),
 			'GET /wc/v3/products': () =>
@@ -477,4 +487,36 @@ test('a refund carries one unit of each line tax, and a line with no taxes refun
 	assert.deepEqual(net.line_items[0].refund_tax, []);
 	assert.equal(net.line_items[0].refund_total, '10.00');
 	assert.equal(net.amount, '10.00');
+});
+
+async function zonesOf(store) {
+	const client = createClient({ url: target.url, credentials: CREDS, fetchImpl: store.fetchImpl });
+	const { storeFacts } = await readStoreFacts(client, target);
+	return Object.fromEntries(Object.entries(storeFacts).map(([k, f]) => [k, f.timeZone]));
+}
+
+test("a store's own timezone wins over the site's", async () => {
+	const zones = await zonesOf(fakeStore({ site: { timezone_string: 'Asia/Tokyo' } }));
+	assert.equal(zones.eu, 'Europe/Amsterdam');
+	assert.equal(zones.us, 'America/Los_Angeles');
+});
+
+test("a store with an empty timezone inherits the site's, as the app resolves it", async () => {
+	const site = { timezone_string: 'Asia/Tokyo', gmt_offset: '9' };
+	const zones = await zonesOf(fakeStore({ zones: { uk: ' ' }, site }));
+	assert.equal(zones.uk, 'Asia/Tokyo');
+	const offset = await zonesOf(fakeStore({ zones: { uk: '' }, site: { gmt_offset: '-5' } }));
+	assert.equal(offset.uk, 'Etc/GMT+5');
+	const half = resolveTimeZone({ timezone: '' }, { timezone_string: '', gmt_offset: 5.5 });
+	assert.equal(half, '+05:30');
+});
+
+test('a store whose timezone cannot be resolved stops the run, naming the store id', async () => {
+	const site = { timezone_string: 'Nowhere' };
+	const store = fakeStore({ zones: { wholesale: 'Not/AZone' }, site });
+	const { error, logs } = await apply(store);
+	assert.ok(error instanceof SeedSafetyError);
+	assert.equal(error.message, 'store 14214 has no usable timezone');
+	assert.equal(store.writes().length, 0);
+	assert.equal(logs.length, 0);
 });
