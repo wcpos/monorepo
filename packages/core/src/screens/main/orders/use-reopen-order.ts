@@ -18,7 +18,7 @@ import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useOrderRecord, useUndoRefusedReopen } from './commands/use-order-record';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
-import { standaloneCheckoutHref } from '../pos/checkout/till-route';
+import { openTill, standaloneCheckoutHref } from '../pos/checkout/till-route';
 
 const logger = getLogger(['wcpos', 'orders', 'reopen']);
 
@@ -185,10 +185,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 				);
 		}
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-		router.push({
-			pathname: '/cart/[...orderId]',
-			params: { orderId: order.uuid ? [order.uuid] : [] },
-		});
+		openTill(router, order.uuid);
 	}, [
 		blockIfDegraded,
 		reopenOrder,

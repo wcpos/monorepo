@@ -29,6 +29,7 @@ import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/comm
 import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
+import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
@@ -186,6 +187,7 @@ function POSStack() {
 				<SettlementCoordinatorProvider />
 				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
 					<Stack
+						screenListeners={tillStackScreenListeners}
 						screenOptions={{
 							animation: 'none',
 							headerShown: false,

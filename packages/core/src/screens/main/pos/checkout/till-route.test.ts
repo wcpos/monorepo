@@ -1,4 +1,4 @@
-import { columnsCheckoutHref, leaveSheet, returnToTill, tillHref } from './till-route';
+import { columnsCheckoutHref, leaveSheet, openTill, returnToTill, tillHref } from './till-route';
 
 it.each([
 	[true, 'products', '/(app)/(drawer)/(pos)/(tabs)'],
@@ -74,5 +74,24 @@ it('builds the columns checkout href for one order', () => {
 	expect(columnsCheckoutHref('o1')).toEqual({
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
 		params: { orderId: ['o1', 'checkout'] },
+	});
+});
+
+describe('openTill', () => {
+	it('navigates to the requested order', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, 'o2');
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/cart/[...orderId]',
+			params: { orderId: ['o2'] },
+		});
+	});
+
+	it('navigates to a new cart without an order', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router);
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 });

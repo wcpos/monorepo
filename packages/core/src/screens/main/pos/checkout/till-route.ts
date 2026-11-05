@@ -60,3 +60,13 @@ export function columnsCheckoutHref(orderId: string): Href {
 		params: { orderId: [orderId, 'checkout'] },
 	};
 }
+
+/** Opens the till on an order (or on a new cart) from anywhere in the app. The (pos) stack's own
+ * invariant (`till-stack.ts`) settles the stack if the navigate lands a second till. */
+export function openTill(router: Pick<ImperativeRouter, 'navigate'>, orderId?: string): void {
+	router.navigate(
+		orderId
+			? { pathname: '/cart/[...orderId]', params: { orderId: [orderId] } }
+			: { pathname: '/cart' }
+	);
+}
