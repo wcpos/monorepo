@@ -1163,4 +1163,33 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 			view.unmount();
 		}
 	});
+
+	it('opens when only the rates read answers, with inputs, coverage and generation unchanged', async () => {
+		mockRatesRead = false;
+		currentConfig = createCartConfig({ ...config, calcTaxes: true });
+		mockInputs = { ...mockInputs, rates: [] };
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			const coverageBefore = coverage.value;
+			const inputsBefore = mockInputs;
+			const statusesBefore = statuses.value;
+			expect(coverageBefore.complete).toBe(true);
+			expect(ready()).toBe(false);
+			expect(writes).toEqual([]);
+
+			// A zero-rate store: the read answering leaves `allRates` at [], so nothing else moves.
+			mockRatesRead = true;
+			view.rerender(<SettlementCoordinatorProvider />);
+			await flush();
+			expect(coverage.value).toBe(coverageBefore);
+			expect(mockInputs).toBe(inputsBefore);
+			expect(statuses.value).toBe(statusesBefore);
+			// Catches: `ratesRead` missing from the readiness effect's deps, a gate that never opens.
+			expect(ready()).toBe(true);
+			expect(writes).toEqual([expect.objectContaining({ total: '10' })]);
+		} finally {
+			view.unmount();
+		}
+	});
 });
