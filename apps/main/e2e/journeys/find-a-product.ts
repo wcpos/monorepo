@@ -88,12 +88,24 @@ export interface Catalogue {
 }
 export type ProductWalk = { layout: 'phone' | 'columns'; catalogue: Catalogue };
 
-type WcProduct = { id: number; name: string; sku?: string; variations?: number[] };
+type WcProduct = {
+	id: number;
+	name: string;
+	sku?: string;
+	variations?: number[];
+	meta_data?: { key: string; value: unknown }[];
+};
 type WcCategory = { id: number; name: string; slug: string; count: number };
 type Options = { headers: Record<string, string>; params: Record<string, string> };
 
 /** A name a cashier would type: no undecoded entity, never an E2E probe's (made mid-run). */
 const typeable = (name: string) => name.trim().length > 2 && !/[&<>#;]|\bE2E\b/.test(name);
+
+/** `wc/v3` lists what the POS hides: a product marked online only never reaches a till. */
+const onPos = (product: WcProduct) =>
+	!product.meta_data?.some(
+		({ key, value }) => key === '_pos_visibility' && value === 'online_only'
+	);
 
 /** The outlets' scan settings, read the way `money-oracle-sale.ts` reads the store document. */
 async function readScanSettings(request: APIRequestContext, storeUrl: string, options: Options) {
@@ -142,7 +154,9 @@ export async function readCatalogue(
 		return undefined;
 	};
 	const sellable = { ...published, stock_status: 'instock' };
-	const inStock = (await read<WcProduct>('products', { ...sellable, type: 'simple' })).records;
+	const inStock = (
+		await read<WcProduct>('products', { ...sellable, type: 'simple' })
+	).records.filter(onPos);
 	// The searched product carries the scan code when the store has one long enough (Woo keeps
 	// SKUs unique, so a code found here names exactly one product).
 	const scannable = inStock.filter((product) => (product.sku ?? '').length >= minChars);
@@ -157,14 +171,16 @@ export async function readCatalogue(
 		.filter((c) => c.count > 0 && c.slug !== 'uncategorized' && typeable(c.name))
 		.sort((left, right) => left.count - right.count)
 		.slice(0, 10)) {
-		const query = { ...sellable, per_page: '1', category: `${candidate.id}` };
-		const [member] = (await read<WcProduct>('products', query)).records;
+		const query = { ...sellable, per_page: '10', category: `${candidate.id}` };
+		const member = (await read<WcProduct>('products', query)).records.find(onPos);
 		category = member && { id: candidate.id, name: candidate.name, productId: member.id };
 		if (category) break;
 	}
 	if (!category) throw new Error('the store has no category holding a published, in-stock product');
 	const variable = await read<WcProduct>('products', { ...published, type: 'variable' });
-	const found = await distinct(variable.records.filter((p) => (p.variations ?? []).length > 0));
+	const found = await distinct(
+		variable.records.filter((p) => onPos(p) && (p.variations ?? []).length > 0)
+	);
 	return {
 		searchTerm: { id: searched.id, name: searched.name },
 		category,
