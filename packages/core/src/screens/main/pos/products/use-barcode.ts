@@ -24,7 +24,8 @@ import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
-import { useAddProduct } from '../hooks/use-add-product';
+import { useActionContext } from '../hooks/use-action-context';
+import { showCountingNotice, useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 import { resolveStock } from '../../components/product/resolve-stock';
 import { useScanFeedback } from './use-scan-feedback';
@@ -118,6 +119,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
+	const { readCounting } = useActionContext();
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -169,6 +171,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const guardedClearSearch = () => {
 			if (scanTicketRef.current === scanTicket) clearSearch();
 		};
+		// Refused before the lookup, so a scan during a count never reads as "not found" (#2001).
+		if (await readCounting()) {
+			showCountingNotice(t);
+			return;
+		}
 		let results = await barcodeSearch(barcodeStr, event.symbology);
 		let onlineParentRequired = false;
 		// The online lookup shows a persistent "Searching store…" toast; track it so a

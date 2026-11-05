@@ -272,9 +272,13 @@ describe('switchStore', () => {
 		jest.clearAllMocks();
 
 		// A different store id than `current`, so the switch actually runs.
+		let switched: boolean | undefined;
 		await act(async () => {
-			await result.current.switchStore({ localID: 'store-9' } as never);
+			switched = await result.current.switchStore({ localID: 'store-9' } as never);
 		});
+
+		// Refused, so the caller does not treat it as a switch.
+		expect(switched).toBe(false);
 
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		const [message, options] = (logger.error as jest.Mock).mock.calls[0];
@@ -284,6 +288,20 @@ describe('switchStore', () => {
 		expect(options.context.storeID).toBe('store-9');
 		// The current session is untouched.
 		expect(hasStoreSession(result.current)).toBe(true);
+	});
+
+	it('resolves true for the store already open', async () => {
+		const base = sessionBase();
+		mockHydration.context = { ...base, storeDB, store, site, wpCredentials, extraData };
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+		await waitFor(() => expect(hasStoreSession(result.current)).toBe(true));
+
+		let switched: boolean | undefined;
+		await act(async () => {
+			switched = await result.current.switchStore({ localID: 'store-1' } as never);
+		});
+		expect(switched).toBe(true);
+		expect(switchUserSessionStore).not.toHaveBeenCalled();
 	});
 });
 
