@@ -12,7 +12,9 @@ import {
 	CAPTURE_SCHEMES,
 	CAPTURE_STEPS,
 	captureViewport,
+	cleanUp,
 	ensureSystemTheme,
+	hasScaleStyle,
 } from '../capture-matrix';
 import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
@@ -23,21 +25,6 @@ test.skip(process.env.CAPTURES !== '1', 'J2 captures run only with CAPTURES=1');
 // `recordCapture` read-modifies-writes one manifest per page and locale, and this file runs under
 // `fullyParallel`, so serial is what makes that safe; one `--project` per run.
 test.describe.configure({ mode: 'serial' });
-
-/**
- * Every cleanup runs even when one before it fails. After a failed walk a cleanup failure is only
- * logged, so it never hides the walk's own error; after a passed walk the first one fails the test.
- */
-async function cleanUp(walked: boolean, steps: [string, () => Promise<unknown>][]): Promise<void> {
-	const failures: unknown[] = [];
-	for (const [name, step] of steps) {
-		await step().catch((error: unknown) => {
-			if (walked) failures.push(error);
-			else console.error(`[cleanup] ${name} failed after the walk failed:`, error);
-		});
-	}
-	if (failures.length > 0) throw failures[0];
-}
 
 /** What each step's docs call-outs point at. A testID not on screen is left out of the manifest. */
 const PINS_BY_STEP: Record<number, readonly string[]> = {
@@ -84,15 +71,6 @@ const LABELLED_STEPS = [3, 5, 6];
 
 /** Docs shots come only from demo; dev stores differ (no register bar, their own receipt templates). */
 const DOCS_STORE = 'demo.wcpos.com';
-
-/** Whether the scale style tag `applyScale` adds is still in the document. */
-function hasScaleStyle(page: Page): Promise<boolean> {
-	return page.evaluate(() =>
-		Array.from(document.querySelectorAll('style')).some((style) =>
-			style.textContent?.startsWith(':root, [style*="--spacing:"]')
-		)
-	);
-}
 
 /** Step 6 waits for the receipt to finish drawing; a store with no receipt to draw counts as drawn. */
 async function receiptDrawn(page: Page): Promise<void> {
