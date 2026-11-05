@@ -70,7 +70,7 @@ const PINS_BY_STEP: Record<number, readonly string[]> = {
 		'receipt-paid-with',
 		'receipt-template-select',
 		'receipt-printer-select',
-		'receipt-preview-frame',
+		'receipt-preview',
 		'receipt-print-button',
 		'receipt-email-button',
 		'receipt-new-sale',
