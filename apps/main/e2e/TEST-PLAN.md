@@ -208,6 +208,8 @@ POS Checkout:
 
 Real payment against the live store (**writes**, see "Live-store write discipline" below):
 
+- [x] Prints after checkout with the receipt hidden (show off, print on, cash sale: the hidden
+      `wcpos-print-frame` is printed exactly once, no receipt on screen, the cart is empty)
 - [x] Completes a real payment and reads the order back from the store REST API: order
       exists and carries this run's label, `date_paid` is set and the status is not a
       failure state, line-item count and quantities match the cart, line-item
