@@ -1,4 +1,23 @@
-import { returnToTill } from './till-route';
+import { openTill, returnToTill } from './till-route';
+
+describe('openTill', () => {
+	it('navigates to an existing order', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, 'order-uuid');
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/cart/[...orderId]',
+			params: { orderId: ['order-uuid'] },
+		});
+	});
+
+	it('navigates to a new cart when no order is supplied', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router);
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({ pathname: '/cart' });
+	});
+});
 
 describe('returnToTill', () => {
 	it('dismisses the checkout sheet when there is a screen beneath it', () => {
