@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Platform, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
+
+import { Platform } from '@wcpos/utils/platform';
 
 /**
  * The one layout boundary (owner, 2026-10-02). A window at least this wide AND this tall gets

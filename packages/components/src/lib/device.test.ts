@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
 import { act, renderHook } from '@testing-library/react';
+
+import { Platform } from '@wcpos/utils/platform';
 
 import { DeviceScope, useIsPhone, usePointer } from './device';
 
