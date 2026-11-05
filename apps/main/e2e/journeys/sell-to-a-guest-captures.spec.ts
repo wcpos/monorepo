@@ -64,7 +64,6 @@ const PINS_BY_STEP: Record<number, readonly string[]> = {
 		'checkout-quick-exact',
 		'checkout-keypad',
 		'checkout-commit',
-		'checkout-ledger',
 	],
 	6: [
 		'receipt-change-due',
@@ -82,6 +81,9 @@ const PINS_BY_STEP: Record<number, readonly string[]> = {
 // The docs page shows these steps' tablet shots fully labelled and numbers its legend from the
 // manifest's pin order, so a missing pin would silently move every later number onto the wrong label.
 const LABELLED_STEPS = [3, 5, 6];
+
+/** Docs shots come only from demo; dev stores differ (no register bar, their own receipt templates). */
+const DOCS_STORE = 'demo.wcpos.com';
 
 /** Whether the scale style tag `applyScale` adds is still in the document. */
 function hasScaleStyle(page: Page): Promise<boolean> {
@@ -121,6 +123,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
+					const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
 						if (!(await hasScaleStyle(posPage))) {
@@ -137,10 +140,15 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						const pins = await readPins(posPage, PINS_BY_STEP[number]);
 						const pinned = pins.map((pin) => pin.testID);
 						const missing = PINS_BY_STEP[number].filter((id) => !pinned.includes(id));
-						if (device === 'tablet' && LABELLED_STEPS.includes(number) && missing.length > 0) {
+						if (
+							docsShoot &&
+							device === 'tablet' &&
+							LABELLED_STEPS.includes(number) &&
+							missing.length > 0
+						) {
 							throw new Error(`${state} is a labelled shot missing pins: ${missing.join(', ')}`);
 						}
-						if (number === 6) {
+						if (docsShoot && number === 6) {
 							const warning = `${state} would show the thermal printer warning; the docs must not`;
 							await expect(posPage.getByTestId('receipt-printer-mismatch'), warning).toHaveCount(0);
 						}
@@ -192,6 +200,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						walked = true;
 					} finally {
 						await cleanUp(walked, [
+							[
+								'backToPos',
+								async () => {
+									if (walked) return;
+									await posPage.goto('/');
+									await expect(posPage.getByTestId('search-products').first()).toBeVisible({
+										timeout: 60_000,
+									});
+								},
+							],
 							['unscale', unscale],
 							['closeRegister', async () => opened && closeRegister(posPage)],
 							['restoreSettings', restoreSettings],
