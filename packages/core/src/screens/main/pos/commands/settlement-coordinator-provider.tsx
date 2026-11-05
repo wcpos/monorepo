@@ -50,6 +50,7 @@ import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-h
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { useCartConfigInputs, useCartConfigReader } from '../hooks/use-cart-config';
+import { useTaxSettings } from '../../contexts/tax-rates';
 
 import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -76,6 +77,8 @@ export function SettlementCoordinatorProvider() {
 	const closeSale = useCloseSale();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
+	// Coverage says the lane synced once; only a database read says `allRates` is an answer (#3186).
+	const { ratesRead } = useTaxSettings();
 	const read = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const report = useReportEngineWarnings();
@@ -149,8 +152,11 @@ export function SettlementCoordinatorProvider() {
 	React.useLayoutEffect(() => {
 		inputs$.next(inputs);
 		if (coverage.complete) ratesLanded.set(manager.engine, generation);
-		ratesReady$.next({ ready: ratesLanded.get(manager.engine) === generation, generation });
-	}, [inputs, inputs$, ratesReady$, coverage, generation, manager.engine]);
+		ratesReady$.next({
+			ready: ratesRead && ratesLanded.get(manager.engine) === generation,
+			generation,
+		});
+	}, [inputs, inputs$, ratesReady$, coverage, generation, manager.engine, ratesRead]);
 	React.useEffect(() => {
 		const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(null);
 		const coordinator = createSettlementCoordinator({
