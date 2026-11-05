@@ -194,6 +194,18 @@ export const useBarcodeDetection = (
 		return () => releaseScanOwner(token);
 	}, [isActive, token]);
 
+	// Losing ownership mid-burst drops the partial burst, as a scope change does: the settle
+	// timer must not run this consumer's callback after another consumer has claimed the scan.
+	React.useEffect(() => {
+		const subscription = scanOwner$.subscribe((owner) => {
+			if (owner !== token) {
+				detectorRef.current?.dispose();
+				detectorRef.current = null;
+			}
+		});
+		return () => subscription.unsubscribe();
+	}, [token]);
+
 	/**
 	 * Enable/Disable web barcode detection for the active scan scope.
 	 *
