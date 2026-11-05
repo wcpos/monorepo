@@ -242,6 +242,34 @@ describe('useBarcodeDetection', () => {
 		subscriptions.forEach((subscription) => subscription.unsubscribe());
 	});
 
+	// Pins the ownership-loss disposal: a burst in flight dies with the claim, callback and all.
+	it('drops a burst in flight when another consumer claims ownership before it settles', () => {
+		const firstCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const firstScans: string[] = [];
+		const firstSubscription = first.result.current.barcode$.subscribe((code) =>
+			firstScans.push(code)
+		);
+		act(() => {
+			dispatchBarcode('12345678');
+		});
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const secondScans: string[] = [];
+		const secondSubscription = second.result.current.barcode$.subscribe((code) =>
+			secondScans.push(code)
+		);
+		act(() => {
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(firstScans).toEqual([]);
+		expect(secondScans).toEqual([]);
+		firstSubscription.unsubscribe();
+		secondSubscription.unsubscribe();
+	});
+
 	it.each([10, 20])('never turns focused search typing at %i ms/key into a scan', (gap) => {
 		const scans: string[] = [];
 		function Search() {
