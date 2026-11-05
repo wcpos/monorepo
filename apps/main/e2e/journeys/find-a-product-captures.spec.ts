@@ -3,7 +3,7 @@
  * journey module itself. Steps 1 and 8 are the labelled shots; the others are there to choose from.
  *
  * Two combinations only, as J1's. The walk writes no product and voids its one cart line, so it
- * leaves nothing but, on demo, the closure of the free register it opened.
+ * leaves nothing but, on demo, the closure of the docs register it opened.
  */
 import { expect } from '@playwright/test';
 
@@ -22,7 +22,7 @@ import {
 	hydrateAuthenticatedPage,
 	authenticatedTest as test,
 } from '../fixtures';
-import { pickFreeRegister, watchRegistersRequest } from './demo-register';
+import { pickDocsRegister, showStore } from './demo-register';
 import {
 	type CheckpointId,
 	DECLARED_GAP,
@@ -98,9 +98,10 @@ for (const { device, viewport } of COMBINATIONS) {
 			// The walk, plus a register opened and closed on demo, and the theme and language put back.
 			test.setTimeout(REGISTER_PUSH_TIMEOUT_MS + CLOSE_PUSH_TIMEOUT_MS + 360_000);
 			const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
-			const registersRequest = docsShoot ? watchRegistersRequest(page) : null;
 			// Off demo the store has sessions off, so step 1's `openRegister` has nothing to open.
 			await hydrateAuthenticatedPage(page, info, { waitForCatalogue: false });
+			// The theme and language below belong to the store the app is on.
+			if (docsShoot) await showStore(page, request, info, storeAuthorization);
 			const restoreSettings = await ensureSystemTheme(page, { english: true });
 			// Step 1's 'done' fired, so the register is open: observe-only, it only records that.
 			let opened = false;
@@ -158,9 +159,7 @@ for (const { device, viewport } of COMBINATIONS) {
 			};
 			try {
 				// Demo's stores carry several registers; step 1 opens the one picked here.
-				if (registersRequest) {
-					await pickFreeRegister(page, request, info, storeAuthorization, registersRequest);
-				}
+				if (docsShoot) await pickDocsRegister(page, request, info, storeAuthorization);
 				unscale = await applyScale(page, 'regular');
 				await findAProduct({ page, request, testInfo: info, storeAuthorization, onCheckpoint });
 				walked = true;

@@ -23,7 +23,7 @@ import {
 	hydrateAuthenticatedPage,
 	authenticatedTest as test,
 } from '../fixtures';
-import { pickFreeRegister, watchRegistersRequest } from './demo-register';
+import { pickDocsRegister, showStore } from './demo-register';
 import { CLOSE_PUSH_TIMEOUT_MS, closeRegister } from './open-register';
 import { OPEN_THE_REGISTER, openTheRegister, REGISTER_PUSH_TIMEOUT_MS } from './open-the-register';
 import { stubRegisterWire } from './register-wire-stub';
@@ -101,10 +101,10 @@ for (const { device, viewport } of COMBINATIONS) {
 			// The walk's two holds, plus the theme, language and register put back on the store.
 			test.setTimeout(REGISTER_PUSH_TIMEOUT_MS + CLOSE_PUSH_TIMEOUT_MS + 360_000);
 			const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
-			// The app's own register list names the store it reads (none on a single-store plugin).
-			const registersRequest = watchRegistersRequest(page);
 			if (docsShoot) await hydrateAuthenticatedPage(page, info, { waitForCatalogue: false });
 			else await stubRegisterWire(page, info);
+			// The theme and language below belong to the store the app is on.
+			if (docsShoot) await showStore(page, request, info, storeAuthorization);
 			const restoreSettings = await ensureSystemTheme(page, { english: true });
 			// The last step whose checkpoint fired: observe-only, it only records the number.
 			let reached = 0;
@@ -148,7 +148,7 @@ for (const { device, viewport } of COMBINATIONS) {
 			};
 			try {
 				if (docsShoot) {
-					await pickFreeRegister(page, request, info, storeAuthorization, registersRequest);
+					await pickDocsRegister(page, request, info, storeAuthorization);
 				}
 				unscale = await applyScale(page, 'regular');
 				await openTheRegister({
