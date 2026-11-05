@@ -142,13 +142,6 @@ export function MovementSheet({
 	const [error, setError] = React.useState('');
 	// A no-sale already recorded when its drawer refused: the retry only opens the drawer (#2001).
 	const noSaleRecorded = React.useRef(false);
-	React.useEffect(() => {
-		noSaleRecorded.current = false;
-	}, [type]);
-	const handleOpenChange = (open: boolean) => {
-		if (!open) noSaleRecorded.current = false;
-		onOpenChange(open);
-	};
 	const t = useT();
 	const words: Record<string, string> = {
 		paid_in: t('register.question_paid_in'),
@@ -218,14 +211,14 @@ export function MovementSheet({
 				noSaleRecorded.current = true;
 				await openDrawer();
 			}
-			handleOpenChange(false);
+			onOpenChange(false);
 		} catch (e) {
 			setError(String(e));
 		}
 	};
 	const confirm = () => exclusive('confirm', runConfirm);
 	return (
-		<Dialog open={!!type} onOpenChange={handleOpenChange}>
+		<Dialog open={!!type} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost={portalHost}>
 				<DialogHeader>
 					<DialogTitle>{type ? words[type] : ''}</DialogTitle>

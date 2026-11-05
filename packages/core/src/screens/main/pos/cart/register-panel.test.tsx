@@ -474,6 +474,28 @@ it('a no sale whose drawer refused records once: the retry only opens the drawer
 	expect(showToast).toHaveBeenCalledTimes(1);
 });
 
+// The retry-only guard lasts one sheet: a later no sale is a new drawer opening and its own audit row.
+// The panel unmounts the sheet on close, so this also holds without the sheet's own resets (#2001).
+it('a no sale after the refused one was closed records its own row', async () => {
+	openDrawer.mockRejectedValueOnce(new Error('drawer offline'));
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	const noSale = () => {
+		fireEvent.click(screen.getByTestId('register-panel-no-sale'));
+		fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Wrong change' } });
+		fireEvent.click(screen.getByTestId('movement-confirm'));
+	};
+	noSale();
+	await waitFor(() => expect(screen.getByText('Error: drawer offline')).toBeTruthy());
+	// The sheet's own ×: the last one, inside the panel's.
+	const closers = screen.getAllByTestId('panel-x');
+	fireEvent.click(closers[closers.length - 1]);
+	expect(screen.queryByTestId('movement-confirm')).toBeNull();
+	noSale();
+	await waitFor(() => expect(screen.queryByTestId('movement-confirm')).toBeNull());
+	expect(recordMovement).toHaveBeenCalledTimes(2);
+	expect(openDrawer).toHaveBeenCalledTimes(2);
+});
+
 it('the keypad decimal key stores a canonical point whatever the locale shows', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
