@@ -164,6 +164,15 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
+### phone-touch.spec.ts (authenticated, free only) — 1 test
+
+Phone touch (412x915, `hasTouch`, `isMobile`, `locator.tap`; roadmap#505):
+
+- [x] A tap opens the cart's add menu and it stays open (the tap's own click on the sheet's
+      scrim, mounted under the finger, does not dismiss it); Add Discount opens the dialog; a tap
+      on a coupon in the picker sheet over that dialog picks it and the dialog stays open; a tap
+      on the picker's scrim closes it
+
 ### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
 
 POS money oracle — save to server parity (live store, writes):

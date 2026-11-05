@@ -188,6 +188,8 @@ it('Escape closes and keeps the stored quantity', async () => {
 it('a press outside commits what was typed: typing replaced the number', async () => {
 	await open({ value: 3 });
 	await press('keypad-key-7');
+	fireEvent.mouseDown(screen.getByTestId('overlay-scrim'));
+	await act(async () => jest.runOnlyPendingTimers());
 	await press('overlay-scrim');
 	expect(isOpen()).toBe(false);
 	expect(onChange).toHaveBeenCalledWith(7);
