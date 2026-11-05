@@ -40,6 +40,7 @@ interface ReceiptOrder {
 
 interface ReceiptStore {
 	name: string;
+	logo: string;
 	price_decimals?: number;
 	address: string;
 	phone: string;
@@ -889,6 +890,8 @@ export function buildReceiptData(
 		},
 		store: {
 			name: store.name || '',
+			// Always a string, like PHP's Receipt_Data_Builder; '' keeps the name fallback.
+			logo: typeof store.display?.logo === 'string' && store.display.logo ? store.display.logo : '',
 			price_decimals: store.wc_price_decimals,
 			address: formatAddress({
 				address_1: store.store_address,
