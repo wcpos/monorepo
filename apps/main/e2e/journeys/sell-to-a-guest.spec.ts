@@ -20,7 +20,14 @@ import {
 	isPaymentGatewaysUrl,
 	omitPaymentLinkFromPushAcks,
 } from '../checkout-route-stubs';
-import { decimalPlaces, digitsOf, ledgerRows, pollOrder } from '../checkout-shared';
+import {
+	clickAndExpectPaymentWrite,
+	decimalPlaces,
+	digitsOf,
+	ledgerRows,
+	pollOrder,
+	readAmountMinor,
+} from '../checkout-shared';
 import {
 	getStoreUrl,
 	getStoreVariant,
@@ -181,6 +188,90 @@ test.describe('J2 Sell to a guest', () => {
 			entryMinor - sale.balanceMinor
 		);
 		await startNextSale(ctx, sale);
+	});
+
+	test('a wrong item comes off the cart and Undo puts it back', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		const { page } = ctx;
+		const started = await startGuestSale(ctx);
+		await addProduct(ctx, started);
+		await changeQuantity(ctx, started);
+		// The line's total reveals its strip, as `register-captures.spec.ts` does.
+		await page.getByTestId('cart-line-total').first().click();
+		const remove = page.getByTestId('cart-line-remove').first();
+		await expect(remove).toBeVisible({ timeout: 15_000 });
+		await remove.click();
+		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(0, { timeout: 15_000 });
+		// sonner's own attribute on the action button, never its label.
+		const undo = page.getByTestId('success-toast').locator('[data-action]');
+		await expect(undo).toBeVisible({ timeout: 15_000 });
+		await undo.click();
+		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1, { timeout: 15_000 });
+		await expect(
+			page.getByTestId('cart-quantity-input'),
+			'the line comes back as it was'
+		).toHaveText('3');
+	});
+
+	test('cash short of the balance leaves the rest due and the next payment finishes it', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		test.slow();
+		const base = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		let keyedMinor = 0;
+		const ctx: SellToAGuestContext = {
+			...base,
+			tender: 'short',
+			onCheckpoint: async (_step, id) => {
+				if (id === 'cash-entry') keyedMinor = await readAmountMinor(posPage, 'checkout-entry');
+			},
+		};
+		const started = await startGuestSale(ctx);
+		await addProduct(ctx, started);
+		await changeQuantity(ctx, started);
+		const sale = await checkOut(ctx, started);
+		test.skip(sale.mode !== 'tender', 'a legacy store has no cash entry to tender short');
+		await takeCash(ctx, sale);
+		expect(keyedMinor, 'step 5 keyed less than the balance').toBeLessThan(sale.balanceMinor);
+		expect(keyedMinor, 'step 5 keyed some cash').toBeGreaterThan(0);
+		await expect(posPage.getByTestId('checkout-receipt-stage')).toBeHidden();
+		await expect(posPage.getByTestId('checkout-tender-pane')).toBeVisible();
+		// The claim: the next payment starts at what's left.
+		const method = posPage.getByTestId(`checkout-method-${sale.cashMethodId}`);
+		if (!(await posPage.getByTestId('checkout-entry').isVisible())) await method.click();
+		await expect
+			.poll(() => readAmountMinor(posPage, 'checkout-entry'), { timeout: 15_000 })
+			.toBe(sale.balanceMinor - keyedMinor);
+		await clickAndExpectPaymentWrite(posPage, 'checkout-commit', sale.orderId, 'record');
+		// `base` is the exact-tender ctx: steps 6 and 7 run as the plain walk.
+		await seePaid(base, sale);
+		await startNextSale(base, sale);
+
+		const authorization = await resolveProbeAuthorization(
+			request,
+			getStoreUrl(testInfo),
+			storeAuthorization,
+			{ route: '/wcpos/v2/orders' }
+		);
+		const server = await pollOrder(
+			request,
+			testInfo,
+			authorization,
+			sale.orderId,
+			(order) => ledgerRows(order).length === 2,
+			'the server must record two payment legs'
+		);
+		expectOrderPaid(server);
+		const legs = ledgerRows(server).reduce((sum, row) => sum + Number(row.amount), 0);
+		expect(legs, 'the two legs sum to the balance').toBeCloseTo(Number(server.total), 2);
 	});
 
 	test.describe('on a phone', () => {

@@ -87,9 +87,11 @@ export interface SellToAGuestContext {
 	onCheckpoint?: (step: JourneyStep, id: CheckpointId) => Promise<void>;
 	/**
 	 * Step 5's cash: `'exact'` (default) confirms the prefilled balance, `'over'` tenders more so
-	 * change is due. A legacy walk has no cash entry, so it has no effect there.
+	 * change is due, `'short'` keys half the balance (rounded down to a whole minor unit) so the
+	 * rest stays due; after a short take checkout stays open, so `seePaid` does not follow it. A
+	 * legacy walk has no cash entry, so it has no effect there.
 	 */
-	tender?: 'exact' | 'over';
+	tender?: 'exact' | 'over' | 'short';
 	/** Any product will do: step 2's tile add skips the shared-SKU filter. */
 	anyProduct?: boolean;
 }
@@ -327,6 +329,14 @@ async function keyCashAboveBalance(page: Page, balanceText: string): Promise<voi
 	}
 }
 
+/** Tender less than the balance: key half of it, rounded down, so the rest stays due. */
+async function tenderShortOfBalance(page: Page, balanceMinor: number): Promise<void> {
+	await page.getByTestId('checkout-keypad-key-clear').click();
+	for (const digit of String(Math.floor(balanceMinor / 2))) {
+		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
+	}
+}
+
 /** Tender more than the balance: the second quick amount, or a keyed one above it. */
 async function tenderOverBalance(page: Page): Promise<void> {
 	const entry = page.getByTestId('checkout-entry');
@@ -356,6 +366,7 @@ export async function takeCash(ctx: SellToAGuestContext, sale: SaleAtCheckout): 
 			.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 			.toBe(sale.balanceMinor);
 		if (ctx.tender === 'over') await tenderOverBalance(page);
+		if (ctx.tender === 'short') await tenderShortOfBalance(page, sale.balanceMinor);
 		await ctx.onCheckpoint?.(STEPS[5 - 1], 'cash-entry');
 		await clickAndExpectPaymentWrite(page, 'checkout-commit', sale.orderId, 'record');
 	});
