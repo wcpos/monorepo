@@ -38,8 +38,12 @@ export function DeviceScope({ phone, pointer, children }: React.PropsWithChildre
  */
 export function useIsPhone(): boolean {
 	const override = React.useContext(DeviceContext);
-	const window = useWindowDimensions();
-	return override.phone ?? isPhoneWindow(window);
+	const dimensions = useWindowDimensions();
+	// RN-web's height follows the visual viewport, which an on-screen keyboard shrinks (#505); the
+	// layout viewport does not. Every real resize also moves the visual viewport, so this re-renders.
+	const web = Platform.OS === 'web' && typeof window !== 'undefined';
+	const height = web ? window.innerHeight : dimensions.height;
+	return override.phone ?? isPhoneWindow({ width: dimensions.width, height });
 }
 
 export function usePointer(): 'fine' | 'coarse' {

@@ -11,9 +11,17 @@ jest.mock('react-native', () => ({
 	useWindowDimensions: () => mockDimensions,
 }));
 
+// The layout viewport (`window.innerHeight`) follows the mocked window unless a test sets it.
+let innerHeight: number | undefined;
+Object.defineProperty(window, 'innerHeight', {
+	configurable: true,
+	get: () => innerHeight ?? mockDimensions.height,
+});
+
 const originalMatchMedia = window.matchMedia;
 afterEach(() => {
 	window.matchMedia = originalMatchMedia;
+	innerHeight = undefined;
 });
 
 it('is a phone under 768 wide, and when wide but under 480 tall', () => {
@@ -32,6 +40,36 @@ it('is a phone under 768 wide, and when wide but under 480 tall', () => {
 	rerender();
 	expect(result.current).toBe(false);
 });
+
+it('on web, an on-screen keyboard (visual viewport 470 of 800) leaves a terminal wide', () => {
+	Platform.OS = 'web';
+	Object.assign(mockDimensions, { width: 1280, height: 470 });
+	innerHeight = 800;
+	expect(renderHook(useIsPhone).result.current).toBe(false);
+});
+
+it('on web, a layout viewport 430 tall at 932 wide is a phone', () => {
+	Platform.OS = 'web';
+	// The visual height says wide, so only the layout viewport can make it a phone.
+	Object.assign(mockDimensions, { width: 932, height: 800 });
+	innerHeight = 430;
+	expect(renderHook(useIsPhone).result.current).toBe(true);
+});
+
+it.each(['ios', 'android'] as const)(
+	'on %s, the height comes from the window, not innerHeight',
+	(os) => {
+		Platform.OS = os;
+		Object.assign(mockDimensions, { width: 932, height: 430 });
+		innerHeight = 800;
+		const { result, rerender } = renderHook(useIsPhone);
+		expect(result.current).toBe(true);
+		mockDimensions.height = 600;
+		innerHeight = 430;
+		rerender();
+		expect(result.current).toBe(false);
+	}
+);
 
 it('follows both web media queries and removes its change listener on unmount', () => {
 	Platform.OS = 'web';
