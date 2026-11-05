@@ -164,6 +164,11 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
+### terminal-keyboard.spec.ts (authenticated, free + pro) — 1 test
+
+- [x] At 1280x800, a keyboard (visual viewport 470) keeps the columns and the open Add Discount
+      dialog; a real resize to 1280x470 still goes to the phone layout (roadmap#505)
+
 ### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
 
 POS money oracle — save to server parity (live store, writes):
