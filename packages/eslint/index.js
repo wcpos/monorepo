@@ -491,6 +491,10 @@ export const config = [
 		ignores: [
 			// Git submodules manage their own linting.
 			'apps/web/**',
+			// uniwind's Metro plugin rewrites this file in its own layout on every
+			// `expo start`; Prettier would re-wrap it on commit, so the serving tree was
+			// dirty after every Metro start. The committed form is uniwind's own.
+			'**/uniwind-types.d.ts',
 		],
 	},
 	eslintPluginPrettierRecommended,
