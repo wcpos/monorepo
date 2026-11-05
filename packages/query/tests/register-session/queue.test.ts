@@ -19,7 +19,7 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
-import { remintRegister } from '../../src/register-session/register-document';
+import { isoGmt, remintRegister } from '../../src/register-session/register-document';
 import {
 	adoptSessionRow,
 	drainRegisterSessionQueue,
@@ -103,6 +103,21 @@ it('acknowledges a create, never resends it, and shares the in-flight drain', as
 			business_day: '2026-09-16',
 		})
 	);
+});
+// #3251: the server serves `YYYY-MM-DD HH:MM:SS`, and POST closures refuses it as `opened_at`.
+it('rewrites only the server space form of a GMT time as ISO', () => {
+	expect(isoGmt('2026-09-16 09:05:07')).toBe('2026-09-16T09:05:07.000Z');
+	expect(isoGmt('2026-09-16T09:05:07.123Z')).toBe('2026-09-16T09:05:07.123Z');
+	expect(isoGmt('2026-09-16T09:05:07Z')).toBe('2026-09-16T09:05:07Z');
+});
+it('stores the ISO opening time when a create is acknowledged with the server form', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({
+		status: 201,
+		data: { ...row.toJSON(), status: 'open', opened_at_gmt: '2026-09-16 09:05:07' },
+	});
+	await drain();
+	expect(row.getLatest().opened_at_gmt).toBe('2026-09-16T09:05:07.000Z');
 });
 it('marks a losing create failed and adopts the server session', async () => {
 	const row = await open();
@@ -1536,4 +1551,16 @@ it('adopts the carried float source fields from a server session', async () => {
 		carried_from_closure_id: 'closure',
 		sync_status: 'synced',
 	});
+});
+
+it('stores the ISO opening time when it adopts a server row in the server form', async () => {
+	const source = await open();
+	await adoptSessionRow(db.register_sessions, {
+		...source.toMutableJSON(),
+		id: 'served',
+		opened_at_gmt: '2026-09-16 09:05:07',
+	});
+	expect((await db.register_sessions.findOne('served').exec())?.opened_at_gmt).toBe(
+		'2026-09-16T09:05:07.000Z'
+	);
 });
