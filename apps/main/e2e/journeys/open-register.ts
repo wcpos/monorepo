@@ -54,8 +54,8 @@ function cashInput(figure: string): string {
 	return decimals ? `${whole}.${decimals}` : whole;
 }
 
-/** The app pushes a closure on its 60 s session tick; the margin covers a slow store. */
-const CLOSE_PUSH_TIMEOUT_MS = 90_000;
+/** The app pushes a closure on its 60 s session tick, which can restart: two ticks and a margin. */
+const CLOSE_PUSH_TIMEOUT_MS = 150_000;
 
 /**
  * Close the session through the register's one door (avatar, cashier sheet, In the drawer), as
