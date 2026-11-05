@@ -104,8 +104,8 @@ for (const { device, viewport } of COMBINATIONS) {
 			// The theme and language below belong to the store the app is on.
 			if (docsShoot) await showStore(page, request, info, storeAuthorization);
 			const restoreSettings = await ensureSystemTheme(page, { english: true });
-			// Step 1's 'done' fired, so the register is open: observe-only, it only records that.
-			let opened = false;
+			// Set only once the pick returned: it refuses a held register, so a session here is this run's.
+			let picked = false;
 			let walked = false;
 			let unscale = async () => {};
 			const shoot = async (number: number, slug: string): Promise<void> => {
@@ -154,13 +154,15 @@ for (const { device, viewport } of COMBINATIONS) {
 					(note) => note.type === DECLARED_GAP && note.description?.startsWith(`step ${number}:`)
 				);
 			const onCheckpoint = async ({ number, slug }: JourneyStep, id: CheckpointId) => {
-				if (number === 1 && id === 'done') opened = true;
 				if (SHOTS[number]?.id !== id || (number === 7 && gapped(7))) return;
 				await shoot(number, slug);
 			};
 			try {
 				// Demo's stores carry several registers; step 1 opens the one picked here.
-				if (docsShoot) await pickDocsRegister(page, request, info, storeAuthorization);
+				if (docsShoot) {
+					await pickDocsRegister(page, request, info, storeAuthorization);
+					picked = true;
+				}
 				unscale = await applyScale(page, 'regular');
 				await findAProduct({ page, request, testInfo: info, storeAuthorization, onCheckpoint });
 				walked = true;
@@ -177,10 +179,10 @@ for (const { device, viewport } of COMBINATIONS) {
 						},
 					],
 					['restoreProductPanel', async () => walked || restoreProductPanel(page)],
-					// The walk leaves the register open, so on demo it is closed after a good walk too.
-					// A failed walk's cart line is voided only if step 9 ran; after a failed walk a close
-					// that fails is only logged.
-					['closeRegister', async () => docsShoot && opened && closeRegister(page)],
+					// The walk leaves the register open, so on demo it is closed after a good walk and after
+					// any failure past the pick. A failed walk's cart line is voided only if step 9 ran; on a
+					// register that never opened the close fails and is only logged.
+					['closeRegister', async () => docsShoot && picked && closeRegister(page)],
 					// Step 9's void toast sits over a phone's hamburger, which the restore presses forced.
 					[
 						'toasts',

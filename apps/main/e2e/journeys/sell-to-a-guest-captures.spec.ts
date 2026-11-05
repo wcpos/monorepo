@@ -19,6 +19,7 @@ import {
 import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
 import { pickDocsRegister, showStore } from './demo-register';
+import { showAllProducts } from './find-a-product';
 import { closeRegister, openRegister } from './open-register';
 import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
@@ -102,6 +103,8 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					if (docsShoot) await showStore(posPage, request, info, storeAuthorization);
 					const restoreSettings = await ensureSystemTheme(posPage, { english: true });
 					let opened = false;
+					// Set only once the pick returned: it refuses a held register, so a session here is this run's.
+					let picked = false;
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
@@ -153,11 +156,15 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						});
 					};
 					try {
-						if (docsShoot) await pickDocsRegister(posPage, request, info, storeAuthorization);
+						if (docsShoot) {
+							await pickDocsRegister(posPage, request, info, storeAuthorization);
+							picked = true;
+						}
 						opened = await openRegister(posPage);
 						console.log(`[register] ${info.titlePath.at(-2)}: opened=${opened}`);
 						// A docs shoot with no register it opened has nothing to sell on.
 						if (docsShoot && !opened) throw new Error('the docs register did not open');
+						if (docsShoot) await showAllProducts(posPage);
 						unscale = await applyScale(posPage, step);
 						await sellToAGuest({
 							page: posPage,
@@ -195,7 +202,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 								},
 							],
 							['unscale', unscale],
-							['closeRegister', async () => opened && closeRegister(posPage)],
+							['closeRegister', async () => (opened || picked) && closeRegister(posPage)],
 							['restoreSettings', restoreSettings],
 						]);
 					}

@@ -208,6 +208,22 @@ async function onCart<T>(page: Page, layout: ProductWalk['layout'], body: () => 
 	return result;
 }
 
+/**
+ * Put the panel on the products themselves. A device starts on Browse by Categories on demo,
+ * and the walks need tiles on screen, so a browse root moves to All. The tile wait covers a
+ * catalogue still arriving after a store switch.
+ */
+export async function showAllProducts(page: Page): Promise<void> {
+	if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'products');
+	const stage = page.getByTestId('pos-products-grid-scroller').or(page.getByTestId('browse-root'));
+	await expect(stage.filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+	if (await page.getByTestId('browse-root').filter({ visible: true }).count()) {
+		await setBrowseBy(page, 'all');
+	}
+	const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+	await expect(tiles.filter({ visible: true }).first()).toBeVisible({ timeout: 60_000 });
+}
+
 /** 1. See the products: the grid, its search, the filter bar and the panel's controls. */
 export async function seeProducts(ctx: FindAProductContext): Promise<ProductWalk> {
 	return journeyStep(ctx, 1, async () => {
@@ -216,6 +232,7 @@ export async function seeProducts(ctx: FindAProductContext): Promise<ProductWalk
 		const layout = await posLayout(page);
 		if (layout === 'phone') await showPhoneTab(page, 'products');
 		await ensureGridView(page);
+		await showAllProducts(page);
 		const pills = ['stock_status', 'featured', 'on_sale', 'categories'];
 		const controls = ['pos-products-grid-scroller', 'view-mode-toggle', 'products-settings-button'];
 		for (const testID of [...controls, ...pills.map((key) => `filter-pill-${key}`)]) {
