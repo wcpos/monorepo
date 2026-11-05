@@ -53,6 +53,7 @@ import {
 	setTenderPlan,
 	useOrderCheckoutStage,
 } from '../checkout-mode';
+import * as checkoutMode from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
@@ -203,9 +204,12 @@ const mockRuntime = {
 	engine: { require: mockRequire, db$: () => () => {}, events: () => () => {} },
 };
 let mockAutoShowReceipt = true;
+let mockAutoPrintReceipt = false;
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { autoShowReceipt: mockAutoShowReceipt } }),
+	useUISettings: () => ({
+		uiSettings: { autoShowReceipt: mockAutoShowReceipt, autoPrintReceipt: mockAutoPrintReceipt },
+	}),
 }));
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({
@@ -3294,6 +3298,36 @@ it.each([
 		} finally {
 			mockSize = 'sm';
 			mockAutoShowReceipt = true;
+		}
+	}
+);
+
+// With the receipt hidden no tab is left to auto-print when tapped, so the sale prints now, once.
+it.each([
+	['on', true, [['order-1']]],
+	['off', false, []],
+] as const)(
+	'a sale completing with the receipt hidden and auto-print %s finishes its receipt and prints accordingly',
+	async (_, autoPrint, queued) => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockAutoShowReceipt = false;
+		mockAutoPrintReceipt = autoPrint;
+		mockLeg = terminalState({ phase: 'final', outcome: 'captured' });
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: true };
+		const queue = jest.spyOn(checkoutMode, 'queueHeadlessPrint');
+		const finish = jest.spyOn(checkoutMode, 'finishReceipt');
+		try {
+			const hook = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => {});
+			expect(queue.mock.calls).toEqual(queued);
+			expect(finish).toHaveBeenCalledWith('order-1');
+			hook.unmount();
+		} finally {
+			queue.mockRestore();
+			finish.mockRestore();
+			mockAutoShowReceipt = true;
+			mockAutoPrintReceipt = false;
 		}
 	}
 );

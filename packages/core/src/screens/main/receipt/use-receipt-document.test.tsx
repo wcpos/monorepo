@@ -5,8 +5,9 @@ import { of } from 'rxjs';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 
-import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
+import { claimReceiptAutoPrint, resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
 
@@ -1492,4 +1493,107 @@ it('never opens the till drawer for an online-only remote session report', () =>
 	);
 	printer.mockRestore();
 	dispatch.mockRestore();
+});
+
+describe('a headless auto-print (no receipt on screen)', () => {
+	const reprint = { label: 'receipt.reprint', onClick: jest.fn() };
+	const renderHeadless = () =>
+		renderHook(() =>
+			useReceiptDocument({
+				order,
+				autoPrintAllowed: true,
+				headless: true,
+				failureToastAction: reprint,
+			})
+		);
+	beforeEach(() => {
+		const logger = getLogger([]);
+		[logger.error, logger.warn, logger.debug].forEach((fn) => (fn as jest.Mock).mockClear());
+	});
+
+	it('headless does not wait for a frame', async () => {
+		// The same URL preview: a visible host waits for its frame to load before printing.
+		const visible = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+		await act(async () => {});
+		expect(mockPrint).not.toHaveBeenCalled();
+		visible.unmount();
+		resetCheckoutMode();
+		const { result } = renderHeadless();
+		await act(async () => {});
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+		expect(result.current.autoPrintSettled).toBe(true);
+	});
+
+	it('autoPrintSettled turns true when the print fails', async () => {
+		let fail!: (error: Error) => void;
+		mockPrint.mockImplementationOnce(
+			() =>
+				new Promise<boolean>((_resolve, reject) => {
+					fail = reject;
+				})
+		);
+		const { result } = renderHeadless();
+		await act(async () => {});
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+		// In flight: the host stays mounted until the print settles.
+		expect(result.current.autoPrintSettled).toBe(false);
+		await act(async () => {
+			fail(new Error('ECONNREFUSED'));
+			await Promise.resolve();
+		});
+		expect(result.current.autoPrintSettled).toBe(true);
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
+			'Receipt print failed',
+			expect.objectContaining({
+				code: 'PRINT101',
+				showToast: true,
+				toast: expect.objectContaining({ action: reprint }),
+			})
+		);
+	});
+
+	it('autoPrintSettled turns true and reports when the gate never passes', async () => {
+		jest.useFakeTimers();
+		try {
+			mockFinal = false;
+			const { result, rerender } = renderHeadless();
+			await act(async () => jest.advanceTimersByTime(ORDER_REFRESH_TIMEOUT_MS + 4_999));
+			expect(result.current.autoPrintSettled).toBe(false);
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+			await act(async () => jest.advanceTimersByTime(1));
+			expect(result.current.autoPrintSettled).toBe(true);
+			expect(getLogger([]).warn).toHaveBeenCalledTimes(1);
+			expect(getLogger([]).warn).toHaveBeenCalledWith(
+				'Receipt print failed',
+				expect.objectContaining({
+					code: 'PRINT101',
+					showToast: true,
+					toast: expect.objectContaining({ action: reprint }),
+				})
+			);
+			// Reported once and given up: data that lands later prints nothing behind the toast.
+			mockFinal = true;
+			await act(async () => rerender());
+			expect(mockPrint).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('a print another host holds settles at the deadline, unreported', async () => {
+		jest.useFakeTimers();
+		try {
+			expect(claimReceiptAutoPrint('paid')).toBe(true);
+			const { result } = renderHeadless();
+			await act(async () => jest.advanceTimersByTime(ORDER_REFRESH_TIMEOUT_MS + 4_999));
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(result.current.autoPrintSettled).toBe(false);
+			await act(async () => jest.advanceTimersByTime(1));
+			expect(result.current.autoPrintSettled).toBe(true);
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
 });

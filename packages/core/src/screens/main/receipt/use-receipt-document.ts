@@ -24,7 +24,7 @@ import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
+import { claimReceiptAutoPrint, isReceiptAutoPrintClaimed } from '../pos/checkout/checkout-mode';
 import { useAwaitsStore } from '../pos/checkout/use-awaiting-store';
 import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useUISettings } from '../contexts/ui-settings';
@@ -36,6 +36,9 @@ import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num
 // the host: the page on a slow host answers in 12-15 s (run 39803114058), and it was the print
 // path's own 10 s FETCH_TIMEOUT_MS that timed out there. Past it, the frame loads the URL as before.
 const RECEIPT_PAGE_READ_TIMEOUT_MS = 20_000;
+// A headless auto-print has no screen for the cashier to print from: past the settled-data wait's
+// own bound (ORDER_REFRESH_TIMEOUT_MS) plus this margin, a print that has not started is reported.
+const HEADLESS_PRINT_GRACE_MS = 5_000;
 
 export function useReceiptDocument({
 	order,
@@ -49,7 +52,13 @@ export function useReceiptDocument({
 	templateType,
 	storeId,
 	previewEnabled = true,
+	headless = false,
+	failureToastAction,
 }: {
+	/** No preview frame is mounted: the auto-print never waits for one to load. */
+	headless?: boolean;
+	/** The failed-print toast's button (a headless host's Reprint). */
+	failureToastAction?: { label: string; onClick: () => void };
 	getLocalClosure?: () => Promise<ReadonlyClosureDocument | null>;
 	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
@@ -440,10 +449,11 @@ export function useReceiptDocument({
 					{
 						autoPrint,
 						context: { event: 'receipt.print_failed', orderId: order?.uuid ?? orderId },
+						toastAction: failureToastAction,
 					}
 				)
 			).catch(() => false),
-		[runPrint, order?.uuid, orderId, t]
+		[runPrint, order?.uuid, orderId, t, failureToastAction]
 	);
 
 	/**
@@ -483,14 +493,15 @@ export function useReceiptDocument({
 	// Only a print that reads the preview frame waits for it to load: on a slow site that
 	// frame is a full WordPress page, and a thermal, cloud or pre-rendered print never uses
 	// it. Until the printer is resolved the print path is unknown, so nothing starts.
+	// A headless host has no frame to wait for: its dialog print uses the read page or the URL.
 	const needsLoadedPreview = React.useMemo(
 		() =>
 			printNeedsLoadedPreview({
 				printerProfile,
 				receiptData: receiptData ?? undefined,
 				html: previewHtml ?? undefined,
-			}),
-		[printerProfile, receiptData, previewHtml]
+			}) && !headless,
+		[printerProfile, receiptData, previewHtml, headless]
 	);
 	// The receipt is entered before the bounded order refresh lands. If the receipt request
 	// then fails (or the deadline passes), the only data is built from the local order, still
@@ -522,6 +533,11 @@ export function useReceiptDocument({
 		const timer = setTimeout(() => setDataWaitExpiredFor(uuid), ORDER_REFRESH_TIMEOUT_MS);
 		return () => clearTimeout(timer);
 	}, [awaitingSettledData, dataWaitExpired, order?.uuid]);
+	// The auto-print is over for this order: its print settled, or its gate can no longer pass.
+	const [settledFor, setSettledFor] = React.useState<string | null>(null);
+	const autoPrintSettled =
+		settledFor === order?.uuid ||
+		(!autoPrintAttempted && (!autoPrintAllowed || !uiSettings.autoPrintReceipt));
 	const attemptAutoPrint = React.useCallback(() => {
 		const frameLoaded = iframeLoadedRef.current.key === frameKey && iframeLoadedRef.current.loaded;
 		if (
@@ -536,10 +552,11 @@ export function useReceiptDocument({
 			!hasAutoPrintedRef.current &&
 			claimReceiptAutoPrint(order?.uuid ?? '')
 		) {
+			const uuid = order?.uuid ?? '';
 			hasAutoPrintedRef.current = true;
 			setAttemptedFor(order?.uuid ?? null);
 			// Reported as PRINT101: the sale is saved, print it from the receipt.
-			void printAndReport(true);
+			void printAndReport(true).finally(() => setSettledFor(uuid));
 		}
 	}, [
 		order?.uuid,
@@ -560,6 +577,36 @@ export function useReceiptDocument({
 	React.useEffect(() => {
 		attemptAutoPrint();
 	}, [attemptAutoPrint]);
+
+	// Headless, no cashier is looking at a receipt to print it from: a gate that has not passed
+	// in time is reported as the failed auto-print it is (PRINT101), once, and never prints late.
+	// A print another host holds is not this one's failure: it settles at the deadline, unreported.
+	const headlessWaiting = headless && !autoPrintSettled && !autoPrintAttempted;
+	React.useEffect(() => {
+		if (!headlessWaiting) return;
+		const uuid = order?.uuid ?? '';
+		const timer = setTimeout(() => {
+			if (hasAutoPrintedRef.current) return;
+			if (isReceiptAutoPrintClaimed(uuid)) {
+				setSettledFor(uuid);
+				return;
+			}
+			hasAutoPrintedRef.current = true;
+			reportPrintFailure(
+				getLogger(['wcpos', 'pos', 'receipt']),
+				'Receipt print failed',
+				new Error('The automatic print did not start in time'),
+				t,
+				{
+					autoPrint: true,
+					context: { event: 'receipt.print_failed', orderId: uuid },
+					toastAction: failureToastAction,
+				}
+			);
+			setSettledFor(uuid);
+		}, ORDER_REFRESH_TIMEOUT_MS + HEADLESS_PRINT_GRACE_MS);
+		return () => clearTimeout(timer);
+	}, [headlessWaiting, order?.uuid, t, failureToastAction]);
 
 	/**
 	 * Handle load — single-shot auto-print guard prevents duplicate prints on mode switch
@@ -599,6 +646,7 @@ export function useReceiptDocument({
 		serverReceiptData,
 		...(document ? { document } : {}),
 		autoPrintPending,
+		autoPrintSettled,
 		templates,
 		templatesReady,
 		selectedTemplateId,
