@@ -195,6 +195,19 @@ wait_for_checks() {
   local attempt raw bucket state check all_pass any_failed
   IFS='|' read -r -a required_checks <<< "$MERGE_GATE_REQUIRED_CHECKS"
 
+  # Default-branch-only checks (e.g. Gallery) are dropped only when the base is
+  # known and is not the default branch; an unknown base keeps them required.
+  local base="${MERGE_GATE_BASE_REF:-}" default="${MERGE_GATE_DEFAULT_BRANCH:-}" kept=()
+  for check in "${required_checks[@]}"; do
+    if [[ -n "$check" && -n "$base" && -n "$default" && "$base" != "$default" \
+      && "|${MERGE_GATE_DEFAULT_BRANCH_ONLY_CHECKS:-}|" == *"|$check|"* ]]; then
+      log "Not requiring $check: base $base is not the default branch $default"
+      continue
+    fi
+    kept+=("$check")
+  done
+  required_checks=(${kept[@]+"${kept[@]}"})
+
   for (( attempt=1; attempt<=MAX_ATTEMPTS; attempt++ )); do
     all_pass=true
     any_failed=false

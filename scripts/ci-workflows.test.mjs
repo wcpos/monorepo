@@ -1572,6 +1572,14 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 	// baseline update (roadmap#355): SKIPPED when the gallery path filter did not fire.
 	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
 	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
+	// Only PRs based on the default branch need Gallery: other lanes (1.11.x) have no
+	// Gallery job, and this workflow always runs from the default branch (monorepo#3265).
+	assert.equal(gateStep.env.MERGE_GATE_BASE_REF, '${{ github.event.pull_request.base.ref }}');
+	assert.equal(
+		gateStep.env.MERGE_GATE_DEFAULT_BRANCH,
+		'${{ github.event.repository.default_branch }}'
+	);
+	assert.equal(gateStep.env.MERGE_GATE_DEFAULT_BRANCH_ONLY_CHECKS, 'Gallery');
 });
 
 test('the web E2E test step stops before the job limit so the reports still upload', () => {

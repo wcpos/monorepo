@@ -65,6 +65,9 @@ if [[ "$args" == pr\ checks* ]]; then
     printf 'cancel\tCANCELLED\n'
     exit 0
   fi
+  if [[ "${MOCK_MISSING_CHECK:-}" == "$check_name" ]]; then
+    exit 0
+  fi
   if [[ "${MOCK_SKIP_CHECK:-}" == "$check_name" ]]; then
     printf 'skipping\tSKIPPED\n'
     exit 0
@@ -299,5 +302,45 @@ run_case "promotion to a non-main base does not bypass discipline" fail \
   MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/index.ts' \
   MOCK_COMMIT_MSG_c1="fix: bot commit without trailer" \
   MOCK_NO_CHECKS_EXPECTED=true
+
+# --- Gallery is required only for PRs based on the default branch; the stub
+# --- reports no Gallery check at all (1.11.x's test.yml has no such job).
+
+gallery_env=(
+  MOCK_PR_COMMITS=""
+  MOCK_MISSING_CHECK="Gallery"
+  MERGE_GATE_REQUIRED_CHECKS="🧹 Lint|🧪 Unit Tests|Gallery"
+  MERGE_GATE_DEFAULT_BRANCH_ONLY_CHECKS="Gallery"
+)
+
+gallery_required() {
+  grep -Fq "… Gallery pending (missing/missing)" "$tmpdir/out" || {
+    echo "Expected Gallery to stay required" >&2
+    exit 1
+  }
+}
+
+run_case "1.11.x base does not require Gallery" pass \
+  "${gallery_env[@]}" MERGE_GATE_BASE_REF="1.11.x" MERGE_GATE_DEFAULT_BRANCH="main"
+if ! grep -Fq "Not requiring Gallery: base 1.11.x" "$tmpdir/out"; then
+  echo "Expected the gate to log the dropped Gallery check" >&2
+  exit 1
+fi
+
+run_case "main base still requires Gallery" fail \
+  "${gallery_env[@]}" MERGE_GATE_BASE_REF="main" MERGE_GATE_DEFAULT_BRANCH="main"
+gallery_required
+
+run_case "empty base keeps Gallery required" fail \
+  "${gallery_env[@]}" MERGE_GATE_BASE_REF="" MERGE_GATE_DEFAULT_BRANCH="main"
+gallery_required
+
+run_case "empty default branch keeps Gallery required" fail \
+  "${gallery_env[@]}" MERGE_GATE_BASE_REF="1.11.x" MERGE_GATE_DEFAULT_BRANCH=""
+gallery_required
+
+run_case "1.11.x base still fails on another failed check" fail \
+  "${gallery_env[@]}" MERGE_GATE_BASE_REF="1.11.x" MERGE_GATE_DEFAULT_BRANCH="main" \
+  MOCK_FAIL_CHECK="🧪 Unit Tests"
 
 echo "All merge-gate tests passed."

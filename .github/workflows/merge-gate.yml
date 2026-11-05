@@ -49,6 +49,13 @@ jobs:
           # gallery path filter did not fire. Required so a baseline mismatch
           # blocks the merge (roadmap#355, DoD C).
           MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|Gallery
+          # Lanes other than the default branch (1.11.x) have no Gallery job, and
+          # this workflow always runs from the default branch's file, so Gallery
+          # is required only for PRs based on the default branch (monorepo#3265).
+          # An empty base or default branch keeps it required.
+          MERGE_GATE_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MERGE_GATE_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MERGE_GATE_DEFAULT_BRANCH_ONLY_CHECKS: Gallery
           # 140 × 30s ≈ 70 min: covers deploy (~7 min) plus the slower of a
           # web shard (~12 min) and a native run (~32 min), with one retry.
           MERGE_GATE_MAX_ATTEMPTS: '140'
