@@ -57,7 +57,7 @@ export interface SoakSummary {
 	/** Entry types the browser does not support; empty means every observer ran. */
 	observersUnavailable: string[];
 	cartAddMs: { median: number | null; p95: number | null; max: number | null; nulls: number };
-	/** Orders the per-loop trash could not remove; the teardown tries them again. */
+	/** Orders the per-loop trash left neither trashed nor cancelled; the teardown tries them again. */
 	ordersNotTrashed: number;
 }
 

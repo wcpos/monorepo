@@ -53,6 +53,7 @@ test('sell to a guest, looped', async ({
 		},
 	};
 	let loop = 0;
+	// Orders left neither trashed nor cancelled (the fallback, and how every order ends on dev-pro).
 	let ordersNotTrashed = 0;
 	const runLoop = async () => {
 		loop += 1;

@@ -764,7 +764,8 @@ const CLEANED_UP = new Set(['trash', 'cancelled', 'wc-cancelled']);
  * or the whole test already failed — the id is still in the report, so a leaked
  * order is traceable rather than anonymous. Cleanup NEVER throws; a failed
  * teardown must not convert a passing test into a red one, nor mask a real
- * failure with a cleanup error. Resolves true only when the store confirmed the trash.
+ * failure with a cleanup error. Resolves true only when the store confirmed the order trashed or
+ * cancelled (the fallback, and how every order ends on dev-pro).
  *
  * SAFETY: on a live shared store, the only thing worse than leaking an order is
  * trashing somebody else's. So the order is read back first and only touched
@@ -875,8 +876,8 @@ export async function trashOrder(
 }
 
 /**
- * Trash every order in `tracked` and drop each one the store confirms trashed; returns how many
- * are left. The one routine both the per-loop `trashTracked` and the teardown run.
+ * Trash every order in `tracked` and drop each one the store confirms trashed or cancelled; returns
+ * how many are left. The one routine both the per-loop `trashTracked` and the teardown run.
  */
 async function trashTrackedOrders(
 	request: APIRequestContext,
