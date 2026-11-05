@@ -19,7 +19,11 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
-import { addCheckoutProbeProduct, addCheckoutProbeProductAgain } from '../checkout-probe';
+import {
+	addCheckoutProbeProduct,
+	addCheckoutProbeProductAgain,
+	checkoutProbeAddControl,
+} from '../checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
 	type Descriptor,
@@ -143,15 +147,18 @@ export async function startGuestSale(ctx: SellToAGuestContext): Promise<SaleInPr
 
 /**
  * The shared-SKU product's tile, left filtered on screen, or the first visible tile when the SKU
- * filter does not narrow the grid to one: the product the shared-SKU fallback adds.
+ * filter does not narrow the grid to one: the product step 2's phone add taps. On desktop, the
+ * shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile instead.
  */
 export async function sharedProductTile(page: Page): Promise<Locator> {
 	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const tiles = posScreen.getByTestId('product-tile').filter({ visible: true });
+	const variableTiles = posScreen.getByTestId('variable-product-tile').filter({ visible: true });
 	await search.fill(E2E_PRODUCT_SKU);
+	// Variable tiles count too: an unfiltered grid can show a single simple tile among them.
 	const matched = await expect
-		.poll(() => tiles.count(), { timeout: 15_000 })
+		.poll(async () => (await tiles.count()) + (await variableTiles.count()), { timeout: 15_000 })
 		.toBe(1)
 		.then(
 			() => true,
@@ -172,8 +179,16 @@ export async function addProduct(ctx: SellToAGuestContext, sale: SaleInProgress)
 			await productsSearch(page, 'phone').clear();
 			await showPhoneTab(page, 'cart');
 		} else {
-			// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
-			await (probeAddedOn.has(page) ? addCheckoutProbeProductAgain : addCheckoutProbeProduct)(page);
+			const again = probeAddedOn.has(page);
+			if (again && checkoutProbeAddControl(page) === null) {
+				// Without a probe, the grid's first simple tile may manage stock; a looped walk would
+				// drain it until the stock guard refuses the quantity. Sell the shared SKU again instead.
+				await (await sharedProductTile(page)).click();
+				await productsSearch(page, sale.layout).clear();
+			} else {
+				// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
+				await (again ? addCheckoutProbeProductAgain : addCheckoutProbeProduct)(page);
+			}
 			probeAddedOn.add(page);
 		}
 		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1, { timeout: 15_000 });
