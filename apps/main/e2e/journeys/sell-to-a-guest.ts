@@ -1,7 +1,8 @@
 /**
  * J2 "Sell to a guest": a cashier's guest cash sale, written once as seven steps.
  *
- * - Start state: register open, empty cart, Guest customer, Products visible.
+ * - Start state: register open, empty cart on the store's default customer (Guest on the stores
+ *   it runs against), Products visible.
  * - Edition: Free. Tender cash on Pro stores that serve the payments contract, the legacy
  *   webview pay otherwise.
  * - Docs: `pos/checkout/index.mdx` (wcpos/docs, `versioned_docs/version-2.x`).
@@ -9,6 +10,9 @@
  * - Source ruling: wcpos/roadmap#513 and #514.
  *
  * It never reads the order back: server truth is the caller's job, so a soak loop can skip it.
+ * Its one server read is `requireTenderCheckout`'s payment-method descriptors, which decide the
+ * tender walk. A capture shoot on a shared store leaves its orders cancelled, not trashed; the
+ * showcase tidy trashes them.
  */
 import {
 	type APIRequestContext,
@@ -26,6 +30,7 @@ import {
 } from '../checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
+	decimalPlaces,
 	type Descriptor,
 	digitsOf,
 	openCheckout,
@@ -35,6 +40,7 @@ import {
 import { E2E_PRODUCT_SKU, type StoreAuthorization } from '../fixtures';
 import {
 	checkoutControl,
+	checkoutSurface,
 	type CheckoutSurface,
 	checkoutSurfaceLocator,
 	newRunLabel,
@@ -65,16 +71,27 @@ export const STEPS = [
 ] as const;
 export type JourneyStep = (typeof STEPS)[number];
 
+/** `'done'`: a step's own assertions passed. `'cash-entry'`: step 5's tender is on screen, unconfirmed. */
+export type CheckpointId = 'done' | 'cash-entry';
+
 export interface SellToAGuestContext {
 	page: Page;
 	request: APIRequestContext;
 	testInfo: TestInfo;
 	storeAuthorization: () => StoreAuthorization | null;
 	trackOrder: (order: TrackedOrder) => void;
-	/** Runs after a step's own assertions pass; the captures caller shoots here. */
-	onStep?: (step: JourneyStep) => Promise<void>;
-	/** Runs in step 5 with the cash entry on screen, before it is confirmed; the captures caller shoots here. */
-	onCashEntry?: () => Promise<void>;
+	/**
+	 * Observe-only: a checkpoint reads, waits or shoots; it never presses, types or navigates.
+	 * The walk owns every action.
+	 */
+	onCheckpoint?: (step: JourneyStep, id: CheckpointId) => Promise<void>;
+	/**
+	 * Step 5's cash: `'exact'` (default) confirms the prefilled balance, `'over'` tenders more so
+	 * change is due. A legacy walk has no cash entry, so it has no effect there.
+	 */
+	tender?: 'exact' | 'over';
+	/** Any product will do: step 2's tile add skips the shared-SKU filter. */
+	anyProduct?: boolean;
 }
 
 /** What steps 1 to 3 leave: the layout, detected once in step 1. */
@@ -87,6 +104,7 @@ export interface SaleAtCheckout extends SaleInProgress {
 	orderId: number;
 	uuid: string;
 	mode: 'tender' | 'legacy';
+	surface: CheckoutSurface;
 	cartTotal: string;
 	balanceMinor: number;
 	cashMethodId: string | null;
@@ -115,7 +133,7 @@ async function journeyStep<T>(
 	const step = STEPS[number - 1];
 	return test.step(`${step.number}. ${step.title}`, async () => {
 		const result = await body();
-		await ctx.onStep?.(step);
+		await ctx.onCheckpoint?.(step, 'done');
 		return result;
 	});
 }
@@ -148,25 +166,33 @@ export async function startGuestSale(ctx: SellToAGuestContext): Promise<SaleInPr
 }
 
 /**
- * The shared-SKU product's tile, left filtered on screen, or the first visible tile when the SKU
- * filter does not narrow the grid to one: the product step 2's phone add taps. On desktop, the
- * shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile instead.
+ * The shared-SKU product's tile, left filtered on screen: the product step 2's phone add taps.
+ * Throws, naming the SKU and the tile count, when the filter does not narrow the grid to exactly
+ * one tile. With `anyProduct` the filter is skipped and the first visible tile is returned. On
+ * desktop, the shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile.
  */
-export async function sharedProductTile(page: Page): Promise<Locator> {
+export async function sharedProductTile(page: Page, anyProduct = false): Promise<Locator> {
 	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
-	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const tiles = posScreen.getByTestId('product-tile').filter({ visible: true });
+	if (anyProduct) return tiles.first();
+	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const variableTiles = posScreen.getByTestId('variable-product-tile').filter({ visible: true });
 	await search.fill(E2E_PRODUCT_SKU);
 	// Variable tiles count too: an unfiltered grid can show a single simple tile among them.
+	const count = async () => (await tiles.count()) + (await variableTiles.count());
 	const matched = await expect
-		.poll(async () => (await tiles.count()) + (await variableTiles.count()), { timeout: 15_000 })
+		.poll(count, { timeout: 15_000 })
 		.toBe(1)
 		.then(
 			() => true,
 			() => false
 		);
-	if (!matched) await search.clear();
+	if (!matched) {
+		throw new Error(
+			`SKU "${E2E_PRODUCT_SKU}" filtered the grid to ${await count()} tiles, not 1; ` +
+				'pass anyProduct when any product will do'
+		);
+	}
 	return tiles.first();
 }
 
@@ -177,7 +203,7 @@ export async function addProduct(ctx: SellToAGuestContext, sale: SaleInProgress)
 		if (sale.layout === 'phone') {
 			// The probe add needs cart and grid on screen at once; a phone shows one tab: tap the tile.
 			await showPhoneTab(page, 'products');
-			await (await sharedProductTile(page)).click();
+			await (await sharedProductTile(page, ctx.anyProduct)).click();
 			await productsSearch(page, 'phone').clear();
 			await showPhoneTab(page, 'cart');
 		} else {
@@ -185,7 +211,7 @@ export async function addProduct(ctx: SellToAGuestContext, sale: SaleInProgress)
 			if (again && checkoutProbeAddControl(page) === null) {
 				// Without a probe, the grid's first simple tile may manage stock; a looped walk would
 				// drain it until the stock guard refuses the quantity. Sell the shared SKU again instead.
-				await (await sharedProductTile(page)).click();
+				await (await sharedProductTile(page, ctx.anyProduct)).click();
 				await productsSearch(page, sale.layout).clear();
 			} else {
 				// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
@@ -235,6 +261,7 @@ export async function checkOut(
 		const { orderId, uuid, mode } = await openCheckout(page, (order) =>
 			trackOrder({ ...order, label })
 		);
+		const surface = await checkoutSurface(page);
 
 		if (mode === 'tender') {
 			const { descriptors } = await requireTenderCheckout(
@@ -252,13 +279,19 @@ export async function checkOut(
 			expect(balanceMinor, 'checkout must show a non-zero balance').toBeGreaterThan(0);
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			test.skip(!cash, 'store declares no manual cash method');
-			return { ...sale, orderId, uuid, mode, cartTotal, balanceMinor, cashMethodId: cash!.id };
+			return {
+				...sale,
+				orderId,
+				uuid,
+				mode,
+				surface,
+				cartTotal,
+				balanceMinor,
+				cashMethodId: cash!.id,
+			};
 		}
 
 		// Legacy: the modal must show the same amount the cart's Pay button shows, as digits.
-		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
-			? 'pane'
-			: 'modal';
 		const amount = checkoutControl(page, surface, 'amount');
 		await expect(amount).toBeVisible({ timeout: 15_000 });
 		const shown = digitsOf((await amount.textContent()) ?? '');
@@ -272,11 +305,42 @@ export async function checkOut(
 			orderId,
 			uuid,
 			mode,
+			surface,
 			cartTotal,
 			balanceMinor: Number(shown),
 			cashMethodId: null,
 		};
 	});
+}
+
+/**
+ * A whole-50 balance leaves one quick amount, so key the next whole 50 plus 50 instead. The
+ * first digit would replace the pre-filled balance; clear first so the digits shift in either way.
+ */
+async function keyCashAboveBalance(page: Page, balanceText: string): Promise<void> {
+	const balanceMinor = await readAmountMinor(page, 'checkout-entry');
+	const fiftyMinor = 50 * 10 ** decimalPlaces(balanceText);
+	const amountMinor = Math.ceil(balanceMinor / fiftyMinor) * fiftyMinor + fiftyMinor;
+	await page.getByTestId('checkout-keypad-key-clear').click();
+	for (const digit of String(amountMinor)) {
+		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
+	}
+}
+
+/** Tender more than the balance: the second quick amount, or a keyed one above it. */
+async function tenderOverBalance(page: Page): Promise<void> {
+	const entry = page.getByTestId('checkout-entry');
+	const balanceText = (await entry.textContent()) ?? '';
+	// Quick amounts sort up from the balance itself; the chip's inner label carries the same prefix.
+	const quick = page.locator(
+		'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"]):not([data-testid$="-label"])'
+	);
+	// The exact chip closes the row, so once it shows every quick amount has painted.
+	await expect(page.getByTestId('checkout-quick-exact')).toBeVisible();
+	if ((await quick.count()) > 1) await quick.nth(1).click();
+	else await keyCashAboveBalance(page, balanceText);
+	// Either path leaves more than the balance in the entry, so change is due.
+	await expect(entry).not.toHaveText(balanceText);
 }
 
 /** 5. Take cash: the cash tile opens prefilled with the balance; the cashier confirms it. */
@@ -291,7 +355,8 @@ export async function takeCash(ctx: SellToAGuestContext, sale: SaleAtCheckout): 
 		await expect
 			.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 			.toBe(sale.balanceMinor);
-		await ctx.onCashEntry?.();
+		if (ctx.tender === 'over') await tenderOverBalance(page);
+		await ctx.onCheckpoint?.(STEPS[5 - 1], 'cash-entry');
 		await clickAndExpectPaymentWrite(page, 'checkout-commit', sale.orderId, 'record');
 	});
 }

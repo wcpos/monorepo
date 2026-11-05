@@ -87,7 +87,7 @@ export function checkoutSurfaceLocator(page: Page): Locator {
 		.first();
 }
 
-async function checkoutSurface(page: Page): Promise<CheckoutSurface> {
+export async function checkoutSurface(page: Page): Promise<CheckoutSurface> {
 	return (await page.getByTestId('checkout-tender-pane').isVisible()) ? 'pane' : 'modal';
 }
 

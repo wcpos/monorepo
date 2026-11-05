@@ -59,7 +59,7 @@ test('sell to a guest, looped', async ({
 		testInfo,
 		storeAuthorization,
 		trackOrder,
-		onStep: async (step) => {
+		onCheckpoint: async (step) => {
 			// Step 1 leaves the cart empty, so the add step 2 makes is the one measured.
 			if (step.number === 1) await beginCartAddMeasurement(posPage);
 			if (step.number === 2) cartAddMs = await readCartAddMeasurement(posPage, testInfo, null);

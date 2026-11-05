@@ -6,7 +6,6 @@
 import { expect, type Page } from '@playwright/test';
 
 import { readPins, recordCapture } from '../capture-manifest';
-import { readAmountMinor } from '../checkout-shared';
 import {
 	applyScale,
 	CAPTURE_DEVICES,
@@ -39,20 +38,6 @@ function hasScaleStyle(page: Page): Promise<boolean> {
 			style.textContent?.startsWith(':root, [style*="--spacing:"]')
 		)
 	);
-}
-
-/**
- * A whole-50 balance leaves one quick amount, so key the next whole 50 plus 50 instead. The
- * first digit would replace the pre-filled balance; clear first so the digits shift in either way.
- */
-async function keyCashAboveBalance(page: Page, balanceText: string): Promise<void> {
-	const balanceMinor = await readAmountMinor(page, 'checkout-entry');
-	const fiftyMinor = 50 * 10 ** (/[.,](\d+)\D*$/.exec(balanceText)?.[1].length ?? 0);
-	const amountMinor = Math.ceil(balanceMinor / fiftyMinor) * fiftyMinor + fiftyMinor;
-	await page.getByTestId('checkout-keypad-key-clear').click();
-	for (const digit of String(amountMinor)) {
-		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
-	}
 }
 
 /** Step 6 waits for the receipt to finish drawing; a store with no receipt to draw counts as drawn. */
@@ -88,7 +73,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							unscale = await applyScale(posPage, step);
 						}
 						// A toast covers the header in the shot; wait for every one to leave.
-						await expect(posPage.locator('[data-sonner-toast]')).toHaveCount(0, {
+						await expect(posPage.getByTestId('success-toast')).toHaveCount(0, {
 							timeout: 15_000,
 						});
 						const state = `j2-${number}-${slug}`;
@@ -121,24 +106,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							testInfo: info,
 							storeAuthorization,
 							trackOrder,
-							onCashEntry: async () => {
-								cashEntryShot = true;
-								// The docs page shows change, so the shot tenders more than the balance; the J2
-								// spec still walks exact cash. Quick amounts sort up from the balance itself; the chip's inner label carries the same prefix.
-								const entry = posPage.getByTestId('checkout-entry');
-								const balanceText = (await entry.textContent()) ?? '';
-								const quick = posPage.locator(
-									'[data-testid^="checkout-quick-"]:not([data-testid="checkout-quick-exact"]):not([data-testid="checkout-quick-balance"]):not([data-testid$="-label"])'
-								);
-								// The exact chip closes the row, so once it shows every quick amount has painted.
-								await expect(posPage.getByTestId('checkout-quick-exact')).toBeVisible();
-								if ((await quick.count()) > 1) await quick.nth(1).click();
-								else await keyCashAboveBalance(posPage, balanceText);
-								// Either path leaves more than the balance in the entry, so the shot shows change due.
-								await expect(entry).not.toHaveText(balanceText);
-								await shoot(5, 'take-cash');
-							},
-							onStep: async ({ number, slug }) => {
+							// The docs page shows change, so the shots tender more than the balance.
+							tender: 'over',
+							// Demo has no shared SKU, and a shot does not care which product sells.
+							anyProduct: true,
+							onCheckpoint: async ({ number, slug }, id) => {
+								if (id === 'cash-entry') {
+									cashEntryShot = true;
+									await shoot(number, slug);
+									return;
+								}
 								// A tender walk shot step 5 at the cash entry; a legacy walk has none.
 								if (number === 5 && cashEntryShot) return;
 								if (number === 6) await receiptDrawn(posPage);

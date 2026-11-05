@@ -17,13 +17,17 @@ import { beginCartAddMeasurement, readCartAddMeasurement } from '../cart-add-tim
 import { checkoutProbeAddControl } from '../checkout-probe';
 import {
 	gatewaysResponse,
-	isGatewayBootstrapUrl,
-	isOrderCheckoutUrl,
 	isPaymentGatewaysUrl,
 	omitPaymentLinkFromPushAcks,
 } from '../checkout-route-stubs';
-import { digitsOf, ledgerRows, pollOrder } from '../checkout-shared';
-import { getStoreUrl, getStoreVariant, tryAddProductBySku, waitForCadenceStart } from '../fixtures';
+import { decimalPlaces, digitsOf, ledgerRows, pollOrder } from '../checkout-shared';
+import {
+	getStoreUrl,
+	getStoreVariant,
+	isWcposRestRoute,
+	tryAddProductBySku,
+	waitForCadenceStart,
+} from '../fixtures';
 import { assertMixedTaxTreatment } from '../money-oracle-guards';
 import {
 	assertSaleParity,
@@ -34,7 +38,6 @@ import {
 } from '../money-oracle-sale';
 import {
 	checkoutControl,
-	type CheckoutSurface,
 	expectOrderPaid,
 	expectPaymentBlocked,
 	newRunLabel,
@@ -49,10 +52,13 @@ import {
 	addProduct,
 	changeQuantity,
 	checkOut,
+	seePaid,
 	sellToAGuest,
 	type SellToAGuestContext,
 	sharedProductTile,
 	startGuestSale,
+	startNextSale,
+	takeCash,
 } from './sell-to-a-guest';
 
 /** The toast burst's tap count: step 2's add, then four more taps on the same product. */
@@ -78,7 +84,7 @@ async function hitTarget(control: Locator) {
 }
 
 /** The four `liveOrderTest` fixtures a J2 test destructures, and the journey context from them. */
-type Fixtures = Omit<SellToAGuestContext, 'page' | 'testInfo' | 'onStep'> & { posPage: Page };
+type Fixtures = Omit<SellToAGuestContext, 'page' | 'testInfo'> & { posPage: Page };
 function journeyContext({ posPage, ...fixtures }: Fixtures, testInfo: TestInfo) {
 	return { page: posPage, testInfo, ...fixtures } satisfies SellToAGuestContext;
 }
@@ -136,12 +142,45 @@ test.describe('J2 Sell to a guest', () => {
 			expectOrderPaid(server);
 		}
 		// Both sides in minor units at the cart's precision, so the decimal position counts.
-		const dp = /[.,](\d+)\D*$/.exec(sale.cartTotal)?.[1].length ?? 0;
-		const serverMinor = digitsOf(Number(server.total).toFixed(dp));
+		const serverMinor = digitsOf(Number(server.total).toFixed(decimalPlaces(sale.cartTotal)));
 		expect(serverMinor, 'server total must equal the cart total').toBe(digitsOf(sale.cartTotal));
 		const lines = server.line_items ?? [];
 		expect(lines, 'the sale has one line').toHaveLength(1);
 		expect(Number(lines[0].quantity), 'the line carries the keyed quantity').toBe(sale.quantity);
+	});
+
+	test('a cashier tenders more than the balance and change is due', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		test.slow();
+		const amountOf = async (testId: string) =>
+			Number(digitsOf((await posPage.getByTestId(testId).textContent()) ?? ''));
+		let entryMinor = 0;
+		const ctx: SellToAGuestContext = {
+			...journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo),
+			tender: 'over',
+			onCheckpoint: async (_step, id) => {
+				if (id === 'cash-entry') entryMinor = await amountOf('checkout-entry');
+			},
+		};
+		const started = await startGuestSale(ctx);
+		await addProduct(ctx, started);
+		await changeQuantity(ctx, started);
+		const sale = await checkOut(ctx, started);
+		test.skip(sale.mode !== 'tender', 'a legacy store has no cash entry to tender over');
+		await takeCash(ctx, sale);
+		await seePaid(ctx, sale);
+		expect(entryMinor, 'step 5 tendered more than the balance').toBeGreaterThan(sale.balanceMinor);
+		// Drawn only when change is due: an exact tender fails here.
+		await expect(posPage.getByTestId('receipt-change-due')).toBeVisible({ timeout: 15_000 });
+		const changeMinor = await amountOf('receipt-change-due');
+		expect(changeMinor, 'change is the tender less the balance').toBe(
+			entryMinor - sale.balanceMinor
+		);
+		await startNextSale(ctx, sale);
 	});
 
 	test.describe('on a phone', () => {
@@ -255,10 +294,7 @@ test.describe('J2 Sell to a guest', () => {
 		const sale = await checkOut(ctx, started);
 		expect(sale.orderId, 'the saved order is tracked for cleanup').toBeGreaterThan(0);
 
-		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
-			? 'pane'
-			: 'modal';
-		await checkoutControl(page, surface, 'close').click();
+		await checkoutControl(page, sale.surface, 'close').click();
 
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1);
@@ -412,10 +448,7 @@ test.describe('J2 Sell to a guest', () => {
 		// Listening before checkout opens, so the gateway fetch on mount is not missed.
 		const gatewaysLoaded = gatewaysResponse(page);
 		// Step 4 saves the order and hands it to trackOrder, so teardown trashes it.
-		await checkOut(ctx, started);
-		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
-			? 'pane'
-			: 'modal';
+		const { surface } = await checkOut(ctx, started);
 		await expectPaymentBlocked(page, surface, gatewaysLoaded, 15_000);
 	});
 
@@ -428,14 +461,16 @@ test.describe('J2 Sell to a guest', () => {
 		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
 		test.slow();
 		const { page } = ctx;
-		let contractCheckoutRequested = false;
-		await page.route(isGatewayBootstrapUrl, async (route) => {
-			contractCheckoutRequested = true;
-			await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
-		});
-		await page.route(isOrderCheckoutUrl, async (route) => {
-			contractCheckoutRequested = true;
-			await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+		// Only the legacy checkout draws the webview by the session's mode; the tender flow ignores
+		// it. A 404 says the store serves no payments contract, so the app drops its descriptor.
+		const isPaymentMethodsUrl = (url: URL) =>
+			isWcposRestRoute(url.href, '/wcpos/v2/payment-methods');
+		let methodsRefused = (): void => {};
+		const refused = new Promise<void>((resolve) => (methodsRefused = resolve));
+		await page.route(isPaymentMethodsUrl, async (route) => {
+			const body = '{"code":"rest_no_route","data":{"status":404}}';
+			await route.fulfill({ status: 404, contentType: 'application/json', body });
+			methodsRefused();
 		});
 		await page.route(isPaymentGatewaysUrl, async (route) => {
 			await route.fulfill({
@@ -452,16 +487,16 @@ test.describe('J2 Sell to a guest', () => {
 			});
 		});
 
-		await omitPaymentLinkFromPushAcks(page);
+		// posPage booted the app, which reads payment methods at start: reload so it meets the stub.
+		await page.reload();
+		await refused;
 		const started = await startGuestSale(ctx);
 		await addProduct(ctx, started);
-		const gatewaysLoaded = gatewaysResponse(page);
 		await checkOut(ctx, started);
-		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
-			? 'pane'
-			: 'modal';
-		await expectPaymentBlocked(page, surface, gatewaysLoaded, 10_000);
-		expect(contractCheckoutRequested).toBe(false);
+		// Contract mode draws a text body in its place, and posts only when Process is pressed.
+		await expect(
+			page.getByTestId('checkout-dialog').getByTestId('checkout-payment-webview')
+		).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('a standard, reduced and non-taxable cart saves with per-line tax parity', async ({
