@@ -192,6 +192,17 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 			return doc;
 		});
 	}
+	// A closure dead-lettered by this movement's refusal is never looked at again (the outbox
+	// passes only pending rows), so it would stay failed after the movement lands. Re-queue it;
+	// it still waits for the movement to sync before it sends.
+	const closures = await registerCollections(storeDB)
+		.closures.find({ selector: { session_id: row.session_id, sync_status: 'failed' } })
+		.exec();
+	await Promise.all(
+		closures
+			.filter((closure) => closure.movement_ids.includes(row.id))
+			.map((closure) => closure.incrementalPatch({ ...pending }))
+	);
 	return retried;
 }
 export function recordMovement(
