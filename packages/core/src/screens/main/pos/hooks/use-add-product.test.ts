@@ -17,6 +17,13 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
+const mockReadCounting = jest.fn(async () => false);
+const mockToastShow = jest.fn();
+
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
+
 jest.mock('./added-to-cart-toast', () => ({
 	showAddedToCartToast: (...args: unknown[]) => mockShowAddedToCartToast(...args),
 }));
@@ -92,7 +99,10 @@ jest.mock('../contexts/current-order', () => ({
 }));
 
 jest.mock('./use-add-item-to-order', () => ({
-	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
+	useAddItemToOrder: () => ({
+		addItemToOrder: mockAddItemToOrder,
+		readCounting: () => mockReadCounting(),
+	}),
 }));
 
 // Only the store settings are stubbed; the tax maths runs for real.
@@ -160,6 +170,41 @@ describe('useAddProduct', () => {
 		});
 		mockFindByProductVariationID.mockReturnValue(null);
 		mockAddItemToOrder.mockResolvedValue(true);
+		mockReadCounting.mockResolvedValue(false);
+	});
+
+	it('adds nothing while the drawer is counted, with the notice, then adds after the count', async () => {
+		mockReadCounting.mockResolvedValue(true);
+		const { result } = renderHook(() => useAddProduct());
+		const product = engineDocument({ id: 101, name: 'Plain product', type: 'simple' }, '101');
+
+		let added: boolean | undefined;
+		await act(async () => {
+			added = await result.current.addProduct(product as never);
+		});
+		expect(added).toBe(false);
+		// The silent (scan) path still says why.
+		await act(async () => {
+			added = await result.current.addProduct(product as never, { silent: true });
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockIncrementLineItem).not.toHaveBeenCalled();
+		expect(mockShowAddedToCartToast).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledTimes(2);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: 'pos-counting-refused',
+			type: 'info',
+			title: 'pos_products.counting_items_after_count',
+		});
+
+		mockReadCounting.mockResolvedValue(false);
+		await act(async () => {
+			added = await result.current.addProduct(product as never);
+		});
+		expect(added).toBe(true);
+		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledTimes(2);
 	});
 
 	it('adds an ordinary product document to the order', async () => {

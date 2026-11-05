@@ -7,6 +7,7 @@ import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { PosterPlaceholder } from '@wcpos/components/poster-tile';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 import { useGround } from '@wcpos/components/lib/ground';
+import { cn } from '@wcpos/components/lib/utils';
 
 import { useT } from '../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../query';
@@ -335,7 +336,7 @@ export function TermLevelGrid({
 								extraData={rowTops}
 								renderItem={({ item: row, index: rowIndex }) => (
 									<View
-										className="flex-row"
+										className={cn('flex-row', ground.tileRow)}
 										style={rowIndex === 0 ? FRONT : undefined}
 										onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
 									>

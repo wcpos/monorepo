@@ -8,6 +8,7 @@ import {
 	columnsCheckoutHref,
 	leaveSheet,
 	returnToTill,
+	tillCartHref,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
 
 const checkoutRoutes = {
@@ -195,5 +196,62 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 			'(columns)/cart/[...orderId]',
 		]);
 		expect(view.getPathname()).toBe('/cart/o1/checkout');
+	});
+});
+
+describe('reopening an order from Orders lands on its cart (#2374)', () => {
+	async function renderOrders() {
+		const view = await renderRouter(
+			{
+				...checkoutRoutes,
+				'(app)/(drawer)/orders/index': () => <Text testID="orders" />,
+			},
+			{ initialUrl: '/orders' }
+		);
+		expect(view.getSegments()).toEqual(['(app)', '(drawer)', 'orders']);
+		return view;
+	}
+
+	it('control: pushing /cart/[...orderId] selects columns', async () => {
+		const view = await renderOrders();
+		await act(async () => {
+			router.push({ pathname: '/cart/[...orderId]', params: { orderId: ['o1'] } });
+		});
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(columns)',
+			'cart',
+			'[...orderId]',
+		]);
+	});
+
+	it("on a phone, selects the cart in the phone's tabs", async () => {
+		const view = await renderOrders();
+		await act(async () => router.push(tillCartHref(true, 'o1')));
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(tabs)',
+			'cart',
+			'[...orderId]',
+		]);
+		expect(view.getPathname()).toBe('/cart/o1');
+	});
+
+	it('when wide, still selects the columns cart', async () => {
+		const view = await renderOrders();
+		await act(async () => router.push(tillCartHref(false, 'o1')));
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(columns)',
+			'cart',
+			'[...orderId]',
+		]);
+		expect(view.getPathname()).toBe('/cart/o1');
 	});
 });

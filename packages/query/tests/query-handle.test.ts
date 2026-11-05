@@ -170,6 +170,19 @@ describe('query handle', () => {
 		expect(notified).toBe(1);
 	});
 
+	it('carries the unbound marker to the snapshot and clears it when the bound answer lands (#3186)', () => {
+		const results = new Subject<Result>();
+		const handle = acquire('unbound', results);
+		handle.subscribe(() => undefined);
+		expect(handle.value.unbound).toBe(false);
+		results.next({ count: 0, hits: [], unbound: true });
+		// Catches: a snapshot builder that drops the marker, so readers take the placeholder as an answer.
+		expect(handle.value).toMatchObject({ ready: true, unbound: true, count: 0 });
+		results.next({ count: 0, hits: [] });
+		// Catches: a stale marker after a real read of zero rows.
+		expect(handle.value).toMatchObject({ ready: true, unbound: false, count: 0 });
+	});
+
 	it('reads engine rows and answers once they land', async () => {
 		await database.collections.products.insert(engineProduct({ uuid: 'p1', id: 1, name: 'One' }));
 		const handle = acquire(

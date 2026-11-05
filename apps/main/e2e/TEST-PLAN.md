@@ -173,6 +173,11 @@ Phone touch (412x915, `hasTouch`, `isMobile`, `locator.tap`; roadmap#505):
       on a coupon in the picker sheet over that dialog picks it and the dialog stays open; a tap
       on the picker's scrim closes it
 
+### terminal-keyboard.spec.ts (authenticated, free + pro) — 1 test
+
+- [x] At 1280x800, a keyboard (visual viewport 470) keeps the columns and the open Add Discount
+      dialog; a real resize to 1280x470 still goes to the phone layout (roadmap#505)
+
 ### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
 
 POS money oracle — save to server parity (live store, writes):
@@ -321,6 +326,7 @@ Orders Page (pro only):
 - [x] Search orders
 - [x] Filter pills visible
 - [x] Order actions menu opens (skips when no orders exist)
+- [x] Reopen at 412x915 lands on the `(tabs)` navigator (`pos-tabs-navigator`), not the `(columns)` fallback, with the reopened order's cart tab selected (#2374)
 
 Orders Page (free only):
 
