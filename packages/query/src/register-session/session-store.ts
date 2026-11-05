@@ -26,7 +26,13 @@ import type {
 	UserDatabase,
 } from '@wcpos/database';
 
-import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
+import {
+	advancePerpetual,
+	isoGmt,
+	mintClosureNumber,
+	mintUuid,
+	readRegister,
+} from './register-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
@@ -443,7 +449,7 @@ export async function writeClosure({
 		register_id: session.register_id,
 		store_id: session.store_id ?? null,
 		number: 0,
-		opened_at: session.opened_at_gmt,
+		opened_at: isoGmt(session.opened_at_gmt),
 		business_day:
 			session.business_day ||
 			format(
