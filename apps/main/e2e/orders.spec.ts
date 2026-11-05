@@ -7,7 +7,11 @@ import {
 	openOrderSheet,
 	tryAddProductBySku,
 } from './fixtures';
-import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import {
+	addCheckoutProbeProductAgain,
+	isolatedProductTest as test,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import {
 	checkoutControl,
@@ -208,7 +212,7 @@ test.describe('Orders Page (Pro)', () => {
 		// A second saved order takes the cart, so only the reopen can bring the first one back.
 		// (A bare new-order tab would not do: the cart treats the route's old id as an echo.)
 		await page.getByTestId('new-order-tab').click();
-		await addOrderProbeProduct(page);
+		await addCheckoutProbeProductAgain(page);
 		const second = await openCheckout(page);
 		await checkoutControl(page, second.surface, 'close').click();
 
