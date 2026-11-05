@@ -44,7 +44,7 @@ const PINS_BY_STEP: Record<number, readonly string[]> = {
 	1: ['search-products', 'cart-customer-name'],
 	2: ['cart-quantity-input'],
 	3: [
-		'register-bar',
+		'register-bar-place',
 		'search-products',
 		'pos-products-grid-scroller',
 		'open-order-strip',
