@@ -106,6 +106,38 @@ const schema = fillWithDefaultSettings({ version: 0, primaryKey: 'id', type: 'ob
   await Promise.all(instances.map((instance) => instance.close()));
 })().catch((error) => { globalThis.probeError = error.message; });
 `;
+// All opens start together: the pool must grow and refuse by reservation, not by race (#2347).
+const burstEntry = `
+import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
+import { fillWithDefaultSettings } from 'rxdb/plugins/core';
+import { SQLITE_POOL_DIRECTORY } from './packages/database/src/adapters/storage/sqlite-pool.ts';
+const storage = getRxStorageWorker({
+  workerInput: () => new Worker('/sqlite-capped.worker.js?ver=probe', { type: 'module' }),
+  mode: 'one', workerOptions: { type: 'module' },
+});
+const schema = fillWithDefaultSettings({ version: 0, primaryKey: 'id', type: 'object',
+  properties: { id: { type: 'string', maxLength: 100 } }, required: ['id'] });
+const count = Number(new URLSearchParams(location.search).get('n'));
+(async () => {
+  const results = await Promise.allSettled(Array.from({ length: count }, async (_, i) => {
+    const instance = await storage.createStorageInstance({ databaseInstanceToken: 'burst-token',
+      databaseName: 'burst-' + i, collectionName: 'docs', schema, options: {}, multiInstance: false,
+      devMode: true });
+    await instance.findDocumentsById(['none'], false);
+    return instance;
+  }));
+  const pool = await (await navigator.storage.getDirectory()).getDirectoryHandle(SQLITE_POOL_DIRECTORY);
+  let files = 0;
+  async function walk(directory) {
+    for await (const entry of directory.values()) entry.kind === 'directory' ? await walk(entry) : files++;
+  }
+  await walk(pool);
+  const opened = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
+  const errors = results.filter((result) => result.reason).map((result) => String(result.reason?.message ?? result.reason));
+  globalThis.probeResult = { opened: opened.length, errors, files };
+  await Promise.all(opened.map((instance) => instance.close()));
+})().catch((error) => { globalThis.probeError = error.message; });
+`;
 const lowerPoolCap = {
 	name: 'lower-pool-cap',
 	setup(pluginBuild) {
@@ -125,10 +157,15 @@ const publicDir = new URL('../apps/main/public/', import.meta.url);
 const server = createServer(async (request, response) => {
 	const url = new URL(request.url, 'http://localhost');
 	try {
-		const probeFiles = ['/probe.js', '/cap-probe.js', '/sqlite-capped.worker.js'];
-		if (url.pathname === '/' || url.pathname === '/cap') {
+		const probeFiles = [
+			'/probe.js',
+			'/cap-probe.js',
+			'/burst-probe.js',
+			'/sqlite-capped.worker.js',
+		];
+		if (['/', '/cap', '/burst'].includes(url.pathname)) {
 			response.setHeader('Content-Type', 'text/html');
-			const script = url.pathname === '/cap' ? '/cap-probe.js' : '/probe.js';
+			const script = url.pathname === '/' ? '/probe.js' : url.pathname + '-probe.js';
 			response.end(`<!doctype html><script type="module" src="${script}"></script>`);
 		} else if ([...probeFiles, '/sqlite.worker.js', '/sqlite3.wasm'].includes(url.pathname)) {
 			response.setHeader(
@@ -157,6 +194,13 @@ try {
 	await build({
 		stdin: { contents: capEntry, resolveDir: process.cwd() },
 		outfile: join(dir, 'cap-probe.js'),
+		bundle: true,
+		format: 'esm',
+		platform: 'browser',
+	});
+	await build({
+		stdin: { contents: burstEntry, resolveDir: process.cwd() },
+		outfile: join(dir, 'burst-probe.js'),
 		bundle: true,
 		format: 'esm',
 		platform: 'browser',
@@ -254,6 +298,42 @@ try {
 	assert.match(capped.result.message, /SqlitePoolFullError/);
 	await capContext.close();
 	console.log(`PASS pool refuses past a lowered cap of ${CAPPED_POOL} with SqlitePoolFullError`);
+	// Fresh context per burst; every open starts at once against the capped worker.
+	const burst = async (count) => {
+		const burstContext = await browser.newContext();
+		const burstPage = await burstContext.newPage();
+		await burstPage.goto(origin + '/burst?n=' + count);
+		await burstPage.waitForFunction(
+			() => globalThis.probeResult || globalThis.probeError,
+			undefined,
+			{
+				timeout: 30000,
+			}
+		);
+		const outcome = await burstPage.evaluate(() => ({
+			result: globalThis.probeResult,
+			error: globalThis.probeError,
+		}));
+		await burstContext.close();
+		console.log(`Concurrent burst of ${count}:`, JSON.stringify(outcome));
+		assert.equal(outcome.error, undefined);
+		return outcome.result;
+	};
+	// 12 databases need 24 files against an initial capacity of 22.
+	const grown = await burst(12);
+	assert.equal(grown.opened, 12, 'every concurrent open gets a slot once the pool grows');
+	console.log('PASS concurrent opens grow the pool');
+	const refused = await burst(20);
+	assert.equal(refused.opened, CAPPED_POOL / 2, 'every slot under the cap is usable');
+	assert.equal(refused.errors.length, 20 - CAPPED_POOL / 2);
+	for (const message of refused.errors) {
+		assert.match(message, /SqlitePoolFullError/);
+		assert.doesNotMatch(message, /SQLITE_CANTOPEN/);
+	}
+	// The directory holds one file per slot and no others (measured: 22, 30 and 54 files at
+	// those capacities), so its file count is the capacity.
+	assert.ok(refused.files <= CAPPED_POOL, `pool directory holds ${refused.files} files`);
+	console.log(`PASS concurrent opens past a cap of ${CAPPED_POOL} get SqlitePoolFullError`);
 } finally {
 	await browser?.close();
 	await new Promise((resolve) => server.close(resolve));
