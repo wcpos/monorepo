@@ -41,8 +41,22 @@ export const STEPS = [
 ] as const;
 export type JourneyStep = (typeof STEPS)[number];
 
-/** `'done'`: a step's own assertions passed. `'search-settled'`: step 2's tile is on screen. */
-export type CheckpointId = 'done' | 'search-settled';
+/**
+ * `'done'`: a step's own assertions passed. The rest fire inside a step, before it undoes its own
+ * state: `'search-started'` (2) just before the name is typed, `'search-settled'` (2) the tile is
+ * on screen, `'filter-on'` (3) the category filter applies, `'quick-filter-on'` (4) On sale reads
+ * on, `'rows'` (5) the table view shows, `'browse-root'` (6) the term set shows, `'variations'` (8)
+ * the variations pane has dealt.
+ */
+export type CheckpointId =
+	| 'done'
+	| 'search-started'
+	| 'search-settled'
+	| 'filter-on'
+	| 'quick-filter-on'
+	| 'rows'
+	| 'browse-root'
+	| 'variations';
 
 /** The annotation type a declared gap is recorded under. */
 export const DECLARED_GAP = 'declared-gap';
@@ -217,6 +231,7 @@ export async function search(ctx: FindAProductContext, walk: ProductWalk): Promi
 	await journeyStep(ctx, 2, async () => {
 		const { page } = ctx;
 		const searchTerm = walk.catalogue.searchTerm;
+		await ctx.onCheckpoint?.(STEPS[1], 'search-started');
 		await productsSearch(page).fill(searchTerm.name);
 		await expect(tileOf(page, searchTerm.id)).toBeVisible({ timeout: 30_000 });
 		await ctx.onCheckpoint?.(STEPS[1], 'search-settled');
@@ -242,6 +257,7 @@ export async function filterByCategory(ctx: FindAProductContext, walk: ProductWa
 		const remove = page.getByTestId('filter-pill-remove-categories');
 		await expect(remove).toBeVisible({ timeout: 15_000 });
 		await expect(tileOf(page, category.productId)).toBeVisible({ timeout: 45_000 });
+		await ctx.onCheckpoint?.(STEPS[2], 'filter-on');
 		await remove.click();
 		await expect(remove).toHaveCount(0, { timeout: 15_000 });
 	});
@@ -254,6 +270,7 @@ export async function quickFilter(ctx: FindAProductContext): Promise<void> {
 		await expect(pill).toHaveAttribute('aria-pressed', 'false');
 		await pill.click();
 		await expect(pill).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+		await ctx.onCheckpoint?.(STEPS[3], 'quick-filter-on');
 		await pill.click();
 		await expect(pill).toHaveAttribute('aria-pressed', 'false', { timeout: 10_000 });
 	});
@@ -265,6 +282,7 @@ export async function tilesAndRows(ctx: FindAProductContext): Promise<void> {
 		const { page } = ctx;
 		await ensureTableView(page);
 		await expect(page.getByTestId('data-table-scroller-products').first()).toBeVisible();
+		await ctx.onCheckpoint?.(STEPS[4], 'rows');
 		await ensureGridView(page);
 		await expect(page.getByTestId('pos-products-grid-scroller')).toBeVisible();
 	});
@@ -276,6 +294,7 @@ export async function browseBy(ctx: FindAProductContext): Promise<void> {
 		const { page } = ctx;
 		await setBrowseBy(page, 'categories');
 		await expect(page.getByTestId('browse-root').first()).toBeVisible({ timeout: 30_000 });
+		await ctx.onCheckpoint?.(STEPS[5], 'browse-root');
 		await setBrowseBy(page, 'all');
 		await expect(page.getByTestId('browse-root')).toHaveCount(0, { timeout: 15_000 });
 	});
@@ -338,6 +357,7 @@ export async function seeVariations(ctx: FindAProductContext, walk: ProductWalk)
 		// A dealt tile is "visible" while still transparent: let the deal land before going back.
 		const opacity = () => variation.evaluate((n) => getComputedStyle(n.parentElement!).opacity);
 		await expect.poll(opacity, { timeout: 15_000 }).toBe('1');
+		await ctx.onCheckpoint?.(STEPS[7], 'variations');
 		await pane.getByTestId('variations-parent-tile').click();
 		await expect(pane).toBeHidden({ timeout: 15_000 });
 		await productsSearch(page).clear();
