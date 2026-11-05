@@ -55,5 +55,15 @@ export default defineConfig<WcposTestOptions>({
 			testMatch: /tick-403-soak\.live\.spec\.ts/,
 			use: soakStore,
 		},
+		{
+			name: 'sell-to-a-guest-soak',
+			testMatch: /journeys\/sell-to-a-guest-soak\.live\.spec\.ts/,
+			use: {
+				...soakStore,
+				launchOptions: {
+					args: ['--enable-blink-features=UnrestrictedMeasureUserAgentSpecificMemory'],
+				},
+			},
+		},
 	],
 });
