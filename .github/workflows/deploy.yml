@@ -854,7 +854,11 @@ jobs:
 
       - name: 📊 Merge reports
         if: steps.check-blob-reports.outputs.has_reports == 'true'
-        run: npx playwright merge-reports --reporter=html,json ./all-blob-reports
+        # Pinned to the `@playwright/test` version in pnpm-lock.yaml: the merger must match the
+        # shards that wrote the blobs, and an unpinned `npx playwright` resolves the newest tag,
+        # which broke every PR on 2026-11-05 when playwright@1.65.0 was published hours before
+        # playwright-core@1.65.0. Move this pin with the next Playwright bump.
+        run: npx --yes playwright@1.64.0 merge-reports --reporter=html,json ./all-blob-reports
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results.json
 
