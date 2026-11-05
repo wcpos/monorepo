@@ -9,7 +9,9 @@ import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stac
 import {
 	columnsCheckoutHref,
 	leaveSheet,
+	openTill,
 	returnToTill,
+	tillCartHref,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
 
 const checkoutRoutes = {
@@ -241,9 +243,7 @@ describe('a door into the till from another drawer page', () => {
 				expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(columns)/index']);
 			}
 			await act(async () => router.navigate('/orders'));
-			await act(async () =>
-				router.push({ pathname: '/cart/[...orderId]', params: { orderId: ['o2'] } })
-			);
+			await act(async () => openTill(router, false, 'o2'));
 			expect(posStack(view)?.routes).toHaveLength(1);
 			expect(posStack(view)?.routes[0]).toMatchObject({
 				name: '(columns)/cart/[...orderId]',
@@ -279,13 +279,68 @@ describe('a door into the till from another drawer page', () => {
 			'(modals)/cart/[orderId]/checkout',
 		]);
 		await act(async () => router.navigate('/orders'));
-		await act(async () =>
-			router.push({ pathname: '/cart/[...orderId]', params: { orderId: ['o2'] } })
-		);
+		await act(async () => openTill(router, false, 'o2'));
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
 			'(columns)/cart/[...orderId]',
 		]);
 		expect(posStack(view)?.routes[0].params).toMatchObject({ orderId: ['o2'] });
 		expect(view.getPathname()).toBe('/cart/o2');
+	});
+});
+
+describe('reopening an order from Orders lands on its cart (#2374)', () => {
+	async function renderOrders() {
+		const view = await renderRouter(
+			{
+				...checkoutRoutes,
+				'(app)/(drawer)/orders/index': () => <Text testID="orders" />,
+			},
+			{ initialUrl: '/orders' }
+		);
+		expect(view.getSegments()).toEqual(['(app)', '(drawer)', 'orders']);
+		return view;
+	}
+
+	it('control: pushing /cart/[...orderId] selects columns', async () => {
+		const view = await renderOrders();
+		await act(async () => {
+			router.push({ pathname: '/cart/[...orderId]', params: { orderId: ['o1'] } });
+		});
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(columns)',
+			'cart',
+			'[...orderId]',
+		]);
+	});
+
+	it("on a phone, selects the cart in the phone's tabs", async () => {
+		const view = await renderOrders();
+		await act(async () => router.push(tillCartHref(true, 'o1')));
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(tabs)',
+			'cart',
+			'[...orderId]',
+		]);
+		expect(view.getPathname()).toBe('/cart/o1');
+	});
+
+	it('when wide, still selects the columns cart', async () => {
+		const view = await renderOrders();
+		await act(async () => router.push(tillCartHref(false, 'o1')));
+		expect(view.getSegments()).toEqual([
+			'(app)',
+			'(drawer)',
+			'(pos)',
+			'(columns)',
+			'cart',
+			'[...orderId]',
+		]);
+		expect(view.getPathname()).toBe('/cart/o1');
 	});
 });

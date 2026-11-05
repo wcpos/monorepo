@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { readAwaitingCustomer, readLedger } from '@wcpos/order-math';
 import {
 	awaitTerminalWriteOutcome,
@@ -68,6 +69,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
+	const phone = useIsPhone();
 
 	/**
 	 * ADR 0040: the server refuses a reopen while a payment leg is in motion, and names the leg.
@@ -185,7 +187,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 				);
 		}
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-		openTill(router, order.uuid);
+		openTill(router, phone, order.uuid);
 	}, [
 		blockIfDegraded,
 		reopenOrder,
@@ -198,6 +200,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		wpCredentials.id,
 		register,
 		site.uuid,
+		phone,
 	]);
 
 	/** One reopen per order at a time; a call while one awaits the store is ignored. */

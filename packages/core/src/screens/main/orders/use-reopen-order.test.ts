@@ -74,6 +74,9 @@ jest.mock('../../../contexts/translations', () => ({
 		args ? `${key} ${JSON.stringify(args)}` : key,
 }));
 jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
+// Wide unless a test says otherwise: the phone pushes the explicit (tabs) cart (#2374).
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 jest.mock('../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ blockIfDegraded: () => false }),
 }));
@@ -90,6 +93,7 @@ beforeEach(() => {
 	mockListeners.clear();
 	mockConnectivity = 'online';
 	mockOnDrain = () => {};
+	mockPhone = false;
 });
 
 const leg = {
@@ -269,6 +273,18 @@ it('navigates to the order cart after a successful local write', async () => {
 	await act(async () => result.current.reopen());
 	expect(mockNavigate).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
+		params: { orderId: ['order-1'] },
+	});
+});
+
+it("on a phone, navigates to the order cart in the phone's tabs", async () => {
+	mockPhone = true;
+	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(mockNavigate).toHaveBeenCalledTimes(1);
+	expect(mockNavigate).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
 });

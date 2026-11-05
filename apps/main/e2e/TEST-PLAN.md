@@ -312,6 +312,7 @@ Orders Page (pro only):
 - [x] Search orders
 - [x] Filter pills visible
 - [x] Order actions menu opens (skips when no orders exist)
+- [x] Reopen at 412x915 lands on the `(tabs)` navigator (`pos-tabs-navigator`), not the `(columns)` fallback, with the reopened order's cart tab selected (#2374)
 
 Orders Page (free only):
 

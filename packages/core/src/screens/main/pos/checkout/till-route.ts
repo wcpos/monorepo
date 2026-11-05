@@ -61,12 +61,24 @@ export function columnsCheckoutHref(orderId: string): Href {
 	};
 }
 
-/** Opens the till on an order (or on a new cart) from anywhere in the app. The (pos) stack's own
- * invariant (`till-stack.ts`) settles the stack if the navigate lands a second till. */
-export function openTill(router: Pick<ImperativeRouter, 'navigate'>, orderId?: string): void {
-	router.navigate(
-		orderId
-			? { pathname: '/cart/[...orderId]', params: { orderId: [orderId] } }
-			: { pathname: '/cart' }
-	);
+/** A reopened order's cart: /cart ties to (columns), not the phone's tabs (#2374). */
+export function tillCartHref(compact: boolean, orderId: string | undefined) {
+	return {
+		pathname: compact ? '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]' : '/cart/[...orderId]',
+		params: { orderId: orderId ? [orderId] : [] },
+	} as const;
+}
+
+/**
+ * Opens the till on an order (or on a new cart) from anywhere in the app: a NAVIGATE, never a push
+ * (a push from another drawer page stacked a second POS screen and doubled every scan, #3283). The
+ * (pos) stack's own invariant (`till-stack.ts`) settles the stack if the navigate still lands a
+ * second till.
+ */
+export function openTill(
+	router: Pick<ImperativeRouter, 'navigate'>,
+	compact: boolean,
+	orderId?: string
+): void {
+	router.navigate(tillCartHref(compact, orderId));
 }

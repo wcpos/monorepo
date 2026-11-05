@@ -1,4 +1,11 @@
-import { columnsCheckoutHref, leaveSheet, openTill, returnToTill, tillHref } from './till-route';
+import {
+	columnsCheckoutHref,
+	leaveSheet,
+	openTill,
+	returnToTill,
+	tillCartHref,
+	tillHref,
+} from './till-route';
 
 it.each([
 	[true, 'products', '/(app)/(drawer)/(pos)/(tabs)'],
@@ -78,9 +85,9 @@ it('builds the columns checkout href for one order', () => {
 });
 
 describe('openTill', () => {
-	it('navigates to the requested order', () => {
+	it('navigates (never pushes) to the requested order when wide', () => {
 		const router = { navigate: jest.fn() };
-		openTill(router, 'o2');
+		openTill(router, false, 'o2');
 		expect(router.navigate).toHaveBeenCalledTimes(1);
 		expect(router.navigate).toHaveBeenCalledWith({
 			pathname: '/cart/[...orderId]',
@@ -88,10 +95,22 @@ describe('openTill', () => {
 		});
 	});
 
-	it('navigates to a new cart without an order', () => {
+	it("navigates to a new cart in the phone's tabs without an order", () => {
 		const router = { navigate: jest.fn() };
-		openTill(router);
+		openTill(router, true);
 		expect(router.navigate).toHaveBeenCalledTimes(1);
-		expect(router.navigate).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]',
+			params: { orderId: [] },
+		});
 	});
+});
+
+it.each([
+	[true, 'o1', '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]', ['o1']],
+	[false, 'o1', '/cart/[...orderId]', ['o1']],
+	[true, undefined, '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]', []],
+	[false, undefined, '/cart/[...orderId]', []],
+] as const)('tillCartHref(%s, %s) pushes %s', (compact, orderId, pathname, ids) => {
+	expect(tillCartHref(compact, orderId)).toEqual({ pathname, params: { orderId: ids } });
 });
