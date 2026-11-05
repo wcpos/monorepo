@@ -2,7 +2,11 @@ import * as React from 'react';
 
 import { readStockPayload, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { findOpenSession, readBoundRegister } from '@wcpos/query/register-session';
+import {
+	findOpenSession,
+	isRegisterCounting,
+	readBoundRegister,
+} from '@wcpos/query/register-session';
 
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -75,22 +79,12 @@ export function useActionContext(): {
 							id: String(userId),
 							name: wpCredentials.display_name || wpCredentials.username || '',
 						},
-			// `findOpenSession` matches `status: 'open'` only, so the counting row is read directly.
 			// Every product tile mounts the add hooks: this runs on the tap or scan, not in render.
 			readCounting: async () => {
 				if (!sessionsOn) return false;
 				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
 				if (!registerId) return false;
-				const counting = await storeDB.collections.register_sessions
-					?.findOne({
-						selector: {
-							register_id: registerId,
-							status: 'counting',
-							sync_status: { $ne: 'failed' },
-						},
-					})
-					.exec();
-				return !!counting;
+				return isRegisterCounting(storeDB, registerId);
 			},
 		}),
 		[
