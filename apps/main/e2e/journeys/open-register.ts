@@ -47,15 +47,39 @@ export async function openRegister(page: Page): Promise<boolean> {
  * The drawer tile's formatted figure as the count field's input: its digits, with the last
  * separator kept as the decimal point when one or two digits follow it.
  */
-function cashInput(figure: string): string {
+export function cashInput(figure: string): string {
 	const number = /\d[\d.,'\s\u00a0\u202f]*/.exec(figure)?.[0].replace(/[^\d]+$/, '') ?? '';
 	const decimals = /[.,](\d{1,2})$/.exec(number)?.[1];
 	const whole = (decimals ? number.slice(0, -decimals.length - 1) : number).replace(/\D/g, '');
 	return decimals ? `${whole}.${decimals}` : whole;
 }
 
+/**
+ * The cashier sheet, opened by the avatar. The phone mounts a register bar per tab, both
+ * "visible", one off-screen: press the avatar that is on screen (forced, as in
+ * register-captures.spec.ts, as the bars stack).
+ */
+export async function openCashierSheet(page: Page): Promise<void> {
+	const width = page.viewportSize()?.width ?? 0;
+	const door = page.getByTestId('user-sheet-drawer');
+	// A toast can eat the press, and stays while hovered: retry with the mouse moved off it, but
+	// not while the door shows (that would close the sheet).
+	await expect(async () => {
+		if (await door.isVisible()) return;
+		for (const avatar of await page.getByTestId('register-bar-avatar').all()) {
+			const box = await avatar.boundingBox();
+			if (box && box.x >= 0 && box.x < width) {
+				await avatar.click({ force: true, timeout: 5_000 });
+				break;
+			}
+		}
+		await page.mouse.move(0, 0);
+		await expect(door).toBeVisible({ timeout: 3_000 });
+	}).toPass({ timeout: 30_000 });
+}
+
 /** The app pushes a closure on its 60 s session tick, which can restart: two ticks and a margin. */
-const CLOSE_PUSH_TIMEOUT_MS = 150_000;
+export const CLOSE_PUSH_TIMEOUT_MS = 150_000;
 
 /**
  * Close the session through the register's one door (avatar, cashier sheet, In the drawer), as
@@ -67,26 +91,9 @@ const CLOSE_PUSH_TIMEOUT_MS = 150_000;
  */
 export async function closeRegister(page: Page): Promise<void> {
 	await test.step('Close the register', async () => {
-		// The phone mounts a register bar per tab, both "visible", one off-screen: press the
-		// avatar that is on screen (forced, as in register-captures.spec.ts, as the bars stack).
 		if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'cart');
-		const width = page.viewportSize()?.width ?? 0;
-		const door = page.getByTestId('user-sheet-drawer');
-		// A toast can eat the press, and stays while hovered: retry with the mouse moved off it, but
-		// not while the door shows (that would close the sheet).
-		await expect(async () => {
-			if (await door.isVisible()) return;
-			for (const avatar of await page.getByTestId('register-bar-avatar').all()) {
-				const box = await avatar.boundingBox();
-				if (box && box.x >= 0 && box.x < width) {
-					await avatar.click({ force: true, timeout: 5_000 });
-					break;
-				}
-			}
-			await page.mouse.move(0, 0);
-			await expect(door).toBeVisible({ timeout: 3_000 });
-		}).toPass({ timeout: 30_000 });
-		await door.click();
+		await openCashierSheet(page);
+		await page.getByTestId('user-sheet-drawer').click();
 		const drawer = page.getByTestId('register-panel-drawer');
 		await expect(drawer, 'the expected cash, which a blind cashier is not shown').toBeVisible({
 			timeout: 15_000,
