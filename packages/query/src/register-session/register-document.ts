@@ -87,6 +87,14 @@ export function mintUuid(): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+// The server serves `opened_at_gmt` as `YYYY-MM-DD HH:MM:SS` (UTC, no zone); built by string
+// because `new Date()` reads that form as local time and moves the instant off UTC.
+export function isoGmt(value: string): string {
+	return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+		? `${value.replace(' ', 'T')}.000Z`
+		: value;
+}
+
 export async function readRegister(userDB: UserDatabase): Promise<RegisterDocument | null> {
 	const register = (await userDB.getLocal<RegisterDocument>('register'))?.toJSON(true).data ?? null;
 	currentRegisterId = register?.id ?? null;
