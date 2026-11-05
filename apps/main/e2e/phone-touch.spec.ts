@@ -104,7 +104,9 @@ test.describe('Phone touch', () => {
 		const probe = probeCoupon!;
 		const visible = (id: string) => page.getByTestId(id).locator('visible=true').first();
 		await visible('pos-tab-products').tap();
-		expect(await tryAddProductBySku(page), 'the shared SKU reaches the cart').toBe('added');
+		const added = await tryAddProductBySku(page);
+		test.skip(added === 'unavailable', 'the shared E2E SKU is not a simple product on this store');
+		expect(added, 'the shared SKU reaches the cart').toBe('added');
 		await visible('pos-tab-cart').tap();
 		await ensureRegisterOpen(page);
 
