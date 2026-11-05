@@ -23,6 +23,7 @@ it('gives the page-gutter token inside a window', () => {
 		mx: 'mx-gutter',
 		gap: 'gap-gutter',
 		negMt: '-mt-gutter',
+		tiles: 'px-gutter',
 		units: 3,
 	});
 });
@@ -38,6 +39,7 @@ it('keeps 16 at the phone screen edge', () => {
 		mx: 'mx-4',
 		gap: 'gap-4',
 		negMt: '-mt-4',
+		tiles: 'px-4',
 		units: 4,
 	});
 });
@@ -51,11 +53,27 @@ it('hands out the same frozen object every render', () => {
 });
 
 // A pane with another pane across the resize handle keeps no inset on that edge: the handle is
-// the gutter, one page gutter wide (CODING_STANDARDS § Gutters).
+// the gutter, one page gutter wide (CODING_STANDARDS § Gutters). The tile ground alone keeps the
+// 6 px a Poster stack reaches past its tile on a right inner edge: it takes the tiles' margin
+// back, so with no gutter the last column's stacks were clipped at the scroller's edge.
 it.each([
-	['right', 'pl-gutter pr-0', 'ml-gutter mr-0', 'pt-gutter pb-gutter pl-gutter pr-0', 'pl-gutter'],
-	['left', 'pl-0 pr-gutter', 'ml-0 mr-gutter', 'pt-gutter pb-gutter pl-0 pr-gutter', 'pl-0'],
-] as const)('keeps no inset on the inner edge (%s)', (edge, px, mx, p, pl) => {
+	[
+		'right',
+		'pl-gutter pr-0',
+		'ml-gutter mr-0',
+		'pt-gutter pb-gutter pl-gutter pr-0',
+		'pl-gutter',
+		'pl-gutter pr-1.5',
+	],
+	[
+		'left',
+		'pl-0 pr-gutter',
+		'ml-0 mr-gutter',
+		'pt-gutter pb-gutter pl-0 pr-gutter',
+		'pl-0',
+		'pl-0 pr-gutter',
+	],
+] as const)('keeps no inset on the inner edge (%s)', (edge, px, mx, p, pl, tiles) => {
 	const wrapper = ({ children }: React.PropsWithChildren) =>
 		React.createElement(GroundInnerEdge, { value: edge }, children);
 	expect(renderHook(() => useGround(), { wrapper }).result.current).toMatchObject({
@@ -63,6 +81,7 @@ it.each([
 		mx,
 		p,
 		pl,
+		tiles,
 		pt: 'pt-gutter',
 		gap: 'gap-gutter',
 		negMt: '-mt-gutter',

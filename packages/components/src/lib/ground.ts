@@ -19,6 +19,13 @@ export type Ground = {
 	/** Takes back the gutter of the row above (a chip row's bottom padding). */
 	readonly negMt: string;
 	/**
+	 * The tile ground's sides: the gutter, except that a right inner edge keeps the 6 px a Poster
+	 * stack's far card reaches past its tile (`poster-tile/style.ts` FAR); the tile ground takes
+	 * the tiles' 4 px margin back, so with no gutter the last column's cards sat flush with the
+	 * scroller's edge and it clipped their stacks (owner, 2026-11-05).
+	 */
+	readonly tiles: string;
+	/**
 	 * The OUTER edge's gutter in spacing units, for code that needs it in px (`units * unit`);
 	 * an inner edge (`GroundInnerEdge`) has none.
 	 */
@@ -38,6 +45,7 @@ const WINDOW: Ground = Object.freeze({
 	mx: 'mx-gutter',
 	gap: 'gap-gutter',
 	negMt: '-mt-gutter',
+	tiles: 'px-gutter',
 	units: GUTTER_UNITS,
 });
 
@@ -50,6 +58,7 @@ const PHONE: Ground = Object.freeze({
 	mx: 'mx-4',
 	gap: 'gap-4',
 	negMt: '-mt-4',
+	tiles: 'px-4',
 	units: 4,
 });
 
@@ -72,6 +81,7 @@ const INNER_RIGHT: Ground = Object.freeze({
 	mx: 'ml-gutter mr-0',
 	gap: 'gap-gutter',
 	negMt: '-mt-gutter',
+	tiles: 'pl-gutter pr-1.5',
 	units: GUTTER_UNITS,
 });
 
@@ -84,6 +94,7 @@ const INNER_LEFT: Ground = Object.freeze({
 	mx: 'ml-0 mr-gutter',
 	gap: 'gap-gutter',
 	negMt: '-mt-gutter',
+	tiles: 'pl-0 pr-gutter',
 	units: GUTTER_UNITS,
 });
 
