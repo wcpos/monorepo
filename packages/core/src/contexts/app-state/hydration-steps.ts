@@ -59,7 +59,8 @@ const PROBE_BODY_SNIPPET_LENGTH = 2048;
 async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
 	init: Parameters<typeof fetch>[1] = {},
-	timeoutMs = AUTH_TEST_TIMEOUT_MS
+	timeoutMs = AUTH_TEST_TIMEOUT_MS,
+	timeoutState?: { timedOut: boolean }
 ): Promise<{ response: Response; data: unknown; text: string } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
@@ -89,6 +90,7 @@ async function fetchJsonWithTimeout(
 					: '';
 		return { response, data, text };
 	} catch {
+		if (timeoutState) timeoutState.timedOut = controller.signal.aborted;
 		return null;
 	} finally {
 		clearTimeout(timeout);
@@ -134,16 +136,22 @@ async function generateHashId(dataObject: any): Promise<string> {
  */
 type AuthProbeResult = { verdict: 'success' | 'auth-failed' | 'transport-dead'; status?: number };
 
-async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthProbeResult> {
+async function testHeaderAuth(
+	authTestUrl: string,
+	token: string,
+	timeoutState?: { timedOut: boolean }
+): Promise<AuthProbeResult> {
 	try {
 		const prepared = buildRequestPreamble(
 			{ purpose: 'probe-header', client: AppInfo, accessToken: token },
 			{ url: authTestUrl }
 		);
-		const result = await fetchJsonWithTimeout(prepared.url, {
-			method: 'GET',
-			headers: Object.fromEntries(prepared.headers),
-		});
+		const result = await fetchJsonWithTimeout(
+			prepared.url,
+			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
+			AUTH_TEST_TIMEOUT_MS,
+			timeoutState
+		);
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
 			return { verdict: 'transport-dead', status: result?.response.status };
@@ -164,17 +172,20 @@ async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthP
 async function testParamAuth(
 	authTestUrl: string,
 	token: string,
-	bareSupported: boolean
+	bareSupported: boolean,
+	timeoutState?: { timedOut: boolean }
 ): Promise<AuthProbeResult> {
 	try {
 		const prepared = buildRequestPreamble(
 			{ purpose: 'probe-param', client: AppInfo, accessToken: token, bareAuthParam: bareSupported },
 			{ url: authTestUrl }
 		);
-		const result = await fetchJsonWithTimeout(prepared.url, {
-			method: 'GET',
-			headers: Object.fromEntries(prepared.headers),
-		});
+		const result = await fetchJsonWithTimeout(
+			prepared.url,
+			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
+			AUTH_TEST_TIMEOUT_MS,
+			timeoutState
+		);
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
 			return { verdict: 'transport-dead', status: result?.response.status };
@@ -252,7 +263,7 @@ export type AuthTransportResolution =
 			useProtocolHeaders: boolean;
 			useInstanceHeader: boolean;
 	  }
-	| { ok: false; code: ErrorCode | null };
+	| { ok: false; code: ErrorCode | null; timedOut?: true };
 
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
@@ -284,7 +295,8 @@ const ECHO_PROBE_SENT_HEADERS: readonly string[] = [
 async function probeHeaderEcho(
 	echoUrl: string,
 	accessToken: string,
-	wcposVersion?: string
+	wcposVersion?: string,
+	timeoutState?: { timedOut: boolean }
 ): Promise<EchoProbeVerdict> {
 	try {
 		const prepared = buildRequestPreamble(
@@ -309,7 +321,8 @@ async function probeHeaderEcho(
 		const result = await fetchJsonWithTimeout(
 			prepared.url,
 			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
-			AUTH_PROBE_TIMEOUT_MS
+			AUTH_PROBE_TIMEOUT_MS,
+			timeoutState
 		);
 
 		if (!result) return null;
@@ -351,16 +364,23 @@ async function probeHeaderEcho(
 async function probeLegacyAuth(
 	authTestUrl: string,
 	accessToken: string,
-	wcposVersion?: string
+	wcposVersion?: string,
+	timeoutState?: { timedOut: boolean }
 ): Promise<
 	| { headerSupported: boolean; paramSupported: boolean; statuses?: [number?, number?] }
 	| 'transport-dead'
 > {
-	const header = await testHeaderAuth(authTestUrl, accessToken);
+	// Only a failed fetch writes the holder, so the attempt that ends the rung decides it.
+	const header = await testHeaderAuth(authTestUrl, accessToken, timeoutState);
 	if (header.verdict === 'success')
 		return { headerSupported: true, paramSupported: false, statuses: [header.status] };
 	if (header.verdict === 'transport-dead') return 'transport-dead';
-	const param = await testParamAuth(authTestUrl, accessToken, bareAuthParamSupported(wcposVersion));
+	const param = await testParamAuth(
+		authTestUrl,
+		accessToken,
+		bareAuthParamSupported(wcposVersion),
+		timeoutState
+	);
 	return param.verdict === 'transport-dead'
 		? 'transport-dead'
 		: {
@@ -375,6 +395,9 @@ interface HostBlockEvidence {
 	queryOnly: boolean;
 	pathEcho?: EchoProbeVerdict;
 	queryEcho?: EchoProbeVerdict;
+	echoesTimedOut?: boolean;
+	/** Every legacy auth/test rung that ran ended on our own timer. */
+	legacyTimedOut?: boolean;
 	legacyHeaderStatus?: number;
 	legacyParamStatus?: number;
 	credentialChannels?: boolean;
@@ -400,6 +423,9 @@ const echoesNetworkDead = (evidence: HostBlockEvidence) =>
  * discriminator (research finding d9 — reachable-vs-hostile) found nothing
  * alive. That is a store-offline shape, owned by the online-status UX — a
  * host-blocked toast there would mislabel every outage as a hosting problem.
+ * Our own timeouts also mean "not provably hostile", on every platform: a
+ * probe that died on our timer removes evidence, it never proves a block
+ * (#2328, #1812).
  */
 function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 	const answered = [evidence.pathEcho, evidence.queryEcho].filter(isAnsweredEcho);
@@ -417,6 +443,7 @@ function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 		if (evidence.pingHealthy) return ERROR_CODES.RESPONSE_HEADERS_REJECTED;
 		return null;
 	}
+	if (echoesNetworkDead(evidence) && evidence.echoesTimedOut) return null;
 	if (evidence.platform === 'web' && echoesNetworkDead(evidence)) {
 		if (evidence.simpleEchoSucceeded) return ERROR_CODES.CORS_PREFLIGHT_BLOCKED;
 		if (evidence.pingResolved === false && evidence.noCorsPingResolved) {
@@ -425,6 +452,9 @@ function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 	}
 	if (evidence.credentialChannels) return ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST;
 	if (echoesNetworkDead(evidence) && evidence.pingResolved !== true) return null;
+	// A slow auth/test proves nothing, but an echo the host answered with 403
+	// is the host refusing us, and a timeout afterwards does not undo that.
+	if (evidence.legacyTimedOut && !answered.some(({ status }) => status === 403)) return null;
 	return ERROR_CODES.REST_TRANSPORT_BLOCKED;
 }
 
@@ -559,6 +589,12 @@ async function finishHostBlock(
 	}
 	const code = classifyHostBlock(evidence);
 	if (code === null) {
+		if (evidence.echoesTimedOut || evidence.legacyTimedOut) {
+			appLogger.warn('Authorization probes timed out — store too slow to answer', {
+				context: { wcposApiUrl },
+			});
+			return { ok: false, code: null, timedOut: true };
+		}
 		appLogger.warn('Authorization probes unreachable — store appears offline', {
 			context: { wcposApiUrl },
 		});
@@ -592,9 +628,11 @@ export async function testAuthorizationMethod(
 		const queryEchoUrl = toRestRouteUrl(pathEchoUrl, pathRoot);
 		let echo: HeaderEchoResult | null = null;
 		let useRestRouteParam = queryOnly;
+		const pathTimeout = { timedOut: false };
+		const queryTimeout = { timedOut: false };
 		let pathEcho: EchoProbeVerdict | undefined;
 		if (!queryOnly) {
-			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion);
+			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion, pathTimeout);
 			if (pathEcho && !isAnsweredEcho(pathEcho)) {
 				echo = pathEcho;
 			}
@@ -616,7 +654,7 @@ export async function testAuthorizationMethod(
 				pathEcho === null);
 		let queryEcho: EchoProbeVerdict | undefined;
 		if (pathTriggersQuery) {
-			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion);
+			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion, queryTimeout);
 			if (queryEcho && !isAnsweredEcho(queryEcho)) {
 				echo = queryEcho;
 				useRestRouteParam = true;
@@ -627,6 +665,10 @@ export async function testAuthorizationMethod(
 			queryOnly,
 			pathEcho,
 			queryEcho,
+			echoesTimedOut:
+				(pathEcho === null || queryEcho === null) &&
+				(pathEcho !== null || pathTimeout.timedOut) &&
+				(queryEcho !== null || queryTimeout.timedOut),
 		};
 		const pingUrl = pingProbeUrl(pathRoot);
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
@@ -728,13 +770,23 @@ export async function testAuthorizationMethod(
 		// 2xx, which are the path-blocked shapes.
 		const tryLegacyPath =
 			!queryOnly && pathStatus !== undefined && pathStatus !== 403 && !pathAnswerNotEcho;
-		if (tryLegacyPath) legacy = await probeLegacyAuth(pathAuthUrl, accessToken, wcposVersion);
+		const pathLegacyTimeout = { timedOut: false };
+		const queryLegacyTimeout = { timedOut: false };
+		if (tryLegacyPath) {
+			legacy = await probeLegacyAuth(pathAuthUrl, accessToken, wcposVersion, pathLegacyTimeout);
+		}
 		if (legacy === 'transport-dead') {
-			legacy = await probeLegacyAuth(queryAuthUrl, accessToken, wcposVersion);
+			legacy = await probeLegacyAuth(queryAuthUrl, accessToken, wcposVersion, queryLegacyTimeout);
 			useRestRouteParam = true;
 		}
 		if (legacy === 'transport-dead') {
-			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, hostEvidence);
+			// Slow only when every rung that ran timed out: a 403 or 404 from either
+			// spelling is the store answering, and that answer stays the evidence.
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, {
+				...hostEvidence,
+				legacyTimedOut:
+					(!tryLegacyPath || pathLegacyTimeout.timedOut) && queryLegacyTimeout.timedOut,
+			});
 		}
 		const { headerSupported, paramSupported } = legacy;
 		if (headerSupported) {
