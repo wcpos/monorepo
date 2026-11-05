@@ -43,12 +43,45 @@ async function cleanUp(walked: boolean, steps: [string, () => Promise<unknown>][
 const PINS_BY_STEP: Record<number, readonly string[]> = {
 	1: ['search-products', 'cart-customer-name'],
 	2: ['cart-quantity-input'],
-	3: ['cart-quantity-input', 'checkout-button'],
+	3: [
+		'register-bar',
+		'search-products',
+		'pos-products-grid-scroller',
+		'open-order-strip',
+		'cart-customer-name',
+		'cart-quantity-input',
+		'add-cart-item-menu',
+		'cart-subtotal',
+		'checkout-button',
+	],
 	4: ['checkout-tender-pane', 'checkout-dialog'],
-	5: ['checkout-entry', 'checkout-commit'],
-	6: ['receipt-paid-banner'],
+	5: [
+		'checkout-tab-payments',
+		'checkout-tab-legacy',
+		'checkout-balance',
+		'checkout-split-chip',
+		'checkout-method-pos_cash',
+		'checkout-quick-exact',
+		'checkout-keypad',
+		'checkout-commit',
+		'checkout-ledger',
+	],
+	6: [
+		'receipt-change-due',
+		'receipt-paid-with',
+		'receipt-template-select',
+		'receipt-printer-select',
+		'receipt-preview-frame',
+		'receipt-print-button',
+		'receipt-email-button',
+		'receipt-new-sale',
+	],
 	7: ['cart-customer-name'],
 };
+
+// The docs page shows these steps' tablet shots fully labelled and numbers its legend from the
+// manifest's pin order, so a missing pin would silently move every later number onto the wrong label.
+const LABELLED_STEPS = [3, 5, 6];
 
 /** Whether the scale style tag `applyScale` adds is still in the document. */
 function hasScaleStyle(page: Page): Promise<boolean> {
@@ -102,6 +135,15 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						const imagePath = await captureViewport(posPage, info, 'j2', state);
 						// Straight after the shot, before anything else moves the page.
 						const pins = await readPins(posPage, PINS_BY_STEP[number]);
+						const pinned = pins.map((pin) => pin.testID);
+						const missing = PINS_BY_STEP[number].filter((id) => !pinned.includes(id));
+						if (device === 'tablet' && LABELLED_STEPS.includes(number) && missing.length > 0) {
+							throw new Error(`${state} is a labelled shot missing pins: ${missing.join(', ')}`);
+						}
+						if (number === 6) {
+							const warning = `${state} would show the thermal printer warning; the docs must not`;
+							await expect(posPage.getByTestId('receipt-printer-mismatch'), warning).toHaveCount(0);
+						}
 						recordCapture({
 							journey: SELL_TO_A_GUEST.key,
 							docsPage: SELL_TO_A_GUEST.docsPage,
