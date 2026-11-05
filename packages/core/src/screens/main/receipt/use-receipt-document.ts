@@ -36,9 +36,12 @@ import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num
 // the host: the page on a slow host answers in 12-15 s (run 39803114058), and it was the print
 // path's own 10 s FETCH_TIMEOUT_MS that timed out there. Past it, the frame loads the URL as before.
 const RECEIPT_PAGE_READ_TIMEOUT_MS = 20_000;
-// A headless auto-print has no screen for the cashier to print from: past the settled-data wait's
-// own bound (ORDER_REFRESH_TIMEOUT_MS) plus this margin, a print that has not started is reported.
+// A headless auto-print has no screen for the cashier to print from: past the longer of the waits
+// it may hold on (the settled data's ORDER_REFRESH_TIMEOUT_MS, the page read's own bound) plus this
+// margin, a print that has not started is reported. A read still inside its bound is not a failure.
 const HEADLESS_PRINT_GRACE_MS = 5_000;
+const HEADLESS_PRINT_DEADLINE_MS =
+	Math.max(ORDER_REFRESH_TIMEOUT_MS, RECEIPT_PAGE_READ_TIMEOUT_MS) + HEADLESS_PRINT_GRACE_MS;
 
 export function useReceiptDocument({
 	order,
@@ -187,9 +190,9 @@ export function useReceiptDocument({
 	}, [pageURL]);
 	const pageHtml = (page?.url === pageURL && page?.html) || undefined;
 	const previewHtml = renderedHtml ?? pageHtml ?? null;
+	const pageReadPending = !!pageURL && page?.url !== pageURL;
 	const previewPending =
-		awaits === null ||
-		(previewHtml == null && (templatesResolving || (!!pageURL && page?.url !== pageURL)));
+		awaits === null || (previewHtml == null && (templatesResolving || pageReadPending));
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
@@ -494,15 +497,16 @@ export function useReceiptDocument({
 	// frame is a full WordPress page, and a thermal, cloud or pre-rendered print never uses
 	// it. Until the printer is resolved the print path is unknown, so nothing starts.
 	// A headless host has no frame to wait for: its dialog print uses the read page or the URL.
-	const needsLoadedPreview = React.useMemo(
+	const printReadsPreview = React.useMemo(
 		() =>
 			printNeedsLoadedPreview({
 				printerProfile,
 				receiptData: receiptData ?? undefined,
 				html: previewHtml ?? undefined,
-			}) && !headless,
-		[printerProfile, receiptData, previewHtml, headless]
+			}),
+		[printerProfile, receiptData, previewHtml]
 	);
+	const needsLoadedPreview = printReadsPreview && !headless;
 	// The receipt is entered before the bounded order refresh lands. If the receipt request
 	// then fails (or the deadline passes), the only data is built from the local order, still
 	// pos-open: printing it would hand the customer an "open / still payable" receipt and
@@ -540,6 +544,9 @@ export function useReceiptDocument({
 		(!autoPrintAttempted && (!autoPrintAllowed || !uiSettings.autoPrintReceipt));
 	const attemptAutoPrint = React.useCallback(() => {
 		const frameLoaded = iframeLoadedRef.current.key === frameKey && iframeLoadedRef.current.loaded;
+		// With no frame to wait on, a headless host waits for what the frame's load stood in for: the
+		// templates (the printer is resolved for the template), and the page read when the print reads
+		// it (a dialog print started first fetches the page again and fails on a slow host).
 		if (
 			uiSettings.autoPrintReceipt &&
 			autoPrintAllowed &&
@@ -547,6 +554,8 @@ export function useReceiptDocument({
 			awaits !== null &&
 			!cloudAwaiting &&
 			(!needsLoadedPreview || frameLoaded) &&
+			!(headless && templatesResolving) &&
+			!(headless && printReadsPreview && pageReadPending) &&
 			hasFinalData &&
 			(receiptDataIsServer || localOrderSettled) &&
 			!hasAutoPrintedRef.current &&
@@ -568,6 +577,10 @@ export function useReceiptDocument({
 		cloudAwaiting,
 		localOrderSettled,
 		needsLoadedPreview,
+		headless,
+		templatesResolving,
+		printReadsPreview,
+		pageReadPending,
 		printAndReport,
 		receiptDataIsServer,
 		uiSettings.autoPrintReceipt,
@@ -604,7 +617,7 @@ export function useReceiptDocument({
 				}
 			);
 			setSettledFor(uuid);
-		}, ORDER_REFRESH_TIMEOUT_MS + HEADLESS_PRINT_GRACE_MS);
+		}, HEADLESS_PRINT_DEADLINE_MS);
 		return () => clearTimeout(timer);
 	}, [headlessWaiting, order?.uuid, t, failureToastAction]);
 
