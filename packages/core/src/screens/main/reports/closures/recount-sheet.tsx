@@ -28,7 +28,11 @@ import { ApprovalFields } from '../../pos/cart/approve-sheet';
 import { RegisterAmount } from '../../pos/cart/movement-sheet';
 import { DenominationTile } from '../../pos/cart/register-count';
 import { denominations } from '../../pos/cart/register-count.denominations';
-import { denominationTotal, validAmount } from '../../pos/cart/register-count.helpers';
+import {
+	countDecimals,
+	denominationTotal,
+	validAmount,
+} from '../../pos/cart/register-count.helpers';
 import {
 	type Correction,
 	deriveSettled,
@@ -55,6 +59,7 @@ export function RecountSheet({
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const settings = useDocField(store, (value) => value);
 	const currency = settings?.currency;
+	const decimals = countDecimals(settings?.price_num_decimals);
 	const currencyOptions = {
 		currency,
 		currencyPosition: settings?.currency_pos,
@@ -83,12 +88,14 @@ export function RecountSheet({
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const amounts = {
 		...counted,
-		cash: Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : counted.cash,
+		cash: Object.keys(pieces).length
+			? fromMinor(denominationTotal(pieces, decimals), decimals)
+			: counted.cash,
 	};
 	const reasonTooLong = [...reason.trim()].length > RECOUNT_REASON_LIMIT;
 	const invalid =
 		!online ||
-		Object.values(amounts).some((value) => !validAmount(value)) ||
+		Object.values(amounts).some((value) => !validAmount(value, decimals)) ||
 		!reason.trim() ||
 		reasonTooLong ||
 		(!manager && (!username.trim() || !password));

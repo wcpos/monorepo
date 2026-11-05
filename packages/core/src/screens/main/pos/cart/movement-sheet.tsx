@@ -140,6 +140,8 @@ export function MovementSheet({
 	const { busy, exclusive } = useExclusive();
 	const noteRef = React.useRef<TextInputInstance>(null);
 	const [error, setError] = React.useState('');
+	// A no-sale already recorded when its drawer refused: the retry only opens the drawer (#2001).
+	const noSaleRecorded = React.useRef(false);
 	const t = useT();
 	const words: Record<string, string> = {
 		paid_in: t('register.question_paid_in'),
@@ -197,9 +199,18 @@ export function MovementSheet({
 		// characters and a trailing space passes here and 400s on arrival if sent raw.
 		const trimmedReason = reason.trim();
 		try {
-			const row = await actions.recordMovement({ type, amount: normalized, reason: trimmedReason });
-			onDone(row.id, type, normalized);
-			if (type === 'no_sale') await openDrawer();
+			if (!noSaleRecorded.current) {
+				const row = await actions.recordMovement({
+					type,
+					amount: normalized,
+					reason: trimmedReason,
+				});
+				onDone(row.id, type, normalized);
+			}
+			if (type === 'no_sale') {
+				noSaleRecorded.current = true;
+				await openDrawer();
+			}
 			onOpenChange(false);
 		} catch (e) {
 			setError(String(e));
