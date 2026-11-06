@@ -40,16 +40,27 @@ export function standaloneCheckoutHref(orderId: string) {
 	} as const;
 }
 
+/** The (pos) layout's anchor: a sheet directly above it was cold-loaded, so no till lies beneath. */
+const POS_ANCHOR_ROUTE = 'index';
+
+/** The name of the route beneath the focused one in a stack's state (which may be unset). */
+export function routeBeneath(
+	state: { index: number; routes: { name: string }[] } | undefined
+): string | undefined {
+	return state?.routes[state.index - 1]?.name;
+}
+
 /**
  * Leaves a (pos) sheet for the till beneath it; a replace would stack a second POS screen
- * (#3148). A cold-loaded sheet sits over the layout's anchor in a seeded, typeless stack that
- * `canDismiss` cannot see (expo-router TODO ENG-22019), so it alone takes the fallback.
+ * (#3148). `canDismiss` alone is not enough: it reports true over the anchor, and dismissing
+ * there runs the anchor's redirect to the till, so a sheet above the anchor takes the fallback.
  */
 export function leaveSheet(
 	router: Pick<ImperativeRouter, 'replace' | 'dismiss' | 'canDismiss'>,
-	fallback: Href
+	fallback: Href,
+	beneath?: string
 ): void {
-	if (router.canDismiss()) router.dismiss();
+	if (beneath !== POS_ANCHOR_ROUTE && router.canDismiss()) router.dismiss();
 	else router.replace(fallback);
 }
 

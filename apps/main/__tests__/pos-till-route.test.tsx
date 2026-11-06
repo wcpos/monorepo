@@ -1,15 +1,29 @@
 import * as React from 'react';
 import { Text } from 'react-native';
 
-import { Redirect, router, Slot, Stack, Tabs } from 'expo-router';
+import { Redirect, router, Slot, Stack, Tabs, useFocusEffect, useNavigation } from 'expo-router';
 import { act, renderRouter } from 'expo-router/testing-library';
 
 import {
 	columnsCheckoutHref,
 	leaveSheet,
 	returnToTill,
+	routeBeneath,
 	tillCartHref,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
+
+// The checkout fixture records the route beneath it from its own navigation, read in a focus
+// effect as CheckoutScreen does: during a pushed screen's first render the push is not committed.
+let beneathCheckout: string | undefined;
+function CheckoutProbe() {
+	const navigation = useNavigation();
+	useFocusEffect(
+		React.useCallback(() => {
+			beneathCheckout = routeBeneath(navigation.getState());
+		}, [navigation])
+	);
+	return <Text testID="checkout-modal" />;
+}
 
 const checkoutRoutes = {
 	'(app)/_layout': () => <Slot />,
@@ -19,7 +33,7 @@ const checkoutRoutes = {
 	'(app)/(drawer)/(pos)/(columns)/index': () => <Text testID="columns-index" />,
 	'(app)/(drawer)/(pos)/(columns)/cart/index': () => <Text testID="columns-cart" />,
 	'(app)/(drawer)/(pos)/(columns)/cart/[...orderId]': () => <Text testID="columns-cart" />,
-	'(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout': () => <Text testID="checkout-modal" />,
+	'(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout': CheckoutProbe,
 	'(app)/(drawer)/(pos)/(tabs)/_layout': () => (
 		<Tabs>
 			<Tabs.Screen name="index" />
@@ -41,10 +55,11 @@ const posStack = (view: Awaited<ReturnType<typeof renderRouter>>) =>
 		?.state?.routes.find((route) => route.name === '(drawer)')
 		?.state?.routes.find((route) => route.name === '(pos)')?.state;
 
-async function renderDeepLinkCheckout() {
+async function renderDeepLinkCheckout(index = checkoutRoutes['(app)/(drawer)/(pos)/index']) {
 	return renderRouter(
 		{
 			...checkoutRoutes,
+			'(app)/(drawer)/(pos)/index': index,
 			'(app)/(drawer)/(pos)/_layout': {
 				default: () => <Stack />,
 				unstable_settings: { anchor: 'index' },
@@ -188,14 +203,35 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 			'index',
 			'(modals)/cart/[orderId]/checkout',
 		]);
-		// The seeded stack is typeless (expo-router's canDismiss has a TODO for it), so the sheet
-		// cannot be popped; the replace keeps the unfocused anchor beneath, which renders nothing.
-		await act(async () => leaveSheet(router, columnsCheckoutHref('o1')));
+		// canDismiss reports true over the anchor, but popping would run its redirect to the till;
+		// the anchor named beneath takes the replace, which keeps the unfocused anchor rendering nothing.
+		await act(async () => leaveSheet(router, columnsCheckoutHref('o1'), 'index'));
 		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
 			'index',
 			'(columns)/cart/[...orderId]',
 		]);
 		expect(view.getPathname()).toBe('/cart/o1/checkout');
+	});
+
+	it.each([
+		['the anchor under a deep link', 'index', renderDeepLinkCheckout],
+		[
+			'the wide till under a pushed sheet',
+			'(columns)/cart/[...orderId]',
+			() => renderCheckout(true),
+		],
+	])("the checkout screen's (pos) navigation names %s", async (_, name, render) => {
+		beneathCheckout = undefined;
+		await render();
+		expect(beneathCheckout).toBe(name);
+	});
+
+	it('returning a wide cold sheet to the till dismisses through the anchor to the columns', async () => {
+		const view = await renderDeepLinkCheckout(() => (
+			<Redirect href="/(app)/(drawer)/(pos)/(columns)" />
+		));
+		await act(async () => returnToTill(router, false, 'products'));
+		expect(view.getSegments()[3]).toBe('(columns)');
 	});
 });
 

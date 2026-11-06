@@ -2,6 +2,7 @@ import {
 	columnsCheckoutHref,
 	leaveSheet,
 	returnToTill,
+	routeBeneath,
 	tillCartHref,
 	tillHref,
 } from './till-route';
@@ -73,6 +74,31 @@ describe('leaveSheet', () => {
 		expect(router.replace).toHaveBeenCalledTimes(1);
 		expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
 		expect(router.dismiss).not.toHaveBeenCalled();
+	});
+
+	it('replaces a sheet over the anchor even though canDismiss reports true', () => {
+		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
+		leaveSheet(router, { pathname: '/cart' }, 'index');
+		expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(router.dismiss).not.toHaveBeenCalled();
+	});
+
+	it('pops a sheet over a till route named beneath it', () => {
+		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
+		leaveSheet(router, { pathname: '/cart' }, '(columns)/cart/[...orderId]');
+		expect(router.dismiss).toHaveBeenCalledTimes(1);
+		expect(router.replace).not.toHaveBeenCalled();
+	});
+});
+
+describe('routeBeneath', () => {
+	it('names the route beneath the focused one', () => {
+		const routes = [{ name: 'index' }, { name: '(modals)/cart/[orderId]/checkout' }];
+		expect(routeBeneath({ index: 1, routes })).toBe('index');
+	});
+
+	it('is undefined for the bottom route', () => {
+		expect(routeBeneath({ index: 0, routes: [{ name: 'index' }] })).toBeUndefined();
 	});
 });
 

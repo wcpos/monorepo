@@ -98,8 +98,8 @@ describe('mobile OTA configuration', () => {
 			}
 		);
 		expect(listed).toEqual([
-			'../../patches/expo-modules-core@58.0.22.patch',
-			'../../patches/react-native-esc-pos-printer@4.5.0.patch',
+			'../../patches/expo-modules-core@58.0.30.patch',
+			'../../patches/react-native-esc-pos-printer@4.5.1.patch',
 		]);
 	});
 
@@ -112,8 +112,8 @@ describe('mobile OTA configuration', () => {
 		expect(
 			fingerprintConfig.extraSources.map((source: { filePath: string }) => source.filePath)
 		).toEqual([
-			'../../patches/expo-modules-core@58.0.22.patch',
-			'../../patches/react-native-esc-pos-printer@4.5.0.patch',
+			'../../patches/expo-modules-core@58.0.30.patch',
+			'../../patches/react-native-esc-pos-printer@4.5.1.patch',
 		]);
 	});
 
