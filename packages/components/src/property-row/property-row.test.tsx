@@ -265,6 +265,26 @@ it('on one line, a Saved mark hangs under the key out of flow, and the verb stay
 	expect(screen.getByTestId('verb')).toBeTruthy();
 });
 
+it('on one line with help, the mark sits after the key on its line and the help wraps under both (Codex, #3333)', () => {
+	render(
+		<SavedFieldProvider>
+			<Save name="customer" />
+			<PropertyRow label="Default customer" name="customer" help="Used for walk-in sales">
+				Guest
+			</PropertyRow>
+		</SavedFieldProvider>
+	);
+	fireEvent.click(screen.getByText('save customer'));
+	const key = screen.getByText('Default customer');
+	const mark = screen.getByTestId('saved-customer');
+	expect(mark.parentElement).toBe(key.parentElement);
+	expect(classes(key.parentElement as HTMLElement)).toEqual(
+		expect.arrayContaining(['flex-row', 'flex-wrap'])
+	);
+	expect(classes(screen.getByText('Used for walk-in sales'))).toContain('basis-full');
+	expect(screen.queryByText('Default customer')?.nextElementSibling).toBe(mark);
+});
+
 it('the row is the form item: its key names every label-less control in it', () => {
 	render(
 		<PropertyRow prefix="coupon" id="amount" label="Amount">

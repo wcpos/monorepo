@@ -134,6 +134,8 @@ export function PropertyRow(props: {
 	} else if (locked && !value) value = '—';
 	if (typeof value === 'string' || typeof value === 'number') value = <Text>{value}</Text>;
 	const keyed = props.label !== undefined;
+	// The key column reads as one line (key, then the mark) when stacked or when it carries help.
+	const keyLine = !line || !!props.help;
 	// No value (a switch row): in a dialog the key and its help run to the trailing slot; on a
 	// settings page the value column stays so the switches line up (line 12).
 	const bare = keyed && value == null && !wide;
@@ -151,18 +153,19 @@ export function PropertyRow(props: {
 				<View
 					className={cn(
 						'min-h-9 justify-center',
-						// Stacked: the column is the key's line, so a mark sits after the key and the help
-						// line wraps under both.
+						// Stacked, or a row with help: the column is the key's line, so a mark sits after the
+						// key and the help line wraps under both (Codex P2, #3333: an anchored mark would lie
+						// over the help text).
 						// (`justify-start`: the column's centring is for its cross axis, not this row's main one.)
-						!line && 'flex-row flex-wrap items-center justify-start gap-x-2',
+						keyLine && 'flex-row flex-wrap items-center justify-start gap-x-2',
 						line && (bare ? 'min-w-0 flex-1' : wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
 						props.indent && 'pl-4'
 					)}
 				>
 					<Key nativeID={`${item}-form-item`}>{props.label ?? ''}</Key>
-					{mark && line ? (
-						// One line: a zero-height anchor right after the key, so the mark hangs under the
-						// key's last line (a wrapping key included) and the row never grows.
+					{mark && !keyLine ? (
+						// One line, no help: a zero-height anchor right after the key, so the mark hangs under
+						// the key's last line (a wrapping key included) and the row never grows.
 						<View className="h-0 self-start overflow-visible">
 							<View className="absolute top-0 left-0">{mark}</View>
 						</View>
@@ -170,7 +173,7 @@ export function PropertyRow(props: {
 						mark
 					)}
 					{props.help ? (
-						<Text variant="help" className={cn(!line && 'basis-full')}>
+						<Text variant="help" className={cn(keyLine && 'basis-full')}>
 							{props.help}
 						</Text>
 					) : null}
