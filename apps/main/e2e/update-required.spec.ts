@@ -92,6 +92,8 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	const screen = page.getByTestId('update-required-screen');
 	await expect(screen).toBeVisible({ timeout: 90_000 });
 	await expect(page.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
+	await expect(page.getByTestId('update-required-sync-first')).toBeVisible();
+	await expect(page.getByTestId('update-required-upgrade-docs-link')).toBeVisible();
 	// Web offers the reload CTA (the web bundle auto-updates on reload).
 	await expect(page.getByTestId('update-required-reload')).toBeVisible();
 
@@ -131,6 +133,8 @@ test('after logout the login card shows the update notice, not Re-authenticate',
 	await page.reload();
 	await expect(notice).toBeVisible({ timeout: 60_000 });
 	await expect(notice.getByTestId('update-required-docs-link-SYNC341')).toBeVisible();
+	await expect(notice.getByTestId('update-required-sync-first')).toBeVisible();
+	await expect(notice.getByTestId('update-required-upgrade-docs-link')).toBeVisible();
 	await expect(notice.getByTestId('update-required-reload')).toBeVisible();
 	await expect(page.getByTestId('wp-user-button')).toHaveCount(0);
 	await expect(page.getByTestId('open-pos-button')).toHaveCount(0);
