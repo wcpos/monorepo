@@ -74,6 +74,8 @@ let figuresPending = false;
 let blind = false,
 	approval_required = false,
 	varianceThreshold = '';
+let expectedCash = '480.80',
+	decimals: number | undefined;
 const closure = { id: 's', number: 1 };
 const closeSession = jest.fn(async () => closure),
 	backToSelling = jest.fn(async () => undefined);
@@ -91,7 +93,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			count_denominations,
 		},
 		binding: { registerName: 'Front' },
-		expected: { cash: '480.80', card: '20' },
+		expected: { cash: expectedCash, card: '20' },
 		unsyncedCount,
 		figuresPending,
 		actions: { closeSession, backToSelling },
@@ -99,7 +101,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
-		store: { currency: 'GBP' },
+		store: { currency: 'GBP', price_num_decimals: decimals },
 		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	}),
 }));
@@ -134,6 +136,8 @@ beforeEach(() => {
 	blind = false;
 	approval_required = false;
 	varianceThreshold = '';
+	expectedCash = '480.80';
+	decimals = undefined;
 	jest.clearAllMocks();
 });
 afterEach(() => jest.useRealTimers());
@@ -153,6 +157,24 @@ it('shows short and exact with check', () => {
 	enter('480.80');
 	expect(screen.getByTestId('count-variance').textContent).toContain('Exact');
 	expect(screen.getByTestId('count-exact')).toBeTruthy();
+});
+it('counts in the store’s decimals: a fil over on a 3-place store is not exact', () => {
+	decimals = 3;
+	expectedCash = '1.250';
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	enter('1.254');
+	expect(screen.getByTestId('count-variance').textContent).not.toContain('Exact');
+	expect(screen.queryByTestId('count-exact')).toBeNull();
+	enter('1.250');
+	expect(screen.getByTestId('count-exact')).toBeTruthy();
+});
+it('counts in cents on a store that shows no decimals: 12.50 against 12.00 is 0.50 over', () => {
+	decimals = 0;
+	expectedCash = '12.00';
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	enter('12.50');
+	expect(screen.getByTestId('count-variance').textContent).toBe('+£0.50 over');
+	expect(screen.queryByTestId('count-exact')).toBeNull();
 });
 it('counts two notes, clears their contribution on typing, and clears the tiles', () => {
 	render(

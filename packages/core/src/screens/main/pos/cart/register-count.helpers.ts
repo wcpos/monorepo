@@ -1,20 +1,25 @@
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
-export const validAmount = (value: string) =>
+/** Cash is counted in at least cents: a store that hides decimals still holds coins. */
+export const countDecimals = (priceDecimals: unknown) => Math.max(2, Number(priceDecimals ?? 2));
+
+// `decimals` is `countDecimals(price_num_decimals)`: a 3-place currency (KWD, BHD) counts in fils, a 0-place store still in cents.
+export const validAmount = (value: string, decimals: number) =>
 	/^(?:\d+\.?\d*|\.\d+)$/.test(value) &&
 	Number.isFinite(Number(value)) &&
-	Number.isSafeInteger(toMinor(value, 2));
-export const countVariance = (counted: string, expected: string) =>
-	toMinor(counted, 2) - toMinor(expected, 2);
-export const overThreshold = (variance: number, threshold?: string | null) =>
-	!!threshold?.trim() && Math.abs(variance) > toMinor(threshold, 2);
-export const denominationTotal = (pieces: Record<string, number>) =>
-	Object.entries(pieces).reduce((sum, [value, count]) => sum + toMinor(value, 2) * count, 0);
+	Number.isSafeInteger(toMinor(value, decimals));
+export const countVariance = (counted: string, expected: string, decimals: number) =>
+	toMinor(counted, decimals) - toMinor(expected, decimals);
+export const overThreshold = (variance: number, decimals: number, threshold?: string | null) =>
+	!!threshold?.trim() && Math.abs(variance) > toMinor(threshold, decimals);
+export const denominationTotal = (pieces: Record<string, number>, decimals: number) =>
+	Object.entries(pieces).reduce((sum, [value, count]) => sum + toMinor(value, decimals) * count, 0);
 export function varianceText(
 	variance: number,
+	decimals: number,
 	format: (value: number) => string,
 	t: (key: string) => string
 ) {
 	if (!variance) return t('register.exact');
-	return `${variance < 0 ? '−' : '+'}${format(Number(fromMinor(Math.abs(variance), 2)))} ${variance < 0 ? t('register.short') : t('register.over')}`;
+	return `${variance < 0 ? '−' : '+'}${format(Number(fromMinor(Math.abs(variance), decimals)))} ${variance < 0 ? t('register.short') : t('register.over')}`;
 }

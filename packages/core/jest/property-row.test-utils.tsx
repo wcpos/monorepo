@@ -7,7 +7,7 @@ import * as React from 'react';
  * imports each suite mocks its own way. The row itself is pinned by `property-row.test.tsx`.
  */
 type RowProps = React.PropsWithChildren<{
-	label: string;
+	label?: string;
 	prefix?: string;
 	id?: string;
 	name?: string | readonly string[];
@@ -83,7 +83,7 @@ export function PropertyRow(props: RowProps) {
 			data-form-item={item}
 			data-indent={props.indent || undefined}
 		>
-			<span id={item && `${item}-form-item`}>{props.label}</span>
+			{props.label !== undefined && <span id={item && `${item}-form-item`}>{props.label}</span>}
 			{props.help ? <span>{props.help}</span> : null}
 			{/* The row is the form item: the suite's FormItem, if any, is what its controls adopt. */}
 			<FormItem {...(FormItem === React.Fragment ? {} : { nativeID: item })}>

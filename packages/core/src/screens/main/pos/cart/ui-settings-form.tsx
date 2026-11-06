@@ -159,6 +159,11 @@ export function UISettingsForm() {
 						render={({ field }) => (
 							<FormSwitch
 								label={getUILabel('autoPrintReceipt')}
+								description={
+									field.value && !formData?.autoShowReceipt
+										? t('pos_cart.auto_print_without_receipt_hint')
+										: undefined
+								}
 								testID="cart-setting-auto-print-receipt"
 								{...field}
 							/>

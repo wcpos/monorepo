@@ -49,6 +49,7 @@ const registered = [
 	"'v2-dialog': dialogV2",
 	'chip',
 	'keypad',
+	"'price-keypad': priceKeypad",
 	"'segmented-control': segmentedControl",
 	"'step-progress': stepProgress",
 	'derivation',

@@ -1,5 +1,5 @@
 import { createTestT } from '../../../../../../jest/translate';
-import { describeEvent, failureReasonLabel } from './labels';
+import { describeEvent, disabledReasonText, failureReasonLabel } from './labels';
 
 const t = createTestT();
 const context = { readerLabel: 'Paul Solo', failureReason: null };
@@ -84,5 +84,13 @@ it('passes an unknown message through at its own level', () => {
 	});
 	expect(describeEvent({ message: 'Something new', level: 'error' }, t, context).tone).toBe(
 		'error'
+	);
+});
+
+// roadmap#523: on web and desktop a device-only gateway is unavailable until the store allows a
+// server-driven reader; the line names the setting to change, never the merchant's own title.
+it('names the setting to change for a device-only method on web', () => {
+	expect(disabledReasonText('driver_web', 'Stripe Terminal', t)).toBe(
+		"Only the app's readers are allowed for this payment method. Allow smart readers on its WooCommerce settings page to pay from this till."
 	);
 });

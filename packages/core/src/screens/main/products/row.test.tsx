@@ -30,8 +30,12 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 		caps: { canEditProducts: mockCanEdit, canEditVariations: mockCanEditVariations },
 	}),
 }));
+let mockImageSource: string | undefined;
 jest.mock('../hooks/use-image-attachment', () => ({
-	useImageAttachment: () => ({ uri: 'image' }),
+	useImageAttachment: (_record: unknown, source: string) => {
+		mockImageSource = source;
+		return { uri: 'image' };
+	},
 }));
 jest.mock('../hooks/use-stock-status-label', () => ({
 	useStockStatusLabel: () => ({ getLabel: () => 'In stock' }),
@@ -132,6 +136,29 @@ it('names the variation from its attributes and respects the variation capabilit
 	render(<ProductRow record={variation} />);
 	fireEvent.click(screen.getByTestId('products-row-one'));
 	expect(mockPush).not.toHaveBeenCalled();
+});
+it('a product row reads its first image', () => {
+	mockImageSource = undefined;
+	const product = {
+		...record,
+		payload: { ...record.payload, images: [{ src: 'https://store.test/product.jpg' }] },
+	} as EngineRecord<'products'>;
+	render(<ProductRow record={product} />);
+	expect(mockImageSource).toBe('https://store.test/product.jpg');
+});
+it('a variation row reads its singular image', () => {
+	mockImageSource = undefined;
+	const variation = {
+		...record,
+		payload: {
+			...record.payload,
+			type: 'variation',
+			image: { src: 'https://store.test/variation.jpg' },
+			images: [{ src: 'https://store.test/array.jpg' }],
+		},
+	} as unknown as EngineRecord<'variations'>;
+	render(<ProductRow record={variation} />);
+	expect(mockImageSource).toBe('https://store.test/variation.jpg');
 });
 
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));

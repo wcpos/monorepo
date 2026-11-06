@@ -75,9 +75,11 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import {
 	enterCheckout,
+	finishReceipt,
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	selectReceipt,
 	setLinesPaidBy,
@@ -1489,6 +1491,9 @@ export function useTenderFlow(
 			if (settled.saleComplete) {
 				if (uiSettings.autoShowReceipt) selectReceipt(order.uuid);
 				else {
+					// No tab is left behind to auto-print when tapped later: the print follows now.
+					finishReceipt(order.uuid);
+					if (uiSettings.autoPrintReceipt) queueHeadlessPrint(order.uuid);
 					leaveCheckout(order.uuid);
 					setCurrentOrderID('');
 					leaveHost();
@@ -1505,6 +1510,7 @@ export function useTenderFlow(
 		t,
 		tenderRecorded,
 		uiSettings.autoShowReceipt,
+		uiSettings.autoPrintReceipt,
 		setCurrentOrderID,
 		leaveHost,
 	]);

@@ -195,13 +195,16 @@ async function syncBinding(
 	userDB: Parameters<typeof adoptCounters>[0],
 	siteUuid: string,
 	storeId: number | undefined,
-	online: boolean
+	online: boolean,
+	/** False once the session moved on (a store switch): a late answer then writes nothing (#2001). */
+	isCurrent: () => boolean = () => true
 ): Promise<void> {
 	const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, siteUuid, id);
 	// Before the first await: a reader's effect may have started the list request already, and
 	// its answer reads this at arrival time.
 	entry.cache = { userDB, siteUuid };
 	const bound = await readBoundRegister(userDB, siteUuid, storeId);
+	if (!isCurrent()) return;
 	publish(entry, {
 		status: bound ? 'bound' : 'unknown',
 		registerId: bound?.id ?? null,
@@ -209,7 +212,7 @@ async function syncBinding(
 	});
 	if (!online) return;
 	await loadDirectory(entry, http, storeId);
-	if (!entry.loaded) return;
+	if (!isCurrent() || !entry.loaded) return;
 	const registers = entry.value.registers;
 	if (bound && registers.some(({ id }) => id === bound.id)) {
 		await adoptServerCounters(bound.id);
@@ -217,7 +220,10 @@ async function syncBinding(
 	}
 	if (registers.length === 1) {
 		await adoptServerCounters(registers[0].id);
+		// `bindRegister` sets the module's current site/store, which stamps every new order.
+		if (!isCurrent()) return;
 		await bindRegister(userDB, siteUuid, registers[0], storeId);
+		if (!isCurrent()) return;
 		recordRegisterFact({
 			kind: 'binding-changed',
 			source: 'automatic',
@@ -232,6 +238,7 @@ async function syncBinding(
 	} else {
 		if (bound) {
 			await unbindRegister(userDB, siteUuid, storeId);
+			if (!isCurrent()) return;
 			recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
 		}
 		publish(entry, {
@@ -249,8 +256,14 @@ export function useRegisterBindingSession(): void {
 	const entry = directory(site.uuid!, store.id);
 	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
 	React.useEffect(() => {
+		let current = true;
 		// A failed list request leaves the pointer/status unchanged; no retries.
-		void syncBinding(entry, http, userDB, site.uuid!, store.id, online).catch(() => {});
+		void syncBinding(entry, http, userDB, site.uuid!, store.id, online, () => current).catch(
+			() => {}
+		);
+		return () => {
+			current = false;
+		};
 	}, [entry, http, online, site.uuid, store.id, userDB]);
 }
 
