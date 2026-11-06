@@ -16,7 +16,8 @@ import { translateErrorSummary } from '../screens/main/logs/generated/error-summ
 const CODE = 'SYNC341';
 // The route once the docs flip makes 2.x the default (wcpos/docs#587). A 1.11
 // binary outlives the flip, so it carries the permanent URL, not a /2.x/ one.
-const UPGRADE_DOCS_URL = 'https://docs.wcpos.com/getting-started/upgrading-to-2';
+// The card shows after this till can no longer sync, so it points at the recovery steps.
+const UPGRADE_DOCS_URL = 'https://docs.wcpos.com/getting-started/upgrading-to-2#rolling-back';
 
 interface Props {
 	/**

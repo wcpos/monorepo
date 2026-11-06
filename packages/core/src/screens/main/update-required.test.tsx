@@ -74,7 +74,7 @@ describe('UpdateRequired', () => {
 			'Upgrading to 2.0'
 		);
 		expect(mockDocsLinkHrefs['update-required-upgrade-docs-link']).toBe(
-			'https://docs.wcpos.com/getting-started/upgrading-to-2'
+			'https://docs.wcpos.com/getting-started/upgrading-to-2#rolling-back'
 		);
 	});
 
