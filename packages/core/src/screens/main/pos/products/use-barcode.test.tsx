@@ -7,6 +7,8 @@ import { barcodeLookupErrorCode, useBarcode } from './use-barcode';
 
 const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
+const mockReadCounting = jest.fn(async () => false);
+const mockShowCountingNotice = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockEngineActive = jest.fn();
 const mockEngineStatus = jest.fn();
@@ -113,6 +115,11 @@ jest.mock('../../hooks/barcodes', () => ({
 
 jest.mock('../hooks/use-add-product', () => ({
 	useAddProduct: () => ({ addProduct: mockAddProduct }),
+	showCountingNotice: (...args: unknown[]) => mockShowCountingNotice(...args),
+}));
+
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({ readCounting: () => mockReadCounting() }),
 }));
 
 jest.mock('../hooks/use-add-variation', () => ({
@@ -334,6 +341,29 @@ describe('useBarcode online escalation', () => {
 		}));
 		mockAddProduct.mockResolvedValue(true);
 		mockAddVariation.mockResolvedValue(true);
+		mockReadCounting.mockReset().mockResolvedValue(false);
+		mockShowCountingNotice.mockReset();
+	});
+
+	it('refuses a scan while the drawer is counted, with the notice and no "not found"', async () => {
+		engineProducts.push(productDocument());
+		mockReadCounting.mockResolvedValue(true);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockShowCountingNotice).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(mockSetSearch).not.toHaveBeenCalled();
+		// An unknown code during the count is refused the same way, not reported as a miss.
+		await act(async () => scan('UNKNOWN'));
+		expect(mockFetcher).not.toHaveBeenCalled();
+		expect(mockToastShow).not.toHaveBeenCalled();
+
+		mockReadCounting.mockResolvedValue(false);
+		await act(async () => scan());
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockShowCountingNotice).toHaveBeenCalledTimes(2);
 	});
 
 	it.each([

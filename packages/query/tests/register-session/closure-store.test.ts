@@ -427,6 +427,16 @@ it('derives a legacy closure day from opening in store time', async () => {
 	expect(closure.business_day).toBe('2026-09-16');
 });
 
+// #3251: a row stored in the server form before the fix still closes with an ISO opened_at.
+it('writes an ISO opened_at for a session row holding the server form', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		session: { ...input.session.toJSON(), opened_at_gmt: '2026-09-16 09:05:07' },
+	});
+	expect(closure.opened_at).toBe('2026-09-16T09:05:07.000Z');
+});
+
 it('patches only the receipt snapshot and corrections count, including server identity', async () => {
 	const closure = await writeClosure(await seed());
 	await closure.incrementalPatch({ server_closure_id: 'remote' });

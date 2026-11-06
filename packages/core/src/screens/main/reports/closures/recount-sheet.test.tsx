@@ -37,6 +37,15 @@ const viewedStores = of([
 		price_decimal_sep: ',',
 		price_thousand_sep: '.',
 	},
+	// A 3-place (fils) store: KWD has no faces of its own, so it counts on the default ones.
+	{
+		id: 3,
+		currency: 'KWD',
+		currency_pos: 'left',
+		price_num_decimals: 3,
+		price_decimal_sep: '.',
+		price_thousand_sep: ',',
+	},
 ]);
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
@@ -447,4 +456,23 @@ it('keeps the sheet busy until the refreshed snapshot is saved', async () => {
 		finish();
 	});
 	expect(close).toHaveBeenCalledWith(false);
+});
+
+// Revert: total the denominations in 2 places, so a fils store's count is sent in cents.
+it('totals denominations in the store’s decimals on a 3-place store', async () => {
+	render(
+		<RecountSheet row={{ ...row, store_id: 3 } as never} onSaved={done} onOpenChange={close} />
+	);
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-denominations'));
+	fireEvent.click(screen.getByTestId('den-tile-10'));
+	fireEvent.click(screen.getByTestId('den-tile-0.05'));
+	expect((screen.getByTestId('recount-cash') as HTMLInputElement).value).toBe('10.050');
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(post).toHaveBeenCalledWith(
+			'closures/server-closure/recount',
+			expect.objectContaining({ counted: { cash: '10.050', card: '4' } })
+		)
+	);
 });
