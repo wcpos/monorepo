@@ -17,6 +17,11 @@ export interface QueryResult<TCollection = RxCollection> {
 	 * cashier (#1733).
 	 */
 	searchState?: 'pending' | 'answered';
+	/**
+	 * True only on the placeholder emitted while no engine database is bound. Such a
+	 * result is not an answer: its empty `hits` say nothing about what is stored (#3186).
+	 */
+	unbound?: boolean;
 	count?: number;
 	/**
 	 * The parent ids a relation named from matching children, resident or not; an owner's

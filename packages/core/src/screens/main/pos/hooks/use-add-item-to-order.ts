@@ -43,7 +43,7 @@ export const useAddItemToOrder = () => {
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch, settleIntent } = useCartWrite();
-	const { ctx, actor } = useActionContext();
+	const { ctx, actor, readCounting } = useActionContext();
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { store, wpCredentials, site } = useStoreSession();
@@ -306,5 +306,5 @@ export const useAddItemToOrder = () => {
 		]
 	);
 
-	return { addItemToOrder };
+	return { addItemToOrder, readCounting };
 };

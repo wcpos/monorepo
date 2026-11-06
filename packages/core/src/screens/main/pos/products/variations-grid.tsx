@@ -3,6 +3,8 @@ import { View } from 'react-native';
 
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 
+import { useGround } from '@wcpos/components/lib/ground';
+import { cn } from '@wcpos/components/lib/utils';
 import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 
 import { useQueryHandleFields } from '../../../../query';
@@ -82,6 +84,7 @@ export function VariationsGrid({
 	const slotsNode = React.useRef<React.ComponentRef<typeof View>>(null);
 	// The parent in flight may paint above the scroller, over the crumb row (see useAirspace).
 	const air = useAirspace(scroll);
+	const ground = useGround();
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -130,7 +133,7 @@ export function VariationsGrid({
 							{rows.map((row, rowIndex) => (
 								<View
 									key={rowIndex}
-									className="flex-row"
+									className={cn('flex-row', ground.tileRow)}
 									style={rowIndex === 0 ? FRONT : undefined}
 								>
 									{row.map((index) => {

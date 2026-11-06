@@ -255,6 +255,22 @@ describe('buildReceiptData', () => {
 		expect(result.store.tax_ids).toEqual([]);
 	});
 
+	it('carries the advertised logo on store', () => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			display: { contract: 1, signaling: '/wcpos/v2/display', logo: 'https://shop.test/logo.png' },
+		});
+		expect(result.store.logo).toBe('https://shop.test/logo.png');
+	});
+
+	it.each([undefined, { contract: 1 }, { contract: 1, logo: '' }, { contract: 1, logo: 5 }])(
+		'emits an empty logo when the store advertises none (%p)',
+		(display) => {
+			const result = buildReceiptData(mockOrder, { ...mockStore, display });
+			expect(result.store.logo).toBe('');
+		}
+	);
+
 	it.each([0, 3, undefined])('carries server price decimals (%s) into receipt data', (decimals) => {
 		const result = buildReceiptData(mockOrder, {
 			...mockStore,

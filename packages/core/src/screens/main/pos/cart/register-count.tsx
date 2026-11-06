@@ -33,6 +33,7 @@ import { ApproveSheet } from './approve-sheet';
 import { RegisterAmount } from './movement-sheet';
 import { denominations } from './register-count.denominations';
 import {
+	countDecimals,
 	countVariance,
 	denominationTotal,
 	overThreshold,
@@ -124,6 +125,7 @@ export function RegisterCount({
 	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
+	const decimals = countDecimals(useDocField(store, (value) => value.price_num_decimals));
 	const noteForm = useForm({ defaultValues: { note: session?.count_note ?? '' } });
 	const note = useWatch({ control: noteForm.control, name: 'note' });
 	const noteId = React.useId();
@@ -146,9 +148,11 @@ export function RegisterCount({
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const t = useT();
-	const amount = Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : cash;
-	const valid = validAmount(amount);
-	const variance = countVariance(amount, expected.cash ?? '0');
+	const amount = Object.keys(pieces).length
+		? fromMinor(denominationTotal(pieces, decimals), decimals)
+		: cash;
+	const valid = validAmount(amount, decimals);
+	const variance = countVariance(amount, expected.cash ?? '0', decimals);
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const counted = {
 		cash: amount,
@@ -165,7 +169,7 @@ export function RegisterCount({
 		!approvedThisCount &&
 		(!!session?.approval_required ||
 			!!session?.approved_counted ||
-			(!blind && valid && overThreshold(variance, varianceThreshold)));
+			(!blind && valid && overThreshold(variance, decimals, varianceThreshold)));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
@@ -207,7 +211,7 @@ export function RegisterCount({
 							testID="count-variance"
 							className={`font-semibold tabular-nums ${variance < 0 ? 'text-bad' : variance === 0 ? 'text-ok' : 'text-foreground'}`}
 						>
-							{varianceText(variance, format, t)}
+							{varianceText(variance, decimals, format, t)}
 						</Text>
 						{variance === 0 && (
 							<View testID="count-exact">
@@ -393,15 +397,15 @@ export function RegisterCount({
 					disabled:
 						!valid ||
 						figuresPending ||
-						Object.values(others).some((value) => value !== '' && !validAmount(value)),
+						Object.values(others).some((value) => value !== '' && !validAmount(value, decimals)),
 					onPress: () => {
-						if (!blind && valid && overThreshold(variance, varianceThreshold))
+						if (!blind && valid && overThreshold(variance, decimals, varianceThreshold))
 							recordRegisterFact({
 								kind: 'variance-over-threshold',
 								actor,
 								sessionId: session?.id,
 								registerId: session?.register_id,
-								variance: fromMinor(variance, 2),
+								variance: fromMinor(variance, decimals),
 								threshold: varianceThreshold,
 							});
 						if (needsManager) setApproving(true);

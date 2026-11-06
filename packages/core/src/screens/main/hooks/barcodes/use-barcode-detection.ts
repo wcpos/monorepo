@@ -16,6 +16,13 @@ import {
 import { markUserActivity } from '@wcpos/utils/user-activity';
 import { useDocField } from '@wcpos/query';
 
+import {
+	claimScanOwner,
+	createScanConsumerToken,
+	isScanOwner,
+	releaseScanOwner,
+	scanOwner$,
+} from './scan-owner';
 import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
 import { useScanHub } from './scan-hub-context';
@@ -56,6 +63,7 @@ export const useBarcodeDetection = (
 	const callback = options.callback ?? noopBarcodeCallback;
 	const leafFocused = useIsFocused();
 	const isActive = options.isActive ?? leafFocused;
+	const [token] = React.useState(() => createScanConsumerToken());
 	const { store } = useStoreSession();
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
@@ -148,6 +156,7 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyUp = React.useCallback(
 		(e: KeyboardEvent) => {
+			if (!isScanOwner(token)) return;
 			const target = e.target as HTMLElement | null;
 			const ignoreInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
 			if (ignoreInput) {
@@ -161,7 +170,7 @@ export const useBarcodeDetection = (
 				}
 			}
 		},
-		[handleKeyInput]
+		[handleKeyInput, token]
 	);
 
 	/**
@@ -169,13 +178,33 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyPress = React.useCallback(
 		(e: TextInputKeyPressEvent) => {
+			if (!isScanOwner(token)) return;
 			// On web/Electron a focused text field belongs to the typist, regardless
 			// of speed. The document listener still handles wedges outside inputs;
 			// device-identified scans arrive independently through the scan hub.
 			if (Platform.OS !== 'web') handleKeyInput(e.nativeEvent.key);
 		},
-		[handleKeyInput]
+		[handleKeyInput, token]
 	);
+
+	// Claim before attaching listeners: overlapping tills must never consume the same scan.
+	React.useEffect(() => {
+		if (!isActive) return;
+		claimScanOwner(token);
+		return () => releaseScanOwner(token);
+	}, [isActive, token]);
+
+	// Losing ownership mid-burst drops the partial burst, as a scope change does: the settle
+	// timer must not run this consumer's callback after another consumer has claimed the scan.
+	React.useEffect(() => {
+		const subscription = scanOwner$.subscribe((owner) => {
+			if (owner !== token) {
+				detectorRef.current?.dispose();
+				detectorRef.current = null;
+			}
+		});
+		return () => subscription.unsubscribe();
+	}, [token]);
 
 	/**
 	 * Enable/Disable web barcode detection for the active scan scope.
@@ -221,12 +250,12 @@ export const useBarcodeDetection = (
 			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
 				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
 				// hub is shared; drop events here (#1409).
-				withLatestFrom(isActive$),
-				filter(([, active]) => active),
+				withLatestFrom(isActive$, scanOwner$),
+				filter(([, active, owner]) => active && owner === token),
 				map(([event]) => event),
 				dedupeScans(SCAN_DEDUP_WINDOW_MS, scanTimeOf)
 			),
-		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
+		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$, token]
 	);
 	const barcode$ = React.useMemo(() => gatedScans$.pipe(map((event) => event.code)), [gatedScans$]);
 	const scanEvents$ = React.useMemo(
