@@ -368,7 +368,9 @@ export function RegisterPanel({
 										type === 'paid_in' ? 'paidIn' : type === 'paid_out' ? 'paidOut' : 'cashDrawer'
 									}
 								/>
-								<ButtonText>{movementNames[type]}</ButtonText>
+								<ButtonText numberOfLines={2} className="text-center">
+									{movementNames[type]}
+								</ButtonText>
 							</Button>
 						))}
 					</View>

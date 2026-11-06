@@ -72,9 +72,10 @@ const buttonVariants = cva(
 			 * Four sizes, by role: `sm` (36) in rows and toolbars,
 			 * `default` (44, the control token) everywhere else, `lg` (56) for the
 			 * pane's one sale/commit button — Pay, Take payment, Open/Close register,
-			 * New sale. `stack` (56) keeps the control radius and base label, with the icon
+			 * New sale. `stack` (56 at least) keeps the control radius and base label, with the icon
 			 * over the label, for a labelled verb among equals (the register panel's
-			 * Pay in · Pay out · No sale), never the commit button.
+			 * Pay in · Pay out · No sale), never the commit button; a translated label may
+			 * take two lines, so the height is a floor and the row's buttons stretch alike.
 			 * A Button never carries its own height class. A small pill is a
 			 * `Chip size="sm"`, never a Button.
 			 */
@@ -82,7 +83,7 @@ const buttonVariants = cva(
 				default: 'h-ctl rounded-control px-4 py-2',
 				sm: 'rounded-control h-9 px-3',
 				lg: 'rounded-commit h-14 px-6',
-				stack: 'rounded-control h-14 gap-1 px-3',
+				stack: 'rounded-control min-h-14 gap-1 px-3 py-2',
 			},
 		},
 		defaultVariants: {

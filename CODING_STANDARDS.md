@@ -326,7 +326,7 @@ The seven kept variants (decision 1[^board]) and the title bar's `bare`; nothing
 | `sm`      | 36 (`h-9`)                      | in table rows and dense toolbars                                                                                                                              |
 | `default` | 44 (`h-ctl`, the control token) | everywhere else                                                                                                                                               |
 | `lg`      | 56 (`h-14`)                     | the pane's one sale button: Pay, Take payment, Open/Close register, New sale                                                                                  |
-| `stack`   | 56 (`h-14`)                     | the control radius, the base label, the icon over the label; a labelled verb among equals (the register panel's Pay in · Pay out · No sale), never the commit |
+| `stack`   | 56 at least (`min-h-14`)        | the control radius, the base label, the icon over the label; a labelled verb among equals (the register panel's Pay in · Pay out · No sale), never the commit |
 
 Heights are at the Regular scale step; Compact and Spacious scale them with `--spacing`, and `h-ctl`
 never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `IconButton size="sm"` and

@@ -92,7 +92,8 @@ describe('Button variants', () => {
 
 	it('gives stack a 56 px control with an icon-label gap and a base-size label, not a commit', () => {
 		const classes = buttonVariants({ size: 'stack' });
-		expect(classes).toContain('h-14');
+		expect(classes).toContain('min-h-14');
+		expect(classes).not.toContain('h-14');
 		expect(classes).toContain('rounded-control');
 		expect(classes).toContain('gap-1');
 		expect(classes).not.toContain('rounded-commit');
