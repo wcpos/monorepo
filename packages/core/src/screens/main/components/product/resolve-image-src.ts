@@ -9,12 +9,10 @@ interface ImageLike {
 /**
  * The two shapes a variation document can carry its image in.
  *
- * Woo's own `products/<parent>/variations` controller — the shape our wcpos/v1 lane
- * serves — emits a SINGULAR `image` object. The wcpos/v2 lane (plugin 1.10.0+)
- * hydrates variations through WooCommerce's PRODUCTS controller instead
- * (`Sync\Product_Serializer`: "Variations are serialized through the SAME products
- * controller as products"), and that controller emits an `images` ARRAY. A till
- * talks v2 to a 1.10.0+ store and v1 to a 1.9.x one, so both reach this client.
+ * Every lane sends a SINGULAR `image` object, except plugin 1.10.0: its wcpos/v2 lane
+ * hydrated variations through WooCommerce's PRODUCTS controller, which emits an `images`
+ * ARRAY. Plugin 1.10.1 restored `image` on 2026-08-25. This lane's floor is still 1.10.0,
+ * so both shapes can reach this client (wcpos/woocommerce-pos-pro#477).
  */
 interface ImageBearingPayload {
 	images?: ImageLike[] | null;
@@ -22,14 +20,9 @@ interface ImageBearingPayload {
 }
 
 /**
- * Resolve the URL to display for a product or variation, whichever wire shape the
- * store's plugin version serves. `images[0]` wins when present — it is the shape the
- * current (v2) lane sends; `image` is the v1 fallback.
- */
-/**
  * The image ENTRY to display, whichever wire shape the store's plugin version serves.
- * `images[0]` wins when present — it is the shape the current (v2) lane sends; `image` is the
- * v1 fallback.
+ * `images[0]` wins when present: only a 1.10.0 store sends it. `image` is what every other
+ * store sends.
  *
  * The entry rather than just its `src`, because a cart line item carries the attachment `id`
  * alongside the URL and the server matches on it.
