@@ -566,7 +566,7 @@ describe('#2016: a refused close', () => {
 			render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 			const band = screen.getByTestId('register-panel-refused-close').textContent;
 			expect(band).toContain('The store refused this close. Your count is kept.');
-			expect(band).toContain('Sales are blocked while this register is being counted');
+			expect(band).not.toContain('Sales are blocked while this register is being counted');
 			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
 			expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.00');
 			expect(screen.getByTestId('count-close').textContent).toBe('Retry');

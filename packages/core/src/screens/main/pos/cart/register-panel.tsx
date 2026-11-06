@@ -312,7 +312,6 @@ export function RegisterPanel({
 				{refusedClose && session && (
 					<RefusedCloseNotice
 						className="mx-4"
-						session={session}
 						onRetry={() =>
 							void attempt(async () => {
 								if (session.status === 'open') await actions.startCounting();

@@ -85,32 +85,17 @@ it('keeps the count of a session document as a close the storage worker can clon
 
 it('offers Retry only when given one', () => {
 	const onRetry = jest.fn();
-	const view = render(<RefusedCloseNotice session={{ status: 'counting' }} />);
+	const view = render(<RefusedCloseNotice />);
 	expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
-	view.rerender(<RefusedCloseNotice session={{ status: 'counting' }} onRetry={onRetry} />);
+	view.rerender(<RefusedCloseNotice onRetry={onRetry} />);
 	fireEvent.click(screen.getByTestId('register-panel-retry-close'));
 	expect(screen.getByTestId('register-panel-retry-close').textContent).toBe('register.retry');
 	expect(onRetry).toHaveBeenCalledTimes(1);
 });
 
-it.each([
-	[{ status: 'counting', sync_status: 'pending' }, true],
-	[{ status: 'closed', sync_status: 'failed' }, true],
-	[{ status: 'open', sync_status: 'failed' }, true],
-	[{ status: 'open', sync_status: 'pending' }, false],
-	[
-		{ status: 'open', sync_status: 'pending', pending_status: 'open', server_status: 'counting' },
-		true,
-	],
-	[
-		{ status: 'open', sync_status: 'pending', pending_status: 'open', server_status: 'open' },
-		false,
-	],
-])('for %j says sales are blocked: %s', (session, blocked) => {
-	render(<RefusedCloseNotice session={session} />);
-	expect(screen.queryByTestId('description')?.textContent ?? null).toBe(
-		blocked ? 'register.close_refused_wait' : null
-	);
+it('is the one line, with no description under it', () => {
+	render(<RefusedCloseNotice onRetry={jest.fn()} />);
+	expect(screen.queryByTestId('description')).toBeNull();
 });
 
 it('takes the count from the closure row when the session has none', async () => {

@@ -45,36 +45,23 @@ export function keptCount(
 }
 
 /**
- * The store refused this till's close (#2016): the count is kept. Retry opens the count, so
- * it is only offered where that is the way back; sales stay blocked until the store accepts.
+ * The store refused this till's close (#2016): the count is kept. One line; the rest is in
+ * Learn more (REGISTER211). Retry opens the count, so it is only offered where that is the way back.
  */
 export function RefusedCloseNotice({
-	session,
 	onRetry,
 	className,
 }: {
-	session: {
-		status: string;
-		sync_status?: string;
-		pending_status?: string | null;
-		server_status?: string | null;
-	};
 	onRetry?: () => void;
 	className?: string;
 }) {
 	const t = useT();
-	// The last clause mirrors the sale refusal in findOpenSession.
-	const blocked =
-		session.status !== 'open' ||
-		session.sync_status === 'failed' ||
-		(session.pending_status === 'open' && session.server_status === 'counting');
 	return (
 		<Notice
 			tone="bad"
 			testID="register-panel-refused-close"
 			className={className}
 			title={t('register.close_refused')}
-			description={blocked ? t('register.close_refused_wait') : undefined}
 			actions={
 				onRetry
 					? [{ label: t('register.retry'), testID: 'register-panel-retry-close', onPress: onRetry }]

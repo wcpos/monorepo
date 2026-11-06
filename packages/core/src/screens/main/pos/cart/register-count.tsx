@@ -212,7 +212,7 @@ export function RegisterCount({
 			keyboardShouldPersistTaps="handled"
 		>
 			{/* The footer is this pane's Retry: it sends the count as edited here. */}
-			{refusedClose && session && <RefusedCloseNotice session={session} />}
+			{refusedClose && <RefusedCloseNotice />}
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
