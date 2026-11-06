@@ -1,8 +1,10 @@
 import * as React from 'react';
 
+import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import {
 	observeRememberedReaders,
 	type Readers,
+	rememberedMode,
 	type RememberedReader,
 	rememberedReaders,
 	type StoreLocalDatabase,
@@ -26,7 +28,14 @@ export function useRememberedReaders(): Readonly<Readers> {
 	return readers;
 }
 
-export function useRememberedReader(methodId: string | null) {
+/**
+ * One method's remembered reader for checkout. A memory from the other connection (a cloud
+ * choice on a device-primary method, or the reverse) is not this method's reader: ignored.
+ */
+export function useRememberedReader(
+	methodId: string | null,
+	methods: readonly PaymentMethodDescriptor[]
+) {
 	const { storeDB } = useStoreSession();
 	const [loaded, setLoaded] = React.useState<{
 		storeDB: StoreLocalDatabase;
@@ -47,9 +56,12 @@ export function useRememberedReader(methodId: string | null) {
 	}, [storeDB]);
 	// Stable: both sit in the tender flow's useCallback deps.
 	const getLoaded = React.useCallback(
-		(id: string | null): string | null =>
-			id && loaded?.storeDB === storeDB ? (loaded.get(id)?.id ?? null) : null,
-		[loaded, storeDB]
+		(id: string | null): string | null => {
+			const reader = id && loaded?.storeDB === storeDB ? loaded.get(id) : undefined;
+			const mode = methods.find((method) => method.id === id)?.capture.mode;
+			return reader && rememberedMode(reader) === mode ? reader.id : null;
+		},
+		[loaded, storeDB, methods]
 	);
 	const remember = React.useCallback(
 		async (reader: RememberedReader): Promise<void> => {

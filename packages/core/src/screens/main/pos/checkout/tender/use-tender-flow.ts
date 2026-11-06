@@ -401,7 +401,7 @@ export function useTenderFlow(
 			}));
 		// The active view of the plan decides only what the keypad shows (legs, entry prefill).
 		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
-		const { readers, lockToDefault } = selectableReaders(
+		const { readers, lockToDefault, only } = selectableReaders(
 			byId.get(methodId ?? '') ?? null,
 			service?.readersInUse(),
 			order.uuid
@@ -416,12 +416,16 @@ export function useTenderFlow(
 				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
 				: initial.entryMinor,
 			linesPaidBy: getCheckoutModeSnapshot().linesPaidBy.get(order.uuid) ?? {},
-			readerId: initialReaderId(readers, lockToDefault, null),
+			readerId: initialReaderId(readers, lockToDefault, null, only),
 		};
 	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
-	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
+	const {
+		readerId: remembered,
+		getLoaded,
+		remember,
+	} = useRememberedReader(state.methodId, methods);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]
@@ -541,7 +545,7 @@ export function useTenderFlow(
 		(transport: PaymentTransport) => reducerDispatch({ type: 'pick-transport', transport }),
 		[reducerDispatch]
 	);
-	const { readers, lockToDefault } = selectableReaders(method, readersInUse, order.uuid);
+	const { readers, lockToDefault, only } = selectableReaders(method, readersInUse, order.uuid);
 	// With a plan, a cash leg is the planned share: notes handed over above it are change,
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
@@ -666,10 +670,10 @@ export function useTenderFlow(
 			remembered === null
 		)
 			return;
-		const readerId = initialReaderId(readers, lockToDefault, remembered);
+		const readerId = initialReaderId(readers, lockToDefault, remembered, only);
 		if (readerId !== null && readerId !== state.readerId)
 			dispatch({ type: 'pick-reader', readerId });
-	}, [method, state.readerId, readers, lockToDefault, remembered, dispatch]);
+	}, [method, state.readerId, readers, lockToDefault, only, remembered, dispatch]);
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
@@ -694,7 +698,7 @@ export function useTenderFlow(
 				: state.view === 'amount'
 					? state.entryMinor
 					: plannedLegMinor;
-			const { readers, lockToDefault } = selectableReaders(
+			const { readers, lockToDefault, only } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
 				order.uuid
@@ -703,7 +707,7 @@ export function useTenderFlow(
 				type: 'pick-method',
 				methodId,
 				prefillMinor,
-				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId)),
+				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId), only),
 			});
 			setTenderMethod(order.uuid, methodId);
 		},

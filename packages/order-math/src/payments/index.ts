@@ -42,6 +42,8 @@ export type {
 	MintDevicePaymentInput,
 	MintServerPaymentResult,
 } from './ledger';
+export { captureEntry, serverHardware } from './capture-modes';
+export type { ServerHardware } from './capture-modes';
 export { toMinor, fromMinor } from './money';
 export { roundToIncrement, roundedDue, settlesAtRoundedDue } from './rounding';
 export type { PaymentRounding } from './rounding';

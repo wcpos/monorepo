@@ -22,7 +22,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { CARD_READER_DOCS_URL } from './docs';
-import { readerName } from './reader-name';
+import { locationName, readerName } from './reader-name';
 import { useT } from '../../../../contexts/translations';
 import { getDriver } from '../../../../services/payment-drivers/registry';
 import { useDriverStatus } from '../../pos/checkout/tender/use-driver-status';
@@ -173,12 +173,6 @@ export function ReaderRow({
 		);
 
 	const busy = working || connecting || updating;
-	// The gateway names its Terminal location in the descriptor (Stripe: `location_name`); a
-	// Bluetooth reader registers to that location when it connects, so it is the reader's too.
-	const locationName =
-		typeof method.provider_data.location_name === 'string' && method.provider_data.location_name
-			? method.provider_data.location_name
-			: null;
 	// ONE state line: what is happening wins over a held link, which wins over silence.
 	const battery = status.reader?.battery;
 	const state: DeviceState | null = line
@@ -201,7 +195,7 @@ export function ReaderRow({
 			busy={scan !== null && found === null}
 			name={name || method.title}
 			tag={decode(method.title)}
-			identifiers={[serial, locationName]}
+			identifiers={[serial, locationName(method)]}
 			state={state}
 			progress={
 				updating
