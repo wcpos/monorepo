@@ -570,11 +570,15 @@ jobs:
       # and it keeps dev-mode LogBox overlays from sitting above the app where
       # they would swallow Maestro taps. `--offline` skips Expo API calls the
       # server does not need.
+      # EXPO_NO_METRO_LAZY: a production-mode lazy bundle makes every `import()`
+      # fetch a chunk, native has no `location` to build the chunk URL from, so
+      # Expo throws; shipped builds are not lazy either, so this matches them.
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
+          EXPO_NO_METRO_LAZY: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime: the
           # dev launcher issues two serialized manifest requests per relaunch,
@@ -1112,6 +1116,7 @@ jobs:
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
+          EXPO_NO_METRO_LAZY: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime instead
           # of recomputing the fingerprint inside every 10 s launcher request.

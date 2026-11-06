@@ -870,6 +870,19 @@ test('native E2E concurrency isolates pull requests and supersedes stale main pu
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
+test('native E2E Metro serves a non-lazy bundle on both platforms', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// A production-mode lazy bundle throws on native when import() fetches a chunk.
+	const metroSteps = Object.values(workflow.jobs)
+		.flatMap((job) => job.steps ?? [])
+		.filter((step) => typeof step.run === 'string' && step.run.includes('expo start'));
+
+	assert.equal(metroSteps.length, 2);
+	for (const step of metroSteps) {
+		assert.equal(step.env?.EXPO_NO_METRO_LAZY, '1', step.name);
+	}
+});
+
 test('native E2E reports logger and direct console errors on both platforms', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-errors-'));

@@ -192,7 +192,7 @@ Native flows 04/06 and the web add-product case in `e2e/pos-cart.spec.ts` check
 performance alongside the cart outcome; there is no separate performance suite.
 For native, start Metro in `apps/main` with
 `EXPO_NO_METRO_LAZY=1 EXPO_PUBLIC_WCPOS_E2E=1 npx expo start --no-dev --minify --clear`.
-CI sets the E2E flag. Restart Metro after edits if `CI=1` disables its watcher.
+CI sets both variables. Restart Metro after edits if `CI=1` disables its watcher.
 Native timing in `packages/core/e2e` is excluded from normal bundles by literal
 E2E guards. Playwright injects web measurement without app instrumentation.
 
