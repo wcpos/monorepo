@@ -26,7 +26,7 @@ import {
 	formatClosureDate,
 } from '../../../../services/register-session/closure-document';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { countVariance, varianceText } from '../../pos/cart/register-count.helpers';
+import { countDecimals, countVariance, varianceText } from '../../pos/cart/register-count.helpers';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
@@ -65,7 +65,12 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 		opened.date_ymd === closed.date_ymd
 			? `${opened.weekday_short} ${Number(opened.day)} ${opened.month_short} ${opened.time}–${closed.time}`
 			: `${opened.date} ${opened.time} → ${closed.date} ${closed.time}`;
-	const variance = countVariance(settled.counted.cash ?? '0', settled.expected.cash ?? '0');
+	const decimals = countDecimals(context.store.price_num_decimals);
+	const variance = countVariance(
+		settled.counted.cash ?? '0',
+		settled.expected.cash ?? '0',
+		decimals
+	);
 	return (
 		<>
 			{leading}
@@ -126,7 +131,8 @@ export function ClosureBody({
 	const format = (value: number) => context.formatMoney(String(value));
 	const counted = settled.counted.cash ?? '0',
 		expected = settled.expected.cash ?? '0';
-	const variance = countVariance(counted, expected);
+	const decimals = countDecimals(context.store.price_num_decimals);
+	const variance = countVariance(counted, expected, decimals);
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures;
 	// A row read back always carries breakdowns; a bare fixture may not.
 	const breakdowns = row.breakdowns ?? {};
@@ -160,7 +166,8 @@ export function ClosureBody({
 	const settledArgs = {
 		recorded: context.formatMoney(recorded.counted?.cash ?? '0'),
 		result: varianceText(
-			countVariance(recorded.counted?.cash ?? '0', recorded.expected?.cash ?? '0'),
+			countVariance(recorded.counted?.cash ?? '0', recorded.expected?.cash ?? '0', decimals),
+			decimals,
 			format,
 			t
 		),
@@ -197,7 +204,7 @@ export function ClosureBody({
 	const figures = [
 		['counted', t('register.counted'), context.formatMoney(counted)],
 		['expected', t('register.expected_label'), context.formatMoney(expected)],
-		['result', t('reports.result'), varianceText(variance, format, t)],
+		['result', t('reports.result'), varianceText(variance, decimals, format, t)],
 	].filter(([key]) => !blind || key === 'counted');
 	return (
 		<View testID={testID} className="gap-4">
@@ -335,7 +342,12 @@ export function ClosureBody({
 												blind
 													? ''
 													: varianceText(
-															countVariance(settled.counted[name], settled.expected[name] ?? '0'),
+															countVariance(
+																settled.counted[name],
+																settled.expected[name] ?? '0',
+																decimals
+															),
+															decimals,
 															format,
 															t
 														),

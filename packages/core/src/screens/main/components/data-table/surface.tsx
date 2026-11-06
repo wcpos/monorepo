@@ -49,7 +49,7 @@ export function TableSurface({ className, ...props }: ViewProps) {
 export function TileGround({ children }: { children: React.ReactNode }) {
 	// The phone's screen edge keeps 16 (`useGround`), as the chip row above the tiles does.
 	return (
-		<View className={cn('min-h-0 flex-1 pb-1', useGround().px)}>
+		<View className={cn('min-h-0 flex-1 pb-1', useGround().tiles)}>
 			<View className="-mx-1 -mt-1 min-h-0 flex-1">{children}</View>
 		</View>
 	);

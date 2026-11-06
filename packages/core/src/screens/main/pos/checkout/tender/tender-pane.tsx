@@ -6,6 +6,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Chip } from '@wcpos/components/chip';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
@@ -30,6 +31,7 @@ import { disabledReasonText } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
+import { CARD_READER_DOCS_URL } from '../../../settings/card-readers/docs';
 import { useT } from '../../../../../contexts/translations';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
@@ -440,9 +442,19 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									<Text className="text-foreground text-sm" decodeHtml>
 										{tile.method.title}
 									</Text>
-									<Text variant="help" className="flex-1">
-										{tile.reason ? disabledReasonText(tile.reason, tile.method.title, t) : ''}
-									</Text>
+									<VStack space="xs" className="flex-1">
+										<Text variant="help">
+											{tile.reason ? disabledReasonText(tile.reason, tile.method.title, t) : ''}
+										</Text>
+										{tile.reason === 'driver_web' ? (
+											<DocsLink
+												testID={`checkout-unavailable-${tile.method.id}-docs`}
+												href={CARD_READER_DOCS_URL}
+											>
+												{t('settings.having_trouble')}
+											</DocsLink>
+										) : null}
+									</VStack>
 								</View>
 							))
 						: null}

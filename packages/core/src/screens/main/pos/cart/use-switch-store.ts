@@ -20,7 +20,9 @@ export function useSwitchStore() {
 	const handleSwitchStore = async (nextStore: ReadonlyStoreRecord): Promise<boolean> => {
 		setIsSwitching(true);
 		try {
-			await switchStore(nextStore);
+			// Refused for an incomplete target session: AUTH131 has told the cashier, so no
+			// second toast, no navigation, and the caller keeps its sheet open.
+			if (!(await switchStore(nextStore))) return false;
 			// The router owns the URL: passing the server store id as a param writes
 			// `/?store=<id>` on web (so a refresh boots into the new store) without
 			// clobbering Expo Router's own history state the way a manual

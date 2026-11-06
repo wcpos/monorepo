@@ -16,7 +16,8 @@ type NoticeActions = readonly [NoticeAction] | readonly [NoticeAction, NoticeAct
 type NoticeItem = { id: string; text: string; actions: NoticeActions };
 type NoticeProps = ViewProps & {
 	tone: Extract<Tone, 'warning' | 'info' | 'bad'>;
-	icon?: IconName;
+	/** The leading glyph: the tone's by default; `null` draws none (a band that is a box of fields). */
+	icon?: IconName | null;
 	title: string;
 	description?: string;
 	children?: React.ReactNode;
@@ -65,7 +66,7 @@ export function Notice({
 				className
 			)}
 		>
-			<Icon name={icon ?? TONE[tone].glyph} className="text-foreground" />
+			{icon !== null && <Icon name={icon ?? TONE[tone].glyph} className="text-foreground" />}
 			<VStack className="min-w-0 flex-1 basis-48">
 				<Text testID={id('title')} className="text-foreground font-medium">
 					{title}
