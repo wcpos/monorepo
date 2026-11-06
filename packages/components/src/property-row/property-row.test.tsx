@@ -59,6 +59,11 @@ jest.mock('../switch', () => ({
 	),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+// On web `useIsPhone` reads the layout viewport (`window.innerHeight`); keep it on the mocked window.
+Object.defineProperty(window, 'innerHeight', {
+	configurable: true,
+	get: () => mockWindow.height,
+});
 
 const classes = (element: HTMLElement) => element.dataset.classes?.split(' ') ?? [];
 

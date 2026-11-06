@@ -15,6 +15,7 @@ import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { CommandsProvider } from '@wcpos/core/extensions/commands';
 import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
+import { HeadlessAutoPrintHost } from '@wcpos/core/screens/main/pos/checkout/receipt-stage/headless-auto-print';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
 import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
@@ -184,6 +185,7 @@ function POSStack() {
 			<PosUrlMirror />
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
+				<HeadlessAutoPrintHost />
 				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
 					<Stack
 						screenOptions={{
