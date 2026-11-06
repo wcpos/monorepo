@@ -91,7 +91,8 @@ describe('Button variants', () => {
 	});
 
 	it('gives stack a 56 px control with an icon-label gap and a base-size label, not a commit', () => {
-		const classes = buttonVariants({ size: 'stack' });
+		// Split: `min-h-14` contains `h-14` as a substring, and the floor is the point.
+		const classes = buttonVariants({ size: 'stack' }).split(/\s+/);
 		expect(classes).toContain('min-h-14');
 		expect(classes).not.toContain('h-14');
 		expect(classes).toContain('rounded-control');
