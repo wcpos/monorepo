@@ -35,6 +35,11 @@ jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../jest/property-row.test-utils')
 );
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
+jest.mock('@wcpos/components/section-heading', () => ({
+	SectionHeading: ({ title, testID }: { title: string; testID?: string }) => (
+		<h2 data-testid={testID}>{title}</h2>
+	),
+}));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: mockWrap }));
 jest.mock('@wcpos/components/text', () => ({ Text: mockWrap }));
 jest.mock('../../../contexts/translations', () => ({
@@ -64,8 +69,9 @@ const toggle = () => screen.getByTestId('m-hidden-fields-toggle');
 const saleCounter = { id: 1, key: '_wcpos_sale_counter', value: '6' };
 const gift = { id: 2, key: 'gift', value: 'yes' };
 
-it('folds a private field behind one Hidden fields row; public rows stay', () => {
+it('folds a private field behind one Hidden fields row; public rows stay under a heading', () => {
 	render(<Harness meta={[saleCounter, gift]} />);
+	expect(screen.getByTestId('m-custom-fields-heading').textContent).toBe('Custom fields');
 	expect(has('m-row-meta-1')).toBe(true);
 	expect(has('m-remove-meta-1')).toBe(true);
 	expect(has('m-row-meta-0')).toBe(false);
@@ -100,6 +106,8 @@ it('draws no Hidden fields row when nothing is private', () => {
 it('the Saved mark sits on Hidden fields while closed with no public row, then on the first private row', () => {
 	const meta = [saleCounter, { id: 3, key: '_other', value: 'x' }];
 	const { rerender } = render(<Harness meta={meta} />);
+	// No public row, no heading: the private rows have the Hidden fields row.
+	expect(has('m-custom-fields-heading')).toBe(false);
 	mockSaved = 'meta_data';
 	rerender(<Harness meta={meta} />);
 	expect(screen.getByTestId('m-hidden-fields').textContent).toContain('2 fields');

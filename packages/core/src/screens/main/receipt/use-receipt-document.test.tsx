@@ -5,8 +5,13 @@ import { of } from 'rxjs';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 
-import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
+import {
+	claimReceiptAutoPrint,
+	isReceiptAutoPrintClaimed,
+	resetCheckoutMode,
+} from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
 
@@ -159,7 +164,9 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+// Stable across renders, as react-i18next's `t` is: the headless deadline effect depends on it.
+const mockT = (key: string) => key;
+jest.mock('../../../contexts/translations', () => ({ useT: () => mockT }));
 jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoPrintReceipt: mockAutoPrint } }),
 }));
@@ -1492,4 +1499,226 @@ it('never opens the till drawer for an online-only remote session report', () =>
 	);
 	printer.mockRestore();
 	dispatch.mockRestore();
+});
+
+describe('a headless auto-print (no receipt on screen)', () => {
+	const reprint = { label: 'receipt.reprint', onClick: jest.fn() };
+	// RECEIPT_PAGE_READ_TIMEOUT_MS (20 s, not exported) + HEADLESS_PRINT_GRACE_MS: the deadline
+	// waits out the page read's own bound, the longest wait a headless print may hold on.
+	const HEADLESS_DEADLINE_MS = 20_000 + 5_000;
+	const pageAnswers = () =>
+		mockFetch.mockResolvedValue({ ok: true, text: async () => '<p>Server receipt</p>' });
+	const renderHeadless = () =>
+		renderHook(() =>
+			useReceiptDocument({
+				order,
+				autoPrintAllowed: true,
+				headless: true,
+				failureToastAction: reprint,
+			})
+		);
+	beforeEach(() => {
+		const logger = getLogger([]);
+		[logger.error, logger.warn, logger.debug].forEach((fn) => (fn as jest.Mock).mockClear());
+	});
+
+	it('headless does not wait for a frame', async () => {
+		// The same URL preview: a visible host waits for its frame to load before printing.
+		const visible = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+		await act(async () => {});
+		expect(mockPrint).not.toHaveBeenCalled();
+		visible.unmount();
+		resetCheckoutMode();
+		// Headless, it prints once the page read has settled, with no frame ever loading.
+		pageAnswers();
+		const { result } = renderHeadless();
+		await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.autoPrintSettled).toBe(true));
+	});
+
+	it('autoPrintSettled turns true when the print fails', async () => {
+		let fail!: (error: Error) => void;
+		mockPrint.mockImplementationOnce(
+			() =>
+				new Promise<boolean>((_resolve, reject) => {
+					fail = reject;
+				})
+		);
+		pageAnswers();
+		const { result } = renderHeadless();
+		await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+		// In flight: the host stays mounted until the print settles.
+		expect(result.current.autoPrintSettled).toBe(false);
+		await act(async () => {
+			fail(new Error('ECONNREFUSED'));
+			await Promise.resolve();
+		});
+		expect(result.current.autoPrintSettled).toBe(true);
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
+			'Receipt print failed',
+			expect.objectContaining({
+				code: 'PRINT101',
+				showToast: true,
+				toast: expect.objectContaining({ action: reprint }),
+			})
+		);
+	});
+
+	it('autoPrintSettled turns true and reports when the gate never passes', async () => {
+		jest.useFakeTimers();
+		try {
+			mockFinal = false;
+			const { result, rerender } = renderHeadless();
+			await act(async () => jest.advanceTimersByTime(HEADLESS_DEADLINE_MS - 1));
+			expect(result.current.autoPrintSettled).toBe(false);
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+			await act(async () => jest.advanceTimersByTime(1));
+			expect(result.current.autoPrintSettled).toBe(true);
+			expect(getLogger([]).warn).toHaveBeenCalledTimes(1);
+			expect(getLogger([]).warn).toHaveBeenCalledWith(
+				'Receipt print failed',
+				expect.objectContaining({
+					code: 'PRINT101',
+					showToast: true,
+					toast: expect.objectContaining({ action: reprint }),
+				})
+			);
+			// Reported once and given up: data that lands later prints nothing behind the toast.
+			mockFinal = true;
+			await act(async () => rerender());
+			expect(mockPrint).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('a print another host holds settles at the deadline, unreported', async () => {
+		jest.useFakeTimers();
+		try {
+			expect(claimReceiptAutoPrint('paid')).toBe(true);
+			const { result } = renderHeadless();
+			await act(async () => jest.advanceTimersByTime(HEADLESS_DEADLINE_MS - 1));
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(result.current.autoPrintSettled).toBe(false);
+			await act(async () => jest.advanceTimersByTime(1));
+			expect(result.current.autoPrintSettled).toBe(true);
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	const dialogPrinter = () =>
+		jest
+			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+			.mockReturnValue({ useSystemDialog: true });
+
+	it('waits for the templates, then prints to the printer resolved for the template', async () => {
+		// A store with no cached templates: until they arrive the printer resolves empty, to the dialog.
+		let templates: { id: number }[] = [];
+		const renderer = jest
+			.spyOn(jest.requireMock('./hooks/use-template-renderer'), 'useTemplateRenderer')
+			.mockImplementation(() => ({
+				templates,
+				templatesSynced: false,
+				selectedTemplateId: templates[0]?.id ?? null,
+				renderedHtml: null,
+				receiptData: { lines: [] },
+				hasFinalData: true,
+				receiptDataIsServer: true,
+			}));
+		const printer = jest
+			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+			.mockImplementation((options) =>
+				(options as { template: { id: string } | null }).template?.id === '7'
+					? { resolvedPrinter: { name: 'Kitchen printer', connectionType: 'network' } }
+					: { useSystemDialog: true }
+			);
+		try {
+			const { result, rerender } = renderHeadless();
+			await act(async () => {});
+			expect(mockPrint).not.toHaveBeenCalled();
+			// The single claim is not spent on the dialog.
+			expect(isReceiptAutoPrintClaimed('paid')).toBe(false);
+			templates = [{ id: 7 }];
+			await act(async () => rerender());
+			expect(mockPrint).toHaveBeenCalledTimes(1);
+			expect(mockPrintOptions.printerProfile).toMatchObject({ name: 'Kitchen printer' });
+			expect(result.current.printedTo).toBe('Kitchen printer');
+		} finally {
+			renderer.mockRestore();
+			printer.mockRestore();
+		}
+	});
+
+	it('a dialog print waits for the page read, then prints it without reading it again', async () => {
+		let answer!: (response: unknown) => void;
+		mockFetch.mockReturnValue(
+			new Promise((resolve) => {
+				answer = resolve;
+			})
+		);
+		const printer = dialogPrinter();
+		try {
+			renderHeadless();
+			await act(async () => {});
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(isReceiptAutoPrintClaimed('paid')).toBe(false);
+			await act(async () => answer({ ok: true, text: async () => '<p>Server receipt</p>' }));
+			await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+			expect(mockPrintOptions.html).toBe('<p>Server receipt</p>');
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		} finally {
+			printer.mockRestore();
+		}
+	});
+
+	it('a failed page read releases a dialog print', async () => {
+		mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+		const printer = dialogPrinter();
+		try {
+			renderHeadless();
+			await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+		} finally {
+			printer.mockRestore();
+		}
+	});
+
+	it('a thermal print from receipt data does not wait for the page read', async () => {
+		mockReceiptData = { lines: [] };
+		mockPrinter = { resolvedPrinter: { name: 'Kitchen printer', connectionType: 'network' } };
+		const { result } = renderHeadless();
+		await act(async () => {});
+		expect(result.current.previewProps.pending).toBe(true);
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not report a page read still inside its bound', async () => {
+		jest.useFakeTimers();
+		const printer = dialogPrinter();
+		try {
+			const { result } = renderHeadless();
+			// Past the settled-data bound plus the grace: the read is pending, so nothing is reported.
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(ORDER_REFRESH_TIMEOUT_MS + 5_000);
+			});
+			expect(mockPrint).not.toHaveBeenCalled();
+			expect(result.current.autoPrintSettled).toBe(false);
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+			// The read's own bound settles it, and the print starts from the URL, unreported.
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(20_000 - ORDER_REFRESH_TIMEOUT_MS - 5_000);
+			});
+			expect(mockPrint).toHaveBeenCalledTimes(1);
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(HEADLESS_DEADLINE_MS);
+			});
+			expect(result.current.autoPrintSettled).toBe(true);
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
+		} finally {
+			printer.mockRestore();
+			jest.useRealTimers();
+		}
+	});
 });

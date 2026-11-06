@@ -28,7 +28,10 @@ const mockPush = jest.fn();
 const mockHandlers = new Map<string, () => unknown>();
 const mockDisabled = new Map<string, boolean>();
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+const mockNavigate = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+}));
 
 const mockEngineRequire = jest.fn();
 const mockAwaitWriteOutcome = jest.fn(async (..._args: unknown[]) => undefined as unknown);
@@ -210,6 +213,7 @@ describe('Order actions while storage is degraded (#163 ruling R5)', () => {
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 		expect(mockEngineWrite).not.toHaveBeenCalled();
 	});
 
@@ -233,6 +237,7 @@ describe('Order actions while storage is degraded (#163 ruling R5)', () => {
 		});
 
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 	});
 });
 

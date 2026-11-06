@@ -62,6 +62,7 @@ export {
 export type {
 	PaymentKind,
 	CaptureMode,
+	CaptureModeEntry,
 	OpenEnum,
 	PaymentTransport,
 	PaymentMethodDescriptor,

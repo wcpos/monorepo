@@ -82,8 +82,10 @@ jest.mock('./checkout-mode', () => {
 			return { ...mode, checkoutOrders: new Set([...mode.checkoutOrders, 'order']) };
 		},
 		enterReceipt: (...args: unknown[]) => mockReceipt(...args),
+		queueHeadlessPrint: (...args: unknown[]) => mockQueuePrint(...args),
 	};
 });
+const mockQueuePrint = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
@@ -364,7 +366,9 @@ it.each([
 	[{ source: 'gateway-snapshot', snapshot: payload }, false],
 	[{ source: 'zero-balance', order: { status: 'completed' } }, false],
 ] as [SaleOutcome, boolean][])('refresh and gap rule %j', async (outcome, refresh) => {
-	expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
+	expect(await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false })).toBe(
+		'completed'
+	);
 	expect(mockGap).toHaveBeenCalledTimes(1);
 	if (outcome.source !== 'gateway-snapshot')
 		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, refresh, ctx.stockAdjustment);
@@ -388,7 +392,9 @@ describe("the poster's post-answer adoption stands in for the completion's refre
 		const { reconcileCompletedOrder } = jest.requireActual('./hooks/reconcile-completed-order');
 		mockReconcile.mockImplementationOnce(reconcileCompletedOrder);
 		mockAnswerAdopted.mockResolvedValue(true);
-		expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
+		expect(
+			await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false })
+		).toBe('completed');
 		expect(mockAnswerAdopted).toHaveBeenCalledWith(ctx.runtime, ctx.storeDB, 'order');
 		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, false, ctx.stockAdjustment);
 		await expect(mockReconcile.mock.results[0].value).resolves.toBe('skipped');
@@ -398,14 +404,18 @@ describe("the poster's post-answer adoption stands in for the completion's refre
 	it.each(settled)(
 		'%j: refreshes as before when the resident does not hold the answer',
 		async (outcome) => {
-			expect(await completeSale(ctx, order, outcome, { host: 'modal' })).toBe('completed');
+			expect(
+				await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false })
+			).toBe('completed');
 			expect(mockReconcile).toHaveBeenCalledTimes(1);
 			expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
 		}
 	);
 	it('refreshes when the resident cannot be read', async () => {
 		mockAnswerAdopted.mockRejectedValue(new Error('Engine resident "order" is missing'));
-		expect(await completeSale(ctx, order, manual, { host: 'modal' })).toBe('completed');
+		expect(await completeSale(ctx, order, manual, { host: 'modal', autoPrintReceipt: false })).toBe(
+			'completed'
+		);
 		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
 	});
 	it.each([
@@ -413,16 +423,16 @@ describe("the poster's post-answer adoption stands in for the completion's refre
 		[{ source: 'gateway-contract', status: 'completed' }],
 	] as [SaleOutcome][])('%j refreshes whatever the resident holds', async (outcome) => {
 		mockAnswerAdopted.mockResolvedValue(true);
-		await completeSale(ctx, order, outcome, { host: 'modal' });
+		await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false });
 		expect(mockAnswerAdopted).not.toHaveBeenCalled();
 		expect(mockReconcile).toHaveBeenCalledTimes(1);
 		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
 	});
 });
 it.each([
-	[{ host: 'stage', autoShowReceipt: true }, ['order']],
-	[{ host: 'stage', autoShowReceipt: false }, null],
-	[{ host: 'modal' }, null],
+	[{ host: 'stage', autoShowReceipt: true, autoPrintReceipt: false }, ['order']],
+	[{ host: 'stage', autoShowReceipt: false, autoPrintReceipt: false }, null],
+	[{ host: 'modal', autoPrintReceipt: false }, null],
 	[{ host: 'background' }, ['order', { select: false }]],
 ] as const)('presentation %j precedes refresh', async (presentation, args) => {
 	await completeSale(ctx, order, manual, presentation);
@@ -433,6 +443,57 @@ it.each([
 		);
 	} else expect(mockReceipt).not.toHaveBeenCalled();
 });
+describe('the print that follows a sale with no receipt on screen', () => {
+	it.each([
+		[
+			'show on, print on: the stage owns the print, nothing is queued',
+			{ host: 'stage', autoShowReceipt: true, autoPrintReceipt: true },
+			false,
+		],
+		[
+			'show off, print on: queues a headless print',
+			{ host: 'stage', autoShowReceipt: false, autoPrintReceipt: true },
+			true,
+		],
+		[
+			'show off, print off: queues nothing',
+			{ host: 'stage', autoShowReceipt: false, autoPrintReceipt: false },
+			false,
+		],
+	] as const)('%s', async (_name, presentation, queued) => {
+		mockRefresh.mockResolvedValue('refreshed');
+		expect(await completeSale(ctx, order, manual, presentation)).toBe('completed');
+		// A sent sale leaves the till the same way, so it follows the same rule.
+		expect(await completeSale(ctx, order, sent, presentation)).toBe('sent');
+		if (queued) expect(mockQueuePrint.mock.calls).toEqual([['order'], ['order']]);
+		else expect(mockQueuePrint).not.toHaveBeenCalled();
+		expect(mockReceipt).toHaveBeenCalledTimes(presentation.autoShowReceipt ? 2 : 0);
+	});
+	it('modal host, print on: queues a headless print whatever show says', async () => {
+		// The routed receipt modal never auto-prints, so the print follows the sale either way.
+		expect(await completeSale(ctx, order, manual, { host: 'modal', autoPrintReceipt: true })).toBe(
+			'completed'
+		);
+		expect(mockQueuePrint).toHaveBeenCalledWith('order');
+		mockQueuePrint.mockClear();
+		await completeSale(ctx, order, manual, { host: 'modal', autoPrintReceipt: false });
+		expect(mockQueuePrint).not.toHaveBeenCalled();
+	});
+	it('a replay queues nothing', async () => {
+		const replay = { source: 'replay', refreshed: true } as const;
+		expect(await completeSale(ctx, order, replay, { host: 'modal', autoPrintReceipt: true })).toBe(
+			'completed'
+		);
+		expect(
+			await completeSale(ctx, order, replay, {
+				host: 'stage',
+				autoShowReceipt: false,
+				autoPrintReceipt: true,
+			})
+		).toBe('completed');
+		expect(mockQueuePrint).not.toHaveBeenCalled();
+	});
+});
 it('does not finish partial or unpaid sales', async () => {
 	expect(
 		await completeSale(ctx, order, { ...manual, remainingMinor: 50 }, { host: 'background' })
@@ -442,7 +503,7 @@ it('does not finish partial or unpaid sales', async () => {
 			ctx,
 			order,
 			{ source: 'gateway-contract', status: 'failed' },
-			{ host: 'modal' }
+			{ host: 'modal', autoPrintReceipt: false }
 		)
 	).toBe('not-completed');
 	expect(mockGap).not.toHaveBeenCalled();
@@ -452,9 +513,13 @@ it('does not finish partial or unpaid sales', async () => {
 it('a sent sale leaves the till: sent moment, store refresh, checkout.sent row, attempt resolved', async () => {
 	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'gateway' });
 	mockRefresh.mockResolvedValue('refreshed');
-	expect(await completeSale(ctx, order, sent, { host: 'stage', autoShowReceipt: true })).toBe(
-		'sent'
-	);
+	expect(
+		await completeSale(ctx, order, sent, {
+			host: 'stage',
+			autoShowReceipt: true,
+			autoPrintReceipt: false,
+		})
+	).toBe('sent');
 	expect(mockReceipt).toHaveBeenCalledWith('order');
 	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
 	expect(mockReconcile).not.toHaveBeenCalled();
@@ -484,7 +549,7 @@ it('a settled sale is the paid completion: receipt, refresh, checkout.completed 
 			{ ...ctx, actor: { id: '7', name: 'Pat' } },
 			resident,
 			{ source: 'gateway-settled', order: sent.order },
-			{ host: 'stage', autoShowReceipt: true }
+			{ host: 'stage', autoShowReceipt: true, autoPrintReceipt: false }
 		)
 	).toBe('completed');
 	expect(mockReceipt).toHaveBeenCalledWith('order');
@@ -554,7 +619,7 @@ it('a sent answer whose order is open shows no moment and writes no row', async 
 			ctx,
 			order,
 			{ ...sent, order: { ...sent.order, status: 'pos-open' } },
-			{ host: 'stage', autoShowReceipt: true }
+			{ host: 'stage', autoShowReceipt: true, autoPrintReceipt: false }
 		)
 	).toBe('not-completed');
 	expect(mockReceipt).not.toHaveBeenCalled();
@@ -727,6 +792,7 @@ it.each([42, undefined])(
 				{
 					host: 'stage',
 					autoShowReceipt: true,
+					autoPrintReceipt: false,
 				}
 			)
 		).toBe('partial');
@@ -751,7 +817,7 @@ it('does not refresh an unsettled manual sale when the store agrees with the til
 				order: { balance: '1.00' },
 				remainingMinor: 100,
 			} as unknown as SaleOutcome,
-			{ host: 'stage', autoShowReceipt: true }
+			{ host: 'stage', autoShowReceipt: true, autoPrintReceipt: false }
 		)
 	).toBe('partial');
 	expect(mockRefresh).not.toHaveBeenCalled();
@@ -900,7 +966,7 @@ it('uses the caller queue without enqueueing completion again', async () => {
 				ctx,
 				order,
 				manual,
-				{ host: 'modal' },
+				{ host: 'modal', autoPrintReceipt: false },
 				{ dispatchToken: createDispatchToken() }
 			)
 		).toBe('completed');
@@ -919,7 +985,7 @@ it('uses the caller queue without enqueueing completion again', async () => {
 it('enqueues completion when no caller queue is supplied', async () => {
 	const enqueue = jest.spyOn(mutationQueue, 'enqueueOrderMutation');
 	try {
-		await completeSale(ctx, order, manual, { host: 'modal' });
+		await completeSale(ctx, order, manual, { host: 'modal', autoPrintReceipt: false });
 		expect(enqueue).toHaveBeenCalledWith('order', expect.any(Function));
 	} finally {
 		enqueue.mockRestore();
@@ -940,8 +1006,8 @@ it('a refused completion dispatch throws and keeps its attempt', async () => {
 });
 
 it.each([
-	['manual', { host: 'stage', autoShowReceipt: false }, 'user'],
-	['manual', { host: 'modal' }, 'user'],
+	['manual', { host: 'stage', autoShowReceipt: false, autoPrintReceipt: false }, 'user'],
+	['manual', { host: 'modal', autoPrintReceipt: false }, 'user'],
 	['terminal', { host: 'background' }, 'system'],
 	['replay', { host: 'background' }, 'replay'],
 ] as const)('dispatches %s from %j as %s', async (kind, presentation, source) => {
@@ -994,6 +1060,7 @@ it('audits the summary read after reconciliation, including counted payment legs
 	});
 	await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, resident, manual, {
 		host: 'modal',
+		autoPrintReceipt: false,
 	});
 	expect(mockActionLog.mock.calls).toEqual([
 		[
@@ -1154,9 +1221,13 @@ it.each([
 	});
 	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
 	expect(isSaleComplete(answer, 2, { ...payload, status: 'pos-open' } as never)).toBe(false);
-	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
-		result
-	);
+	expect(
+		await completeSale(ctx, resident, answer, {
+			host: 'stage',
+			autoShowReceipt: true,
+			autoPrintReceipt: false,
+		})
+	).toBe(result);
 	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
 	if (result === 'partial') {
 		expect(mockReceipt).not.toHaveBeenCalled();
@@ -1178,9 +1249,13 @@ it('a gateway settled after a reopen was adopted is not completed: no receipt', 
 	mockRefresh.mockResolvedValueOnce('refreshed'); // the refresh confirms the reopen
 	const settled = { source: 'gateway-settled', order: { status: 'pending' } } as SaleOutcome;
 	expect(isSaleComplete(settled, 2, { ...payload, status: 'pending' } as never)).toBe(true);
-	expect(await completeSale(ctx, resident, settled, { host: 'stage', autoShowReceipt: true })).toBe(
-		'not-completed'
-	);
+	expect(
+		await completeSale(ctx, resident, settled, {
+			host: 'stage',
+			autoShowReceipt: true,
+			autoPrintReceipt: false,
+		})
+	).toBe('not-completed');
 	expect(mockReceipt).not.toHaveBeenCalled();
 });
 
@@ -1195,9 +1270,13 @@ it('an unconfirmed paid answer keeps its completion attempt and enters no receip
 	} as never;
 	mockRefresh.mockRejectedValueOnce(new Error('offline'));
 	const answer = { ...manual, order: { status: 'completed', balance: '0.00' } } as SaleOutcome;
-	expect(await completeSale(ctx, resident, answer, { host: 'stage', autoShowReceipt: true })).toBe(
-		'unconfirmed'
-	);
+	expect(
+		await completeSale(ctx, resident, answer, {
+			host: 'stage',
+			autoShowReceipt: true,
+			autoPrintReceipt: false,
+		})
+	).toBe('unconfirmed');
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toHaveProperty('order');
 });
@@ -1213,7 +1292,7 @@ describe('a zero balance the store answered closed', () => {
 	} as never;
 	const closed = (answer = 'completed') =>
 		({ source: 'zero-balance', order: { status: answer } }) as SaleOutcome;
-	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	const stage = { host: 'stage', autoShowReceipt: true, autoPrintReceipt: false } as const;
 	beforeEach(() => {
 		status = 'pos-partial';
 	});

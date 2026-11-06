@@ -21,6 +21,7 @@ import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
 	adoptCounters,
+	isoGmt,
 	mintClosureNumber,
 	readCounters,
 	readRegister,
@@ -190,7 +191,10 @@ async function acknowledge(
 	await doc.incrementalModify((local) => {
 		const outstanding =
 			local.pending_status && (sentAt === undefined || local.status_at !== sentAt);
-		const incoming = { ...server };
+		const incoming = {
+			...server,
+			opened_at_gmt: isoGmt(server.opened_at_gmt ?? local.opened_at_gmt),
+		};
 		if (local.counted_float != null && incoming.counted_float === null)
 			delete incoming.counted_float;
 		return {
@@ -626,7 +630,14 @@ export async function adoptSessionRow(
 	// `closure_id` with `server_status` unchanged, and the server's row is its recovery.
 	if (local?.server_status === 'closed' && local.status === 'closed' && row.status !== 'closed')
 		return;
-	const adopted = { ...row, ...synced, server_status: row.status, pending_status: null };
+	const adopted = {
+		...row,
+		...synced,
+		// The detail route's row may omit it: the local value stands.
+		...(row.opened_at_gmt ? { opened_at_gmt: isoGmt(row.opened_at_gmt) } : {}),
+		server_status: row.status,
+		pending_status: null,
+	};
 	/**
 	 * Merge over the local document, never replace it: the list route serves only the
 	 * session's own columns (see `mergeIntoDocument`). Replacing reset the detail route's
