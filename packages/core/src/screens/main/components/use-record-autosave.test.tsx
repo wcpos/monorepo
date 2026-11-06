@@ -6,10 +6,12 @@ import { useRecordAutosave } from './use-record-autosave';
 import type { UseFormReturn } from 'react-hook-form';
 
 const mockMarkSaved = jest.fn();
+const mockMarkFailed = jest.fn();
 const mockFlush = jest.fn(async () => true);
 let change: (changes: Record<string, unknown>) => Promise<boolean>;
 jest.mock('@wcpos/components/form', () => ({
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => mockMarkFailed,
 	useFormChangeHandler: (options: { onChange: typeof change }) => {
 		change = options.onChange;
 		return { flush: mockFlush };
@@ -165,12 +167,21 @@ it('awaits an async patch (the customer mirror validates the billing root first)
 		'first_name'
 	);
 });
-it("a refusal from the record's hooks is not written: no mark, false", async () => {
+it("a refusal from the record's hooks is not written: the row is marked failed, false", async () => {
 	persist.mockResolvedValue({ deny: { reasonKey: 'pos_cart.refused' } });
 	values.name = 'Ada';
 	mount();
 	expect(await change({ name: 'Ada' })).toBe(false);
 	expect(mockMarkSaved).not.toHaveBeenCalled();
+	expect(mockMarkFailed).toHaveBeenCalledWith(['name']);
+});
+it('a persist that throws marks the row failed and rethrows', async () => {
+	persist.mockRejectedValue(new Error('offline'));
+	values.name = 'Ada';
+	mount();
+	await expect(change({ name: 'Ada' })).rejects.toThrow('offline');
+	expect(mockMarkSaved).not.toHaveBeenCalled();
+	expect(mockMarkFailed).toHaveBeenCalledWith(['name']);
 });
 it.each([true, { document: {} }, false, undefined])(
 	'after sees written=%p; only a truthy persist marks the root',
@@ -183,7 +194,12 @@ it.each([true, { document: {} }, false, undefined])(
 		expect(await change({ name: 'Ada' })).toBe(Boolean(written));
 		expect(persist).toHaveBeenCalledWith({ name: 'Ada' }, 'name');
 		expect(after).toHaveBeenCalledWith(Boolean(written));
-		if (written) expect(mockMarkSaved).toHaveBeenCalledWith(['name']);
-		else expect(mockMarkSaved).not.toHaveBeenCalled();
+		if (written) {
+			expect(mockMarkSaved).toHaveBeenCalledWith(['name']);
+			expect(mockMarkFailed).not.toHaveBeenCalled();
+		} else {
+			expect(mockMarkSaved).not.toHaveBeenCalled();
+			expect(mockMarkFailed).toHaveBeenCalledWith(['name']);
+		}
 	}
 );

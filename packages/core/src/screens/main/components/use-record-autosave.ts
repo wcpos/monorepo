@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useFormChangeHandler, useMarkSaved } from '@wcpos/components/form';
+import { useFormChangeHandler, useMarkFailed, useMarkSaved } from '@wcpos/components/form';
 
 import { metaForWrite } from './meta-for-write';
 import { isActionRefusal } from '../../../extensions/actions/types';
@@ -16,7 +16,8 @@ export type RecordPatch<P> = Partial<P> | { data: Partial<P>; after?: (written: 
 /**
  * The one autosave for an edit form (CODING_STANDARDS §Design, Saving): the changed path's
  * root, the record's wire spellings (tax IDs, custom fields, the tax class), the caller's write,
- * the Saved mark. `useFormChangeHandler` under it has already validated the changed path.
+ * the Saved mark, or the Not saved mark when the write does not land (a falsy result, a refusal,
+ * a throw). `useFormChangeHandler` under it has already validated the changed path.
  */
 export function useRecordAutosave<T extends FieldValues, P extends object>({
 	form,
@@ -41,6 +42,7 @@ export function useRecordAutosave<T extends FieldValues, P extends object>({
 	metaDraft?: (rows: MetaRows) => MetaRows;
 }): { flush: () => Promise<boolean> } {
 	const markSaved = useMarkSaved();
+	const markFailed = useMarkFailed();
 	const draftMeta = (rows: MetaRows) => metaDraft?.(rows) ?? rows;
 	// A row the form opened with is the cashier's to delete, numbered since or not; so is one it wrote.
 	const [writtenKeys] = React.useState(
@@ -77,11 +79,19 @@ export function useRecordAutosave<T extends FieldValues, P extends object>({
 				'data' in own && typeof own.after === 'function'
 					? (own as { data: Partial<P>; after: (written: boolean) => void })
 					: { data: own as Partial<P>, after: undefined };
-			// A refusal from the record's hooks is truthy but is not a landed write.
-			const result = await persist(data, root);
+			// A refusal from the record's hooks is truthy but is not a landed write. A throw is the
+			// same outcome for the cashier: the record does not hold the edit, so the row says so.
+			let result: unknown;
+			try {
+				result = await persist(data, root);
+			} catch (error) {
+				markFailed([root]);
+				throw error;
+			}
 			const written = Boolean(result) && !isActionRefusal(result);
 			after?.(written);
 			if (written) markSaved([root]);
+			else markFailed([root]);
 			return written;
 		},
 	});

@@ -15,6 +15,7 @@ jest.mock('@wcpos/components/form', () => ({
 	useFormChangeHandler: jest.requireActual('@wcpos/components/form/use-form-change-handler')
 		.useFormChangeHandler,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 }));
 jest.mock('@wcpos/query', () => ({
 	savePrinterProfile: jest.fn().mockResolvedValue({ id: 'star-printer' }),
