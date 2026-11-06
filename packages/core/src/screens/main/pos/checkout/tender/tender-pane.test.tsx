@@ -426,6 +426,41 @@ it('lists an offline queue-capable device method as unavailable until offline te
 	expect(flow.pickMethod).not.toHaveBeenCalled();
 });
 
+// roadmap#523: a device-only gateway on web says which setting to change and links the docs;
+// another reason keeps its one line and no link.
+it('links the card reader docs from a device method unavailable on web, and only there', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		tiles: [
+			{
+				method: deviceMethod,
+				disabled: true,
+				reason: 'driver_web',
+				worksOffline: false,
+				settlesLater: false,
+			},
+			{
+				method: { ...deviceMethod, id: 'other_reader', title: 'Other reader' },
+				disabled: true,
+				reason: 'no_readers',
+				worksOffline: false,
+				settlesLater: false,
+			},
+		],
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.getByTestId('checkout-unavailable-device').textContent).toContain(
+		'Allow smart readers on its WooCommerce settings page to pay from this till.'
+	);
+	expect(screen.getByTestId('checkout-unavailable-device-docs').textContent).toContain(
+		'Having trouble?'
+	);
+	expect(screen.getByTestId('checkout-unavailable-other_reader')).toBeTruthy();
+	expect(screen.queryByTestId('checkout-unavailable-other_reader-docs')).toBeNull();
+});
+
 // ADR 0040 §1.3: a command sent and never answered gates the checkout; its one action re-sends it.
 // A live terminal leg keeps its own view.
 it('the unanswered gate re-sends the command, and leaves a live terminal leg its view', () => {
