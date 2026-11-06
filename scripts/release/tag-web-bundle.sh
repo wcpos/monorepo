@@ -113,12 +113,15 @@ previous_lane_tag() {
 # bytes for every such chunk (v1.11.12, 2026-11-06: 72 of them, and the verification of the
 # previous train is what had seeded the edge). stdin: this tag's "<sha> <path>" hashed lines;
 # $1 lane, $2 the previous tag. Purges every path both tags carry with different bytes.
+# Runs in the calling shell (no pipeline): a throttled purge must reach the throttle state the
+# failure advice reads.
 purge_changed_hashed() {
 	local prev cur path
 	prev=$(expected_from_tree "$2") || return 1
 	cur=$(cat)
-	join -1 2 -2 2 <(sort -k2 <<<"$cur") <(sort -k2 <<<"$prev") | awk '$2 != $3 { print $1 }' |
-		while read -r path; do purge_cdn_path "$1" "$path"; done
+	while read -r path; do
+		purge_cdn_path "$1" "$path"
+	done < <(join -1 2 -2 2 <(sort -k2 <<<"$cur") <(sort -k2 <<<"$prev") | awk '$2 != $3 { print $1 }')
 }
 
 verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new lane)
@@ -133,7 +136,7 @@ verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new 
 		fi
 	done <<< "$expected"
 	if [[ -n "${3:-}" ]]; then
-		printf '%s' "$hashed" | purge_changed_hashed "$lane" "$3" || return 1
+		purge_changed_hashed "$lane" "$3" <<<"$hashed" || return 1
 	fi
 	if ! printf '%s' "$hashed" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS"; then
 		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. $(cdn_refresh_advice "as ${tag}")" >&2
