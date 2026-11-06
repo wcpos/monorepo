@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import type { PaymentMethodDescriptor, ServerHardware } from '@wcpos/order-math';
 
 import { CARD_READER_DOCS_URL } from './docs';
 import { CardReadersSettings } from './index';
@@ -219,7 +219,9 @@ async function flush(ms = 0) {
 it('explains an empty store and shows the dashed empty state when nothing is connected', async () => {
 	mockMethods = [];
 	const rendered = render(<CardReadersSettings />);
-	expect(screen.getByTestId('card-readers-none')).toBeTruthy();
+	expect(screen.getByTestId('card-readers-none').textContent).toContain(
+		"No card readers are set up for this store. Add them on the gateway's WooCommerce page."
+	);
 	rendered.unmount();
 	mockMethods = [deviceMethod];
 	render(<CardReadersSettings />);
@@ -455,6 +457,17 @@ describe('a provider whose driver cannot run on this platform', () => {
 		expect(screen.queryByTestId('reader-row-stripe')).toBeNull();
 	});
 
+	it('a store that allows only the app readers says so on web, not that none are set up', async () => {
+		registerDriver(stripeDriver({ available: false, reason: 'web' }));
+		mockMethods = [stripeMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId('card-readers-app-only').textContent).toContain(
+			"Only the app's readers are allowed for this store. Allow smart readers on the gateway's WooCommerce page to pay from this till."
+		);
+		expect(screen.queryByTestId('card-readers-none')).toBeNull();
+	});
+
 	it('is offered where it can run: two providers open the picker', async () => {
 		registerDriver(stripeDriver({ available: true }));
 		mockMethods = [deviceMethod, stripeMethod];
@@ -627,5 +640,177 @@ describe('Tap to Pay row', () => {
 		expect(screen.getByTestId(`reader-row-${deviceMethod.id}-status`).textContent).toBe(
 			'Ready · 82%'
 		);
+	});
+});
+
+describe('Smart readers', () => {
+	const cloudHardware: ServerHardware = {
+		discovery: 'server',
+		readers: [
+			{ id: 'tmr_front', label: 'Front counter', status: 'online', default: true },
+			{ id: 'tmr_back', label: 'Back counter', status: 'online', default: false },
+			{ id: 'tmr_bar', label: 'Bar', status: 'offline', default: false },
+		],
+		default_reader: 'tmr_front',
+		lock_to_default: false,
+	};
+	function cloud(hardware: Partial<ServerHardware> = {}, modes = true): PaymentMethodDescriptor {
+		const entry = {
+			mode: 'server',
+			provider: 'stripe',
+			hardware: { ...cloudHardware, ...hardware },
+		};
+		return {
+			...deviceMethod,
+			id: 'stripe_terminal',
+			title: 'Stripe Terminal',
+			capture: { ...entry, webview_available: false, ...(modes ? { modes: [entry] } : {}) },
+			provider_data: { location_name: 'London Shop' },
+		};
+	}
+	const row = (reader: string) => `smart-reader-stripe_terminal-${reader}`;
+
+	it.each([
+		['a capture.modes server entry', true],
+		['a single-mode server descriptor', false],
+	])('lists one row per cloud reader from %s, the default Selected', async (_label, modes) => {
+		mockMethods = [cloud({}, modes)];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId('card-readers-smart').textContent).toContain('Smart readers');
+		expect(screen.getByTestId(`${row('tmr_front')}-tag`).textContent).toBe('Stripe Terminal');
+		expect(screen.getByTestId(`${row('tmr_front')}-identifiers`).textContent).toBe('London Shop');
+		expect(screen.getByTestId(`${row('tmr_front')}-status`).textContent).toBe('Online');
+		expect(screen.getByTestId(`${row('tmr_bar')}-status`).textContent).toBe('Offline');
+		expect(screen.getByTestId(`${row('tmr_front')}-selected`).textContent).toBe('Selected');
+		// A choice shown, not a button: no button role, no pressed state.
+		expect(screen.getByTestId(`${row('tmr_front')}-selected`).getAttribute('role')).toBeNull();
+		expect(
+			screen.getByTestId(`${row('tmr_front')}-selected`).getAttribute('aria-pressed')
+		).toBeNull();
+		expect(screen.getByTestId(`${row('tmr_back')}-use`).textContent).toBe('Use this reader');
+		// Cloud readers alone: no Bluetooth section and no empty page.
+		expect(screen.queryByTestId('card-readers-list')).toBeNull();
+		expect(screen.queryByTestId('card-readers-none')).toBeNull();
+	});
+
+	it('offers no Use on an offline reader', async () => {
+		mockMethods = [cloud()];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.queryByTestId(`${row('tmr_bar')}-use`)).toBeNull();
+		expect(screen.queryByTestId(`${row('tmr_bar')}-selected`)).toBeNull();
+	});
+
+	it('Use writes the till memory checkout reads, and the row becomes Selected', async () => {
+		mockMethods = [cloud()];
+		render(<CardReadersSettings />);
+		await flush();
+		await act(async () => {
+			fireEvent.click(screen.getByTestId(`${row('tmr_back')}-use`));
+		});
+		expect(remembered$.value.stripe_terminal).toMatchObject({
+			id: 'tmr_back',
+			label: 'Back counter',
+		});
+		expect(remembered$.value.stripe_terminal?.transport).toBeUndefined();
+		expect(screen.getByTestId(`${row('tmr_back')}-selected`)).toBeTruthy();
+		expect(screen.queryByTestId(`${row('tmr_back')}-use`)).toBeNull();
+		expect(screen.getByTestId(`${row('tmr_front')}-use`)).toBeTruthy();
+	});
+
+	it('a store lock shows only the default Selected, set by the store, and no Use', async () => {
+		remembered$.next({ stripe_terminal: { id: 'tmr_front', label: 'Front counter' } });
+		mockMethods = [cloud({ default_reader: 'tmr_back', lock_to_default: true })];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`${row('tmr_back')}-selected`)).toBeTruthy();
+		expect(screen.getByTestId(`${row('tmr_back')}-identifiers`).textContent).toBe(
+			'London Shop · Set by the store'
+		);
+		expect(screen.getByTestId(`${row('tmr_front')}-identifiers`).textContent).toBe('London Shop');
+		expect(screen.queryAllByTestId(/-selected$/)).toHaveLength(1);
+		expect(screen.queryAllByTestId(/^smart-reader-.*-use$/)).toHaveLength(0);
+	});
+
+	it('a store lock on an offline reader still says so, with nothing Selected and no Use', async () => {
+		mockMethods = [cloud({ default_reader: 'tmr_bar', lock_to_default: true })];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`${row('tmr_bar')}-identifiers`).textContent).toBe(
+			'London Shop · Set by the store'
+		);
+		expect(screen.queryAllByTestId(/^smart-reader-.*-(selected|use)$/)).toHaveLength(0);
+	});
+
+	it('one usable reader needs no choice: Selected, and no Use anywhere', async () => {
+		mockMethods = [
+			cloud({
+				readers: [
+					{ id: 'tmr_back', label: 'Back counter', status: 'online', default: false },
+					{ id: 'tmr_bar', label: 'Bar', status: 'offline', default: false },
+				],
+				default_reader: null,
+			}),
+		];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`${row('tmr_back')}-selected`)).toBeTruthy();
+		expect(screen.queryAllByTestId(/^smart-reader-.*-use$/)).toHaveLength(0);
+	});
+
+	it('a device-only store shows the Bluetooth section and no Smart readers', async () => {
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId('card-readers-list')).toBeTruthy();
+		expect(screen.queryByTestId('card-readers-smart')).toBeNull();
+	});
+
+	const deviceEntry = {
+		mode: 'device',
+		provider: deviceMethod.capture.provider,
+		hardware: deviceMethod.capture.hardware,
+	};
+
+	// Only the primary connection is a row; a secondary one becomes a row with wcpos/roadmap#113.
+	it('a cloud-primary gateway that also allows a device shows Smart readers and no Bluetooth', async () => {
+		const mixed = cloud();
+		mockMethods = [
+			{
+				...mixed,
+				capture: { ...mixed.capture, modes: [...(mixed.capture.modes ?? []), deviceEntry] },
+			},
+		];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId('card-readers-smart')).toBeTruthy();
+		expect(screen.queryByTestId('card-readers-list')).toBeNull();
+		expect(screen.queryByTestId('reader-row-stripe_terminal')).toBeNull();
+	});
+
+	// Only the primary connection is a row; a secondary one becomes a row with wcpos/roadmap#113.
+	it('a device-primary gateway that also allows cloud readers shows no Smart readers', async () => {
+		const server = cloud().capture.modes![0];
+		mockMethods = [
+			{ ...deviceMethod, capture: { ...deviceMethod.capture, modes: [deviceEntry, server] } },
+		];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId('card-readers-list')).toBeTruthy();
+		expect(screen.queryByTestId('card-readers-smart')).toBeNull();
+	});
+
+	it('a memory from the other connection is ignored on both sections', async () => {
+		remembered$.next({
+			// A device memory on the cloud method, a cloud memory on the device method.
+			stripe_terminal: { id: 'tmr_back', label: 'Back counter', transport: 'bluetooth' },
+			[deviceMethod.id]: { id: 'tmr_back', label: 'Back counter' },
+		});
+		mockMethods = [cloud(), deviceMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`${row('tmr_front')}-selected`)).toBeTruthy();
+		expect(screen.queryByTestId(`reader-row-${deviceMethod.id}`)).toBeNull();
+		expect(screen.getByTestId('card-readers-empty')).toBeTruthy();
 	});
 });

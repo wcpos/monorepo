@@ -24,6 +24,7 @@ export {
 	type CustomerLinkIdentity,
 } from './new-customer-link';
 export {
+	rememberedMode,
 	rememberedReaders,
 	observeRememberedReaders,
 	type RememberedReader,

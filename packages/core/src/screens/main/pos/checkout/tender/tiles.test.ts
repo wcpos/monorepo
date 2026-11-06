@@ -250,6 +250,26 @@ it('drops offline readers and marks only other orders as busy', () => {
 	expect(selectableReaders(makeMethod()).readers).toEqual([]);
 });
 
+// A secondary connection becomes a row with the native slice (wcpos/roadmap#113).
+it('reads no cloud readers from a server entry in modes while the device is primary', () => {
+	const mixed = makeMethod({
+		capture: {
+			...deviceMethod.capture,
+			modes: [
+				{
+					mode: 'device',
+					provider: deviceMethod.capture.provider,
+					hardware: deviceMethod.capture.hardware,
+				},
+				{ mode: 'server', provider: 'stripe', hardware: server.capture.hardware },
+			],
+		},
+	});
+	expect(selectableReaders(mixed)).toEqual({ lockToDefault: false, readers: [] });
+	// No server entry, no cloud readers: the device's own hardware is never read as readers.
+	expect(selectableReaders(deviceMethod).readers).toEqual([]);
+});
+
 describe('initialReaderId', () => {
 	const a = { id: 'a', label: 'Front', isDefault: true, inUseBy: null };
 	const b = { id: 'b', label: 'Back', isDefault: false, inUseBy: null };
@@ -259,8 +279,10 @@ describe('initialReaderId', () => {
 		['absent remembered', [a, b], false, 'gone', 'a'],
 		['busy remembered', [a, { ...b, inUseBy: '42' }], false, 'b', 'a'],
 		['default only', [a, b], false, null, 'a'],
-		['no default', [b], false, null, null],
-		['busy default', [{ ...a, inUseBy: '42' }, b], false, null, null],
+		['the only usable reader needs no choice', [b], false, null, 'b'],
+		['busy default is no fallback to another', [{ ...a, inUseBy: '42' }, b], false, null, null],
+		['remembered reader offline, one other online', [b], false, 'gone', null],
+		['two usable, no default, nothing remembered', [b, { ...b, id: 'c' }], false, null, null],
 		['no readers', [], false, 'b', null],
 	] as const)('%s', (_label, readers, locked, remembered, expected) => {
 		expect(initialReaderId(readers, locked, remembered)).toBe(expected);

@@ -1923,6 +1923,7 @@ describe('server tender', () => {
 	});
 	it('applies a late remembered read when no reader has been picked', async () => {
 		mockReaderPreferences.terminal = { id: 'reader', label: 'Reader' };
+		// Two readers and no default: nothing is preselected until the memory arrives.
 		mockMethods = [
 			{
 				...terminal,
@@ -1931,7 +1932,10 @@ describe('server tender', () => {
 					hardware: {
 						...terminal.capture.hardware,
 						default_reader: null,
-						readers: [{ ...terminal.capture.hardware.readers[0], default: false }],
+						readers: [
+							{ ...terminal.capture.hardware.readers[0], default: false },
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
 					},
 				},
 			},
@@ -2025,7 +2029,32 @@ describe('server tender', () => {
 			})
 		);
 	});
-	it('never preselects the first reader without a default', async () => {
+	it('never preselects among several readers without a default', async () => {
+		mockMethods = [
+			{
+				...terminal,
+				capture: {
+					...terminal.capture,
+					hardware: {
+						...terminal.capture.hardware,
+						default_reader: null,
+						readers: [
+							{ id: 'reader', label: 'Front', status: 'online', default: false },
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
+					},
+				},
+			},
+		];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('terminal'));
+		expect(result.current.state.readerId).toBeNull();
+		act(() => result.current.pickReader('reader'));
+		expect(result.current.state.readerId).toBe('reader');
+		await act(async () => {});
+	});
+	// Remember over configure (wcpos/roadmap#523): a till with one usable reader needs no choice.
+	it('preselects the only usable reader without a default', async () => {
 		mockMethods = [
 			{
 				...terminal,
@@ -2041,8 +2070,6 @@ describe('server tender', () => {
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('terminal'));
-		expect(result.current.state.readerId).toBeNull();
-		act(() => result.current.pickReader('reader'));
 		expect(result.current.state.readerId).toBe('reader');
 		await act(async () => {});
 	});
@@ -2454,6 +2481,13 @@ describe('device tender', () => {
 		expect(mockReaderPreferences.device.id).toBe('replacement');
 		mockRealService.stop();
 		mockRealService = null;
+	});
+	it('ignores a cloud reader memory on a device method (wcpos/roadmap#523)', async () => {
+		registerDriver(createSimulatedDriver());
+		mockReaderPreferences.device = { id: 'tmr_front', label: 'Front counter' };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.pickMethod('device'));
+		expect(result.current.rememberedReaderId).toBeNull();
 	});
 	it('refuses a press on an order the store has not created, before the reader starts', async () => {
 		delete mockPayload.id;

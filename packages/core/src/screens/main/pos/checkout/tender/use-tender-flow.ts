@@ -421,7 +421,11 @@ export function useTenderFlow(
 	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
-	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
+	const {
+		readerId: remembered,
+		getLoaded,
+		remember,
+	} = useRememberedReader(state.methodId, methods);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]

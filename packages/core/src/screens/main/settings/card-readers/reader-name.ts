@@ -1,3 +1,5 @@
+import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+
 import type { ReaderInfo } from '../../../../services/payment-drivers/types';
 
 // Stripe reports the SDK's device type; the cashier knows the name on the box. Its own module so
@@ -18,4 +20,13 @@ export function readerName(
 	if (reader.transport === 'tap_to_pay') return t('settings.card_readers.this_device');
 	const model = reader.model ? (MODEL_NAMES[reader.model] ?? reader.model) : null;
 	return model ?? reader.label;
+}
+
+/**
+ * The Terminal location the gateway names in its descriptor (Stripe: `location_name`): where a
+ * cloud reader is registered, and where a Bluetooth reader registers when it connects.
+ */
+export function locationName(method: PaymentMethodDescriptor): string | null {
+	const name = method.provider_data.location_name;
+	return typeof name === 'string' && name ? name : null;
 }
