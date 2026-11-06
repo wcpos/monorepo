@@ -47,7 +47,12 @@ beforeEach(async () => {
 				version: 0,
 				primaryKey: 'id',
 				type: 'object',
-				properties: { id: { type: 'string', maxLength: 36 }, counted: { type: 'object' } },
+				properties: {
+					id: { type: 'string', maxLength: 36 },
+					counted: { type: 'object' },
+					count_note: { type: ['string', 'null'] },
+					count_denominations: { type: ['array', 'null'] },
+				},
 				required: ['id'],
 			},
 		},
@@ -114,3 +119,53 @@ it('takes the count from the closure row when the session has none', async () =>
 	expect(() => serialize(kept)).not.toThrow();
 	expect(kept).toEqual({ counted: { cash: '40.00' }, note: '', denominations: [] });
 });
+
+// An interrupted retry (#3302): closeSession saved the corrected count, note and denominations
+// on the session; writeClosure never rewrote the closure row.
+const staleClosure = () => ({
+	id: 's',
+	counted: { cash: '40.00' },
+	breakdowns: { variance_note: 'Short', denominations: [{ value: '20', pieces: 2 }] },
+});
+it('keptCount prefers the corrected note and denominations an interrupted retry saved', async () => {
+	const session = await db.sessions.insert({
+		id: 's',
+		counted: { cash: '60.00' },
+		count_note: 'Found a twenty',
+		count_denominations: [{ value: '20', pieces: 3 }],
+	});
+	const kept = keptCount(session, staleClosure());
+	expect(() => serialize(kept)).not.toThrow();
+	expect(kept).toEqual({
+		counted: { cash: '60.00' },
+		note: 'Found a twenty',
+		denominations: [{ value: '20', pieces: 3 }],
+	});
+	const denominations = [{ value: '20', pieces: 3 }];
+	const corrected = { id: 's', counted: { cash: '60.00' }, count_denominations: denominations };
+	const plain = keptCount(corrected, staleClosure());
+	expect(plain.denominations).toEqual(denominations);
+	expect(plain.denominations).not.toBe(denominations);
+});
+it.each([
+	['emptied', '', []],
+	['cleared', null, null],
+])(
+	'keptCount falls back to the closure row for an %s note and denominations',
+	(_, note, pieces) => {
+		const closure = staleClosure();
+		const emptied = {
+			id: 's',
+			counted: { cash: '40.00' },
+			count_note: note,
+			count_denominations: pieces,
+		};
+		const kept = keptCount(emptied, closure);
+		expect(kept).toEqual({
+			counted: { cash: '40.00' },
+			note: 'Short',
+			denominations: [{ value: '20', pieces: 2 }],
+		});
+		expect(kept.denominations).not.toBe(closure.breakdowns.denominations);
+	}
+);

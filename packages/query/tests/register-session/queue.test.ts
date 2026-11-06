@@ -1811,6 +1811,54 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(row.getLatest().toJSON()).toEqual(before);
 		expect(before.counted).toEqual({ cash: '100' });
 	});
+	// Requeue from the latest row, or restore no field: the refresh's row goes out, or nothing does.
+	it('a refresh during a retry does not lose the close', async () => {
+		const { session } = await reopenedClose();
+		const closed = await closeSession(db, session.id, { counted: { cash: '120' } });
+		expect(closed.sync_status).toBe('failed');
+		// A refresh lands mid-retry: the store still holds the session at counting, with the old count.
+		await adoptSessionRow(
+			db.register_sessions,
+			serverListRow({
+				...session.getLatest().toJSON(),
+				status: 'counting',
+				counted: { cash: '100' },
+				closure_id: null,
+			}) as never
+		);
+		expect(session.getLatest().toJSON()).toMatchObject({
+			status: 'counting',
+			sync_status: 'synced',
+			counted: { cash: '100' },
+		});
+		const written = await writeClosure({
+			storeDB: db,
+			userDB,
+			siteUuid: 'site',
+			session: closed.toJSON(true),
+			counted: '120',
+			otherTenders: {},
+			movements: [],
+			orders: [],
+			revise: true,
+		});
+		await requeueClose(db, session.id, closed.toMutableJSON());
+		expect(session.getLatest().toJSON()).toMatchObject({
+			...retried,
+			counted: { cash: '120' },
+			closure_id: session.id,
+		});
+		const server: Record<string, unknown> = serverListRow(session.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data: url === 'closures' ? { ...written.toJSON(), ...body } : { ...server, status: 'closed' },
+		}));
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'closed', counted: { cash: '120' } })
+		);
+	});
 	it('Retry after a refused abandon closes the same session with one closure row', async () => {
 		const { session, row, before } = await reopenedClose();
 		await backToSelling(db, session.id);

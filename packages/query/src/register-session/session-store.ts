@@ -221,17 +221,32 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 	}
 	return retried;
 }
+// A retry's held close (#3302): the status POST reads these; a refresh mid-retry overwrites them.
+const HELD_CLOSE_FIELDS = [
+	'status',
+	'status_at',
+	'closed_at_gmt',
+	'counted',
+	'count_note',
+	'count_denominations',
+	'closed_by',
+	'closure_id',
+	'business_day',
+] as const;
+type HeldClose = Partial<Pick<RegisterSessionRow, (typeof HELD_CLOSE_FIELDS)[number]>>;
 /**
  * Put a refused close back in the outbox (#2016), as `retryMovement` does for cash: the same
  * status POST with the same count, once the cashier has dealt with what the store objected to.
  */
-export async function requeueClose(storeDB: RegisterStoreDatabase, id: string) {
+export async function requeueClose(storeDB: RegisterStoreDatabase, id: string, close?: HeldClose) {
 	const { register_sessions: sessions, closures } = registerCollections(storeDB);
 	const row = await sessions.findOne(id).exec();
 	if (!row) throw new Error('invalid_retry_target');
 	const closure = await closures.findOne(id).exec();
 	if (closure?.sync_status === 'failed') await closure.incrementalPatch({ ...pending });
-	return row.incrementalPatch({ ...pending, pending_status: 'closed' });
+	const held = HELD_CLOSE_FIELDS.filter((field) => close?.[field] !== undefined);
+	const restored = Object.fromEntries(held.map((field) => [field, close![field]]));
+	return row.incrementalPatch({ ...restored, ...pending, pending_status: 'closed' });
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,

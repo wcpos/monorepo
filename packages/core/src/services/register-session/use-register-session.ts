@@ -50,6 +50,9 @@ const logger = getLogger(['wcpos', 'registerSession']);
 // still close; the closure then carries the fallback and the parent arrives later.
 const REFUND_PARENT_WAIT_MS = 15_000;
 
+/** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
+const unacceptedIn = (id: string, closures?: { id: string; sync_status: string }[] | null) =>
+	!!closures?.some((row) => row.id === id && !['synced', 'superseded'].includes(row.sync_status));
 function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
 	return hasPendingLocalWork(record) || record.remoteId === null;
 }
@@ -174,13 +177,18 @@ export function useRegisterSession() {
 	const [accountingState] = React.useState(createSessionAccountingState);
 	const source = React.useMemo(() => {
 		const sessions$ = observeRegisterSessions(storeDB, binding.registerId);
+		const closures$ = observeRegisterClosures(storeDB, binding.registerId);
+		// `session`'s order, so a refused abandon's retry has its sales; unread closures count as none.
 		const accounting = observeSessionAccounting(
 			runtime.engine,
-			sessions$.pipe(
-				map((rows) =>
+			combineLatest([sessions$, closures$]).pipe(
+				map(([rows, closureRows]) =>
 					rows === null
 						? null
 						: (rows.active.find((row) => row.sync_status !== 'failed') ??
+							rows.active.find(
+								(row) => row.sync_status === 'failed' && unacceptedIn(row.id, closureRows)
+							) ??
 							rows.closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced'))
 				)
 			),
@@ -193,7 +201,7 @@ export function useRegisterSession() {
 						sessions$,
 						observeCashMovements(storeDB),
 						accounting.stream,
-						observeRegisterClosures(storeDB, binding.registerId),
+						closures$,
 					]).pipe(
 						map(([rows, entries, accounting, closureRows]) =>
 							rows && entries && accounting && closureRows
@@ -220,11 +228,7 @@ export function useRegisterSession() {
 		sessionsOn
 			? observed
 			: null;
-	// A closure the store has not taken: neither accepted (`synced`) nor already on file there.
-	const unacceptedClosure = (id: string) =>
-		!!data?.closureRows.some(
-			(closure) => closure.id === id && !['synced', 'superseded'].includes(closure.sync_status)
-		);
+	const unacceptedClosure = (id: string) => unacceptedIn(id, data?.closureRows);
 	const session =
 		data?.active.find((row) => row.sync_status !== 'failed') ??
 		// Recover only a close this till made and never got acknowledged whose closure write
@@ -615,7 +619,8 @@ export function useRegisterSession() {
 					revise: true,
 				});
 				// The closure now matches this close: let the outbox send both.
-				if (session!.getLatest().sync_status === 'failed') await requeueClose(storeDB, session!.id);
+				if (closed.sync_status === 'failed')
+					await requeueClose(storeDB, session!.id, closed.toMutableJSON());
 				await recordLiveSession(userDB, site.uuid!, closed.register_id, null);
 				recordRegisterFact({
 					kind: 'session-closed',
