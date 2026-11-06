@@ -59,13 +59,14 @@ export function SmartReaders({
 					if (!hardware) return [];
 					// What checkout would pay with: the lock, then this till's choice, then the default,
 					// then the only usable reader.
-					const { readers: usable, lockToDefault } = selectableReaders(method);
+					const { readers: usable, lockToDefault, only } = selectableReaders(method);
 					// A device reader's memory is not a cloud choice.
 					const memory = remembered[method.id];
 					const selected = initialReaderId(
 						usable,
 						lockToDefault,
-						memory && rememberedMode(memory) === 'server' ? memory.id : null
+						memory && rememberedMode(memory) === 'server' ? memory.id : null,
+						only
 					);
 					return hardware.readers.map((reader) => {
 						const id = `smart-reader-${method.id}-${reader.id}`;

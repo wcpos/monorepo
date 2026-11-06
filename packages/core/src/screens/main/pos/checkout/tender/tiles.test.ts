@@ -235,10 +235,10 @@ it('has no readers when the locked default is offline', () => {
 		},
 	});
 	expect(buildTenderTiles([method], { online: true })[0].reason).toBe('no_readers');
-	expect(selectableReaders(method)).toEqual({ readers: [], lockToDefault: true });
+	expect(selectableReaders(method)).toMatchObject({ readers: [], lockToDefault: true });
 });
 it('drops offline readers and marks only other orders as busy', () => {
-	expect(selectableReaders(server, held, 'mine')).toEqual({
+	expect(selectableReaders(server, held, 'mine')).toMatchObject({
 		lockToDefault: false,
 		readers: [{ id: 'a', label: 'Front', isDefault: true, inUseBy: '123' }],
 	});
@@ -265,7 +265,7 @@ it('reads no cloud readers from a server entry in modes while the device is prim
 			],
 		},
 	});
-	expect(selectableReaders(mixed)).toEqual({ lockToDefault: false, readers: [] });
+	expect(selectableReaders(mixed)).toMatchObject({ lockToDefault: false, readers: [] });
 	// No server entry, no cloud readers: the device's own hardware is never read as readers.
 	expect(selectableReaders(deviceMethod).readers).toEqual([]);
 });
@@ -274,18 +274,34 @@ describe('initialReaderId', () => {
 	const a = { id: 'a', label: 'Front', isDefault: true, inUseBy: null };
 	const b = { id: 'b', label: 'Back', isDefault: false, inUseBy: null };
 	it.each([
-		['lock wins', [a, b], true, 'b', 'a'],
-		['remembered beats default', [a, b], false, 'b', 'b'],
-		['absent remembered', [a, b], false, 'gone', 'a'],
-		['busy remembered', [a, { ...b, inUseBy: '42' }], false, 'b', 'a'],
-		['default only', [a, b], false, null, 'a'],
-		['the only usable reader needs no choice', [b], false, null, 'b'],
-		['busy default is no fallback to another', [{ ...a, inUseBy: '42' }, b], false, null, null],
-		['remembered reader offline, one other online', [b], false, 'gone', null],
-		['two usable, no default, nothing remembered', [b, { ...b, id: 'c' }], false, null, null],
-		['no readers', [], false, 'b', null],
-	] as const)('%s', (_label, readers, locked, remembered, expected) => {
-		expect(initialReaderId(readers, locked, remembered)).toBe(expected);
+		['lock wins', [a, b], true, 'b', false, 'a'],
+		['remembered beats default', [a, b], false, 'b', false, 'b'],
+		['absent remembered', [a, b], false, 'gone', false, 'a'],
+		['busy remembered', [a, { ...b, inUseBy: '42' }], false, 'b', false, 'a'],
+		['default only', [a, b], false, null, false, 'a'],
+		["the store's only reader needs no choice", [b], false, null, true, 'b'],
+		["the store's only reader, memory not loaded yet", [b], false, null, true, 'b'],
+		["the store's only reader is busy", [{ ...b, inUseBy: '42' }], false, null, true, null],
+		[
+			'busy default is no fallback to another',
+			[{ ...a, inUseBy: '42' }, b],
+			false,
+			null,
+			false,
+			null,
+		],
+		['remembered reader offline, one other online', [b], false, 'gone', false, null],
+		[
+			'two usable, no default, nothing remembered',
+			[b, { ...b, id: 'c' }],
+			false,
+			null,
+			false,
+			null,
+		],
+		['no readers', [], false, 'b', false, null],
+	] as const)('%s', (_label, readers, locked, remembered, only, expected) => {
+		expect(initialReaderId(readers, locked, remembered, only)).toBe(expected);
 	});
 });
 

@@ -68,25 +68,26 @@ export function selectableReaders(
 					};
 				})
 		: [];
-	return { readers, lockToDefault };
+	// `only`: the store has exactly one reader, whatever its status, so no memory could name another.
+	return { readers, lockToDefault, only: (hardware?.readers.length ?? 0) === 1 };
 }
 
 /** The till's last confirmed choice wins unless the store has locked its default. */
 export function initialReaderId(
 	readers: readonly ReturnType<typeof selectableReaders>['readers'][number][],
 	lockToDefault: boolean,
-	remembered: string | null
+	remembered: string | null,
+	only = false
 ): string | null {
 	if (lockToDefault) return readers.find((reader) => reader.isDefault)?.id ?? null;
 	const usable = readers.filter((reader) => reader.inUseBy === null);
-	// Remember over configure: a store with exactly one free reader and no memory needs no choice.
-	// Never a fallback for a remembered or busy reader: that would pick another till's reader.
+	// Remember over configure: a store whose ONLY reader is online and free needs no choice, and no
+	// memory loaded later could name another. Never a fallback among several readers: that would
+	// pick another counter's reader while this till's own is busy or offline.
 	return (
 		usable.find((reader) => reader.id === remembered)?.id ??
 		usable.find((reader) => reader.isDefault)?.id ??
-		(remembered === null && readers.length === 1 && readers[0].inUseBy === null
-			? readers[0].id
-			: null)
+		(only && readers.length === 1 && readers[0].inUseBy === null ? readers[0].id : null)
 	);
 }
 

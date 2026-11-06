@@ -743,7 +743,21 @@ describe('Smart readers', () => {
 		expect(screen.queryAllByTestId(/^smart-reader-.*-(selected|use)$/)).toHaveLength(0);
 	});
 
-	it('one usable reader needs no choice: Selected, and no Use anywhere', async () => {
+	it("the store's only reader needs no choice: Selected, and no Use anywhere", async () => {
+		mockMethods = [
+			cloud({
+				readers: [{ id: 'tmr_back', label: 'Back counter', status: 'online', default: false }],
+				default_reader: null,
+			}),
+		];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`${row('tmr_back')}-selected`)).toBeTruthy();
+		expect(screen.queryAllByTestId(/^smart-reader-.*-use$/)).toHaveLength(0);
+	});
+
+	// Two readers with one offline is still a choice: the offline one may be this till's.
+	it('one online reader beside an offline one is offered, not chosen', async () => {
 		mockMethods = [
 			cloud({
 				readers: [
@@ -755,8 +769,9 @@ describe('Smart readers', () => {
 		];
 		render(<CardReadersSettings />);
 		await flush();
-		expect(screen.getByTestId(`${row('tmr_back')}-selected`)).toBeTruthy();
-		expect(screen.queryAllByTestId(/^smart-reader-.*-use$/)).toHaveLength(0);
+		expect(screen.queryAllByTestId(/^smart-reader-.*-selected$/)).toHaveLength(0);
+		expect(screen.getByTestId(`${row('tmr_back')}-use`)).toBeTruthy();
+		expect(screen.queryByTestId(`${row('tmr_bar')}-use`)).toBeNull();
 	});
 
 	it('a device-only store shows the Bluetooth section and no Smart readers', async () => {
