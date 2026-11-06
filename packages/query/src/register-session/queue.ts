@@ -181,6 +181,12 @@ export const synced = {
 } as const;
 const due = (row: { sync_status: string; sync_next_at?: number | null }) =>
 	row.sync_status === 'pending' && (!row.sync_next_at || row.sync_next_at <= Date.now());
+/**
+ * A server row without a count never empties the cashier's (#2016): after a refused close the
+ * store's row has no `counted`, and the count is the only copy of what was in the drawer.
+ */
+const noCount = (counted: unknown) =>
+	counted == null || Object.keys(counted as object).length === 0;
 
 /** Keep a newer cashier transition when a response to an older request arrives. */
 async function acknowledge(
@@ -207,7 +213,7 @@ async function acknowledge(
 			status_at: local.status_at,
 			approver_token: outstanding ? local.approver_token : null,
 			closure_id: local.closure_id ?? server.closure_id,
-			counted: outstanding ? local.counted : server.counted,
+			counted: outstanding || noCount(server.counted) ? local.counted : server.counted,
 			counting_by: server.counting_by,
 			counting_started_at_gmt: outstanding
 				? local.counting_started_at_gmt
@@ -655,6 +661,7 @@ export async function adoptSessionRow(
 			const incoming = { ...adopted };
 			if (current.counted_float != null && incoming.counted_float === null)
 				delete incoming.counted_float;
+			if (noCount(incoming.counted)) delete incoming.counted;
 			return current.sync_status === 'pending' ? current : { ...current, ...incoming };
 		},
 		() => adopted

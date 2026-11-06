@@ -35,6 +35,7 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
+import { RefusedCloseNotice } from './refused-close-notice';
 import { FigureTile } from './figure-tile';
 import { ageLabel } from './register-bar.helpers';
 import { Ticking } from './ticking';
@@ -75,14 +76,17 @@ export function RegisterPanel({
 		closeTime,
 		movements,
 		refusedMovements,
+		refusedClose,
 		lastClosure,
 		actions,
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
-	// This device's own count, or a close awaiting its closure write, opens on the count pane.
+	// This device's own count, or a close awaiting its closure write, opens on the count pane;
+	// so does a close the store refused (#2016), whose count mark the close already cleared.
 	const landing =
-		(session?.status === 'counting' && countingHere) || session?.status === 'closed'
+		(session?.status === 'counting' && (countingHere || refusedClose)) ||
+		session?.status === 'closed'
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
@@ -127,7 +131,7 @@ export function RegisterPanel({
 			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
 			// would write `open` over the closed session.
 			if (!next && countBusy) return;
-			if (!next && pane === 'count' && session?.status === 'counting')
+			if (!next && pane === 'count' && (session?.status === 'counting' || refusedClose))
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
@@ -293,6 +297,15 @@ export function RegisterPanel({
 						testID="register-panel-figures-pending"
 						className="mx-4"
 						title={t('register.figures_after_sync')}
+					/>
+				)}
+				{refusedClose && session && (
+					<RefusedCloseNotice
+						className="mx-4"
+						session={session}
+						closure={lastClosure}
+						closeSession={actions.closeSession}
+						attempt={attempt}
 					/>
 				)}
 				{refused.length > 0 && (

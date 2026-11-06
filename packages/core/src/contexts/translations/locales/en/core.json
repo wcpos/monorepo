@@ -2964,6 +2964,7 @@
 	"register.refused_other": "{count} movements refused by the store",
 	"register.refused_row": "Refused",
 	"register.retry": "Retry",
+	"register.close_refused": "The store refused this close. Your count is kept.",
 	"register.closure_blind_restricted": "Closure details are restricted while blind counting is on",
 	"register.closure_n_written": "Closure {n} written",
 	"register.counting_the_drawer": "Counting the drawer",

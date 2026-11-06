@@ -206,6 +206,18 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 	}
 	return retried;
 }
+/**
+ * Put a refused close back in the outbox (#2016), as `retryMovement` does for cash: the same
+ * status POST with the same count, once the cashier has dealt with what the store objected to.
+ */
+export async function requeueClose(storeDB: RegisterStoreDatabase, id: string) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const row = await sessions.findOne(id).exec();
+	if (!row) throw new Error('invalid_retry_target');
+	const closure = await closures.findOne(id).exec();
+	if (closure?.sync_status === 'failed') await closure.incrementalPatch({ ...pending });
+	return row.incrementalPatch({ ...pending, pending_status: 'closed' });
+}
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,
 	input: {

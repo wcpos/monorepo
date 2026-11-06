@@ -35,6 +35,7 @@ export {
 	RegisterSessionRequiredError,
 	requireOpenSession,
 	retryMovement,
+	requeueClose,
 	startCounting,
 	readMovement,
 	voidMovement,

@@ -29,6 +29,7 @@ import {
 	recordLiveSession,
 	recordMovement,
 	RegisterSessionRequiredError,
+	requeueClose,
 	requireOpenSession,
 	retryMovement,
 	sessionRefreshRequests,
@@ -219,21 +220,44 @@ export function useRegisterSession() {
 		sessionsOn
 			? observed
 			: null;
+	// A closure the store has not taken: neither accepted (`synced`) nor already on file there.
+	const unacceptedClosure = (id: string) =>
+		!!data?.closureRows.some(
+			(closure) => closure.id === id && !['synced', 'superseded'].includes(closure.sync_status)
+		);
 	const session =
 		data?.active.find((row) => row.sync_status !== 'failed') ??
 		// Recover only a close this till made and never got acknowledged whose closure write
 		// was interrupted (closure_id stamped, no local closure row); imported closed history
 		// is synced and is never current, and a written closure needs no current session.
+		// #2016, the one exception: a refused close is not history until the store has accepted
+		// it or the cashier has abandoned it, so a refused (`failed`) close stays current. So does
+		// a session whose status POST was refused while its closure is unaccepted (a refused
+		// abandon), at whatever status it holds, until the next refresh.
+		data?.active.find((row) => row.sync_status === 'failed' && unacceptedClosure(row.id)) ??
 		data?.closed.find(
 			(row) =>
 				row.closure_id === row.id &&
 				row.sync_status !== 'synced' &&
-				!data.closureRows.some((closure) => closure.id === row.id)
+				(!data.closureRows.some((closure) => closure.id === row.id) ||
+					(row.sync_status === 'failed' && unacceptedClosure(row.id)))
 		) ??
 		null;
 	// Only an open session can be overdue; its opening fixes which close it is due at.
 	const openedAt = session?.status === 'open' ? session.opened_at_gmt : null;
 	usePastCloseClock(closeTime, openedAt, timezone);
+	/**
+	 * The store refused this till's close (#2016): the close came back `failed` and no refresh
+	 * has reached the store (a), or the store's row reopened it at counting with this till's
+	 * closure still unaccepted (b). A refused override is `approval_required`, not this.
+	 */
+	const refusedClose =
+		!!session &&
+		((session.status === 'closed' && session.sync_status === 'failed') ||
+			(session.status === 'counting' &&
+				!session.approval_required &&
+				session.server_status !== 'closed' &&
+				unacceptedClosure(session.id)));
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
 	/**
 	 * Refused cash outlives the session it was recorded against. Scoping it to the current
@@ -352,7 +376,10 @@ export function useRegisterSession() {
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!live?.counting_here,
-		countingElsewhere: !!session && session.status === 'counting' && !live?.counting_here,
+		// The close cleared the count mark; a close the store refused is still this till's count.
+		countingElsewhere:
+			!!session && session.status === 'counting' && !live?.counting_here && !refusedClose,
+		refusedClose,
 		countingBy,
 		// The refresh clears the live record as the remote close lands; the marker outlives it.
 		closedElsewhere:
@@ -483,7 +510,9 @@ export function useRegisterSession() {
 				if (figuresPending) throw new Error('register_figures_pending');
 				const closed =
 					session!.status === 'closed'
-						? session!
+						? session!.sync_status === 'failed'
+							? await requeueClose(storeDB, session!.id)
+							: session!
 						: await closeSession(storeDB, session!.id, {
 								...input,
 								closedBy: wpCredentials.id,

@@ -64,6 +64,7 @@ let mockSession: {
 	loaded?: boolean;
 	countingHere?: boolean;
 	countingElsewhere?: boolean;
+	refusedClose?: boolean;
 	overdue?: boolean;
 } = {
 	session: null,
@@ -231,5 +232,24 @@ it.each([true, false])('mounts the receipt edge only when tear is %s', (tear) =>
 		}
 	} finally {
 		mockTear = false;
+	}
+});
+
+it('#2016: a refused close the store reopened at counting keeps the cart and asks for the count', () => {
+	const previous = mockSession;
+	mockSession = {
+		session: { id: 's', status: 'counting' },
+		sessionsOn: true,
+		countingHere: false,
+		refusedClose: true,
+	};
+	try {
+		render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('cart-table')).toBeTruthy();
+		expect(screen.queryByTestId('counting-elsewhere-card')).toBeNull();
+		expect(consumeRegisterPanelRequest()).toBe('count');
+	} finally {
+		mockSession = previous;
+		consumeRegisterPanelRequest();
 	}
 });

@@ -73,7 +73,7 @@ function CartColumn({
 	const { tear } = useThemeTraits();
 	const surface = isColumn ? 'bg-cart' : 'bg-background';
 	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
-	const { sessionsOn, session, loaded, overdue, countingHere, countingElsewhere } =
+	const { sessionsOn, session, loaded, overdue, countingHere, countingElsewhere, refusedClose } =
 		useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
@@ -81,7 +81,8 @@ function CartColumn({
 	const reopened = React.useRef<string | undefined>(undefined);
 	// This device's own count, or a close awaiting its closure write (kept for recovery), asks for
 	// the count pane once; only the focused bar opens it (the phone mounts both tabs; Codex, #3073).
-	const recovering = session?.status === 'closed';
+	// A close the store refused (#2016) is this till's count too: its count mark went with the close.
+	const recovering = session?.status === 'closed' || refusedClose;
 	React.useEffect(() => {
 		if (!session || reopened.current === session.id) return;
 		if (!(session.status === 'counting' && countingHere) && !recovering) return;
