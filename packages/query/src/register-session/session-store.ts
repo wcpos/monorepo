@@ -81,6 +81,18 @@ export async function requireOpenSession(
 	// Retain the baseline; pending rows supply the delta until the next detail refresh.
 	return session.id;
 }
+/**
+ * Whether the register's session is being counted. `findOpenSession` matches `status: 'open'`
+ * only and throws on a miss, so this is its own read. It runs on the tap or scan: one `findOne`.
+ */
+export async function isRegisterCounting(storeDB: RegisterStoreDatabase, registerId: string) {
+	const counting = await registerCollections(storeDB)
+		.register_sessions?.findOne({
+			selector: { register_id: registerId, status: 'counting', sync_status: { $ne: 'failed' } },
+		})
+		.exec();
+	return !!counting;
+}
 export function openSession(
 	storeDB: RegisterStoreDatabase,
 	input: {

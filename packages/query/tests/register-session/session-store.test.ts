@@ -9,6 +9,7 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 import {
 	backToSelling,
 	closeSession,
+	isRegisterCounting,
 	openSession,
 	recordApproval,
 	recordMovement,
@@ -118,6 +119,19 @@ it('gates counting and missing sessions, and retains the server baseline before 
 	await expect(requireOpenSession(db, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
 	});
+});
+
+it('reads counting only for this register, and never from a failed row', async () => {
+	const row = await openSession(db, input);
+	expect(await isRegisterCounting(db, 'register')).toBe(false);
+	const other = await openSession(db, { ...input, registerId: 'other' });
+	await startCounting(db, other.id);
+	expect(await isRegisterCounting(db, 'other')).toBe(true);
+	expect(await isRegisterCounting(db, 'register')).toBe(false);
+	await startCounting(db, row.id);
+	expect(await isRegisterCounting(db, 'register')).toBe(true);
+	await row.getLatest().incrementalPatch({ sync_status: 'failed' });
+	expect(await isRegisterCounting(db, 'register')).toBe(false);
 });
 
 it('re-queues a refused movement so the outbox will send it again', async () => {

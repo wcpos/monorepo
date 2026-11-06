@@ -26,6 +26,8 @@ let mockClosure = {
 	breakdowns: {},
 };
 const mockContext = {
+	// The real context always carries the store; the count reads its decimals from it.
+	store: { name: 'UK Store' },
 	i18n: {},
 	timezone: 'UTC',
 	locale: 'en',

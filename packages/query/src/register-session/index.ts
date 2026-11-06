@@ -28,6 +28,7 @@ export {
 	backToSelling,
 	closeSession,
 	findOpenSession,
+	isRegisterCounting,
 	openSession,
 	recordMovement,
 	recordApproval,

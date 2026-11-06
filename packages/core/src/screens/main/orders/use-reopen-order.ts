@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { readAwaitingCustomer, readLedger } from '@wcpos/order-math';
 import {
 	awaitTerminalWriteOutcome,
@@ -18,7 +19,7 @@ import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useOrderRecord, useUndoRefusedReopen } from './commands/use-order-record';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
-import { standaloneCheckoutHref } from '../pos/checkout/till-route';
+import { standaloneCheckoutHref, tillCartHref } from '../pos/checkout/till-route';
 
 const logger = getLogger(['wcpos', 'orders', 'reopen']);
 
@@ -68,6 +69,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
+	const phone = useIsPhone();
 
 	/**
 	 * ADR 0040: the server refuses a reopen while a payment leg is in motion, and names the leg.
@@ -185,10 +187,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 				);
 		}
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-		router.push({
-			pathname: '/cart/[...orderId]',
-			params: { orderId: order.uuid ? [order.uuid] : [] },
-		});
+		router.push(tillCartHref(phone, order.uuid));
 	}, [
 		blockIfDegraded,
 		reopenOrder,
@@ -201,6 +200,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		wpCredentials.id,
 		register,
 		site.uuid,
+		phone,
 	]);
 
 	/** One reopen per order at a time; a call while one awaits the store is ignored. */
