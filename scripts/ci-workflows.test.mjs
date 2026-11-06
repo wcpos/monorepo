@@ -517,6 +517,24 @@ test('release workflows require green main with an explicit typed override', () 
 	);
 });
 
+test('the web-bundle retention keeps only hashed files; a root file the build does not carry is dropped', () => {
+	const publish = readWorkflow('publish-web-bundle.yml');
+	const step = publish.jobs.publish.steps.find(({ name }) =>
+		String(name).startsWith('🚀 Publish to web-bundle')
+	);
+	assert.ok(step, 'publish step');
+	// Both lanes publish to the same branch. The 24 h grace exists for hashed
+	// _expo/ files a stale edge's metadata.json may still name; a root file the
+	// new build does not carry (another lane's worker or wasm) must go at once,
+	// or the lane tag script refuses the bundle (1.11.11, 2026-11-06).
+	const loop = step.run.slice(step.run.indexOf('git ls-files build | while read'));
+	const drop = loop.indexOf('*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;');
+	const grace = loop.indexOf('keep_until');
+	assert.ok(drop > 0, 'root files this build does not carry are dropped');
+	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the grace');
+	assert.ok(drop < grace, 'the drop runs before the age check');
+});
+
 test('a main-branch web bundle is gated on its worker RXDB_VERSION against its lane', () => {
 	const publish = readWorkflow('publish-web-bundle.yml');
 	const steps = publish.jobs.publish.steps.map(({ name }) => name);
