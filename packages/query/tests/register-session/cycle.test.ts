@@ -130,6 +130,38 @@ it("seeds only the bound register's cache", async () => {
 	await cycle('B');
 	expect(await storeDB.register_sessions.find().exec()).toHaveLength(0);
 });
+// #3251 (Codex on #3259): the directory caches the server's space form while a refreshed row
+// holds the ISO form; compared as text, 'T' sorted after ' ' and a newer session was refused.
+it('a newer directory session in the server form still replaces an older refreshed row', async () => {
+	await storeDB.register_sessions.insert({
+		...existing,
+		id: 'old',
+		opened_at_gmt: '2026-10-28T09:00:00.000Z',
+	});
+	const newer = { ...live, session_id: 'new', opened_at_gmt: '2026-10-28 12:00:00' };
+	expect(await seedSessionFromCache(storeDB, newer, 'A', 1)).toBe('seeded');
+	expect((await storeDB.register_sessions.findOne('old').exec())?.toJSON()).toMatchObject({
+		status: 'closed',
+		closed_at_gmt: '2026-10-28T12:00:00.000Z',
+	});
+	expect((await storeDB.register_sessions.findOne('new').exec())?.opened_at_gmt).toBe(
+		'2026-10-28T12:00:00.000Z'
+	);
+});
+it('still refuses a directory session older than a synced active row, whichever form each holds', async () => {
+	await storeDB.register_sessions.insert({
+		...existing,
+		id: 'newer',
+		opened_at_gmt: '2026-10-28 15:00:00',
+	});
+	const older = { ...live, session_id: 'old', opened_at_gmt: '2026-10-28T12:00:00.000Z' };
+	expect(await seedSessionFromCache(storeDB, older, 'A', 1)).toBe('present');
+	expect((await storeDB.register_sessions.findOne('newer').exec())?.status).toBe('open');
+});
+it('records a directory session in the ISO form', async () => {
+	await recordLiveSession(userDB, 'site', 'A', { ...live, opened_at_gmt: '2026-10-28 13:05:00' });
+	expect(readLiveSession('site', 'A')?.opened_at_gmt).toBe('2026-10-28T13:05:00.000Z');
+});
 it('leaves an existing open row alone', async () => {
 	const row = await storeDB.register_sessions.insert(existing);
 	const before = row.toJSON();

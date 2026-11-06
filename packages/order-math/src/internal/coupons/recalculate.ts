@@ -396,49 +396,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		// Recalculate totalDiscount after capping
 		discountResult.totalDiscount = discountResult.perItem.reduce((sum, e) => sum + e.discount, 0);
 
-		// Convert inclusive discounts to ex-tax using calculateTaxes for exact
-		// WC-matching compound rate decomposition (replaces ratio shortcut).
-		const exTaxPerItem = pricesIncludeTax
-			? discountResult.perItem.map((entry) => {
-					if (entry.discount <= 0) return entry;
-					const li =
-						entry.lineIndex != null
-							? resetItems[entry.lineIndex]
-							: resetItems.find((item) => item.product_id === entry.product_id);
-					if (!li) return entry;
-
-					// Non-taxable items carry no embedded tax, so the inclusive
-					// discount is already ex-tax — skip extraction.
-					if (statusOf(li) !== 'taxable') return entry;
-
-					// Get the applicable tax rates for this item's tax class
-					const itemTaxClass = normalizeTaxClass(li.tax_class);
-					const itemRates = taxRates.filter((r) => normalizeTaxClass(r.class) === itemTaxClass);
-					if (itemRates.length === 0) return entry;
-
-					// Decompose the inclusive discount into tax + ex-tax using WC's algorithm
-					const taxResult = calculateTaxes({
-						amount: entry.discount,
-						rates: itemRates.map((r) => ({
-							id: r.id,
-							rate: r.rate,
-							compound: r.compound,
-							order: r.order,
-							// WC sorts compound rates by tax_rate_priority (#1548) — must survive this map.
-							priority: r.priority,
-						})),
-						amountIncludesTax: true,
-						dp,
-						// WC set_item_discount_amounts → WC_Tax::calc_inclusive_tax rounds each
-						// rate with WC_Tax::round at wc_get_rounding_precision().
-						perRatePrecision: getRoundingPrecision(dp),
-					});
-					const exTaxDiscount = entry.discount - taxResult.total;
-					return { ...entry, discount: round(exTaxDiscount, 6) };
-				})
-			: discountResult.perItem;
-
-		allPerItemDiscounts.push(exTaxPerItem);
+		allPerItemDiscounts.push(discountResult.perItem);
 
 		// In sequential mode, also reduce item prices so the next coupon's
 		// discount *calculation* (not just allocation) uses the reduced price.
@@ -468,10 +426,64 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return { ...cl, discount, discount_tax };
 	});
 
+	// WC set_item_discount_amounts takes the tax out of each item's discount ONCE, from
+	// get_discounts_by_item(): every coupon's inclusive amount for that item, added up
+	// first. Extracting per coupon rounds each coupon's tax on its own, and the ex-tax
+	// parts can land a line 1 µ off WooCommerce — 7.999999 where it stores 8 (#2593).
+	const toExTaxLineDiscounts = (entries: PerItemDiscount[]): PerItemDiscount[] => {
+		const byLine = new Map<string, PerItemDiscount>();
+		for (const entry of entries) {
+			// Same keys computeDiscountedLineItems matches on: the line, or the product without one.
+			const key =
+				entry.lineIndex != null ? `line:${entry.lineIndex}` : `product:${entry.product_id}`;
+			const sum = byLine.get(key);
+			byLine.set(key, { ...entry, discount: (sum?.discount ?? 0) + entry.discount });
+		}
+		// Convert inclusive discounts to ex-tax using calculateTaxes for exact
+		// WC-matching compound rate decomposition (replaces ratio shortcut).
+		return [...byLine.values()].map((entry) => {
+			if (entry.discount <= 0) return entry;
+			const li =
+				entry.lineIndex != null
+					? resetItems[entry.lineIndex]
+					: resetItems.find((item) => item.product_id === entry.product_id);
+			if (!li) return entry;
+
+			// Non-taxable items carry no embedded tax, so the inclusive
+			// discount is already ex-tax — skip extraction.
+			if (statusOf(li) !== 'taxable') return entry;
+
+			// Get the applicable tax rates for this item's tax class
+			const itemTaxClass = normalizeTaxClass(li.tax_class);
+			const itemRates = taxRates.filter((r) => normalizeTaxClass(r.class) === itemTaxClass);
+			if (itemRates.length === 0) return entry;
+
+			// Decompose the inclusive discount into tax + ex-tax using WC's algorithm
+			const taxResult = calculateTaxes({
+				amount: entry.discount,
+				rates: itemRates.map((r) => ({
+					id: r.id,
+					rate: r.rate,
+					compound: r.compound,
+					order: r.order,
+					// WC sorts compound rates by tax_rate_priority (#1548) — must survive this map.
+					priority: r.priority,
+				})),
+				amountIncludesTax: true,
+				dp,
+				// WC set_item_discount_amounts → WC_Tax::calc_inclusive_tax rounds each
+				// rate with WC_Tax::round at wc_get_rounding_precision().
+				perRatePrecision: getRoundingPrecision(dp),
+			});
+			const exTaxDiscount = entry.discount - taxResult.total;
+			return { ...entry, discount: round(exTaxDiscount, 6) };
+		});
+	};
+
 	// Step 4: Apply all discounts to line items
 	const discountedLineItems = computeDiscountedLineItems(
 		resetItems,
-		allPerItemDiscounts,
+		pricesIncludeTax ? [toExTaxLineDiscounts(allPerItemDiscounts.flat())] : allPerItemDiscounts,
 		getRoundingPrecision(dp)
 	);
 	const taxedLineItems = rederiveOrderItemTaxes(discountedLineItems, taxRates, {

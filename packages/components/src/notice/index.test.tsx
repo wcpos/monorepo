@@ -179,3 +179,9 @@ it('renders each item as its line with its own actions, in the band action styli
 	// One action style for the band and its items (Uniwind classes are not compiled here).
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8').match(/min-h-9/g)).toHaveLength(1);
 });
+// A band that is a box of fields (the order's hand-over) carries no glyph.
+it('icon={null} draws no glyph', () => {
+	const { container } = render(<Notice tone="warning" title="Title" testID="notice" icon={null} />);
+	expect(container.querySelector('[data-icon]')).toBeNull();
+	expect(screen.getByTestId('notice')).toHaveClass(...TONE.warning.band.split(' '));
+});

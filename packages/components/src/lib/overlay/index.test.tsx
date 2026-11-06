@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Pressable, type PressableProps, View } from 'react-native';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { EdgeSurface, TitleBarStripProvider } from '../../edge-surface';
 import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from '../motion';
@@ -280,6 +280,7 @@ it('hands a sheet dismiss to the web scrim as its press, and nothing when unset'
 			<Probe />
 		</OverlayShell>
 	);
+	mockScrimProps.at(-1)?.onPressIn?.({} as never);
 	mockScrimProps.at(-1)?.onPress?.({} as never);
 	expect(onDismiss).toHaveBeenCalledTimes(1);
 	render(
@@ -287,6 +288,7 @@ it('hands a sheet dismiss to the web scrim as its press, and nothing when unset'
 			<Probe />
 		</OverlayShell>
 	);
+	mockScrimProps.at(-1)?.onPressIn?.({} as never);
 	mockScrimProps.at(-1)?.onPress?.({} as never);
 	expect(onDismiss).toHaveBeenCalledTimes(2);
 });
@@ -300,10 +302,70 @@ it('dismisses on the backdrop only: a press bubbling up from the panel is ignore
 	);
 	const scrim = {};
 	const panel = {};
+	mockScrimProps.at(-1)?.onPressIn?.({} as never);
 	mockScrimProps.at(-1)?.onPress?.({ target: panel, currentTarget: scrim } as never);
 	expect(onDismiss).not.toHaveBeenCalled();
+	mockScrimProps.at(-1)?.onPressIn?.({} as never);
 	mockScrimProps.at(-1)?.onPress?.({ target: scrim, currentTarget: scrim } as never);
 	expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
+// roadmap#505: a Radix trigger opens on pointer-down, so a phone sheet's scrim mounts under the
+// finger and the tap's click lands on it. Real DOM events, through RN-web's Pressable.
+function renderSheet(onDismiss: () => void) {
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="t">
+			<View testID="t-panel" />
+		</OverlayShell>
+	);
+	return { scrim: screen.getByTestId('t-scrim'), panel: screen.getByTestId('t-panel') };
+}
+function press(node: HTMLElement) {
+	fireEvent.mouseDown(node);
+	fireEvent.mouseUp(node);
+	fireEvent.click(node);
+}
+
+it('ignores a click on the scrim whose press did not begin there', () => {
+	const onDismiss = jest.fn();
+	const { scrim } = renderSheet(onDismiss);
+	fireEvent.click(scrim);
+	expect(onDismiss).not.toHaveBeenCalled();
+});
+
+it('dismisses on a press that begins and ends on the scrim, once per press', () => {
+	const onDismiss = jest.fn();
+	const { scrim } = renderSheet(onDismiss);
+	press(scrim);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	fireEvent.click(scrim);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a press inside the panel, and it leaves no press for a later scrim click', () => {
+	const onDismiss = jest.fn();
+	const { scrim, panel } = renderSheet(onDismiss);
+	press(panel);
+	expect(onDismiss).not.toHaveBeenCalled();
+	fireEvent.click(scrim);
+	expect(onDismiss).not.toHaveBeenCalled();
+});
+
+it('lets the open web scrim take presses over a modal dialog, never the leaving one', () => {
+	const { rerender } = render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable}>
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.className?.split(' ')).toContain('pointer-events-auto');
+	expect(mockScrimProps.at(-1)?.className?.split(' ')).not.toContain('pointer-events-none');
+	rerender(
+		<OverlayShell presentation="bottom" open={false} Scrim={Pressable}>
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.className?.split(' ')).toContain('pointer-events-none');
+	expect(mockScrimProps.at(-1)?.className?.split(' ')).not.toContain('pointer-events-auto');
 });
 
 it('closes a sheet that owns its dismiss on Escape, and leaves the key alone otherwise', () => {

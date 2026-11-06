@@ -16,6 +16,13 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
+const mockReadCounting = jest.fn(async () => false);
+const mockToastShow = jest.fn();
+
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
+
 jest.mock('./added-to-cart-toast', () => ({
 	showAddedToCartToast: (...args: unknown[]) => mockShowAddedToCartToast(...args),
 }));
@@ -81,7 +88,10 @@ jest.mock('../contexts/current-order', () => ({
 }));
 
 jest.mock('./use-add-item-to-order', () => ({
-	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
+	useAddItemToOrder: () => ({
+		addItemToOrder: mockAddItemToOrder,
+		readCounting: () => mockReadCounting(),
+	}),
 }));
 
 // Only the store settings are stubbed; the tax maths runs for real.
@@ -154,6 +164,43 @@ describe('useAddVariation', () => {
 		mockGetUuidFromLineItem.mockReturnValue('line-item-uuid');
 		mockIncrementLineItem.mockResolvedValue(true);
 		mockAddItemToOrder.mockResolvedValue(true);
+		mockReadCounting.mockResolvedValue(false);
+	});
+
+	it('adds nothing while the drawer is counted, with the notice, then adds after the count', async () => {
+		mockReadCounting.mockResolvedValue(true);
+		mockFindByProductVariationID.mockReturnValue([]);
+		const { result } = renderHook(() => useAddVariation());
+
+		let added: boolean | undefined;
+		await act(async () => {
+			added = await result.current.addVariation(
+				variationDocument as never,
+				parentDocument as never,
+				undefined,
+				{ silent: true }
+			);
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockIncrementLineItem).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: 'pos-counting-refused',
+			type: 'info',
+			title: 'pos_products.counting_items_after_count',
+		});
+
+		mockReadCounting.mockResolvedValue(false);
+		await act(async () => {
+			added = await result.current.addVariation(
+				variationDocument as never,
+				parentDocument as never
+			);
+		});
+		expect(added).toBe(true);
+		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledTimes(1);
 	});
 
 	it('increments a duplicate variation in the current order when a retained callback runs', async () => {
