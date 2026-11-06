@@ -15,9 +15,9 @@
 		"test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
 		"test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
 		"test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-android-aar-compile-sdk.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs && node scripts/check-workspace-tasks.mjs && node scripts/check-react-compiler-smells.mjs",
-		"lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
-		"lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
-		"typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"lint": "NODE_OPTIONS=--max-old-space-size=6144 turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"lint:fix": "NODE_OPTIONS=--max-old-space-size=6144 turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"typecheck": "NODE_OPTIONS=--max-old-space-size=6144 turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
 		"main:expo": "pnpm --filter @wcpos/main exec expo",
 		"clean": "node scripts/clean-node-modules",
 		"main": "pnpm --filter @wcpos/main",
@@ -41,7 +41,7 @@
 	},
 	"packageManager": "pnpm@11.1.1",
 	"lint-staged": {
-		"!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
+		"!(*.worker).{js,jsx,ts,tsx}": "node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js --fix"
 	},
 	"devDependencies": {
 		"@sqlite.org/sqlite-wasm": "3.53.4-build1",

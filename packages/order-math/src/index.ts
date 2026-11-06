@@ -120,6 +120,7 @@ export type {
 	PaymentRounding,
 	PaymentKind,
 	CaptureMode,
+	CaptureModeEntry,
 	OpenEnum,
 	PaymentTransport,
 	PaymentMethodDescriptor,

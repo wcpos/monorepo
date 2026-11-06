@@ -11,7 +11,7 @@ export const CENSUS_COLLECTIONS = SYNC_COLLECTION_NAMES;
  * fallback (collection-map owns the per-collection route and pins the rule).
  * Variations are the reason this is stated rather than assumed: Woo core has no
  * un-nested variations endpoint at all, and the plugin's cross-parent
- * `wcpos/v1/products/variations` route is what lets them count like everything
+ * `wcpos/v2/variations` route is what lets them count like everything
  * else.
  */
 export const SUPPORTED_CENSUS_COLLECTIONS = CENSUS_COLLECTIONS;

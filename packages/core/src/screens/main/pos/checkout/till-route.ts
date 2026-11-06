@@ -79,3 +79,17 @@ export function tillCartHref(compact: boolean, orderId: string | undefined) {
 		params: { orderId: orderId ? [orderId] : [] },
 	} as const;
 }
+
+/**
+ * Opens the till on an order (or on a new cart) from anywhere in the app: a NAVIGATE, never a push
+ * (a push from another drawer page stacked a second POS screen and doubled every scan, #3283). The
+ * (pos) stack's own invariant (`till-stack.ts`) settles the stack if the navigate still lands a
+ * second till.
+ */
+export function openTill(
+	router: Pick<ImperativeRouter, 'navigate'>,
+	compact: boolean,
+	orderId?: string
+): void {
+	router.navigate(tillCartHref(compact, orderId));
+}

@@ -34,10 +34,13 @@ jest.mock('@wcpos/components/text', () => ({
 // Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
 const mockCopyPicture = jest.fn(() => undefined);
 const mockDealCards = jest.fn(() => null);
+// The back badge's style, as the Deal hands it to the copy.
+const mockDealBackStyle = jest.fn(() => ({ opacity: 0.5 }));
 jest.mock('../deal-stack', () => ({
 	useLiftedLayout: () => undefined,
 	useCopyPicture: () => mockCopyPicture(),
 	useDealCards: () => mockDealCards(),
+	useDealBackStyle: () => mockDealBackStyle(),
 }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name, className }: { name: string; className?: string }) => {
@@ -187,7 +190,8 @@ describe('TermTile', () => {
 		unmount();
 		render(<ParentTermTile term={uncategorized} onPress={jest.fn()} />);
 		expect(screen.getByTestId('poster-words').textContent).toBe(onTile);
-		expect(screen.getByTestId('browse-parent-badge')).toBeTruthy();
+		// The badge wears the Deal's style: it fades with the copy's walk.
+		expect(screen.getByTestId('browse-parent-badge')).toHaveStyle({ opacity: 0.5 });
 	});
 	it('lets its picture fade in, and falls back to its tint when it fails', () => {
 		render(<TermTile term={drinks} onPress={jest.fn()} />);

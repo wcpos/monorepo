@@ -1,6 +1,7 @@
 import {
 	columnsCheckoutHref,
 	leaveSheet,
+	openTill,
 	returnToTill,
 	routeBeneath,
 	tillCartHref,
@@ -106,6 +107,28 @@ it('builds the columns checkout href for one order', () => {
 	expect(columnsCheckoutHref('o1')).toEqual({
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
 		params: { orderId: ['o1', 'checkout'] },
+	});
+});
+
+describe('openTill', () => {
+	it('navigates (never pushes) to the requested order when wide', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, false, 'o2');
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/cart/[...orderId]',
+			params: { orderId: ['o2'] },
+		});
+	});
+
+	it("navigates to a new cart in the phone's tabs without an order", () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, true);
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]',
+			params: { orderId: [] },
+		});
 	});
 });
 
