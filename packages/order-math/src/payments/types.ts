@@ -104,6 +104,12 @@ export interface PaymentEvent {
 	context?: Record<string, unknown>;
 }
 
+export interface CaptureModeEntry {
+	mode: OpenEnum<CaptureMode>;
+	provider: string | null;
+	hardware: PaymentHardware | null;
+}
+
 export interface PaymentMethodDescriptor {
 	schema: 1;
 	id: string;
@@ -116,6 +122,8 @@ export interface PaymentMethodDescriptor {
 		provider: string | null;
 		hardware: PaymentHardware | null;
 		webview_available: boolean;
+		/** Contract 1.3 additive; absent on an older store; the first entry is the primary the till pays with by default. */
+		modes?: CaptureModeEntry[];
 	};
 	capabilities: {
 		amount: { partial: boolean; min?: string; max?: string };
