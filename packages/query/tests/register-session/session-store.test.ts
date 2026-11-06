@@ -3,6 +3,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 import type { StoreDatabase } from '@wcpos/database';
+import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
 
@@ -29,6 +30,7 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	await db.addCollections({
+		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
