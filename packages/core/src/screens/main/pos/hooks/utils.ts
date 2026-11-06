@@ -340,11 +340,9 @@ export const convertVariationToLineItemWithoutTax = (
 		quantity: 1,
 		sku: variation.sku,
 		tax_class: variation.tax_class,
-		/**
-		 * Both wire shapes before falling back to the parent. A 1.10.0 store serves a variation
-		 * with `images[]` and no `image`, so reading `image` alone made the parent fallback ALWAYS
-		 * win — and unlike the blank thumbnail, this one is persisted: the parent's picture is
-		 * written onto the order line and shows in the order view and on receipts (#1577).
+		/*
+		 * The variation's own picture, then the parent's. This one is persisted: it is written
+		 * onto the order line and shows in the order view and on receipts (#1577).
 		 */
 		image:
 			normalizeLineItemImage(resolveImageEntry(variation)) ||
