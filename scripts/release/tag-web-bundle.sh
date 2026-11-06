@@ -101,7 +101,30 @@ wait_for_cdn() {
 	done
 }
 
-verify_lane_live() {
+# stdin: all tag names. $1 lane, $2 this tag. stdout: the lane's newest tag below $2, or nothing.
+previous_lane_tag() {
+	local patch="${2##*.}"
+	grep -E "^v${1//./\\.}\.[0-9]+$" | awk -F. -v p="$patch" '$3 + 0 < p + 0' | sort -t. -k3,3n | tail -1
+}
+
+# Expo names a chunk by a hash taken BEFORE the Sentry release banner is stamped into it, so
+# a chunk keeps its name across patch tags while its bytes change by the version string, and
+# jsDelivr caches @<lane>/<path> by path: without a purge the lane serves the previous tag's
+# bytes for every such chunk (v1.11.12, 2026-11-06: 72 of them, and the verification of the
+# previous train is what had seeded the edge). stdin: this tag's "<sha> <path>" hashed lines;
+# $1 lane, $2 the previous tag. Purges every path both tags carry with different bytes.
+# Runs in the calling shell (no pipeline): a throttled purge must reach the throttle state the
+# failure advice reads.
+purge_changed_hashed() {
+	local prev cur path
+	prev=$(expected_from_tree "$2") || return 1
+	cur=$(cat)
+	while read -r path; do
+		purge_cdn_path "$1" "$path"
+	done < <(join -1 2 -2 2 <(sort -k2 <<<"$cur") <(sort -k2 <<<"$prev") | awk '$2 != $3 { print $1 }')
+}
+
+verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new lane)
 	local lane="$1" tag="$2" expected sha path hashed="" unhashed="" n=0 m=0 paths=()
 	purge_cdn_root "$lane"
 	expected=$(expected_from_tree "$tag") || return 1
@@ -112,6 +135,9 @@ verify_lane_live() {
 			hashed+="$sha $path"$'\n'; n=$((n + 1))
 		fi
 	done <<< "$expected"
+	if [[ -n "${3:-}" ]]; then
+		purge_changed_hashed "$lane" "$3" <<<"$hashed" || return 1
+	fi
 	if ! printf '%s' "$hashed" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS"; then
 		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. $(cdn_refresh_advice "as ${tag}")" >&2
 		return 1
@@ -178,7 +204,7 @@ main() {
 		echo "${sha} is already ${tag}; resuming CDN verification"
 	fi
 
-	verify_lane_live "$lane" "$tag"
+	verify_lane_live "$lane" "$tag" "$(printf '%s\n' "$tags" | previous_lane_tag "$lane" "$tag")"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
