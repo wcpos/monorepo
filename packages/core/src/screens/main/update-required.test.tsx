@@ -8,6 +8,7 @@ import { render, screen } from '@testing-library/react';
 import { UpdateRequired } from './update-required';
 
 let mockIsWeb = true;
+const mockDocsLinkHrefs: Record<string, string> = {};
 
 jest.mock('@wcpos/utils/platform', () => ({
 	Platform: {
@@ -22,7 +23,20 @@ jest.mock('@wcpos/components/button', () => {
 });
 jest.mock('@wcpos/components/docs-link', () => {
 	const { Text } = jest.requireActual('react-native');
-	return { DocsLink: Text };
+	return {
+		DocsLink: ({
+			testID,
+			href,
+			children,
+		}: {
+			testID: string;
+			href: string;
+			children?: React.ReactNode;
+		}) => {
+			mockDocsLinkHrefs[testID] = href;
+			return <Text testID={testID}>{children}</Text>;
+		},
+	};
 });
 jest.mock('@wcpos/components/hstack', () => {
 	const { View } = jest.requireActual('react-native');
@@ -47,6 +61,21 @@ jest.mock('../../contexts/translations', () => {
 describe('UpdateRequired', () => {
 	beforeEach(() => {
 		mockIsWeb = true;
+		for (const key of Object.keys(mockDocsLinkHrefs)) delete mockDocsLinkHrefs[key];
+	});
+
+	it('tells the till to sync first and links the upgrade guide', () => {
+		render(<UpdateRequired />);
+
+		expect(screen.getByTestId('update-required-sync-first').textContent).toBe(
+			'Sync this till before updating; 2.0 does not carry over unsent sales.'
+		);
+		expect(screen.getByTestId('update-required-upgrade-docs-link').textContent).toBe(
+			'Upgrading to 2.0'
+		);
+		expect(mockDocsLinkHrefs['update-required-upgrade-docs-link']).toBe(
+			'https://docs.wcpos.com/getting-started/upgrading-to-2#rolling-back'
+		);
 	});
 
 	it('offers reload on the web build', () => {

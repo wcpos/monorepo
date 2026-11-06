@@ -14,6 +14,10 @@ import { translateErrorAction } from '../screens/main/logs/generated/error-actio
 import { translateErrorSummary } from '../screens/main/logs/generated/error-summaries.generated';
 
 const CODE = 'SYNC341';
+// The route once the docs flip makes 2.x the default (wcpos/docs#587). A 1.11
+// binary outlives the flip, so it carries the permanent URL, not a /2.x/ one.
+// The card shows after this till can no longer sync, so it points at the recovery steps.
+const UPGRADE_DOCS_URL = 'https://docs.wcpos.com/getting-started/upgrading-to-2#rolling-back';
 
 interface Props {
 	/**
@@ -51,6 +55,12 @@ export function UpdateRequiredNotice({ onRetry, align = 'center', testID, childr
 			<Text className={centered ? 'text-center' : undefined}>{translateErrorAction(t, CODE)}</Text>
 			<DocsLink testID={`update-required-docs-link-${CODE}`} href={getErrorCodeDocURL(CODE)}>
 				{t('common.learn_more', { _tags: 'core' })}
+			</DocsLink>
+			<Text testID="update-required-sync-first" className={centered ? 'text-center' : undefined}>
+				{t('common.sync_this_till_before_updating', { _tags: 'core' })}
+			</Text>
+			<DocsLink testID="update-required-upgrade-docs-link" href={UPGRADE_DOCS_URL}>
+				{t('common.upgrading_to_2_0', { _tags: 'core' })}
 			</DocsLink>
 			{hasActions ? (
 				<HStack className={centered ? 'justify-center p-2' : undefined}>

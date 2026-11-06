@@ -1,4 +1,7 @@
-export const TRANSLATION_VERSION = '2026.11.1';
+// Side tag cut from 2026.11.1 plus the update-required card's two keys
+// (wcpos/roadmap#545). Tags from main drop 81 keys this line still uses:
+// never bump this to one.
+export const TRANSLATION_VERSION = '2026.11.1-card';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
