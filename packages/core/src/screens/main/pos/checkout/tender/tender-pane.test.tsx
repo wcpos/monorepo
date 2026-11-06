@@ -1058,7 +1058,7 @@ jest.mock('react-native', () => {
 	}>) {
 		// The jsdom host has no layout engine; expose its committed layout callback to the test.
 		React.useLayoutEffect(() => {
-			if (testID && onLayout) mockLayouts[testID] = onLayout;
+			if (onLayout) mockLayouts[testID ?? 'unnamed'] = onLayout;
 		}, [testID, onLayout]);
 		return (
 			<div data-testid={testID} className={className}>
@@ -1077,6 +1077,46 @@ it('shrinks the shared keypad under a short measured pane and restores tile fit'
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
 	act(() => mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 900 } } }));
 	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+});
+
+// #3337: the foot is outside the measured pane, so the shrink sum is head + 4 gaps + 4 tiles
+// (200 + 4×8 + 4×64 = 488 at the regular step); a 60-high foot no longer counts.
+it('decides shrink without the commit foot', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	const pane = (height: number) =>
+		act(() => {
+			mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+			mockLayouts.unnamed?.({ nativeEvent: { layout: { height: 60 } } });
+			mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height } } });
+		});
+	pane(520);
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+	pane(480);
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+});
+
+// #3337: the pay button is pinned under the keypad's scroll area, never inside it.
+it.each([true, false])('keeps the commit outside the scrolling pane (phone=%s)', (phone) => {
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		entryAppliedMinor: 9295,
+		state: {
+			...initialTenderState,
+			view: 'amount' as const,
+			methodId: 'pos_cash',
+			entryMinor: 9295,
+		},
+	};
+	render(
+		<DeviceScope phone={phone}>
+			<TenderPane flow={flow} format={String} />
+		</DeviceScope>
+	);
+	const commit = screen.getByTestId('checkout-commit');
+	expect(screen.getByTestId('checkout-keypad-pane').contains(commit)).toBe(false);
+	fireEvent.click(commit);
+	expect(flow.takeTender).toHaveBeenCalledTimes(1);
 });
 
 // Fractional widths plus a gap must not wrap five methods into four columns.

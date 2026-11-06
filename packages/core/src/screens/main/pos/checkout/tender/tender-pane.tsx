@@ -176,9 +176,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
 	const [paneHeight, setPaneHeight] = React.useState(0);
 	const [headHeight, setHeadHeight] = React.useState(0);
-	const [footHeight, setFootHeight] = React.useState(0);
 	const gap = scale ? scale[0] * 2 : 0;
-	const fixedHeight = headHeight + footHeight + gap * KEYPAD_ROWS.length;
+	// The commit foot sits outside the measured pane, so only the head and the row gaps are fixed.
+	const fixedHeight = headHeight + gap * KEYPAD_ROWS.length;
 	const shrink =
 		!!scale && paneHeight > 0 && paneHeight < fixedHeight + KEYPAD_ROWS.length * scale[4];
 	const contentHeight = shrink
@@ -284,7 +284,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						: '')
 		: t('pos_checkout.choose_how_paying');
 
-	return (
+	// The scroll area holds everything but the commit; the foot is pinned under it (#3337).
+	const pane = (
 		<ScrollView
 			testID="checkout-keypad-pane"
 			className="bg-card flex-1"
@@ -571,8 +572,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
 				className="w-full"
 			/>
-			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
-			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
+		</ScrollView>
+	);
+
+	return (
+		<View className="bg-card flex-1 gap-2">
+			{pane}
+			{/* Outside the scroll area, so the keypad can never push it below the clip. On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
+			<View className="w-full">
 				<Button
 					variant="default"
 					size="lg"
@@ -596,7 +603,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</ButtonText>
 				</Button>
 			</View>
-		</ScrollView>
+		</View>
 	);
 }
 
