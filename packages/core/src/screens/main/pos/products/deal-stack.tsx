@@ -821,10 +821,12 @@ const DealWalkContext = React.createContext<SharedValue<number> | null>(null);
 
 /**
  * For the back badge on the tile in slot 0: its style. The badge belongs to the slot, not to
- * the tile that walks there, so it fades with the copy's walk over the reach a dealt tile fades
- * in over (`FADE_IN_BY`): it arrives with the parent and, going home, is gone before the parent
- * lands on the tile it left — which has no badge. Cut at the landing instead, it vanished in one
- * frame as the root took over (web film, 2026-11-06). Off the copy the badge is simply shown.
+ * the tile that walks there, so it has a dealt tile's own opacity against the copy's walk
+ * (`FADE_IN_BY`): out, it is whole by 80% of the walk; home, it is whole for the first 20% and
+ * reaches 0 as the parent lands on the tile it left — which has no badge. Cut at the landing
+ * instead, it vanished in one frame as the root took over (web film, 2026-11-06). One curve for
+ * both directions, as the tiles have: a walk reversed mid-flight keeps its opacity. Off the copy
+ * the badge is simply shown.
  */
 export function useDealBackStyle() {
 	const walk = React.useContext(DealWalkContext);

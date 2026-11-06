@@ -1365,9 +1365,9 @@ it('the parent’s cards leave as the first tiles land and come home with the la
 });
 
 // The badge vanished in one frame as the parent landed home and the root's tile (no badge)
-// took over (web film, 2026-11-06). It fades with the copy's walk instead, over the reach a
-// dealt tile fades in over, so it is gone before the landing and arrives with the parent.
-it('the parent’s back badge fades with its walk, gone before it lands home', () => {
+// took over (web film, 2026-11-06). It has a dealt tile's opacity against the copy's walk
+// instead: whole by 80% of the walk out, and home it reaches 0 as the parent lands.
+it('the parent’s back badge fades with its walk, reaching 0 as it lands home', () => {
 	const { rerender, unmount } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);
 	const back = () => backRef.current!();
@@ -1376,16 +1376,19 @@ it('the parent’s back badge fades with its walk, gone before it lands home', (
 	layOut();
 	// In slot 0 it is whole.
 	expect(back().opacity).toBe(1);
-	// Part way home it is fading, over the first 80% of the walk: only the parent's walk feeds
-	// it, so every clock standing at 1 (the walk among them) is wound back together.
+	// Part way along the walk it has a dealt tile's opacity, in either direction: only the
+	// parent's walk feeds it, so every clock standing at 1 (the walk among them) is wound
+	// together. At 0.7 of the walk it is fading; at 0.2 it still shows, and lands at 0.
 	const whole = mockShared.filter((shared) => shared.value === 1);
-	whole.forEach((shared) => {
-		shared.value = 0.7;
-	});
+	const wind = (to: number) =>
+		whole.forEach((shared) => {
+			shared.value = to;
+		});
+	wind(0.7);
 	expect(back().opacity).toBeCloseTo(0.7 / 0.8);
-	whole.forEach((shared) => {
-		shared.value = 1;
-	});
+	wind(0.2);
+	expect(back().opacity).toBeCloseTo(0.25);
+	wind(1);
 	rerender(<Stage detail={null} />);
 	expect(back().opacity).toBe(0);
 
