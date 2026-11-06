@@ -47,6 +47,6 @@
     "@wcpos/utils": "workspace:*",
     "rxdb": "17.6.0",
     "rxdb-premium": "17.6.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   }
 }
