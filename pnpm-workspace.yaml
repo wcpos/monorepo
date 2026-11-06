@@ -51,7 +51,7 @@ overrides:
   # resolver redirects every supported react-native-web component to uniwind/components/<name>,
   # and 1.11.0 listed InputAccessoryView without shipping it, so the web bundle died at
   # "Unable to resolve ./exports/InputAccessoryView". 1.12.2 ships it.
-  "uniwind": "1.12.2"
+  "uniwind": "1.13.1"
   "react": "19.3.0"
   "react-dom": "19.3.0"
   "react-native": "0.88.0"
@@ -78,7 +78,7 @@ overrides:
   "react-native-star-io10": "1.12.1"
   # jest-expo 57 pulls jest-environment-* 29 (nested jest-mock 29 lacks clearMocksOnScope);
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
-  "jest-environment-jsdom": "^30.4.1"
+  "jest-environment-jsdom": "^30.5.2"
   "jest-environment-node": "^30.4.1"
   # react-devtools-core resolves shell-quote in this workspace — keep the
   # patched release (GHSA-w7jw-789q-3m8p, critical, fixed 1.8.4). Floor then raised to
