@@ -58,7 +58,7 @@ on:
         type: boolean
         default: false
       # A fingerprint change rarely lands for both platforms' sakes; verifying
-      # an Android-only native change should cost $1, not $3. The cache key
+      # an Android-only native change should not pay for an iOS build too. The cache key
       # carries the selection so a single-platform build can never satisfy a
       # later `all` run from cache.
       platform:
@@ -357,7 +357,7 @@ jobs:
         run: |
           set -uo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "::error::No cached dev client for $CACHE_KEY ($PLATFORM). JS-only changes never need a build — Metro serves the checked-out JS — so a miss means the NATIVE fingerprint moved. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend (iOS \$2, Android \$1)."
+            echo "::error::No cached dev client for $CACHE_KEY ($PLATFORM). JS-only changes never need a build — Metro serves the checked-out JS — so a miss means the NATIVE fingerprint moved. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend (iOS \$2, Android at the large-worker rate)."
             exit 1
           fi
           if [ "$NATIVE_PLAN" != "rebuild" ]; then
