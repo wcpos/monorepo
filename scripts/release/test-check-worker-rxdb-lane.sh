@@ -54,6 +54,8 @@ expect_eq "the repo's root package.json pins rxdb" 1 "$(pinned_rxdb < "$SCRIPT_D
 # --- lane_of_version ---
 expect_eq "lane of 1.10.31" 1.10 "$(lane_of_version 1.10.31)"
 expect_status "lane of 1.10 fails closed" fail lane_of_version 1.10
+expect_eq "workers on a 2.x lane" $'sqlite.worker.js\nindexeddb.worker.js' "$(lane_workers 2.0)"
+expect_eq "workers on a 1.x lane" $'opfs.worker.js\nindexeddb.worker.js' "$(lane_workers 1.11)"
 expect_status "lane of 1.11.0-beta.1 fails closed" fail lane_of_version 1.11.0-beta.1
 
 # --- tag arithmetic ---
@@ -95,6 +97,8 @@ bundle() {
 bundle tag-v1.10.40 opfs.worker.js=17.4.0 indexeddb.worker.js=16.21.1
 bundle tag-v1.11.1 opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 bundle tag-v2.0.3 sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+bundle tag-v2.0.9 opfs.worker.js=17.6.0 sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+bundle tag-v1.11.2 opfs.worker.js=17.6.0 sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 bundle b-110-incident opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 bundle b-110-same opfs.worker.js=17.4.0 indexeddb.worker.js=16.21.1
 bundle b-111 opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
@@ -109,6 +113,8 @@ run() { env PATH="$tmpdir:$PATH" MOCK_DIR="$tmpdir" "$@"; }
 lane110=$'v1.10.39\nv1.10.40'
 both=$'v1.10.40\nv1.11.0\nv1.11.1'
 lane20=$'v1.10.40\nv1.11.1\nv2.0.2\nv2.0.3'
+lane20stray=$'v1.11.1\nv2.0.3\nv2.0.9'
+lane111stray=$'v1.11.1\nv1.11.2\nv2.0.3'
 
 # The 2026-10-14 incident: a 17.6.0 OPFS worker onto the 17.4.0 lane.
 expect_status "17.6.0 worker on a 17.4.0 lane fails" fail run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/b-110-incident" 1.10.31 --allow-frozen-lane
@@ -136,6 +142,14 @@ expect_eq "naming the dropped worker" 1 "$(grep -c 'indexeddb.worker.js is in v2
 expect_status "a worker the bundle added on a tagged lane fails" fail run MOCK_TAGS="$lane20" "$CHECK" "$tmpdir/b-20-opfs-added" 2.0.4
 expect_eq "naming the added worker" 1 "$(grep -c 'opfs.worker.js is in this bundle but not in v2.0.3' "$tmpdir/out")"
 expect_status "a failed listing of the tag's build/ fails closed" fail run MOCK_TAGS="$lane20" MOCK_LIST_FAIL=1 "$CHECK" "$tmpdir/b-20-same" 2.0.4
+
+# 2026-11-06: the 1.11.10 train published to web-bundle's shared main branch, the
+# 2.0 publish retained its opfs.worker.js, and v2.0.9 carried it. Another lane's
+# worker at the tag is not one this lane's plugins vendor.
+expect_status "2.x: a 1.x worker the tag carries from a shared-branch publish is ignored" pass run MOCK_TAGS="$lane20stray" "$CHECK" "$tmpdir/b-20-same" 2.0.10
+expect_eq "and says so" 1 "$(grep -c 'opfs.worker.js is in v2.0.9 but no plugin on lane 2.0 vendors it' "$tmpdir/out")"
+expect_eq "while both lane workers are still compared" 2 "$(grep -c 'matches v2.0.9 on lane 2.0' "$tmpdir/out")"
+expect_status "1.x: a 2.x worker the tag carries is ignored" pass run MOCK_TAGS="$lane111stray" "$CHECK" "$tmpdir/b-111" 1.11.3 --allow-frozen-lane
 
 expect_status "no vendored worker fails closed" fail run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/b-empty" 1.10.31
 expect_status "no vendored worker passes with --worker-optional" pass run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/b-empty" 1.10.31 --worker-optional
