@@ -372,7 +372,7 @@ function matchingSelectors$(
 }
 
 function emptyResult(): QueryResult<RxCollection> {
-	return { count: 0, hits: [] };
+	return { count: 0, hits: [], unbound: true };
 }
 
 /**
@@ -382,7 +382,7 @@ function emptyResult(): QueryResult<RxCollection> {
  * 'pending'` for the empty state to distinguish.
  */
 function pendingSearchResult(): QueryResult<RxCollection> {
-	return { count: 0, hits: [], searchState: 'pending' };
+	return { count: 0, hits: [], searchState: 'pending', unbound: true };
 }
 
 /** Direct reactive read against the current engine database through the adapter execute path. */
