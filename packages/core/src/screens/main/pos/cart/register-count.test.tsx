@@ -560,22 +560,39 @@ describe('#2016: a refused close', () => {
 		};
 	};
 	it.each(['closed', 'counting'])(
-		'at %s shows the band with the count kept, and Retry sends the same close',
+		'at %s shows the band with the count kept and no Retry; the footer is the retry',
 		async (status) => {
 			refused(status);
 			render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
-			expect(screen.getByTestId('register-panel-refused-close').textContent).toContain(
-				'The store refused this close. Your count is kept.'
-			);
+			const band = screen.getByTestId('register-panel-refused-close').textContent;
+			expect(band).toContain('The store refused this close. Your count is kept.');
+			expect(band).toContain('Sales are blocked while this register is being counted');
+			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
 			expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.00');
-			await act(async () => fireEvent.click(screen.getByTestId('register-panel-retry-close')));
-			expect(closeSession).toHaveBeenCalledWith({
-				counted: { cash: '40.00' },
-				note: 'Short a note',
-				denominations: [{ value: '20', pieces: 2 }],
-			});
+			expect(screen.getByTestId('count-close').textContent).toBe('Retry');
+			await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+			expect(closeSession).toHaveBeenCalledWith(
+				expect.objectContaining({ counted: { cash: '40.00' }, note: 'Short a note' })
+			);
 		}
 	);
+	it('asks for the manager before a retry over the threshold', async () => {
+		refused('counting');
+		varianceThreshold = '5';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByTestId('count-close').textContent).toBe('Approve & close');
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+	it('back from a refused close already at open does not abandon it again', async () => {
+		refused('open');
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+		expect(backToSelling).not.toHaveBeenCalled();
+	});
 	it('shows no band at a count the store has not refused', () => {
 		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
@@ -618,7 +635,7 @@ describe('#2016: a refused close', () => {
 		rerender(pane());
 		expect(shown()).toEqual({ amount: '12.00', note: '', twenties: '0' });
 	});
-	it('Close & print sends the count as edited from the kept one', async () => {
+	it('Retry sends the count as edited from the kept one', async () => {
 		refused('counting');
 		render(pane());
 		enter('41.50');

@@ -211,14 +211,8 @@ export function RegisterCount({
 			contentContainerClassName="gap-4 px-4 py-5"
 			keyboardShouldPersistTaps="handled"
 		>
-			{refusedClose && session && (
-				<RefusedCloseNotice
-					session={session}
-					closure={lastClosure}
-					closeSession={actions.closeSession}
-					attempt={attempt}
-				/>
-			)}
+			{/* The footer is this pane's Retry: it sends the count as edited here. */}
+			{refusedClose && session && <RefusedCloseNotice session={session} />}
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
@@ -402,8 +396,10 @@ export function RegisterCount({
 					onPress={() =>
 						attempt(async () => {
 							// A closed session awaiting its closure write is not one to reopen; a close the
-							// store refused is (#2016): back to selling is its abandon, the count kept.
-							if (session?.status === 'counting' || refusedClose) await actions.backToSelling();
+							// store refused is (#2016): back to selling is its abandon, the count kept. One
+							// already back at open needs no second abandon.
+							if (session?.status === 'counting' || (refusedClose && session?.status !== 'open'))
+								await actions.backToSelling();
 							onBack();
 						})
 					}
@@ -420,7 +416,11 @@ export function RegisterCount({
 			<DialogFooter
 				size="lg"
 				intent={{
-					label: needsManager ? t('register.approve_and_close') : t('register.close_and_print'),
+					label: needsManager
+						? t('register.approve_and_close')
+						: refusedClose
+							? t('register.retry')
+							: t('register.close_and_print'),
 					testID: 'count-close',
 					loading: busy,
 					disabled:

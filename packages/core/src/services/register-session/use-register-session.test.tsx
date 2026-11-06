@@ -2193,7 +2193,18 @@ describe('#2016: a refused close', () => {
 		expect(result.current.countingElsewhere).toBe(false);
 	});
 	it.each([
-		['once abandoned (open)', { status: 'open' }, 'pending'],
+		['abandoned', { status: 'open', sync_status: 'pending', pending_status: 'open' }],
+		['refused at open', { status: 'open', sync_status: 'failed' }],
+	])('reads a session %s with an unaccepted closure as a refused close', async (_, patch) => {
+		active = [reopened(patch)];
+		closureRows = [closure('pending')];
+		const result = await current();
+		expect(result.current.session?.id).toBe(session.id);
+		expect(result.current.refusedClose).toBe(true);
+	});
+	it.each([
+		['at open with an accepted closure', { status: 'open' }, 'synced'],
+		['at open for a refused override', { status: 'open', approval_required: true }, 'pending'],
 		['for a refused override', { approval_required: true }, 'pending'],
 		['once the store closed it', { server_status: 'closed' }, 'pending'],
 		['with an accepted closure', {}, 'synced'],
@@ -2205,35 +2216,62 @@ describe('#2016: a refused close', () => {
 		expect(result.current.session?.id).toBe(session.id);
 		expect(result.current.refusedClose).toBe(false);
 	});
-	it('retries a refused close through the outbox, not a second close', async () => {
-		active = [];
-		closed = [refused()];
+	/** The store's closeSession on a session with an unaccepted closure: closed, and held. */
+	const holdOnClose = (row: Row) =>
+		jest.mocked(actions.closeSession).mockImplementationOnce(async (_db, _id, input) => {
+			Object.assign(row, { status: 'closed', sync_status: 'failed', counted: input.counted });
+			return row as never;
+		});
+	// Revert the action to requeue first: the close goes out before the closure is rewritten.
+	it.each([
+		['a refused close', () => ((closed = [refused()]), (active = []), closed[0]), 'pending'],
+		['a counting row after a refresh', () => ((active = [reopened()]), active[0]), 'failed'],
+		['a counting row the store reopened', () => ((active = [reopened()]), active[0]), 'pending'],
+	])(
+		'retries %s by closing again, rewriting the closure, then requeueing',
+		async (_, shape, cs) => {
+			const row = shape();
+			closureRows = [closure(cs)];
+			holdOnClose(row);
+			jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
+			const result = await current();
+			await act(() => result.current.actions.closeSession({ counted: { cash: '110' } }));
+			expect(actions.closeSession).toHaveBeenCalledWith(
+				mockStoreSession.storeDB,
+				session.id,
+				expect.objectContaining({ counted: { cash: '110' } })
+			);
+			expect(row.counted).toEqual({ cash: '110' });
+			expect(actions.writeClosure).toHaveBeenCalledWith(
+				expect.objectContaining({ revise: true, counted: '110' })
+			);
+			expect(actions.requeueClose).toHaveBeenCalledWith(mockStoreSession.storeDB, session.id);
+			expect(jest.mocked(actions.writeClosure).mock.invocationCallOrder[0]).toBeLessThan(
+				jest.mocked(actions.requeueClose).mock.invocationCallOrder[0]
+			);
+		}
+	);
+	it('leaves the close held when the closure write fails', async () => {
+		const row = reopened();
+		active = [row];
 		closureRows = [closure('pending')];
-		const requeued = { ...refused(), sync_status: 'pending', pending_status: 'closed' };
-		jest.mocked(actions.requeueClose).mockResolvedValueOnce(requeued as never);
-		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
+		holdOnClose(row);
+		jest.mocked(actions.writeClosure).mockRejectedValueOnce(new Error('disk write'));
 		const result = await current();
-		await act(() => result.current.actions.closeSession({ counted: { cash: '105' } }));
-		expect(actions.requeueClose).toHaveBeenCalledWith(mockStoreSession.storeDB, session.id);
-		expect(actions.closeSession).not.toHaveBeenCalled();
-		expect(actions.writeClosure).toHaveBeenCalledWith(
-			expect.objectContaining({ session: requeued })
-		);
+		await expect(
+			act(() => result.current.actions.closeSession({ counted: { cash: '110' } }))
+		).rejects.toThrow('disk write');
+		expect(actions.requeueClose).not.toHaveBeenCalled();
+		expect(row.sync_status).toBe('failed');
 	});
-	it('retries a reopened refused close with the same close', async () => {
-		active = [reopened()];
-		closureRows = [closure('pending')];
+	it('does not requeue a first close', async () => {
 		jest
 			.mocked(actions.closeSession)
-			.mockResolvedValueOnce({ ...reopened(), status: 'closed' } as never);
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
 		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
-		const result = await current();
+		const result = await settled();
 		await act(() => result.current.actions.closeSession({ counted: { cash: '105' } }));
-		expect(actions.closeSession).toHaveBeenCalledWith(
-			mockStoreSession.storeDB,
-			session.id,
-			expect.objectContaining({ counted: { cash: '105' } })
-		);
+		expect(actions.writeClosure).toHaveBeenCalledWith(expect.objectContaining({ revise: true }));
 		expect(actions.requeueClose).not.toHaveBeenCalled();
 	});
 	it.each(['open', 'counting'])(

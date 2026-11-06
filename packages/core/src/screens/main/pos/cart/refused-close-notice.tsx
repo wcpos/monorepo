@@ -35,35 +35,42 @@ export function keptCount(
 	};
 }
 
-/** The store refused this till's close: the count is kept, and Retry sends the same close. */
+/**
+ * The store refused this till's close (#2016): the count is kept. Retry opens the count, so
+ * it is only offered where that is the way back; sales stay blocked until the store accepts.
+ */
 export function RefusedCloseNotice({
 	session,
-	closure,
-	closeSession,
-	attempt,
+	onRetry,
 	className,
 }: {
-	session: Parameters<typeof keptCount>[0];
-	closure: Parameters<typeof keptCount>[1];
-	closeSession: (input: CloseInput) => Promise<unknown>;
-	/** The pane's own error surface, so a failed retry reads as any failed action there. */
-	attempt: (action: () => Promise<unknown>) => Promise<unknown>;
+	session: {
+		status: string;
+		sync_status?: string;
+		pending_status?: string | null;
+		server_status?: string | null;
+	};
+	onRetry?: () => void;
 	className?: string;
 }) {
 	const t = useT();
+	// The last clause mirrors the sale refusal in findOpenSession.
+	const blocked =
+		session.status !== 'open' ||
+		session.sync_status === 'failed' ||
+		(session.pending_status === 'open' && session.server_status === 'counting');
 	return (
 		<Notice
 			tone="bad"
 			testID="register-panel-refused-close"
 			className={className}
 			title={t('register.close_refused')}
-			actions={[
-				{
-					label: t('register.retry'),
-					testID: 'register-panel-retry-close',
-					onPress: () => void attempt(() => closeSession(keptCount(session, closure))),
-				},
-			]}
+			description={blocked ? t('register.close_refused_wait') : undefined}
+			actions={
+				onRetry
+					? [{ label: t('register.retry'), testID: 'register-panel-retry-close', onPress: onRetry }]
+					: undefined
+			}
 			docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('REGISTER211') }}
 		/>
 	);

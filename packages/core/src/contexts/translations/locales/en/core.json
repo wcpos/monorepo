@@ -2965,6 +2965,7 @@
 	"register.refused_row": "Refused",
 	"register.retry": "Retry",
 	"register.close_refused": "The store refused this close. Your count is kept.",
+	"register.close_refused_wait": "Sales are blocked while this register is being counted; ask a manager to restore permission to close, then Retry.",
 	"register.closure_blind_restricted": "Closure details are restricted while blind counting is on",
 	"register.closure_n_written": "Closure {n} written",
 	"register.counting_the_drawer": "Counting the drawer",

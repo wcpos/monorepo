@@ -248,13 +248,14 @@ export function useRegisterSession() {
 	usePastCloseClock(closeTime, openedAt, timezone);
 	/**
 	 * The store refused this till's close (#2016): the close came back `failed` and no refresh
-	 * has reached the store (a), or the store's row reopened it at counting with this till's
-	 * closure still unaccepted (b). A refused override is `approval_required`, not this.
+	 * has reached the store (a), or the session is at counting or open with this till's closure
+	 * still unaccepted (b): the store's row reopened it at counting, or the cashier went back to
+	 * selling, refused or not. A refused override is `approval_required`, not this.
 	 */
 	const refusedClose =
 		!!session &&
 		((session.status === 'closed' && session.sync_status === 'failed') ||
-			(session.status === 'counting' &&
+			(['counting', 'open'].includes(session.status) &&
 				!session.approval_required &&
 				session.server_status !== 'closed' &&
 				unacceptedClosure(session.id)));
@@ -508,11 +509,11 @@ export function useRegisterSession() {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register_figures_pending');
+				// A retry of a refused close (#3304) closes again, so a corrected count reaches the
+				// status POST; closeSession holds it out of the outbox until the closure below is rewritten.
 				const closed =
-					session!.status === 'closed'
-						? session!.sync_status === 'failed'
-							? await requeueClose(storeDB, session!.id)
-							: session!
+					session!.status === 'closed' && session!.sync_status !== 'failed'
+						? session!
 						: await closeSession(storeDB, session!.id, {
 								...input,
 								closedBy: wpCredentials.id,
@@ -611,7 +612,10 @@ export function useRegisterSession() {
 					movements: entries,
 					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
 					refundRecords,
+					revise: true,
 				});
+				// The closure now matches this close: let the outbox send both.
+				if (session!.getLatest().sync_status === 'failed') await requeueClose(storeDB, session!.id);
 				await recordLiveSession(userDB, site.uuid!, closed.register_id, null);
 				recordRegisterFact({
 					kind: 'session-closed',

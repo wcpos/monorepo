@@ -97,6 +97,16 @@ export function RegisterPanel({
 		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
+	// A refusal that lands after the local write leaves the written pane (#2016). It is the
+	// change that counts: a retry's write can finish while the last refusal still reads true.
+	const [wasRefused, setWasRefused] = React.useState(refusedClose);
+	if (refusedClose !== wasRefused) {
+		setWasRefused(refusedClose);
+		if (refusedClose && pane === 'written') {
+			setPane(landing);
+			setWritten(null);
+		}
+	}
 	const [countBusy, setCountBusy] = React.useState(false);
 	const { format } = useCurrencyFormat();
 	const { print, doc } = useSessionReport();
@@ -303,9 +313,12 @@ export function RegisterPanel({
 					<RefusedCloseNotice
 						className="mx-4"
 						session={session}
-						closure={lastClosure}
-						closeSession={actions.closeSession}
-						attempt={attempt}
+						onRetry={() =>
+							void attempt(async () => {
+								if (session.status === 'open') await actions.startCounting();
+								setPane('count');
+							})
+						}
 					/>
 				)}
 				{refused.length > 0 && (

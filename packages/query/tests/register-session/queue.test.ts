@@ -1709,35 +1709,92 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		});
 		return refused;
 	}
-	const rewrite = (session: Awaited<ReturnType<typeof closeSession>>) =>
-		writeClosure({
+	/** The hook's Retry (#3304): close again, held; rewrite the closure; then requeue the close. */
+	async function retry(id: string, counted = '100') {
+		const closed = await closeSession(db, id, { counted: { cash: counted } });
+		expect(closed.sync_status).toBe('failed');
+		const written = await writeClosure({
 			storeDB: db,
 			userDB,
 			siteUuid: 'site',
-			session: session.toJSON(true),
-			counted: '100',
+			session: closed.toJSON(true),
+			counted,
 			otherTenders: {},
-			movements: [],
+			movements: await db.cash_movements.find().exec(),
 			orders: [],
+			revise: true,
 		});
+		await requeueClose(db, id);
+		return written;
+	}
 	const retried = { status: 'closed', pending_status: 'closed', sync_status: 'pending' };
-
-	it('Retry on a refused close requeues the same close with one closure row', async () => {
-		const { session, row, before } = await refusedClose();
-		const written = await rewrite(await requeueClose(db, session.id));
-		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
-		expect(written.id).toBe(session.id);
-		expect(await db.closures.count().exec()).toBe(1);
-		expect(row.getLatest().toJSON()).toEqual(before);
+	/** One closure row, under its number, rewritten for this close and back in the outbox. */
+	const rewritten = (
+		before: { id: string; number: number },
+		closedAt: string | null | undefined
+	) => ({
+		id: before.id,
+		number: before.number,
+		closed_at: closedAt,
+		counted: { cash: '100' },
+		sync_status: 'pending',
 	});
-	it('Retry on a reopened refused close closes it again and leaves the closure row alone', async () => {
-		const { session, row, before } = await reopenedClose();
-		const closed = await closeSession(db, session.id, { counted: session.getLatest().counted! });
-		const written = await rewrite(closed);
+
+	it('Retry on a refused close rewrites the same closure row and requeues the close', async () => {
+		const { session, row, before } = await refusedClose();
+		const written = await retry(session.id);
 		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
 		expect(written.id).toBe(session.id);
 		expect(await db.closures.count().exec()).toBe(1);
-		expect(row.getLatest().toJSON()).toEqual(before);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
+	});
+	it('Retry on a reopened refused close closes it again and rewrites the same closure row', async () => {
+		const { session, row, before } = await reopenedClose();
+		const written = await retry(session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
+		expect(written.id).toBe(session.id);
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
+	});
+	// Revert closeSession's hold or writeClosure's revise: the old closure goes to the store.
+	it('a held retry sends nothing; once rewritten and requeued it sends the new figures', async () => {
+		const { session } = await refusedClose();
+		const paidIn = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await paidIn.incrementalPatch({ sync_status: 'synced' });
+		await closeSession(db, session.id, { counted: { cash: '120' } });
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		await session.getLatest().incrementalPatch({ server_status: 'counting' });
+		const written = await retry(session.id, '120');
+		const server: Record<string, unknown> = serverListRow(session.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data: url === 'closures' ? { ...written.toJSON(), ...body } : { ...server, status: 'closed' },
+		}));
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'closed', counted: { cash: '120' } })
+		);
+		expect(http.post).toHaveBeenCalledWith(
+			'closures',
+			expect.objectContaining({
+				id: session.id,
+				counted: { cash: '120' },
+				till_expected: { cash: '130.0000' },
+			})
+		);
+		expect(written.getLatest().sync_status).toBe('synced');
 	});
 	it.each([
 		['a refused close', refusedClose],
@@ -1776,11 +1833,12 @@ describe('#2016: retry and abandon keep the closure row', () => {
 				closure_id: null,
 			}) as never
 		);
-		const closed = await closeSession(db, session.id, { counted: { cash: '100' } });
-		const written = await rewrite(closed);
+		const written = await retry(session.id);
 		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
 		expect(written.id).toBe(session.id);
 		expect(await db.closures.count().exec()).toBe(1);
-		expect(row.getLatest().toJSON()).toEqual(before);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
 	});
 });

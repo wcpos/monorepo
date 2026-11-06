@@ -82,8 +82,11 @@ function CartColumn({
 	// This device's own count, or a close awaiting its closure write (kept for recovery), asks for
 	// the count pane once; only the focused bar opens it (the phone mounts both tabs; Codex, #3073).
 	// A close the store refused (#2016) is this till's count too: its count mark went with the close.
-	const recovering = session?.status === 'closed' || refusedClose;
+	// One back at open keeps selling: the panel's band offers the retry, nothing is forced.
+	const recovering = session?.status === 'closed' || (refusedClose && session?.status !== 'open');
 	React.useEffect(() => {
+		// A refusal can bring back a session the till already let go: ask for its count again.
+		if (!session) reopened.current = undefined;
 		if (!session || reopened.current === session.id) return;
 		if (!(session.status === 'counting' && countingHere) && !recovering) return;
 		reopened.current = session.id;
