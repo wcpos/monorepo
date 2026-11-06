@@ -44,6 +44,8 @@ export function useCustomerDisplayService(): void {
 		taxDisplayCart: value.tax_display_cart,
 		pricesIncludeTax: value.prices_include_tax,
 		receiptI18n: value.receipt_i18n,
+		// Pro advertises the resolved logo URL on the store; the schema types only contract/signaling.
+		logo: (value.display as { logo?: unknown } | undefined)?.logo,
 	}));
 	const hasDisplay = Boolean(fields?.display);
 	const displayContract = fields?.display?.contract;
@@ -58,6 +60,7 @@ export function useCustomerDisplayService(): void {
 				currency: fields?.currency ?? '',
 				locale,
 				...(fields?.timezone ? { timezone: fields.timezone } : {}),
+				...(typeof fields?.logo === 'string' && fields.logo ? { logo: fields.logo } : {}),
 			},
 			presentation_hints: {
 				display_tax: fields?.taxDisplayCart === 'incl' ? 'incl' : 'excl',

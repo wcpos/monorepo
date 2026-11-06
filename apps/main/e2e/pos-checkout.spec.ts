@@ -1,6 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { becomesVisible, getStoreUrl, openOrderSheet, tryAddProductBySku } from './fixtures';
+import {
+	becomesVisible,
+	getStoreUrl,
+	getStoreVariant,
+	navigateToPage,
+	openOrderSheet,
+	tryAddProductBySku,
+} from './fixtures';
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	gatewaysResponse,
@@ -452,6 +459,126 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// Replacing checkout stacked another POS screen, making one scan add N units.
 			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
 			await expect(page.getByTestId('search-products')).toHaveCount(1);
+		}
+	);
+
+	liveTest(
+		're-opening an order from Orders leaves exactly one POS screen',
+		async ({ posPage: page, trackOrder }, testInfo) => {
+			// The Orders page is Pro-only; free draws the upgrade overlay over the rows.
+			liveTest.skip(getStoreVariant(testInfo) !== 'pro', 'Orders page requires Pro');
+			liveTest.slow();
+			const label = newRunLabel();
+			await addTestProductToCart(page);
+			await stampRunLabel(page, label);
+			const { uuid, surface } = await openCheckout(page, {
+				onOrderCreated: (order) => trackOrder({ ...order, label }),
+			});
+			await checkoutControl(page, surface, 'close').click();
+			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+
+			// Re-open from the Orders page: a push from another drawer page used to land a second till.
+			await navigateToPage(page, 'orders');
+			const row = page.getByTestId(`data-table-row-${uuid}`);
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.getByTestId('order-open-button').click();
+			await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+			await page.getByTestId('order-modal-reopen').click();
+			await expect(page.getByTestId('screen-pos').filter({ visible: true }).first()).toBeVisible({
+				timeout: 30_000,
+			});
+
+			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
+			await expect(page.getByTestId('search-products')).toHaveCount(1);
+		}
+	);
+
+	liveTest(
+		'prints after checkout with the receipt hidden',
+		async ({ posPage: page, trackOrder }) => {
+			liveTest.slow();
+
+			// The system dialog cannot be driven, so the hidden print frame's print() is counted
+			// instead, and answered with the afterprint a closed dialog sends.
+			await page.addInitScript(() => {
+				const counter = window as unknown as { __wcposPrintCalls: number };
+				counter.__wcposPrintCalls = 0;
+				new MutationObserver(() => {
+					const frame = document.getElementById('wcpos-print-frame') as HTMLIFrameElement | null;
+					const win = frame?.contentWindow as (Window & { __stubbed?: boolean }) | null;
+					if (!win || win.__stubbed) return;
+					win.__stubbed = true;
+					win.print = () => {
+						counter.__wcposPrintCalls += 1;
+						setTimeout(() => win.dispatchEvent(new Event('afterprint')), 0);
+					};
+				}).observe(document, { childList: true, subtree: true });
+			});
+			// The print reads the receipt page by `fetch`, same-origin in production but refused here
+			// (PRINT101, "Failed to fetch"): forward it with CORS, as checkout-tender.spec.ts does.
+			const receiptPage = (url: URL) => url.pathname.includes('/wcpos-receipt/');
+			await page.route(receiptPage, async (route) => {
+				const response = await route.fetch();
+				const headers = { ...response.headers(), 'access-control-allow-origin': '*' };
+				await route.fulfill({ response, headers });
+			});
+			// One trip into the panel: the first read is kept before anything changes, for `finally`.
+			// Bounded: the config sets no actionTimeout, and this also runs from a `finally`.
+			let before: { show: boolean; print: boolean } | undefined;
+			const setReceiptSwitches = async (show: boolean, print: boolean) => {
+				const settings = page.getByTestId('cart-settings-button').filter({ visible: true });
+				await settings.click({ timeout: 15_000 });
+				const read = (testID: string) => isSwitchEnabled(page.getByTestId(testID).first());
+				const showToggle = page.getByTestId('cart-setting-auto-show-receipt').first();
+				await expect(showToggle).toBeVisible({ timeout: 15_000 });
+				const state = {
+					show: await read('cart-setting-auto-show-receipt'),
+					print: await read('cart-setting-auto-print-receipt'),
+				};
+				before ??= state;
+				for (const [testID, on] of [
+					['cart-setting-auto-show-receipt', show],
+					['cart-setting-auto-print-receipt', print],
+				] as const) {
+					const toggle = page.getByTestId(testID).first();
+					if ((await isSwitchEnabled(toggle)) !== on) await toggle.click({ timeout: 15_000 });
+					await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(on);
+				}
+				await page.keyboard.press('Escape');
+				await expect(showToggle).toBeHidden({ timeout: 10_000 });
+				return state;
+			};
+
+			try {
+				await setReceiptSwitches(false, true);
+				await page.reload();
+				await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
+
+				const label = newRunLabel();
+				await addTestProductToCart(page);
+				await stampRunLabel(page, label);
+				await openCheckout(page, {
+					onOrderCreated: (order) => trackOrder({ ...order, label }),
+				});
+				await processPayment(page);
+
+				const printCalls = () =>
+					page.evaluate(
+						() => (window as unknown as { __wcposPrintCalls: number }).__wcposPrintCalls
+					);
+				await expect.poll(printCalls, { timeout: 60_000 }).toBe(1);
+				await expect(page.getByTestId('checkout-paid')).toHaveCount(0);
+				await expect(page.getByTestId('receipt-paid-banner')).toHaveCount(0);
+				await expect(page.getByTestId('cart-empty').filter({ visible: true })).toHaveCount(1, {
+					timeout: 30_000,
+				});
+				// One sale, one print: nothing prints it a second time once the frame has gone.
+				await page.waitForTimeout(3_000);
+				expect(await printCalls()).toBe(1);
+			} finally {
+				if (before) await setReceiptSwitches(before.show, before.print);
+				await page.unroute(receiptPage);
+			}
 		}
 	);
 

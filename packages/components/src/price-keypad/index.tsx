@@ -68,6 +68,8 @@ export type PriceKeypadProps = {
 	invalid?: boolean;
 	/** Told when the keypad opens and closes. */
 	onOpenChange?: (open: boolean) => void;
+	/** The gallery's: the panel laid out in place, inside the cell's scale scope (`GrowKeypad`). */
+	inline?: boolean;
 	ref?: React.Ref<PriceKeypadHandle>;
 };
 
@@ -100,6 +102,7 @@ export function PriceKeypad({
 	describedBy,
 	invalid,
 	onOpenChange,
+	inline,
 	ref,
 }: PriceKeypadProps) {
 	const shell = React.useRef<GrowKeypadHandle>(null);
@@ -170,6 +173,7 @@ export function PriceKeypad({
 			align="end"
 			animation={ANIMATION}
 			disabled={disabled}
+			inline={inline}
 			decimalSeparator={decimalSeparator}
 			onPress={press}
 			onOpen={() => dispatch({ type: 'reset' })}

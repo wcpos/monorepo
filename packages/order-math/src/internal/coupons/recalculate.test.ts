@@ -1394,3 +1394,71 @@ it.each([false, true])('catalog tax status applies only without POS data (POS=%s
 	expect(Number(result.lineItems[0].total_tax)).toBe(pos ? 0.9 : 0);
 	expect(Number(result.couponLines[0].discount_tax)).toBe(pos ? 0.1 : 0);
 });
+
+describe('#2593 stacked coupons on a prices-include-tax line', () => {
+	// Every expected value here was read from WooCommerce 11.3 (prices include tax, tax
+	// rounded per line, one rate): an order of these lines, $order->apply_coupon() per
+	// code, then each item's get_total()/get_total_tax() and each coupon line's
+	// get_discount()/get_discount_tax().
+	const run = (lines: LineItem[], coupons: string[], percent = '10', sequential = false) =>
+		recalculateCoupons(
+			makeInput({
+				lineItems: lines,
+				couponLines: coupons.map((code) => makeCouponLine(code)),
+				couponConfigs: new Map(
+					coupons.map((code) => {
+						const [type, amount] = code.split(' ');
+						return [code, makeConfig({ discount_type: type as 'percent', amount })];
+					})
+				),
+				pricesIncludeTax: true,
+				calcDiscountsSequentially: sequential,
+				taxRates: [{ id: 1, rate: percent, compound: false, order: 1, class: 'standard' }],
+			})
+		);
+	const lineAmounts = (result: RecalculateResult) =>
+		result.lineItems.flatMap(({ total, total_tax }) => [total, total_tax]);
+	const couponAmounts = (result: RecalculateResult) =>
+		result.couponLines.flatMap(({ discount, discount_tax }) => [discount, discount_tax]);
+	const stacked = ['percent 10', 'fixed_product 0.37'];
+
+	it.each([
+		[10.19, '10', stacked, '0.8', ['0.93', '0.09', '0.34', '0.03']],
+		[11.74, '10', ['percent 5', 'percent 20'], '0.8', ['0.54', '0.05', '2.14', '0.21']],
+		[11.2, '20', ['percent 5', 'fixed_product 1.04'], '1.6', ['0.47', '0.09', '0.87', '0.17']],
+	] as [number, string, string[], string, string[]][])(
+		'takes the tax out of the summed discount once: %s at %s%% is 8, not 7.999999',
+		(price, percent, coupons, tax, amounts) => {
+			const result = run([makePosLineItem(1, price, price)], coupons, percent);
+			expect(result.lineItems[0].total).toBe('8');
+			expect(result.lineItems[0].total_tax).toBe(tax);
+			expect(couponAmounts(result)).toEqual(amounts);
+		}
+	);
+
+	it('a non-taxable line takes its stacked discount whole', () => {
+		const lines = [makePosLineItem(1, 10.19, 10.19), makePosLineItem(2, 5, 5, 1, 'none')];
+		const result = run(lines, stacked);
+		expect(lineAmounts(result)).toEqual(['8', '0.8', '4.13', '0']);
+		expect(couponAmounts(result)).toEqual(['1.43', '0.09', '0.71', '0.03']);
+	});
+
+	it('two lines of one product each keep their own discount', () => {
+		const lines = [makePosLineItem(1, 10.19, 10.19), makePosLineItem(1, 10.19, 10.19, 2)];
+		const result = run(lines, stacked);
+		expect(lineAmounts(result)).toEqual(['8', '0.8', '16', '1.6']);
+		expect(couponAmounts(result)).toEqual(['2.78', '0.28', '1.01', '0.1']);
+	});
+
+	it('sequential mode lands on the same 8', () => {
+		const result = run([makePosLineItem(1, 10.19, 10.19)], stacked, '10', true);
+		expect(lineAmounts(result)).toEqual(['8', '0.8']);
+		expect(couponAmounts(result)).toEqual(['0.93', '0.09', '0.34', '0.03']);
+	});
+
+	it('one coupon is unchanged', () => {
+		const result = run([makePosLineItem(1, 10.19, 10.19)], ['percent 10']);
+		expect(lineAmounts(result)).toEqual(['8.336363', '0.83']);
+		expect(couponAmounts(result)).toEqual(['0.93', '0.09']);
+	});
+});

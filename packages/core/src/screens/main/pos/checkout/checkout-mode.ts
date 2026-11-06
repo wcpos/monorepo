@@ -57,6 +57,9 @@ export function claimReceiptAutoPrint(uuid: string) {
 	receiptPrintAttempts.add(uuid);
 	return true;
 }
+export function isReceiptAutoPrintClaimed(uuid: string): boolean {
+	return receiptPrintAttempts.has(uuid);
+}
 
 const listeners = new Set<() => void>();
 const publish = (next: CheckoutModeSnapshot) => {
@@ -203,9 +206,45 @@ export function selectReceipt(uuid: string | null) {
 	if (snapshot.selectedReceiptOrder === uuid) return;
 	publish({ ...snapshot, selectedReceiptOrder: uuid });
 }
+/**
+ * Sales whose receipt prints with nothing on screen (show off, or a routed receipt modal, which
+ * cannot print). A sale is queued once per session: its entry leaves when the print settles, and
+ * neither a finished tab nor a second completion can bring it back for a second print.
+ */
+let headlessPrints: ReadonlySet<string> = new Set();
+const headlessPrintsQueued = new Set<string>();
+const headlessListeners = new Set<() => void>();
+function publishHeadlessPrints(next: ReadonlySet<string>) {
+	headlessPrints = next;
+	headlessListeners.forEach((listener) => listener());
+}
+export function queueHeadlessPrint(uuid: string) {
+	if (headlessPrintsQueued.has(uuid)) return;
+	headlessPrintsQueued.add(uuid);
+	publishHeadlessPrints(new Set([...headlessPrints, uuid]));
+}
+export function settleHeadlessPrint(uuid: string) {
+	if (!headlessPrints.has(uuid)) return;
+	const next = new Set(headlessPrints);
+	next.delete(uuid);
+	publishHeadlessPrints(next);
+}
+function subscribeHeadlessPrints(listener: () => void) {
+	headlessListeners.add(listener);
+	return () => {
+		headlessListeners.delete(listener);
+	};
+}
+const getHeadlessPrints = () => headlessPrints;
+export function useHeadlessPrints() {
+	return React.useSyncExternalStore(subscribeHeadlessPrints, getHeadlessPrints, getHeadlessPrints);
+}
+
 export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
 	finishedBeforeCompletion.clear();
+	headlessPrintsQueued.clear();
+	publishHeadlessPrints(new Set());
 	publish({
 		tenderMethods: new Map(),
 		tenderPlans: new Map(),
