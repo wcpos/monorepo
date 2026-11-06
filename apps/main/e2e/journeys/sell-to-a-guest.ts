@@ -168,20 +168,24 @@ export async function startGuestSale(ctx: SellToAGuestContext): Promise<SaleInPr
 }
 
 /**
- * The shared-SKU product's tile, left filtered on screen: the product step 2's phone add taps.
- * Throws, naming the SKU and the tile count, when the filter does not narrow the grid to exactly
- * one tile. With `anyProduct` the filter is skipped and the first visible tile is returned. On
- * desktop, the shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile.
+ * The shared-SKU product's add control (a grid tile, or a table view's row button), left filtered on
+ * screen: the product step 2's phone add taps. Throws, naming the SKU and the count, when the filter
+ * does not narrow the list to exactly one product. A variable-only match clears the filter and
+ * returns the first catalogue control; so does `anyProduct`, which skips the filter. On desktop,
+ * the shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile.
  */
 export async function sharedProductTile(page: Page, anyProduct = false): Promise<Locator> {
 	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 	const tiles = posScreen.getByTestId('product-tile').filter({ visible: true });
-	if (anyProduct) return tiles.first();
+	const rowButtons = posScreen.getByTestId('add-to-cart-button').filter({ visible: true });
+	const addControls = tiles.or(rowButtons);
+	if (anyProduct) return addControls.first();
 	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const variableTiles = posScreen.getByTestId('variable-product-tile').filter({ visible: true });
 	await search.fill(E2E_PRODUCT_SKU);
 	// Variable tiles count too: an unfiltered grid can show a single simple tile among them.
-	const count = async () => (await tiles.count()) + (await variableTiles.count());
+	const count = async () =>
+		(await tiles.count()) + (await variableTiles.count()) + (await rowButtons.count());
 	const matched = await expect
 		.poll(count, { timeout: 15_000 })
 		.toBe(1)
@@ -195,7 +199,11 @@ export async function sharedProductTile(page: Page, anyProduct = false): Promise
 				'pass anyProduct when any product will do'
 		);
 	}
-	return tiles.first();
+	if ((await variableTiles.count()) > 0) {
+		await search.clear();
+		await expect(addControls.first()).toBeVisible({ timeout: 15_000 });
+	}
+	return addControls.first();
 }
 
 /** 2. Add a product: the run-private probe, or the shared-SKU fallback without writer secrets. */

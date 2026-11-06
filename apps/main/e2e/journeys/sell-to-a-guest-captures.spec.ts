@@ -123,7 +123,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
-					const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
+					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
 						if (!(await hasScaleStyle(posPage))) {
