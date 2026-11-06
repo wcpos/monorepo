@@ -15,7 +15,7 @@ const FIELD_TEXT = 'text-foreground placeholder:text-muted-foreground text-base'
  * same box as a View. One ring while the control is open or focused, one dim when disabled.
  */
 const fieldBoxVariants = cva(
-	`border-chip-border bg-card rounded-field border-[length:var(--shape-ctl-border)] ${FIELD_TEXT}`,
+	`border-chip-border bg-chip rounded-field border-[length:var(--shape-ctl-border)] ${FIELD_TEXT}`,
 	{
 		variants: {
 			state: {
