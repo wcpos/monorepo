@@ -42,7 +42,7 @@ const MATRIX: [FieldBoxState, { has: string[]; not: string[] }][] = [
 	],
 	[
 		'attention',
-		{ has: [...MARK, SEEN], not: ['border-chip-border', THEME_WIDTH, 'bg-card', ...RING, ...DIM] },
+		{ has: [...MARK, SEEN], not: ['border-chip-border', THEME_WIDTH, 'bg-chip', ...RING, ...DIM] },
 	],
 ];
 
@@ -50,7 +50,7 @@ describe('fieldBox', () => {
 	it.each(MATRIX)('%s', (state, { has, not }) => {
 		const classes = fieldBox({ state }).split(/\s+/);
 		expect(classes).toEqual(expect.arrayContaining([...BOX, PLACEHOLDER, ...has]));
-		if (state !== 'attention') expect(classes).toContain('bg-card');
+		if (state !== 'attention') expect(classes).toContain('bg-chip');
 		for (const absent of not) expect(classes).not.toContain(absent);
 	});
 
