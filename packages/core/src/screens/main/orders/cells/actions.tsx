@@ -46,6 +46,7 @@ import { requestServerDelete } from '../../hooks/mutations/request-server-delete
 import { useProAccess } from '../../contexts/pro-access';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { openTill } from '../../pos/checkout/till-route';
 
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
 
@@ -137,10 +138,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			data: { status: 'pos-open', meta_data },
 		});
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-		router.push({
-			pathname: '/cart/[...orderId]',
-			params: { orderId: order.uuid ? [order.uuid] : [] },
-		});
+		openTill(router, order.uuid);
 	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id, t]);
 
 	/**

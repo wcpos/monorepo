@@ -27,7 +27,10 @@ const mockPush = jest.fn();
 const mockHandlers = new Map<string, () => unknown>();
 const mockDisabled = new Map<string, boolean>();
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+const mockNavigate = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+}));
 
 const mockEngineRequire = jest.fn();
 const mockAwaitWriteOutcome = jest.fn(async (..._args: unknown[]) => undefined as unknown);
@@ -205,7 +208,9 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 			document: mockOrder,
 			data: expect.objectContaining({ status: 'pos-open' }),
 		});
-		expect(mockPush).toHaveBeenCalledWith({
+		// Re-open goes through openTill(): a navigate, never a push (a push from the Orders page
+		// stacked a second POS screen).
+		expect(mockNavigate).toHaveBeenCalledWith({
 			pathname: '/cart/[...orderId]',
 			params: { orderId: ['order-1'] },
 		});
@@ -237,6 +242,7 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 		expect(mockEngineWrite).not.toHaveBeenCalled();
 	});
 
@@ -260,6 +266,7 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		});
 
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 	});
 });
 
@@ -298,6 +305,7 @@ describe('Orders list action reports', () => {
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 		expect(logger.debug).toHaveBeenCalledWith('Refused to re-open paid order', {
 			showToast: true,
 			toast: { title: 'orders.reopen_paid_refund_instead', type: 'warning' },
@@ -325,6 +333,7 @@ describe('Orders list action reports', () => {
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockNavigate).not.toHaveBeenCalled();
 		expect(logger.debug).toHaveBeenCalledWith(
 			'Refused to re-open paid order',
 			expect.objectContaining({ showToast: true })

@@ -16,6 +16,7 @@ import {
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
 
 import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -134,6 +135,7 @@ function POSStack() {
 		<TaxRatesProvider>
 			<View className="bg-background flex-1">
 				<Stack
+					screenListeners={tillStackScreenListeners}
 					screenOptions={{
 						animation: 'none',
 						headerShown: false,

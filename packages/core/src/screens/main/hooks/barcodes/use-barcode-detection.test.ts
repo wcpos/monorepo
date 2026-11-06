@@ -9,6 +9,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { ScanEvent } from '@wcpos/scanner';
 
+import { resetScanOwnersForTests } from './scan-owner';
 import { resetHeuristicTooShortRateLimit } from './too-short-feedback';
 import { useBarcodeDetection } from './use-barcode-detection';
 
@@ -111,6 +112,7 @@ const dispatchBarcode = (barcode: string) => {
 
 describe('useBarcodeDetection', () => {
 	beforeEach(() => {
+		resetScanOwnersForTests();
 		jest.useFakeTimers();
 		jest.clearAllMocks();
 		(Platform as { OS: string }).OS = 'web';
@@ -126,6 +128,146 @@ describe('useBarcodeDetection', () => {
 		jest.runOnlyPendingTimers();
 		jest.useRealTimers();
 		(Platform as { OS: string }).OS = 'web';
+	});
+
+	it('gives only the newest active consumer each burst and restores the previous owner on unmount', () => {
+		const first = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const firstScans: string[] = [];
+		const firstSubscription = first.result.current.barcode$.subscribe((code) =>
+			firstScans.push(code)
+		);
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const secondScans: string[] = [];
+		const secondSubscription = second.result.current.barcode$.subscribe((code) =>
+			secondScans.push(code)
+		);
+
+		act(() => {
+			dispatchBarcode('12345678');
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstScans).toEqual([]);
+		expect(secondScans).toEqual(['12345678']);
+
+		second.unmount();
+		secondSubscription.unsubscribe();
+		act(() => {
+			dispatchBarcode('87654321');
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstScans).toEqual(['87654321']);
+		expect(secondScans).toEqual(['12345678']);
+		firstSubscription.unsubscribe();
+	});
+
+	it.each(['hub', 'attributed'] as const)('gates both %s streams to the newest owner', (source) => {
+		const first = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const firstCodes: string[] = [];
+		const firstEvents: ScanEvent[] = [];
+		const secondCodes: string[] = [];
+		const secondEvents: ScanEvent[] = [];
+		const subscriptions = [
+			first.result.current.barcode$.subscribe((code) => firstCodes.push(code)),
+			first.result.current.scanEvents$.subscribe((event) => firstEvents.push(event)),
+			second.result.current.barcode$.subscribe((code) => secondCodes.push(code)),
+			second.result.current.scanEvents$.subscribe((event) => secondEvents.push(event)),
+		];
+		const event: ScanEvent = {
+			code: '12345678',
+			source:
+				source === 'hub' ? { kind: 'serial' } : { kind: 'wedge-attributed', profileId: 'one' },
+			timestamp: 123,
+		};
+		act(() => (source === 'hub' ? hubEvents$ : attributedEvents$).next(event));
+		expect(firstCodes).toEqual([]);
+		expect(firstEvents).toEqual([]);
+		expect(secondCodes).toEqual(['12345678']);
+		expect(secondEvents).toEqual([event]);
+		subscriptions.forEach((subscription) => subscription.unsubscribe());
+	});
+
+	it('does not feed a non-owner native detector or invoke its callback', () => {
+		(Platform as { OS: string }).OS = 'ios';
+		const firstCallback = jest.fn();
+		const secondCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const second = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: secondCallback })
+		);
+		const subscriptions = [
+			first.result.current.barcode$.subscribe(),
+			second.result.current.barcode$.subscribe(),
+		];
+		act(() => {
+			for (const key of '12345678') {
+				const event = { nativeEvent: { key } } as Parameters<
+					typeof first.result.current.onKeyPress
+				>[0];
+				first.result.current.onKeyPress(event);
+				second.result.current.onKeyPress(event);
+				jest.advanceTimersByTime(10);
+			}
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(secondCallback).toHaveBeenCalledTimes(1);
+		expect(secondCallback).toHaveBeenCalledWith('12345678');
+		subscriptions.forEach((subscription) => subscription.unsubscribe());
+	});
+
+	// Pins the keydown gate: a non-owner must not feed its detector, so its callback never runs.
+	it('does not invoke a non-owner callback on a web burst', () => {
+		const firstCallback = jest.fn();
+		const secondCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const second = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: secondCallback })
+		);
+		const subscriptions = [
+			first.result.current.barcode$.subscribe(),
+			second.result.current.barcode$.subscribe(),
+		];
+		act(() => {
+			dispatchBarcode('12345678');
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(secondCallback).toHaveBeenCalledTimes(1);
+		expect(secondCallback).toHaveBeenCalledWith('12345678');
+		subscriptions.forEach((subscription) => subscription.unsubscribe());
+	});
+
+	// Pins the ownership-loss disposal: a burst in flight dies with the claim, callback and all.
+	it('drops a burst in flight when another consumer claims ownership before it settles', () => {
+		const firstCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const firstScans: string[] = [];
+		const firstSubscription = first.result.current.barcode$.subscribe((code) =>
+			firstScans.push(code)
+		);
+		act(() => {
+			dispatchBarcode('12345678');
+		});
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const secondScans: string[] = [];
+		const secondSubscription = second.result.current.barcode$.subscribe((code) =>
+			secondScans.push(code)
+		);
+		act(() => {
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(firstScans).toEqual([]);
+		expect(secondScans).toEqual([]);
+		firstSubscription.unsubscribe();
+		secondSubscription.unsubscribe();
 	});
 
 	it.each([10, 20])('never turns focused search typing at %i ms/key into a scan', (gap) => {
