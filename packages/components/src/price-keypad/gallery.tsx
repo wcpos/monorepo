@@ -32,6 +32,7 @@ function OpenPriceKeypad() {
 		<View className="h-96 w-64">
 			<TranslatedPriceKeypad
 				ref={ref}
+				inline
 				rest="text"
 				value={3.2}
 				discounts={[5, 10, 15]}

@@ -63,6 +63,8 @@ type GrowKeypadProps = {
 	 * trigger resolves against a content-sized root and draws 18 px tall (#3069, 2026-10-29).
 	 */
 	className?: string;
+	/** The gallery's: the panel laid out where the trigger is, inside the cell's scale scope, not portalled. */
+	inline?: boolean;
 	ref?: React.Ref<GrowKeypadHandle>;
 };
 
@@ -87,6 +89,7 @@ export function GrowKeypad({
 	onClose,
 	onOpenChange: onOpenChangeProp,
 	className,
+	inline,
 	ref,
 }: GrowKeypadProps) {
 	const trigger = React.useRef<TriggerRef>(null);
@@ -155,6 +158,7 @@ export function GrowKeypad({
 				{children}
 			</PopoverTrigger>
 			<PopoverContent
+				inline={inline}
 				align={align}
 				side={frame.grow === 'up' ? 'top' : 'bottom'}
 				sideOffset={frame.offset}
