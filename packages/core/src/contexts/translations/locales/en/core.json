@@ -1758,6 +1758,7 @@
 	"settings.no_printers_configured": "No printers configured",
 	"settings.no_printers_found": "Not all printers can be detected automatically. Enter the IP address above to add one manually.",
 	"settings.no_templates": "No active templates found.",
+	"settings.not_saved": "Not saved",
 	"settings.number_of_decimals": "Number of Decimals",
 	"settings.open_drawer": "Open drawer",
 	"settings.paired_printers": "Paired Bluetooth printers",
