@@ -74,6 +74,8 @@ export type PosterTileProps = {
 	/** The tile in slot 0 of a dealt grid: tapping it is the way back. */
 	back?: boolean;
 	backTestID?: string;
+	/** The back badge's animated style: the Deal fades it with the copy's walk. */
+	backStyle?: React.ComponentProps<typeof Animated.View>['style'];
 	/** The plain-text name behind a tint's initial: the title is usually an element (Codex, #3146). */
 	name?: string;
 	/** Words on the scrim, in this order. Every slot empty: no scrim. */
@@ -225,6 +227,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 		corner,
 		back,
 		backTestID,
+		backStyle,
 		name,
 		title,
 		money,
@@ -363,9 +366,13 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 							</View>
 						)}
 						{back && (
-							<View className={`${CIRCLE} absolute top-2 right-2`} testID={backTestID}>
+							<Animated.View
+								className={`${CIRCLE} absolute top-2 right-2`}
+								style={backStyle}
+								testID={backTestID}
+							>
 								<Icon name="chevronLeft" size="sm" className="text-muted-foreground" />
-							</View>
+							</Animated.View>
 						)}
 						{corner != null && <View className="absolute top-2 right-2">{corner}</View>}
 					</View>

@@ -662,6 +662,140 @@ describe('testAuthorizationMethod', () => {
 		}
 	});
 
+	describe('a probe that died on our own timer is not evidence of a block (#1812)', () => {
+		const waitForAbort = (_input: unknown, init: RequestInit) =>
+			new Promise<Response>((_resolve, reject) => {
+				init.signal!.addEventListener('abort', () => {
+					reject(new DOMException('The operation was aborted', 'AbortError'));
+				});
+			});
+		const notFound = () => ({ ok: false, status: 404, json: jest.fn() });
+		const forbidden = () => ({ ok: false, status: 403, json: jest.fn() });
+		const blocked = { ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED };
+		const slow = { ok: false, code: null, timedOut: true };
+		let wasWeb: boolean;
+
+		beforeEach(() => {
+			wasWeb = mockPlatform.isWeb;
+			jest.useFakeTimers();
+		});
+
+		afterEach(() => {
+			jest.useRealTimers();
+			mockPlatform.isWeb = wasWeb;
+		});
+
+		const settle = async (ms: number) => {
+			const authorization = testAuthorizationMethod(
+				'https://example.com/wp-json/wcpos/v2/',
+				'token'
+			);
+			await jest.advanceTimersByTimeAsync(ms);
+			return authorization;
+		};
+
+		it('treats native echo timeouts as a slow store even when the ping answers', async () => {
+			mockPlatform.isWeb = false;
+			fetchMock
+				.mockImplementationOnce(waitForAbort)
+				.mockImplementationOnce(waitForAbort)
+				.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn() });
+
+			await expect(settle(6000)).resolves.toEqual(slow);
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+			expect(String(fetchMock.mock.calls[2][0])).toContain('/wcpos/v2/ping');
+			expect(mockAppLogger.error).not.toHaveBeenCalled();
+		});
+
+		it.each([
+			['web', true],
+			['native', false],
+		])('does not name a host block for a store that answers in 5 s on %s', async (_name, isWeb) => {
+			// A real fetch rejects when our controller aborts it; it only resolves
+			// if the store answers first, which a 5 s store never does here.
+			mockPlatform.isWeb = isWeb;
+			fetchMock.mockImplementation(
+				(_input: unknown, init: RequestInit) =>
+					new Promise((resolve, reject) => {
+						const answer = setTimeout(
+							() => resolve({ ok: true, status: 200, json: jest.fn(async () => ({})) }),
+							5000
+						);
+						init.signal!.addEventListener('abort', () => {
+							clearTimeout(answer);
+							reject(new DOMException('The operation was aborted', 'AbortError'));
+						});
+					})
+			);
+
+			await expect(settle(30000)).resolves.toEqual(slow);
+			expect(mockAppLogger.error).not.toHaveBeenCalled();
+		});
+
+		it('treats a legacy auth/test timeout after echo 404s as a slow store', async () => {
+			fetchMock
+				.mockResolvedValueOnce(notFound())
+				.mockResolvedValueOnce(notFound())
+				.mockImplementationOnce(waitForAbort)
+				.mockImplementationOnce(waitForAbort);
+
+			await expect(settle(25000)).resolves.toEqual(slow);
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+			expect(fetchMock.mock.calls[2][1].signal.aborted).toBe(true);
+			expect(fetchMock.mock.calls[3][1].signal.aborted).toBe(true);
+			expect(mockAppLogger.warn).toHaveBeenCalledWith(
+				'Authorization probes timed out — store too slow to answer',
+				{ context: { wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/' } }
+			);
+			expect(mockAppLogger.error).not.toHaveBeenCalled();
+		});
+
+		it('keeps the transport block when the echoes answered 403 and auth/test then timed out', async () => {
+			fetchMock
+				.mockResolvedValueOnce(forbidden())
+				.mockResolvedValueOnce(forbidden())
+				.mockImplementationOnce(waitForAbort);
+
+			await expect(settle(15000)).resolves.toEqual(blocked);
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+			expect(fetchMock.mock.calls[2][1].signal.aborted).toBe(true);
+		});
+
+		it('keeps the transport block when the query auth/test answers 404 after the path one timed out', async () => {
+			fetchMock
+				.mockResolvedValueOnce(notFound())
+				.mockResolvedValueOnce(notFound())
+				.mockImplementationOnce(waitForAbort)
+				.mockResolvedValueOnce(notFound());
+
+			await expect(settle(15000)).resolves.toEqual(blocked);
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+		});
+
+		it('keeps the transport block when the query auth/test times out after the path one answered 404', async () => {
+			fetchMock
+				.mockResolvedValueOnce(notFound())
+				.mockResolvedValueOnce(notFound())
+				.mockResolvedValueOnce(notFound())
+				.mockImplementationOnce(waitForAbort);
+
+			await expect(settle(15000)).resolves.toEqual(blocked);
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+			expect(fetchMock.mock.calls[3][1].signal.aborted).toBe(true);
+		});
+
+		it('keeps the transport block when auth/test fails on the network rather than our timer', async () => {
+			fetchMock
+				.mockResolvedValueOnce(notFound())
+				.mockResolvedValueOnce(notFound())
+				.mockRejectedValueOnce(new TypeError('Network request failed'))
+				.mockRejectedValueOnce(new TypeError('Network request failed'));
+
+			await expect(settle(1000)).resolves.toEqual(blocked);
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+		});
+	});
+
 	it('classifies a path timeout with a fast query failure as preflight blocking', async () => {
 		jest.useFakeTimers();
 		try {

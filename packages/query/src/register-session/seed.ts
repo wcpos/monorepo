@@ -1,6 +1,5 @@
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
-
-import type { LiveSession } from './register-document';
+import { isoGmt, type LiveSession } from './register-document';
 
 export async function seedSessionFromCache(
 	storeDB: RegisterStoreDatabase,
@@ -22,13 +21,15 @@ export async function seedSessionFromCache(
 		})
 		.exec();
 	// A cache older than a synced active row is the stale one: never end that row before it opened.
-	if (previous.some((row) => row.opened_at_gmt > live.opened_at_gmt)) return 'present';
+	// Both sides through `isoGmt`: a cache written before the rows carried one form compares as text.
+	const openedAt = isoGmt(live.opened_at_gmt);
+	if (previous.some((row) => isoGmt(row.opened_at_gmt) > openedAt)) return 'present';
 	for (const row of previous) {
 		await row.incrementalPatch({
 			status: 'closed',
 			server_status: 'closed',
 			pending_status: null,
-			closed_at_gmt: live.opened_at_gmt,
+			closed_at_gmt: openedAt,
 		});
 	}
 	await sessions.insert({
@@ -36,8 +37,8 @@ export async function seedSessionFromCache(
 		register_id: registerId,
 		store_id: storeId ?? null,
 		status: live.status,
-		business_day: live.business_day ?? live.opened_at_gmt.slice(0, 10),
-		opened_at_gmt: live.opened_at_gmt,
+		business_day: live.business_day ?? openedAt.slice(0, 10),
+		opened_at_gmt: openedAt,
 		opened_by: live.opened_by?.id ?? null,
 		expected_float: live.acknowledged ? null : live.expected_float,
 		counted_float: live.acknowledged ? null : live.counted_float,

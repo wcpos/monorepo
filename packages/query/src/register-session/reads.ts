@@ -75,6 +75,29 @@ export function observeRegisterClosures(storeDB: RegisterStoreDatabase, register
 	);
 }
 
+/** Absent → empty. Register id → the name its newest closure recorded. */
+export function observeClosureRegisterNames(
+	storeDB: RegisterStoreDatabase
+): Observable<Record<string, string>> {
+	return observeFollowedCollection<ClosureRow>(storeDB, 'closures').pipe(
+		switchMap((closures) =>
+			closures
+				? closures.find().$.pipe(
+						map((rows) => {
+							const names: Record<string, string> = {};
+							// Ascending, so a register's newest closure is written last and wins.
+							for (const row of [...rows].sort((a, b) => a.number - b.number)) {
+								const name: unknown = row.breakdowns?.register_name;
+								if (typeof name === 'string' && name) names[row.register_id] = name;
+							}
+							return names;
+						})
+					)
+				: of({})
+		)
+	);
+}
+
 /** Absent → false. Bridge cycles also follow in-place register collection replacements. */
 export function observeRegisterSessionAvailability(storeDB: RegisterStoreDatabase) {
 	return combineLatest(

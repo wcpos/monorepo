@@ -58,6 +58,7 @@ it.each([
 		expect(panel).toHaveClass('rounded-t-2xl w-full max-w-full web:animate-sheet-in');
 		expect(panel).not.toHaveClass('max-w-80');
 		expect(screen.queryByTestId('anchored')).toBeNull();
+		fireEvent.mouseDown(screen.getByTestId('panel-scrim'));
 		fireEvent.click(screen.getByTestId('panel-scrim'));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	} else {
@@ -80,6 +81,7 @@ it('closes an anchored panel on an outside press only when asked', () => {
 	expect(onOpenChange).not.toHaveBeenCalled();
 	bare.unmount();
 	overlay(false, { outsidePress: true });
+	fireEvent.mouseDown(screen.getByTestId('panel-scrim'));
 	fireEvent.click(screen.getByTestId('panel-scrim'));
 	expect(onOpenChange).toHaveBeenCalledWith(false);
 });
