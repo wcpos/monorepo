@@ -33,7 +33,12 @@ import {
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
-import { enterReceipt, getCheckoutModeSnapshot, releaseUnconfirmedReceipt } from './checkout-mode';
+import {
+	enterReceipt,
+	getCheckoutModeSnapshot,
+	queueHeadlessPrint,
+	releaseUnconfirmedReceipt,
+} from './checkout-mode';
 import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
 import { persistProvenance } from './provenance/persist-provenance';
@@ -329,9 +334,24 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 	}
 }
 export type Presentation =
-	| { host: 'stage'; autoShowReceipt: boolean; canSelectReceipt?: () => boolean }
-	| { host: 'modal' }
+	| {
+			host: 'stage';
+			autoShowReceipt: boolean;
+			autoPrintReceipt: boolean;
+			canSelectReceipt?: () => boolean;
+	  }
+	| { host: 'modal'; autoPrintReceipt: boolean }
 	| { host: 'background' };
+
+/**
+ * The receipt prints with nothing on screen when no host will print it: the stage with show off,
+ * and the routed modal whatever show says (it never auto-prints). The stage with show on prints
+ * itself; a background completion leaves its tab to the cashier.
+ */
+function queuePrintWithoutReceipt(uuid: string, presentation: Presentation) {
+	if (presentation.host === 'background' || !presentation.autoPrintReceipt) return;
+	if (presentation.host === 'modal' || !presentation.autoShowReceipt) queueHeadlessPrint(uuid);
+}
 
 /**
  * The sale leaves the till unpaid: the pane shows the sent moment in place of Paid, the
@@ -351,6 +371,7 @@ async function finishSent(
 		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });
 		else enterReceipt(order.uuid);
 	}
+	queuePrintWithoutReceipt(order.uuid, presentation);
 	const latest = order.getLatest().payload;
 	if (latest.id) await refreshOrderRecord(ctx.runtime, latest.id).catch(() => undefined);
 	getLogger(['wcpos', 'pos', 'checkout']).info(`Sale ${order.uuid} sent to the customer`, {
@@ -476,6 +497,7 @@ async function finishSale(
 		if (presentation.canSelectReceipt?.() === false) enterReceipt(order.uuid, { select: false });
 		else enterReceipt(order.uuid);
 	}
+	if (outcome.source !== 'replay') queuePrintWithoutReceipt(order.uuid, presentation);
 	await reportProvenanceGap({
 		...ctx,
 		order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },

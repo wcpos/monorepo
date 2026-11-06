@@ -26,6 +26,8 @@ let mockClosure = {
 	breakdowns: {},
 };
 const mockContext = {
+	// The real context always carries the store; the count reads its decimals from it.
+	store: { name: 'UK Store' },
 	i18n: {},
 	timezone: 'UTC',
 	locale: 'en',
@@ -261,6 +263,22 @@ it.each([
 	try {
 		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
 		expect(useClosureView).toHaveBeenCalledWith(mockClosure, { isReprint });
+	} finally {
+		mockClosure = previous;
+	}
+});
+
+it("names a register the directory no longer lists from the closure's own record", () => {
+	const previous = mockClosure;
+	mockClosure = {
+		...mockClosure,
+		register_id: 'retired',
+		breakdowns: { register_name: 'Back till' },
+	};
+	try {
+		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('closure-print'));
+		expect(screen.getByText(/^Back till · /)).toBeTruthy();
 	} finally {
 		mockClosure = previous;
 	}

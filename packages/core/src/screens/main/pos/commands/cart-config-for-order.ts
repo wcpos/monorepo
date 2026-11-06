@@ -14,7 +14,7 @@ import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
 export type OrderPayload = Partial<CurrentOrderRecord['payload']>;
 export interface CartConfigInputs {
-	settings: Omit<TaxSettingsContextProps, 'allRates' | 'taxClasses'> & {
+	settings: Omit<TaxSettingsContextProps, 'allRates' | 'taxClasses' | 'ratesRead'> & {
 		taxClassSlugs: readonly string[];
 		calcDiscountsSequentially: boolean;
 		taxBasedOn: unknown;

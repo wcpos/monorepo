@@ -164,6 +164,20 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
+### phone-touch.spec.ts (authenticated, free only) — 1 test
+
+Phone touch (412x915, `hasTouch`, `isMobile`, `locator.tap`; roadmap#505):
+
+- [x] A tap opens the cart's add menu and it stays open (the tap's own click on the sheet's
+      scrim, mounted under the finger, does not dismiss it); Add Discount opens the dialog; a tap
+      on a coupon in the picker sheet over that dialog picks it and the dialog stays open; a tap
+      on the picker's scrim closes it
+
+### terminal-keyboard.spec.ts (authenticated, free + pro) — 1 test
+
+- [x] At 1280x800, a keyboard (visual viewport 470) keeps the columns and the open Add Discount
+      dialog; a real resize to 1280x470 still goes to the phone layout (roadmap#505)
+
 ### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
 
 POS money oracle — save to server parity (live store, writes):
@@ -203,6 +217,8 @@ POS Checkout:
 
 Real payment against the live store (**writes**, see "Live-store write discipline" below):
 
+- [x] Prints after checkout with the receipt hidden (show off, print on, cash sale: the hidden
+      `wcpos-print-frame` is printed exactly once, no receipt on screen, the cart is empty)
 - [x] Completes a real payment and reads the order back from the store REST API: order
       exists and carries this run's label, `date_paid` is set and the status is not a
       failure state, line-item count and quantities match the cart, line-item

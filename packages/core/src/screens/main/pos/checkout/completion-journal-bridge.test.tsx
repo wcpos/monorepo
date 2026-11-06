@@ -1140,6 +1140,7 @@ it('an unconfirmed sale is finished by the bridge once the paid order is adopted
 		await owner.completeSale(mockContext, resident('order', 'pos-open') as never, answer, {
 			host: 'stage',
 			autoShowReceipt: true,
+			autoPrintReceipt: false,
 		})
 	).toBe('unconfirmed');
 	expect(await pendingCompletions(mockContext.storeDB)).toHaveProperty('order');
@@ -1176,6 +1177,7 @@ it.each([
 		await owner.completeSale(mockContext, resident() as never, answer, {
 			host: 'stage',
 			autoShowReceipt: true,
+			autoPrintReceipt: false,
 		})
 	).toBe('completed');
 	expect(await pendingCompletions(mockContext.storeDB)).toMatchObject({
@@ -1219,7 +1221,7 @@ it('finishes an unconfirmed sale when a pull adopts the paid order mid-session',
 		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	const pos = resident('order', 'pos-open') as never;
-	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	const stage = { host: 'stage', autoShowReceipt: true, autoPrintReceipt: false } as const;
 	expect(await owner.completeSale(mockContext, pos, answer, stage)).toBe('unconfirmed');
 	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 		awaitingAdoption: true,
@@ -1250,7 +1252,7 @@ it('finishes an unconfirmed sale adopted after an offline restart whose replay f
 		remainingMinor: 0,
 	} as unknown as Parameters<typeof owner.completeSale>[2];
 	const pos = resident('order', 'pos-open') as never;
-	const stage = { host: 'stage', autoShowReceipt: true } as const;
+	const stage = { host: 'stage', autoShowReceipt: true, autoPrintReceipt: false } as const;
 	expect(await owner.completeSale(mockContext, pos, answer, stage)).toBe('unconfirmed');
 	// The restart, offline: the replay's refresh of the still-unpaid resident fails.
 	mockOnline = 'offline';
