@@ -271,6 +271,15 @@ jobs:
           keep_until=$(( $(date +%s) - 24 * 3600 ))
           git ls-files build | while read -r path; do
             [ -e "$BUILD_DIR/${path#build/}" ] && continue
+            # Only hashed files under _expo/ get the day's grace: a stale metadata.json
+            # names those and nothing else. A root file this build does not carry is
+            # another lane's (both lanes publish to this branch): the 2.0.9 build's
+            # sqlite.worker.js and sqlite3.wasm rode onto the 1.11.11 bundle on
+            # 2026-11-06 and tag-web-bundle.sh refused the lane tag. Drop it now.
+            case "${path#build/}" in
+              */*) ;;
+              *) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;
+            esac
             last=$(git log -1 --format=%ct -- "$path" 2>/dev/null || echo 0)
             if [ "${last:-0}" -lt "$keep_until" ]; then
               git rm -q "$path"
