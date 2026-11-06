@@ -4,9 +4,10 @@ import { View } from 'react-native';
 import { format as formatDate } from 'date-fns/format';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Badge } from '@wcpos/components/badge';
 import { Icon } from '@wcpos/components/icon';
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Derivation, DerivationLine, DerivationStep } from '@wcpos/components/derivation';
 import {
 	Dialog,
@@ -17,11 +18,11 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { cn } from '@wcpos/components/lib/utils';
 import { MenuRow } from '@wcpos/components/menu-row';
 import { Notice } from '@wcpos/components/notice';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
-import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
 import { readCarriedFrom } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
@@ -35,7 +36,6 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
-import { FigureTile } from './figure-tile';
 import { ageLabel } from './register-bar.helpers';
 import { Ticking } from './ticking';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -86,6 +86,8 @@ export function RegisterPanel({
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
+	const [ledgerOpen, setLedgerOpen] = React.useState(false);
+	const [othersOpen, setOthersOpen] = React.useState(false);
 	// Off the till, the panel mounts open before its session has loaded (Codex, #3091).
 	const [opening, setOpening] = React.useState({ open, initialPane, loaded });
 	if (open !== opening.open || initialPane !== opening.initialPane || loaded !== opening.loaded) {
@@ -131,6 +133,8 @@ export function RegisterPanel({
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
+				setLedgerOpen(false);
+				setOthersOpen(false);
 				setMovement(null);
 				setError('');
 			}
@@ -314,61 +318,88 @@ export function RegisterPanel({
 					/>
 				)}
 				{session && (
-					<View className="flex-row gap-2 px-4">
+					<View className="gap-1 px-4">
 						{!blind && (
-							<FigureTile
-								testID="register-panel-drawer"
-								label={t('register.in_the_drawer')}
-								value={figuresPending ? '—' : format(Number(expected.cash ?? 0))}
-								sub={figuresPending ? t('register.figures_after_sync') : undefined}
-							/>
+							<View testID="register-panel-drawer">
+								<Text className="text-muted-foreground">{t('register.in_the_drawer')}</Text>
+								<AmountFigure size="hero">
+									{figuresPending ? '—' : format(Number(expected.cash ?? 0))}
+								</AmountFigure>
+								{figuresPending && (
+									<Text className="text-muted-foreground">{t('register.figures_after_sync')}</Text>
+								)}
+							</View>
 						)}
 						{/* A seeded session's money is unknown until the baseline arrives (§ 4.9 rule 1); the
 						    count is this device's and stays. */}
-						<FigureTile
-							testID="register-panel-session-sales"
-							label={t('register.session_sales')}
-							value={
-								blind || !salesMoneyKnown
-									? t('register.sales_count', { count: salesCount })
-									: figuresPending
-										? '—'
-										: format(sessionSales)
-							}
-							sub={
-								blind || !salesMoneyKnown
-									? undefined
-									: figuresPending
-										? t('register.figures_after_sync')
-										: t('register.sales_count', { count: salesCount })
-							}
-						/>
+						<Text testID="register-panel-session-sales" className="text-muted-foreground" tabular>
+							{t('register.session_sales')}
+							{blind || !salesMoneyKnown ? (
+								` · ${t('register.sales_count', { count: salesCount })}`
+							) : figuresPending ? (
+								` — · ${t('register.figures_after_sync')}`
+							) : (
+								<>
+									{' '}
+									<Text className="text-foreground font-semibold tabular-nums">
+										{format(sessionSales)}
+									</Text>
+									{' · '}
+									{t('register.sales_count', { count: salesCount })}
+								</>
+							)}
+						</Text>
 					</View>
 				)}
 				{session && (
 					<View className="flex-row gap-2 px-4">
 						{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
-							<Tile
+							<Button
 								key={type}
+								size="stack"
+								variant="outline"
 								testID={`register-panel-${type.replace('_', '-')}`}
 								className="flex-1"
 								disabled={session?.status !== 'open'}
 								onPress={() => setMovement(type)}
-								title={movementNames[type]}
 							>
 								<Icon
 									name={
 										type === 'paid_in' ? 'paidIn' : type === 'paid_out' ? 'paidOut' : 'cashDrawer'
 									}
 								/>
-							</Tile>
+								<ButtonText>{movementNames[type]}</ButtonText>
+							</Button>
 						))}
 					</View>
 				)}
 				<DialogBody className="gap-0">
 					{terms && (
 						<>
-							<Derivation testID="register-panel-ledger" className="px-4 pt-2">
+							<MenuRow
+								testID="register-panel-expected"
+								label={t('register.expected_in_drawer')}
+								onPress={() => setLedgerOpen((v) => !v)}
+								trailing={
+									<>
+										{trailing(figuresPending ? '—' : format(Number(terms.expected)))}
+										<Icon
+											name={ledgerOpen ? 'chevronDown' : 'chevronRight'}
+											size="sm"
+											className="text-muted-foreground"
+										/>
+									</>
+								}
+							/>
+							{figuresPending && (
+								<Text variant="key" className="px-2.5 py-1">
+									{t('register.figures_after_sync')}
+								</Text>
+							)}
+							<Derivation
+								testID="register-panel-ledger"
+								className={cn('px-4 pt-2', !ledgerOpen && 'hidden')}
+							>
 								<DerivationStep
 									testID="register-panel-float"
 									label={t('register.opened_suffix', { time: openedTime })}
@@ -456,25 +487,30 @@ export function RegisterPanel({
 										</DerivationStep>
 									);
 								})}
-								{!blind && (
-									<DerivationStep
-										testID="register-panel-expected"
-										state="result"
-										label={t('register.expected_in_drawer')}
-										trailing={trailing(figuresPending ? '—' : format(Number(terms.expected)))}
-										detail={figuresPending ? t('register.figures_after_sync') : undefined}
-									/>
-								)}
 							</Derivation>
 							{others.length > 0 && (
 								<>
 									{/* A band, not a row: these tenders are not in the drawer. No count: a split
 									    sale is both a cash and a card sale, so no subtraction names it honestly. */}
-									<View className="h-band border-border mt-2 justify-center border-b px-2.5">
-										<Text variant="caption">{t('register.other_tenders')}</Text>
-									</View>
+									<MenuRow
+										testID="register-panel-other-tenders"
+										label={t('register.other_tenders')}
+										onPress={() => setOthersOpen((v) => !v)}
+										trailing={
+											<>
+												{trailing(
+													format(others.reduce((sum, [, amount]) => sum + Number(amount), 0))
+												)}
+												<Icon
+													name={othersOpen ? 'chevronDown' : 'chevronRight'}
+													size="sm"
+													className="text-muted-foreground"
+												/>
+											</>
+										}
+									/>
 									{others.map(([method, value]) => (
-										<View key={method} className={STATIC_ROW}>
+										<View key={method} className={cn(STATIC_ROW, !othersOpen && 'hidden')}>
 											<Text className="min-w-0 flex-1">{tenderLabel(method)}</Text>
 											{trailing(format(Number(value)))}
 										</View>

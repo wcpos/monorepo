@@ -60,10 +60,10 @@ describe('Button variants', () => {
 		expect(buttonTextVariants({ variant: 'on-warning' })).toContain('text-warning-foreground');
 	});
 
-	// Three sizes by role (ruled 2026-10-16). The default rides the floored
+	// Sizes by role (ruled 2026-10-16). The default rides the floored
 	// control token (roadmap#357), so Compact on a finger still gets 44; sm and
 	// lg ride the spacing unit, so they scale with the density step too.
-	it('has exactly three role sizes: sm 36, default on the control token, lg 56', () => {
+	it('keeps sm 36, default on the control token, and lg 56 with its commit styling', () => {
 		expect(buttonVariants({ size: 'default' })).toContain('h-ctl');
 		expect(buttonVariants({ size: 'default' })).not.toContain('h-10');
 		expect(buttonVariants({ size: 'sm' })).toContain('h-9');
@@ -88,6 +88,19 @@ describe('Button variants', () => {
 			'border-[length:var(--shape-ctl-border)]'
 		);
 		expect(buttonVariants({})).toContain('rounded-control');
+	});
+
+	it('gives stack a 56 px control with an icon-label gap and a base-size label, not a commit', () => {
+		const classes = buttonVariants({ size: 'stack' });
+		expect(classes).toContain('h-14');
+		expect(classes).toContain('rounded-control');
+		expect(classes).toContain('gap-1');
+		expect(classes).not.toContain('rounded-commit');
+		expect(classes).not.toContain('shadow-commit');
+		const label = buttonTextVariants({ size: 'stack' });
+		expect(label).toContain('text-base');
+		expect(label).not.toContain('text-lg');
+		expect(label).not.toContain('text-sm');
 	});
 
 	// A small pill is a Chip (ruled 2026-10-16, decision 10): the `xs` size and the tinted
