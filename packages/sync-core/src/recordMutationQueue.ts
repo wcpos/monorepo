@@ -490,6 +490,27 @@ export class RecordMutationQueue {
 		});
 	}
 
+	/**
+	 * True only when this writer's own unreleased hold ran past its TTL. Read-only on
+	 * purpose: it runs on a failed renewal, where compensation may still need the
+	 * expired row, and `hasVoidFence` would sweep it.
+	 */
+	async writerHoldLapsed(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		const row = (await this.storage.list()).find(
+			(item) => item.mutationId === fenceId(collection, record)
+		);
+		return (
+			row?.admittedBy === token &&
+			row.payload.phase !== 'released' &&
+			(row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs
+		);
+	}
+
 	async admissionState(row: QueuedMutation, nowMs: number): Promise<'released' | 'live' | 'lost'> {
 		if (!row.admittedBy || row.admissionReleased === row.admittedBy) return 'released';
 		const rows = await this.storage.list();
