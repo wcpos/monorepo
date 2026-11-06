@@ -51,6 +51,7 @@ export {
 	observeRegisterSessionAvailability,
 	readClosure,
 	observeClosures,
+	observeClosureRegisterNames,
 	observeOpenSessionPresence,
 	type ReadonlyClosureDocument,
 	observeCashMovements,
