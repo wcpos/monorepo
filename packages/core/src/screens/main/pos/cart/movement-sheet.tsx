@@ -57,7 +57,12 @@ export function RegisterAmount({
 	// The symbol sits inside the field's border, so a tap on it is a tap on the field (as the
 	// Input's own leading glyph): it focuses the numerals rather than being a dead strip.
 	const symbol = (text: string) => (
-		<Pressable accessible={false} tabIndex={-1} onPress={() => inputRef.current?.focus()}>
+		<Pressable
+			accessible={false}
+			tabIndex={-1}
+			testID={`${props.testID}-symbol`}
+			onPress={() => inputRef.current?.focus()}
+		>
 			<Text className={SYMBOL}>{text}</Text>
 		</Pressable>
 	);
