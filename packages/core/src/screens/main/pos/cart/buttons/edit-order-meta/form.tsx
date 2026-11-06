@@ -420,12 +420,14 @@ export function EditOrderMetaForm({
 						/>
 					</PropertyRow>
 					<Form {...handOverForm}>
-						{/* One group: the cart's scope. The band turns amber once anything is staged; each
-						    changed picker takes the field's amber. Not a live region: it holds pickers. */}
+						{/* One group: the cart's scope, always the attention band and never a glyph (Paul,
+						    2026-11-04): changing any of these is deliberate. Each changed picker takes the
+						    field's amber. Not a live region: it holds pickers. */}
 						<Notice
 							testID="order-meta-hand-over"
 							live={false}
-							tone={changes.length > 0 ? 'warning' : 'info'}
+							tone="warning"
+							icon={null}
 							title={t('pos_cart.hand_over')}
 							description={t('pos_cart.hand_over_hint')}
 						>

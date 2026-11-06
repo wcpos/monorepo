@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -115,13 +116,18 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 				onRetry={frameGate.retry}
 				testID="checkout-payment-form-load-failed"
 			/>
-			<PaymentWebview
-				order={order}
-				receiptHost={receiptHost}
-				{...frameGate.frameProps}
-				settledOrderStatuses={settledOrderStatuses}
-				onStockRejection={handleStockRejection}
-			/>
+			{/* The frame renders nothing until the pay link is prepared, so the slot holds
+			    the pane's height itself: Process Payment sits at the foot from the first
+			    paint instead of jumping down when the pay page arrives. */}
+			<View className="flex-1" testID="checkout-legacy-frame-slot">
+				<PaymentWebview
+					order={order}
+					receiptHost={receiptHost}
+					{...frameGate.frameProps}
+					settledOrderStatuses={settledOrderStatuses}
+					onStockRejection={handleStockRejection}
+				/>
+			</View>
 			<HStack className="justify-end">
 				<Button
 					testID="checkout-legacy-process-payment"

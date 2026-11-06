@@ -1567,10 +1567,17 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 	const gateStep = workflow.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
 	// 'Gallery' is test.yml's aggregator over the read-only shoot and the label-driven
 	// baseline update (roadmap#355): SKIPPED when the gallery path filter did not fire.
-	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	// The 1.11.x lane has no gallery job, and pull_request_target evaluates main's copy
+	// of this file for a PR based on 1.11.x (#3281 timed out on it), so the list is
+	// chosen by the PR's base.
+	const requiredFor = (baseRef) =>
+		evaluateExpression(gateStep.env.MERGE_GATE_REQUIRED_CHECKS, {
+			'github.event.pull_request.base.ref': baseRef,
+		}).split('|');
+	assert.deepEqual(requiredFor('main'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	assert.deepEqual(requiredFor('1.11.x'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
 	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
 });
 

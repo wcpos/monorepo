@@ -15,6 +15,7 @@ import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { CommandsProvider } from '@wcpos/core/extensions/commands';
 import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
+import { HeadlessAutoPrintHost } from '@wcpos/core/screens/main/pos/checkout/receipt-stage/headless-auto-print';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
 import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
@@ -29,6 +30,7 @@ import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/comm
 import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
+import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
@@ -184,8 +186,10 @@ function POSStack() {
 			<PosUrlMirror />
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
+				<HeadlessAutoPrintHost />
 				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
 					<Stack
+						screenListeners={tillStackScreenListeners}
 						screenOptions={{
 							animation: 'none',
 							headerShown: false,

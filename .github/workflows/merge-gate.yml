@@ -48,7 +48,11 @@ jobs:
           # label-driven baseline update (mutually exclusive); SKIPPED when the
           # gallery path filter did not fire. Required so a baseline mismatch
           # blocks the merge (roadmap#355, DoD C).
-          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|Gallery
+          # The 1.11.x lane has no gallery job, and pull_request_target runs THIS
+          # file (the default branch's) for a PR based on 1.11.x: #3281 timed out
+          # on a Gallery check nothing ever reports. Gallery is required only
+          # where test.yml reports it.
+          MERGE_GATE_REQUIRED_CHECKS: ${{ github.event.pull_request.base.ref == '1.11.x' && '🧹 Lint|🧪 Unit Tests|🎭 E2E Tests' || '🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|Gallery' }}
           # 140 × 30s ≈ 70 min: covers deploy (~7 min) plus the slower of a
           # web shard (~12 min) and a native run (~32 min), with one retry.
           MERGE_GATE_MAX_ATTEMPTS: '140'

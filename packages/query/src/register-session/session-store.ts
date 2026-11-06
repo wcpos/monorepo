@@ -26,7 +26,13 @@ import type {
 	UserDatabase,
 } from '@wcpos/database';
 
-import { advancePerpetual, mintClosureNumber, mintUuid, readRegister } from './register-document';
+import {
+	advancePerpetual,
+	isoGmt,
+	mintClosureNumber,
+	mintUuid,
+	readRegister,
+} from './register-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
@@ -74,6 +80,18 @@ export async function requireOpenSession(
 	if (!session) return null;
 	// Retain the baseline; pending rows supply the delta until the next detail refresh.
 	return session.id;
+}
+/**
+ * Whether the register's session is being counted. `findOpenSession` matches `status: 'open'`
+ * only and throws on a miss, so this is its own read. It runs on the tap or scan: one `findOne`.
+ */
+export async function isRegisterCounting(storeDB: RegisterStoreDatabase, registerId: string) {
+	const counting = await registerCollections(storeDB)
+		.register_sessions?.findOne({
+			selector: { register_id: registerId, status: 'counting', sync_status: { $ne: 'failed' } },
+		})
+		.exec();
+	return !!counting;
 }
 export function openSession(
 	storeDB: RegisterStoreDatabase,
@@ -186,6 +204,17 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 			return doc;
 		});
 	}
+	// A closure dead-lettered by this movement's refusal is never looked at again (the outbox
+	// passes only pending rows), so it would stay failed after the movement lands. Re-queue it;
+	// it still waits for the movement to sync before it sends.
+	const closures = await registerCollections(storeDB)
+		.closures.find({ selector: { session_id: row.session_id, sync_status: 'failed' } })
+		.exec();
+	await Promise.all(
+		closures
+			.filter((closure) => closure.movement_ids.includes(row.id))
+			.map((closure) => closure.incrementalPatch({ ...pending }))
+	);
 	return retried;
 }
 export function recordMovement(
@@ -443,7 +472,7 @@ export async function writeClosure({
 		register_id: session.register_id,
 		store_id: session.store_id ?? null,
 		number: 0,
-		opened_at: session.opened_at_gmt,
+		opened_at: isoGmt(session.opened_at_gmt),
 		business_day:
 			session.business_day ||
 			format(

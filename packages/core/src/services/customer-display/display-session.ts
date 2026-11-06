@@ -17,7 +17,14 @@ export interface DisplayEvent {
 	payload: Record<string, unknown>;
 }
 export interface DisplayConfigInput {
-	store: { id: number; name: string; currency: string; locale: string; timezone?: string };
+	store: {
+		id: number;
+		name: string;
+		currency: string;
+		locale: string;
+		timezone?: string;
+		logo?: string;
+	};
 	presentation_hints: Record<string, unknown>;
 	i18n: Record<string, string>;
 }

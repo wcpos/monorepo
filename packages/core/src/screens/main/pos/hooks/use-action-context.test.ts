@@ -10,6 +10,7 @@ import { useActionContext } from './use-action-context';
 const mockReadBoundRegister = jest.fn();
 const mockFindOpenSession = jest.fn();
 const mockIncrementalPatch = jest.fn();
+const mockFindSession = jest.fn();
 
 jest.mock('@wcpos/query', () => {
 	const runtime = { engine: { active: () => undefined } };
@@ -29,7 +30,13 @@ jest.mock('../../../../contexts/app-state', () => {
 		store: { id: 3 },
 		wpCredentials: { id: 7 },
 		userDB: {},
-		storeDB: 'storeDB',
+		storeDB: {
+			collections: {
+				register_sessions: {
+					findOne: (query: unknown) => ({ exec: async () => mockFindSession(query) }),
+				},
+			},
+		},
 		site: { uuid: 'site' },
 	};
 	return { useStoreSession: () => session };
@@ -76,7 +83,8 @@ it('resolves the bound register and its open session without writing', async () 
 		sessionId: 'session-1',
 	});
 	expect(mockReadBoundRegister).toHaveBeenCalledWith({}, 'site', 3);
-	expect(mockFindOpenSession).toHaveBeenCalledWith('storeDB', 'register-1', true);
+	const { storeDB } = jest.requireMock('../../../../contexts/app-state').useStoreSession();
+	expect(mockFindOpenSession).toHaveBeenCalledWith(storeDB, 'register-1', true);
 	// The read noun never touches the session document; the writer does that.
 	expect(mockIncrementalPatch).not.toHaveBeenCalled();
 });
@@ -105,4 +113,20 @@ it('reads a payment method descriptor from the till, null for one it does not of
 	});
 	expect(result.current.ctx.read.paymentMethod('stripe')).toBeNull();
 	expect(result.current.ctx.store.priceDecimals).toBe(2);
+});
+
+it('reads at event time whether the bound register is being counted', async () => {
+	const { result } = renderHook(() => useActionContext());
+	expect(mockFindSession).not.toHaveBeenCalled();
+	mockFindSession.mockReturnValueOnce({ id: 'session-1', status: 'counting' });
+	await expect(result.current.readCounting()).resolves.toBe(true);
+	expect(mockFindSession).toHaveBeenCalledWith({
+		selector: { register_id: 'register-1', status: 'counting', sync_status: { $ne: 'failed' } },
+	});
+	mockFindSession.mockReturnValueOnce(null);
+	await expect(result.current.readCounting()).resolves.toBe(false);
+	// No bound register: nothing to count.
+	mockReadBoundRegister.mockResolvedValueOnce(null);
+	await expect(result.current.readCounting()).resolves.toBe(false);
+	expect(mockFindSession).toHaveBeenCalledTimes(2);
 });

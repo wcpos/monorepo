@@ -10,13 +10,15 @@ import {
 	SQLITE_POOL_NAME,
 } from '../packages/database/src/adapters/storage/sqlite-pool.ts';
 import { getSQLiteBasicsOo1 } from './sqlite-basics-oo1.mjs';
-import { ensurePoolCapacity } from './sqlite-pool-capacity.mjs';
+import { createPoolReservations } from './sqlite-pool-capacity.mjs';
 import { quietRecoveredConstraintWarnings } from './sqlite-quiet-constraint.mjs';
 
 const wasmUrl = new URL('sqlite3.wasm', self.location.href);
 // The plugin's worker cache-buster must select the matching wasm build too.
 wasmUrl.search = self.location.search;
 let ready;
+let poolReservations;
+const reservations = new WeakMap(); // db -> its pool reservation, until settleOpen (#2347)
 const sqliteBasics = getSQLiteBasicsOo1({
 	journalMode: 'WAL',
 	async openDb(name) {
@@ -30,12 +32,25 @@ const sqliteBasics = getSQLiteBasicsOo1({
 			});
 		});
 		const pool = await ready;
-		await ensurePoolCapacity(pool, {
+		poolReservations ??= createPoolReservations(pool, {
 			filesPerDatabase: SQLITE_POOL_FILES_PER_DATABASE,
 			growthStep: SQLITE_POOL_GROWTH_STEP,
 			maxCapacity: SQLITE_POOL_MAX_CAPACITY,
 		});
-		return new pool.OpfsSAHPoolDb('/' + name);
+		const reservation = await poolReservations.reserve();
+		const before = pool.getFileCount();
+		try {
+			const db = new pool.OpfsSAHPoolDb('/' + name);
+			reservation.claimed(pool.getFileCount() - before);
+			reservations.set(db, reservation);
+			return db;
+		} catch (error) {
+			reservation.release();
+			throw error;
+		}
+	},
+	settleOpen(db) {
+		reservations.get(db)?.release();
 	},
 });
 // Expose synchronously: awaiting wasm first loses the page's first RPC (#2242 spike).

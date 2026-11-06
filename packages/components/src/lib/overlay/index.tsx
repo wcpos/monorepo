@@ -66,6 +66,7 @@ export type OverlayScrimProps = {
 	/** Native: a blocking scrim takes no touches (see `OverlayShellProps.blocking`). */
 	pointerEvents?: 'auto' | 'none';
 	onPress?: (event: GestureResponderEvent) => void;
+	onPressIn?: (event: GestureResponderEvent) => void;
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
 export type OverlayShellProps = {
@@ -347,8 +348,17 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	React.useEffect(() => {
 		onDismissRef.current = onDismiss;
 	});
+	// Web: a Radix trigger opens on pointer-down, so a phone sheet's scrim mounts under the finger
+	// and takes that tap's click. Only a press that began on the scrim dismisses (roadmap#505).
+	const pressedIn = React.useRef(false);
+	const onScrimPressIn = React.useCallback(() => {
+		pressedIn.current = true;
+	}, []);
 	const onScrimPress = React.useCallback(
 		(event?: GestureResponderEvent) => {
+			const began = pressedIn.current;
+			pressedIn.current = false;
+			if (!began) return;
 			// On web the scrim is the panel's ancestor, so a press inside the panel bubbles
 			// here too; only the backdrop itself dismisses.
 			if (event?.target && event.currentTarget && event.target !== event.currentTarget) return;
@@ -465,6 +475,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 						focusable={false}
 						style={onOutsidePress ? OUTSIDE_PRESS_LAYER : undefined}
 						onPress={onDismiss || onOutsidePress ? onScrimPress : undefined}
+						onPressIn={onDismiss || onOutsidePress ? onScrimPressIn : undefined}
 						testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 					>
 						{children}
@@ -512,8 +523,11 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			className={cn(
 				'bg-scrim absolute top-0 right-0 bottom-0 left-0 flex',
 				align[presentation],
-				// A leaving overlay takes no presses: the next tap goes to what is under it.
-				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out pointer-events-none',
+				// A leaving overlay takes no presses: the next tap goes to what is under it. An open one
+				// takes them even over a modal Radix dialog, which sets `pointer-events: none` on the body.
+				open
+					? 'web:animate-overlay-in pointer-events-auto'
+					: 'web:animate-overlay-out pointer-events-none',
 				// Radix inserts an auto-height [role=dialog] wrapper; give it the panel's box on every
 				// presentation so h-full / max-h-full / max-w-full resolve (see SCRIM_WRAPPER — never
 				// `display: contents`, which kills native drag inside the panel).
@@ -525,6 +539,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			focusable={false}
 			style={stripTop > 0 ? { top: stripTop } : undefined}
 			onPress={onDismiss ? onScrimPress : undefined}
+			onPressIn={onDismiss ? onScrimPressIn : undefined}
 			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
 			{children}
