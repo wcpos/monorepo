@@ -4,9 +4,12 @@ import { Text } from 'react-native';
 import { Redirect, router, Slot, Stack, Tabs } from 'expo-router';
 import { act, renderRouter } from 'expo-router/testing-library';
 
+import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
+
 import {
 	columnsCheckoutHref,
 	leaveSheet,
+	openTill,
 	returnToTill,
 	tillCartHref,
 } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
@@ -196,6 +199,92 @@ describe('a wide checkout sheet hands off to the columns cart', () => {
 			'(columns)/cart/[...orderId]',
 		]);
 		expect(view.getPathname()).toBe('/cart/o1/checkout');
+	});
+});
+
+describe('a door into the till from another drawer page', () => {
+	const drawerRoutes = {
+		...checkoutRoutes,
+		'(app)/(drawer)/(pos)/_layout': () => <Stack screenListeners={tillStackScreenListeners} />,
+		// This describe exercises the wide till; the shared checkout fixture defaults to phone tabs.
+		'(app)/(drawer)/(pos)/index': () => <Redirect href="/(app)/(drawer)/(pos)/(columns)" />,
+		'(app)/(drawer)/_layout': () => (
+			<Tabs screenOptions={{ lazy: false }}>
+				<Tabs.Screen name="(pos)" />
+				<Tabs.Screen name="orders" />
+			</Tabs>
+		),
+		'(app)/(drawer)/orders/index': () => <Text testID="orders" />,
+	};
+
+	it('control: re-opening from Orders stacks two tills without listeners', async () => {
+		const view = await renderRouter(
+			{
+				...drawerRoutes,
+				'(app)/(drawer)/(pos)/_layout': () => <Stack />,
+			},
+			{ initialUrl: '/(app)/(drawer)/(pos)/(columns)/cart/o1' }
+		);
+		await act(async () => router.navigate('/orders'));
+		await act(async () =>
+			router.push({ pathname: '/cart/[...orderId]', params: { orderId: ['o2'] } })
+		);
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+			'(columns)/cart/[...orderId]',
+		]);
+	});
+
+	it.each(['/(app)/(drawer)/(pos)/(columns)/cart/o1', '/'])(
+		'keeps one till when re-opening from Orders after %s',
+		async (initialUrl) => {
+			const view = await renderRouter(drawerRoutes, { initialUrl });
+			if (initialUrl === '/') {
+				expect(posStack(view)?.routes.map((route) => route.name)).toEqual(['(columns)/index']);
+			}
+			await act(async () => router.navigate('/orders'));
+			await act(async () => openTill(router, false, 'o2'));
+			expect(posStack(view)?.routes).toHaveLength(1);
+			expect(posStack(view)?.routes[0]).toMatchObject({
+				name: '(columns)/cart/[...orderId]',
+				params: { orderId: ['o2'] },
+			});
+			expect(view.getPathname()).toBe('/cart/o2');
+		}
+	);
+
+	it('keeps one till when switching store from Orders', async () => {
+		const view = await renderRouter(drawerRoutes, {
+			initialUrl: '/(app)/(drawer)/(pos)/(columns)/cart/o1',
+		});
+		await act(async () => router.navigate('/orders'));
+		await act(async () => router.replace({ pathname: '/' }));
+		expect(posStack(view)?.routes).toHaveLength(1);
+		expect(posStack(view)?.routes[0].name).not.toMatch(/^\(modals\)\//);
+		expect(view.getPathname()).toBe('/');
+	});
+
+	it('keeps a sheet with its till, then drops both when another order is opened', async () => {
+		const view = await renderRouter(drawerRoutes, {
+			initialUrl: '/(app)/(drawer)/(pos)/(columns)/cart/o1',
+		});
+		await act(async () => {
+			router.push({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+				params: { orderId: 'o1' },
+			});
+		});
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+			'(modals)/cart/[orderId]/checkout',
+		]);
+		await act(async () => router.navigate('/orders'));
+		await act(async () => openTill(router, false, 'o2'));
+		expect(posStack(view)?.routes.map((route) => route.name)).toEqual([
+			'(columns)/cart/[...orderId]',
+		]);
+		expect(posStack(view)?.routes[0].params).toMatchObject({ orderId: ['o2'] });
+		expect(view.getPathname()).toBe('/cart/o2');
 	});
 });
 
