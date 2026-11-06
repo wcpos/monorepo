@@ -1,0 +1,85 @@
+samples=378105 wall=60072 ms bundle=http://192.168.1.152:8081/node_modules/expo-router/entry.bundle//&platform=ios&dev=false&hot=false&lazy=true&minify=true&transform.engine=hermes&transform.bytecode=1&transform.routerRoot=app&transform.reactCompiler=true&unstable_transformProfile=hermes-stable
+
+== self time ==
+  44667 ms  74.4%  (idle) native:NaN:NaN
+   3210 ms   5.3%  create native:NaN:NaN
+   2417 ms   4.0%  writeBytes native:NaN:NaN
+   1212 ms   2.0%  delete native:NaN:NaN
+   1022 ms   1.7%  exists native:NaN:NaN
+    886 ms   1.5%  open native:NaN:NaN
+    739 ms   1.2%  textEncoderPrototypeEncode native:NaN:NaN
+    706 ms   1.2%  stringPrototypeRepeat native:NaN:NaN
+    512 ms   0.9%  fastUtf8Decode bundle:393122:3  →  fastUtf8Decode worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-filesystem-expo/utf-8.js:1
+    431 ms   0.7%  readBytes native:NaN:NaN
+    429 ms   0.7%  parsePath bundle:32886:19  →  parsePath worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:1080
+    361 ms   0.6%  utf8PercentEncodeCodePoint bundle:32055:3  →  utf8PercentEncodeCodePoint worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:191
+    357 ms   0.6%  next bundle:32469:3  →  next worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:625
+    356 ms   0.6%  close native:NaN:NaN
+    336 ms   0.6%  __wcposHash bundle:392120:3  →  __wcposHash worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/cleanup.js:2
+    225 ms   0.4%  parseURLRaw bundle:32411:13  →  parseURLRaw worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:566
+    185 ms   0.3%  mathImul native:NaN:NaN
+    164 ms   0.3%  FileSystemFile native:NaN:NaN
+    129 ms   0.2%  isSpecial bundle:32157:3  →  isSpecial worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:304
+    100 ms   0.2%  isQueryPercentEncode bundle:31989:3  →  isQueryPercentEncode worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:115
+     99 ms   0.2%  isPathPercentEncode bundle:32004:3  →  isPathPercentEncode worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:133
+     93 ms   0.2%  arrayFrom native:NaN:NaN
+     82 ms   0.1%  normalizeString bundle:313985:3  →  normalizeString worktrees/ios-device-profile/node_modules/expo-file-system/src/pathUtilities/path.ts:27
+     72 ms   0.1%  stringIteratorPrototypeNext native:NaN:NaN
+     62 ms   0.1%  isC0ControlPercentEncode bundle:31974:3  →  isC0ControlPercentEncode worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:97
+     56 ms   0.1%  stringPrototypeCharCodeAt native:NaN:NaN
+     52 ms   0.1%  arrayPrototypeSlice native:NaN:NaN
+     51 ms   0.1%  (anon) bundle:32434:30  →  Array.from$argument_1 worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:589
+     49 ms   0.1%  stringFromCharCode native:NaN:NaN
+     48 ms   0.1%  stringFromCodePoint native:NaN:NaN
+     47 ms   0.1%  utf8Encode bundle:31933:3  →  utf8Encode worktrees/ios-device-profile/node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.mjs:51
+     40 ms   0.1%  (anon) native:NaN:NaN
+     40 ms   0.1%  jsonParse native:NaN:NaN
+     35 ms   0.1%  size native:NaN:NaN
+     28 ms   0.0%  regExpPrototypeExec native:NaN:NaN
+     28 ms   0.0%  (garbage collector) native:NaN:NaN
+     27 ms   0.0%  ?anon_2_cleanupDocumentJsonFile bundle:392225:57  →  cleanupDocumentJsonFile worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/cleanup.js:12
+     25 ms   0.0%  offset native:NaN:NaN
+     25 ms   0.0%  jsonStringify native:NaN:NaN
+     22 ms   0.0%  stringPrototypeCodePointAt native:NaN:NaN
+
+== total (inclusive) time ==
+  60072 ms 100.0%  (root) native:NaN:NaN
+  44667 ms  74.4%  (idle) native:NaN:NaN
+  15361 ms  25.6%  (anon) native:NaN:NaN
+  15348 ms  25.5%  tryCallOne native:NaN:NaN
+   6035 ms  10.0%  step native:NaN:NaN
+   6024 ms  10.0%  generatorPrototypeResume native:NaN:NaN
+   4845 ms   8.1%  (anon) bundle:392874:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:473
+   4845 ms   8.1%  spawn native:NaN:NaN
+   4845 ms   8.1%  Promise native:NaN:NaN
+   4844 ms   8.1%  tryCallTwo native:NaN:NaN
+   4842 ms   8.1%  ?anon_0_ bundle:392874:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:473
+   4119 ms   6.9%  (anon) bundle:392753:33  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:330
+   4112 ms   6.8%  ?anon_0_ bundle:392778:13  →  enqueue$argument_1 worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:362
+   4110 ms   6.8%  writeChunk bundle:392786:21  →  FileSystemWritableFileStream#writeChunk worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:371
+   4107 ms   6.8%  ?anon_2_writeChunk bundle:392795:21  →  FileSystemWritableFileStream#writeChunk worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:382
+   3847 ms   6.4%  lazyInit bundle:392731:13  →  FileSystemWritableFileStream#lazyInit worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:307
+   2451 ms   4.1%  ?anon_2_cleanupDocumentJsonFile bundle:392225:57  →  cleanupDocumentJsonFile worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/cleanup.js:12
+   1634 ms   2.7%  create native:NaN:NaN
+   1212 ms   2.0%  delete native:NaN:NaN
+   1120 ms   1.9%  writeBytes native:NaN:NaN
+   1087 ms   1.8%  ?anon_2_cleanupChangelogOperations bundle:392186:61  →  cleanupChangelogOperations worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/cleanup.js:12
+    931 ms   1.6%  ?anon_0_ bundle:390302:75  →  t.addChangelogOperations worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/changelog.js:2
+    911 ms   1.5%  (anon) bundle:392399:28  →  t.getWritable worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-filesystem-expo/filesystem-expo.js:1
+    909 ms   1.5%  ?anon_0_ bundle:392400:15  →  t.getWritable worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-filesystem-expo/filesystem-expo.js:1
+    908 ms   1.5%  createWritable bundle:392586:25  →  FileSystemFileHandle#createWritable worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:141
+    905 ms   1.5%  ?anon_2_createWritable bundle:392590:58  →  FileSystemFileHandle#createWritable worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:146
+    903 ms   1.5%  FileSystemWritableFileStream bundle:392721:16  →  FileSystemWritableFileStream#constructor worktrees/ios-device-profile/node_modules/expo-opfs/dist/src/index.js:297
+    899 ms   1.5%  File bundle:312817:5  →  constructor worktrees/ios-device-profile/node_modules/expo-file-system/src/File.ts:149
+    822 ms   1.4%  hermesBuiltinApply native:NaN:NaN
+    822 ms   1.4%  join bundle:313812:16  →  PathUtilities.join worktrees/ios-device-profile/node_modules/expo-file-system/src/pathUtilities/index.ts:15
+    706 ms   1.2%  stringPrototypeRepeat native:NaN:NaN
+    660 ms   1.1%  (anon) bundle:389690:24  →  r._encode worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/storage-instance.js:1
+    658 ms   1.1%  textEncoderPrototypeEncode native:NaN:NaN
+    575 ms   1.0%  __wcposHash bundle:392120:3  →  __wcposHash worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/cleanup.js:2
+    466 ms   0.8%  exists native:NaN:NaN
+    462 ms   0.8%  ?anon_2_ bundle:390280:13  →  t.getChangelogOperations worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/changelog.js:2
+    451 ms   0.8%  open native:NaN:NaN
+    439 ms   0.7%  (anon) bundle:389692:20  →  r._decode worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/storage-instance.js:1
+    439 ms   0.7%  fastUtf8Decode bundle:393122:3  →  fastUtf8Decode worktrees/ios-device-profile/node_modules/rxdb-premium/dist/esm/plugins/storage-filesystem-expo/utf-8.js:1
+    417 ms   0.7%  asUrl bundle:314435:3  →  asUrl worktrees/ios-device-profile/node_modules/expo-file-system/src/pathUtilities/url.ts:70
