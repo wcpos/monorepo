@@ -74,7 +74,7 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 	// animation: reanimated on web is JS-driven and would stutter under load.
 	const rotation = useSharedValue(0);
 	React.useEffect(() => {
-		if (Platform.isNative) return;
+		if (!Platform.isNative) return;
 		// One full turn per second, linear — matches tailwind's `animate-spin`.
 		// ReduceMotion.Never on both layers (the repeat suppression is separate
 		// from the timing's): a spinner is a functional progress indicator, and
