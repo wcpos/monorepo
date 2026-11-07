@@ -31,3 +31,7 @@ export {
 export { recordReceiptPrint } from './record-receipt-print';
 export { resolveQueuedChange } from './resolve-queued-change';
 export { enqueueRecordWrite, pushRecord, readWrittenResident } from './push-record';
+export {
+	settleStoreDeletedOrder,
+	type StoreDeletedOrderSettlement,
+} from './settle-store-deleted-order';

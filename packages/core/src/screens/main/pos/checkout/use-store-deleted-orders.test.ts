@@ -3,21 +3,20 @@ import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { REJECTED_QUEUE_STATUSES } from '@wcpos/query';
+import type { settleStoreDeletedOrder, StoreDeletedOrderSettlement } from '@wcpos/query/mutations';
 
 import { useStoreDeletedOrdersSettler } from './use-store-deleted-orders';
 
 const mockRows = new BehaviorSubject<unknown[]>([]);
 const mockObserve = jest.fn((..._args: unknown[]) => mockRows.asObservable());
-const mockFind = jest.fn();
-const mockRebirth = jest.fn();
+const mockSettle = jest.fn<
+	ReturnType<typeof settleStoreDeletedOrder>,
+	Parameters<typeof settleStoreDeletedOrder>
+>();
 const mockWarn = jest.fn();
 const mockError = jest.fn();
-let mockScope = 'scope-1';
-const mockEngine = {
-	resolveConflict: jest.fn(),
-	write: jest.fn(),
-	status: () => ({ activeScopeId: mockScope }),
-};
+let mockScope: string | null = 'scope-1';
+const mockEngine = { status: () => ({ activeScopeId: mockScope }) };
 const mockRuntime = { engine: mockEngine };
 const mockT = (key: string, args?: { number: unknown }) => (args ? `${key}:${args.number}` : key);
 jest.mock('@wcpos/query', () => ({
@@ -26,20 +25,8 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 }));
 jest.mock('@wcpos/query/mutations', () => ({
-	findEngineResident: (...args: unknown[]) => mockFind(...args),
-	rebirthOrderResident: (...args: unknown[]) => mockRebirth(...args),
-	// Mirrors the real helper: re-read the resident, write a create from its payload.
-	recreateRebornOrder: async (manager: unknown, recordId: string) => {
-		const current = await mockFind(manager, 'orders', recordId);
-		return mockEngine.write({
-			collection: 'orders',
-			operation: 'create',
-			recordId,
-			payload: (current as { toMutableJSON(): { payload: unknown } }).toMutableJSON().payload,
-		});
-	},
-	residentPayload: (resident: { toMutableJSON(): { payload: unknown } }) =>
-		resident.toMutableJSON().payload,
+	settleStoreDeletedOrder: (...args: Parameters<typeof settleStoreDeletedOrder>) =>
+		mockSettle(...args),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
@@ -56,14 +43,11 @@ const row = {
 	rejectedStatus: 404,
 	rejectedReason: 'woo_rxdb_sync_record_not_found',
 };
-const resident = (
-	status: string,
-	number: string | undefined = '33827',
-	remoteId: string | null = '33827'
-) => ({
-	toJSON: () => ({ remoteId }),
-	toMutableJSON: () => ({ payload: { id: 33827, status, number } }),
-});
+const recreated: StoreDeletedOrderSettlement = {
+	kind: 'recreated',
+	number: '33827',
+	alreadyReborn: false,
+};
 const emit = async (rows = [row]) => {
 	await act(async () => {
 		mockRows.next(rows);
@@ -74,82 +58,41 @@ beforeEach(() => {
 	mockRows.next([]);
 	jest.resetAllMocks();
 	mockObserve.mockImplementation(() => mockRows.asObservable());
-	mockEngine.resolveConflict.mockResolvedValue(undefined);
-	mockEngine.write.mockResolvedValue({ mutationId: 'create' });
-	mockFind.mockResolvedValue(resident('pos-open'));
-	mockRebirth.mockResolvedValue(resident('pos-open'));
+	mockSettle.mockResolvedValue(recreated);
 });
 
-it('rebirths an open cart, discards then writes a plain create and toasts once', async () => {
-	const reborn = { toMutableJSON: () => ({ payload: { id: 0, status: 'pos-open' } }) };
-	// The resident as it stands AFTER the discard: an edit landed while it awaited storage.
-	const edited = {
-		toMutableJSON: () => ({
-			payload: { id: 0, status: 'pos-open', line_items: [{ quantity: 2 }] },
-		}),
-	};
-	mockFind.mockResolvedValueOnce(resident('pos-open')).mockResolvedValue(edited);
-	mockRebirth.mockResolvedValue(reborn);
-	const { unmount } = renderHook(() => useStoreDeletedOrdersSettler(1));
-	expect(mockObserve).toHaveBeenCalledWith(mockEngine, {
-		statuses: REJECTED_QUEUE_STATUSES,
-		collectionName: 'orders',
-	});
-	await emit();
-	expect(mockRebirth).toHaveBeenCalledWith(mockRuntime, 'a');
-	expect(mockFind).toHaveBeenCalledTimes(2);
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
-	expect(mockEngine.write).toHaveBeenCalledWith({
-		collection: 'orders',
-		operation: 'create',
-		recordId: 'a',
-		payload: { id: 0, status: 'pos-open', line_items: [{ quantity: 2 }] },
-	});
-	expect(mockRebirth.mock.invocationCallOrder[0]).toBeLessThan(
-		mockEngine.resolveConflict.mock.invocationCallOrder[0]
-	);
-	expect(mockEngine.resolveConflict.mock.invocationCallOrder[0]).toBeLessThan(
-		mockEngine.write.mock.invocationCallOrder[0]
-	);
-	expect(mockWarn).toHaveBeenCalledWith(
-		expect.any(String),
-		expect.objectContaining({
-			code: 'SYNC203',
-			showToast: true,
-			toast: {
-				title: 'pos_checkout.order_deleted_on_store',
-				text2: 'pos_checkout.order_deleted_on_store_recreated:33827',
-			},
-			context: { orderId: 'a', orderNumber: '33827', mutationId: 'm1', outcome: 'recreated' },
-		})
-	);
-	await emit();
-	expect(mockEngine.write).toHaveBeenCalledTimes(1);
-	expect(mockWarn).toHaveBeenCalledTimes(1);
-	unmount();
-	expect(mockRows.observed).toBe(false);
-});
-
-it.each(['completed', 'pos-partial', 'pending', 'processing', 'custom'])(
-	'discards %s without creating',
-	async (status) => {
-		mockFind.mockResolvedValue(resident(status));
-		renderHook(() => useStoreDeletedOrdersSettler(1));
+it.each(['recreated', 'removed'] as const)(
+	'toasts once for a %s order and does not rerun a handled row',
+	async (kind) => {
+		mockSettle.mockResolvedValue({ kind, number: '33827', alreadyReborn: false });
+		const { unmount } = renderHook(() => useStoreDeletedOrdersSettler(1));
+		expect(mockObserve).toHaveBeenCalledWith(mockEngine, {
+			statuses: REJECTED_QUEUE_STATUSES,
+			collectionName: 'orders',
+		});
 		await emit();
-		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
-		expect(mockRebirth).not.toHaveBeenCalled();
-		expect(mockEngine.write).not.toHaveBeenCalled();
+		expect(mockSettle).toHaveBeenCalledWith(mockRuntime, {
+			recordId: 'a',
+			mutationId: 'm1',
+			abandoned: expect.any(Function),
+		});
 		expect(mockWarn).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
+				code: 'SYNC203',
 				showToast: true,
 				toast: {
 					title: 'pos_checkout.order_deleted_on_store',
-					text2: 'pos_checkout.order_deleted_on_store_removed:33827',
+					text2: `pos_checkout.order_deleted_on_store_${kind}:33827`,
 				},
-				context: { orderId: 'a', orderNumber: '33827', mutationId: 'm1', outcome: 'removed' },
+				context: { orderId: 'a', orderNumber: '33827', mutationId: 'm1', outcome: kind },
 			})
 		);
+		await emit();
+		expect(mockSettle).toHaveBeenCalledTimes(1);
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		unmount();
+		expect(mockRows.observed).toBe(false);
 	}
 );
 
@@ -161,126 +104,128 @@ it.each([
 ])('ignores an unrelated rejection %o', async (overrides) => {
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit([{ ...row, ...overrides }]);
-	expect(mockFind).not.toHaveBeenCalled();
-	expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
+	expect(mockSettle).not.toHaveBeenCalled();
 });
 
-it('discards an absent resident silently', async () => {
-	mockFind.mockResolvedValue(null);
+it.each<StoreDeletedOrderSettlement>([
+	{ kind: 'absent' },
+	{ kind: 'recreated', alreadyReborn: true },
+])('silently handles $kind (alreadyReborn=$alreadyReborn)', async (outcome) => {
+	mockSettle.mockResolvedValue(outcome);
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit();
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+	await emit();
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 	expect(mockWarn).not.toHaveBeenCalled();
 });
 
-it('uses a title-only toast when the order number is absent', async () => {
-	mockFind.mockResolvedValue({
-		toJSON: () => ({ remoteId: '33827' }),
-		toMutableJSON: () => ({ payload: { status: 'completed' } }),
-	});
-	renderHook(() => useStoreDeletedOrdersSettler(1));
-	await emit();
-	expect(mockWarn.mock.calls[0][1].toast).toEqual({ title: 'pos_checkout.order_deleted_on_store' });
-});
+it.each(['recreated', 'removed'] as const)(
+	'uses a title-only toast for %s without a number',
+	async (kind) => {
+		mockSettle.mockResolvedValue({ kind, alreadyReborn: false });
+		renderHook(() => useStoreDeletedOrdersSettler(1));
+		await emit();
+		expect(mockWarn.mock.calls[0][1].toast).toEqual({
+			title: 'pos_checkout.order_deleted_on_store',
+		});
+	}
+);
 
 it('retries a thrown settle only on the next emission and shows a failure toast', async () => {
-	mockFind.mockRejectedValueOnce(new Error('storage failed'));
+	mockSettle.mockRejectedValueOnce(new Error('storage failed'));
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit();
-	expect(mockFind).toHaveBeenCalledTimes(1);
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 	expect(mockError).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({
 			code: 'SYNC201',
 			showToast: true,
 			toast: { title: 'pos_checkout.order_refused', text2: 'storage failed' },
-			context: expect.objectContaining({ error: 'storage failed' }),
+			context: { orderId: 'a', mutationId: 'm1', error: 'storage failed' },
 		})
 	);
 	expect(mockWarn).not.toHaveBeenCalled();
 	await emit();
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
-	expect(mockEngine.write).toHaveBeenCalledTimes(1);
+	expect(mockSettle).toHaveBeenCalledTimes(2);
+	expect(mockWarn).toHaveBeenCalledTimes(1);
 });
 
-it('drains the latest second row for a record after the first settles without another emission', async () => {
-	let finish!: () => void;
-	mockEngine.resolveConflict.mockImplementationOnce(
+it('keeps one settle per record in flight and rescans the latest second row without another emission', async () => {
+	let finish!: (outcome: StoreDeletedOrderSettlement) => void;
+	mockSettle.mockImplementationOnce(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise((resolve) => {
 				finish = resolve;
 			})
 	);
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit([row, { ...row, mutationId: 'stale' }]);
 	await emit([row, { ...row, mutationId: 'm2' }]);
-	expect(mockFind).toHaveBeenCalledTimes(1);
-	mockFind.mockResolvedValue(resident('pos-open', undefined, null));
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+	mockSettle.mockResolvedValue({ kind: 'recreated', alreadyReborn: true });
 	await act(async () => {
-		finish();
+		finish(recreated);
 	});
-	expect(mockEngine.resolveConflict.mock.calls).toEqual([
-		['m1', 'discard'],
-		['m2', 'discard'],
-	]);
-	expect(mockEngine.write).toHaveBeenCalledTimes(2);
+	expect(mockSettle.mock.calls.map(([, input]) => input.mutationId)).toEqual(['m1', 'm2']);
 	expect(mockWarn).toHaveBeenCalledTimes(1);
 });
 
-it('discards and creates an already-reborn cart without another toast', async () => {
-	mockFind.mockResolvedValue(resident('pos-open', undefined, null));
-	renderHook(() => useStoreDeletedOrdersSettler(1));
-	await emit();
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
-	expect(mockEngine.write).toHaveBeenCalledTimes(1);
-	expect(mockWarn).not.toHaveBeenCalled();
-});
-
-it('stops a settle whose effect was cleaned up mid-flight: the discard lands, the create does not', async () => {
-	let finishDiscard!: () => void;
-	mockEngine.resolveConflict.mockReturnValue(
-		new Promise<void>((resolve) => {
-			finishDiscard = resolve;
-		})
+it('abandons a settle when unmounted mid-flight without a toast', async () => {
+	let finish!: (outcome: StoreDeletedOrderSettlement) => void;
+	mockSettle.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			})
 	);
 	const { unmount } = renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit();
-	expect(mockRebirth).toHaveBeenCalledTimes(1);
+	const { abandoned } = mockSettle.mock.calls[0][1];
+	expect(abandoned()).toBe(false);
 	unmount();
+	expect(abandoned()).toBe(true);
 	await act(async () => {
-		finishDiscard();
+		finish({ kind: 'abandoned' });
 	});
-	expect(mockEngine.write).not.toHaveBeenCalled();
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 	expect(mockWarn).not.toHaveBeenCalled();
+	expect(mockRows.observed).toBe(false);
 });
 
-it('abandons a settle when the store scope moves before the discard, leaving the row for its own scope', async () => {
-	let finishRebirth!: (value: unknown) => void;
-	mockRebirth.mockReturnValue(
-		new Promise((resolve) => {
-			finishRebirth = resolve;
-		})
+it('abandons a moved scope and retries its row when back on its own scope', async () => {
+	let finish!: (outcome: StoreDeletedOrderSettlement) => void;
+	mockSettle.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			})
 	);
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit();
+	const { abandoned } = mockSettle.mock.calls[0][1];
+	expect(abandoned()).toBe(false);
 	mockScope = 'scope-2';
+	expect(abandoned()).toBe(true);
 	await act(async () => {
-		finishRebirth(resident('pos-open'));
+		finish({ kind: 'abandoned' });
 	});
-	expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
-	expect(mockEngine.write).not.toHaveBeenCalled();
-	// Back on its own scope, the next emission settles it.
-	mockScope = 'scope-1';
-	mockRebirth.mockResolvedValue(resident('pos-open'));
 	await emit();
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+	expect(mockWarn).not.toHaveBeenCalled();
+	mockScope = 'scope-1';
+	await emit();
+	expect(mockSettle).toHaveBeenCalledTimes(2);
+	expect(mockWarn).toHaveBeenCalledTimes(1);
 });
 
-it('binds its scope at the first emission, so a POS mounted before the database opened still settles', async () => {
-	mockScope = null as unknown as string;
+it('binds its scope lazily when mounted before the database opened', async () => {
+	mockScope = null;
 	renderHook(() => useStoreDeletedOrdersSettler(1));
+	await emit();
+	expect(mockSettle).not.toHaveBeenCalled();
 	mockScope = 'scope-1';
 	await emit();
-	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
-	expect(mockEngine.write).toHaveBeenCalledTimes(1);
+	expect(mockSettle).toHaveBeenCalledTimes(1);
+	expect(mockSettle.mock.calls[0][1].abandoned()).toBe(false);
 });

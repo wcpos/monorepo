@@ -1,13 +1,8 @@
 import * as React from 'react';
 
 import { observeQueueRows, REJECTED_QUEUE_STATUSES, useQueryRuntime } from '@wcpos/query';
-import {
-	findEngineResident,
-	rebirthOrderResident,
-	recreateRebornOrder,
-	residentPayload,
-} from '@wcpos/query/mutations';
-import { OPEN_CART_ORDER_STATUS, type QueueRow } from '@wcpos/sync-engine';
+import { settleStoreDeletedOrder } from '@wcpos/query/mutations';
+import { type QueueRow } from '@wcpos/sync-engine';
 import { isRecordGoneRejection } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -51,24 +46,16 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 				inFlight.add(row.recordId);
 				void (async () => {
 					const { recordId, mutationId } = row;
-					// A switch or cleanup between the awaits abandons the settle: the row stays
-					// rejected for its own scope's effect instance.
 					try {
-						const resident = await findEngineResident(manager, 'orders', recordId);
-						const { number, status } = resident ? residentPayload(resident) : {};
-						const recreate = resident && status === OPEN_CART_ORDER_STATUS;
-						const alreadyReborn = resident?.toJSON().remoteId === null;
-						if (abandoned()) return void handled.delete(mutationId);
-						const reborn = recreate ? await rebirthOrderResident(manager, recordId) : null;
-						if (abandoned()) return void handled.delete(mutationId);
-						await manager.engine.resolveConflict(mutationId, 'discard');
-						if (abandoned()) return;
-						if (reborn) {
-							// The create is built from the resident as it stands AFTER the discard (an edit
-							// made meanwhile is on it); the query package owns the write.
-							await recreateRebornOrder(manager, recordId);
-						}
-						if (!resident || alreadyReborn) return;
+						const outcome = await settleStoreDeletedOrder(manager, {
+							recordId,
+							mutationId,
+							abandoned,
+						});
+						if (outcome.kind === 'abandoned') return void handled.delete(mutationId);
+						if (outcome.kind === 'absent') return;
+						if (outcome.kind === 'recreated' && outcome.alreadyReborn) return;
+						const { number } = outcome;
 						log.warn('Order deleted on the store', {
 							code: ERROR_CODES.RECORD_GONE_ON_STORE,
 							showToast: true,
@@ -76,9 +63,10 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 								title: t('pos_checkout.order_deleted_on_store'),
 								...(number
 									? {
-											text2: recreate
-												? t('pos_checkout.order_deleted_on_store_recreated', { number })
-												: t('pos_checkout.order_deleted_on_store_removed', { number }),
+											text2:
+												outcome.kind === 'recreated'
+													? t('pos_checkout.order_deleted_on_store_recreated', { number })
+													: t('pos_checkout.order_deleted_on_store_removed', { number }),
 										}
 									: {}),
 							},
@@ -86,7 +74,7 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 								orderId: recordId,
 								orderNumber: number,
 								mutationId,
-								outcome: recreate ? 'recreated' : 'removed',
+								outcome: outcome.kind,
 							},
 						});
 					} catch (error) {
