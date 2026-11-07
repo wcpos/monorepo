@@ -5,6 +5,8 @@ import { cva } from 'class-variance-authority';
 
 import { HStack } from '../hstack';
 import { Icon, type IconName, type IconProps } from '../icon';
+import { useThemeTraits } from '../lib/theme-traits';
+import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { PressableSurface, type PressableSurfaceProps } from '../pressable-surface';
 import { Text } from '../text';
@@ -188,6 +190,7 @@ function Button({
 	// announces the button as disabled and E2E `enabled: true` waits never
 	// pass (monorepo#1614, defect 1).
 	const [hovered, setHovered] = React.useState(false);
+	const { linkUnderline } = useThemeTraits();
 	const disabled = !!(props.disabled || loading);
 
 	/**
@@ -245,7 +248,11 @@ function Button({
 						size,
 						pressed: pressableState.pressed,
 						hovered,
-						className: 'web:pointer-events-none',
+						className: cn(
+							'web:pointer-events-none',
+							// A verb on a theme whose link ink is the foreground is marked by its line.
+							variant === 'link' && linkUnderline && 'underline'
+						),
 					})}
 				>
 					{leftIcon || rightIcon || loading ? (

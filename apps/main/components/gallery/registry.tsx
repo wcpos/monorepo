@@ -37,7 +37,8 @@ import { stories as navItem } from '@wcpos/components/nav-item/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
 import { IconSetProvider } from '@wcpos/components/icon';
-import { iconSetForTheme } from '@wcpos/components/lib/themes';
+import { SYSTEM_TYPE, ThemeTraitsContext } from '@wcpos/components/lib/theme-traits';
+import { iconSetForTheme, traitsForTheme } from '@wcpos/components/lib/themes';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
 import { stories as select } from '@wcpos/components/select/gallery';
@@ -138,14 +139,22 @@ function GalleryPage({ children }: React.PropsWithChildren) {
 	React.useLayoutEffect(() => {
 		Uniwind.setTheme(selected);
 	}, [selected]);
+	// The traits a stylesheet cannot carry (the underlined verb, the price chip) are rules of the
+	// theme too; the type set stays the system's because the gallery loads no theme fonts.
+	const traits = React.useMemo(
+		() => ({ ...traitsForTheme(selected), type: SYSTEM_TYPE }),
+		[selected]
+	);
 	return (
 		// The icon set is a rule of the theme (decision 45); the app's provider is not mounted here,
 		// so the page supplies it, and a cell is shot with the glyphs the merchant sees.
 		<IconSetProvider set={iconSetForTheme(selected)}>
-			<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
-				{children}
-				<PortalHost />
-			</ScrollView>
+			<ThemeTraitsContext.Provider value={traits}>
+				<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
+					{children}
+					<PortalHost />
+				</ScrollView>
+			</ThemeTraitsContext.Provider>
 		</IconSetProvider>
 	);
 }
