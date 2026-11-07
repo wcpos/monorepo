@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, type TextInputInstance, View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import {
@@ -15,6 +15,7 @@ import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
 import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
 import { cn } from '@wcpos/components/lib/utils';
 import { amountFigure } from '@wcpos/components/amount-figure';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { fromMinor, toMinor } from '@wcpos/order-math';
@@ -57,14 +58,15 @@ export function RegisterAmount({
 	// The symbol sits inside the field's border, so a tap on it is a tap on the field (as the
 	// Input's own leading glyph): it focuses the numerals rather than being a dead strip.
 	const symbol = (text: string) => (
-		<Pressable
+		<PressableSurface
+			wash="none"
 			accessible={false}
 			tabIndex={-1}
 			testID={`${props.testID}-symbol`}
 			onPress={() => inputRef.current?.focus()}
 		>
 			<Text className={SYMBOL}>{text}</Text>
-		</Pressable>
+		</PressableSurface>
 	);
 	return (
 		<Input.Root figure>
