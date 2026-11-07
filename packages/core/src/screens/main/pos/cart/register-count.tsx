@@ -211,6 +211,12 @@ export function RegisterCount({
 	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
 	const acknowledged = refusedKey === '' || acknowledgedKey === refusedKey;
 	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : refusedKey);
+	// The sheet's confirm closes the session, so a refusal that lands while it is open sends the
+	// count back for a new tick.
+	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply; it lands while the sheet is open, so there is no event handler to close it from.
+		if (!acknowledged) setApproving(false);
+	}, [acknowledged]);
 	const variance = countVariance(amount, expected.cash ?? '0', decimals);
 	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
 	const bandClass = tone.band;

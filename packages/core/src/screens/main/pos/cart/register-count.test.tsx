@@ -870,6 +870,25 @@ describe('cash the store refused (#3271)', () => {
 		expect(closeSession).not.toHaveBeenCalled();
 	});
 
+	it('a further refusal closes an open approval sheet until the new tick', () => {
+		mockMovements = [refused('m1')];
+		varianceThreshold = '5';
+		const { rerender } = render(view());
+		enter('463.30');
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		mockMovements = [refused('m1'), refused('m2', '7.5000')];
+		rerender(view());
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		expect(close().disabled).toBe(true);
+		expect(closeSession).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+	});
+
 	it.each([
 		['a refused no-sale moves no cash', [refused('m1', '0')]],
 		['nothing refused', [{ id: 'm1', amount: '20.0000', sync_status: 'pending' }]],
