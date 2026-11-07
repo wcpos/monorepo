@@ -19,6 +19,7 @@ let mockRouteParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
 	useFocusEffect: (effect: () => void) => jest.requireActual('react').useEffect(effect, [effect]),
 	useLocalSearchParams: () => mockRouteParams,
+	useNavigation: () => ({ getState: () => undefined }),
 	useRouter: () => ({ canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() }),
 }));
 

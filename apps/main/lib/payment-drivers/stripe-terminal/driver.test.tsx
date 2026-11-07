@@ -64,14 +64,13 @@ const pi = {
 	amount: 1125,
 	status: 'succeeded',
 	metadata: { wcpos_payment_id: 'leg' },
-	charges: [
-		{
-			id: 'ch_confirmed',
-			paymentMethodDetails: {
-				cardPresentDetails: { brand: 'visa', last4: '4242', funding: 'credit' },
-			},
+	latestChargeId: 'ch_confirmed',
+	latestCharge: {
+		id: 'ch_confirmed',
+		paymentMethodDetails: {
+			cardPresentDetails: { brand: 'visa', last4: '4242', funding: 'credit' },
 		},
-	],
+	},
 };
 const input: CollectInput = {
 	dp: 2,
@@ -303,9 +302,9 @@ it('publishes update, battery, input, reconnect, disconnect and pairing status',
 	driver.callbacks.onDidChangeConnectionStatus('connecting');
 	expect(driver.status$.get().connection).toBe('connecting');
 	driver.callbacks.onDidStartInstallingUpdate();
-	driver.callbacks.onDidReportReaderSoftwareUpdateProgress('45%');
+	driver.callbacks.onDidReportReaderSoftwareUpdateProgress(0.45);
 	expect(driver.status$.get()).toMatchObject({ connection: 'updating', progress: 0.45 });
-	driver.callbacks.onDidFinishInstallingUpdate({});
+	driver.callbacks.onDidFinishInstallingUpdate();
 	driver.callbacks.onDidChangeConnectionStatus('connected');
 	driver.callbacks.onDidUpdateBatteryLevel({
 		batteryLevel: 0.5,

@@ -38,7 +38,7 @@ export function disabledReasonText(
 		case 'unsupported_fields':
 			return t('pos_checkout.update_app_to_use', { title });
 		case 'driver_web':
-			return t('pos_checkout.driver_web', { title });
+			return t('pos_checkout.driver_web_store_setting', { title });
 		case 'driver_permission':
 			return t('pos_checkout.driver_permission', { title });
 		case 'driver_bluetooth_off':

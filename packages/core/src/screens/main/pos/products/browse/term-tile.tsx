@@ -14,7 +14,13 @@ import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
-import { type Measurable, useCopyPicture, useDealCards, useLiftedLayout } from '../deal-stack';
+import {
+	type Measurable,
+	useCopyPicture,
+	useDealBackStyle,
+	useDealCards,
+	useLiftedLayout,
+} from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
 
 // A shortcut is not a category: its glyph on the last tint.
@@ -178,6 +184,8 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 	const stackStyle = useAnimatedStyle(() => ({
 		opacity: cards ? Math.min(1, Math.max(0, cards.value)) : 1,
 	}));
+	// The way back arrives with the copy and leaves as it walks home (`useDealBackStyle`).
+	const backStyle = useDealBackStyle();
 	const { t, label, mark, title, sub } = useTermWords(term);
 	// The same picture the tapped tile was showing: it moves, it does not arrive.
 	const picture = useTermPicture(term, true);
@@ -187,6 +195,7 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 			mark={mark}
 			back
 			backTestID="browse-parent-badge"
+			backStyle={backStyle}
 			stacked
 			stackStyle={stackStyle}
 			name={label}

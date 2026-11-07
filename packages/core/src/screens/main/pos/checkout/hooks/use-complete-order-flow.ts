@@ -56,6 +56,7 @@ export function useCompleteOrderFlowForOrder(
 					? {
 							host: 'stage',
 							autoShowReceipt: !!uiSettings.autoShowReceipt,
+							autoPrintReceipt: !!uiSettings.autoPrintReceipt,
 							canSelectReceipt: () => {
 								const { selectedReceiptOrder } = getCheckoutModeSnapshot();
 								return (
@@ -64,7 +65,7 @@ export function useCompleteOrderFlowForOrder(
 								);
 							},
 						}
-					: { host: 'modal' },
+					: { host: 'modal', autoPrintReceipt: !!uiSettings.autoPrintReceipt },
 				queue
 			);
 			switch (result) {
@@ -121,6 +122,7 @@ export function useCompleteOrderFlowForOrder(
 			setCurrentOrderID,
 			getCurrentOrderID,
 			uiSettings.autoShowReceipt,
+			uiSettings.autoPrintReceipt,
 			t,
 		]
 	);

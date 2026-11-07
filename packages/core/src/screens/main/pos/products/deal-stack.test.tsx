@@ -165,6 +165,7 @@ import {
 	useAirspace,
 	useCopyPicture,
 	useDeal,
+	useDealBackStyle,
 	useDealCards,
 	useLiftedLayout,
 } from './deal-stack';
@@ -209,6 +210,15 @@ function Cards() {
 	const cards = useDealCards();
 	React.useLayoutEffect(() => {
 		cardsRef.current = cards;
+	});
+	return null;
+}
+// The parent's back badge: the style the Deal hands it, as the mock above wraps it.
+const backRef: { current: (() => Style) | null } = { current: null };
+function Back() {
+	const style = useDealBackStyle() as unknown as { factory: () => Style };
+	React.useLayoutEffect(() => {
+		backRef.current = style.factory;
 	});
 	return null;
 }
@@ -279,6 +289,7 @@ function Pane({
 					{index === 0 && picture ? <Picture /> : null}
 					{index === 0 && cards ? <Cards /> : null}
 					{index === 0 ? <Body /> : null}
+					{index === 0 ? <Back /> : null}
 				</DealCell>
 			))}
 			{scroll ? <Air scroll={scroll} /> : null}
@@ -1351,4 +1362,38 @@ it('the parent’s cards leave as the first tiles land and come home with the la
 	// Off a copy there are no cards to deal.
 	render(<Cards />);
 	expect(cardsRef.current).toBeNull();
+});
+
+// The badge vanished in one frame as the parent landed home and the root's tile (no badge)
+// took over (web film, 2026-11-06). It has a dealt tile's opacity against the copy's walk
+// instead: whole by 80% of the walk out, and home it reaches 0 as the parent lands.
+it('the parent’s back badge fades with its walk, reaching 0 as it lands home', () => {
+	const { rerender, unmount } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	const back = () => backRef.current!();
+	// On the tapped tile, which has no badge, the copy shows none either.
+	expect(back().opacity).toBe(0);
+	layOut();
+	// In slot 0 it is whole.
+	expect(back().opacity).toBe(1);
+	// Part way along the walk it has a dealt tile's opacity, in either direction: only the
+	// parent's walk feeds it, so every clock standing at 1 (the walk among them) is wound
+	// together. At 0.7 of the walk it is fading; at 0.2 it still shows, and lands at 0.
+	const whole = mockShared.filter((shared) => shared.value === 1);
+	const wind = (to: number) =>
+		whole.forEach((shared) => {
+			shared.value = to;
+		});
+	wind(0.7);
+	expect(back().opacity).toBeCloseTo(0.7 / 0.8);
+	wind(0.2);
+	expect(back().opacity).toBeCloseTo(0.25);
+	wind(1);
+	rerender(<Stage detail={null} />);
+	expect(back().opacity).toBe(0);
+
+	// Off a copy the badge is simply shown.
+	unmount();
+	render(<Back />);
+	expect(back().opacity).toBe(1);
 });

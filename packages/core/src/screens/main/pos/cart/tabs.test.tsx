@@ -354,7 +354,7 @@ it("the + cell is the blank cart's tab: it unfolds while the current order is ne
 	fireEvent.click(open);
 	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
 });
-it('with no carts the unfolded New tab is the only tab: no underline, no tray, no arrows', () => {
+it('with no carts the unfolded New tab is the only tab: underlined, no tray, no arrows', () => {
 	const open = mockOpen;
 	try {
 		mockOpen = [];
@@ -363,8 +363,9 @@ it('with no carts the unfolded New tab is the only tab: no underline, no tray, n
 		layout(560);
 		const fresh = screen.getByTestId('new-order-tab');
 		expect(fresh.getAttribute('aria-selected')).toBe('true');
-		expect(fresh.className).toContain('border-transparent');
-		expect(fresh.className).not.toContain('border-primary');
+		// The only tab is still the open cart, so it keeps its underline (Paul, 2026-11-04).
+		expect(fresh.className).toContain('border-primary');
+		expect(fresh.className).not.toContain('border-transparent');
 		expect(screen.queryByTestId('open-orders-count')).toBeNull();
 		expect(screen.queryByTestId('scrollable-tabs-prev')).toBeNull();
 	} finally {
@@ -549,7 +550,7 @@ it('the count badge beats for a new open order, not for another scope arriving',
 	}
 });
 
-it('a sole cart has no tray, no arrows and no underline', () => {
+it('a sole cart has no tray and no arrows, and keeps its underline', () => {
 	render(<OpenOrderTabs />);
 	layout(560);
 	expect(screen.queryByTestId('open-orders-count')).toBeNull();
@@ -557,8 +558,9 @@ it('a sole cart has no tray, no arrows and no underline', () => {
 	expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
 	const tab = screen.getByTestId('open-order-tab-open');
 	expect(tab.getAttribute('aria-selected')).toBe('true');
-	expect(tab.className).toContain('border-transparent');
-	expect(tab.className).not.toContain('border-primary');
+	// The only cart is the open one: its underline says so (Paul, 2026-11-04).
+	expect(tab.className).toContain('border-primary');
+	expect(tab.className).not.toContain('border-transparent');
 	expect(screen.getByTestId('new-order-tab')).not.toBeNull();
 });
 

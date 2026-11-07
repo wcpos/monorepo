@@ -59,6 +59,11 @@ jest.mock('../switch', () => ({
 	),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+// On web `useIsPhone` reads the layout viewport (`window.innerHeight`); keep it on the mocked window.
+Object.defineProperty(window, 'innerHeight', {
+	configurable: true,
+	get: () => mockWindow.height,
+});
 
 const classes = (element: HTMLElement) => element.dataset.classes?.split(' ') ?? [];
 
@@ -102,16 +107,21 @@ function Adopted() {
 	return <span data-testid="adopted">{React.useContext(FormItemContext).nativeID}</span>;
 }
 
-describe('the row owns the trailing slot', () => {
+describe('the row owns the trailing slot; a mark sits with the key', () => {
 	const verb = <PropertyVerb testID="verb">Edit</PropertyVerb>;
 	const control = <span data-testid="control" />;
 	it.each([
-		['no field saved: the verb, then the control', 'other', 'Edit', true],
-		["one of the row's fields saved: the mark replaces the verb", 'tax_class', 'Saved', true],
-		['a field of another row saved: the verb stays', 'name', 'Edit', true],
+		['no field saved: the verb, then the control', 'other', 'TaxStandardEdit', true],
+		[
+			"one of the row's fields saved: the mark follows the key; the verb stays",
+			'tax_class',
+			'TaxSavedStandardEdit',
+			true,
+		],
+		['a field of another row saved: nothing changes', 'name', 'TaxStandardEdit', true],
 	])('%s', (_case, saved, expected, hasControl) => {
 		render(
-			<PropertyRowLabelsProvider labels={{ saved: 'Saved', open: 'Open' }}>
+			<PropertyRowLabelsProvider labels={{ saved: 'Saved', failed: 'Not saved', open: 'Open' }}>
 				<SavedFieldProvider>
 					<Save name={saved} />
 					<PropertyRow
@@ -129,8 +139,9 @@ describe('the row owns the trailing slot', () => {
 		);
 		fireEvent.click(screen.getByText(`save ${saved}`));
 		const row = screen.getByTestId('line-row-tax');
-		expect(row.textContent).toBe(`TaxStandard${expected}`);
+		expect(row.textContent).toBe(expected);
 		expect(!!screen.queryByTestId('control')).toBe(hasControl);
+		expect(screen.getByTestId('verb')).toBeTruthy();
 		// The control is last, so a mark arriving never moves it.
 		const trailing = screen.getByTestId('control').parentElement as HTMLElement;
 		expect(trailing.lastElementChild).toBe(screen.getByTestId('control'));
@@ -145,7 +156,7 @@ describe('the row owns the trailing slot', () => {
 		);
 		fireEvent.click(screen.getByText('save code'));
 		expect(screen.getByTestId('saved-code')).toBeTruthy();
-		expect(screen.queryByTestId('verb')).toBeNull();
+		expect(screen.getByTestId('verb')).toBeTruthy();
 	});
 
 	it('locked (rule 6): the value, where it is set and Open; a boolean is a disabled switch', () => {
@@ -186,7 +197,6 @@ it.each([
 		false,
 	],
 	['a Switch', { control: <Probe testID="switch" /> }, 'switch', true],
-	['a Saved mark', { name: 'tax', verb: <PropertyVerb>Edit</PropertyVerb> }, 'saved-tax', true],
 ])(
 	'on a phone, words wrap in flow under the value; a mark or a switch keeps the key line: %s',
 	(_case, props, find, absolute) => {
@@ -207,6 +217,73 @@ it.each([
 		expect(classes(trailing).includes('flex-wrap')).toBe(!absolute);
 	}
 );
+
+it('on a phone, a Saved mark sits on the key line after the key, and the verb stays in flow', () => {
+	render(
+		<DeviceScope phone>
+			<SavedFieldProvider>
+				<Save name="tax" />
+				<PropertyRow
+					label="Prices entered with tax"
+					name="tax"
+					verb={<PropertyVerb testID="verb">Edit</PropertyVerb>}
+				>
+					{true}
+				</PropertyRow>
+			</SavedFieldProvider>
+		</DeviceScope>
+	);
+	fireEvent.click(screen.getByText('save tax'));
+	const key = screen.getByText('Prices entered with tax');
+	const mark = screen.getByTestId('saved-tax');
+	expect(mark.parentElement).toBe(key.parentElement);
+	expect(classes(key.parentElement as HTMLElement)).toEqual(
+		expect.arrayContaining(['flex-row', 'items-center'])
+	);
+	expect(screen.getByTestId('verb')).toBeTruthy();
+	const trailing = screen.getByTestId('verb').closest('[data-classes*="gap-2"]') as HTMLElement;
+	expect(classes(trailing).includes('flex-wrap')).toBe(true);
+});
+
+it('on one line, a Saved mark hangs under the key out of flow, and the verb stays', () => {
+	render(
+		<SavedFieldProvider>
+			<Save name="tax" />
+			<PropertyRow label="Tax" name="tax" verb={<PropertyVerb testID="verb">Edit</PropertyVerb>}>
+				Standard
+			</PropertyRow>
+		</SavedFieldProvider>
+	);
+	fireEvent.click(screen.getByText('save tax'));
+	const key = screen.getByText('Tax');
+	const anchor = screen.getByTestId('saved-tax').parentElement?.parentElement as HTMLElement;
+	expect(anchor.parentElement).toBe(key.parentElement);
+	expect(classes(anchor)).toContain('h-0');
+	expect(classes(screen.getByTestId('saved-tax').parentElement as HTMLElement)).toContain(
+		'absolute'
+	);
+	expect(screen.getByTestId('verb')).toBeTruthy();
+});
+
+it('on one line with help, the mark sits after the key on its line and the help wraps under both (Codex, #3333)', () => {
+	render(
+		<SavedFieldProvider>
+			<Save name="customer" />
+			<PropertyRow label="Default customer" name="customer" help="Used for walk-in sales">
+				Guest
+			</PropertyRow>
+		</SavedFieldProvider>
+	);
+	fireEvent.click(screen.getByText('save customer'));
+	const key = screen.getByText('Default customer');
+	const mark = screen.getByTestId('saved-customer');
+	expect(mark.parentElement).toBe(key.parentElement);
+	expect(classes(key.parentElement as HTMLElement)).toEqual(
+		expect.arrayContaining(['flex-row', 'flex-wrap'])
+	);
+	expect(classes(screen.getByText('Used for walk-in sales'))).toContain('basis-full');
+	expect(screen.queryByText('Default customer')?.nextElementSibling).toBe(mark);
+});
 
 it('the row is the form item: its key names every label-less control in it', () => {
 	render(
@@ -375,4 +452,62 @@ it('a verb is a small link Button in primary ink', () => {
 	expect(classes(screen.getByText('Edit'))).toEqual(
 		expect.arrayContaining(['text-primary', 'text-sm', 'font-ui'])
 	);
+});
+
+// A switch row with a help line (Tax exempt): the key and its help run to the switch in a dialog;
+// on a settings page the value column stays so every switch sits in the one trailing column.
+it.each([
+	['a dialog', false, ['min-w-0', 'flex-1']],
+	['a settings page', true, ['w-64', 'shrink-0']],
+])('a row with no value lets its key run to the trailing slot in %s', (_case, wide, keyClasses) => {
+	render(
+		<PropertyList wide={wide}>
+			<PropertyRow
+				testID="row"
+				label="Tax exempt"
+				help="Removes all tax from this order."
+				control={<input type="checkbox" readOnly />}
+			/>
+		</PropertyList>
+	);
+	const key = screen.getByText('Tax exempt').parentElement as HTMLElement;
+	expect(classes(key)).toEqual(expect.arrayContaining(keyClasses));
+	const columns = screen.getByTestId('row').children;
+	expect(columns).toHaveLength(wide ? 3 : 2);
+});
+
+// A row with no key has no key line for a mark to sit on: on a phone the Saved mark stays in
+// flow under the inputs, never absolutely over them (Codex P2, #3229).
+it('on a phone, a row with no label keeps its Saved mark in flow', () => {
+	render(
+		<DeviceScope phone>
+			<SavedFieldProvider>
+				<Save name="meta_data" />
+				<PropertyRow testID="row" name="meta_data" compound>
+					<input data-testid="key" />
+				</PropertyRow>
+			</SavedFieldProvider>
+		</DeviceScope>
+	);
+	fireEvent.click(screen.getByText('save meta_data'));
+	const trailing = screen
+		.getByTestId('saved-meta_data')
+		.closest('[data-classes*="gap-2"]') as HTMLElement;
+	expect(classes(trailing).includes('absolute')).toBe(false);
+	expect(classes(trailing).includes('flex-wrap')).toBe(true);
+});
+
+// A custom field's key is its first input: the row has no key column, the inputs take the width.
+it('a row with no label has no key column and indents its value', () => {
+	render(
+		<PropertyRow testID="row" compound indent>
+			<input data-testid="key" />
+		</PropertyRow>
+	);
+	const row = screen.getByTestId('row');
+	expect(row.children).toHaveLength(1);
+	expect(classes(row.children[0] as HTMLElement)).toEqual(
+		expect.arrayContaining(['flex-1', 'pl-4'])
+	);
+	expect(row.contains(screen.getByTestId('key'))).toBe(true);
 });

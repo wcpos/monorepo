@@ -80,6 +80,7 @@ jest.mock('@wcpos/components/form', () => ({
 		.useFormChangeHandler,
 	SavedMark: () => null,
 	useMarkSaved: () => jest.fn(),
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => '',
 	Form: jest.requireActual('react-hook-form').FormProvider,
 	FormField: jest.requireActual('react-hook-form').Controller,
@@ -690,9 +691,9 @@ describe('the hand-over box', () => {
 		);
 	}
 
-	it('rests info: the footer says it stays in this cart and Send is disabled', () => {
+	it('rests amber: the footer says it stays in this cart and Send is disabled', () => {
 		renderBox();
-		expect(box().dataset.tone).toBe('info');
+		expect(box().dataset.tone).toBe('warning');
 		expect(screen.getByTestId('order-meta-hand-over-summary').textContent).toBe(
 			'pos_cart.stays_in_this_cart'
 		);

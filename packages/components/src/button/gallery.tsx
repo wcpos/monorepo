@@ -1,11 +1,12 @@
 import type * as React from 'react';
 import { View } from 'react-native';
 
-import { Button } from './index';
+import { Icon } from '../icon';
+import { Button, ButtonText } from './index';
 
 type Props = React.ComponentProps<typeof Button>;
 
-// The eight kept variants and three sizes (CODING_STANDARDS § Design, Buttons; ruled
+// The eight kept variants and four sizes (CODING_STANDARDS § Design, Buttons; ruled
 // 2026-10-16): one story per variant × size, so a change to any cell of the table shows.
 const VARIANTS = [
 	'default',
@@ -17,7 +18,9 @@ const VARIANTS = [
 	'ghost-destructive',
 	'destructive',
 ] as const satisfies readonly NonNullable<Props['variant']>[];
-const SIZES = ['sm', 'default', 'lg'] as const satisfies readonly NonNullable<Props['size']>[];
+const SIZES = ['sm', 'default', 'lg', 'stack'] as const satisfies readonly NonNullable<
+	Props['size']
+>[];
 
 const examples: ({ id: string } & Props)[] = [
 	...VARIANTS.flatMap((variant) =>
@@ -25,7 +28,17 @@ const examples: ({ id: string } & Props)[] = [
 			id: `${variant}-${size}`,
 			variant,
 			size,
-			children: size === 'lg' ? 'Checkout £12.40' : 'Add product',
+			children:
+				size === 'stack' ? (
+					<>
+						<Icon name="plus" />
+						<ButtonText>Pay in</ButtonText>
+					</>
+				) : size === 'lg' ? (
+					'Checkout £12.40'
+				) : (
+					'Add product'
+				),
 		}))
 	),
 	{ id: 'icon', leftIcon: 'plus', children: 'Add product' },

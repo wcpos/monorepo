@@ -138,6 +138,15 @@ it('announces the on-state on the press target, with or without a clear control'
 	rerender(<Chip label="Menu" testID="chip" on={false} />);
 	expect(screen.getByTestId('chip')).toHaveAttribute('aria-pressed', 'false');
 });
+it('a read-only chip shows its on-state without being a button', () => {
+	const onPress = jest.fn();
+	render(<Chip label="Selected" testID="chip" on readOnly onPress={onPress} />);
+	const chip = screen.getByTestId('chip');
+	expect(chip).not.toHaveAttribute('role', 'button');
+	expect(chip).not.toHaveAttribute('aria-pressed');
+	fireEvent.click(chip);
+	expect(onPress).not.toHaveBeenCalled();
+});
 it('renders count zero and a leading icon', () => {
 	const { container } = render(<Chip label="Menu" count={0} icon="plus" testID="chip" />);
 	expect(screen.getByTestId('chip-count')).toHaveTextContent('0');

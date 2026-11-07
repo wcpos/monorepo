@@ -124,6 +124,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: ({ name }: { name: string }) =>
 		mockSavedName === name ? <span data-testid={`saved-${name}`} /> : null,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => mockSavedName,
 }));
 jest.mock('@wcpos/components/hstack', () => ({

@@ -15,6 +15,8 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	/** A number beside the label, or its own text (`+3`). */
 	count?: number | string;
 	on?: boolean;
+	/** A choice shown, not made here (the reader a till pays with): no press, not a button. */
+	readOnly?: boolean;
 	dimmed?: boolean;
 	add?: boolean;
 	onLongPress?: PressableProps['onLongPress'];
@@ -60,6 +62,7 @@ export function Chip({
 	leading,
 	count,
 	on,
+	readOnly,
 	dimmed,
 	add,
 	onClear: clearProp,
@@ -97,6 +100,7 @@ export function Chip({
 	const onClear = action ? undefined : clearProp;
 	// The trailing cell's press: the action's, or the clear control's. Either makes the chip split.
 	const trail = action?.onPress ?? onClear;
+	const button = !trail && !readOnly;
 	// `sm` is drawn under 44 for a dense cell; each press target still gets 44 (§ Design 2).
 	const band = sm && <MinTargetBand />;
 	const content = (
@@ -131,12 +135,12 @@ export function Chip({
 			disabled={inactive}
 			// With a trailing cell the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
-			onPress={trail ? undefined : onPress}
+			onPress={button ? onPress : undefined}
 			onLongPress={onLongPress}
 			{...contextMenu}
-			role={trail ? undefined : 'button'}
-			{...(trail ? {} : selectedState(on))}
-			tabIndex={trail ? -1 : 0}
+			role={button ? 'button' : undefined}
+			{...(button ? selectedState(on) : {})}
+			tabIndex={button ? 0 : -1}
 			accessible={trail ? false : undefined}
 			className={cn(
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by

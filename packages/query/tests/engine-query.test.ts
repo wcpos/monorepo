@@ -657,12 +657,40 @@ describe('observeEngineQuery', () => {
 
 		try {
 			expect(counts).toEqual([0]);
-			expect(results[0]).toEqual({ count: 0, hits: [] });
+			expect(results[0]).toEqual({ count: 0, hits: [], unbound: true });
 			listeners.forEach((listener) => listener(firstDatabase));
 			await waitFor(() => expect(counts.filter((count) => count === 1)).toHaveLength(1));
 
 			listeners.forEach((listener) => listener(secondDatabase));
 			await waitFor(() => expect(counts.filter((count) => count === 1)).toHaveLength(2));
+		} finally {
+			subscription.unsubscribe();
+			pending.open();
+			await database.close();
+		}
+	});
+
+	it('marks only the no-database placeholder unbound, never a bound read of no rows (#3186)', async () => {
+		const database = await createEngineDatabase(['products']);
+		const pending = createPendingFakeEngine(database);
+		const listeners = new Set<(current: RxDatabase | null) => void>();
+		pending.engine.db$ = (listener) => {
+			listeners.add(listener);
+			listener(null);
+			return () => listeners.delete(listener);
+		};
+		const results: { unbound?: boolean; hits: unknown[] }[] = [];
+		const subscription = observeEngineQuery(pending.engine, { collection: 'products' }).subscribe(
+			(result) => results.push(result)
+		);
+		try {
+			// Catches: an unbound placeholder that reads as an answer (a store with no rows).
+			expect(results).toEqual([{ count: 0, hits: [], unbound: true }]);
+			listeners.forEach((listener) => listener(database as never));
+			await waitFor(() => expect(results).toHaveLength(2));
+			// Catches: the marker leaking into a real answer of zero rows.
+			expect(results[1].hits).toEqual([]);
+			expect(results[1].unbound).toBeUndefined();
 		} finally {
 			subscription.unsubscribe();
 			pending.open();
@@ -948,6 +976,7 @@ describe('a descriptor relation', () => {
 			return () => listeners.delete(listener);
 		};
 		const states: (string | undefined)[] = [];
+		const unbound: (boolean | undefined)[] = [];
 		let ids: string[] = [];
 		const subscription = observeEngineQuery(pending.engine, {
 			collection: 'products',
@@ -956,17 +985,39 @@ describe('a descriptor relation', () => {
 			relation,
 		}).subscribe((result) => {
 			states.push(result.searchState);
+			unbound.push(result.unbound);
 			ids = result.hits.map((hit) => hit.id);
 		});
 		try {
 			// Catches: an unbound join emitting an empty 'answered' (the #1733 "not found" lie).
 			expect(states).toEqual(['pending']);
+			expect(unbound).toEqual([true]);
 			listeners.forEach((listener) => listener(database as never));
 			await waitFor(() => expect(states.at(-1)).toBe('answered'));
 			expect(ids).toEqual(['hat']);
 		} finally {
 			subscription.unsubscribe();
 			pending.open();
+			await database.close();
+		}
+	});
+
+	it('does not mark the no-children answer unbound (#3186)', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
+		try {
+			// No child matches, so the named parents come from `emptyResult()` as a real answer.
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				search: 'zzz',
+				searchFields: ['name'],
+				relation,
+			});
+			expect(result.hits).toEqual([]);
+			expect(result.relatedIds).toEqual([]);
+			expect(result.searchState).toBe('answered');
+			expect(result.unbound).toBeUndefined();
+		} finally {
 			await database.close();
 		}
 	});

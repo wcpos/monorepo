@@ -346,6 +346,7 @@ export function observeEngineQuery(
 							...pendingSearchResult(),
 							searchActive: true,
 							relatedIds: [],
+							unbound: true,
 						})
 			)
 		);
@@ -354,7 +355,7 @@ export function observeEngineQuery(
 		switchMap((database) =>
 			database
 				? readBound(engine, database, parent)
-				: of(search ? pendingSearchResult() : emptyResult())
+				: of({ ...(search ? pendingSearchResult() : emptyResult()), unbound: true })
 		)
 	);
 }

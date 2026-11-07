@@ -119,7 +119,7 @@ let mockStoreId = 2;
 const mockStoreTimezone = 'UTC';
 let mockStores = ['store-a'];
 let mockSwitching = false;
-const mockSwitch = jest.fn(async () => {});
+const mockSwitch = jest.fn(async (): Promise<boolean> => true);
 jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => 'stores' }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('./use-switch-store', () => ({

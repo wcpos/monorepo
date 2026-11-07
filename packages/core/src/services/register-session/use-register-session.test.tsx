@@ -2,6 +2,7 @@
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
+import { TZDate } from '@date-fns/tz';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject, map, merge, of, startWith, Subject } from 'rxjs';
 import { Query } from 'mingo';
@@ -15,7 +16,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 import * as actions from '@wcpos/query/register-session';
 
-import { useRegisterSession } from './use-register-session';
+import { isPastClose, useRegisterSession } from './use-register-session';
 import {
 	markCountingHere,
 	markSeededIn,
@@ -1273,8 +1274,9 @@ it.each([
 );
 
 describe('overdue', () => {
-	// Local noon, so the close times below sit either side of it whatever the runner's zone.
-	const noon = new Date(2026, 9, 13, 12, 0);
+	// Noon on the store's clock (the mocked store is in Los Angeles), so the close times below
+	// sit either side of it whatever the runner's zone; the session opened at 09:00 that day.
+	const noon = new TZDate(2026, 9, 13, 12, 0, 'America/Los_Angeles');
 
 	function rendered() {
 		const counter = { renders: 0, overdueWithSession: [] as boolean[] };
@@ -1306,6 +1308,7 @@ describe('overdue', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		jest.setSystemTime(noon);
+		active = [{ ...active[0], opened_at_gmt: '2026-10-13T16:00:00.000Z' }];
 	});
 	afterEach(() => {
 		jest.useRealTimers();
@@ -1400,6 +1403,59 @@ describe('overdue', () => {
 		expect(result.current.overdue).toBe(true);
 		// Catches the replacement stream re-rendering per minute rather than once at its flip.
 		expect(counter.renders).toBe(settledRenders + 1);
+	});
+});
+
+describe('isPastClose', () => {
+	const la = 'America/Los_Angeles';
+	const at = (zone: string, ...parts: [number, number, number, number, number]) =>
+		new TZDate(...parts, zone);
+	// A TZDate prints its own offset; the session row carries GMT without the `Z`.
+	const gmt = (date: Date) => new Date(date.getTime()).toISOString().replace('.000Z', '');
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+	const pastAt = (now: Date, close: string | null, opened: Date, zone: string) => {
+		jest.useFakeTimers().setSystemTime(now);
+		return isPastClose(close, gmt(opened), zone);
+	};
+
+	it('is not past for a session opened after tonight’s close: it is due at tomorrow’s', () => {
+		// Catches measuring against today's close: 22:00 is behind 23:30 on the same day.
+		expect(pastAt(at(la, 2026, 9, 13, 23, 30), '22:00', at(la, 2026, 9, 13, 23, 0), la)).toBe(
+			false
+		);
+		expect(pastAt(at(la, 2026, 9, 14, 22, 1), '22:00', at(la, 2026, 9, 13, 23, 0), la)).toBe(true);
+	});
+
+	it('stays overdue past midnight for a session left open from yesterday', () => {
+		// Catches measuring against today's close: 17:00 today is still ahead of 08:00.
+		expect(pastAt(at(la, 2026, 9, 13, 8, 0), '17:00', at(la, 2026, 9, 12, 9, 0), la)).toBe(true);
+	});
+
+	it('reads the close on the store’s clock, not the device’s', () => {
+		const tokyo = 'Asia/Tokyo';
+		const opened = at(tokyo, 2026, 9, 13, 9, 0);
+		// 17:00 in Tokyo is 08:00 GMT, whatever zone the runner is in.
+		expect(pastAt(new Date('2026-10-13T07:59:00Z'), '17:00', opened, tokyo)).toBe(false);
+		expect(pastAt(new Date('2026-10-13T08:01:00Z'), '17:00', opened, tokyo)).toBe(true);
+	});
+
+	it('finds the next day’s close across a DST change', () => {
+		// Opened 18:00 PDT on 31 October; the clocks go back overnight, so the next 17:00 is PST,
+		// 01:00 GMT on 2 November. A close taken as 24 hours after the 31st's would fall at 00:00.
+		const opened = at(la, 2026, 9, 31, 18, 0);
+		expect(pastAt(new Date('2026-11-02T00:30:00Z'), '17:00', opened, la)).toBe(false);
+		expect(pastAt(new Date('2026-11-02T01:01:00Z'), '17:00', opened, la)).toBe(true);
+	});
+
+	it('is never past with no or an unreadable close or open time', () => {
+		const opened = at(la, 2026, 9, 12, 9, 0);
+		const now = at(la, 2026, 9, 13, 12, 0);
+		expect(pastAt(now, null, opened, la)).toBe(false);
+		expect(pastAt(now, 'late', opened, la)).toBe(false);
+		jest.useFakeTimers().setSystemTime(now);
+		expect(isPastClose('11:00', null, la)).toBe(false);
 	});
 });
 

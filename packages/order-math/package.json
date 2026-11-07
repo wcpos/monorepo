@@ -24,9 +24,9 @@
 	},
 	"devDependencies": {
 		"@types/jest": "^30.0.0",
-		"@types/lodash": "^4.17.26",
+		"@types/lodash": "^4.17.27",
 		"@wcpos/database": "workspace:*",
 		"jest": "^30.5.2",
-		"ts-jest": "29.4.12"
+		"ts-jest": "29.4.15"
 	}
 }
