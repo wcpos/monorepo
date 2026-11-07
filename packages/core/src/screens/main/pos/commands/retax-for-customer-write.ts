@@ -1,6 +1,7 @@
 import isEqual from 'lodash/isEqual';
 
 import { hasLiveSettlementLeg, retaxCartLines, serverOwnsMoney } from '@wcpos/order-math';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { CartConfig, EngineWarning, LineItemInput, TaxStatus } from '@wcpos/order-math';
 
 import type { OrderPayload } from './cart-config-for-order';
@@ -22,6 +23,8 @@ export function retaxForCustomerWrite(
 	const { meta_data } = current;
 	if (deps.ownedElsewhere || serverOwnsMoney(meta_data) || hasLiveSettlementLeg(meta_data))
 		return none;
+	// An exempt order keeps its lines: on an inclusive store config.vatExempt is false (roadmap#477).
+	if (wooMetaCarrier.vatExempt(meta_data)) return none;
 	// As settleCartWrite: an undefined field keeps the order's current value.
 	const defined = Object.entries(intent).filter(([, value]) => value !== undefined);
 	const config = deps.configForOrder({ ...current, ...Object.fromEntries(defined) });

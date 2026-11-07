@@ -1,3 +1,5 @@
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
 import { config as baseConfig } from '../../../../../jest/cart-write';
 import { cartConfigForOrder, type OrderPayload } from './cart-config-for-order';
 import { retaxForCustomerWrite } from './retax-for-customer-write';
@@ -144,5 +146,36 @@ it('a coupon-discounted line takes total tax from its total and subtotal tax fro
 		subtotal_tax: '15',
 		total_tax: '12',
 		taxes: [{ id: 2, total: '12.000000', subtotal: '15.000000' }],
+	});
+});
+
+describe('a server-flagged exempt order keeps its lines (roadmap#477)', () => {
+	const zero = { ...line, subtotal_tax: '0', total_tax: '0', taxes: [] };
+	const exempt = order({
+		line_items: [zero],
+		meta_data: wooMetaCarrier.stampVatExempt([], true),
+	} as never);
+
+	it('on an inclusive store, where the config does not carry the flag', () => {
+		const inclusive = (o: OrderPayload) =>
+			cartConfigForOrder({
+				settings: {
+					...baseConfig,
+					calcTaxes: true,
+					priceNumDecimals: 2,
+					pricesIncludeTax: true,
+					taxBasedOn: 'shipping',
+				},
+				rates,
+				baseLocation: { country: 'AU' },
+				order: o,
+			} as never);
+		expect(inclusive(exempt).vatExempt).toBe(false);
+		const { lines } = retaxForCustomerWrite(exempt, toNZ, { ...deps, configForOrder: inclusive });
+		expect(lines).toEqual({});
+	});
+
+	it('on an exclusive store', () => {
+		expect(retaxForCustomerWrite(exempt, toNZ, deps).lines).toEqual({});
 	});
 });

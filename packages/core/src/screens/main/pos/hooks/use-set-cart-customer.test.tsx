@@ -192,7 +192,7 @@ afterEach(() => expectSettledWrites(localPatch));
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
 
-it('settles the target post-edit address, not the rendered order, without repricing products', async () => {
+it('settles the target post-edit address, not the rendered order, and re-taxes the lines', async () => {
 	const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
 	const { settleAggregate, snapshotFromOrderJSON } = jest.requireActual('@wcpos/order-math');
 	const configForOrder = jest.fn((payload) =>
@@ -206,7 +206,7 @@ it('settles the target post-edit address, not the rendered order, without repric
 			order: payload,
 		})
 	);
-	jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValueOnce(configForOrder);
+	jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValue(configForOrder);
 	const product = {
 		product_id: 1,
 		quantity: 1,
@@ -246,14 +246,15 @@ it('settles the target post-edit address, not the rendered order, without repric
 	const { data } = localPatch.mock.calls[0][0];
 	expect(data).toMatchObject({
 		billing: { country: 'NZ' },
-		total: '23',
-		total_tax: '3',
+		total: '24',
+		total_tax: '4',
 		shipping_tax: '2',
+		line_items: [{ total: '10', subtotal: '10', total_tax: '2', subtotal_tax: '2' }],
 	});
+	const retaxed = { ...after, line_items: data.line_items };
 	expect(data).toMatchObject(
-		settleAggregate(snapshotFromOrderJSON(after), configForOrder(after)).patch
+		settleAggregate(snapshotFromOrderJSON(retaxed), configForOrder(retaxed)).patch
 	);
-	expect(data).not.toHaveProperty('line_items');
 });
 
 jest.mock('../commands/use-boundary-commit', () => ({
