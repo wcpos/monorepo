@@ -128,7 +128,7 @@ export function Icon({
 
 	return (
 		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
-			{spin === undefined ? glyph : <Spin active={spin}>{glyph}</Spin>}
+			{spin === undefined ? glyph : <Spin active={false}>{glyph}</Spin>}
 		</View>
 	);
 }
