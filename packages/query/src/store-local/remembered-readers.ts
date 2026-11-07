@@ -21,6 +21,11 @@ export type RememberedReader = {
 };
 export type Readers = Record<string, RememberedReader>;
 
+/** Which connection a memory belongs to: a device reader keeps its transport, a cloud one has none. */
+export function rememberedMode(reader: RememberedReader): 'device' | 'server' {
+	return reader.transport === undefined ? 'server' : 'device';
+}
+
 function snapshot(reader: RememberedReader): RememberedReader {
 	return {
 		id: reader.id,

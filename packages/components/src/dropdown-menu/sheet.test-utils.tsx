@@ -23,6 +23,7 @@ const Part = React.forwardRef<
 		aria-checked={props['aria-checked']}
 		aria-selected={props['aria-selected']}
 		onClick={disabled ? undefined : (onPress as unknown as React.MouseEventHandler<HTMLDivElement>)}
+		onMouseDown={(props as { onPressIn?: () => void }).onPressIn}
 	>
 		{children as React.ReactNode}
 	</div>

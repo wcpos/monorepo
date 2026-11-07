@@ -107,7 +107,10 @@ function Textarea({
 					state: props.editable === false ? 'disabled' : isFocused ? 'open' : 'rest',
 					multiline: true,
 				}),
-				'web:flex w-full px-3 py-2 leading-none',
+				// One line sits in the middle of the control's 44 (12 + the base line's 19 + 12), and
+				// wrapped lines keep the base rhythm; `leading-none` stacked them touching (Paul,
+				// 2026-11-04, the cart line's name).
+				'web:flex w-full px-3 py-3',
 				className
 			)}
 			multiline={multiline}

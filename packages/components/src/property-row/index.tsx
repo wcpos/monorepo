@@ -21,8 +21,12 @@ import { TextClassContext } from '../text/context';
 export const PROPERTY_PLACEHOLDER_CLASS = 'text-muted-foreground text-base';
 
 /** The row's own words, translated by the app once at its root (`DialogLabels`' pattern). */
-export type PropertyRowLabels = { saved: string; open: string };
-const Labels = React.createContext<PropertyRowLabels>({ saved: 'Saved', open: 'Open' });
+export type PropertyRowLabels = { saved: string; failed: string; open: string };
+const Labels = React.createContext<PropertyRowLabels>({
+	saved: 'Saved',
+	failed: 'Not saved',
+	open: 'Open',
+});
 export function PropertyRowLabelsProvider(
 	props: React.PropsWithChildren<{ labels: PropertyRowLabels }>
 ) {
@@ -61,11 +65,15 @@ export function PropertyList(props: {
  * The row is the form item: `id` and the list's `prefix` give it the testID `<prefix>-row-<id>` and
  * the item id `<prefix>-<id>` (minted without them); its key is `<item>-form-item`, the label every
  * label-less control in the row adopts (not in a `compound` row). `name` is the form field (or fields) the row holds,
- * `id` by default: while one's Saved mark shows it takes the verb's place, never beside it.
- * The trailing slot is that mark-or-verb, then `control` (a Switch), which never moves.
+ * `id` by default. A field's Saved (or Not saved) mark sits with the key, never in the trailing
+ * slot (Paul, 2026-11-06, after the judged real-app render): on the key's line when the row is
+ * stacked, under the key's last line when the row is one line, out of flow both times, so the
+ * key, the value and the verb keep their place and the field keeps its width while it shows.
+ * The trailing slot is the verb, then `control` (a Switch), which never moves.
  */
 export function PropertyRow(props: {
-	label: string;
+	/** The key; a row without one (a custom field, whose key is its first input) has no key column. */
+	label?: string;
 	children?: React.ReactNode;
 	prefix?: string;
 	id?: string;
@@ -97,11 +105,12 @@ export function PropertyRow(props: {
 	const item = prefix && id ? `${prefix}-${id}` : minted;
 	const savedName = useSavedName();
 	const marked = !!savedName && [props.name ?? id ?? []].flat().includes(savedName);
+	const mark = marked ? (
+		<SavedMark name={savedName} label={labels.saved} failedLabel={labels.failed} />
+	) : null;
 	// A trailing slot that carries words (locked's provenance, a verb) wraps on a phone.
-	const words = !marked && (!!locked || !!props.verb);
-	const end = marked ? (
-		<SavedMark name={savedName} label={labels.saved} />
-	) : locked ? (
+	const words = !!locked || !!props.verb;
+	const end = locked ? (
 		<>
 			<Text variant="key">{locked.where}</Text>
 			{locked.href ? <DocsLink href={locked.href}>{labels.open}</DocsLink> : null}
@@ -124,6 +133,12 @@ export function PropertyRow(props: {
 		);
 	} else if (locked && !value) value = '—';
 	if (typeof value === 'string' || typeof value === 'number') value = <Text>{value}</Text>;
+	const keyed = props.label !== undefined;
+	// The key column reads as one line (key, then the mark) when stacked or when it carries help.
+	const keyLine = !line || !!props.help;
+	// No value (a switch row): in a dialog the key and its help run to the trailing slot; on a
+	// settings page the value column stays so the switches line up (line 12).
+	const bare = keyed && value == null && !wide;
 	return (
 		<FormItem
 			nativeID={item}
@@ -134,37 +149,68 @@ export function PropertyRow(props: {
 				line && (props.align === 'top' ? 'items-start' : 'items-center')
 			)}
 		>
-			<View
-				className={cn(
-					'min-h-9 justify-center',
-					line && (wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
-					props.indent && 'pl-4'
-				)}
-			>
-				<Key nativeID={`${item}-form-item`}>{props.label}</Key>
-				{props.help ? <Text variant="help">{props.help}</Text> : null}
-			</View>
-			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
-			<View className={cn('min-w-0', !phone && 'flex-1', !phone && wide && 'max-w-80')}>
-				<TextClassContext.Provider
-					value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
-				>
-					{props.compound ? (
-						<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
-					) : (
-						value
+			{keyed && (
+				<View
+					className={cn(
+						'min-h-9 justify-center',
+						// Stacked, or a row with help: the column is the key's line, so a mark sits after the
+						// key and the help line wraps under both (Codex P2, #3333: an anchored mark would lie
+						// over the help text).
+						// (`justify-start`: the column's centring is for its cross axis, not this row's main one.)
+						keyLine && 'flex-row flex-wrap items-center justify-start gap-x-2',
+						line && (bare ? 'min-w-0 flex-1' : wide ? 'w-64 shrink-0 lg:w-72' : 'w-32 shrink-0'),
+						props.indent && 'pl-4'
 					)}
-				</TextClassContext.Provider>
-			</View>
-			{end || props.control ? (
+				>
+					<Key nativeID={`${item}-form-item`}>{props.label ?? ''}</Key>
+					{mark && !keyLine ? (
+						// One line, no help: a zero-height anchor right after the key, so the mark hangs under
+						// the key's last line (a wrapping key included) and the row never grows.
+						<View className="h-0 self-start overflow-visible">
+							<View className="absolute top-0 left-0">{mark}</View>
+						</View>
+					) : (
+						mark
+					)}
+					{props.help ? (
+						<Text variant="help" className={cn(keyLine && 'basis-full')}>
+							{props.help}
+						</Text>
+					) : null}
+				</View>
+			)}
+			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
+			{!bare && (
+				<View
+					className={cn(
+						'min-w-0',
+						!phone && 'flex-1',
+						!phone && wide && 'max-w-80',
+						!keyed && props.indent && 'pl-4'
+					)}
+				>
+					<TextClassContext.Provider
+						value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
+					>
+						{props.compound ? (
+							<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
+						) : (
+							value
+						)}
+					</TextClassContext.Provider>
+				</View>
+			)}
+			{end || props.control || (!keyed && mark) ? (
 				<View
 					className={cn(
 						'shrink-0 flex-row items-center gap-2',
-						// A mark or a switch is narrow and sits on the key's line; words would lie over a
-						// long key on a phone, so there they wrap in flow under the value.
-						words ? 'flex-wrap' : !line && 'absolute top-1 right-0'
+						// A switch is narrow and sits on the key's line; words would lie over a long key on
+						// a phone, so there they wrap in flow under the value. A row with no key has no key
+						// line: its slot stays in flow too, never over the value (Codex P2, #3229).
+						words || !keyed ? 'flex-wrap' : !line && 'absolute top-1 right-0'
 					)}
 				>
+					{!keyed ? mark : null}
 					{end}
 					{props.control}
 				</View>

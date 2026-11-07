@@ -52,6 +52,7 @@ jest.mock('@wcpos/components/form', () => {
 		SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		SavedMark: () => null,
 		useMarkSaved: () => jest.fn(),
+		useMarkFailed: () => jest.fn(),
 		useSavedName: () => '',
 		FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
 		FormLabel: ({ children }: React.PropsWithChildren) => <>{children}</>,

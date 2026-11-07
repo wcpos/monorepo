@@ -102,6 +102,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: () => null,
 	savedKeys: (_before: unknown, changes: object) => Object.keys(changes),
 	useMarkSaved: () => jest.fn(),
+	useMarkFailed: () => jest.fn(),
 	useFormChangeHandler: (options: unknown) => mockUseFormChangeHandler(options),
 	// The dimmed shipping select names itself by its row's label id.
 	useFormField: () => ({ formItemNativeID: 'shipping-tax-class-label' }),

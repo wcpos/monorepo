@@ -50,4 +50,11 @@ export {
 	type FormItemProps,
 };
 
-export { SavedFieldProvider, SavedMark, savedKeys, useMarkSaved, useSavedName } from './saved-mark';
+export {
+	SavedFieldProvider,
+	SavedMark,
+	savedKeys,
+	useMarkFailed,
+	useMarkSaved,
+	useSavedName,
+} from './saved-mark';

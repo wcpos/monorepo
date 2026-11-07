@@ -6,6 +6,21 @@ import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+// React Native Web drops className without Uniwind; retain the fold's classes in this harness.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		children,
+		testID,
+		className,
+		role,
+	}: React.ComponentProps<typeof import('react-native').View>) => (
+		<div data-testid={testID} className={className} role={role}>
+			{children}
+		</div>
+	),
+}));
+
 // Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
 jest.mock('@rn-primitives/label', () => ({
 	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
@@ -245,7 +260,7 @@ jest.mock('@wcpos/components/input', () => {
 	function Wrap({ children }: { children?: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
-	// The movement amount is the `hero` variant: Input.Root / InputField.
+	// The movement amount is one framed figure: Input.Root / InputField.
 	return {
 		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
 	};
@@ -386,10 +401,11 @@ it('lists a non-cash tender only while it holds money; cash is the derivation, n
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByText('Cash')).toBeNull();
 	expect(screen.queryByText('Card')).toBeNull();
+	fireEvent.click(screen.getByTestId('register-panel-other-tenders'));
 	expect(screen.getByText('Stripe Terminal')).toBeTruthy();
 });
 
-it("the body is the drawer's derivation and ends in Expected", () => {
+it("the body folds the drawer's derivation under Expected", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	const ledger = screen.getByTestId('register-panel-ledger');
 	expect(
@@ -400,7 +416,6 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 		'register.opened_suffix 09:02register.float£100.00',
 		'register.term_count register.cash_sales 2register.taken£62.00',
 		'register.term_count register.paid_out 1−£7.00Milk−£7.00register.void',
-		'register.expected_in_drawer£155.00',
 	]);
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	// No session: no derivation, only the closure.
@@ -408,6 +423,46 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-panel-expected')).toBeNull();
 	expect(screen.getByTestId('register-panel-last-closure')).toBeTruthy();
+});
+
+it('the ledger folds under Expected and resets after the panel closes and reopens', () => {
+	const onOpenChange = jest.fn();
+	const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	expect(screen.getByTestId('register-panel-ledger').className).not.toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	fireEvent.click(screen.getByTestId('panel-x'));
+	expect(onOpenChange).toHaveBeenCalledWith(false);
+	view.rerender(<RegisterPanel open={false} onOpenChange={onOpenChange} />);
+	view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+});
+
+it('Other tenders folds with its total on the row', () => {
+	expected = { cash: '155', card: '30', stripe_terminal_for_woocommerce: '-5' };
+	const onOpenChange = jest.fn();
+	const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	const trigger = screen.getByTestId('register-panel-other-tenders');
+	expect(trigger.textContent).toBe('register.other_tenders£25.00');
+	for (const label of ['Card', 'Stripe Terminal']) {
+		expect(screen.getByText(label).parentElement?.className).toContain('hidden');
+	}
+	fireEvent.click(trigger);
+	for (const label of ['Card', 'Stripe Terminal']) {
+		expect(screen.getByText(label).parentElement?.className).not.toContain('hidden');
+	}
+	expect(screen.getByText('Card').parentElement?.textContent).toContain('£30.00');
+	expect(screen.getByText('Stripe Terminal').parentElement?.textContent).toContain('£-5.00');
+	fireEvent.click(trigger);
+	expect(screen.getByText('Card').parentElement?.className).toContain('hidden');
+	fireEvent.click(trigger);
+	fireEvent.click(screen.getByTestId('panel-x'));
+	view.rerender(<RegisterPanel open={false} onOpenChange={onOpenChange} />);
+	view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByText('Card').parentElement?.className).toContain('hidden');
 });
 
 it('hides every amount and the X report for blind cashiers', () => {
@@ -457,6 +512,43 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 		amount: '0',
 		reason: 'Wrong change',
 	});
+});
+
+it('a no sale whose drawer refused records once: the retry only opens the drawer', async () => {
+	openDrawer.mockRejectedValueOnce(new Error('drawer offline'));
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-no-sale'));
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Wrong change' } });
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	await waitFor(() => expect(screen.getByText('Error: drawer offline')).toBeTruthy());
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	await waitFor(() => expect(openDrawer).toHaveBeenCalledTimes(2));
+	await waitFor(() => expect(screen.queryByTestId('movement-confirm')).toBeNull());
+	// Catches the retry minting a second no-sale row and a second Undo toast.
+	expect(recordMovement).toHaveBeenCalledTimes(1);
+	expect(showToast).toHaveBeenCalledTimes(1);
+});
+
+// The retry-only guard lasts one sheet: a later no sale is a new drawer opening and its own audit row.
+// The panel unmounts the sheet on close, so this also holds without the sheet's own resets (#2001).
+it('a no sale after the refused one was closed records its own row', async () => {
+	openDrawer.mockRejectedValueOnce(new Error('drawer offline'));
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	const noSale = () => {
+		fireEvent.click(screen.getByTestId('register-panel-no-sale'));
+		fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Wrong change' } });
+		fireEvent.click(screen.getByTestId('movement-confirm'));
+	};
+	noSale();
+	await waitFor(() => expect(screen.getByText('Error: drawer offline')).toBeTruthy());
+	// The sheet's own ×: the last one, inside the panel's.
+	const closers = screen.getAllByTestId('panel-x');
+	fireEvent.click(closers[closers.length - 1]);
+	expect(screen.queryByTestId('movement-confirm')).toBeNull();
+	noSale();
+	await waitFor(() => expect(screen.queryByTestId('movement-confirm')).toBeNull());
+	expect(recordMovement).toHaveBeenCalledTimes(2);
+	expect(openDrawer).toHaveBeenCalledTimes(2);
 });
 
 it('the keypad decimal key stores a canonical point whatever the locale shows', () => {
@@ -718,7 +810,7 @@ it('a sole register is titled Register and an age below an hour reads minutes', 
 		jest.useRealTimers();
 	}
 });
-it('the two figure tiles separate drawer money from net sales across every tender', () => {
+it('the drawer hero separates drawer money from the net sales line across every tender', () => {
 	const previousExpected = expected,
 		previousTerms = terms;
 	try {
@@ -729,7 +821,7 @@ it('the two figure tiles separate drawer money from net sales across every tende
 			'register.in_the_drawer£345.03'
 		);
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_sales£85.00register.sales_count 2'
+			'register.session_sales £85.00 · register.sales_count 2'
 		);
 	} finally {
 		expected = previousExpected;
@@ -744,27 +836,27 @@ it('a baseline without server terms (older plugin): Session sales is the count, 
 	};
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-		'register.session_salesregister.sales_count 2'
+		'register.session_sales · register.sales_count 2'
 	);
 	expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
 		'register.in_the_drawer£155.00'
 	);
 });
-it('a blind cashier gets one figure tile with the sales count and no money', () => {
+it('a blind cashier gets the sales count line and no money', () => {
 	const previous = blind;
 	try {
 		blind = true;
 		render(<RegisterPanel open onOpenChange={jest.fn()} />);
 		expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_salesregister.sales_count 2'
+			'register.session_sales · register.sales_count 2'
 		);
 		expect(screen.getByTestId('register-panel').textContent).not.toContain('£');
 	} finally {
 		blind = previous;
 	}
 });
-it('a seeded session: both figure tiles read — with the sync note', () => {
+it('a seeded session: the drawer hero and sales line read — with the sync note', () => {
 	const previous = currentFiguresPending;
 	try {
 		currentFiguresPending = true;
@@ -773,8 +865,11 @@ it('a seeded session: both figure tiles read — with the sync note', () => {
 			'register.in_the_drawer—register.figures_after_sync'
 		);
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_sales—register.figures_after_sync'
+			'register.session_sales — · register.figures_after_sync'
 		);
+		// The other-tender rows are a part of the session until the baseline arrives: no total yet.
+		const others = screen.queryByTestId('register-panel-other-tenders');
+		if (others) expect(others.textContent).toBe('register.other_tenders—');
 	} finally {
 		currentFiguresPending = previous;
 	}
@@ -795,7 +890,7 @@ it('zero terms are not drawn; a voided movement step disappears', () => {
 		];
 		render(<RegisterPanel open onOpenChange={jest.fn()} />);
 		const ledger = screen.getByTestId('register-panel-ledger');
-		expect(within(ledger).getAllByRole('listitem')).toHaveLength(2);
+		expect(within(ledger).getAllByRole('listitem')).toHaveLength(1);
 		expect(ledger.textContent).not.toMatch(/paid_in|paid_out|cash_sales|cash_refunds|no_sale/);
 		expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	} finally {

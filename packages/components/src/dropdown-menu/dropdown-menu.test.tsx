@@ -87,6 +87,7 @@ describe('phone sheet', () => {
 		expect(mockRoot.onOpenChange).not.toHaveBeenCalled();
 		expect(action).toHaveBeenCalledTimes(1);
 		expect(screen.getByTestId('disabled')).toHaveClass('opacity-45');
+		fireEvent.mouseDown(screen.getByTestId('panel-scrim'));
 		fireEvent.click(screen.getByTestId('panel-scrim'));
 		expect(mockRoot.onOpenChange).toHaveBeenCalledWith(false);
 	});

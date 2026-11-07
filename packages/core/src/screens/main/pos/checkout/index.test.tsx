@@ -14,12 +14,17 @@ const mockDismiss = jest.fn();
 const mockReplace = jest.fn();
 const mockRouter = { canDismiss: () => mockCanDismiss, dismiss: mockDismiss, replace: mockReplace };
 let mockParams: Record<string, string> = { orderId: 'a' };
+let mockBeneath = '(columns)/cart/[...orderId]';
+const mockNavigation = {
+	getState: () => ({ index: 1, routes: [{ name: mockBeneath }, { name: 'checkout' }] }),
+};
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('expo-router', () => ({
 	useFocusEffect: (effect: () => void) => jest.requireActual('react').useEffect(effect, [effect]),
 	useLocalSearchParams: () => mockParams,
+	useNavigation: () => mockNavigation,
 	useRouter: () => mockRouter,
 }));
 jest.mock('./checkout', () => ({ Checkout: () => <div data-testid="modal" /> }));
@@ -41,6 +46,7 @@ beforeEach(() => {
 	mockDismiss.mockReset();
 	mockReplace.mockReset();
 	mockParams = { orderId: 'a' };
+	mockBeneath = '(columns)/cart/[...orderId]';
 });
 it('a wide sheet over a till pops to it and enters checkout', () => {
 	mockCanDismiss = true;
@@ -56,6 +62,16 @@ it('a wide deep link with nothing beneath is replaced by the columns cart in che
 	expect(mockReplace).toHaveBeenCalledTimes(1);
 	expect(mockDismiss).not.toHaveBeenCalled();
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
+	expect(mockReplace).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+		params: { orderId: ['a', 'checkout'] },
+	});
+});
+it('a wide sheet over the anchor is replaced by the columns checkout even when it can dismiss', () => {
+	mockBeneath = 'index';
+	mockCanDismiss = true;
+	render(<CheckoutScreen />);
+	expect(mockDismiss).not.toHaveBeenCalled();
 	expect(mockReplace).toHaveBeenCalledWith({
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
 		params: { orderId: ['a', 'checkout'] },

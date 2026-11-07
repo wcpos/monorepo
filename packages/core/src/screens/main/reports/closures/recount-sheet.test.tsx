@@ -37,6 +37,15 @@ const viewedStores = of([
 		price_decimal_sep: ',',
 		price_thousand_sep: '.',
 	},
+	// A 3-place (fils) store: KWD has no faces of its own, so it counts on the default ones.
+	{
+		id: 3,
+		currency: 'KWD',
+		currency_pos: 'left',
+		price_num_decimals: 3,
+		price_decimal_sep: '.',
+		price_thousand_sep: ',',
+	},
 ]);
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
@@ -86,8 +95,8 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
+jest.mock('@wcpos/components/input', () => {
+	function Field({
 		value,
 		onChangeText,
 		testID,
@@ -99,16 +108,24 @@ jest.mock('@wcpos/components/input', () => ({
 		testID: string;
 		secureTextEntry?: boolean;
 		maxLength?: number;
-	}) => (
-		<input
-			type={secureTextEntry ? 'password' : 'text'}
-			maxLength={maxLength}
-			data-testid={testID}
-			value={value}
-			onChange={(e) => onChangeText(e.target.value)}
-		/>
-	),
-}));
+	}) {
+		return (
+			<input
+				type={secureTextEntry ? 'password' : 'text'}
+				maxLength={maxLength}
+				data-testid={testID}
+				value={value}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
+		);
+	}
+	function Wrap({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	return {
+		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
+	};
+});
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
@@ -378,9 +395,10 @@ it.each([
 		/>
 	);
 	const input = screen.getByTestId('amount');
-	expect(input.previousElementSibling?.textContent ?? '').toBe(prefix);
-	expect(input.nextElementSibling?.textContent ?? '').toBe(suffix);
+	expect(input.previousElementSibling?.firstElementChild?.textContent ?? '').toBe(prefix);
+	expect(input.nextElementSibling?.firstElementChild?.textContent ?? '').toBe(suffix);
 	expect(input.parentElement?.children).toHaveLength(2);
+	expect(input.parentElement?.querySelectorAll('span')).toHaveLength(1);
 });
 
 // Revert: pass undefined for a null store, selecting bound GBP denominations instead of store zero.
@@ -447,4 +465,23 @@ it('keeps the sheet busy until the refreshed snapshot is saved', async () => {
 		finish();
 	});
 	expect(close).toHaveBeenCalledWith(false);
+});
+
+// Revert: total the denominations in 2 places, so a fils store's count is sent in cents.
+it('totals denominations in the store’s decimals on a 3-place store', async () => {
+	render(
+		<RecountSheet row={{ ...row, store_id: 3 } as never} onSaved={done} onOpenChange={close} />
+	);
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-denominations'));
+	fireEvent.click(screen.getByTestId('den-tile-10'));
+	fireEvent.click(screen.getByTestId('den-tile-0.05'));
+	expect((screen.getByTestId('recount-cash') as HTMLInputElement).value).toBe('10.050');
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(post).toHaveBeenCalledWith(
+			'closures/server-closure/recount',
+			expect.objectContaining({ counted: { cash: '10.050', card: '4' } })
+		)
+	);
 });

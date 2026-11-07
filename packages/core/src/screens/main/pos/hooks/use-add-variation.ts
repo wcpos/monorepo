@@ -8,6 +8,7 @@ import { useDocField } from '@wcpos/query';
 
 import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
+import { showCountingNotice } from './use-add-product';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
 import { useUpdateCartLine } from './use-update-cart-line';
@@ -34,7 +35,7 @@ interface MetaData {
 }
 
 export const useAddVariation = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, readCounting } = useAddItemToOrder();
 	// Event-time resolution — every variable product tile mounts this hook.
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateCartLine();
@@ -54,6 +55,11 @@ export const useAddVariation = () => {
 			metaData?: MetaData[],
 			options?: { silent?: boolean }
 		) => {
+			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
+			if (await readCounting()) {
+				showCountingNotice(t);
+				return false;
+			}
 			let success;
 
 			// always make sure we have the latest product document
@@ -127,6 +133,7 @@ export const useAddVariation = () => {
 			}
 		},
 		[
+			readCounting,
 			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,

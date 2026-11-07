@@ -43,18 +43,18 @@ minimumReleaseAgeExclude:
   - "@react-native/virtualized-lists"
   - "@expo/config-types"
 overrides:
-  "expo": "~58.0.14"
-  "expo-modules-core": "~58.0.22"
+  "expo": "~58.0.23"
+  "expo-modules-core": "~58.0.30"
   "@expo/dom-webview": "~58.0.2"
   "lightningcss": "1.30.1"
   # react-native-web 0.21.4 (SDK 58.0.8) exports InputAccessoryView from its index; uniwind's web
   # resolver redirects every supported react-native-web component to uniwind/components/<name>,
   # and 1.11.0 listed InputAccessoryView without shipping it, so the web bundle died at
   # "Unable to resolve ./exports/InputAccessoryView". 1.12.2 ships it.
-  "uniwind": "1.12.2"
+  "uniwind": "1.13.1"
   "react": "19.3.0"
   "react-dom": "19.3.0"
-  "react-native": "0.88.0"
+  "react-native": "0.88.1"
   # Keep transitive auto-installed peers on the SDK native runtime.
   "react-native-reanimated": "4.7.1"
   # expo-router floats ^4.2.2; pin so the patch below has one target. 4.2.10 carries upstream's
@@ -62,7 +62,7 @@ overrides:
   "react-native-drawer-layout": "4.2.10"
   "react-native-edge-to-edge": "^1.6.2"
   "react-native-gesture-handler": "~3.3.0"
-  "react-native-safe-area-context": "~5.10.1"
+  "react-native-safe-area-context": "~5.11.1"
   # react-native-calendars lists moment as an OPTIONAL dependency and requires it
   # inside a try/catch, which Metro treats as an optional require: absent, it is
   # skipped; present, it is bundled. The lock had never resolved it, and every
@@ -71,14 +71,14 @@ overrides:
   "react-native-calendars>moment": "-"
   "@electron/node-gyp": "10.2.0-electron.2"
   "tar": "^7.5.11"
-  "react-native-nitro-modules": "0.35.9"
-  # react-native-star-io10 1.13.0 ships a stario10.aar with minCompileSdk=37; Expo SDK 57
-  # (AGP 8.12) tops out at compileSdk 36, so the Android build fails at :app:checkDebugAarMetadata.
-  # Hold at 1.12.1 (aar minCompileSdk=1) until Expo ships an AGP that supports API 37.
-  "react-native-star-io10": "1.12.1"
+  "react-native-nitro-modules": "0.37.2"
+  # react-native-star-io10 1.13.0+ ships a stario10.aar with minCompileSdk=37. It was held at
+  # 1.12.1 while Expo SDK 57 (AGP 8.12) topped out at compileSdk 36; SDK 58 builds against
+  # compileSdk 37, so scripts/check-android-aar-compile-sdk.mjs passes on 1.14.0.
+  "react-native-star-io10": "1.14.0"
   # jest-expo 57 pulls jest-environment-* 29 (nested jest-mock 29 lacks clearMocksOnScope);
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
-  "jest-environment-jsdom": "^30.4.1"
+  "jest-environment-jsdom": "^30.5.2"
   "jest-environment-node": "^30.4.1"
   # react-devtools-core resolves shell-quote in this workspace — keep the
   # patched release (GHSA-w7jw-789q-3m8p, critical, fixed 1.8.4). Floor then raised to
@@ -155,9 +155,9 @@ patchedDependencies:
   # on "There was a problem loading the project" (apps/main/.maestro/README.md §4). The
   # patch reads a string runtime from the already-evaluated config; policy objects (local
   # dev, `fingerprint`) still go through the CLI. Ported from main's @expo/cli@57.0.16
-  # patch (#2532); 58.1.11 has the same per-request spawn. Drop when @expo/cli does this
+  # patch (#2532); 58.1.19 has the same per-request spawn. Drop when @expo/cli does this
   # itself (pinned by scripts/expo-cli-manifest-runtime.test.mjs).
-  "@expo/cli@58.1.11": "patches/@expo__cli@58.1.11.patch"
+  "@expo/cli@58.1.19": "patches/@expo__cli@58.1.19.patch"
   # FlashList 2.3.2 filters stale measurements only while truncating the layout table.
   # processDataUpdate can truncate it first, so move the guard outside that branch to
   # cover late ViewHolder measurements too (#1671). The 2.2.2 fix alone is insufficient.
@@ -172,9 +172,9 @@ patchedDependencies:
   # through the CLI-generated, gitignored `apps/main/expo-env.d.ts`, which `expo start`
   # rewrites, so it cannot be fixed there. Our sources use no web-only style key; className
   # and `hovered` are kept. Exact key on purpose: pnpm fails loudly when a patch becomes
-  # unused at a version bump. Still needed in 58.0.14; drop when Expo's file no longer
+  # unused at a version bump. Still needed in 58.0.23; drop when Expo's file no longer
   # augments the style interfaces.
-  "expo@58.0.14": "patches/expo@58.0.14.patch"
+  "expo@58.0.23": "patches/expo@58.0.23.patch"
   # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
   # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
   # then on close() delete the original, read the whole swap back and rewrite it. The
@@ -195,7 +195,7 @@ patchedDependencies:
   # agrees with React's static prop. Kept as a guard after the Reanimated bump; drop it once
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
-  "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  "react-native-esc-pos-printer@4.5.1": "patches/react-native-esc-pos-printer@4.5.1.patch"
   # storage-sqlite's sqliteTransaction kept a REJECTED link in its per-database promise chain
   # after a failed handler, so every later write replayed that error until the process died
   # (the till could not save an order for a whole session on the Pixel, 2026-10-06). The patch
@@ -218,9 +218,9 @@ patchedDependencies:
   # Drop when Skia stops deep-importing react-native on web.
   "@shopify/react-native-skia@2.14.0": "patches/@shopify__react-native-skia@2.14.0.patch"
   # Android shared-object registry: synchronize lookups and released-id validation on
-  # the same registry monitor as writes (d0afac0a6); 58.0.22 still reads the mutable map
+  # the same registry monitor as writes (d0afac0a6); 58.0.30 still reads the mutable map
   # without that lock in these three paths. Drop when all three use the writers' monitor.
-  expo-modules-core@58.0.22: patches/expo-modules-core@58.0.22.patch
+  expo-modules-core@58.0.30: patches/expo-modules-core@58.0.30.patch
   # The web Content of popover, select and tooltip drops `insets`, the primitives' name for Radix's
   # collisionPadding (dropdown-menu forwards it). AnchoredOverlay passes the desktop title bar's
   # height there, so a menu never slides over the title bar. Drop when upstream forwards it.

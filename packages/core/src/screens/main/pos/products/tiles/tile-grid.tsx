@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useGround } from '@wcpos/components/lib/ground';
+import { cn } from '@wcpos/components/lib/utils';
 import { chunk } from '@wcpos/components/tile-grid';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { useDocField } from '@wcpos/query';
@@ -26,8 +28,9 @@ export function TileRow({
 	columns: number;
 	children: React.ReactNode;
 }): React.ReactElement {
+	// The row's end keeps a stack's reach inside the scroller on a right inner edge (lib/ground).
 	return (
-		<View className="flex-row">
+		<View className={cn('flex-row', useGround().tileRow)}>
 			{children}
 			{Array.from({ length: columns - React.Children.count(children) }, (_, i) => (
 				<View key={`spacer-${i}`} className="m-1 flex-1" />

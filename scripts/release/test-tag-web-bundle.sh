@@ -91,6 +91,7 @@ args="$*"
 ref="${args##*ref=}"; ref="${ref%% *}"
 case "$args" in
 	'api repos/wcpos/web-bundle/git/trees/v1.11.1?recursive=1') cat "$MOCK_TREE"; exit "${MOCK_GH_EXIT:-0}" ;;
+	'api repos/wcpos/web-bundle/git/trees/v1.11.0?recursive=1') cat "$MOCK_TREE_PREV" ;;
 	*"git/refs"*) echo "dry run must not create a ref" >&2; exit 99 ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .commit.message") printf '%s\n' "$MOCK_MSG" ;;
@@ -157,6 +158,34 @@ MOCK_OK_AT=999 expect_status "wrong path fails at deadline" fail cdn verify_cdn_
 expect_eq "deadline failure names remaining path" 1 "$(grep -Fc "FAIL: @1.11/build/$entry" "$tmpdir/out")"
 expect_status "empty inventory cannot pass" fail cdn verify_cdn_paths 1.11 0 </dev/null
 MOCK_GH_EXIT=1 expect_status "tree API error cannot pass" fail cdn expected_from_tree v1.11.1
+
+# --- same-named chunks whose bytes changed are purged before the hashed verification ---
+export MOCK_TREE_PREV="$tmpdir/tree-prev"
+other_sha=$(printf other | git hash-object --stdin)
+kept='_expo/static/js/web/kept-def.js'
+gone='_expo/static/js/web/gone-012.js'
+cat > "$MOCK_TREE_PREV" <<JSON
+{"truncated":false,"tree":[
+{"type":"blob","path":"build/metadata.json","sha":"$other_sha"},
+{"type":"blob","path":"build/$entry","sha":"$other_sha"},
+{"type":"blob","path":"build/$kept","sha":"$good_sha"},
+{"type":"blob","path":"build/$gone","sha":"$good_sha"}]}
+JSON
+: > "$MOCK_LOG"
+expect_status "changed chunks purge runs" pass cdn purge_changed_hashed 1.11 v1.11.0 <<<"$(printf '%s %s\n%s %s' "$good_sha" "$entry" "$good_sha" "$kept")"
+expect_eq "a same-named chunk with different bytes is purged on the lane" 1 "$(grep -Fc "purge.jsdelivr.net/gh/wcpos/web-bundle@1.11/build/$entry" "$MOCK_LOG" || true)"
+expect_eq "a same-named chunk with the same bytes is not purged" 0 "$(grep -Fc "/$kept" "$MOCK_LOG" || true)"
+expect_eq "a chunk only the previous tag carries is not purged" 0 "$(grep -Fc "/$gone" "$MOCK_LOG" || true)"
+expect_eq "only the one purge was sent" 1 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
+MOCK_GH_EXIT=1 expect_status "a failed previous-tree listing fails closed" fail cdn purge_changed_hashed 1.11 v1.11.1 <<<"$good_sha $entry"
+CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
+MOCK_PURGE_BODY='{"paths":{"x":{"throttled":true,"throttlingReset":120}}}' PATH="$tmpdir/cdn:$tmpdir:$PATH" \
+	purge_changed_hashed 1.11 v1.11.0 <<<"$good_sha $entry" > "$tmpdir/out"
+expect_eq "a throttled chunk purge reaches the caller's throttle state" "1 120" "$CDN_PURGE_THROTTLED $CDN_PURGE_THROTTLE_RESET"
+CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
+expect_eq "previous lane tag is the newest below this one" v1.11.11 "$(printf 'v1.10.40\nv1.11.9\nv1.11.11\nv1.11.12\nv2.0.9\n' | previous_lane_tag 1.11 v1.11.12)"
+expect_eq "previous lane tag ignores other lanes and a later tag" v1.11.2 "$(printf 'v1.11.2\nv1.11.3\nv1.10.40\nv1.11.4\n' | previous_lane_tag 1.11 v1.11.3)"
+expect_eq "a new lane has no previous tag" "" "$(printf 'v1.10.40\n' | previous_lane_tag 1.11 v1.11.0)"
 sed 's/"truncated":false/"truncated":true/' "$MOCK_TREE" > "$tmpdir/truncated-tree"
 MOCK_TREE="$tmpdir/truncated-tree" expect_status "truncated tree cannot pass" fail cdn expected_from_tree v1.11.1
 phase() { (CDN_HASHED_DEADLINE_SECONDS=0; CDN_UNHASHED_DEADLINE_SECONDS=5; CDN_VERIFY_SECONDS=0; verify_lane_live 1.11 v1.11.1); }

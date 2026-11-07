@@ -13,6 +13,9 @@
 # JS-only merges — almost every merge — build nothing and cost $0.
 #
 # Costs, for the rare build: $2 per iOS, $1 per Android on Starter usage rates;
+# that $1 is the default worker, and Android dev clients now run on the large
+# worker, billed at that tier, because the default worker's Gradle daemon dies
+# on the 2.0 tree (#3206);
 # the monthly allowance (15 + 15 builds — the Free plan's hard limit, and
 # exactly what Starter's $45 credit buys) is shared with RELEASE builds
 # (`build.yml`), which is why this workflow spends only on fingerprint change
@@ -51,7 +54,7 @@ on:
       # and a debugging session coincide). Trunk (push) runs are exempt: buying the
       # rare fingerprint-change build is their job.
       build:
-        description: 'Spend an EAS build if no dev client is cached for this fingerprint (iOS $2, Android $1)'
+        description: 'Spend an EAS build if no dev client is cached for this fingerprint (iOS $2, Android at the large-worker rate)'
         type: boolean
         default: false
       # A fingerprint change rarely lands for both platforms' sakes; verifying
@@ -171,13 +174,15 @@ jobs:
 
       # workflow_dispatch accepts an arbitrary ref, and the jobs below run the
       # checked-out seed script with write-capable store credentials. Refuse
-      # anything not already on main or next, both protected trunks. Pull requests
+      # anything not already on main or next, both protected trunks. `next` does not
+      # always exist (it is deleted between a promotion and the next cut), so the
+      # fetch tolerates its absence and a commit must then be on main. Pull requests
       # are exempt by construction: `build.if` admits only same-repo, non-draft PRs —
       # the same trust boundary deploy.yml already grants the store secrets to.
       - name: 🔒 Validate trusted ref
         if: github.event_name != 'pull_request'
         run: |
-          git fetch origin main next
+          git fetch origin main next 2>/dev/null || git fetch origin main
           if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main &&
              ! git merge-base --is-ancestor HEAD refs/remotes/origin/next; then
             echo "::error::ref must resolve to a commit on the main or next branch"

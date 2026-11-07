@@ -15,12 +15,6 @@ import { useImageAttachment } from '../../hooks/use-image-attachment';
 export function ProductVariationImage({
 	row,
 }: CellContext<{ record: EngineRecord<'variations'> }, 'image'>) {
-	/**
-	 * Both wire shapes, not just `image`: the wcpos/v2 lane serializes variations
-	 * through the products controller, so a 1.10.0+ store sends `images[]` and the
-	 * singular `image` is empty. Reading only `image` blanked every variation
-	 * thumbnail in the list (#1577).
-	 */
 	const imageURL = useRecordField(row.original.record, (record) => resolveImageSrc(record.payload));
 	const { uri, error } = useImageAttachment(row.original.record, imageURL ?? '');
 

@@ -86,6 +86,8 @@ test('sell to a guest, looped', async ({
 		await sampler.checkpoint('end');
 	} catch (error) {
 		// A journey failure still stops the timers and attaches what was recorded up to it.
+		// The failed loop never reached its trashTracked: its order counts, and the journey's error stays.
+		ordersNotTrashed = await trashTracked().catch(() => ordersNotTrashed);
 		await sampler.finish({ ordersNotTrashed }).catch(() => undefined);
 		throw error;
 	}

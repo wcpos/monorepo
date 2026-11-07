@@ -8,6 +8,7 @@ test('public value surface is exactly the spec', () => {
 	).toEqual([
 		'activeAwaitingCustomer',
 		'calculateCartLine',
+		'captureEntry',
 		'countsTowardPaid',
 		'createCartConfig',
 		'derive',
@@ -58,6 +59,7 @@ test('public value surface is exactly the spec', () => {
 		'saleProvenanceMeta',
 		// Added 2026-10-21 (#2830): one payment-row identity for the ledger upsert and query's answer merge.
 		'samePaymentId',
+		'serverHardware',
 		'serverOwnsMoney',
 		// Added 2026-08-23 (#1472): the cart's money write must not sit behind a
 		// coupon-reference fetch, and settleCart's missing-coupon gate makes it. The

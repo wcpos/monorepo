@@ -98,7 +98,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 				}, info) => {
 					// The walk, plus putting the register, theme and language back on the shared store.
 					test.setTimeout(420_000);
-					const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
+					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 					// The theme and language below belong to the store the app is on.
 					if (docsShoot) await showStore(posPage, request, info, storeAuthorization);
 					const restoreSettings = await ensureSystemTheme(posPage, { english: true });
