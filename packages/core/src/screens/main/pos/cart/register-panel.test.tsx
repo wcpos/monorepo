@@ -353,7 +353,16 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<p data-testid={testID}>{children}</p>
 	),
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DialogFooter: (
+		props: React.ComponentProps<typeof import('@wcpos/components/dialog').DialogFooter>
+	) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return (
+			<footer>
+				<Footer {...props} />
+			</footer>
+		);
+	},
 }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
@@ -523,10 +532,39 @@ it('a reason chip fills the reason and the verb names the amount', () => {
 	expect(confirmButton().disabled).toBe(false);
 });
 
+it('the keypad sits under the amount and the reasons are a three-column grid', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const amount = screen.getByTestId('movement-amount');
+	const key = screen.getByTestId('movement-key-1');
+	const supplier = screen.getByTestId('movement-reason-supplier');
+	expect(amount.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	expect(key.compareDocumentPosition(supplier) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	const grid = supplier.parentElement!.parentElement!.parentElement!;
+	expect(grid.children).toHaveLength(2);
+	for (const row of Array.from(grid.children)) {
+		expect(row.children).toHaveLength(3);
+		expect(within(row as HTMLElement).getAllByTestId(/^movement-reason-/)).toHaveLength(3);
+	}
+});
+
+it('the reason why the button is held sits beside it', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-in'));
+	expect(confirmButton().disabled).toBe(true);
+	const footer = confirmButton().closest('footer')!;
+	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('amount');
+	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '20' } });
+	expect(confirmButton().disabled).toBe(true);
+	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('reason');
+});
+
 it('the consequence line says what is left after a paid out', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
-	expect(screen.getByTestId('movement-after').textContent).toBe('register.drawer_holds £155.00');
+	expect(screen.getByTestId('movement-after').textContent).toContain(
+		'register.drawer_holds £155.00'
+	);
 	fireEvent.click(screen.getByTestId('movement-key-7'));
 	expect(screen.getByTestId('movement-after').textContent).toContain('£148.00');
 });
