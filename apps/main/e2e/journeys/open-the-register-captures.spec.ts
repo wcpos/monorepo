@@ -8,6 +8,8 @@
  */
 import { expect } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { readPins, recordCapture } from '../capture-manifest';
 import {
 	applyScale,
@@ -100,7 +102,7 @@ for (const { device, viewport } of COMBINATIONS) {
 		test('open the register, every step', async ({ page, request, storeAuthorization }, info) => {
 			// The walk's two holds, plus the theme, language and register put back on the store.
 			test.setTimeout(REGISTER_PUSH_TIMEOUT_MS + CLOSE_PUSH_TIMEOUT_MS + 360_000);
-			const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
+			const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 			if (docsShoot) await hydrateAuthenticatedPage(page, info, { waitForCatalogue: false });
 			else await stubRegisterWire(page, info);
 			// The theme and language below belong to the store the app is on.
@@ -113,7 +115,7 @@ for (const { device, viewport } of COMBINATIONS) {
 			const shoot = async (number: number, slug: string): Promise<void> => {
 				// A navigation or reload drops the added style tag; re-scale before the shot.
 				if (!(await hasScaleStyle(page))) {
-					console.log(`[rescale] ${info.titlePath.at(-2)}: before j1-${number}-${slug}`);
+					log.info(`[rescale] ${info.titlePath.at(-2)}: before j1-${number}-${slug}`);
 					unscale = await applyScale(page, 'regular');
 				}
 				// A movement's toast covers the panel in the shot; wait for every toast to leave.

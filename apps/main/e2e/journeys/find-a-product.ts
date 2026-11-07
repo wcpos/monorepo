@@ -68,6 +68,34 @@ export const DECLARED_GAP = 'declared-gap';
  */
 export const WEDGE_KEY_DELAY_MS = 5;
 
+/**
+ * The store threshold the burst has to beat. Bursts at 5 ms measured 6 to 7 ms between keys, so a
+ * threshold at or under 10 ms cannot be met reliably.
+ */
+export const WEDGE_MIN_THRESHOLD_MS = 10;
+
+/** The outlets' scan settings: the lowest threshold, the highest minimum, every edge in use. */
+export type ScanSettings = {
+	thresholdMs: number;
+	minChars: number;
+	prefixes: string[];
+	suffixes: string[];
+};
+
+/**
+ * Whether a wedge burst of this SKU scans as the SKU itself. Edges matter because `stripBoundary`
+ * (`packages/scanner/src/wedge-detector.ts`) removes a configured prefix or suffix only when it
+ * equals the key at that edge, so a bare SKU is untouched unless its own edge matches.
+ */
+export function burstCanCarry(sku: string, scan: ScanSettings): boolean {
+	return (
+		scan.thresholdMs > WEDGE_MIN_THRESHOLD_MS &&
+		sku.length >= scan.minChars &&
+		!scan.prefixes.includes(sku.charAt(0)) &&
+		!scan.suffixes.includes(sku.charAt(sku.length - 1))
+	);
+}
+
 export interface FindAProductContext {
 	page: Page;
 	request: APIRequestContext;
@@ -120,7 +148,14 @@ async function readScanSettings(request: APIRequestContext, storeUrl: string, op
 	const numbers = (key: string, fallback: number) =>
 		stores.map((store) => Number(store[key] ?? fallback)).filter(Number.isFinite);
 	const thresholdMs = Math.min(...numbers('barcode_scanning_avg_time_input_threshold', 24));
-	return { thresholdMs, minChars: Math.max(...numbers('barcode_scanning_min_chars', 8)) };
+	const strings = (key: string) =>
+		stores.map((store) => store[key]).filter((v): v is string => typeof v === 'string' && v !== '');
+	return {
+		thresholdMs,
+		minChars: Math.max(...numbers('barcode_scanning_min_chars', 8)),
+		prefixes: strings('barcode_scanning_prefix'),
+		suffixes: strings('barcode_scanning_suffix'),
+	} satisfies ScanSettings;
 }
 
 /** Read what the walk looks for from the store, once. Nothing is hard-coded or created. */
@@ -130,7 +165,7 @@ export async function readCatalogue(
 ): Promise<Catalogue> {
 	const storeUrl = getStoreUrl(test.info());
 	const options = await resolveProbeOptions(request, storeUrl, storeAuthorization);
-	const { thresholdMs, minChars } = await readScanSettings(
+	const scan = await readScanSettings(
 		request,
 		storeUrl,
 		await resolveProbeOptions(request, storeUrl, storeAuthorization, { route: '/wcpos/v1/orders' })
@@ -157,13 +192,14 @@ export async function readCatalogue(
 	const inStock = (
 		await read<WcProduct>('products', { ...sellable, type: 'simple' })
 	).records.filter(onPos);
-	// The searched product carries the scan code when the store has one long enough (Woo keeps
-	// SKUs unique, so a code found here names exactly one product).
-	const scannable = inStock.filter((product) => (product.sku ?? '').length >= minChars);
+	// The searched product carries the scan code when the store has one the burst can carry (Woo
+	// keeps SKUs unique, so a code found here names exactly one product).
+	const scannable = inStock.filter((product) => burstCanCarry(product.sku ?? '', scan));
 	const searched = (await distinct(scannable)) ?? (await distinct(inStock));
 	if (!searched) throw new Error('the store has no published, in-stock simple product to search');
 	const scanCode = (scannable.find((p) => p.id === searched.id) ?? scannable[0])?.sku ?? null;
-	// Smallest populated category first: its member shows without scrolling the filtered grid.
+	// Smallest populated category first. Its member is the first by title, the panel's default sort
+	// (name ascending), so it is on screen however many products the category holds.
 	const terms = { per_page: '100', hide_empty: 'true' };
 	const { records: categories } = await read<WcCategory>('products/categories', terms);
 	let category: Catalogue['category'] | undefined;
@@ -171,8 +207,16 @@ export async function readCatalogue(
 		.filter((c) => c.count > 0 && c.slug !== 'uncategorized' && typeable(c.name))
 		.sort((left, right) => left.count - right.count)
 		.slice(0, 10)) {
-		const query = { ...sellable, per_page: '10', category: `${candidate.id}` };
-		const member = (await read<WcProduct>('products', query)).records.find(onPos);
+		const query = {
+			...sellable,
+			per_page: '10',
+			category: `${candidate.id}`,
+			orderby: 'title',
+			order: 'asc',
+		};
+		const member = (await read<WcProduct>('products', query)).records.find(
+			(p) => onPos(p) && typeable(p.name)
+		);
 		category = member && { id: candidate.id, name: candidate.name, productId: member.id };
 		if (category) break;
 	}
@@ -186,7 +230,7 @@ export async function readCatalogue(
 		category,
 		scanCode,
 		variableTerm: found ? { id: found.id, name: found.name } : null,
-		thresholdMs,
+		thresholdMs: scan.thresholdMs,
 	};
 }
 
@@ -338,7 +382,7 @@ export async function scanABarcode(ctx: FindAProductContext, walk: ProductWalk):
 	await journeyStep(ctx, 7, async () => {
 		const { page } = ctx;
 		const { scanCode, thresholdMs } = walk.catalogue;
-		if (!scanCode) return declareGap(ctx, 7, 'no SKU as long as the scan minimum');
+		if (!scanCode) return declareGap(ctx, 7, 'no SKU the wedge burst can carry');
 		const before = await onCart(page, walk.layout, () => cartLines(page).count());
 		// The detector ignores keys aimed at a text field: the burst goes to the document.
 		await productsSearch(page).blur();

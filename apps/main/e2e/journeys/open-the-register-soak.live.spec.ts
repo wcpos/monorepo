@@ -13,6 +13,8 @@
  */
 import { expect } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { authenticatedTest as test } from '../fixtures';
 import { CLOSE_PUSH_TIMEOUT_MS } from './open-register';
 import { OPEN_THE_REGISTER, openTheRegister, REGISTER_PUSH_TIMEOUT_MS } from './open-the-register';
@@ -42,7 +44,7 @@ test('open the register, looped', async ({ page }, testInfo) => {
 		const startedAt = Date.now();
 		await openTheRegister({ page, testInfo });
 		const wallMs = Date.now() - startedAt;
-		console.log(`[soak] loop ${loop}: ${wallMs} ms`);
+		log.info(`[soak] loop ${loop}: ${wallMs} ms`);
 		await sampler.endLoop({ journey: OPEN_THE_REGISTER.key, loop, wallMs, cartAddMs: null });
 	};
 
