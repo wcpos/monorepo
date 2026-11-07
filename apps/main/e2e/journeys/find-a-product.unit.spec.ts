@@ -1,5 +1,10 @@
 import { expect, test } from '../test';
-import { burstCanCarry, type ScanSettings } from './find-a-product';
+import {
+	burstCanCarry,
+	categoryCandidates,
+	type ScanSettings,
+	type WcCategory,
+} from './find-a-product';
 
 /**
  * Unit-style pins for J12's scan-code pick: no page, no store. A SKU the burst cannot carry makes
@@ -26,5 +31,44 @@ test.describe('burstCanCarry', () => {
 
 	test('refuses a SKU whose last character is a configured suffix', () => {
 		expect(burstCanCarry('ABC-12345#', scan)).toBe(false);
+	});
+});
+
+const term = (
+	id: number,
+	count: number,
+	slug = `cat-${id}`,
+	name = `Category ${id}`
+): WcCategory => ({
+	id,
+	name,
+	slug,
+	count,
+});
+
+test.describe('categoryCandidates', () => {
+	test('keeps the default category when it is the only one', () => {
+		const only = term(1, 12, 'uncategorized', 'Uncategorized');
+		expect(categoryCandidates([only])).toEqual([only]);
+	});
+
+	test('puts a larger merchant category before a smaller default one', () => {
+		const ids = categoryCandidates([term(1, 2, 'uncategorized', 'Uncategorized'), term(2, 40)]);
+		expect(ids.map((c) => c.id)).toEqual([2, 1]);
+	});
+
+	test('orders merchant categories smallest count first', () => {
+		const ids = categoryCandidates([term(1, 30), term(2, 3), term(3, 9)]).map((c) => c.id);
+		expect(ids).toEqual([2, 3, 1]);
+	});
+
+	test('drops an empty category and an untypeable name', () => {
+		const picked = categoryCandidates([term(1, 0), term(2, 5, 'a-b', 'A &amp; B'), term(3, 7)]);
+		expect(picked.map((c) => c.id)).toEqual([3]);
+	});
+
+	test('returns at most 10', () => {
+		const many = Array.from({ length: 14 }, (_, i) => term(i + 1, i + 1));
+		expect(categoryCandidates(many).map((c) => c.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 	});
 });
