@@ -237,10 +237,16 @@ export function RegisterCount({
 							testID="count"
 							onPress={(key) => {
 								// Leaving denomination entry starts a fresh count: the typed buffer behind the
-								// tiles is stale and must not come back (Codex, #3356; ledger line 65).
-								const fresh = Object.keys(pieces).length > 0;
+								// tiles is stale and must not come back (Codex, #3356; ledger line 65). So does a
+								// zero whose places are full (Clear writes 0.00): a digit could not join it.
+								const tiles = Object.keys(pieces).length > 0;
 								setPieces({});
-								setCash((prev) => typeDecimal(fresh ? '' : prev, key, decimals));
+								setCash((prev) => {
+									const point = prev.indexOf('.');
+									const fullZero =
+										Number(prev) === 0 && point >= 0 && prev.length - point - 1 >= decimals;
+									return typeDecimal(tiles || fullZero ? '' : prev, key, decimals);
+								});
 							}}
 						/>
 					</View>

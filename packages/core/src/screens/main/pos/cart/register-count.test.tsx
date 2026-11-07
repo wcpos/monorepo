@@ -294,6 +294,20 @@ it('the keypad starts a fresh count after denominations; the earlier typed amoun
 	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('7');
 	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('0');
 });
+it('after Clear the keypad starts a new count instead of being stuck on 0.00', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('count-denominations'));
+	fireEvent.click(screen.getByTestId('den-tile-20'));
+	fireEvent.click(screen.getByTestId('count-clear'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('0.00');
+	fireEvent.focus(screen.getByTestId('count-amount'));
+	for (const key of ['4', '2']) fireEvent.click(screen.getByTestId(`count-key-${key}`));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('42');
+	// A zero still being typed (0.0) is not a cleared count: the next digit joins it.
+	enter('0.0');
+	fireEvent.click(screen.getByTestId('count-key-5'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('0.05');
+});
 it.each(['', 'invalid'])('does not collapse an invalid count %s on blur', (value) => {
 	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 	enter(value);
