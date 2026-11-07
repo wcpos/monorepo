@@ -248,7 +248,7 @@ it('the keypad types into the count and collapses on blur, reopens on focus', ()
 	expect(screen.getByTestId('count-keypad')).toBeTruthy();
 	fireEvent.blur(amount);
 	expect(screen.queryByTestId('count-keypad')).toBeNull();
-	expect(screen.getByTestId('count-tap-to-change').textContent).toBe('Tap the amount to change it');
+	expect(screen.getByTestId('count-tap-to-change').textContent).toBe('Tap the amount to edit it');
 	fireEvent.focus(amount);
 	expect(screen.getByTestId('count-keypad')).toBeTruthy();
 	expect(screen.queryByTestId('count-tap-to-change')).toBeNull();
