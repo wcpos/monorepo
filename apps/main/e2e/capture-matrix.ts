@@ -53,6 +53,19 @@ export async function captureViewport(
 	if (settle) await page.waitForTimeout(settle);
 	const combo = info.titlePath.find((title) => /^(tablet|phone)-/.test(title)) ?? 'unknown';
 	const path = info.outputPath(`${combo}--${state}.png`);
+	// A tooltip opens on hover and on focus. The pointer stays where the walk last clicked, so park
+	// it in a corner; focus can stay on a tooltip trigger, so blur that trigger, and nothing else.
+	const size = page.viewportSize();
+	if (size) await page.mouse.move(size.width - 1, size.height - 1);
+	await page.evaluate(() => {
+		const el = document.activeElement;
+		if (!(el instanceof HTMLElement) || !el.dataset.state?.includes('open')) return;
+		const described = (el.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
+		if (described.some((id) => document.getElementById(id)?.getAttribute('role') === 'tooltip')) {
+			el.blur();
+		}
+	});
+	await expect(page.locator('[role="tooltip"]')).toHaveCount(0, { timeout: 5_000 });
 	// Viewport only: a full-page shot under `hasTouch` resets Chromium's touch emulation, so
 	// `(pointer: fine)` flips to true for every later state and the phone renders as a table.
 	await page.screenshot({ path });
@@ -189,4 +202,31 @@ export async function ensureSystemTheme(
 		await toPos();
 		console.log(`[settings] restored theme ${theme}, language ${language}`);
 	};
+}
+
+/**
+ * Every cleanup runs even when one before it fails. After a failed walk a cleanup failure is only
+ * logged, so it never hides the walk's own error; after a passed walk the first one fails the test.
+ */
+export async function cleanUp(
+	walked: boolean,
+	steps: [string, () => Promise<unknown>][]
+): Promise<void> {
+	const failures: unknown[] = [];
+	for (const [name, step] of steps) {
+		await step().catch((error: unknown) => {
+			if (walked) failures.push(error);
+			else console.error(`[cleanup] ${name} failed after the walk failed:`, error);
+		});
+	}
+	if (failures.length > 0) throw failures[0];
+}
+
+/** Whether the scale style tag `applyScale` adds is still in the document. */
+export function hasScaleStyle(page: Page): Promise<boolean> {
+	return page.evaluate(() =>
+		Array.from(document.querySelectorAll('style')).some((style) =>
+			style.textContent?.startsWith(':root, [style*="--spacing:"]')
+		)
+	);
 }
