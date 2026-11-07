@@ -43,12 +43,47 @@ async function cleanUp(walked: boolean, steps: [string, () => Promise<unknown>][
 const PINS_BY_STEP: Record<number, readonly string[]> = {
 	1: ['search-products', 'cart-customer-name'],
 	2: ['cart-quantity-input'],
-	3: ['cart-quantity-input', 'checkout-button'],
+	3: [
+		'register-bar-place',
+		'search-products',
+		'pos-products-grid-scroller',
+		'open-order-strip',
+		'cart-customer-name',
+		'cart-quantity-input',
+		'add-cart-item-menu',
+		'cart-subtotal',
+		'checkout-button',
+	],
 	4: ['checkout-tender-pane', 'checkout-dialog'],
-	5: ['checkout-entry', 'checkout-commit'],
-	6: ['receipt-paid-banner'],
+	5: [
+		'checkout-tab-payments',
+		'checkout-tab-legacy',
+		'checkout-balance',
+		'checkout-split-chip',
+		'checkout-method-pos_cash',
+		'checkout-quick-exact',
+		'checkout-keypad',
+		'checkout-commit',
+	],
+	6: [
+		'receipt-change-due',
+		'receipt-paid-with',
+		'receipt-template-select',
+		'receipt-printer-select',
+		'receipt-preview',
+		'receipt-print-button',
+		'receipt-email-button',
+		'receipt-new-sale',
+	],
 	7: ['cart-customer-name'],
 };
+
+// The docs page shows these steps' tablet shots fully labelled and numbers its legend from the
+// manifest's pin order, so a missing pin would silently move every later number onto the wrong label.
+const LABELLED_STEPS = [3, 5, 6];
+
+/** Docs shots come only from demo; dev stores differ (no register bar, their own receipt templates). */
+const DOCS_STORE = 'demo.wcpos.com';
 
 /** Whether the scale style tag `applyScale` adds is still in the document. */
 function hasScaleStyle(page: Page): Promise<boolean> {
@@ -88,6 +123,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
+					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
 						if (!(await hasScaleStyle(posPage))) {
@@ -102,6 +138,20 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						const imagePath = await captureViewport(posPage, info, 'j2', state);
 						// Straight after the shot, before anything else moves the page.
 						const pins = await readPins(posPage, PINS_BY_STEP[number]);
+						const pinned = pins.map((pin) => pin.testID);
+						const missing = PINS_BY_STEP[number].filter((id) => !pinned.includes(id));
+						if (
+							docsShoot &&
+							device === 'tablet' &&
+							LABELLED_STEPS.includes(number) &&
+							missing.length > 0
+						) {
+							throw new Error(`${state} is a labelled shot missing pins: ${missing.join(', ')}`);
+						}
+						if (docsShoot && number === 6) {
+							const warning = `${state} would show the thermal printer warning; the docs must not`;
+							await expect(posPage.getByTestId('receipt-printer-mismatch'), warning).toHaveCount(0);
+						}
 						recordCapture({
 							journey: SELL_TO_A_GUEST.key,
 							docsPage: SELL_TO_A_GUEST.docsPage,
@@ -150,6 +200,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						walked = true;
 					} finally {
 						await cleanUp(walked, [
+							[
+								'backToPos',
+								async () => {
+									if (walked) return;
+									await posPage.goto('/');
+									await expect(posPage.getByTestId('search-products').first()).toBeVisible({
+										timeout: 60_000,
+									});
+								},
+							],
 							['unscale', unscale],
 							['closeRegister', async () => opened && closeRegister(posPage)],
 							['restoreSettings', restoreSettings],

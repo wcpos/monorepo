@@ -87,9 +87,11 @@ export interface SellToAGuestContext {
 	onCheckpoint?: (step: JourneyStep, id: CheckpointId) => Promise<void>;
 	/**
 	 * Step 5's cash: `'exact'` (default) confirms the prefilled balance, `'over'` tenders more so
-	 * change is due. A legacy walk has no cash entry, so it has no effect there.
+	 * change is due, `'short'` keys half the balance (rounded down to a whole minor unit) so the
+	 * rest stays due; after a short take checkout stays open, so `seePaid` does not follow it. A
+	 * legacy walk has no cash entry, so it has no effect there.
 	 */
-	tender?: 'exact' | 'over';
+	tender?: 'exact' | 'over' | 'short';
 	/** Any product will do: step 2's tile add skips the shared-SKU filter. */
 	anyProduct?: boolean;
 }
@@ -166,20 +168,24 @@ export async function startGuestSale(ctx: SellToAGuestContext): Promise<SaleInPr
 }
 
 /**
- * The shared-SKU product's tile, left filtered on screen: the product step 2's phone add taps.
- * Throws, naming the SKU and the tile count, when the filter does not narrow the grid to exactly
- * one tile. With `anyProduct` the filter is skipped and the first visible tile is returned. On
- * desktop, the shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile.
+ * The shared-SKU product's add control (a grid tile, or a table view's row button), left filtered on
+ * screen: the product step 2's phone add taps. Throws, naming the SKU and the count, when the filter
+ * does not narrow the list to exactly one product. A variable-only match clears the filter and
+ * returns the first catalogue control; so does `anyProduct`, which skips the filter. On desktop,
+ * the shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile.
  */
 export async function sharedProductTile(page: Page, anyProduct = false): Promise<Locator> {
 	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 	const tiles = posScreen.getByTestId('product-tile').filter({ visible: true });
-	if (anyProduct) return tiles.first();
+	const rowButtons = posScreen.getByTestId('add-to-cart-button').filter({ visible: true });
+	const addControls = tiles.or(rowButtons);
+	if (anyProduct) return addControls.first();
 	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const variableTiles = posScreen.getByTestId('variable-product-tile').filter({ visible: true });
 	await search.fill(E2E_PRODUCT_SKU);
 	// Variable tiles count too: an unfiltered grid can show a single simple tile among them.
-	const count = async () => (await tiles.count()) + (await variableTiles.count());
+	const count = async () =>
+		(await tiles.count()) + (await variableTiles.count()) + (await rowButtons.count());
 	const matched = await expect
 		.poll(count, { timeout: 15_000 })
 		.toBe(1)
@@ -193,7 +199,11 @@ export async function sharedProductTile(page: Page, anyProduct = false): Promise
 				'pass anyProduct when any product will do'
 		);
 	}
-	return tiles.first();
+	if ((await variableTiles.count()) > 0) {
+		await search.clear();
+		await expect(addControls.first()).toBeVisible({ timeout: 15_000 });
+	}
+	return addControls.first();
 }
 
 /** 2. Add a product: the run-private probe, or the shared-SKU fallback without writer secrets. */
@@ -327,6 +337,14 @@ async function keyCashAboveBalance(page: Page, balanceText: string): Promise<voi
 	}
 }
 
+/** Tender less than the balance: key half of it, rounded down, so the rest stays due. */
+async function tenderShortOfBalance(page: Page, balanceMinor: number): Promise<void> {
+	await page.getByTestId('checkout-keypad-key-clear').click();
+	for (const digit of String(Math.floor(balanceMinor / 2))) {
+		await page.getByTestId(`checkout-keypad-key-${digit}`).click();
+	}
+}
+
 /** Tender more than the balance: the second quick amount, or a keyed one above it. */
 async function tenderOverBalance(page: Page): Promise<void> {
 	const entry = page.getByTestId('checkout-entry');
@@ -356,6 +374,7 @@ export async function takeCash(ctx: SellToAGuestContext, sale: SaleAtCheckout): 
 			.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 			.toBe(sale.balanceMinor);
 		if (ctx.tender === 'over') await tenderOverBalance(page);
+		if (ctx.tender === 'short') await tenderShortOfBalance(page, sale.balanceMinor);
 		await ctx.onCheckpoint?.(STEPS[5 - 1], 'cash-entry');
 		await clickAndExpectPaymentWrite(page, 'checkout-commit', sale.orderId, 'record');
 	});
