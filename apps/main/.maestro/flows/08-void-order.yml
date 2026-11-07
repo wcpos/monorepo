@@ -20,8 +20,7 @@ appId: com.wcpos.main.dev
     file: ../subflows/ensure-pos-ready.yml
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
       - tapOn:
           id: "pos-tab-cart"
@@ -44,8 +43,7 @@ appId: com.wcpos.main.dev
       - evalScript: "${console.log('WCPOS_E2E cart screen not shown after the tab tap, re-tapping once')}"
       - runFlow:
           when:
-            visible:
-              id: "pos-tab-cart"
+            true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
           commands:
             - tapOn:
                 id: "pos-tab-cart"
@@ -168,8 +166,7 @@ appId: com.wcpos.main.dev
       READY_ID: search-products
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
       - tapOn:
           id: "pos-tab-cart"
@@ -190,8 +187,7 @@ appId: com.wcpos.main.dev
       - evalScript: "${console.log('WCPOS_E2E cart screen not shown after the relaunch tab tap, re-tapping once')}"
       - runFlow:
           when:
-            visible:
-              id: "pos-tab-cart"
+            true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
           commands:
             - tapOn:
                 id: "pos-tab-cart"
