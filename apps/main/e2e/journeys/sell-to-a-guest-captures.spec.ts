@@ -72,6 +72,10 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							console.log(`[rescale] ${info.titlePath.at(-2)}: before j2-${number}-${slug}`);
 							unscale = await applyScale(posPage, step);
 						}
+						// A toast covers the header in the shot; wait for every one to leave.
+						await expect(posPage.getByTestId('success-toast')).toHaveCount(0, {
+							timeout: 15_000,
+						});
 						const state = `j2-${number}-${slug}`;
 						const imagePath = await captureViewport(posPage, info, 'j2', state);
 						// Straight after the shot, before anything else moves the page.
@@ -102,11 +106,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							testInfo: info,
 							storeAuthorization,
 							trackOrder,
-							onCashEntry: async () => {
-								cashEntryShot = true;
-								await shoot(5, 'take-cash');
-							},
-							onStep: async ({ number, slug }) => {
+							// The docs page shows change, so the shots tender more than the balance.
+							tender: 'over',
+							// Demo has no shared SKU, and a shot does not care which product sells.
+							anyProduct: true,
+							onCheckpoint: async ({ number, slug }, id) => {
+								if (id === 'cash-entry') {
+									cashEntryShot = true;
+									await shoot(number, slug);
+									return;
+								}
 								// A tender walk shot step 5 at the cash entry; a legacy walk has none.
 								if (number === 5 && cashEntryShot) return;
 								if (number === 6) await receiptDrawn(posPage);

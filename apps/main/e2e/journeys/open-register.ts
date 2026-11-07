@@ -14,17 +14,28 @@ export async function posLayout(page: Page): Promise<'phone' | 'columns'> {
 	return (await phoneTab.count()) > 0 ? 'phone' : 'columns';
 }
 
-/** On a phone the cart and the products grid are separate tabs; only the shown one is visible. */
+/**
+ * On a phone the cart and the products grid are separate tabs, and both stay mounted, so a pane
+ * can count as visible while off-screen. Tap until the tab reports selected.
+ */
 export async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promise<void> {
-	await page.getByTestId(`pos-tab-${tab}`).filter({ visible: true }).click();
+	const button = page.getByTestId(`pos-tab-${tab}`).filter({ visible: true });
+	await expect(async () => {
+		await button.click({ timeout: 5_000 });
+		await expect(button).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
+	}).toPass({ timeout: 30_000 });
 }
 
 /** J1 "Open the register" as a shared start state for other journeys. */
 export async function openRegister(page: Page): Promise<void> {
 	await test.step('Open the register', async () => {
 		// The register card lives in the cart, which a phone shows on its Cart tab.
-		if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'cart');
-		// Idempotent: an already-open register resolves on its ready cart header.
-		await ensureRegisterOpen(page);
+		const phone = (await posLayout(page)) === 'phone';
+		if (phone) await showPhoneTab(page, 'cart');
+		// Idempotent: an already-open register resolves on its ready cart header. Choosing a
+		// register takes a phone back to Products, with the card still mounted off-screen.
+		await ensureRegisterOpen(page, {
+			afterPicking: phone ? () => showPhoneTab(page, 'cart') : undefined,
+		});
 	});
 }
