@@ -35,10 +35,13 @@ expect_eq "parses the build commit message" "$msha" \
 	"$(printf 'chore(release): build web bundle (@main from monorepo %s)\n' "$msha" | monorepo_sha_from_message)"
 expect_eq "parses a short SHA" eea33c50 \
 	"$(printf 'chore(release): build web bundle (@main from monorepo eea33c50)\n\nbody' | monorepo_sha_from_message)"
+expect_eq "parses a lane-branch build message" "$msha" \
+	"$(printf 'chore(release): build web bundle (@1.11.x from monorepo %s)\n' "$msha" | monorepo_sha_from_message)"
 expect_eq "parses next's message shape (SHA, then the input ref)" "$msha" \
 	"$(printf 'chore(release): build web bundle (@main from monorepo %s, ref release/2.0.1)\n' "$msha" | monorepo_sha_from_message)"
 expect_status "refuses a branch-name ref" fail monorepo_sha_from_message <<<'chore(release): build web bundle (@main from monorepo main)'
 expect_status "refuses a @next build" fail monorepo_sha_from_message <<<"chore(release): build web bundle (@next from monorepo $msha)"
+expect_status "refuses an unrelated branch" fail monorepo_sha_from_message <<<"chore(release): build web bundle (@release/1.11.x from monorepo $msha)"
 expect_status "refuses an unrelated commit" fail monorepo_sha_from_message <<<'docs: readme'
 
 # --- jsd_version ---
@@ -74,7 +77,9 @@ case "$url" in
 		printf 200 ;;
 	*)
 		n=$(( $(cat "$MOCK_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$MOCK_COUNT"
-		if [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
+		if [[ -n "${MOCK_BODY:-}" ]]; then
+			printf '%s' "$MOCK_BODY" > "$body"
+		elif [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
 			printf good > "$body"
 		else
 			printf '429: Too Many Requests' > "$body"
@@ -92,6 +97,7 @@ ref="${args##*ref=}"; ref="${ref%% *}"
 case "$args" in
 	'api repos/wcpos/web-bundle/git/trees/v1.11.1?recursive=1') cat "$MOCK_TREE"; exit "${MOCK_GH_EXIT:-0}" ;;
 	'api repos/wcpos/web-bundle/git/trees/v1.11.0?recursive=1') cat "$MOCK_TREE_PREV" ;;
+	'api repos/wcpos/web-bundle/git/trees/bundlesha?recursive=1') cat "$MOCK_TREE"; exit "${MOCK_GH_EXIT:-0}" ;;
 	*"git/refs"*) echo "dry run must not create a ref" >&2; exit 99 ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .commit.message") printf '%s\n' "$MOCK_MSG" ;;
@@ -147,6 +153,21 @@ expect_status "diagnosis includes cached error text" pass grep -q '429: Too Many
 expect_status "diagnosis includes byte count" pass grep -q '22 bytes' "$tmpdir/diagnosis"
 MOCK_HTTP=404 expect_status "404 fails even with matching bytes" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
 MOCK_EXIT=16 expect_status "transport failure fails even with matching bytes" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+size_body='Package size exceeded the configured limit of 50 MB. Try https://github.com/wcpos/web-bundle'
+MOCK_HTTP=403 MOCK_BODY="$size_body" expect_status "size refusal diagnoses a permanent failure" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+expect_eq "permanent diagnosis preserves HTTP details" 1 "$(grep -c '^PERMANENT: HTTP 403, .* bytes, curl exit 0:' "$tmpdir/out" || true)"
+rm -f "$MOCK_COUNT" "$MOCK_LOG"
+started=$SECONDS
+MOCK_HTTP=403 MOCK_BODY="$size_body" expect_status "size refusal stops polling" fail cdn verify_cdn_paths 1.11 5 \
+	<<<"$(printf '%s %s\n%s later.js' "$good_sha" "$entry" "$good_sha")"
+elapsed=$((SECONDS - started))
+expect_eq "size refusal is FAIL-HARD" 1 "$(grep -c 'FAIL-HARD: @1.11 is refused by jsDelivr' "$tmpdir/out" || true)"
+expect_status "size refusal does not wait for the deadline" pass test "$elapsed" -lt 5
+expect_eq "size refusal stops before another path or poll" 1 "$(cat "$MOCK_COUNT")"
+MOCK_HTTP=403 MOCK_BODY='Forbidden' expect_status "ordinary 403 keeps the retryable verdict" fail cdn verify_cdn_paths 1.11 0 <<<"$good_sha $entry"
+expect_eq "ordinary 403 still uses FAIL" 1 "$(grep -c '^FAIL: ' "$tmpdir/out" || true)"
+MOCK_HTTP=503 MOCK_BODY="$size_body" expect_status "size text without 403 is not permanent" fail cdn verify_cdn_paths 1.11 0 <<<"$good_sha $entry"
+expect_eq "non-403 still uses FAIL" 1 "$(grep -c '^FAIL: ' "$tmpdir/out" || true)"
 rm -f "$MOCK_COUNT" "$MOCK_LOG"
 MOCK_OK_AT=3 expect_status "wrong twice then correct passes" pass cdn verify_cdn_paths 1.11 5 <<<"$good_sha $entry"
 expect_eq "polling never purges (a re-purge extends jsDelivr's throttle)" 0 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
@@ -248,6 +269,31 @@ at v1.11.1 opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 at v2.0.0 sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 
 at bundlesha opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+cat > "$MOCK_TREE" <<'JSON'
+{"truncated":false,"tree":[
+{"type":"blob","path":"build/_expo/entry.js","size":46137344},
+{"type":"blob","path":"build/metadata.json","size":1048576},
+{"type":"blob","path":"README.md","size":99999999},
+{"type":"tree","path":"build/_expo"}]}
+JSON
+expect_eq "tree size sums build blobs only" 47185920 "$(cdn tree_size_bytes bundlesha)"
+expect_status "dry run at the tree limit passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "tree size is reported" 1 "$(grep -c 'tree bundlesha: 47185920 bytes (45.* MiB)' "$tmpdir/out" || true)"
+sed 's/46137344/46137345/' "$MOCK_TREE" > "$tmpdir/oversize-tree"
+expect_status "dry run over the tree limit fails" fail run MOCK_TREE="$tmpdir/oversize-tree" MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "oversize tree is FAIL-HARD" 1 "$(grep -c 'FAIL-HARD: tree bundlesha' "$tmpdir/out" || true)"
+expect_eq "oversize tree lists largest build blobs first" $'46137345 build/_expo/entry.js\n1048576 build/metadata.json' "$(grep -E '^[0-9]+ build/' "$tmpdir/out" || true)"
+expect_status "dry run tree API failure fails closed" fail run MOCK_GH_EXIT=1 MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+sed 's/"truncated":false/"truncated":true/' "$MOCK_TREE" > "$tmpdir/size-truncated-tree"
+expect_status "dry run truncated tree fails closed" fail run MOCK_TREE="$tmpdir/size-truncated-tree" MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+sed 's/46137344/100/' "$MOCK_TREE" > "$tmpdir/small-tree"
+cp "$tmpdir/small-tree" "$MOCK_TREE"
+expect_status "dry run under the tree limit passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+lane_msg="chore(release): build web bundle (@1.11.x from monorepo $msha)"
+expect_status "matching lane-branch build passes" pass run MOCK_MSG="$lane_msg" MOCK_VERSION=1.11.5 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+expect_status "mismatched lane-branch build fails" fail run MOCK_MSG="$lane_msg" MOCK_VERSION=2.0.0 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "lane mismatch names the branch, SHA and app lane" 1 "$(grep -Fc "bundle was built for @1.11.x but the app at $msha is on lane 2.0" "$tmpdir/out" || true)"
+expect_status "dry run still refuses @next" fail run MOCK_MSG="${lane_msg/@1.11.x/@next}" MOCK_VERSION=1.11.5 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 expect_status "dry run on the newest lane passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 expect_eq "dry run prints the next patch tag" 1 "$(grep -c 'would tag v1.11.2 at bundlesha' "$tmpdir/out")"
 expect_status "refuses a commit that carries an older tag" fail run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 MOCK_TAGGED_AS=v1.11.0 "$TAG" bundlesha --dry-run
@@ -278,6 +324,43 @@ at bundlesha sqlite.worker.js=17.6.0
 expect_status "2.x: a dropped indexeddb worker is refused" fail run MOCK_VERSION=2.0.1 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 at bundlesha
 expect_status "a bundle with no vendored worker is refused" fail run MOCK_VERSION=2.1.0 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+
+# --- publish workflow retention and working-tree size gate ---
+# Exercise the actual shell block, stopping before it stages or publishes anything.
+publish_tree() {
+	env WB="$tmpdir/publish" BUILD_DIR="$tmpdir/new-build" BRANCH=main bash -euo pipefail -c \
+		"$(sed -n '/^          mkdir -p "\$WB\/build"/,/^          git add -A/{ /git add -A/d; p; }' "$SCRIPT_DIR/../../.github/workflows/publish-web-bundle.yml")"
+}
+mkdir -p "$tmpdir/publish/build/_expo" "$tmpdir/new-build/_expo"
+(
+	cd "$tmpdir/publish"
+	git init -q
+	git config user.name Test
+	git config user.email test@example.com
+	git config commit.gpgsign false
+	git config core.hooksPath /dev/null
+	printf old > build/_expo/old.js
+	printf stale > build/old.worker.js
+	git add build
+	git commit -qm 'chore(release): build web bundle (older)'
+	printf previous > build/_expo/previous.js
+	git add build
+	git commit -qm 'chore(release): build web bundle (previous)'
+	printf readme > README.md
+	git add README.md
+	git commit -qm 'docs: readme'
+)
+printf new > "$tmpdir/new-build/_expo/new.js"
+printf metadata > "$tmpdir/new-build/metadata.json"
+expect_status "workflow accepts a small working tree" pass publish_tree
+expect_status "workflow drops a hashed file older than the previous build" pass test ! -e "$tmpdir/publish/build/_expo/old.js"
+expect_status "workflow retains the previous build despite a later docs commit" pass test -f "$tmpdir/publish/build/_expo/previous.js"
+expect_status "workflow keeps the new build" pass test -f "$tmpdir/publish/build/_expo/new.js"
+expect_status "workflow keeps the root-file removal rule" pass test ! -e "$tmpdir/publish/build/old.worker.js"
+dd if=/dev/zero of="$tmpdir/new-build/_expo/large.js" bs=1048576 count=46 2>/dev/null
+expect_status "workflow refuses oversized new, untracked files" fail publish_tree
+expect_eq "workflow size refusal names the branch" 1 "$(grep -c '::error::web-bundle@main would be .* MiB; jsDelivr refuses' "$tmpdir/out" || true)"
+expect_eq "workflow lists the largest new file" 1 "$(grep -c '^48234496 build/_expo/large.js$' "$tmpdir/out" || true)"
 
 if [[ $failures -gt 0 ]]; then echo "$failures tag-web-bundle test(s) failed" >&2; exit 1; fi
 echo "All tag-web-bundle tests passed."
