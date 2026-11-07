@@ -22,8 +22,7 @@ env:
 # and the setup add landed in that order (local run, 2026-09-09).
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
       - tapOn:
           id: "pos-tab-cart"
@@ -106,8 +105,7 @@ env:
           index: 0
       - runFlow:
           when:
-            visible:
-              id: "pos-tab-cart"
+            true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
           commands:
             - tapOn:
                 id: "pos-tab-cart"
@@ -135,10 +133,11 @@ env:
     repeat: 19
     delay: 200
 - evalScript: ${output.burstTappedAt = Date.now()}
+# A phone is known from DEVICE_CLASS, with no lookup; tablets show the cart in
+# a column. A phone must tap, so a missing cart tab fails at this tap.
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
       - tapOn:
           id: "pos-tab-cart"

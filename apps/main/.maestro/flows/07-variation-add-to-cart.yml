@@ -164,10 +164,11 @@ env:
 # console.log below leaves a line in maestro.log every time the first press was
 # lost, so the rate — and whether a second press lands — is measured instead of
 # hidden. If the retry also fails the flow still fails on the 30 s wait below.
+# Branch on DEVICE_CLASS, not `visible: pos-tab-cart`: that short lookup was
+# SKIPPED with the tab on screen (run 42359087999), so the Cart never opened.
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
       - tapOn:
           id: "pos-tab-cart"
