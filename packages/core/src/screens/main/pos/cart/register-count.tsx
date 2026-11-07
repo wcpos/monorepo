@@ -4,6 +4,7 @@ import { Platform, ScrollView, View } from 'react-native';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Checkbox } from '@wcpos/components/checkbox';
 import {
 	DialogDescription,
 	DialogFooter,
@@ -23,10 +24,11 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
-import { fromMinor } from '@wcpos/order-math';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
@@ -128,6 +130,7 @@ export function RegisterCount({
 		figuresPending,
 		refusedClose,
 		lastClosure,
+		movements,
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -191,6 +194,23 @@ export function RegisterCount({
 		? fromMinor(denominationTotal(pieces, decimals), decimals)
 		: cash;
 	const valid = validAmount(amount, decimals);
+	// This session's cash the store refused: the closure records it as not on the server (#3271),
+	// and Close waits for the cashier to say so once. A refused no-sale moves no cash.
+	const refusedCash = movements.filter(
+		(row) => row.sync_status === 'failed' && Number(row.amount) > 0
+	);
+	const refusedTotal = fromMinor(
+		refusedCash.reduce((total, row) => total + toMinor(row.amount, 4), 0),
+		4
+	);
+	// Keyed by the refused rows, so a further refusal after the tick asks again.
+	const refusedKey = refusedCash
+		.map((row) => row.id)
+		.sort()
+		.join();
+	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
+	const acknowledged = refusedKey === '' || acknowledgedKey === refusedKey;
+	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : refusedKey);
 	const variance = countVariance(amount, expected.cash ?? '0', decimals);
 	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
 	const bandClass = tone.band;
@@ -422,6 +442,32 @@ export function RegisterCount({
 							/>
 						</View>
 					))}
+			{refusedCash.length > 0 && (
+				<Notice
+					tone="warning"
+					live={false}
+					testID="count-refused-cash"
+					title={t('register.refused_cash_title', { amount: format(Number(refusedTotal)) })}
+					description={t('register.refused_cash_body')}
+				>
+					{/* The row is the checkbox; the mark only draws its state. */}
+					<PressableSurface
+						role="checkbox"
+						selected={acknowledged}
+						wash="none"
+						onPress={toggleAcknowledged}
+						className="min-h-ctl flex-row items-center gap-2"
+					>
+						<Checkbox
+							testID="count-refused-cash-ack"
+							checked={acknowledged}
+							onCheckedChange={toggleAcknowledged}
+							className="pointer-events-none"
+						/>
+						<Text>{t('register.refused_cash_ack')}</Text>
+					</PressableSurface>
+				</Notice>
+			)}
 			{unsyncedCount > 0 && (
 				<Notice
 					tone="info"
@@ -495,6 +541,7 @@ export function RegisterCount({
 					disabled:
 						!valid ||
 						figuresPending ||
+						!acknowledged ||
 						Object.values(others).some((value) => value !== '' && !validAmount(value, decimals)),
 					onPress: () => {
 						if (!blind && valid && overThreshold(variance, decimals, varianceThreshold))

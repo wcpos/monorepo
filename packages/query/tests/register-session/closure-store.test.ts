@@ -260,6 +260,47 @@ it.each(['latest completion', 'latest captured timestamp', 'last untimestamped c
 	}
 );
 
+// Revert the closure's failed-movement filter (#3271): a refused paid-out drops off the record.
+it('records a refused movement as unsynced cash; a synced one beside it adds nothing', async () => {
+	let session = await openSession(db, {
+		registerId: 'register',
+		expectedFloat: '100',
+		countedFloat: '100',
+		openedBy: 7,
+		businessDay: { year: 2026, month: 9, day: 16 },
+	});
+	const refused = await recordMovement(db, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '20',
+		reason: '',
+		actor: 7,
+	});
+	await refused.incrementalPatch({ sync_status: 'failed' });
+	const synced = await recordMovement(db, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: '',
+		actor: 7,
+	});
+	await synced.incrementalPatch({ sync_status: 'synced' });
+	session = await closeSession(db, session.id, { counted: { cash: '85' }, closedBy: 7 });
+	expect(session.sync_status).toBe('pending');
+	const row = await writeClosure({
+		storeDB: db,
+		userDB,
+		siteUuid: 'site',
+		session,
+		counted: '85',
+		otherTenders: {},
+		movements: await db.cash_movements.find().exec(),
+		orders: [],
+	});
+	// The refused movement plus the pending session itself; the synced paid-in counts in neither.
+	expect(row.toJSON()).toMatchObject({ unsynced_count: 2, unsynced_total: '20.0000' });
+});
+
 it('resumes after the insert or perpetual write was interrupted without minting or adding twice', async () => {
 	const input = await seed();
 	const insert = jest.spyOn(db.closures, 'insert').mockRejectedValueOnce(new Error('disk write'));
