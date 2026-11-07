@@ -134,7 +134,7 @@ Three trunks during the 2.0 beta period (from the 2.0 promotion in November 2026
 - **`main`** — 2.0 (beta, then GA). dev-free and dev-pro run it.
 - **`next`** — frozen until 2.0 GA; nothing targets it.
 
-A 1.11 web bundle is published from a `1.11.x` SHA: `publish-web-bundle.yml` with `monorepo_ref=<SHA>`, `bundle_branch=main`, `allow_frozen_lane=true` and the override phrase (there is no push Deploy for a `1.11.x` SHA, so the bundle gate can never be green), then `scripts/release/tag-web-bundle.sh <web-bundle-sha> --allow-frozen-lane` (the `@1.11` lane is frozen once `@2.0` exists). The push Deploy and both E2E suites do not run for `1.11.x`.
+A 1.11 web bundle is published from a `1.11.x` SHA: `publish-web-bundle.yml` dispatched from `1.11.x` with `monorepo_ref=<SHA>`, `bundle_branch=1.11.x` (the stable lane's own web-bundle branch; never `main`, which is the 2.0 lane's and whose retained files pushed `v2.0.10` over jsDelivr's 50 MB limit on 2026-11-06), `allow_frozen_lane=true` and the override phrase (there is no push Deploy for a `1.11.x` SHA, so the bundle gate can never be green), then `scripts/release/tag-web-bundle.sh <web-bundle-sha> --allow-frozen-lane` (the `@1.11` lane is frozen once `@2.0` exists). The push Deploy and both E2E suites do not run for `1.11.x`.
 
 Never commit directly to a trunk — branch off the right one in a worktree and target the PR's base at the same lane. When the lane is not explicit, ask "1.11.x or main?" rather than defaulting.
 

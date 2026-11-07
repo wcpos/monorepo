@@ -16,16 +16,11 @@ name: Publish Web Bundle
 #                       sqlite.worker.js and Pro's dev deploy to pick it up — the
 #                       last step of this workflow checks dev-next for exactly that.
 #
-#   monorepo `main`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<major.minor>
-#                       (e.g. @1.10, then @1.11 once `next` becomes `main`). The
-#                       plugin derives that ref from its own version, and the tag
-#                       is cut by the release train, not by this workflow.
+# This lane publishes to web-bundle `1.11.x`; `@1.11` on jsDelivr is what
+# 1.11 plugins load. The tag `v1.11.N` is still cut from that commit by
+# scripts/release/tag-web-bundle.sh on monorepo `main` (--allow-frozen-lane).
 #
-# Publishing to the `main` BRANCH of web-bundle is a staging convenience only —
-# it moves nothing a released plugin loads. Cut the lane tag from it with
-# scripts/release/tag-web-bundle.sh <web-bundle-sha>.
-#
-# WORKER / LANE GATE (bundle_branch=main only, 2026-10-14): a field plugin keeps
+# WORKER / LANE GATE (released lanes only, 2026-10-14): a field plugin keeps
 # the OPFS worker it vendors but loads the newest tag on its @major.minor lane,
 # and rxdb's remote storage refuses any RXDB_VERSION mismatch (RM1). So the build
 # is refused when its worker's RXDB_VERSION differs from the lane's highest tag
@@ -41,8 +36,7 @@ name: Publish Web Bundle
 # (require-green-main) can never pass for a `next` SHA, so pass the override
 # phrase; and pass `monorepo_ref` as a SHA when the branch name contains a `/`
 # (the resolve step puts the ref in a REST path). The workflow FILE runs at the
-# dispatch ref; `main` and `next` carry the same steps (the worker gate calls the
-# lane's own check script), so dispatching from either ref publishes the same way.
+# dispatch ref.
 
 on:
   workflow_dispatch:
@@ -52,15 +46,15 @@ on:
         required: true
         default: next
       bundle_branch:
-        description: web-bundle branch to publish to — `next` IS the next lane's jsDelivr ref (@next); released lanes use the major.minor tag cut at release
+        description: web-bundle branch to publish to — `next` IS the next lane's jsDelivr ref (@next); released lanes publish to `main` (the trunk lane) or `<major>.<minor>.x` (a stable lane) and load the major.minor tag cut at release
         required: true
-        default: next
+        default: 1.11.x
       override_release_gate:
         description: Type "I accept a red main" to override the release gate
         type: string
         default: ''
       allow_frozen_lane:
-        description: bundle_branch=main only — build for a lane a higher lane has frozen (a deliberate patch to old plugins; the RXDB_VERSION check still applies)
+        description: released lanes only (bundle_branch=main or <major>.<minor>.x) — build for a lane a higher lane has frozen (a deliberate patch to old plugins; the RXDB_VERSION check still applies)
         type: boolean
         default: false
 
@@ -98,7 +92,7 @@ jobs:
           fetch-depth: 1
 
       - name: 📌 Stage the worker/lane gate from the workflow revision
-        if: ${{ github.event.inputs.bundle_branch == 'main' }}
+        if: ${{ github.event.inputs.bundle_branch != 'next' }}
         run: cp scripts/release/check-worker-rxdb-lane.sh "$RUNNER_TEMP/check-worker-rxdb-lane.sh"
 
       - name: 📌 Stage CDN verification from the workflow revision
@@ -182,7 +176,7 @@ jobs:
       # The build copies apps/main/public/opfs.worker.js (the drift-locked
       # source) into build/; gate the file that is about to be published.
       - name: 🧬 Gate the worker's RXDB_VERSION against its bundle lane
-        if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch == 'main' }}
+        if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch != 'next' }}
         env:
           GH_TOKEN: ${{ github.token }}
           ALLOW_FROZEN_LANE: ${{ github.event.inputs.allow_frozen_lane }}
@@ -248,7 +242,7 @@ jobs:
           # Publish via a fresh clone of web-bundle on the target branch, decoupled
           # from the apps/web submodule (so a deps re-check during the build can't
           # reset the submodule out from under us). Full history without blobs, not
-          # --depth 1: the retention below asks `git log -1 -- <path>` when each
+          # --depth 1: the no-inventory fallback below asks `git log -1 -- <path>` when each
           # file was last published, and a shallow clone answers "the tip" for every
           # file, so nothing ever aged out while publishes were under a day apart
           # (web-bundle@next carried chunks from 2026-10-13 on 2026-10-15). Blobless
@@ -258,35 +252,66 @@ jobs:
           git clone --filter=blob:none --branch "$BRANCH" \
             "https://x-access-token:${GH_TOKEN}@github.com/wcpos/web-bundle.git" "$WB"
 
-          # Lay the fresh build over build/, then drop only what the new build does not
-          # carry AND has been published for more than a day. A jsDelivr edge keeps the
-          # old metadata.json for up to 12 h; the hashed entry it names must still exist
-          # on the branch, or every tab on that edge fails with "Failed to load script …
-          # entry-….js" (dev-next, 2026-10-05: the previous entry was deleted minutes
-          # after it was published). Unhashed files (metadata.json, index.html, the
-          # workers) are simply overwritten.
+          # Lay the fresh build over build/, retaining exactly the previous build's
+          # hashed files for edges still serving its metadata.json: the ones its
+          # build/publish-inventory.txt lists. That bounds the tree to two builds (a
+          # day's builds can exceed jsDelivr's 50 MB package limit, which refuses every
+          # file). Asking which commit last touched a file was wrong: a chunk unchanged
+          # from build A to B was last touched by A, so build C dropped it while edges
+          # serving B's metadata.json still named it. Unhashed files (metadata.json,
+          # index.html, the workers) are simply overwritten.
           mkdir -p "$WB/build"
           cp -R "$BUILD_DIR/." "$WB/build/"
           cd "$WB"
-          keep_until=$(( $(date +%s) - 24 * 3600 ))
+          INVENTORY=build/publish-inventory.txt
+          if previous_inventory=$(git show "HEAD:$INVENTORY" 2>/dev/null); then
+            previous_build=""
+          else
+            previous_inventory=""
+            previous_build=$(git log -1 --format=%H --grep='^chore(release): build web bundle' HEAD)
+            echo "no previous $INVENTORY; keeping the hashed files the most recent build commit last touched"
+          fi
           git ls-files build | while read -r path; do
             [ -e "$BUILD_DIR/${path#build/}" ] && continue
-            # Only hashed files under _expo/ get the day's grace: a stale metadata.json
-            # names those and nothing else. A root file this build does not carry is
-            # another lane's (both lanes publish to this branch): the 2.0.9 build's
-            # sqlite.worker.js and sqlite3.wasm rode onto the 1.11.11 bundle on
-            # 2026-11-06 and tag-web-bundle.sh refused the lane tag. Drop it now.
+            # Only hashed files under _expo/ get retained: a stale metadata.json
+            # names those and nothing else. This lane publishes to web-bundle `1.11.x`;
+            # drop root files absent from the new build rather than carry stale workers.
+            # The previous build's own publish-inventory.txt is one; it is rewritten below.
             case "${path#build/}" in
               */*) ;;
               *) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;
             esac
-            last=$(git log -1 --format=%ct -- "$path" 2>/dev/null || echo 0)
-            if [ "${last:-0}" -lt "$keep_until" ]; then
-              git rm -q "$path"
+            if [ -n "$previous_build" ]; then
+              keep=$([ "$(git log -1 --format=%H -- "$path")" = "$previous_build" ] && echo yes || echo no)
             else
-              echo "keeping $path (published $(( ($(date +%s) - last) / 3600 )) h ago; an edge may still name it)"
+              keep=$(grep -Fxq -- "${path#build/}" <<< "$previous_inventory" && echo yes || echo no)
+            fi
+            if [ "$keep" = yes ]; then
+              echo "keeping $path (from the previous build; an edge may still name it)"
+            else
+              git rm -q "$path"
             fi
           done
+          # This build's own _expo/ files, for the next publish's retention. Written
+          # here, never into $BUILD_DIR, which the CDN job uploads.
+          (cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"
+
+          # 45 MiB, under jsDelivr's 50 MB limit whichever unit they mean, and under it
+          # with one retained previous build.
+          WEB_BUNDLE_TREE_LIMIT_BYTES=47185920
+          # Include new, untracked files too: git add -A below will publish them.
+          sizes=$(git ls-files --cached --others --exclude-standard -z build | while IFS= read -r -d '' path; do
+            size=$(wc -c < "$path" | tr -d ' ')
+            printf '%s %s\n' "$size" "$path"
+          done)
+          total=$(awk '{ n += $1 } END { printf "%.0f", n }' <<< "$sizes")
+          mib=$(awk -v n="$total" 'BEGIN { printf "%.2f", n / 1048576 }')
+          echo "tree $BRANCH: $total bytes ($mib MiB)"
+          if ((total > WEB_BUNDLE_TREE_LIMIT_BYTES)); then
+            sort -nr <<< "$sizes" | sed -n '1,10p'
+            echo "::error::web-bundle@$BRANCH would be $mib MiB; jsDelivr refuses every file of a version over 50 MB. Drop the retained files listed above or publish to a lane branch."
+            exit 1
+          fi
 
           git add -A
           if git diff --staged --quiet; then
