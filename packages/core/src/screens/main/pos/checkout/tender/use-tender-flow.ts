@@ -973,7 +973,7 @@ export function useTenderFlow(
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
-			let splitMeta = journaledPlan
+			const splitMeta = journaledPlan
 				? [
 						splitPlanMeta({
 							kind: journaledPlan.kind,
@@ -987,10 +987,20 @@ export function useTenderFlow(
 				: hasStaleSplit
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
-			const allocations = getCheckoutModeSnapshot().allocations.get(order.uuid);
-			if (allocations && Object.keys(allocations).length > 0) {
-				splitMeta = [...(splitMeta ?? []), paidUnitsMeta(allocations)];
-			}
+			// The per-payment allocations, THIS leg's included: a manual leg with picked units mints
+			// its row id before the write, and a terminal leg has `minted.row.id` before its
+			// provenance save, so the completing payment's own units are never missing from
+			// `_wcpos_paid_units` (Greptile on #3400).
+			const withPaidUnits = (paymentId: string | undefined) => {
+				const stored = getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
+				const allocations =
+					paymentId && Object.keys(state.picked).length > 0
+						? { ...stored, [paymentId]: state.picked }
+						: stored;
+				return Object.keys(allocations).length > 0
+					? [...(splitMeta ?? []), paidUnitsMeta(allocations)]
+					: splitMeta;
+			};
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
 			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
@@ -1034,7 +1044,7 @@ export function useTenderFlow(
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
 			});
-			const saveProvenance = async () => {
+			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 
 				savingProvenance = sale.lane === 'online';
@@ -1042,7 +1052,7 @@ export function useTenderFlow(
 					order,
 					sessionId,
 					online: savingProvenance,
-					extraMeta: splitMeta,
+					extraMeta: withPaidUnits(paymentId),
 				});
 				savingProvenance = false;
 			};
@@ -1161,7 +1171,7 @@ export function useTenderFlow(
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
-				await saveProvenance();
+				await saveProvenance(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1212,7 +1222,7 @@ export function useTenderFlow(
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
-				await saveProvenance();
+				await saveProvenance(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1296,7 +1306,9 @@ export function useTenderFlow(
 
 			if (!sale.lane) throw new Error('press_lane_missing');
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
-			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
+			const paymentId =
+				roundingMinor !== 0 || Object.keys(state.picked).length > 0 ? uuidv4() : undefined;
+			const extraMeta = withPaidUnits(paymentId);
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
 			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
@@ -1306,7 +1318,7 @@ export function useTenderFlow(
 				tendered,
 				lane: sale.lane,
 				...(paymentId ? { paymentId } : {}),
-				...(splitMeta ? { extraMeta: splitMeta } : {}),
+				...(extraMeta ? { extraMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
 			}).catch(async (error: unknown) => {

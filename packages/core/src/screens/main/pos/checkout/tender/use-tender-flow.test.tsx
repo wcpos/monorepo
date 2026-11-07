@@ -49,6 +49,7 @@ import {
 	markOrderSaving,
 	resetCheckoutMode,
 	resolveStage,
+	setAllocations,
 	setTenderMethod,
 	setTenderPlan,
 	useOrderCheckoutStage,
@@ -1611,6 +1612,24 @@ describe('useTenderFlow', () => {
 		expect(JSON.parse(input.extraMeta?.[0].value as string)).toMatchObject({
 			kind: 'even',
 			shares: ['30.00', '30.00', '32.95'],
+		});
+	});
+
+	it('the completing payment journals its own picked units under a row id minted before the write (Greptile on #3400)', async () => {
+		setAllocations(order.uuid, { a: { l1: 1 } });
+		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.paymentId).toEqual(expect.any(String));
+		const paidUnits = input.extraMeta?.find(
+			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
+		);
+		expect(JSON.parse(paidUnits?.value as string)).toEqual({
+			a: { l1: 1 },
+			[input.paymentId as string]: { l2: 2 },
 		});
 	});
 
