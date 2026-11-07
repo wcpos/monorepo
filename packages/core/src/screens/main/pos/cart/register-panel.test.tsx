@@ -867,6 +867,9 @@ it('a seeded session: the drawer hero and sales line read — with the sync note
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
 			'register.session_sales — · register.figures_after_sync'
 		);
+		// The other-tender rows are a part of the session until the baseline arrives: no total yet.
+		const others = screen.queryByTestId('register-panel-other-tenders');
+		if (others) expect(others.textContent).toBe('register.other_tenders—');
 	} finally {
 		currentFiguresPending = previous;
 	}

@@ -503,7 +503,10 @@ export function RegisterPanel({
 										trailing={
 											<>
 												{trailing(
-													format(others.reduce((sum, [, amount]) => sum + Number(amount), 0))
+													// A seeded session's non-cash rows are a part until the baseline arrives: no total yet.
+													figuresPending
+														? '—'
+														: format(others.reduce((sum, [, amount]) => sum + Number(amount), 0))
 												)}
 												<Icon
 													name={othersOpen ? 'chevronDown' : 'chevronRight'}
