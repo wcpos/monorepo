@@ -46,6 +46,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: () => null,
 	savedKeys: () => [],
 	useMarkSaved: () => jest.fn(),
+	useMarkFailed: () => jest.fn(),
 	useFormChangeHandler: jest.fn(),
 }));
 jest.mock('@wcpos/query', () => ({

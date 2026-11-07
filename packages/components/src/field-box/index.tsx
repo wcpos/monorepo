@@ -6,8 +6,14 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text/context';
 
-/** What a field holds reads in the foreground, its placeholder muted. */
-const FIELD_TEXT = 'text-foreground placeholder:text-muted-foreground text-base';
+/**
+ * What a field holds reads in the foreground, its placeholder muted. On the web react-native-web's
+ * own `::placeholder` rule reads `--placeholderTextColor` and, with the variable unset, falls back to
+ * the text colour over uniwind's `placeholder:` utility (same specificity, later in the cascade), so
+ * every placeholder drew in the foreground; the variable is set here to the muted token.
+ */
+const FIELD_TEXT =
+	'text-foreground placeholder:text-muted-foreground [--placeholderTextColor:var(--color-muted-foreground)] text-base';
 
 /**
  * The closed face of every control: Input, Textarea, the pickers' triggers and the keypads'.
@@ -15,7 +21,7 @@ const FIELD_TEXT = 'text-foreground placeholder:text-muted-foreground text-base'
  * same box as a View. One ring while the control is open or focused, one dim when disabled.
  */
 const fieldBoxVariants = cva(
-	`border-chip-border bg-card rounded-field border-[length:var(--shape-ctl-border)] ${FIELD_TEXT}`,
+	`border-chip-border bg-chip rounded-field border-[length:var(--shape-ctl-border)] ${FIELD_TEXT}`,
 	{
 		variants: {
 			state: {
@@ -30,8 +36,9 @@ const fieldBoxVariants = cva(
 			},
 			/** A Textarea grows from one control's height. */
 			multiline: { false: 'h-ctl', true: 'min-h-ctl' },
+			figure: { false: '', true: 'h-tile' },
 		},
-		defaultVariants: { state: 'rest', multiline: false },
+		defaultVariants: { state: 'rest', multiline: false, figure: false },
 	}
 );
 
@@ -44,6 +51,7 @@ type FieldBoxState = NonNullable<VariantProps<typeof fieldBoxVariants>['state']>
 
 type FieldBoxProps = ViewProps & {
 	state?: FieldBoxState;
+	figure?: boolean;
 	/** Nothing chosen: the text inside reads as a placeholder. */
 	empty?: boolean;
 	/** Layout only (width, flex, padding); the look is the box's. */
@@ -51,10 +59,13 @@ type FieldBoxProps = ViewProps & {
 };
 
 /** The box around a control's own content; text inside takes the field's tone. */
-function FieldBox({ state = 'rest', empty = false, className, ...props }: FieldBoxProps) {
+function FieldBox({ state = 'rest', empty = false, figure, className, ...props }: FieldBoxProps) {
 	return (
 		<TextClassContext.Provider value={cn(FIELD_TEXT, empty && 'text-muted-foreground')}>
-			<View className={cn(fieldBox({ state }), 'flex-row items-center', className)} {...props} />
+			<View
+				className={cn(fieldBox({ state, figure }), 'flex-row items-center', className)}
+				{...props}
+			/>
 		</TextClassContext.Provider>
 	);
 }

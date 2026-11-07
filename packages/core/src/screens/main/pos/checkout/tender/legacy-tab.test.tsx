@@ -39,6 +39,19 @@ jest.mock('../components/payment-webview', () => {
 // The handler each Process Payment render hands the button, so a test can fire a press held
 // over from an earlier render (a DOM click on a disabled button never reaches onClick).
 const mockPressHandlers: (() => void)[] = [];
+// A View that keeps its className: the frame-slot test reads it (react-native-web drops it).
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		children,
+		testID,
+		className,
+	}: React.PropsWithChildren<{ testID?: string; className?: string }>) => (
+		<div data-testid={testID} className={className}>
+			{children}
+		</div>
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -144,6 +157,16 @@ it('waits for the gateway catalog, then hands the frame the LOADED catalog', () 
 	mockCheckoutSession = { ...MOCK_CHECKOUT_SESSION, settledOrderStatuses: catalog };
 	view.rerender(<LegacyTab order={makeOrder()} flow={flow} />);
 	expect(jest.mocked(PaymentWebview).mock.calls[0][0].settledOrderStatuses).toEqual(catalog);
+});
+
+it('the frame slot holds the pane height before the pay page mounts, so Process Payment does not move', () => {
+	const view = render(<LegacyTab order={makeOrder(true)} flow={flow} />);
+	const slot = view.getByTestId('checkout-legacy-frame-slot');
+	expect(slot.className).toContain('flex-1');
+	// The button is the slot's sibling after it, never inside it.
+	const button = view.getByTestId('checkout-legacy-process-payment');
+	expect(slot.contains(button)).toBe(false);
+	expect(slot.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it('forwards receiptHost to PaymentWebview', () => {

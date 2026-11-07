@@ -5,6 +5,7 @@ import { expect, request as playwrightRequest } from '@playwright/test';
 import { getStoreVariant, listStoreIds, openOrderSheet, storeRequestOptions } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
 import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
+import { fillKeypadField } from './keypad-field';
 import {
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
@@ -324,3 +325,48 @@ for (const targetStoreId of storeTargets) {
 		}
 	);
 }
+
+/**
+ * #3243: an old session. Coverage compaction removes the boot-only taxRates lane 10 to 15
+ * minutes after boot, and a couponed cart's persisted total stopped following its discount.
+ * Every other test is a fresh session, so this one installs a fake clock before the POS boots
+ * and jumps it 16 minutes (the lid-closed jump: due timers fire once, so the compaction scan
+ * runs against a lane that has been stale for 11 minutes). The Pay button reads the persisted
+ * total, so it is the referent. A quick discount is not Pro-gated.
+ */
+const agedTest = liveTest.extend({
+	page: async ({ page }, use) => {
+		await page.clock.install();
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API.
+		await use(page);
+	},
+});
+
+agedTest('a discount in an old session reaches the Pay button', async ({ posPage: page }) => {
+	agedTest.slow();
+	await addCheckoutProbeProduct(page);
+	const before = await readCartMoney(page);
+	await page.clock.fastForward('16:00');
+	// One real scan interval for the compaction lane, which the jump leaves due.
+	await page.waitForTimeout(65_000);
+
+	await page.getByTestId('add-cart-item-menu').click();
+	await page.getByTestId('menu-add-discount').click();
+	const dialog = page.getByTestId('add-discount-dialog');
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
+	await fillKeypadField(page, 'discount-amount-input', '1');
+	await page.getByTestId('add-discount-submit').click();
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+	const after = await readCartMoney(page, { discounted: true });
+	expect(Number(after.total), 'the persisted total must follow the discount').toBeLessThan(
+		Number(before.total)
+	);
+	// Locale-agnostic: dev-free formats fr_FR, so compare the digits of the button's amount.
+	const digits = Number(after.total).toFixed(2).replace(/\D/g, '');
+	await expect
+		.poll(async () =>
+			((await page.getByTestId('checkout-button').textContent()) ?? '').replace(/\D/g, '')
+		)
+		.toContain(digits);
+});

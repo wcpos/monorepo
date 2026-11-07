@@ -6,6 +6,8 @@ const BOX = ['h-ctl', 'rounded-field', 'text-foreground', 'text-base'];
 const THEME_WIDTH = 'border-[length:var(--shape-ctl-border)]';
 const SEEN = 'border';
 const PLACEHOLDER = 'placeholder:text-muted-foreground';
+// react-native-web's `::placeholder` rule reads this variable (ledger line 5).
+const PLACEHOLDER_VAR = '[--placeholderTextColor:var(--color-muted-foreground)]';
 const RING = ['border-ring', 'web:ring-1', 'web:ring-ring'];
 const DIM = ['opacity-45', 'web:cursor-not-allowed'];
 const MARK = ['border-attention', 'bg-attention/15'];
@@ -42,15 +44,15 @@ const MATRIX: [FieldBoxState, { has: string[]; not: string[] }][] = [
 	],
 	[
 		'attention',
-		{ has: [...MARK, SEEN], not: ['border-chip-border', THEME_WIDTH, 'bg-card', ...RING, ...DIM] },
+		{ has: [...MARK, SEEN], not: ['border-chip-border', THEME_WIDTH, 'bg-chip', ...RING, ...DIM] },
 	],
 ];
 
 describe('fieldBox', () => {
 	it.each(MATRIX)('%s', (state, { has, not }) => {
 		const classes = fieldBox({ state }).split(/\s+/);
-		expect(classes).toEqual(expect.arrayContaining([...BOX, PLACEHOLDER, ...has]));
-		if (state !== 'attention') expect(classes).toContain('bg-card');
+		expect(classes).toEqual(expect.arrayContaining([...BOX, PLACEHOLDER, PLACEHOLDER_VAR, ...has]));
+		if (state !== 'attention') expect(classes).toContain('bg-chip');
 		for (const absent of not) expect(classes).not.toContain(absent);
 	});
 
@@ -58,5 +60,22 @@ describe('fieldBox', () => {
 		const classes = fieldBox({ multiline: true }).split(/\s+/);
 		expect(classes).toContain('min-h-ctl');
 		expect(classes).not.toContain('h-ctl');
+	});
+
+	it('stands tile tall for a figure without changing the rest of the box', () => {
+		const classes = fieldBox({ figure: true }).split(/\s+/);
+		expect(classes).toContain('h-tile');
+		expect(classes).not.toContain('h-ctl');
+		expect(classes).toEqual(
+			expect.arrayContaining([
+				'rounded-field',
+				'text-foreground',
+				'text-base',
+				PLACEHOLDER,
+				'bg-chip',
+				'border-chip-border',
+				THEME_WIDTH,
+			])
+		);
 	});
 });

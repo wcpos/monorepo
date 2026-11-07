@@ -21,10 +21,12 @@ import {
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import { captureEntry, type PaymentMethodDescriptor } from '@wcpos/order-math';
+import { rememberedMode } from '@wcpos/query/store-local';
 
 import { CARD_READER_DOCS_URL } from './docs';
 import { readerName, ReaderRow } from './reader-row';
+import { smartReaderMethods, SmartReaders } from './smart-readers';
 import { useReaderActions } from './use-reader-actions';
 import { SettingsSection } from '../components/settings-section';
 import { useT } from '../../../../contexts/translations';
@@ -35,7 +37,10 @@ import { useRememberedReaders } from '../../pos/checkout/tender/remembered-reade
 import { deviceTransports } from '../../pos/checkout/tender/tiles';
 import { useDriverChanges } from '../../pos/checkout/tender/use-driver-status';
 
-/** Device-mode methods this build can drive: a row's worth of reader maintenance each. */
+/**
+ * Device-mode methods this build can drive: a row's worth of reader maintenance each. Only the
+ * primary connection is a row; a secondary one becomes a row with wcpos/roadmap#113.
+ */
 function deviceMethods(methods: readonly PaymentMethodDescriptor[]) {
 	return methods.filter((method) => {
 		if (!method.pos_enabled || method.capture.mode !== 'device') return false;
@@ -56,10 +61,21 @@ export function CardReadersSettings() {
 	const t = useT();
 	const { methods } = usePaymentMethods();
 	useDriverChanges();
-	const remembered = useRememberedReaders();
+	const memory = useRememberedReaders();
+	// A cloud reader choice shares its method's memory; these rows are device readers.
+	const remembered = Object.fromEntries(
+		Object.entries(memory).filter(([, reader]) => rememberedMode(reader) === 'device')
+	);
 	const actions = useReaderActions();
 	const { caps } = useUserCapabilities();
 	const devices = deviceMethods(methods);
+	const smart = smartReaderMethods(methods);
+	// On web and desktop a store that allows only the app's readers leaves this till none to use.
+	const appReadersOnly = methods.some((method) => {
+		const entry = method.pos_enabled ? captureEntry(method, 'device') : null;
+		const availability = entry ? getDriver(entry.provider)?.availability() : null;
+		return availability?.available === false && availability.reason === 'web';
+	});
 	const rows = devices.filter((method) => {
 		const status = getDriver(method.capture.provider)?.status$.get();
 		// A row stays while it has something to say: a connection, a memory, a scan or an error.
@@ -120,14 +136,23 @@ export function CardReadersSettings() {
 
 	return (
 		<VStack className="gap-5">
-			<Text className="text-muted-foreground">{t('settings.card_readers.description')}</Text>
+			<Text className="text-muted-foreground">{t('settings.card_readers.description_till')}</Text>
+			{smart.length > 0 ? (
+				<SmartReaders methods={smart} remembered={memory} choose={actions.choose} />
+			) : null}
 			{devices.length === 0 ? (
-				<EmptyState
-					testID="card-readers-none"
-					kind="empty"
-					size="inline"
-					title={t('settings.card_readers.no_device_methods')}
-				/>
+				smart.length === 0 ? (
+					<EmptyState
+						testID={appReadersOnly ? 'card-readers-app-only' : 'card-readers-none'}
+						kind="empty"
+						size="inline"
+						title={
+							appReadersOnly
+								? t('settings.card_readers.app_readers_only')
+								: t('settings.card_readers.none_set_up')
+						}
+					/>
+				) : null
 			) : (
 				<>
 					{phoneRows.length > 0 || tapToPay.length > 0 ? (

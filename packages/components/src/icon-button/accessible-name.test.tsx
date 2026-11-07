@@ -30,6 +30,13 @@ jest.mock('react-native', () => {
 		},
 	};
 });
+jest.mock('@wcpos/utils/platform', () => ({
+	Platform: {
+		get OS() {
+			return mockPlatform.OS;
+		},
+	},
+}));
 jest.mock('expo-haptics', () => ({
 	impactAsync: jest.fn(),
 	ImpactFeedbackStyle: { Light: 'light' },

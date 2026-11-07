@@ -24,6 +24,9 @@
 #     built from it differs (rxdb bumped, worker not rebuilt).
 # A worker absent on both sides is skipped; a lane with no tags passes ("new
 # lane"); --worker-optional passes a bundle that carries no vendored worker at all.
+# A worker only the tag carries that no plugin on the lane vendors (lane_workers)
+# is noted and ignored: web-bundle's main branch takes both lanes' publishes, and
+# its 24 h retention kept the 1.11.10 train's opfs.worker.js in v2.0.9 (2026-11-06).
 #
 # Sourcing this file defines the pure functions (stdin in, stdout out) and runs nothing.
 
@@ -63,6 +66,13 @@ lane_of_version() {
 		return 1
 	fi
 	printf '%s.%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+}
+
+# $1: lane (x.y). stdout: the workers a plugin on that lane vendors, one per line.
+# 1.x plugins run the OPFS engine; 2.x plugins run SQLite. Both keep the legacy indexeddb worker.
+lane_workers() {
+	if [[ "${1%%.*}" -ge 2 ]]; then printf '%s\n' sqlite.worker.js indexeddb.worker.js
+	else printf '%s\n' opfs.worker.js indexeddb.worker.js; fi
 }
 
 # stdin: tag names. $1: lane. stdout: highest N among v<lane>.N, or nothing.
@@ -171,6 +181,10 @@ check_worker_lane() {
 			echo "FAIL: ${name} is in this bundle but not in ${tag}; plugins on lane ${lane} vendor no such worker. A new worker needs a NEW minor." >&2
 			failed=1; continue
 		elif [[ "$here" == false ]]; then
+			if ! lane_workers "$lane" | grep -qx "$name"; then
+				echo "note: ${name} is in ${tag} but no plugin on lane ${lane} vendors it (another lane's worker, retained by a publish to the shared branch); ignored"
+				continue
+			fi
 			echo "FAIL: ${name} is in ${tag} but not in this bundle; plugins on lane ${lane} still vendor it. Dropping a worker needs a NEW minor." >&2
 			failed=1; continue
 		fi

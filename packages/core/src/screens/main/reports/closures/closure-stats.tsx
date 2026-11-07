@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 
+import { AmountFigure } from '@wcpos/components/amount-figure';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
@@ -84,17 +85,13 @@ export function ClosureStats({
 	const countNote = rows.length
 		? t('reports.stat_counts', { count: rows.length })
 		: t('reports.stat_nothing_closed');
-	// The rows' own result tokens (closure-list.tsx): short is bad, over is ok, exact is quiet.
-	// A partial period's sign can still flip with the next page: no verdict colour until it is whole.
-	const discrepancyColor = partial
-		? 'text-muted-foreground'
-		: totals.variance < 0
-			? 'text-bad'
-			: totals.variance > 0
-				? 'text-ok'
-				: 'text-muted-foreground';
 	// Literal labels: the i18n ratchet refuses a computed key, and the catalogue needs each string.
 	const cells = {
+		discrepancy: [
+			t('reports.stat_discrepancy'),
+			totals.variance ? signed(totals.variance) : '—',
+			results,
+		],
 		sessions: [
 			t('reports.stat_sessions'),
 			rows.length + sessions.length,
@@ -117,34 +114,39 @@ export function ClosureStats({
 			rows.length ? format(totals.counted) : '—',
 			countNote,
 		],
-		discrepancy: [
-			t('reports.stat_discrepancy'),
-			totals.variance ? signed(totals.variance) : '—',
-			results,
-		],
 	};
 	return (
-		<View className={cn('bg-card flex-row rounded-lg border', phone && 'flex-wrap')}>
+		<View className={cn('border-border flex-row border-b pb-3', phone && 'flex-wrap')}>
 			{Object.entries(cells).map(([id, [label, value, note]], index) => (
 				<View
 					key={id}
 					className={cn(
 						'px-4 py-3',
-						phone ? (index === 4 ? 'w-full' : 'w-1/2') : 'flex-1',
-						(phone ? index % 2 === 0 && index < 4 : index < 4) && 'border-r',
-						phone && index > 1 && 'border-t'
+						index === 0 && 'pl-0',
+						phone ? (index === 0 ? 'w-full' : 'w-1/2') : 'flex-1',
+						(phone ? index % 2 === 1 : index < 4) && 'border-r',
+						phone && index > 0 && 'border-t'
 					)}
 				>
 					<Text variant="key">{label}</Text>
-					<Text
-						testID={`closure-stat-${id.replaceAll('_', '-')}`}
-						className={cn(
-							'text-lg font-semibold tabular-nums',
-							id === 'discrepancy' && discrepancyColor
-						)}
-					>
-						{value}
-					</Text>
+					{id === 'discrepancy' ? (
+						<AmountFigure
+							testID="closure-stat-discrepancy"
+							size="headline"
+							tone={
+								partial || totals.variance === 0 ? 'default' : totals.variance < 0 ? 'bad' : 'ok'
+							}
+						>
+							{value}
+						</AmountFigure>
+					) : (
+						<Text
+							testID={`closure-stat-${id.replaceAll('_', '-')}`}
+							className="text-lg font-semibold tabular-nums"
+						>
+							{value}
+						</Text>
+					)}
 					<Text variant="key">{note}</Text>
 				</View>
 			))}
