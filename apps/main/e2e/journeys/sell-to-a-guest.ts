@@ -143,15 +143,18 @@ export async function startGuestSale(ctx: SellToAGuestContext): Promise<SaleInPr
 
 /**
  * The shared-SKU product's tile, left filtered on screen, or the first visible tile when the SKU
- * filter does not narrow the grid to one: the product the shared-SKU fallback adds.
+ * filter does not narrow the grid to one: the product step 2's phone add taps. On desktop, the
+ * shared-SKU fallback in `addCheckoutProbeProduct` may add the first catalogue tile instead.
  */
 export async function sharedProductTile(page: Page): Promise<Locator> {
 	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 	const search = posScreen.getByTestId('search-products').filter({ visible: true });
 	const tiles = posScreen.getByTestId('product-tile').filter({ visible: true });
+	const variableTiles = posScreen.getByTestId('variable-product-tile').filter({ visible: true });
 	await search.fill(E2E_PRODUCT_SKU);
+	// Variable tiles count too: an unfiltered grid can show a single simple tile among them.
 	const matched = await expect
-		.poll(() => tiles.count(), { timeout: 15_000 })
+		.poll(async () => (await tiles.count()) + (await variableTiles.count()), { timeout: 15_000 })
 		.toBe(1)
 		.then(
 			() => true,

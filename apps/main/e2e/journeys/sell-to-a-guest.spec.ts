@@ -5,11 +5,15 @@
  * - keypad digits supersedes `pos-cart.spec.ts:135`
  * - closing checkout supersedes `pos-checkout.spec.ts:272`
  * - table-view add supersedes `products.spec.ts:119`
+ * - five-add toast burst supersedes `pos-cart-toast-burst.spec.ts:37`
+ * - read-only cart add timing supersedes `pos-cart.spec.ts:58` and `pos-cart.spec.ts:69`
  */
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 
+import { beginCartAddMeasurement, readCartAddMeasurement } from '../cart-add-timing';
+import { checkoutProbeAddControl } from '../checkout-probe';
 import { digitsOf, ledgerRows, pollOrder } from '../checkout-shared';
-import { getStoreUrl, getStoreVariant } from '../fixtures';
+import { getStoreUrl, getStoreVariant, waitForCadenceStart } from '../fixtures';
 import {
 	checkoutControl,
 	type CheckoutSurface,
@@ -26,8 +30,31 @@ import {
 	checkOut,
 	sellToAGuest,
 	type SellToAGuestContext,
+	sharedProductTile,
 	startGuestSale,
 } from './sell-to-a-guest';
+
+/** The toast burst's tap count: step 2's add, then four more taps on the same product. */
+const BURST_ADDS = 5;
+
+/**
+ * The G7 add budget, copied from `pos-cart.spec.ts` (it exports nothing). The gate is
+ * quarantined, so here it only labels the reading and is never compared against.
+ */
+const CART_ADD_BUDGET_MS = 300;
+
+/** What `elementFromPoint` finds at the control's centre: the control itself, or what covers it. */
+// Copied from `pos-cart-toast-burst.spec.ts`, which #516 retires.
+async function hitTarget(control: Locator) {
+	return control.evaluate((element) => {
+		const box = element.getBoundingClientRect();
+		const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+		return {
+			landsOnControl: hit !== null && element.contains(hit),
+			coveredBy: hit?.closest('[data-testid]')?.getAttribute('data-testid') ?? hit?.tagName ?? null,
+		};
+	});
+}
 
 /** The four `liveOrderTest` fixtures a J2 test destructures, and the journey context from them. */
 type Fixtures = Omit<SellToAGuestContext, 'page' | 'testInfo' | 'onStep'> & { posPage: Page };
@@ -234,5 +261,117 @@ test.describe('J2 Sell to a guest', () => {
 			// Later tests in this worker start from the grid.
 			await ensureGridView(page);
 		}
+	});
+
+	// #2370: a burst of adds shows ONE added-to-cart toast that updates in place, and no toast takes
+	// a tap meant for the product grid (on the iPad a stack of them covered the top product row).
+	test('a five-add burst shows one toast and every tap lands', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		const { page } = ctx;
+		const started = await startGuestSale(ctx);
+
+		// With writer credentials step 2 adds the run-private probe, and the burst taps its control.
+		// Without them the burst taps the shared-SKU tile from its first add. One product either way,
+		// or the line count below fails.
+		let control = checkoutProbeAddControl(page);
+		let firstTap = 0;
+		if (control !== null) {
+			await addProduct(ctx, started);
+			firstTap = 1;
+		} else {
+			// Step 2 is skipped: its desktop fallback can add a product other than sharedProductTile's.
+			control = await sharedProductTile(page);
+		}
+		await expect(control).toBeVisible({ timeout: 30_000 });
+		for (let adds = firstTap; adds < BURST_ADDS; adds += 1) {
+			const hit = await hitTarget(control);
+			expect(
+				hit,
+				`add ${adds + 1} of ${BURST_ADDS} lands on the product, not on ${hit.coveredBy}`
+			).toEqual(expect.objectContaining({ landsOnControl: true }));
+			await control.click();
+			await page.waitForTimeout(200);
+		}
+
+		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText(String(BURST_ADDS), {
+			timeout: 15_000,
+		});
+		const name = `toast-burst-after-${BURST_ADDS}-adds`;
+		const path = testInfo.outputPath(`${name}.png`);
+		await page.screenshot({ path });
+		await testInfo.attach(name, { path, contentType: 'image/png' });
+		// Sampled once, not polled: a stack of toasts expiring one by one would pass through 1.
+		expect(await page.getByTestId('success-toast').count(), 'added-to-cart toasts open').toBe(1);
+		// One product, one cart line: no tap went to another product.
+		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1);
+	});
+
+	// Both G7 gates are quarantined (e2e/quarantine.json): this test reads and attaches the timings
+	// and never asserts them. It fails only when the journey or the harness check below fails.
+	test('cart add timing (quarantined G7 gates: read, never asserted)', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		const { page } = ctx;
+		const started = await startGuestSale(ctx);
+		// The reading is for the add, not the sync: measure after the startup writes drain.
+		await waitForCadenceStart(page);
+		await beginCartAddMeasurement(page);
+		await addProduct(ctx, started);
+		await readCartAddMeasurement(page, testInfo, CART_ADD_BUDGET_MS);
+
+		// Twenty adds need one product identity for every tap: the run-private probe's own control.
+		// Without writer credentials only the single-add reading is attached.
+		const control = checkoutProbeAddControl(page);
+		if (control !== null) {
+			const quantity = page.getByTestId('cart-quantity-input').first();
+			const burstStartedAt = await page.evaluate(() => performance.now());
+			for (let index = 0; index < 19; index += 1) {
+				await control.click();
+				if (index < 18) await page.waitForTimeout(200);
+			}
+			const settled = await expect
+				.poll(async () => (await quantity.textContent())?.trim(), { timeout: 20_000 })
+				.toBe('20')
+				.then(
+					() => true,
+					() => false
+				);
+			const settledMs = settled
+				? await page.evaluate((start) => performance.now() - start, burstStartedAt)
+				: null;
+			const finalQuantity = await quantity.textContent().then(
+				(text) => text?.trim() ?? null,
+				() => null
+			);
+			await testInfo.attach('cart-add-burst', {
+				body: JSON.stringify({
+					metric: 'first-burst-click-to-quantity-20-in-dom',
+					platform: 'web',
+					project: testInfo.project.name,
+					adds: 20,
+					paceMs: 200,
+					// A label from the quarantined gate, never compared.
+					budgetMs: 8_000,
+					settledMs,
+					finalQuantity,
+					asserted: false,
+				}),
+				contentType: 'application/json',
+			});
+		}
+
+		expect(
+			testInfo.attachments.map((attachment) => attachment.name),
+			'the single-add timing reading is attached'
+		).toContain('cart-add-performance');
 	});
 });
