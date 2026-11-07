@@ -256,6 +256,28 @@ it('the keypad types into the count and collapses on blur, reopens on focus', ()
 	fireEvent.mouseDown(amount);
 	expect(screen.getByTestId('count-keypad')).toBeTruthy();
 });
+it('a blur that moves focus into the keypad keeps it open, so the digit lands', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	const amount = screen.getByTestId('count-amount');
+	enter('40');
+	fireEvent.blur(amount, { relatedTarget: screen.getByTestId('count-key-5') });
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('count-key-5'));
+	expect((amount as HTMLInputElement).value).toBe('405');
+	fireEvent.blur(amount, { relatedTarget: screen.getByTestId('count-note') });
+	expect(screen.queryByTestId('count-keypad')).toBeNull();
+});
+it('the keypad starts a fresh count after denominations; the earlier typed amount never returns', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	enter('100');
+	fireEvent.click(screen.getByTestId('count-denominations'));
+	fireEvent.click(screen.getByTestId('den-tile-20'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('20.00');
+	fireEvent.focus(screen.getByTestId('count-amount'));
+	fireEvent.click(screen.getByTestId('count-key-7'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('7');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('0');
+});
 it.each(['', 'invalid'])('does not collapse an invalid count %s on blur', (value) => {
 	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 	enter(value);

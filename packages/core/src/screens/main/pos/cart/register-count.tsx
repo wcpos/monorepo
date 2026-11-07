@@ -140,6 +140,9 @@ export function RegisterCount({
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
 	const [keypadOpen, setKeypadOpen] = React.useState(true);
+	// On the web a key takes focus before its press lands; a blur that moves into the keypad
+	// must not collapse it, or the digit is lost (Codex, #3356).
+	const keypadRef = React.useRef<React.ComponentRef<typeof View>>(null);
 	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
 		Object.fromEntries(
 			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
@@ -210,14 +213,20 @@ export function RegisterCount({
 					setPieces({});
 					setCash(value.replace(separator, '.'));
 				}}
-				onBlur={() => {
+				onBlur={(event) => {
+					const next = (event?.nativeEvent as { relatedTarget?: unknown } | undefined)
+						?.relatedTarget;
+					const keypad = keypadRef.current as unknown as {
+						contains?: (node: unknown) => boolean;
+					} | null;
+					if (next && keypad?.contains?.(next)) return;
 					if (valid) setKeypadOpen(false);
 				}}
 				onFocus={() => setKeypadOpen(true)}
 				onPressIn={() => setKeypadOpen(true)}
 			/>
 			{keypadOpen ? (
-				<View testID="count-keypad">
+				<View ref={keypadRef} testID="count-keypad">
 					<Keypad
 						rows={[
 							...DIGIT_ROWS,
@@ -226,8 +235,11 @@ export function RegisterCount({
 						fit={phone ? 'shrink' : 'tile'}
 						testID="count"
 						onPress={(key) => {
+							// Leaving denomination entry starts a fresh count: the typed buffer behind the
+							// tiles is stale and must not come back (Codex, #3356; ledger line 65).
+							const fresh = Object.keys(pieces).length > 0;
 							setPieces({});
-							setCash((prev) => typeDecimal(prev, key, decimals));
+							setCash((prev) => typeDecimal(fresh ? '' : prev, key, decimals));
 						}}
 					/>
 				</View>
