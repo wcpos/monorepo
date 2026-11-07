@@ -17,6 +17,7 @@ import {
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
 	mintServerPayment,
+	paidUnitsMeta,
 	partitionVoidableRows,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
@@ -82,9 +83,11 @@ import {
 	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	selectReceipt,
+	setAllocations,
 	setLinesPaidBy,
 	setTenderMethod,
 	setTenderPlan,
+	useAllocations,
 	useTenderMethod,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
@@ -189,6 +192,7 @@ export interface TenderFlow {
 	planMore: boolean;
 	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
 	linesPaidBy: TenderState['linesPaidBy'];
+	allocations: Record<string, Record<TenderLineId, number>>;
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -296,6 +300,7 @@ export function useTenderFlow(
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
+	const allocations = useAllocations(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
@@ -777,6 +782,12 @@ export function useTenderFlow(
 			// of a short split must come back with the plan, or that leg wipes the split record.
 			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
+			if (Object.keys(state.picked).length > 0) {
+				setAllocations(order.uuid, {
+					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					[row.id]: state.picked,
+				});
+			}
 		},
 		[order, state, dp, byId, actor, orderContext]
 	);
@@ -962,7 +973,7 @@ export function useTenderFlow(
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
-			const splitMeta = journaledPlan
+			let splitMeta = journaledPlan
 				? [
 						splitPlanMeta({
 							kind: journaledPlan.kind,
@@ -976,6 +987,10 @@ export function useTenderFlow(
 				: hasStaleSplit
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
+			const allocations = getCheckoutModeSnapshot().allocations.get(order.uuid);
+			if (allocations && Object.keys(allocations).length > 0) {
+				splitMeta = [...(splitMeta ?? []), paidUnitsMeta(allocations)];
+			}
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
 			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
@@ -1818,6 +1833,7 @@ export function useTenderFlow(
 			planMore,
 			lines,
 			linesPaidBy: state.linesPaidBy,
+			allocations: allocations ?? {},
 			rows,
 			liveRows,
 			retainedRows,
@@ -1854,6 +1870,7 @@ export function useTenderFlow(
 		}),
 		[
 			plan,
+			allocations,
 			figures,
 			planLabel,
 			planMore,

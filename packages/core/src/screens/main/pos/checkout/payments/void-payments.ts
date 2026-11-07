@@ -50,12 +50,15 @@ export type VoidPaymentsOutcome =
 	| { kind: 'offline'; paymentIds: string[] };
 export async function voidPayments(
 	order: VoidPaymentsOrder,
-	deps: VoidPaymentsDeps
+	deps: VoidPaymentsDeps,
+	options?: { paymentIds?: readonly string[] }
 ): Promise<VoidPaymentsOutcome> {
-	const { voidable: liveRows, retained: kept } = partitionVoidableRows(order.meta_data);
+	const { voidable, retained: kept } = partitionVoidableRows(order.meta_data);
+	const selected = (row: PaymentRow) => !options?.paymentIds || options.paymentIds.includes(row.id);
+	const liveRows = voidable.filter(selected);
 	// #2798 thread 4341491614: such a leg is never sent a void, but it is reported, so a cancel
 	// that leaves money captured is never read as a clean one. The store's own rule, so `refused`.
-	const retained: VoidPaymentsFailure[] = kept.map((row) => ({
+	const retained: VoidPaymentsFailure[] = kept.filter(selected).map((row) => ({
 		paymentId: row.id,
 		message: 'captured_refund_required',
 		refused: true,

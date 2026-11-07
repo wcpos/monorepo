@@ -238,6 +238,7 @@ function makeFlow(count = 1): TenderFlow {
 		planMore: false,
 		lines: [],
 		linesPaidBy: {},
+		allocations: {},
 		rows: [],
 		liveRows: [],
 		retainedRows: [],
