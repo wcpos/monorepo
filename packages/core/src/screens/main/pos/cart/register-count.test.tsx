@@ -92,9 +92,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 // The mark only draws its state: a press on it lands on its row, as on a device.
 jest.mock('@wcpos/components/checkbox', () => ({
-	Checkbox: ({ testID, checked }: { testID?: string; checked?: boolean }) => (
-		<span data-testid={testID} aria-checked={!!checked} />
-	),
+	Checkbox: ({ checked }: { checked?: boolean }) => <span aria-checked={!!checked} />,
 }));
 let mockSessionStatus = 'counting';
 let mockMovements: { id: string; amount: string | null; sync_status: string }[] = [];

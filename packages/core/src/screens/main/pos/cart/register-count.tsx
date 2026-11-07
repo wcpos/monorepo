@@ -452,6 +452,7 @@ export function RegisterCount({
 				>
 					{/* The row is the checkbox; the mark only draws its state. */}
 					<PressableSurface
+						testID="count-refused-cash-ack"
 						role="checkbox"
 						selected={acknowledged}
 						wash="none"
@@ -459,7 +460,6 @@ export function RegisterCount({
 						className="min-h-ctl flex-row items-center gap-2"
 					>
 						<Checkbox
-							testID="count-refused-cash-ack"
 							checked={acknowledged}
 							onCheckedChange={toggleAcknowledged}
 							className="pointer-events-none"
