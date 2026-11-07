@@ -502,7 +502,10 @@ export async function writeClosure({
 		if (refundSessionId(refund) === session.id) addTaxRates(refund);
 	}
 	const dirtyOrders = bound.filter(hasPendingLocalWork);
-	const dirtyMovements = entries.filter((row) => row.sync_status === 'pending');
+	// A refused movement is cash the server's ledger does not hold: the closure records it (#3271).
+	const dirtyMovements = entries.filter(
+		(row) => row.sync_status === 'pending' || row.sync_status === 'failed'
+	);
 
 	const counters = bound
 		.map((order) =>

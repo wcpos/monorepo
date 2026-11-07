@@ -90,7 +90,12 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
+// The mark only draws its state: a press on it lands on its row, as on a device.
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({ checked }: { checked?: boolean }) => <span aria-checked={!!checked} />,
+}));
 let mockSessionStatus = 'counting';
+let mockMovements: { id: string; amount: string | null; sync_status: string }[] = [];
 let count_note: string | null = null;
 let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
@@ -127,6 +132,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		unsyncedCount,
 		refusedClose: mockRefusedClose,
 		lastClosure: mockLastClosure,
+		movements: mockMovements,
 		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),
@@ -175,6 +181,7 @@ const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
 	mockSessionStatus = 'counting';
+	mockMovements = [];
 	approved_counted = null;
 	count_note = null;
 	count_denominations = null;
@@ -812,5 +819,98 @@ describe('#2016: a refused close', () => {
 		expect(closeSession).toHaveBeenCalledWith(
 			expect.objectContaining({ counted: { cash: '41.50' }, note: 'Recounted' })
 		);
+	});
+});
+
+describe('cash the store refused (#3271)', () => {
+	const refused = (id: string, amount: string | null = '20.0000') => ({
+		id,
+		amount,
+		sync_status: 'failed',
+	});
+	const close = () => screen.getByTestId('count-close') as HTMLButtonElement;
+	const view = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />;
+
+	it('names the refused cash and closes only after one acknowledgement', async () => {
+		mockMovements = [refused('m1'), { id: 'm2', amount: '5.0000', sync_status: 'synced' }];
+		render(view());
+		enter('480.80');
+		expect(screen.getByTestId('count-refused-cash-title').textContent).toBe(
+			'£20.00 in cash was refused by the store'
+		);
+		expect(close().disabled).toBe(true);
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(screen.getByTestId('count-refused-cash-ack').getAttribute('aria-checked')).toBe('true');
+		expect(close().disabled).toBe(false);
+		await act(async () => fireEvent.click(close()));
+		expect(closeSession).toHaveBeenCalledTimes(1);
+	});
+
+	it('pressing the label ticks it too, and pressing again unticks it', () => {
+		mockMovements = [refused('m1')];
+		render(view());
+		enter('480.80');
+		fireEvent.click(screen.getByText('I understand, close anyway'));
+		expect(close().disabled).toBe(false);
+		fireEvent.click(screen.getByText('I understand, close anyway'));
+		expect(close().disabled).toBe(true);
+	});
+
+	it('on the manager path the press opens the approval only after the tick', () => {
+		mockMovements = [refused('m1')];
+		varianceThreshold = '5';
+		render(view());
+		enter('463.30');
+		expect(close().textContent).toBe('Approve & close');
+		fireEvent.click(close());
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+
+	it('a further refusal closes an open approval sheet until the new tick', () => {
+		mockMovements = [refused('m1')];
+		varianceThreshold = '5';
+		const { rerender } = render(view());
+		enter('463.30');
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		mockMovements = [refused('m1'), refused('m2', '7.5000')];
+		rerender(view());
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		expect(close().disabled).toBe(true);
+		expect(closeSession).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+	});
+
+	it.each([
+		['a refused no-sale moves no cash', [refused('m1', '0')]],
+		['nothing refused', [{ id: 'm1', amount: '20.0000', sync_status: 'pending' }]],
+	])('%s: no notice, Close enabled', (_, movements) => {
+		mockMovements = movements;
+		render(view());
+		enter('480.80');
+		expect(screen.queryByTestId('count-refused-cash')).toBeNull();
+		expect(close().disabled).toBe(false);
+	});
+
+	it('a further refusal after the tick asks again', () => {
+		mockMovements = [refused('m1')];
+		const { rerender } = render(view());
+		enter('480.80');
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(close().disabled).toBe(false);
+		mockMovements = [refused('m1'), refused('m2', '7.5000')];
+		rerender(view());
+		expect(screen.getByTestId('count-refused-cash-title').textContent).toBe(
+			'£27.50 in cash was refused by the store'
+		);
+		expect(close().disabled).toBe(true);
 	});
 });
