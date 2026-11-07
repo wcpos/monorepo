@@ -9,6 +9,7 @@ const mockMarkSaved = jest.fn();
 let change: (changes: Record<string, unknown>) => Promise<boolean>;
 jest.mock('@wcpos/components/form', () => ({
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useFormChangeHandler: (options: { onChange: typeof change }) => {
 		change = options.onChange;
 		return { flush: jest.fn() };

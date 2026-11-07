@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { TZDate } from '@date-fns/tz';
 import { useObservableState } from 'observable-hooks';
 import { combineLatest, distinctUntilChanged, filter, firstValueFrom, map, of, timer } from 'rxjs';
 
@@ -36,7 +37,9 @@ import {
 	writeClosure,
 } from '@wcpos/query/register-session';
 
+import { DEVICE_ZONE, inZone } from '../../hooks/store-zone';
 import { useStoreDay } from '../../hooks/use-store-day';
+import { convertUTCStringToLocalDate } from '../../hooks/use-local-date';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
@@ -107,17 +110,50 @@ function baselineContains(
 	return (id: string | number | null | undefined) => !pending.has(id);
 }
 
-/** Whether now is past today's `HH:MM` close time; no or unreadable close time is never past. */
-function isPastClose(closeTime: string | null | undefined) {
+/**
+ * Whether now is past the first `HH:MM` close, on the store's clock, after the session opened:
+ * a session opened after tonight's close is due at tomorrow's, and one left open overnight
+ * stays overdue past midnight. No or unreadable close time, or no open time, is never past.
+ */
+export function isPastClose(
+	closeTime: string | null | undefined,
+	openedAtGmt: string | null | undefined,
+	zone: string
+) {
 	const [hour, minute] = String(closeTime ?? '')
 		.split(':')
 		.map(Number);
-	if (!closeTime || !Number.isFinite(hour) || !Number.isFinite(minute)) return false;
-	const now = new Date();
-	return (
-		now.getTime() >
-		new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute).getTime()
+	if (!closeTime || !openedAtGmt || !Number.isFinite(hour) || !Number.isFinite(minute)) {
+		return false;
+	}
+	const opened = convertUTCStringToLocalDate(openedAtGmt).getTime();
+	if (Number.isNaN(opened)) return false;
+	const day = inZone(zone, new Date(opened));
+	const closeOn = (offset: number) =>
+		(zone === DEVICE_ZONE
+			? new Date(day.getFullYear(), day.getMonth(), day.getDate() + offset, hour, minute)
+			: new TZDate(day.getFullYear(), day.getMonth(), day.getDate() + offset, hour, minute, zone)
+		).getTime();
+	const close = closeOn(0) > opened ? closeOn(0) : closeOn(1);
+	return Date.now() > close;
+}
+
+function usePastCloseClock(...args: Parameters<typeof isPastClose>) {
+	const [closeTime, openedAt, zone] = args;
+	// The clock is not in the data stream: there it re-rendered every consumer once a minute
+	// with nothing changed (roadmap#423). This stream emits only when the verdict flips.
+	const pastClose$ = React.useMemo(
+		() =>
+			timer(0, 60_000).pipe(
+				map(() => isPastClose(closeTime, openedAt, zone)),
+				distinctUntilChanged()
+			),
+		[closeTime, openedAt, zone]
 	);
+	// The subscription only schedules the render at the flip; the verdict is read fresh below,
+	// so a close time changed mid-session never renders the previous close time's verdict for
+	// the tick before the new stream emits.
+	useObservableState(pastClose$, () => isPastClose(closeTime, openedAt, zone));
 }
 
 export function useRegisterSession() {
@@ -176,20 +212,6 @@ export function useRegisterSession() {
 	}, [storeDB, binding.registerId, sessionsOn, runtime.engine, runtime.locale, accountingState]);
 	const { missingParentKey, pendingParents, accountingChanges, latestAccounting } = source;
 	const observed = useObservableState(source.stream, null);
-	// The clock is not in the data stream: there it re-rendered every consumer once a minute
-	// with nothing changed (roadmap#423). This stream emits only when the verdict flips.
-	const pastClose$ = React.useMemo(
-		() =>
-			timer(0, 60_000).pipe(
-				map(() => isPastClose(closeTime)),
-				distinctUntilChanged()
-			),
-		[closeTime]
-	);
-	// The subscription only schedules the render at the flip; the verdict is read fresh below,
-	// so a close time changed mid-session never renders the previous close time's verdict for
-	// the tick before the new stream emits.
-	useObservableState(pastClose$, () => isPastClose(closeTime));
 	const data =
 		observed?.storeDB === storeDB &&
 		observed?.registerId === binding.registerId &&
@@ -209,6 +231,9 @@ export function useRegisterSession() {
 				!data.closureRows.some((closure) => closure.id === row.id)
 		) ??
 		null;
+	// Only an open session can be overdue; its opening fixes which close it is due at.
+	const openedAt = session?.status === 'open' ? session.opened_at_gmt : null;
+	usePastCloseClock(closeTime, openedAt, timezone);
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
 	/**
 	 * Refused cash outlives the session it was recorded against. Scoping it to the current
@@ -300,7 +325,8 @@ export function useRegisterSession() {
 					at: session.counting_started_at_gmt ?? null,
 				}
 			: null;
-	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
+	const overdue =
+		!!session && session.status === 'open' && isPastClose(closeTime, openedAt, timezone);
 	return {
 		session,
 		/**

@@ -2,6 +2,7 @@ import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import {
 	observeCashMovements,
+	observeClosureRegisterNames,
 	observeClosures,
 	observeOpenSessionPresence,
 	observeRegisterClosures,
@@ -114,4 +115,42 @@ it('readClosure waits for an answered query of the collection that is current', 
 	await expect(answer).resolves.toMatchObject({ id: 'closure', from: 'replacement' });
 	expect(original.findOne).toHaveBeenCalledWith('closure');
 	expect(replacement.findOne).toHaveBeenCalledWith('closure');
+});
+
+describe('observeClosureRegisterNames', () => {
+	const names = (rows: unknown[]) => {
+		const values: unknown[] = [];
+		const db = { collections: { closures: { find: () => ({ $: of(rows) }) } } };
+		observeClosureRegisterNames(db as never).subscribe((value) => values.push(value));
+		return values;
+	};
+
+	it('emits an empty map while the collection is absent', () => {
+		const values: unknown[] = [];
+		observeClosureRegisterNames(null).subscribe((value) => values.push(value));
+		observeClosureRegisterNames({ collections: {} } as never).subscribe((value) =>
+			values.push(value)
+		);
+		expect(values).toEqual([{}, {}]);
+	});
+
+	it("keeps the name of a register's newest closure, whatever the row order", () => {
+		expect(
+			names([
+				{ register_id: 'r', number: 2, breakdowns: { register_name: 'Renamed till' } },
+				{ register_id: 'r', number: 1, breakdowns: { register_name: 'Old till' } },
+			])
+		).toEqual([{ r: 'Renamed till' }]);
+	});
+
+	it('adds nothing for a closure without a recorded name', () => {
+		expect(
+			names([
+				{ register_id: 'a', number: 1, breakdowns: { register_name: 'Front' } },
+				{ register_id: 'a', number: 2, breakdowns: { register_name: '' } },
+				{ register_id: 'b', number: 3, breakdowns: {} },
+				{ register_id: 'c', number: 4 },
+			])
+		).toEqual([{ a: 'Front' }]);
+	});
 });

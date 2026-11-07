@@ -1388,6 +1388,122 @@ it('blocks a failed named movement and dead-letters the closure after six due at
 	}
 	expect(row.getLatest().sync_next_at).toBeNull();
 });
+describe('retrying a refused movement re-queues the closure it dead-lettered', () => {
+	async function deadLettered() {
+		const { session, row } = await closure();
+		await session.incrementalPatch({
+			sync_status: 'synced',
+			server_status: 'closed',
+			pending_status: null,
+		});
+		const movement = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_out',
+			amount: '5',
+			reason: 'Milk',
+			actor: 7,
+		});
+		await movement.incrementalPatch({ sync_status: 'failed', sync_error: 'movement_refused' });
+		await row.incrementalPatch({
+			movement_ids: [movement.id],
+			sync_status: 'failed',
+			sync_attempts: 6,
+			sync_next_at: null,
+			sync_error: 'movement_refused',
+		});
+		return { session, row, movement };
+	}
+	it('posts the closure once and ends synced after the movement is accepted', async () => {
+		const { row, movement } = await deadLettered();
+		await retryMovement(db, movement.id);
+		http.post.mockImplementation(async (url) => ({
+			data:
+				url === 'movements'
+					? serverMovementRow(movement.getLatest().toJSON())
+					: { ...row.getLatest().toJSON(), findings: {} },
+		}));
+		await drain();
+		await drain();
+		expect(http.post.mock.calls.map(([url]) => url)).toEqual(['movements', 'closures']);
+		expect(movement.getLatest().sync_status).toBe('synced');
+		expect(row.getLatest().toJSON()).toMatchObject({
+			sync_status: 'synced',
+			synced_rows_at: expect.any(String),
+		});
+	});
+	it('leaves the closure pending and unsent until the movement syncs', async () => {
+		const { row, movement } = await deadLettered();
+		await retryMovement(db, movement.id);
+		expect(row.getLatest().toJSON()).toMatchObject({
+			sync_status: 'pending',
+			sync_attempts: 0,
+			sync_next_at: null,
+			sync_error: null,
+		});
+		await movement.incrementalPatch({ sync_next_at: Date.now() + 60000 });
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		expect(row.getLatest().toJSON()).toMatchObject({
+			sync_status: 'pending',
+			synced_rows_at: null,
+		});
+	});
+	it('leaves a failed closure that does not list the retried movement alone', async () => {
+		const { session, row, movement } = await deadLettered();
+		const other = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '1',
+			reason: '',
+			actor: 7,
+		});
+		await other.incrementalPatch({ sync_status: 'failed', sync_error: 'movement_refused' });
+		await row.incrementalPatch({ movement_ids: [other.id] });
+		await retryMovement(db, movement.id);
+		expect(row.getLatest().toJSON()).toMatchObject({
+			sync_status: 'failed',
+			sync_attempts: 6,
+			sync_error: 'movement_refused',
+		});
+	});
+	it('leaves a synced closure that lists the retried movement synced and unsent', async () => {
+		const { row, movement } = await deadLettered();
+		await row.incrementalPatch({ sync_status: 'synced', sync_error: null });
+		await retryMovement(db, movement.id);
+		expect(row.getLatest().sync_status).toBe('synced');
+		http.post.mockImplementation(async () => ({
+			data: serverMovementRow(movement.getLatest().toJSON()),
+		}));
+		await drain();
+		await drain();
+		expect(http.post.mock.calls.map(([url]) => url)).toEqual(['movements']);
+		expect(row.getLatest().sync_status).toBe('synced');
+	});
+	it('fails the closure again by the existing path when the movement is refused again', async () => {
+		const { row, movement } = await deadLettered();
+		await retryMovement(db, movement.id);
+		http.post.mockRejectedValue({
+			response: { status: 403, data: { code: 'movement_refused_again' } },
+		});
+		await drain();
+		expect(movement.getLatest().toJSON()).toMatchObject({
+			sync_status: 'failed',
+			sync_error: 'movement_refused_again',
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({ sync_status: 'pending', sync_attempts: 1 });
+		for (let attempt = 2; attempt <= 6; attempt++) {
+			await row.incrementalPatch({ sync_next_at: null });
+			await drain();
+		}
+		expect(http.post.mock.calls.map(([url]) => url)).toEqual(['movements']);
+		expect(row.getLatest().toJSON()).toMatchObject({
+			sync_status: 'failed',
+			sync_attempts: 6,
+			sync_next_at: null,
+			sync_error: 'movement_refused_again',
+		});
+	});
+});
 it('resubmits the current closure with re-adopted perpetual totals', async () => {
 	const { session, row } = await closure();
 	await session.incrementalPatch({

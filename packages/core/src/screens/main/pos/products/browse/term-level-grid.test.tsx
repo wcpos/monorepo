@@ -136,6 +136,7 @@ jest.mock('../deal-stack', () => ({
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
 	useDealCards: () => null,
+	useDealBackStyle: () => ({}),
 }));
 // The list renders every row it is handed, wrapped as its cells are (with the cell style the
 // grid asks for), and an end-reached is a scroll on it.

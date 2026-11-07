@@ -61,7 +61,10 @@ export function ProductRow({
 	const variable = product.type === 'variable';
 	const variation = product.type === 'variation';
 	const editable = !readOnly && (variation ? caps.canEditVariations : caps.canEditProducts);
-	const source = resolveImageSrc(product);
+	// A product carries `images`; a variation carries `image`.
+	const source = variation
+		? resolveImageSrc(product as EngineRecord<'variations'>['payload'])
+		: (product as EngineRecord<'products'>['payload']).images?.[0]?.src;
 	const { uri, error } = useImageAttachment(record, source ?? '');
 	const range = variable
 		? getVariablePrices(product.meta_data, {

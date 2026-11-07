@@ -186,6 +186,37 @@ test('publishes the canonical receipt shape the display template reads', () => {
 	);
 });
 
+test('keeps the store logo through the display snapshot', () => {
+	// The real mapReceiptData and formatReceiptData run here (no mocks), so the
+	// templates' `{{#store.logo}}` guard sees the URL Pro advertised.
+	const store = mockStore as typeof mockStore & { display?: Record<string, unknown> };
+	store.display = {
+		contract: 1,
+		signaling: '/wcpos/v2/display',
+		logo: 'https://shop.test/logo.png',
+	};
+	try {
+		withPayload({ line_items: [line] });
+		render(<CustomerDisplaySnapshotSource />);
+
+		expect(mockPublish).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				action: 'cart.updated',
+				payload: expect.objectContaining({
+					order: expect.objectContaining({
+						store: expect.objectContaining({
+							name: 'Main Street',
+							logo: 'https://shop.test/logo.png',
+						}),
+					}),
+				}),
+			})
+		);
+	} finally {
+		delete store.display;
+	}
+});
+
 test('still publishes when the runtime has no Intl currency formatter', () => {
 	// formatMoney falls back to "<code> <amount>"; the build must not throw
 	// during POS boot (the 2026-09-03 regression) and must not go idle.

@@ -22,7 +22,8 @@
       "distribution": "internal",
       "developmentClient": true,
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "resourceClass": "large"
       },
       "ios": {
         "simulator": true

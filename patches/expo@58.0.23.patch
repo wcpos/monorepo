@@ -1,8 +1,8 @@
 diff --git a/types/react-native-web.d.ts b/types/react-native-web.d.ts
-index 1fc21a2..342a298 100644
+index bbf8566..342a298 100644
 --- a/types/react-native-web.d.ts
 +++ b/types/react-native-web.d.ts
-@@ -11,95 +11,6 @@ declare module 'react-native' {
+@@ -11,97 +11,6 @@ declare module 'react-native' {
      className?: string;
    }
  
@@ -35,6 +35,8 @@ index 1fc21a2..342a298 100644
 -    backgroundOrigin?: 'border-box' | 'content-box' | 'padding-box';
 -    /** @platform web */
 -    clip?: string;
+-    /** @platform web */
+-    cursor?: string;
 -    /** @platform web */
 -    gridAutoColumns?: string;
 -    /** @platform web */
@@ -86,7 +88,7 @@ index 1fc21a2..342a298 100644
 -    /** @platform web */
 -    transitionTimingFunction?: string | Function | (string | Function)[];
 -    /** @platform web */
--    userSelect?: string;
+-    userSelect?: 'auto' | 'text' | 'none' | 'contain' | 'all';
 -    /** @platform web */
 -    visibility?: string;
 -    /** @platform web */
@@ -98,7 +100,7 @@ index 1fc21a2..342a298 100644
    /**
     * Text
     */
-@@ -112,107 +23,6 @@ declare module 'react-native' {
+@@ -114,107 +23,6 @@ declare module 'react-native' {
      lang?: string;
    }
  
@@ -178,7 +180,7 @@ index 1fc21a2..342a298 100644
 -    /** @platform web */
 -    transitionDelay?: string | string[];
 -    /** @platform web */
--    transitionDuration?: string | string[];
+-    transitionDuration?: string | string[] | number;
 -    /** @platform web */
 -    transitionProperty?: string | string[];
 -    /** @platform web */
@@ -206,7 +208,7 @@ index 1fc21a2..342a298 100644
    /**
     * Pressable
     */
-@@ -226,9 +36,6 @@ declare module 'react-native' {
+@@ -228,9 +36,6 @@ declare module 'react-native' {
        | React.ReactNode
        | ((state: PressableStateCallbackType) => React.ReactNode)
        | undefined;

@@ -72,6 +72,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: ({ name }: { name: string }) => <div data-testid={`saved-${name}`} />,
 	useSavedName: () => mockSavedName,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
 		return { flush: mockFlush };

@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-math';
 import { rememberedReaders } from '@wcpos/query/store-local';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { getDriver } from '../../../../services/payment-drivers/registry';
@@ -9,6 +11,8 @@ import { getTerminalPaymentsService } from '../../../../services/terminal-paymen
 import { deviceTransports } from '../../pos/checkout/tender/tiles';
 
 import type { ReaderInfo } from '../../../../services/payment-drivers/types';
+
+const cardReadersLogger = getLogger(['wcpos', 'settings', 'card-readers']);
 
 /** A scan in progress or finished for one method: the found readers, or why it stopped. */
 export type ReaderScan = {
@@ -172,6 +176,20 @@ export function useReaderActions() {
 			await rememberedReaders(storeDB).forget(method.id);
 		});
 	}, [pendingForget, run, storeDB]);
+	/** This till pays with a cloud reader: the memory checkout reads (no transport: not a device). */
+	const choose = React.useCallback(
+		(method: PaymentMethodDescriptor, reader: { id: string; label: string }) =>
+			rememberedReaders(storeDB)
+				.set(method.id, { id: reader.id, label: reader.label })
+				.catch((error: unknown) =>
+					cardReadersLogger.error('Card reader choice could not be saved', {
+						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+						showToast: true,
+						context: { methodId: method.id, error: getErrorMessage(error) },
+					})
+				),
+		[storeDB]
+	);
 	/** Dev-only simulated-reader controls run through the same error line as everything else. */
 	const runDev = React.useCallback(
 		(method: PaymentMethodDescriptor, operation: () => Promise<void>) =>
@@ -191,6 +209,7 @@ export function useReaderActions() {
 		askForget,
 		cancelForget,
 		confirmForget,
+		choose,
 		runDev,
 	};
 }

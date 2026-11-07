@@ -3,6 +3,7 @@ import {
 	KNOWN_CAPTURE_MODES,
 	type PaymentMethodDescriptor,
 	type PaymentTransport,
+	serverHardware,
 } from '@wcpos/order-math';
 
 import { getDriver } from '../../../../../services/payment-drivers/registry';
@@ -35,51 +36,58 @@ export type TileDisabledReason =
 	| 'no_readers'
 	| { type: 'reader_in_use'; number: string };
 
+/**
+ * The cloud readers checkout pays with: the `server` hardware while the primary connection is
+ * `server`. A secondary connection becomes a row with the native slice (wcpos/roadmap#113).
+ */
+export function primaryServerHardware(method: PaymentMethodDescriptor | null | undefined) {
+	return method?.capture.mode === 'server' ? serverHardware(method) : null;
+}
+
 type ReadersInUse = ReadonlyMap<string, { orderUuid: string; orderNumber: string }>;
 export function selectableReaders(
 	method: PaymentMethodDescriptor | null,
 	readersInUse: ReadersInUse = new Map(),
 	currentOrderUuid?: string
 ) {
-	const hardware = method?.capture.hardware;
-	const lockToDefault = Boolean(
-		method?.capture.mode === 'server' &&
-		hardware &&
-		'readers' in hardware &&
-		hardware.lock_to_default
-	);
-	const readers =
-		method?.capture.mode === 'server' && hardware && 'readers' in hardware
-			? hardware.readers
-					.filter(
-						(reader) =>
-							reader.status === 'online' &&
-							(!lockToDefault || reader.id === hardware.default_reader)
-					)
-					.map((reader) => {
-						const holder = readersInUse.get(reader.id);
-						return {
-							id: reader.id,
-							label: reader.label,
-							isDefault: reader.id === hardware.default_reader || reader.default,
-							inUseBy: holder && holder.orderUuid !== currentOrderUuid ? holder.orderNumber : null,
-						};
-					})
-			: [];
-	return { readers, lockToDefault };
+	const hardware = primaryServerHardware(method);
+	const lockToDefault = Boolean(hardware?.lock_to_default);
+	const readers = hardware
+		? hardware.readers
+				.filter(
+					(reader) =>
+						reader.status === 'online' && (!lockToDefault || reader.id === hardware.default_reader)
+				)
+				.map((reader) => {
+					const holder = readersInUse.get(reader.id);
+					return {
+						id: reader.id,
+						label: reader.label,
+						isDefault: reader.id === hardware.default_reader || reader.default,
+						inUseBy: holder && holder.orderUuid !== currentOrderUuid ? holder.orderNumber : null,
+					};
+				})
+		: [];
+	// `only`: the store has exactly one reader, whatever its status, so no memory could name another.
+	return { readers, lockToDefault, only: (hardware?.readers.length ?? 0) === 1 };
 }
 
 /** The till's last confirmed choice wins unless the store has locked its default. */
 export function initialReaderId(
 	readers: readonly ReturnType<typeof selectableReaders>['readers'][number][],
 	lockToDefault: boolean,
-	remembered: string | null
+	remembered: string | null,
+	only = false
 ): string | null {
 	if (lockToDefault) return readers.find((reader) => reader.isDefault)?.id ?? null;
+	const usable = readers.filter((reader) => reader.inUseBy === null);
+	// Remember over configure: a store whose ONLY reader is online and free needs no choice, and no
+	// memory loaded later could name another. Never a fallback among several readers: that would
+	// pick another counter's reader while this till's own is busy or offline.
 	return (
-		readers.find((reader) => reader.id === remembered && reader.inUseBy === null)?.id ??
-		readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ??
-		null
+		usable.find((reader) => reader.id === remembered)?.id ??
+		usable.find((reader) => reader.isDefault)?.id ??
+		(only && readers.length === 1 && readers[0].inUseBy === null ? readers[0].id : null)
 	);
 }
 

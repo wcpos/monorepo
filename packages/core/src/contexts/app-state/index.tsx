@@ -39,7 +39,8 @@ export interface AppState extends HydrationContext {
 	updateAppState: (updates: Partial<HydrationContext>) => void;
 	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
 	logout: () => Promise<void>;
-	switchStore: (store: ReadonlyStoreRecord) => Promise<void>;
+	/** Resolves false only when the target store's session is incomplete (AUTH131 already told the cashier). */
+	switchStore: (store: ReadonlyStoreRecord) => Promise<boolean>;
 }
 
 /**
@@ -189,10 +190,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	}, [clearStoreSession, state.userDB, state.wpCredentials]);
 
 	const switchStore = React.useCallback(
-		async (store: ReadonlyStoreRecord): Promise<void> => {
+		async (store: ReadonlyStoreRecord): Promise<boolean> => {
 			const current = await state.appState!.get('current');
 			if (store.localID === current?.storeID) {
-				return;
+				return true;
 			}
 
 			let sessionData;
@@ -209,11 +210,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 						wpCredentialsID: current?.wpCredentialsID,
 						storeID: store.localID ?? undefined,
 					});
-					return;
+					return false;
 				}
 				throw error;
 			}
 			updateAppState(toHydrationContext(sessionData));
+			return true;
 		},
 		[state.appState, state.userDB, updateAppState]
 	);
