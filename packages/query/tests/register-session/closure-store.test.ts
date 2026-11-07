@@ -12,6 +12,7 @@ import { readClosure, readRegister } from '@wcpos/query/register-session';
 import {
 	backToSelling,
 	closeSession,
+	findOpenSession,
 	openSession,
 	recordMovement,
 	refreshClosureRow,
@@ -777,5 +778,207 @@ it('persists count details on close and clears them on back to selling', async (
 		count_note: null,
 		count_denominations: null,
 		approved_counted: null,
+	});
+});
+
+describe('a refused close retried with revise (#2016, #3304)', () => {
+	const sale = (uuid: string, sessionId: string, amount: string) => ({
+		uuid,
+		payload: {
+			meta_data: [
+				{ key: '_wcpos_session', value: sessionId },
+				{ key: '_wcpos_completions', value: [{ session: sessionId }] },
+				{
+					key: '_wcpos_payments',
+					value: {
+						schema: 1,
+						payments: [
+							{
+								id: uuid,
+								session_id: sessionId,
+								kind: 'cash',
+								method_id: 'cash',
+								status: 'captured',
+								amount,
+								refunded_amount: '0',
+							},
+						],
+					},
+				},
+			],
+		},
+	});
+	const register = async () => (await readRegister(userDB))?.sites.site.registers?.register;
+	/** The first close is written, the cashier abandons it, and the session sells again. */
+	async function abandoned() {
+		const input = await seed();
+		const first = await writeClosure(input);
+		await backToSelling(db, input.session.id);
+		return { input, first };
+	}
+	const reclose = (id: string, cash = '150') =>
+		closeSession(db, id, { counted: { cash }, closedBy: 7 });
+
+	// Revert writeClosure's revise branch: the retry returns the first close's period unchanged.
+	it('a sale after the abandon reaches the retried closure and the perpetual counts it once', async () => {
+		const { input, first } = await abandoned();
+		const session = await reclose(input.session.id);
+		const row = await writeClosure({
+			...input,
+			session,
+			orders: [...input.orders, sale('late-sale', session.id, '25')],
+			revise: true,
+		});
+		expect(row.toJSON()).toMatchObject({
+			id: first.id,
+			number: 1,
+			period_sales_total: '105.0000',
+			perpetual_sales_total: '105.0000',
+			perpetual_refunds_total: '10.0000',
+			order_ids: ['order', 'late-sale'],
+			// The held session is no more synced than the pending one the first close counted.
+			unsynced_count: 6,
+			sync_status: 'pending',
+		});
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(await register()).toMatchObject({
+			last_closure_number: 1,
+			perpetual_sales_total: '105.0000',
+			perpetual_refunds_total: '10.0000',
+		});
+	});
+
+	it('a cash movement after the abandon reaches the retried closure and its expected cash', async () => {
+		const { input } = await abandoned();
+		const paidIn = await recordMovement(db, {
+			sessionId: input.session.id,
+			type: 'paid_in',
+			amount: '40',
+			reason: '',
+			actor: 7,
+		});
+		const session = await reclose(input.session.id);
+		const row = await writeClosure({
+			...input,
+			session,
+			movements: await db.cash_movements.find().exec(),
+			revise: true,
+		});
+		expect(row.movement_ids).toContain(paidIn.id);
+		expect(row.toJSON()).toMatchObject({
+			till_expected: { cash: '195.0000' },
+			variance: { cash: '-45.0000' },
+			sync_status: 'pending',
+		});
+	});
+
+	it('a failed closure retried with a corrected count comes back pending with that count', async () => {
+		const { input, first } = await abandoned();
+		await first.incrementalPatch({ sync_status: 'failed', sync_error: 'refused' });
+		const session = await reclose(input.session.id, '160');
+		const row = await writeClosure({ ...input, session, counted: '160', revise: true });
+		expect(row.toJSON()).toMatchObject({
+			counted: { cash: '160' },
+			variance: { cash: '5.0000' },
+			sync_status: 'pending',
+			sync_error: null,
+		});
+	});
+
+	it.each(['synced', 'superseded'] as const)(
+		'revise leaves a %s closure and the register as they are',
+		async (status) => {
+			const { input, first } = await abandoned();
+			await first.incrementalPatch({ sync_status: status });
+			const before = first.getLatest().toJSON();
+			const registerBefore = await register();
+			const session = await reclose(input.session.id, '160');
+			const row = await writeClosure({
+				...input,
+				session,
+				counted: '160',
+				orders: [...input.orders, sale('late-sale', session.id, '25')],
+				revise: true,
+			});
+			expect(row.toJSON()).toEqual(before);
+			expect(await register()).toEqual(registerBefore);
+		}
+	);
+
+	it.each(['pending', 'failed'] as const)(
+		'without revise (the recovery call) a %s closure is unchanged',
+		async (status) => {
+			const { input, first } = await abandoned();
+			await first.incrementalPatch({ sync_status: status });
+			const before = first.getLatest().toJSON();
+			const session = await reclose(input.session.id, '160');
+			const row = await writeClosure({
+				...input,
+				session,
+				counted: '160',
+				otherTenders: {},
+				movements: [],
+				orders: [],
+			});
+			expect(row.toJSON()).toEqual(before);
+			expect(await register()).toMatchObject({ perpetual_sales_total: '80.0000' });
+		}
+	);
+
+	// Keeping the snapshot shows the first close's figures on the closure pane after a retry.
+	it('keeps the print markers and drops the receipt snapshot of the first close', async () => {
+		const { input, first } = await abandoned();
+		await first.incrementalPatch({
+			printed_at: '2026-09-16T18:00:00.000Z',
+			print_count: 2,
+			printed_number: 1,
+			receipt_snapshot: '{"old":true}',
+		});
+		const session = await reclose(input.session.id);
+		const row = await writeClosure({
+			...input,
+			session,
+			orders: [...input.orders, sale('late-sale', session.id, '25')],
+			revise: true,
+		});
+		expect(row.toJSON()).toMatchObject({
+			period_sales_total: '105.0000',
+			printed_at: '2026-09-16T18:00:00.000Z',
+			print_count: 2,
+			printed_number: 1,
+		});
+		expect(row.toJSON().receipt_snapshot).toBeUndefined();
+	});
+
+	// Revert closeSession's hold: the status POST goes out and the outbox sends the old closure.
+	it('closeSession holds a close back while its closure is unaccepted, and only then', async () => {
+		const { input, first } = await abandoned();
+		expect(input.session.toJSON()).toMatchObject({ status: 'closed', sync_status: 'pending' });
+		expect((await reclose(input.session.id)).toJSON()).toMatchObject({
+			status: 'closed',
+			pending_status: 'closed',
+			sync_status: 'failed',
+		});
+		await backToSelling(db, input.session.id);
+		await first.incrementalPatch({ sync_status: 'synced' });
+		expect((await reclose(input.session.id)).sync_status).toBe('pending');
+	});
+
+	// Revert the refused-window check: a sale attaches to a session the store is counting.
+	it('no sale attaches to an abandoned refused close while the store is counting it', async () => {
+		const { input, first } = await abandoned();
+		const session = await db.register_sessions.findOne(input.session.id).exec();
+		await session!.incrementalPatch({ server_status: 'counting' });
+		await expect(findOpenSession(db, 'register', true)).rejects.toThrow(
+			'register_session_not_open'
+		);
+		await first.incrementalPatch({ sync_status: 'synced' });
+		expect((await findOpenSession(db, 'register', true))?.id).toBe(session!.id);
+	});
+	it('an offline abandon with no closure keeps selling', async () => {
+		const { session } = await seed();
+		await backToSelling(db, session.id);
+		await session.getLatest().incrementalPatch({ server_status: 'counting' });
+		expect((await findOpenSession(db, 'register', true))?.id).toBe(session.id);
 	});
 });

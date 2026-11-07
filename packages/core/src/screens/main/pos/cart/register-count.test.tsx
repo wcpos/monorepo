@@ -70,6 +70,9 @@ let count_note: string | null = null;
 let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
+let mockRefusedClose = false;
+let mockCounted: Record<string, string> | null = null;
+let mockLastClosure: Record<string, unknown> | null = null;
 let figuresPending = false;
 let blind = false,
 	approval_required = false,
@@ -91,10 +94,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			approved_counted,
 			count_note,
 			count_denominations,
+			counted: mockCounted,
 		},
 		binding: { registerName: 'Front' },
 		expected: { cash: expectedCash, card: '20' },
 		unsyncedCount,
+		refusedClose: mockRefusedClose,
+		lastClosure: mockLastClosure,
 		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),
@@ -132,6 +138,9 @@ beforeEach(() => {
 	count_note = null;
 	count_denominations = null;
 	unsyncedCount = 3;
+	mockRefusedClose = false;
+	mockCounted = null;
+	mockLastClosure = null;
 	figuresPending = false;
 	blind = false;
 	approval_required = false;
@@ -534,4 +543,106 @@ it('restores the note and denomination tiles when the count pane reopens', () =>
 	fireEvent.click(screen.getByTestId('count-denominations'));
 	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('2');
 	expect(screen.getByTestId('den-tile-5-badge').textContent).toBe('1');
+});
+
+describe('#2016: a refused close', () => {
+	const refused = (status: string) => {
+		mockSessionStatus = status;
+		mockRefusedClose = true;
+		mockCounted = { cash: '40.00' };
+		mockLastClosure = {
+			id: 's',
+			counted: { cash: '40.00' },
+			breakdowns: {
+				variance_note: 'Short a note',
+				denominations: [{ value: '20', pieces: 2, amount: '40' }],
+			},
+		};
+	};
+	it.each(['closed', 'counting'])(
+		'at %s shows the band with the count kept and no Retry; the footer is the retry',
+		async (status) => {
+			refused(status);
+			render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+			const band = screen.getByTestId('register-panel-refused-close').textContent;
+			expect(band).toContain('The store refused this close. Your count is kept.');
+			expect(band).not.toContain('Sales are blocked while this register is being counted');
+			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+			expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.00');
+			expect(screen.getByTestId('count-close').textContent).toBe('Retry');
+			await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+			expect(closeSession).toHaveBeenCalledWith(
+				expect.objectContaining({ counted: { cash: '40.00' }, note: 'Short a note' })
+			);
+		}
+	);
+	it('asks for the manager before a retry over the threshold', async () => {
+		refused('counting');
+		varianceThreshold = '5';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByTestId('count-close').textContent).toBe('Approve & close');
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+	it('back from a refused close already at open does not abandon it again', async () => {
+		refused('open');
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+		expect(backToSelling).not.toHaveBeenCalled();
+	});
+	it('shows no band at a count the store has not refused', () => {
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+	});
+	it('back to selling abandons a refused close that reads closed', async () => {
+		refused('closed');
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+		expect(backToSelling).toHaveBeenCalledTimes(1);
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+	const pane = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />;
+	const shown = () => {
+		fireEvent.click(screen.getByTestId('count-denominations'));
+		return {
+			amount: (screen.getByTestId('count-amount') as HTMLInputElement).value,
+			note: (screen.getByTestId('count-note') as HTMLInputElement).value,
+			twenties: screen.queryByTestId('den-tile-20-badge')?.textContent ?? null,
+		};
+	};
+	const kept = { amount: '40.00', note: 'Short a note', twenties: '2' };
+	it('starts the pane from the kept count, note and pieces', () => {
+		refused('counting');
+		render(pane());
+		expect(shown()).toEqual(kept);
+	});
+	it('fills a pane that was open before the refusal landed', () => {
+		const { rerender } = render(pane());
+		refused('counting');
+		rerender(pane());
+		expect(shown()).toEqual(kept);
+	});
+	it('leaves the pane alone when the close was not refused', () => {
+		refused('counting');
+		mockRefusedClose = false;
+		mockCounted = { cash: '12.00' };
+		const { rerender } = render(pane());
+		rerender(pane());
+		expect(shown()).toEqual({ amount: '12.00', note: '', twenties: '0' });
+	});
+	it('Retry sends the count as edited from the kept one', async () => {
+		refused('counting');
+		render(pane());
+		enter('41.50');
+		fireEvent.change(screen.getByTestId('count-note'), { target: { value: 'Recounted' } });
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(closeSession).toHaveBeenCalledWith(
+			expect.objectContaining({ counted: { cash: '41.50' }, note: 'Recounted' })
+		);
+	});
 });

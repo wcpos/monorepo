@@ -552,6 +552,61 @@ export async function mintClosureNumber(
 	});
 	return number;
 }
+/**
+ * Rewrite this closure's reservation with a refused close's revised figures (#3304), keeping
+ * its number. An applied period comes out of the register's totals and the revised one goes
+ * in, in the same write, so a crash before the row is rewritten leaves the period counted once.
+ */
+export async function reviseClosureReservation(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	closure: DeepReadonly<ClosureRow>
+): Promise<DeepReadonly<ClosureRow>> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	let row: DeepReadonly<ClosureRow> = closure;
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const register = bucket.registers?.[registerId] ?? {};
+		const reservation = register.closure_reservation;
+		if (!reservation || reservation.row.id !== closure.id)
+			throw new Error('closure_reservation_missing');
+		const old = reservation.applied ? reservation.row : null;
+		const sales =
+			toMinor(register.perpetual_sales_total ?? '0', 4) -
+			(old ? toMinor(old.period_sales_total, 4) : 0) +
+			toMinor(closure.period_sales_total, 4);
+		const refunds =
+			toMinor(register.perpetual_refunds_total ?? '0', 4) -
+			(old ? toMinor(old.period_refunds_total, 4) : 0) +
+			toMinor(closure.period_refunds_total, 4);
+		row = {
+			...closure,
+			number: reservation.row.number,
+			number_retried: reservation.row.number_retried ?? false,
+			perpetual_sales_total: fromMinor(sales, 4),
+			perpetual_refunds_total: fromMinor(refunds, 4),
+		};
+		const registers = {
+			...bucket.registers,
+			[registerId]: {
+				...register,
+				closure_reservation: { row, applied: reservation.applied },
+				// An unapplied reservation leaves the totals to `advancePerpetual`, which applies it once.
+				...(reservation.applied
+					? {
+							perpetual_sales_total: row.perpetual_sales_total,
+							perpetual_refunds_total: row.perpetual_refunds_total,
+						}
+					: {}),
+			},
+		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+	return row;
+}
 export async function advancePerpetual(
 	userDB: UserDatabase,
 	siteUuid: string,
