@@ -32,6 +32,7 @@ import {
 	mintClosureNumber,
 	mintUuid,
 	readRegister,
+	reviseClosureReservation,
 } from './register-document';
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
@@ -52,6 +53,9 @@ export class RegisterSessionRequiredError extends Error {
 	}
 }
 export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed' } } as const;
+/** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
+const unaccepted = (closure: { sync_status: string } | null | undefined) =>
+	!!closure && !['synced', 'superseded'].includes(closure.sync_status);
 /**
  * The open session for a register, or throws. A read: it changes nothing, so an action guard
  * may call it before `next`. `requireOpenSession` returns only its id.
@@ -69,6 +73,12 @@ export async function findOpenSession(
 		})
 		.exec();
 	if (!session) throw new RegisterSessionRequiredError();
+	// A refused close abandoned while the store still counts it (#2016): no sale attaches to a
+	// session the store is counting. An offline abandon, with no closure written, keeps selling.
+	if (session.pending_status === 'open' && session.server_status === 'counting') {
+		const closure = await registerCollections(storeDB).closures?.findOne(session.id).exec();
+		if (unaccepted(closure)) throw new RegisterSessionRequiredError();
+	}
 	return session;
 }
 export async function requireOpenSession(
@@ -163,10 +173,15 @@ export const closeSession = async (
 		denominations?: { value: string; pieces: number }[];
 	}
 ) => {
-	const sessions = registerCollections(storeDB).register_sessions;
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
 	const session = await sessions.findOne(id).exec();
 	if (!session) throw new RegisterSessionRequiredError();
+	// A retry of a refused close (#3304) is held out of the outbox: once the store has the session
+	// closed, the outbox sends the closure as it stands, so the close must not become sendable
+	// until the closure is rewritten. A crash here leaves a refused close the cashier can retry.
+	const held = unaccepted(await closures?.findOne(id).exec());
 	return transition(sessions, id, 'closed', {
+		...(held ? { sync_status: 'failed' as const } : {}),
 		business_day:
 			session.business_day ||
 			format(
@@ -216,6 +231,33 @@ export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: 
 			.map((closure) => closure.incrementalPatch({ ...pending }))
 	);
 	return retried;
+}
+// A retry's held close (#3302): the status POST reads these; a refresh mid-retry overwrites them.
+const HELD_CLOSE_FIELDS = [
+	'status',
+	'status_at',
+	'closed_at_gmt',
+	'counted',
+	'count_note',
+	'count_denominations',
+	'closed_by',
+	'closure_id',
+	'business_day',
+] as const;
+type HeldClose = Partial<Pick<RegisterSessionRow, (typeof HELD_CLOSE_FIELDS)[number]>>;
+/**
+ * Put a refused close back in the outbox (#2016), as `retryMovement` does for cash: the same
+ * status POST with the same count, once the cashier has dealt with what the store objected to.
+ */
+export async function requeueClose(storeDB: RegisterStoreDatabase, id: string, close?: HeldClose) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const row = await sessions.findOne(id).exec();
+	if (!row) throw new Error('invalid_retry_target');
+	const closure = await closures.findOne(id).exec();
+	if (closure?.sync_status === 'failed') await closure.incrementalPatch({ ...pending });
+	const held = HELD_CLOSE_FIELDS.filter((field) => close?.[field] !== undefined);
+	const restored = Object.fromEntries(held.map((field) => [field, close![field]]));
+	return row.incrementalPatch({ ...restored, ...pending, pending_status: 'closed' });
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,
@@ -312,8 +354,11 @@ export async function writeClosure({
 	timezone = 'device',
 	note = '',
 	denominations = [],
+	revise = false,
 }: {
 	timezone?: string;
+	/** Rewrite an unaccepted closure with these figures (a refused close's retry, #3304). */
+	revise?: boolean;
 	storeDB: RegisterStoreDatabase;
 	userDB: UserDatabase;
 	siteUuid: string;
@@ -353,7 +398,7 @@ export async function writeClosure({
 }) {
 	const closures = registerCollections(storeDB).closures;
 	const existing = await closures.findOne(session.id).exec();
-	if (existing) {
+	if (existing && (!revise || !unaccepted(existing))) {
 		await advancePerpetual(userDB, siteUuid, session.register_id, {
 			sales: existing.period_sales_total,
 			refunds: existing.period_refunds_total,
@@ -501,7 +546,10 @@ export async function writeClosure({
 		perpetual_sales_total: '0',
 		perpetual_refunds_total: '0',
 		unsynced_count:
-			dirtyOrders.length + dirtyMovements.length + (session.sync_status === 'pending' ? 1 : 0),
+			dirtyOrders.length +
+			dirtyMovements.length +
+			// A held retry (#3304) is `failed` until its closure is rewritten: still unsynced.
+			(['pending', 'failed'].includes(session.sync_status) ? 1 : 0),
 		unsynced_total: sum([
 			...dirtyMovements.map((row) => row.amount),
 			...dirtyOrders
@@ -586,22 +634,41 @@ export async function writeClosure({
 		movement_ids: entries.map((row) => row.id),
 		...pending,
 	};
-	// Reserve the snapshot in the same atomic document write as its number. A failed insert
-	// or restarted till reuses this exact snapshot; the existing outbox remains the only sender.
-	await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
-	const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
-		.closure_reservation!.row;
 	let row: ClosureDocument;
-	try {
-		row = await closures.insert({
+	if (existing) {
+		// A refused close's retry (#3304) rewrites its closure under the same number, reservation
+		// first: a crash before the row leaves the session held, and the next retry takes the
+		// reserved period out of the totals, so the period is still counted once.
+		const reserved = await reviseClosureReservation(userDB, siteUuid, session.register_id, {
+			...draft,
+			printed_at: existing.printed_at,
+			print_count: existing.print_count,
+			printed_number: existing.printed_number,
+		});
+		// The receipt snapshot holds the old figures, and the closure pane prefers it.
+		row = await existing.incrementalModify(({ receipt_snapshot: _snapshot, ...previous }) => ({
+			...previous,
 			...reserved,
 			order_ids: [...reserved.order_ids],
 			movement_ids: [...reserved.movement_ids],
-		});
-	} catch (error) {
-		const winner = await closures.findOne(reserved.id).exec();
-		if (!winner) throw error;
-		row = winner;
+		}));
+	} else {
+		// Reserve the snapshot in the same atomic document write as its number. A failed insert
+		// or restarted till reuses this exact snapshot; the existing outbox remains the only sender.
+		await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
+		const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
+			.closure_reservation!.row;
+		try {
+			row = await closures.insert({
+				...reserved,
+				order_ids: [...reserved.order_ids],
+				movement_ids: [...reserved.movement_ids],
+			});
+		} catch (error) {
+			const winner = await closures.findOne(reserved.id).exec();
+			if (!winner) throw error;
+			row = winner;
+		}
 	}
 	await advancePerpetual(userDB, siteUuid, session.register_id, {
 		sales: row.period_sales_total,

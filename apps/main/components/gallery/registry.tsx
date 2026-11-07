@@ -36,6 +36,8 @@ import { stories as input } from '@wcpos/components/input/gallery';
 import { stories as navItem } from '@wcpos/components/nav-item/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
+import { IconSetProvider } from '@wcpos/components/icon';
+import { iconSetForTheme } from '@wcpos/components/lib/themes';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
 import { stories as select } from '@wcpos/components/select/gallery';
@@ -131,15 +133,20 @@ const isTheme = (theme: string | undefined): theme is Theme =>
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
+	const selected = isTheme(theme) ? theme : 'light';
 	// Sync the URL's external theme selection before painting the cells.
 	React.useLayoutEffect(() => {
-		Uniwind.setTheme(isTheme(theme) ? theme : 'light');
-	}, [theme]);
+		Uniwind.setTheme(selected);
+	}, [selected]);
 	return (
-		<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
-			{children}
-			<PortalHost />
-		</ScrollView>
+		// The icon set is a rule of the theme (decision 45); the app's provider is not mounted here,
+		// so the page supplies it, and a cell is shot with the glyphs the merchant sees.
+		<IconSetProvider set={iconSetForTheme(selected)}>
+			<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
+				{children}
+				<PortalHost />
+			</ScrollView>
+		</IconSetProvider>
 	);
 }
 

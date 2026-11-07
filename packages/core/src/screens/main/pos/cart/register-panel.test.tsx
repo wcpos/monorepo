@@ -44,6 +44,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: mockRegisters }),
 }));
 let mockOverdue = false;
+let mockRefusedClose = false;
 let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
 jest.mock('../../reports/closures/closure-panel', () => ({
@@ -96,6 +97,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		countingHere: mockCountingHere,
+		refusedClose: mockRefusedClose,
 		overdue: mockOverdue,
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
@@ -406,6 +408,7 @@ const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButton
 beforeEach(() => {
 	mockPhone = false;
 	currentLoaded = true;
+	mockRefusedClose = false;
 	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
@@ -1391,3 +1394,82 @@ it.each(['scene', null] as const)(
 		expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
 	}
 );
+
+describe('#2016: a refused close', () => {
+	it.each(['closed', 'counting'])(
+		'at %s lands on the count with the band; the footer is the retry, not the band',
+		(status) => {
+			currentSession = { ...currentSession, status, counted: { cash: '155' } };
+			mockRefusedClose = true;
+			render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('count-back')).toBeTruthy();
+			expect(screen.getByTestId('register-panel-refused-close').textContent).toContain(
+				'register.close_refused'
+			);
+			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+			expect(startCounting).not.toHaveBeenCalled();
+		}
+	);
+	it('at open shows the band on the register pane; Retry starts counting and opens the count', async () => {
+		currentSession = { ...currentSession, counted: {} };
+		mockRefusedClose = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-close-register')).toBeTruthy();
+		expect(screen.getByTestId('register-panel-refused-close').textContent).toContain(
+			'register.close_refused'
+		);
+		expect(startCounting).not.toHaveBeenCalled();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-retry-close')));
+		expect(startCounting).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		expect(mockCloseSession).not.toHaveBeenCalled();
+	});
+	it.each(['counting', 'closed'])(
+		'a refusal landing on the register pane at %s: Retry opens the count without counting again',
+		async (status) => {
+			const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+			currentSession = { ...currentSession, status, counted: { cash: '155' } };
+			mockRefusedClose = true;
+			view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('register-panel-close-register')).toBeTruthy();
+			await act(async () => fireEvent.click(screen.getByTestId('register-panel-retry-close')));
+			expect(screen.getByTestId('count-back')).toBeTruthy();
+			expect(startCounting).not.toHaveBeenCalled();
+			expect(mockCloseSession).not.toHaveBeenCalled();
+		}
+	);
+	it('a refusal landing on the written moment takes the till back to the count', async () => {
+		const view = render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+		await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+		fireEvent.change(screen.getByTestId('count-amount'), { target: { value: '155' } });
+		fireEvent.click(screen.getByTestId('count-close'));
+		await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		view.rerender(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('closure-done')).toBeNull();
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		expect(screen.getByTestId('register-panel-refused-close')).toBeTruthy();
+	});
+	it('a retry that writes while the last refusal still reads shows the written moment', async () => {
+		currentSession = { ...currentSession, status: 'counting', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+		fireEvent.click(screen.getByTestId('count-close'));
+		await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+		currentSession = { ...currentSession, status: 'closed' };
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('closure-done')).toBeTruthy();
+	});
+	it('× on a refused close that reads closed abandons it to selling', async () => {
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		const onOpenChange = jest.fn();
+		render(<RegisterPanel open onOpenChange={onOpenChange} />);
+		fireEvent.click(screen.getByTestId('panel-x'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(mockBackToSelling).toHaveBeenCalledTimes(1);
+	});
+});

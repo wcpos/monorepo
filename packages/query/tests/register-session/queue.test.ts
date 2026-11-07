@@ -11,9 +11,11 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 import { readRegister } from '@wcpos/query/register-session';
 
 import {
+	backToSelling,
 	closeSession,
 	openSession,
 	recordMovement,
+	requeueClose,
 	retryMovement,
 	startCounting,
 	voidMovement,
@@ -1679,4 +1681,328 @@ it('stores the ISO opening time when it adopts a server row in the server form',
 	expect((await db.register_sessions.findOne('served').exec())?.opened_at_gmt).toBe(
 		'2026-09-16T09:05:07.000Z'
 	);
+});
+
+describe('#2016: a refused close keeps its count', () => {
+	const kept = { cash: '105' };
+	it.each([
+		['null', null],
+		['undefined', undefined],
+		['{}', {}],
+	])('the refresh never empties a local count with a %s server count', async (_, counted) => {
+		for (const sync_status of ['synced', 'failed', 'pending'] as const) {
+			const row = await open();
+			await row.incrementalPatch({
+				status: 'counting',
+				server_status: 'counting',
+				counted: kept,
+				sync_status,
+			});
+			const server: Record<string, unknown> = {
+				...serverListRow(row.getLatest().toJSON()),
+				status: 'counting',
+				counted,
+			};
+			if (counted === undefined) delete server.counted;
+			await adoptSessionRow(db.register_sessions, server as never);
+			expect(row.getLatest().counted).toEqual(kept);
+		}
+	});
+	it('a server count still wins on the refresh', async () => {
+		const row = await open();
+		await row.incrementalPatch({ server_status: 'open', counted: kept, sync_status: 'synced' });
+		await adoptSessionRow(db.register_sessions, {
+			...serverListRow(row.getLatest().toJSON()),
+			counted: { cash: '99' },
+		} as never);
+		expect(row.getLatest().counted).toEqual({ cash: '99' });
+	});
+	it.each([
+		['null', null, kept],
+		['{}', {}, kept],
+		['a server count', { cash: '99' }, { cash: '99' }],
+	])('the acknowledgement keeps the local count against %s', async (_, counted, result) => {
+		const row = await open();
+		await row.incrementalPatch({ server_status: 'open', counted: kept, sync_status: 'synced' });
+		await startCounting(db, row.id);
+		const server: Record<string, unknown> = serverListRow(row.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockResolvedValue({ data: { ...server, status: 'counting', counted } });
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(`sessions/${row.id}/status`, expect.anything());
+		expect(row.getLatest().toJSON()).toMatchObject({ status: 'counting', sync_status: 'synced' });
+		expect(row.getLatest().counted).toEqual(result);
+	});
+	it('a refused close recovered from the server row keeps its count and its closure row', async () => {
+		const { session, row } = await closure();
+		await session.getLatest().incrementalPatch({ server_status: 'counting' });
+		http.post.mockRejectedValue({
+			response: { status: 403, data: { code: 'wcpos_session_transition_refused' } },
+		});
+		await drain();
+		expect(session.getLatest().sync_status).toBe('failed');
+		const server = serverListRow({
+			...session.getLatest().toJSON(),
+			status: 'counting',
+			counted: null,
+			closure_id: null,
+		});
+		http.get
+			.mockResolvedValueOnce({ data: [server] })
+			.mockResolvedValueOnce({ data: { ...server, movements: [] } });
+		await refreshSessions({ registerId: 'register', http, storeDB: db });
+		expect(session.getLatest().toJSON()).toMatchObject({
+			status: 'counting',
+			sync_status: 'synced',
+			counted: { cash: '100' },
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({ sync_status: 'pending', id: session.id });
+	});
+	it('requeueClose puts a refused close back in the outbox with the same count', async () => {
+		const { session, row } = await closure();
+		await session.getLatest().incrementalPatch({
+			server_status: 'counting',
+			sync_status: 'failed',
+			sync_attempts: 1,
+			sync_error: 'wcpos_session_transition_refused',
+		});
+		await row.getLatest().incrementalPatch({ sync_status: 'failed' });
+		await requeueClose(db, session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({
+			status: 'closed',
+			pending_status: 'closed',
+			sync_status: 'pending',
+			sync_attempts: 0,
+			sync_error: null,
+		});
+		expect(row.getLatest().sync_status).toBe('pending');
+		expect(await db.closures.count().exec()).toBe(1);
+		const server: Record<string, unknown> = serverListRow(session.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockResolvedValue({ data: { ...server, status: 'closed' } });
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'closed', counted: { cash: '100' } })
+		);
+		await expect(requeueClose(db, 'missing')).rejects.toThrow('invalid_retry_target');
+	});
+	it('requeueClose sets the pending close again when the server row cleared it', async () => {
+		const { session } = await closure();
+		await session.getLatest().incrementalPatch({ pending_status: null, sync_status: 'failed' });
+		await requeueClose(db, session.id);
+		expect(session.getLatest().pending_status).toBe('closed');
+	});
+});
+
+describe('#2016: retry and abandon keep the closure row', () => {
+	/** (a) The close came back refused and no refresh reached the store. */
+	async function refusedClose() {
+		const { session, row } = await closure();
+		await session.getLatest().incrementalPatch({
+			server_status: 'counting',
+			sync_status: 'failed',
+			sync_error: 'wcpos_session_transition_refused',
+		});
+		return { session, row, before: row.getLatest().toJSON() };
+	}
+	/** (b) The store's row reopened the session at counting. */
+	async function reopenedClose() {
+		const refused = await refusedClose();
+		await adoptSessionRow(
+			db.register_sessions,
+			serverListRow({
+				...refused.session.getLatest().toJSON(),
+				status: 'counting',
+				counted: null,
+				closure_id: null,
+			}) as never
+		);
+		expect(refused.session.getLatest().toJSON()).toMatchObject({
+			status: 'counting',
+			sync_status: 'synced',
+			pending_status: null,
+		});
+		return refused;
+	}
+	/** The hook's Retry (#3304): close again, held; rewrite the closure; then requeue the close. */
+	async function retry(id: string, counted = '100') {
+		const closed = await closeSession(db, id, { counted: { cash: counted } });
+		expect(closed.sync_status).toBe('failed');
+		const written = await writeClosure({
+			storeDB: db,
+			userDB,
+			siteUuid: 'site',
+			session: closed.toJSON(true),
+			counted,
+			otherTenders: {},
+			movements: await db.cash_movements.find().exec(),
+			orders: [],
+			revise: true,
+		});
+		await requeueClose(db, id);
+		return written;
+	}
+	const retried = { status: 'closed', pending_status: 'closed', sync_status: 'pending' };
+	/** One closure row, under its number, rewritten for this close and back in the outbox. */
+	const rewritten = (
+		before: { id: string; number: number },
+		closedAt: string | null | undefined
+	) => ({
+		id: before.id,
+		number: before.number,
+		closed_at: closedAt,
+		counted: { cash: '100' },
+		sync_status: 'pending',
+	});
+
+	it('Retry on a refused close rewrites the same closure row and requeues the close', async () => {
+		const { session, row, before } = await refusedClose();
+		const written = await retry(session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
+		expect(written.id).toBe(session.id);
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
+	});
+	it('Retry on a reopened refused close closes it again and rewrites the same closure row', async () => {
+		const { session, row, before } = await reopenedClose();
+		const written = await retry(session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
+		expect(written.id).toBe(session.id);
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
+	});
+	// Revert closeSession's hold or writeClosure's revise: the old closure goes to the store.
+	it('a held retry sends nothing; once rewritten and requeued it sends the new figures', async () => {
+		const { session } = await refusedClose();
+		const paidIn = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await paidIn.incrementalPatch({ sync_status: 'synced' });
+		await closeSession(db, session.id, { counted: { cash: '120' } });
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		await session.getLatest().incrementalPatch({ server_status: 'counting' });
+		const written = await retry(session.id, '120');
+		const server: Record<string, unknown> = serverListRow(session.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data: url === 'closures' ? { ...written.toJSON(), ...body } : { ...server, status: 'closed' },
+		}));
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'closed', counted: { cash: '120' } })
+		);
+		expect(http.post).toHaveBeenCalledWith(
+			'closures',
+			expect.objectContaining({
+				id: session.id,
+				counted: { cash: '120' },
+				till_expected: { cash: '130.0000' },
+			})
+		);
+		expect(written.getLatest().sync_status).toBe('synced');
+	});
+	it.each([
+		['a refused close', refusedClose],
+		['a reopened refused close', reopenedClose],
+	])('Back to selling abandons %s and keeps the closure row and its count', async (_, shape) => {
+		const { session, row, before } = await shape();
+		await backToSelling(db, session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({
+			status: 'open',
+			pending_status: 'open',
+			sync_status: 'pending',
+			counted: { cash: '100' },
+		});
+		expect(row.getLatest().toJSON()).toEqual(before);
+		expect(before.counted).toEqual({ cash: '100' });
+	});
+	// Requeue from the latest row, or restore no field: the refresh's row goes out, or nothing does.
+	it('a refresh during a retry does not lose the close', async () => {
+		const { session } = await reopenedClose();
+		const closed = await closeSession(db, session.id, { counted: { cash: '120' } });
+		expect(closed.sync_status).toBe('failed');
+		// A refresh lands mid-retry: the store still holds the session at counting, with the old count.
+		await adoptSessionRow(
+			db.register_sessions,
+			serverListRow({
+				...session.getLatest().toJSON(),
+				status: 'counting',
+				counted: { cash: '100' },
+				closure_id: null,
+			}) as never
+		);
+		expect(session.getLatest().toJSON()).toMatchObject({
+			status: 'counting',
+			sync_status: 'synced',
+			counted: { cash: '100' },
+		});
+		const written = await writeClosure({
+			storeDB: db,
+			userDB,
+			siteUuid: 'site',
+			session: closed.toJSON(true),
+			counted: '120',
+			otherTenders: {},
+			movements: [],
+			orders: [],
+			revise: true,
+		});
+		await requeueClose(db, session.id, closed.toMutableJSON());
+		expect(session.getLatest().toJSON()).toMatchObject({
+			...retried,
+			counted: { cash: '120' },
+			closure_id: session.id,
+		});
+		const server: Record<string, unknown> = serverListRow(session.getLatest().toJSON());
+		delete server.created_at_gmt;
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data: url === 'closures' ? { ...written.toJSON(), ...body } : { ...server, status: 'closed' },
+		}));
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'closed', counted: { cash: '120' } })
+		);
+	});
+	it('Retry after a refused abandon closes the same session with one closure row', async () => {
+		const { session, row, before } = await reopenedClose();
+		await backToSelling(db, session.id);
+		http.post.mockRejectedValue({
+			response: { status: 403, data: { code: 'wcpos_session_transition_refused' } },
+		});
+		await drain();
+		expect(http.post).toHaveBeenCalledWith(
+			`sessions/${session.id}/status`,
+			expect.objectContaining({ status: 'open' })
+		);
+		expect(session.getLatest().toJSON()).toMatchObject({ status: 'open', sync_status: 'failed' });
+		// The next refresh: the store still holds the session at counting.
+		await adoptSessionRow(
+			db.register_sessions,
+			serverListRow({
+				...session.getLatest().toJSON(),
+				status: 'counting',
+				counted: null,
+				closure_id: null,
+			}) as never
+		);
+		const written = await retry(session.id);
+		expect(session.getLatest().toJSON()).toMatchObject({ ...retried, counted: { cash: '100' } });
+		expect(written.id).toBe(session.id);
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(row.getLatest().toJSON()).toMatchObject(
+			rewritten(before, session.getLatest().closed_at_gmt)
+		);
+	});
 });
