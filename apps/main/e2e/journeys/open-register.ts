@@ -57,11 +57,12 @@ export function cashInput(figure: string): string {
 /**
  * The cashier sheet, opened by the avatar. The phone mounts a register bar per tab, both
  * "visible", one off-screen: press the avatar that is on screen (forced, as in
- * register-captures.spec.ts, as the bars stack).
+ * register-captures.spec.ts, as the bars stack). `doorId` is a testID the open sheet shows: the
+ * drawer shows only with a bound register.
  */
-export async function openCashierSheet(page: Page): Promise<void> {
+export async function openCashierSheet(page: Page, doorId = 'user-sheet-drawer'): Promise<void> {
 	const width = page.viewportSize()?.width ?? 0;
-	const door = page.getByTestId('user-sheet-drawer');
+	const door = page.getByTestId(doorId);
 	// A toast can eat the press, and stays while hovered: retry with the mouse moved off it, but
 	// not while the door shows (that would close the sheet).
 	await expect(async () => {
