@@ -1128,6 +1128,13 @@ export async function navigateToPage(
 export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
 	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
+	await selectEnglishLanguage(page);
+	await navigateToPage(page, 'pos');
+	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
+}
+
+/** Choose English in the language combobox of the open General settings screen. */
+export async function selectEnglishLanguage(page: Page): Promise<void> {
 	await page.getByTestId('language-select').click();
 	const combobox = page.getByTestId('language-select-content');
 	await expect(combobox).toBeVisible({ timeout: 10_000 });
@@ -1136,8 +1143,6 @@ export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
 	await expect(option).toBeVisible({ timeout: 10_000 });
 	await option.click();
 	await expect(combobox).toBeHidden({ timeout: 10_000 });
-	await navigateToPage(page, 'pos');
-	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
 }
 
 export interface HydrateAuthenticatedPageOptions {
