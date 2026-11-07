@@ -17,6 +17,7 @@ import {
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
 	mintServerPayment,
+	PAID_UNITS_META_KEY,
 	paidUnitsMeta,
 	partitionVoidableRows,
 	type PaymentMethodDescriptor,
@@ -1008,8 +1009,14 @@ export function useTenderFlow(
 					paymentId && Object.keys(state.picked).length > 0
 						? { ...stored, [paymentId]: state.picked }
 						: stored;
-				return Object.keys(allocations).length > 0
-					? [...(splitMeta ?? []), paidUnitsMeta(allocations)]
+				if (Object.keys(allocations).length > 0)
+					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
+				// A refused completing attempt can leave its units on the order: cleared like a stale split.
+				const stale = (order.getLatest().payload.meta_data ?? []).some(
+					({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
+				);
+				return stale
+					? [...(splitMeta ?? []), { key: PAID_UNITS_META_KEY, value: null }]
 					: splitMeta;
 			};
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance

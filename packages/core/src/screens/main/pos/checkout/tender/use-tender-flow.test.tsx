@@ -1615,6 +1615,17 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
+		mockPayload.meta_data = [{ key: '_wcpos_paid_units', value: '{"dead":{"l1":1}}' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.extraMeta).toEqual(
+			expect.arrayContaining([{ key: '_wcpos_paid_units', value: null }])
+		);
+	});
+
 	it('a picked payment without rounding mints an id but writes no fee', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
