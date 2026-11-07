@@ -2908,6 +2908,7 @@
 	"pos_checkout.order_open_send_again": "The order is open again at the store. Send the invoice again if the customer still needs it.",
 	"register.close_register_title": "Close {name}",
 	"register.cash_counted_float_included": "Cash counted, float included",
+	"register.tap_amount_to_change": "Tap the amount to change it",
 	"register.expected_line": "Expected {amount}",
 	"register.short": "short",
 	"register.over": "over",
