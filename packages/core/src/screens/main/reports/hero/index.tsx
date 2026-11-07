@@ -393,37 +393,66 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		</View>
 	);
 }
-function LeftOutChip({ className }: { className?: string }) {
+function useLeftOutCount(): number {
+	const { allOrders } = useReportsData();
+	const included = useIncludedStatus();
+	const { unselectedRowIds } = useReportsSelection();
+	return allOrders.filter((order) => included(order) && unselectedRowIds[order.uuid]).length;
+}
+function LeftOutChip({ count, className }: { count: number; className?: string }) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
 	const { quantity } = useReportFormats(storeId);
 	const { setDetail } = useReportsScope();
-	const { allOrders } = useReportsData();
-	const included = useIncludedStatus();
-	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
-	const leftOut = allOrders.filter(
-		(order) => included(order) && unselectedRowIds[order.uuid]
-	).length;
-	return leftOut > 0 ? (
+	const { setUnselectedRowIds } = useReportsSelection();
+	return (
 		<Chip
 			className={className}
 			testID="hero-chip-left-out"
 			icon="cart"
 			on
-			label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
+			label={t('reports.orders_left_out', { count, n: quantity(count) })}
 			onClear={() => setUnselectedRowIds({})}
 			clearTestID="hero-chip-left-out-clear"
 			clearLabel={t('reports.put_them_back')}
 			onPress={() => setDetail('orders')}
 		/>
-	) : null;
+	);
+}
+function ChipsLayout({ phone, children }: { phone: boolean; children: React.ReactNode }) {
+	return phone ? (
+		<TileGrid columns={2} testID="hero-chips">
+			{children}
+		</TileGrid>
+	) : (
+		<View testID="hero-chips" className="flex-row flex-wrap gap-2">
+			{children}
+		</View>
+	);
+}
+function SettledChips({
+	phone,
+	cell,
+	children,
+}: {
+	phone: boolean;
+	cell?: string;
+	children: React.ReactNode;
+}) {
+	const count = useLeftOutCount();
+	return (
+		<ChipsLayout phone={phone}>
+			{children}
+			{count > 0 && <LeftOutChip count={count} className={cell} />}
+		</ChipsLayout>
+	);
 }
 export function SalesScopeChips({ settled }: { settled: boolean }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { statusMode, setStatusMode } = useReportsScope();
 	const cell = phone ? 'self-stretch' : undefined;
-	const chips = (
+	const shared = (
 		<>
 			<React.Suspense
 				fallback={<View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />}
@@ -442,17 +471,14 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 					{ value: 'all', label: t('reports.every_status'), hint: t('reports.every_status_hint') },
 				]}
 			/>
-			{settled && <LeftOutChip className={cell} />}
 		</>
 	);
-	return phone ? (
-		<TileGrid columns={2} testID="hero-chips">
-			{chips}
-		</TileGrid>
+	return settled ? (
+		<SettledChips phone={phone} cell={cell}>
+			{shared}
+		</SettledChips>
 	) : (
-		<View testID="hero-chips" className="flex-row flex-wrap gap-2">
-			{chips}
-		</View>
+		<ChipsLayout phone={phone}>{shared}</ChipsLayout>
 	);
 }
 export function SalesScope({ date, settled }: { date: React.ReactNode; settled: boolean }) {

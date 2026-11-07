@@ -649,6 +649,11 @@ it('on phone prints from an icon button and puts comparison above the chart togg
 	const chips = screen.getByTestId('hero-chips');
 	expect(strip.contains(chips)).toBe(true);
 	expect(chips.parentElement).toBe(strip);
+	const initialRows = Array.from(chips.children);
+	expect(initialRows.map((row) => row.children.length)).toEqual([2]);
+	expect(initialRows[0].children[0].contains(screen.getByTestId('hero-chip-cashier'))).toBe(true);
+	expect(initialRows[0].children[1].contains(screen.getByTestId('hero-chip-status'))).toBe(true);
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	fireEvent.click(screen.getByTestId('exclude'));
 	const rows = Array.from(chips.children);
 	expect(rows.map((row) => row.children.length)).toEqual([2, 2]);
@@ -656,6 +661,9 @@ it('on phone prints from an icon button and puts comparison above the chart togg
 	expect(rows[0].children[1].contains(screen.getByTestId('hero-chip-status'))).toBe(true);
 	expect(rows[1].children[0].contains(screen.getByTestId('hero-chip-left-out'))).toBe(true);
 	expect(rows[1].children[1].children.length).toBe(0);
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-clear'));
+	expect(Array.from(chips.children).map((row) => row.children.length)).toEqual([2]);
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	const compare = screen.getByTestId('hero-chip-compare');
 	expect(screen.getByTestId('reports-hero').contains(compare)).toBe(true);
 	expect(compare.parentElement!.nextElementSibling).toBe(screen.getByTestId('hero-chart-toggle'));
