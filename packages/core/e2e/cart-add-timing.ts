@@ -77,3 +77,29 @@ export async function observeCartAddWrite<T>(sequence: number | undefined, write
 		if (failed) cancelCartAddTiming(sequence);
 	}
 }
+
+// TEMP #3345 timing: add-stage stamps and a JS-thread stall probe, on the console route the
+// WCPOS_E2E_ENGINE lines use (apps/main/lib/e2e-engine-ledger.ts), so they reach logcat.txt and
+// app-console.log. This module is only required under EXPO_PUBLIC_WCPOS_E2E=1.
+function writeE2eLine(line: string) {
+	const hook = (globalThis as { nativeLoggingHook?: unknown }).nativeLoggingHook;
+	if (typeof hook === 'function') hook(line, 1);
+	else console.warn(line);
+}
+export function logAddStage(stage: string, recordId?: string) {
+	if (!isCartAddTimingEnabled()) return;
+	writeE2eLine(`WCPOS_E2E_ADD_STAGE ${JSON.stringify({ stage, recordId, at: Date.now() })}`);
+}
+let stallProbeStarted = false;
+export function startJsStallProbe() {
+	if (!isCartAddTimingEnabled() || stallProbeStarted) return;
+	stallProbeStarted = true;
+	let last = Date.now();
+	const handle = setInterval(() => {
+		const now = Date.now();
+		if (now - last > 300) writeE2eLine(`WCPOS_E2E_JS_STALL ${now - last} at=${now}`);
+		last = now;
+	}, 100);
+	(handle as { unref?: () => void }).unref?.();
+}
+startJsStallProbe();

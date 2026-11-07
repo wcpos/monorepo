@@ -15,7 +15,12 @@ import {
 	type WriteOutcomeEvent,
 	type WriteSupersededEvent,
 } from './write-drain-lane';
-import { queueFor as defaultQueueFor, enqueueWriteIntent, type WriteIntent } from './write-intents';
+import {
+	queueFor as defaultQueueFor,
+	e2eAddStage, // TEMP #3345 timing
+	enqueueWriteIntent,
+	type WriteIntent,
+} from './write-intents';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineRequest } from '../transport/engine-transport';
@@ -141,6 +146,8 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	});
 	return {
 		write: async (intent) => {
+			const stage = (name: string) => e2eAddStage(name, intent.collection, intent.recordId); // TEMP #3345 timing
+			stage('write:enter'); // TEMP #3345 timing
 			deps.assertUsable();
 			if (!writeFacetFor(intent.collection)) {
 				throw new Error(
@@ -152,11 +159,14 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 			// the OUTGOING store's queue mid-transition. FIFO ops are quick; wait
 			// them out rather than reject a caller-initiated durable write.
 			await deps.settled('write');
+			stage('write:settled'); // TEMP #3345 timing
 			return deps.manager.runGuarded(async (bound) => {
+				stage('write:runGuarded'); // TEMP #3345 timing
 				const database = deps.databaseFor(bound.scopeId);
 				if (!database) throw new Error('write: scope database not open');
 				let result: WriteReceipt | null = null;
 				const wrote = await bound.guardWrite(async () => {
+					stage('write:guardWrite'); // TEMP #3345 timing
 					result = await enqueueWriteIntent({
 						db: database,
 						intent,
@@ -165,7 +175,9 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						observe: deps.diagnostics,
 						canCoalesce: true,
 					});
+					stage('write:enqueueWriteIntent-returned'); // TEMP #3345 timing
 					await onQueueChanged(database);
+					stage('write:onQueueChanged'); // TEMP #3345 timing
 				});
 				if (wrote === 'dropped' || result === null) {
 					throw new Error('write: scope moved during enqueue — retry against the settled scope');

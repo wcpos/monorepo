@@ -32,6 +32,14 @@ type CouponLine = NonNullable<EngineRecord<'orders'>['payload']['coupon_lines']>
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 const kinds = { line_items: 'line_item', fee_lines: 'fee', shipping_lines: 'shipping' } as const;
+
+// TEMP #3345 timing
+const addStage = (stage: string, recordId?: string) => {
+	if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1')
+		(
+			require('../../../../../e2e/cart-add-timing') as typeof import('../../../../../e2e/cart-add-timing')
+		).logAddStage(stage, recordId);
+};
 /**
  * Provides the queued mutation used to add a cart line to the current order.
  *
@@ -162,11 +170,13 @@ export const useAddItemToOrder = () => {
 				};
 				payload = settleIntent(order, orderJSON);
 			}
+			addStage('use-add-item-to-order:before-birthOrder', recordId); // TEMP #3345 timing
 			const savedOrder = await birthOrder(runtime, {
 				recordId,
 				payload,
 				orphan: orphanedSkeleton,
 			});
+			addStage('use-add-item-to-order:after-birthOrder', recordId); // TEMP #3345 timing
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},

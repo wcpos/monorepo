@@ -227,6 +227,17 @@ export function queueFor(
 	return queue;
 }
 
+// TEMP #3345 timing: sync-engine reads no app env, so it keys on the flag the WCPOS_E2E_ENGINE
+// ledger sets under EXPO_PUBLIC_WCPOS_E2E=1, and writes on that ledger's console route
+// (apps/main/lib/e2e-engine-ledger.ts).
+export function e2eAddStage(stage: string, collection: string, recordId: string) {
+	const host = globalThis as { __wcposE2eEngineLedger?: true; nativeLoggingHook?: unknown };
+	if (host.__wcposE2eEngineLedger !== true) return;
+	const line = `WCPOS_E2E_ADD_STAGE ${JSON.stringify({ stage, collection, recordId, at: Date.now() })}`;
+	if (typeof host.nativeLoggingHook === 'function') host.nativeLoggingHook(line, 1);
+	else console.warn(line);
+}
+
 /**
  * Build + durably enqueue one intent against the ACTIVE scope database, and
  * mark the local record dirty (`local.pendingMutationIds` bookkeeping — the
@@ -257,6 +268,7 @@ export async function enqueueWriteIntent(input: {
 	/** The pending row this enqueue coalesced INTO and replaced — its id is now orphaned. */
 	supersededMutationId?: string;
 }> {
+	e2eAddStage('enqueueWriteIntent:enter', input.intent.collection, input.intent.recordId); // TEMP #3345 timing
 	const requested: WriteIntent =
 		input.intent.operation !== 'delete'
 			? {
@@ -385,6 +397,7 @@ export async function enqueueWriteIntent(input: {
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
 		const doc = (await collection.findOne(requested.recordId).exec()) as MutationDoc | null;
+		e2eAddStage(`enqueueWriteIntent:read-queue-and-resident:${attempt}`, name, recordId); // TEMP #3345 timing
 		const stored = doc
 			? (doc.toJSON() as {
 					sync?: { revision?: string };
@@ -758,6 +771,7 @@ export async function enqueueWriteIntent(input: {
 			} else {
 				await queue.enqueue(mutation);
 			}
+			e2eAddStage('enqueueWriteIntent:queued', name, recordId); // TEMP #3345 timing
 
 			// Dirty-mark the resident record (create may target a record inserted by the
 			// caller beforehand; absent is fine for a payload-only create). Enqueue is
@@ -800,6 +814,7 @@ export async function enqueueWriteIntent(input: {
 			}
 
 			committed = true;
+			e2eAddStage('enqueueWriteIntent:return', name, recordId); // TEMP #3345 timing
 			return {
 				mutationId: mutation.mutationId,
 				recordId: mutation.recordId,

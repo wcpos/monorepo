@@ -23,6 +23,14 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
+// TEMP #3345 timing
+const addStage = (stage: string, recordId?: string) => {
+	if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1')
+		(
+			require('../../../../../e2e/cart-add-timing') as typeof import('../../../../../e2e/cart-add-timing')
+		).logAddStage(stage, recordId);
+};
+
 type ProductDocument = import('@wcpos/query').ProductPayload;
 
 /** A refused add during a count: one notice, shared id so repeated taps update it in place. */
@@ -64,6 +72,7 @@ export const useAddProduct = () => {
 			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
+			addStage('use-add-product:enter'); // TEMP #3345 timing
 			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
 			if (await readCounting()) {
 				showCountingNotice(t);
@@ -159,6 +168,7 @@ export const useAddProduct = () => {
 					site: 'useAddProduct',
 				});
 				newLineItem = computed.line as typeof newLineItem;
+				addStage('use-add-product:call-add-item-to-order', currentOrderRecord.uuid); // TEMP #3345 timing
 				const write = addItemToOrder('line_items', newLineItem);
 				success = await (timing ? timing.observeCartAddWrite(timingSequence, write) : write);
 				if (success === false) return false;

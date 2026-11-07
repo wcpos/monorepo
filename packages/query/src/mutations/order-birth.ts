@@ -37,6 +37,15 @@ export async function findBirthState(manager: QueryManager, uuid: string) {
 	return hasQueuedOrAcknowledgedCreate(resident) ? { born: order } : { orphan: order };
 }
 
+// TEMP #3345 timing: the WCPOS_E2E_ENGINE console route (apps/main/lib/e2e-engine-ledger.ts).
+const addStage = (stage: string, recordId: string) => {
+	if (process.env.EXPO_PUBLIC_WCPOS_E2E !== '1') return;
+	const line = `WCPOS_E2E_ADD_STAGE ${JSON.stringify({ stage, recordId, at: Date.now() })}`;
+	const hook = (globalThis as { nativeLoggingHook?: unknown }).nativeLoggingHook;
+	if (typeof hook === 'function') hook(line, 1);
+	else console.warn(line);
+};
+
 export async function birthOrder(
 	manager: QueryManager,
 	{
@@ -52,6 +61,10 @@ export async function birthOrder(
 	const resident = orphan
 		? await patchEngineResident({ manager, collection: 'orders', recordId, changes })
 		: await insertEngineResident({ manager, collection: 'orders', recordId, payload: changes });
+	addStage(
+		orphan ? 'birthOrder:after-patch-resident' : 'birthOrder:after-insert-resident',
+		recordId
+	); // TEMP #3345 timing
 	const payload = resident.toMutableJSON().payload as Record<string, unknown>;
 	// A guest sale has no email, stored locally as ''. wc/v3 rejects '' with
 	// rest_invalid_email (400), which dead-letters the CREATE and strands the
@@ -59,6 +72,7 @@ export async function birthOrder(
 	// use-push-document's pay path.
 	const billing = payload.billing as Record<string, unknown> | undefined;
 	if (billing?.email === '') delete billing.email;
+	addStage('birthOrder:before-engine-write', recordId); // TEMP #3345 timing
 	try {
 		await manager.engine.write({
 			collection: 'orders',
@@ -81,7 +95,9 @@ export async function birthOrder(
 		}
 		throw error;
 	}
+	addStage('birthOrder:after-engine-write', recordId); // TEMP #3345 timing
 	const savedOrder = resident as unknown as EngineRecord<'orders'>;
 	await removeTemporaryOrder(recordId);
+	addStage('birthOrder:after-remove-temporary-order', recordId); // TEMP #3345 timing
 	return savedOrder;
 }
