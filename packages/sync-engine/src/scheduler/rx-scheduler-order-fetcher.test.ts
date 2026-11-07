@@ -1367,43 +1367,67 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
-	it('fails targeted order tasks when Woo omits a requested order id', async () => {
+	// The guard itself (a dirty or pending resident survives) is the repository's and is pinned in
+	// engine-order-repository.delete-manifest.test.ts; this lane's contract is to hand the omitted
+	// ids and the FRESH pending set to that guarded call and to complete the task.
+	it.each([
+		{ label: 'hands an omitted order to the guarded removal', pendingIds: [] },
+		{ label: 'hands the pending set along with an omitted order', pendingIds: [uuidFor(456)] },
+	])('$label and completes while applying the returned order', async ({ pendingIds }) => {
+		const pending = new Set(pendingIds);
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+			removeDeletedOrders: vi.fn(
+				async (_ids: string[], _protectedIds?: ReadonlySet<string>) => undefined
+			),
 		};
-		const fetcher = vi.fn(async () =>
-			response([
-				{
-					id: 123,
-					date_modified_gmt: '2026-05-20T10:10:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
-				},
-			])
-		);
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
+			coverageRepository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 				writeCustomPullCheckpoint: vi.fn(async () => undefined),
 			},
-			fetcher,
+			pendingMutationOrderIds: async () => pending,
+			fetcher: async () =>
+				response([
+					{
+						id: 123,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
+					},
+				]),
 		});
 
-		await expect(
-			schedulerFetcher(
-				orderTask({
-					id: 'orders:ids:missing:on-demand',
-					requirementId: 'orders.missing',
-					queryKey: 'orders:ids:missing',
-					documentIds: ['woo-order:123', 'woo-order:456'],
-					remoteIds: [123, 456].map(remoteId),
-					limit: 2,
-					mode: 'on-demand',
-				})
-			)
-		).rejects.toThrow('Woo REST targeted order response missing requested order ids: 456');
-		expect(repository.upsertMany).not.toHaveBeenCalled();
+		const result = await schedulerFetcher(
+			orderTask({
+				id: 'orders:ids:missing:on-demand',
+				requirementId: 'orders.missing',
+				queryKey: 'orders:ids:missing',
+				documentIds: ['woo-order:123', 'woo-order:456'],
+				remoteIds: [123, 456].map(remoteId),
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(repository.removeDeletedOrders).toHaveBeenCalledExactlyOnceWith(['456'], pending);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[expect.objectContaining({ uuid: uuidFor(123), remoteId: '123' })],
+			expect.objectContaining({ source: 'pull' })
+		);
+		expect(result).toEqual({
+			taskId: 'orders:ids:missing:on-demand',
+			documentCount: 1,
+			requestCount: 1,
+			completed: true,
+			appliedRecordIds: ['123'],
+		});
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-order:123' }], complete: true })
+		);
 	});
 
 	it('fetches customer browser order query tasks through Woo REST filter descriptors', async () => {
