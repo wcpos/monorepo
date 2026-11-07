@@ -114,8 +114,7 @@ env:
                 index: 0
             - runFlow:
                 when:
-                  visible:
-                    id: "pos-tab-cart"
+                  true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
                 commands:
                   - tapOn:
                       id: "pos-tab-cart"

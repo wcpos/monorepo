@@ -1,11 +1,11 @@
 appId: com.wcpos.main.dev
 env:
-  # The lane's store. `next` (2.0) pairs only with the `next`-lane plugin on
-  # dev-next; dev-pro runs the released plugin, which the 2.0 app refuses with
-  # "Update the WooCommerce POS plugin on this site to continue" (local run
-  # 2026-09-30). A flow's env wins over `-e`, so this cannot be overridden
-  # from the command line — change it here when the lane changes.
-  STORE_URL: https://dev-next.wcpos.com
+  # The lane's store. Main tests dev-free and dev-pro and nothing else (owner
+  # ruling 2026-08-18, in deploy.yml); this suite is the pro lane. It must match
+  # E2E_STORE_URL in e2e-native.yml, which seeds that store. A flow's env wins
+  # over `-e`, so this cannot be overridden from the command line: change it
+  # here when the lane changes.
+  STORE_URL: https://dev-pro.wcpos.com
   E2E_USERNAME: demo
   E2E_PASSWORD: demo
 ---
