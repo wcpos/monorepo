@@ -64,6 +64,7 @@ let mockSession: {
 	loaded?: boolean;
 	countingHere?: boolean;
 	countingElsewhere?: boolean;
+	refusedClose?: boolean;
 	overdue?: boolean;
 } = {
 	session: null,
@@ -231,5 +232,60 @@ it.each([true, false])('mounts the receipt edge only when tear is %s', (tear) =>
 		}
 	} finally {
 		mockTear = false;
+	}
+});
+
+it('#2016: a refused close the store reopened at counting keeps the cart and asks for the count', () => {
+	const previous = mockSession;
+	mockSession = {
+		session: { id: 's', status: 'counting' },
+		sessionsOn: true,
+		countingHere: false,
+		refusedClose: true,
+	};
+	try {
+		render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('cart-table')).toBeTruthy();
+		expect(screen.queryByTestId('counting-elsewhere-card')).toBeNull();
+		expect(consumeRegisterPanelRequest()).toBe('count');
+	} finally {
+		mockSession = previous;
+		consumeRegisterPanelRequest();
+	}
+});
+
+it('#2016: a refused close back at open sells on and forces no pane', () => {
+	const previous = mockSession;
+	mockSession = {
+		session: { id: 's', status: 'open' },
+		sessionsOn: true,
+		countingHere: false,
+		refusedClose: true,
+	};
+	try {
+		render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('cart-table')).toBeTruthy();
+		expect(consumeRegisterPanelRequest()).toBeNull();
+	} finally {
+		mockSession = previous;
+		consumeRegisterPanelRequest();
+	}
+});
+
+it('#2016: a refusal after the till let the close go asks for the count again', () => {
+	const previous = mockSession;
+	const closed = { session: { id: 's', status: 'closed' }, sessionsOn: true };
+	mockSession = closed;
+	try {
+		const view = render(<OpenOrders isColumn />);
+		expect(consumeRegisterPanelRequest()).toBe('count');
+		mockSession = { session: null, sessionsOn: true };
+		view.rerender(<OpenOrders isColumn />);
+		mockSession = { ...closed, refusedClose: true };
+		view.rerender(<OpenOrders isColumn />);
+		expect(consumeRegisterPanelRequest()).toBe('count');
+	} finally {
+		mockSession = previous;
+		consumeRegisterPanelRequest();
 	}
 });

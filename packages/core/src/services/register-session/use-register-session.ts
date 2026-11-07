@@ -29,6 +29,7 @@ import {
 	recordLiveSession,
 	recordMovement,
 	RegisterSessionRequiredError,
+	requeueClose,
 	requireOpenSession,
 	retryMovement,
 	sessionRefreshRequests,
@@ -49,6 +50,9 @@ const logger = getLogger(['wcpos', 'registerSession']);
 // still close; the closure then carries the fallback and the parent arrives later.
 const REFUND_PARENT_WAIT_MS = 15_000;
 
+/** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
+const unacceptedIn = (id: string, closures?: { id: string; sync_status: string }[] | null) =>
+	!!closures?.some((row) => row.id === id && !['synced', 'superseded'].includes(row.sync_status));
 function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
 	return hasPendingLocalWork(record) || record.remoteId === null;
 }
@@ -173,13 +177,18 @@ export function useRegisterSession() {
 	const [accountingState] = React.useState(createSessionAccountingState);
 	const source = React.useMemo(() => {
 		const sessions$ = observeRegisterSessions(storeDB, binding.registerId);
+		const closures$ = observeRegisterClosures(storeDB, binding.registerId);
+		// `session`'s order, so a refused abandon's retry has its sales; unread closures count as none.
 		const accounting = observeSessionAccounting(
 			runtime.engine,
-			sessions$.pipe(
-				map((rows) =>
+			combineLatest([sessions$, closures$]).pipe(
+				map(([rows, closureRows]) =>
 					rows === null
 						? null
 						: (rows.active.find((row) => row.sync_status !== 'failed') ??
+							rows.active.find(
+								(row) => row.sync_status === 'failed' && unacceptedIn(row.id, closureRows)
+							) ??
 							rows.closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced'))
 				)
 			),
@@ -192,7 +201,7 @@ export function useRegisterSession() {
 						sessions$,
 						observeCashMovements(storeDB),
 						accounting.stream,
-						observeRegisterClosures(storeDB, binding.registerId),
+						closures$,
 					]).pipe(
 						map(([rows, entries, accounting, closureRows]) =>
 							rows && entries && accounting && closureRows
@@ -219,21 +228,41 @@ export function useRegisterSession() {
 		sessionsOn
 			? observed
 			: null;
+	const unacceptedClosure = (id: string) => unacceptedIn(id, data?.closureRows);
 	const session =
 		data?.active.find((row) => row.sync_status !== 'failed') ??
 		// Recover only a close this till made and never got acknowledged whose closure write
 		// was interrupted (closure_id stamped, no local closure row); imported closed history
 		// is synced and is never current, and a written closure needs no current session.
+		// #2016, the one exception: a refused close is not history until the store has accepted
+		// it or the cashier has abandoned it, so a refused (`failed`) close stays current. So does
+		// a session whose status POST was refused while its closure is unaccepted (a refused
+		// abandon), at whatever status it holds, until the next refresh.
+		data?.active.find((row) => row.sync_status === 'failed' && unacceptedClosure(row.id)) ??
 		data?.closed.find(
 			(row) =>
 				row.closure_id === row.id &&
 				row.sync_status !== 'synced' &&
-				!data.closureRows.some((closure) => closure.id === row.id)
+				(!data.closureRows.some((closure) => closure.id === row.id) ||
+					(row.sync_status === 'failed' && unacceptedClosure(row.id)))
 		) ??
 		null;
 	// Only an open session can be overdue; its opening fixes which close it is due at.
 	const openedAt = session?.status === 'open' ? session.opened_at_gmt : null;
 	usePastCloseClock(closeTime, openedAt, timezone);
+	/**
+	 * The store refused this till's close (#2016): the close came back `failed` and no refresh
+	 * has reached the store (a), or the session is at counting or open with this till's closure
+	 * still unaccepted (b): the store's row reopened it at counting, or the cashier went back to
+	 * selling, refused or not. A refused override is `approval_required`, not this.
+	 */
+	const refusedClose =
+		!!session &&
+		((session.status === 'closed' && session.sync_status === 'failed') ||
+			(['counting', 'open'].includes(session.status) &&
+				!session.approval_required &&
+				session.server_status !== 'closed' &&
+				unacceptedClosure(session.id)));
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
 	/**
 	 * Refused cash outlives the session it was recorded against. Scoping it to the current
@@ -352,7 +381,10 @@ export function useRegisterSession() {
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!live?.counting_here,
-		countingElsewhere: !!session && session.status === 'counting' && !live?.counting_here,
+		// The close cleared the count mark; a close the store refused is still this till's count.
+		countingElsewhere:
+			!!session && session.status === 'counting' && !live?.counting_here && !refusedClose,
+		refusedClose,
 		countingBy,
 		// The refresh clears the live record as the remote close lands; the marker outlives it.
 		closedElsewhere:
@@ -481,8 +513,10 @@ export function useRegisterSession() {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register_figures_pending');
+				// A retry of a refused close (#3304) closes again, so a corrected count reaches the
+				// status POST; closeSession holds it out of the outbox until the closure below is rewritten.
 				const closed =
-					session!.status === 'closed'
+					session!.status === 'closed' && session!.sync_status !== 'failed'
 						? session!
 						: await closeSession(storeDB, session!.id, {
 								...input,
@@ -582,7 +616,11 @@ export function useRegisterSession() {
 					movements: entries,
 					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
 					refundRecords,
+					revise: true,
 				});
+				// The closure now matches this close: let the outbox send both.
+				if (closed.sync_status === 'failed')
+					await requeueClose(storeDB, session!.id, closed.toMutableJSON());
 				await recordLiveSession(userDB, site.uuid!, closed.register_id, null);
 				recordRegisterFact({
 					kind: 'session-closed',

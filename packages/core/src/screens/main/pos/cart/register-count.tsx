@@ -4,6 +4,7 @@ import { Platform, ScrollView, View } from 'react-native';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Checkbox } from '@wcpos/components/checkbox';
 import {
 	DialogDescription,
 	DialogFooter,
@@ -23,10 +24,11 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
-import { fromMinor } from '@wcpos/order-math';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
@@ -36,6 +38,7 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ApproveSheet } from './approve-sheet';
+import { keptCount, RefusedCloseNotice } from './refused-close-notice';
 import { RegisterAmount } from './movement-sheet';
 import { denominations } from './register-count.denominations';
 import {
@@ -125,6 +128,9 @@ export function RegisterCount({
 		varianceThreshold,
 		unsyncedCount,
 		figuresPending,
+		refusedClose,
+		lastClosure,
+		movements,
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -160,6 +166,23 @@ export function RegisterCount({
 			Object.entries(session?.counted ?? {}).filter(([method]) => method !== 'cash')
 		)
 	);
+	// A refused close (#2016) starts from the count it kept, also when the refusal lands after the
+	// pane mounted: the close leaves no current session until the store answers.
+	const prefill = React.useEffectEvent(() => {
+		if (!session) return;
+		const kept = keptCount(session, lastClosure);
+		setCash(kept.counted.cash ?? '');
+		setOthers(
+			Object.fromEntries(Object.entries(kept.counted).filter(([method]) => method !== 'cash'))
+		);
+		if (kept.denominations)
+			setPieces(Object.fromEntries(kept.denominations.map(({ value, pieces }) => [value, pieces])));
+		if (kept.note !== undefined) noteForm.setValue('note', kept.note);
+	});
+	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply, often after mount; the kept count seeds editable state once per refusal, so it cannot be derived without overwriting the cashier's edits.
+		if (refusedClose) prefill();
+	}, [refusedClose]);
 	const [notesOpen, setNotesOpen] = React.useState(false);
 	const [tendersOpen, setTendersOpen] = React.useState(false);
 	const [approving, setApproving] = React.useState(false);
@@ -171,6 +194,29 @@ export function RegisterCount({
 		? fromMinor(denominationTotal(pieces, decimals), decimals)
 		: cash;
 	const valid = validAmount(amount, decimals);
+	// This session's cash the store refused: the closure records it as not on the server (#3271),
+	// and Close waits for the cashier to say so once. A refused no-sale moves no cash.
+	const refusedCash = movements.filter(
+		(row) => row.sync_status === 'failed' && Number(row.amount) > 0
+	);
+	const refusedTotal = fromMinor(
+		refusedCash.reduce((total, row) => total + toMinor(row.amount, 4), 0),
+		4
+	);
+	// Keyed by the refused rows, so a further refusal after the tick asks again.
+	const refusedKey = refusedCash
+		.map((row) => row.id)
+		.sort()
+		.join();
+	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
+	const acknowledged = refusedKey === '' || acknowledgedKey === refusedKey;
+	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : refusedKey);
+	// The sheet's confirm closes the session, so a refusal that lands while it is open sends the
+	// count back for a new tick.
+	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply; it lands while the sheet is open, so there is no event handler to close it from.
+		if (!acknowledged) setApproving(false);
+	}, [acknowledged]);
 	const variance = countVariance(amount, expected.cash ?? '0', decimals);
 	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
 	const bandClass = tone.band;
@@ -212,6 +258,8 @@ export function RegisterCount({
 			contentContainerClassName="gap-4 px-4 py-5"
 			keyboardShouldPersistTaps="handled"
 		>
+			{/* The footer is this pane's Retry: it sends the count as edited here. */}
+			{refusedClose && <RefusedCloseNotice />}
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			{/* The region: a blur leaving the field or a key for a target outside it collapses the keypad. */}
 			<View ref={regionRef} testID="count-entry" className="gap-4" onBlur={leaveRegion}>
@@ -400,6 +448,32 @@ export function RegisterCount({
 							/>
 						</View>
 					))}
+			{refusedCash.length > 0 && (
+				<Notice
+					tone="warning"
+					live={false}
+					testID="count-refused-cash"
+					title={t('register.refused_cash_title', { amount: format(Number(refusedTotal)) })}
+					description={t('register.refused_cash_body')}
+				>
+					{/* The row is the checkbox; the mark only draws its state. */}
+					<PressableSurface
+						testID="count-refused-cash-ack"
+						role="checkbox"
+						selected={acknowledged}
+						wash="none"
+						onPress={toggleAcknowledged}
+						className="min-h-ctl flex-row items-center gap-2"
+					>
+						<Checkbox
+							checked={acknowledged}
+							onCheckedChange={toggleAcknowledged}
+							className="pointer-events-none"
+						/>
+						<Text>{t('register.refused_cash_ack')}</Text>
+					</PressableSurface>
+				</Notice>
+			)}
 			{unsyncedCount > 0 && (
 				<Notice
 					tone="info"
@@ -442,8 +516,11 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							// A closed session awaiting its closure write is not one to reopen.
-							if (session?.status === 'counting') await actions.backToSelling();
+							// A closed session awaiting its closure write is not one to reopen; a close the
+							// store refused is (#2016): back to selling is its abandon, the count kept. One
+							// already back at open needs no second abandon.
+							if (session?.status === 'counting' || (refusedClose && session?.status !== 'open'))
+								await actions.backToSelling();
 							onBack();
 						})
 					}
@@ -460,12 +537,17 @@ export function RegisterCount({
 			<DialogFooter
 				size="lg"
 				intent={{
-					label: needsManager ? t('register.approve_and_close') : t('register.close_and_print'),
+					label: needsManager
+						? t('register.approve_and_close')
+						: refusedClose
+							? t('register.retry')
+							: t('register.close_and_print'),
 					testID: 'count-close',
 					loading: busy,
 					disabled:
 						!valid ||
 						figuresPending ||
+						!acknowledged ||
 						Object.values(others).some((value) => value !== '' && !validAmount(value, decimals)),
 					onPress: () => {
 						if (!blind && valid && overThreshold(variance, decimals, varianceThreshold))

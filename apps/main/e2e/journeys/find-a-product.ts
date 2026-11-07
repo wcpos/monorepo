@@ -123,7 +123,7 @@ type WcProduct = {
 	variations?: number[];
 	meta_data?: { key: string; value: unknown }[];
 };
-type WcCategory = { id: number; name: string; slug: string; count: number };
+export type WcCategory = { id: number; name: string; slug: string; count: number };
 type Options = { headers: Record<string, string>; params: Record<string, string> };
 
 /** A name a cashier would type: no undecoded entity, never an E2E probe's (made mid-run). */
@@ -134,6 +134,18 @@ const onPos = (product: WcProduct) =>
 	!product.meta_data?.some(
 		({ key, value }) => key === '_pos_visibility' && value === 'online_only'
 	);
+
+/** The most products a searched name may share, so its tile shows without scrolling. */
+const DISTINCT_NAME_MAX = 4;
+
+/** Step 3's candidates: populated, typeable, smallest first, `uncategorized` last, at most 10. */
+export function categoryCandidates(categories: WcCategory[]): WcCategory[] {
+	const isDefault = (c: WcCategory) => (c.slug === 'uncategorized' ? 1 : 0);
+	return categories
+		.filter((c) => c.count > 0 && typeable(c.name))
+		.sort((left, right) => isDefault(left) - isDefault(right) || left.count - right.count)
+		.slice(0, 10);
+}
 
 /** The outlets' scan settings, read the way `money-oracle-sale.ts` reads the store document. */
 async function readScanSettings(request: APIRequestContext, storeUrl: string, options: Options) {
@@ -184,7 +196,7 @@ export async function readCatalogue(
 	const distinct = async (candidates: WcProduct[]) => {
 		for (const product of candidates.filter((candidate) => typeable(candidate.name)).slice(0, 8)) {
 			const { records } = await read('products', { search: product.name, per_page: '5' });
-			if (records.length > 0 && records.length <= 4) return product;
+			if (records.length > 0 && records.length <= DISTINCT_NAME_MAX) return product;
 		}
 		return undefined;
 	};
@@ -203,10 +215,7 @@ export async function readCatalogue(
 	const terms = { per_page: '100', hide_empty: 'true' };
 	const { records: categories } = await read<WcCategory>('products/categories', terms);
 	let category: Catalogue['category'] | undefined;
-	for (const candidate of categories
-		.filter((c) => c.count > 0 && c.slug !== 'uncategorized' && typeable(c.name))
-		.sort((left, right) => left.count - right.count)
-		.slice(0, 10)) {
+	for (const candidate of categoryCandidates(categories)) {
 		const query = {
 			...sellable,
 			per_page: '10',
@@ -221,7 +230,7 @@ export async function readCatalogue(
 		if (category) break;
 	}
 	if (!category) throw new Error('the store has no category holding a published, in-stock product');
-	const variable = await read<WcProduct>('products', { ...published, type: 'variable' });
+	const variable = await read<WcProduct>('products', { ...sellable, type: 'variable' });
 	const found = await distinct(
 		variable.records.filter((p) => onPos(p) && (p.variations ?? []).length > 0)
 	);
@@ -256,6 +265,12 @@ const productsSearch = (page: Page): Locator =>
 	page.getByTestId('screen-pos').getByTestId('search-products').filter({ visible: true });
 const tileOf = (page: Page, id: number): Locator =>
 	page.getByTestId(`product-tile-${id}`).or(page.getByTestId(`variable-product-tile-${id}`));
+/** Every id-bearing tile on the POS screen; never `product-tile-stock-<id>`. */
+const idTiles = (page: Page): Locator =>
+	page
+		.getByTestId('screen-pos')
+		.getByTestId(/^(variable-)?product-tile-\d+$/)
+		.filter({ visible: true });
 const cartLines = (page: Page) => page.getByTestId('cart-quantity-input');
 /** Pages whose variations style step 8 changed, and what it found. */
 const foundStyle = new WeakMap<Page, 'inline'>();
@@ -308,8 +323,16 @@ export async function search(ctx: FindAProductContext, walk: ProductWalk): Promi
 	await journeyStep(ctx, 2, async () => {
 		const { page } = ctx;
 		const searchTerm = walk.catalogue.searchTerm;
+		const tiles = idTiles(page);
+		await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
+		const before = await tiles.count();
 		await ctx.onCheckpoint?.(STEPS[1], 'search-started');
 		await productsSearch(page).fill(searchTerm.name);
+		// The search commits 250 ms after the last key; the grid narrowing is the proof it did. A
+		// grid already this small has nothing to narrow, so it goes straight to the tile.
+		if (before > DISTINCT_NAME_MAX) {
+			await expect.poll(() => tiles.count(), { timeout: 30_000 }).toBeLessThan(before);
+		}
 		await expect(tileOf(page, searchTerm.id)).toBeVisible({ timeout: 30_000 });
 		await ctx.onCheckpoint?.(STEPS[1], 'search-settled');
 		await productsSearch(page).clear();

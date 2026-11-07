@@ -7,6 +7,7 @@ import { addCheckoutProbeProduct } from './checkout-probe';
 import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
 import { fillKeypadField } from './keypad-field';
 import {
+	cartRecordUuid,
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
@@ -193,7 +194,8 @@ for (const targetStoreId of storeTargets) {
 						'the cart must have discounted the applied coupon before saving'
 					).toBeGreaterThan(0);
 
-					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+					const recordId = await cartRecordUuid(page);
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});
