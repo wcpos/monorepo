@@ -20,6 +20,7 @@ import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -57,7 +58,7 @@ import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
 import { MenuChip } from '../menu-chip';
 
-function CashierChip() {
+function CashierChip({ className }: { className?: string }) {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -72,6 +73,7 @@ function CashierChip() {
 	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
 		<MenuChip
+			className={className}
 			name="cashier"
 			icon="cashier"
 			scroll
@@ -391,7 +393,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		</View>
 	);
 }
-function LeftOutChip() {
+function LeftOutChip({ className }: { className?: string }) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
 	const { quantity } = useReportFormats(storeId);
@@ -404,6 +406,7 @@ function LeftOutChip() {
 	).length;
 	return leftOut > 0 ? (
 		<Chip
+			className={className}
 			testID="hero-chip-left-out"
 			icon="cart"
 			on
@@ -419,14 +422,16 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { statusMode, setStatusMode } = useReportsScope();
-	return (
-		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
+	const cell = phone ? 'self-stretch' : undefined;
+	const chips = (
+		<>
 			<React.Suspense
 				fallback={<View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />}
 			>
-				<CashierChip />
+				<CashierChip className={cell} />
 			</React.Suspense>
 			<MenuChip
+				className={cell}
 				name="status"
 				icon="cartDone"
 				value={statusMode}
@@ -437,7 +442,16 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 					{ value: 'all', label: t('reports.every_status'), hint: t('reports.every_status_hint') },
 				]}
 			/>
-			{settled && <LeftOutChip />}
+			{settled && <LeftOutChip className={cell} />}
+		</>
+	);
+	return phone ? (
+		<TileGrid columns={2} testID="hero-chips">
+			{chips}
+		</TileGrid>
+	) : (
+		<View testID="hero-chips" className="flex-row flex-wrap gap-2">
+			{chips}
 		</View>
 	);
 }

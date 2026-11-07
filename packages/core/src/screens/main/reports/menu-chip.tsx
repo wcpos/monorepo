@@ -19,7 +19,9 @@ export function MenuChip({
 	hint,
 	scroll = false,
 	ids,
+	className,
 }: {
+	className?: string;
 	name: string;
 	icon: React.ComponentProps<typeof Chip>['icon'];
 	value: string;
@@ -41,6 +43,7 @@ export function MenuChip({
 		<Popover>
 			<PopoverTrigger ref={trigger} asChild>
 				<Chip
+					className={className}
 					testID={ids?.trigger ?? `hero-chip-${name}`}
 					icon={icon}
 					label={choices.find((row) => row.value === value)?.label ?? value}
