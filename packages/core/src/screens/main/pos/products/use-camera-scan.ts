@@ -60,6 +60,9 @@ export const useCameraScan = () => {
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
 			sessionRef.current = createScanSession({
+				// The decoder re-reports a barcode every frame it stays in view: one
+				// sighting adds the item once, however long the camera rests on it.
+				continuous: true,
 				onAccept: (code, symbology) => {
 					if (code.length < minCharsRef.current) {
 						// A decoded-but-too-short code must not vanish silently (#905):
