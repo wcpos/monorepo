@@ -11,8 +11,8 @@ it('chunks items into rows of the columns, the last row short', () => {
 });
 
 it('columns in, equal cells out: every row has the columns, padded; a fragment is its tiles', () => {
-	const { container } = render(
-		<TileGrid columns={3}>
+	const { container, getByTestId } = render(
+		<TileGrid columns={3} testID="hero-chips">
 			{['a', 'b', 'c'].map((id) => (
 				<span key={id} data-testid={id} />
 			))}
@@ -22,6 +22,7 @@ it('columns in, equal cells out: every row has the columns, padded; a fragment i
 			{null}
 		</TileGrid>
 	);
+	expect(getByTestId('hero-chips')).toBe(container.firstElementChild);
 	const rows = Array.from(container.firstElementChild!.children);
 	expect(rows.map((row) => row.children.length)).toEqual([3, 3]);
 	expect(rows.map((row) => Array.from(row.children, (cell) => cell.children.length))).toEqual([

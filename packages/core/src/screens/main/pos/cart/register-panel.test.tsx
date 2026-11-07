@@ -6,6 +6,21 @@ import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+// React Native Web drops className without Uniwind; retain the fold's classes in this harness.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		children,
+		testID,
+		className,
+		role,
+	}: React.ComponentProps<typeof import('react-native').View>) => (
+		<div data-testid={testID} className={className} role={role}>
+			{children}
+		</div>
+	),
+}));
+
 // Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
 jest.mock('@rn-primitives/label', () => ({
 	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
@@ -15,6 +30,11 @@ jest.mock('@rn-primitives/label', () => ({
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'text-muted-foreground' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -24,6 +44,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: mockRegisters }),
 }));
 let mockOverdue = false;
+let mockRefusedClose = false;
 let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
 jest.mock('../../reports/closures/closure-panel', () => ({
@@ -76,6 +97,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		countingHere: mockCountingHere,
+		refusedClose: mockRefusedClose,
 		overdue: mockOverdue,
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
@@ -233,19 +255,30 @@ jest.mock('@wcpos/components/input', () => {
 		value,
 		onChangeText,
 		testID,
+		nativeID,
+		'aria-invalid': invalid,
+		'aria-describedby': describedBy,
 	}: {
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
-	}) {
+		nativeID?: string;
+	} & Pick<React.ComponentProps<'input'>, 'aria-invalid' | 'aria-describedby'>) {
 		return (
-			<input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />
+			<input
+				id={nativeID}
+				value={value}
+				data-testid={testID}
+				aria-invalid={invalid}
+				aria-describedby={describedBy}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
 		);
 	}
 	function Wrap({ children }: { children?: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
-	// The movement amount is the `hero` variant: Input.Root / InputField.
+	// The movement amount is one framed figure: Input.Root / InputField.
 	return {
 		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
 	};
@@ -296,12 +329,14 @@ jest.mock('@wcpos/components/text', () => ({
 		children,
 		testID,
 		className,
+		nativeID,
 	}: {
 		children: React.ReactNode;
 		testID?: string;
 		className?: string;
+		nativeID?: string;
 	}) => (
-		<span data-testid={testID} data-classes={className}>
+		<span id={nativeID} data-testid={testID} data-classes={className}>
 			{children}
 		</span>
 	),
@@ -353,7 +388,16 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<p data-testid={testID}>{children}</p>
 	),
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
+	DialogFooter: (
+		props: React.ComponentProps<typeof import('@wcpos/components/dialog').DialogFooter>
+	) => {
+		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
+		return (
+			<footer>
+				<Footer {...props} />
+			</footer>
+		);
+	},
 }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
@@ -362,7 +406,9 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
+	mockPhone = false;
 	currentLoaded = true;
+	mockRefusedClose = false;
 	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
@@ -386,10 +432,11 @@ it('lists a non-cash tender only while it holds money; cash is the derivation, n
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByText('Cash')).toBeNull();
 	expect(screen.queryByText('Card')).toBeNull();
+	fireEvent.click(screen.getByTestId('register-panel-other-tenders'));
 	expect(screen.getByText('Stripe Terminal')).toBeTruthy();
 });
 
-it("the body is the drawer's derivation and ends in Expected", () => {
+it("the body folds the drawer's derivation under Expected", () => {
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	const ledger = screen.getByTestId('register-panel-ledger');
 	expect(
@@ -400,7 +447,6 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 		'register.opened_suffix 09:02register.float£100.00',
 		'register.term_count register.cash_sales 2register.taken£62.00',
 		'register.term_count register.paid_out 1−£7.00Milk−£7.00register.void',
-		'register.expected_in_drawer£155.00',
 	]);
 	expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	// No session: no derivation, only the closure.
@@ -408,6 +454,46 @@ it("the body is the drawer's derivation and ends in Expected", () => {
 	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-panel-expected')).toBeNull();
 	expect(screen.getByTestId('register-panel-last-closure')).toBeTruthy();
+});
+
+it('the ledger folds under Expected and resets after the panel closes and reopens', () => {
+	const onOpenChange = jest.fn();
+	const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	expect(screen.getByTestId('register-panel-ledger').className).not.toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+	fireEvent.click(screen.getByTestId('register-panel-expected'));
+	fireEvent.click(screen.getByTestId('panel-x'));
+	expect(onOpenChange).toHaveBeenCalledWith(false);
+	view.rerender(<RegisterPanel open={false} onOpenChange={onOpenChange} />);
+	view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByTestId('register-panel-ledger').className).toContain('hidden');
+});
+
+it('Other tenders folds with its total on the row', () => {
+	expected = { cash: '155', card: '30', stripe_terminal_for_woocommerce: '-5' };
+	const onOpenChange = jest.fn();
+	const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	const trigger = screen.getByTestId('register-panel-other-tenders');
+	expect(trigger.textContent).toBe('register.other_tenders£25.00');
+	for (const label of ['Card', 'Stripe Terminal']) {
+		expect(screen.getByText(label).parentElement?.className).toContain('hidden');
+	}
+	fireEvent.click(trigger);
+	for (const label of ['Card', 'Stripe Terminal']) {
+		expect(screen.getByText(label).parentElement?.className).not.toContain('hidden');
+	}
+	expect(screen.getByText('Card').parentElement?.textContent).toContain('£30.00');
+	expect(screen.getByText('Stripe Terminal').parentElement?.textContent).toContain('£-5.00');
+	fireEvent.click(trigger);
+	expect(screen.getByText('Card').parentElement?.className).toContain('hidden');
+	fireEvent.click(trigger);
+	fireEvent.click(screen.getByTestId('panel-x'));
+	view.rerender(<RegisterPanel open={false} onOpenChange={onOpenChange} />);
+	view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+	expect(screen.getByText('Card').parentElement?.className).toContain('hidden');
 });
 
 it('hides every amount and the X report for blind cashiers', () => {
@@ -523,10 +609,65 @@ it('a reason chip fills the reason and the verb names the amount', () => {
 	expect(confirmButton().disabled).toBe(false);
 });
 
+it('the keypad sits under the amount and the reasons are a three-column grid', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const amount = screen.getByTestId('movement-amount');
+	const key = screen.getByTestId('movement-key-1');
+	const supplier = screen.getByTestId('movement-reason-supplier');
+	expect(amount.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	expect(key.compareDocumentPosition(supplier) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	const grid = supplier.parentElement!.parentElement!.parentElement!;
+	expect(grid.children).toHaveLength(2);
+	for (const row of Array.from(grid.children)) {
+		expect(row.children).toHaveLength(3);
+		expect(within(row as HTMLElement).getAllByTestId(/^movement-reason-/)).toHaveLength(3);
+	}
+});
+
+it('the reasons are a two-column grid on the phone', () => {
+	mockPhone = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const supplier = screen.getByTestId('movement-reason-supplier');
+	const grid = supplier.parentElement!.parentElement!.parentElement!;
+	expect(grid.children).toHaveLength(3);
+	for (const row of Array.from(grid.children)) {
+		expect(row.children).toHaveLength(2);
+		expect(within(row as HTMLElement).getAllByTestId(/^movement-reason-/)).toHaveLength(2);
+	}
+});
+
+it('the reason why the button is held sits beside it', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-in'));
+	expect(confirmButton().disabled).toBe(true);
+	const footer = confirmButton().closest('footer')!;
+	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('amount');
+	const invalidId = within(footer).getByTestId('movement-invalid').id;
+	expect(invalidId).toBeTruthy();
+	const amount = screen.getByTestId('movement-amount');
+	const reason = screen.getByTestId('movement-reason');
+	expect(amount.getAttribute('aria-invalid')).toBe('true');
+	expect(amount.getAttribute('aria-describedby')).toBe(invalidId);
+	expect(reason.getAttribute('aria-invalid')).toBe('false');
+	expect(reason.hasAttribute('aria-describedby')).toBe(false);
+	fireEvent.change(amount, { target: { value: '20' } });
+	expect(confirmButton().disabled).toBe(true);
+	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('reason');
+	expect(within(footer).getByTestId('movement-invalid').id).toBe(invalidId);
+	expect(reason.getAttribute('aria-invalid')).toBe('true');
+	expect(reason.getAttribute('aria-describedby')).toBe(invalidId);
+	expect(amount.getAttribute('aria-invalid')).toBe('false');
+	expect(amount.hasAttribute('aria-describedby')).toBe(false);
+});
+
 it('the consequence line says what is left after a paid out', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
-	expect(screen.getByTestId('movement-after').textContent).toBe('register.drawer_holds £155.00');
+	expect(screen.getByTestId('movement-after').textContent).toContain(
+		'register.drawer_holds £155.00'
+	);
 	fireEvent.click(screen.getByTestId('movement-key-7'));
 	expect(screen.getByTestId('movement-after').textContent).toContain('£148.00');
 });
@@ -755,7 +896,7 @@ it('a sole register is titled Register and an age below an hour reads minutes', 
 		jest.useRealTimers();
 	}
 });
-it('the two figure tiles separate drawer money from net sales across every tender', () => {
+it('the drawer hero separates drawer money from the net sales line across every tender', () => {
 	const previousExpected = expected,
 		previousTerms = terms;
 	try {
@@ -766,7 +907,7 @@ it('the two figure tiles separate drawer money from net sales across every tende
 			'register.in_the_drawer£345.03'
 		);
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_sales£85.00register.sales_count 2'
+			'register.session_sales £85.00 · register.sales_count 2'
 		);
 	} finally {
 		expected = previousExpected;
@@ -781,27 +922,27 @@ it('a baseline without server terms (older plugin): Session sales is the count, 
 	};
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-		'register.session_salesregister.sales_count 2'
+		'register.session_sales · register.sales_count 2'
 	);
 	expect(screen.getByTestId('register-panel-drawer').textContent).toBe(
 		'register.in_the_drawer£155.00'
 	);
 });
-it('a blind cashier gets one figure tile with the sales count and no money', () => {
+it('a blind cashier gets the sales count line and no money', () => {
 	const previous = blind;
 	try {
 		blind = true;
 		render(<RegisterPanel open onOpenChange={jest.fn()} />);
 		expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_salesregister.sales_count 2'
+			'register.session_sales · register.sales_count 2'
 		);
 		expect(screen.getByTestId('register-panel').textContent).not.toContain('£');
 	} finally {
 		blind = previous;
 	}
 });
-it('a seeded session: both figure tiles read — with the sync note', () => {
+it('a seeded session: the drawer hero and sales line read — with the sync note', () => {
 	const previous = currentFiguresPending;
 	try {
 		currentFiguresPending = true;
@@ -810,8 +951,11 @@ it('a seeded session: both figure tiles read — with the sync note', () => {
 			'register.in_the_drawer—register.figures_after_sync'
 		);
 		expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
-			'register.session_sales—register.figures_after_sync'
+			'register.session_sales — · register.figures_after_sync'
 		);
+		// The other-tender rows are a part of the session until the baseline arrives: no total yet.
+		const others = screen.queryByTestId('register-panel-other-tenders');
+		if (others) expect(others.textContent).toBe('register.other_tenders—');
 	} finally {
 		currentFiguresPending = previous;
 	}
@@ -832,7 +976,7 @@ it('zero terms are not drawn; a voided movement step disappears', () => {
 		];
 		render(<RegisterPanel open onOpenChange={jest.fn()} />);
 		const ledger = screen.getByTestId('register-panel-ledger');
-		expect(within(ledger).getAllByRole('listitem')).toHaveLength(2);
+		expect(within(ledger).getAllByRole('listitem')).toHaveLength(1);
 		expect(ledger.textContent).not.toMatch(/paid_in|paid_out|cash_sales|cash_refunds|no_sale/);
 		expect(screen.getByTestId('register-panel-expected').textContent).toContain('£155.00');
 	} finally {
@@ -1250,3 +1394,82 @@ it.each(['scene', null] as const)(
 		expect(movement?.getAttribute('data-portal')).toBe(String(portalHost));
 	}
 );
+
+describe('#2016: a refused close', () => {
+	it.each(['closed', 'counting'])(
+		'at %s lands on the count with the band; the footer is the retry, not the band',
+		(status) => {
+			currentSession = { ...currentSession, status, counted: { cash: '155' } };
+			mockRefusedClose = true;
+			render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('count-back')).toBeTruthy();
+			expect(screen.getByTestId('register-panel-refused-close').textContent).toContain(
+				'register.close_refused'
+			);
+			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+			expect(startCounting).not.toHaveBeenCalled();
+		}
+	);
+	it('at open shows the band on the register pane; Retry starts counting and opens the count', async () => {
+		currentSession = { ...currentSession, counted: {} };
+		mockRefusedClose = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-close-register')).toBeTruthy();
+		expect(screen.getByTestId('register-panel-refused-close').textContent).toContain(
+			'register.close_refused'
+		);
+		expect(startCounting).not.toHaveBeenCalled();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-retry-close')));
+		expect(startCounting).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		expect(mockCloseSession).not.toHaveBeenCalled();
+	});
+	it.each(['counting', 'closed'])(
+		'a refusal landing on the register pane at %s: Retry opens the count without counting again',
+		async (status) => {
+			const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+			currentSession = { ...currentSession, status, counted: { cash: '155' } };
+			mockRefusedClose = true;
+			view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+			expect(screen.getByTestId('register-panel-close-register')).toBeTruthy();
+			await act(async () => fireEvent.click(screen.getByTestId('register-panel-retry-close')));
+			expect(screen.getByTestId('count-back')).toBeTruthy();
+			expect(startCounting).not.toHaveBeenCalled();
+			expect(mockCloseSession).not.toHaveBeenCalled();
+		}
+	);
+	it('a refusal landing on the written moment takes the till back to the count', async () => {
+		const view = render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+		await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+		fireEvent.change(screen.getByTestId('count-amount'), { target: { value: '155' } });
+		fireEvent.click(screen.getByTestId('count-close'));
+		await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		view.rerender(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('closure-done')).toBeNull();
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		expect(screen.getByTestId('register-panel-refused-close')).toBeTruthy();
+	});
+	it('a retry that writes while the last refusal still reads shows the written moment', async () => {
+		currentSession = { ...currentSession, status: 'counting', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		await waitFor(() => expect(screen.getByTestId('count-close')).toBeTruthy());
+		fireEvent.click(screen.getByTestId('count-close'));
+		await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
+		currentSession = { ...currentSession, status: 'closed' };
+		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('closure-done')).toBeTruthy();
+	});
+	it('× on a refused close that reads closed abandons it to selling', async () => {
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		const onOpenChange = jest.fn();
+		render(<RegisterPanel open onOpenChange={onOpenChange} />);
+		fireEvent.click(screen.getByTestId('panel-x'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(mockBackToSelling).toHaveBeenCalledTimes(1);
+	});
+});

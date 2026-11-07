@@ -220,6 +220,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	);
 	const left = flow.balanceMinor + flow.roundingMinor - flow.entryAppliedMinor;
 	// The big figure. The eyebrow and the Full balance chip repeat an amount only when it differs.
+	// Once tendered exceeds the amount due, the change takes the lead and this drops to a line under it.
 	const shownMinor =
 		flow.state.view === 'select'
 			? due
@@ -265,6 +266,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							})
 						: t('pos_checkout.part_payment_left', { left: format(left) })
 					: '';
+	const changeLeads = !missing && !noChange && flow.entryChangeMinor > 0;
 	const entry = { amount: format(flow.entryAppliedMinor), method: method?.title };
 	const commit = method
 		? (fields
@@ -328,17 +330,39 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</Text>
 				) : null}
 			</HStack>
-			<AmountFigure testID="checkout-entry" className={flow.state.entryDirty ? '' : 'opacity-70'}>
-				{format(shownMinor)}
-			</AmountFigure>
-			<Text
-				testID="checkout-entry-hint"
-				variant="key"
-				className={`min-h-6 ${noChange ? 'text-warning-text' : flow.entryChangeMinor > 0 ? 'text-success' : ''}`}
-				decodeHtml
-			>
-				{hint}
-			</Text>
+			{changeLeads ? (
+				<>
+					<AmountFigure testID="checkout-entry-hint" tone="ok" decodeHtml>
+						{hint}
+					</AmountFigure>
+					<Text testID="checkout-tendered-line" variant="key" className="min-h-6">
+						{t('pos_checkout.tendered')}{' '}
+						<Text testID="checkout-entry" className="tabular-nums">
+							{format(shownMinor)}
+						</Text>
+						{flow.totalMinor !== flow.balanceMinor
+							? ` · ${t('common.total')} ${format(flow.totalMinor)}`
+							: ''}
+					</Text>
+				</>
+			) : (
+				<>
+					<AmountFigure
+						testID="checkout-entry"
+						className={flow.state.entryDirty ? '' : 'opacity-70'}
+					>
+						{format(shownMinor)}
+					</AmountFigure>
+					<Text
+						testID="checkout-entry-hint"
+						variant="key"
+						className={`min-h-6 ${noChange ? 'text-warning-text' : ''}`}
+						decodeHtml
+					>
+						{hint}
+					</Text>
+				</>
+			)}
 			{flow.roundingMinor !== 0 ? (
 				<Text testID="checkout-rounded-from" variant="key" decodeHtml>
 					{t('pos_checkout.rounded_from', { amount: format(flow.balanceMinor) })}

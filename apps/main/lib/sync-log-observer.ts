@@ -558,7 +558,7 @@ export const CONFORMANCE_TABLE = {
 		message: recordMessage('push already in progress'),
 	},
 	// The dead-letter verdict: the record parks for Store health. Error, the
-	// severity of every code it maps to — and the level that reaches Sentry, now
+	// severity of refusals except a known-gone record (warn) — and the Sentry level, now
 	// that the push.error before it is an info attempt. A catalogue edit's dead
 	// letter is stamped `revertPending` by the engine: an uncoded attempt, because
 	// the revert decides the verdict — queue.write.auto-reverted when it lands, a
@@ -566,7 +566,12 @@ export const CONFORMANCE_TABLE = {
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		level: (_event, fields) => (fields.revertPending === true ? 'info' : 'error'),
+		level: (_event, fields) =>
+			fields.revertPending === true
+				? 'info'
+				: rejectedWriteCode(fields.status, fields.reason) === ERROR_CODES.RECORD_GONE_ON_STORE
+					? 'warn'
+					: 'error',
 		// One mapping shared with the screen's toast (`pushFailureCode`), so the row and
 		// the toast always give the same instruction for the same refusal.
 		code: (_event, fields) => rejectedWriteCode(fields.status, fields.reason),

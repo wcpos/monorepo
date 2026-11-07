@@ -1,15 +1,19 @@
 import {
+	isRecordGoneRejection,
 	type QueuedMutation,
 	type RecordMutationQueue,
 	type RemoteId,
 	remoteIdOrNull,
 	type StoreScopeManager,
 	type SyncObserver,
+	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { removeManifestByWooIds } from '../local-coverage/rx-existence-manifest-repository';
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { type ResidentSync, stampedSync } from './order-revision';
+import { OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 import { requeueRejectedMutation } from './write-intents';
 import { scopeBoundObserver } from '../scope-bound';
 import { removeRefundChildren } from './refund-children';
@@ -69,7 +73,12 @@ export function discardConsequence({
 }: {
 	row: Pick<
 		QueuedMutation,
-		'collectionName' | 'operation' | 'payload' | 'conflictDocument' | 'rejectedReason'
+		| 'collectionName'
+		| 'operation'
+		| 'payload'
+		| 'conflictDocument'
+		| 'rejectedReason'
+		| 'rejectedStatus'
 	>;
 	resident: Record<string, unknown> | null | 'read-failed';
 	remoteIdField?: string;
@@ -81,8 +90,15 @@ export function discardConsequence({
 		(row.collectionName === 'orders'
 			? null
 			: (remoteIdOrNull(row.payload.id) ?? remoteIdOrNull(row.conflictDocument?.id)));
-	if (remoteId !== null)
-		return row.collectionName === 'orders' ? 'keeps-record' : 'may-destroy-record';
+	if (remoteId !== null) {
+		if (row.collectionName !== 'orders') return 'may-destroy-record';
+		const status =
+			resident.status ?? (resident.payload as Record<string, unknown> | undefined)?.status;
+		return isRecordGoneRejection(row.rejectedStatus, row.rejectedReason) &&
+			status !== OPEN_CART_ORDER_STATUS
+			? 'destroys-record'
+			: 'keeps-record';
+	}
 	return row.operation === 'create' && !rejectionSuggestsServerRecord(row.rejectedReason)
 		? 'destroys-record'
 		: 'keeps-record';
@@ -422,16 +438,18 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// `_woocommerce_pos_uuid`), and a record that HAS one is no longer
 								// born-local: it exists server-side and must survive the discard.
 								//
-								// A rejected UPDATE always keeps its resident: that row is server
-								// truth, and discard means "accept it".
+								// An update keeps its resident unless the store proved it is gone.
 								const remoteId = facet ? row?.[facet.remoteIdField] : undefined;
+								const orderRemoteId = remoteIdOrNull(remoteId);
+								const verdict = discardConsequence({
+									row: entry,
+									resident: row ?? null,
+									remoteIdField: facet?.remoteIdField,
+								});
+								if (entry.collectionName === 'orders')
+									discardRemovesResident = verdict === 'destroys-record';
 								const bornLocalCreate =
-									discardServerDocument === null &&
-									discardConsequence({
-										row: entry,
-										resident: row ?? null,
-										remoteIdField: facet?.remoteIdField,
-									}) === 'destroys-record';
+									discardServerDocument === null && verdict === 'destroys-record';
 								const removesResident = discardRemovesResident || bornLocalCreate;
 								// Destroying is only safe when NOTHING is queued to send for this
 								// record. A live row means a push is pending or in flight, and for a
@@ -475,8 +493,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// survives crashes and failed fetches (a failed task re-runs once
 								// its retry gate elapses), so discard can never strand the record
 								// silently posing as synced with the re-pull lost in memory.
-								const orderRemoteId = remoteIdOrNull(remoteId);
-								if (entry.collectionName === 'orders' && orderRemoteId !== null) {
+								if (
+									entry.collectionName === 'orders' &&
+									orderRemoteId !== null &&
+									!discardRemovesResident
+								) {
 									needsRepull = orderRemoteId;
 									await persistOrderRepull({ database, remoteIds: [orderRemoteId], nowMs: now() });
 								}
@@ -583,6 +604,16 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									if (entry.collectionName === 'orders')
 										await removeRefundChildren(database.collections.refunds, [
 											row?.remoteId as string | null,
+										]);
+									// The store proved the order gone: its manifest row would otherwise claim a
+									// resident this device no longer holds. After the resident, like the refunds.
+									if (
+										entry.collectionName === 'orders' &&
+										discardRemovesResident &&
+										orderRemoteId !== null
+									)
+										await removeManifestByWooIds(database.collections.existenceManifestOrders, [
+											wooIdOf(orderRemoteId),
 										]);
 								}
 								// CAS, not an unconditional remove: two discards of one terminal row

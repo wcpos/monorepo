@@ -204,6 +204,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 							/>
 						) : mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
+								testID="checkout-payment-webview"
 								order={order}
 								{...frameGate.frameProps}
 								settledOrderStatuses={settledOrderStatuses}

@@ -16,6 +16,11 @@ export type ThemeTraits = {
 	tear: boolean;
 	settle: boolean;
 	paidFlash: boolean;
+	/**
+	 * A link Button underlines its words: on a theme whose link ink is its foreground (Bold,
+	 * Paper, Monochrome) colour cannot mark a verb, so the line does (judged 2026-11-06).
+	 */
+	linkUnderline: boolean;
 };
 export const SYSTEM_TYPE: ThemeType = {};
 export const DEFAULT_TRAITS: ThemeTraits = {
@@ -27,6 +32,7 @@ export const DEFAULT_TRAITS: ThemeTraits = {
 	tear: false,
 	settle: true,
 	paidFlash: false,
+	linkUnderline: false,
 };
 
 /**
