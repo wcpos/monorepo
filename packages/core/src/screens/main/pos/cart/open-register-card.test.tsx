@@ -7,8 +7,13 @@ import { CountingElsewhereCard, OpenRegisterCard } from './open-register-card';
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
+let separator = '.';
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: {}, store: { id: 1 } }),
+	useAppState: () => ({ store: { price_decimal_sep: separator, price_num_decimals: 2 } }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: <T,>(doc: T, select: (value: T) => unknown) => select(doc),
 }));
 
 let defaultFloat: string | undefined = '200';
@@ -118,10 +123,61 @@ jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 
 beforeEach(() => {
+	separator = '.';
 	hasClosure = true;
 	defaultFloat = '200';
 	lastCount = '570.10';
 });
+it('the first key replaces the prefilled default', () => {
+	defaultFloat = '150';
+	render(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('150');
+	expect(screen.getByTestId('open-register-chip-default').getAttribute('aria-pressed')).toBe(
+		'true'
+	);
+	fireEvent.click(screen.getByTestId('open-register-key-2'));
+	fireEvent.click(screen.getByTestId('open-register-key-0'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('20');
+	expect(screen.getByTestId('open-register-chip-default').getAttribute('aria-pressed')).toBe(
+		'false'
+	);
+});
+
+it('a chip is a suggestion too', () => {
+	render(<OpenRegisterCard />);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '600' } });
+	fireEvent.click(screen.getByTestId('open-register-chip-last'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('570.10');
+	fireEvent.click(screen.getByTestId('open-register-key-4'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('4');
+});
+
+it('typing in the field edits the shown text', () => {
+	render(<OpenRegisterCard />);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '600' } });
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
+});
+
+it("the keypad and the field share the store's separator", async () => {
+	separator = ',';
+	render(<OpenRegisterCard />);
+	fireEvent.click(screen.getByTestId('open-register-key-4'));
+	expect(screen.getByTestId('open-register-key-decimal').getAttribute('aria-label')).toBe(',');
+	fireEvent.click(screen.getByTestId('open-register-key-decimal'));
+	fireEvent.click(screen.getByTestId('open-register-key-5'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('4,5');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '200', countedFloat: '4.5' })
+	);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '6,5' } });
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('6,5');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '200', countedFloat: '6.5' })
+	);
+});
+
 it('uses a last count that arrives after the local query, without replacing typed input', () => {
 	defaultFloat = undefined;
 	lastCount = undefined;
