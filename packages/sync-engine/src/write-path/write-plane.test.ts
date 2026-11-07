@@ -22,6 +22,8 @@ async function fixture(assertUsable: () => void = () => undefined) {
 	});
 	await manager.switchTo('scope-1');
 	const settled = vi.fn(async () => undefined);
+	const persistOrderRepull = vi.fn(async () => undefined);
+	const repullOrdersNow = vi.fn(async () => undefined);
 	const plane = createWritePlane({
 		assertUsable,
 		settled,
@@ -40,11 +42,11 @@ async function fixture(assertUsable: () => void = () => undefined) {
 		onStatusChanged: () => undefined,
 		connectivity: () => 'online',
 		emitWriteEvent: () => undefined,
-		persistOrderRepull: async () => undefined,
-		repullOrdersNow: async () => undefined,
+		persistOrderRepull,
+		repullOrdersNow,
 		queueFor: queuePort,
 	});
-	return { database, plane, queue, queuePort, settled };
+	return { database, plane, queue, queuePort, settled, persistOrderRepull, repullOrdersNow };
 }
 
 describe('write-plane queue identity', () => {
@@ -319,5 +321,71 @@ describe('write-plane guard order', () => {
 			plane.write({ collection: 'orders', operation: 'create', recordId: 'order-1', payload: {} })
 		).rejects.toThrow();
 		expect(settled.mock.calls).toEqual([['read'], ['write']]);
+	});
+});
+
+describe('known-gone order discard', () => {
+	it.each([
+		[404, 'woo_rxdb_sync_record_not_found', '33827', true],
+		[403, 'woo_rxdb_sync_record_not_found', '33827', false],
+		[404, 'other_reason', '33827', false],
+		[404, 'woo_rxdb_sync_record_not_found', null, false],
+	])('status %s reason %s remote %s removes %s', async (status, reason, remoteId, removes) => {
+		const { database, plane, queue, persistOrderRepull, repullOrdersNow } = await fixture();
+		let data: Record<string, unknown> = {
+			remoteId,
+			payload: { id: 33827 },
+			local: { dirty: true, pendingMutationIds: ['terminal'] },
+		};
+		let present = true;
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (fn: (row: Record<string, unknown>) => Record<string, unknown>) => {
+				data = fn(data);
+			},
+			remove: vi.fn(async () => {
+				present = false;
+			}),
+		};
+		const bulkRemove = vi.fn(async () => ({ success: [], error: [] }));
+		const removeRefunds = vi.fn(async () => ({ success: [], error: [] }));
+		Object.assign(database, {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => (present ? resident : null) }) },
+				existenceManifestOrders: { bulkRemove },
+				refunds: {
+					find: () => ({ exec: async () => [{ toJSON: () => ({ uuid: 'refund' }) }] }),
+					bulkRemove: removeRefunds,
+				},
+			},
+		});
+		const pending = await queue.enqueue({
+			mutationId: 'terminal',
+			collectionName: 'orders',
+			operation: 'update',
+			recordId: 'order-1',
+			origin: 'existing',
+			payload: {},
+			baseRevision: 'r1',
+			queuedAt: '2026-11-07T00:00:00.000Z',
+		});
+		await queue.replace({
+			...pending,
+			status: 'rejected',
+			rejectedStatus: status,
+			rejectedReason: reason,
+		});
+		await plane.resolveConflict('terminal', 'discard');
+		expect(present).toBe(!removes);
+		expect(await queue.all()).toEqual([]);
+		if (removes) {
+			expect(bulkRemove).toHaveBeenCalledWith(['33827']);
+			expect(removeRefunds).toHaveBeenCalledWith(['refund']);
+		} else {
+			expect(bulkRemove).not.toHaveBeenCalled();
+			expect(removeRefunds).not.toHaveBeenCalled();
+		}
+		expect(persistOrderRepull).toHaveBeenCalledTimes(!removes && remoteId !== null ? 1 : 0);
+		expect(repullOrdersNow).toHaveBeenCalledTimes(!removes && remoteId !== null ? 1 : 0);
 	});
 });

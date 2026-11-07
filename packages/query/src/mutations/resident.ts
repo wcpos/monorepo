@@ -213,6 +213,47 @@ export async function findEngineResident(
 	return (await resolveEngineResident(manager, collection, recordId))?.resident ?? null;
 }
 
+/** Keep the cart on its UUID, but remove the deleted store order's identity. */
+export async function rebirthEngineResident(input: {
+	manager: QueryManager;
+	collection: 'orders';
+	recordId: string;
+}): Promise<EngineResident> {
+	const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+	if (!resident)
+		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
+	return resident.incrementalModify((old) => {
+		const payload: Record<string, unknown> = {
+			...((old.payload ?? {}) as Record<string, unknown>),
+			id: 0,
+		};
+		for (const key of [
+			'number',
+			'order_key',
+			'date_created',
+			'date_created_gmt',
+			'date_modified',
+			'date_modified_gmt',
+			'date_paid',
+			'date_paid_gmt',
+			'date_completed',
+			'date_completed_gmt',
+			'cart_hash',
+			'transaction_id',
+			'links',
+			'_links',
+			'_embedded',
+		])
+			delete payload[key];
+		return withPromotedFields(input.collection, {
+			...old,
+			remoteId: null,
+			payload,
+			sync: { ...((old.sync ?? {}) as Record<string, unknown>), revision: '', source: 'skeleton' },
+		});
+	});
+}
+
 export async function patchEngineResident(input: {
 	manager: QueryManager;
 	collection: WriteableCollection;

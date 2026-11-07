@@ -71,6 +71,7 @@ describe('package exports', () => {
 				// Who reports a failed request (#2671): the host marks the errors it
 				// wrote a transport row for, and the cashier log reads the same
 				// reported-status rule the lanes stamp by — one rule, both sides.
+				'isRecordGoneRejection',
 				'isReportedRequestStatus',
 				'markTransportFailure',
 				'requestStatusOf',

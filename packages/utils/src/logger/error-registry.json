@@ -170,6 +170,27 @@
 		"introducedIn": "1.11.3"
 	},
 	{
+		"code": "SYNC203",
+		"symbol": "RECORD_GONE_ON_STORE",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "Nothing to fix on this device. If the order was deleted by mistake, restore it from the trash in WP Admin.",
+		"retryPolicy": "never",
+		"dataSafety": "order-safe",
+		"escalation": "none",
+		"summary": "Your store no longer has this order, so this device settled its own copy.",
+		"docsBody": "Someone deleted (trashed) the order in WP Admin while this device still held it. An open cart is kept and sent again as a new order with a new number; any other order is removed from this device, because the store's copy is gone. Nothing is waiting to send.",
+		"troubleshooting": [
+			"Expand the log entry: it names the order number the store deleted and whether this device kept the cart as a new order or removed its copy.",
+			"If the cart was kept, the sale continues as normal — it reaches the store as a new order with a new number when you press Pay.",
+			"If the order was removed and that was a mistake, a store admin can restore it from WooCommerce → Orders → Trash in WP Admin; the till picks it up again on its next refresh.",
+			"If the same order keeps being reported, an admin is deleting orders the till is still using — agree who closes open carts before they are trashed."
+		],
+		"logSources": ["wp-admin-pos-logs"],
+		"evidence": "demo.wcpos.com 2026-11-07: orders #33827 and #33830 bulk-trashed in WP Admin on 2026-11-04 left two cart tabs refusing Pay with 404 woo_rxdb_sync_record_not_found",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"code": "SYNC211",
 		"symbol": "RECORD_INVALID_FIELD",
 		"domain": "SYNC",

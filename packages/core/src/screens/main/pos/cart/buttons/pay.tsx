@@ -10,6 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
+import { isRecordGoneRejection } from '@wcpos/sync-engine';
 
 import { useRegisterSurface } from '../../../../../extensions/commands/use-register-surface';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
@@ -84,6 +85,12 @@ export function PayButton() {
 			orderNumber: currentOrderRecord.payload.number,
 		});
 		const showRefusal = (rejection: CheckoutRejection) => {
+			if (isRecordGoneRejection(rejection.status, rejection.reason)) {
+				orderLogger.info('Checkout refused: the store no longer has this order; settling', {
+					context: { orderId: uuid, orderNumber: currentOrderRecord.payload.number },
+				});
+				return;
+			}
 			showOrderRefusedToast({ t, router, rejection });
 			orderLogger.error('Checkout refused', {
 				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,

@@ -41,6 +41,7 @@ export {
 } from './transport-failure';
 export {
 	discardConsequence,
+	isRecordGoneRejection,
 	rejectionSuggestsServerRecord,
 } from './write-path/conflict-resolution';
 /** A scope generation bump strands the previous generation's unsent sales in its old
