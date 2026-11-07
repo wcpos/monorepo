@@ -123,8 +123,19 @@ const registry: Record<string, Story[]> = {
 	'v2-dialog': dialogV2,
 };
 
-// The gallery shoots the five original themes; the personality themes are not baselined (Paul decides after his pass, 2026-10-30).
-const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome'] as const;
+// Every theme is baselined: the five original ones since decision 12 (2026-10-16), the four personality
+// themes since 2026-11-06 (Paul: "proceed as you recommend", after a Bold field regression no cell could catch).
+const THEMES = [
+	'light',
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'paper',
+	'warm',
+	'bold',
+	'market',
+] as const;
 type Theme = (typeof THEMES)[number];
 const isTheme = (theme: string | undefined): theme is Theme =>
 	(THEMES as readonly string[]).includes(theme ?? '');
