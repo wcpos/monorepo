@@ -517,22 +517,33 @@ test('release workflows require green main with an explicit typed override', () 
 	);
 });
 
-test('the web-bundle retention keeps only hashed files; a root file the build does not carry is dropped', () => {
+test('the web-bundle retention keeps the previous build inventory; a root file the build does not carry is dropped', () => {
 	const publish = readWorkflow('publish-web-bundle.yml');
 	const step = publish.jobs.publish.steps.find(({ name }) =>
 		String(name).startsWith('🚀 Publish to web-bundle')
 	);
 	assert.ok(step, 'publish step');
-	// Both lanes publish to the same branch. The 24 h grace exists for hashed
-	// _expo/ files a stale edge's metadata.json may still name; a root file the
-	// new build does not carry (another lane's worker or wasm) must go at once,
-	// or the lane tag script refuses the bundle (1.11.11, 2026-11-06).
-	const loop = step.run.slice(step.run.indexOf('git ls-files build | while read'));
+	// This lane publishes to its own web-bundle branch. Hashed _expo/ files the previous
+	// build emitted (its publish-inventory.txt) stay for edges still serving its
+	// metadata.json; a root file the new build does not carry (another lane's
+	// worker or wasm) must go at once, or the lane tag script refuses the bundle
+	// (1.11.11, 2026-11-06).
+	const run = step.run;
+	const readInventory = run.indexOf('git show "HEAD:$INVENTORY"');
+	assert.match(run, /INVENTORY=build\/publish-inventory\.txt/);
+	const loopStart = run.indexOf('git ls-files build | while read');
+	assert.ok(readInventory > 0 && readInventory < loopStart, 'the previous inventory is read before the loop');
+	const loop = run.slice(loopStart, run.indexOf('\ndone', loopStart));
 	const drop = loop.indexOf('*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;');
-	const grace = loop.indexOf('keep_until');
+	const listed = loop.indexOf('grep -Fxq -- "${path#build/}" <<< "$previous_inventory"');
 	assert.ok(drop > 0, 'root files this build does not carry are dropped');
-	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the grace');
-	assert.ok(drop < grace, 'the drop runs before the age check');
+	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the inventory check');
+	assert.ok(listed > drop, 'the drop runs before the inventory check; listed files are kept');
+	// The new inventory comes from the fresh build, after the loop, never into
+	// $BUILD_DIR (the CDN job uploads it), and before git add -A publishes it.
+	const write = run.indexOf('(cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"');
+	assert.ok(write > loopStart + loop.length, 'the inventory is written after the retention loop');
+	assert.ok(write < run.indexOf('git add -A'), 'the inventory is written before git add -A');
 });
 
 test('a main-branch web bundle is gated on its worker RXDB_VERSION against its lane', () => {
@@ -540,7 +551,7 @@ test('a main-branch web bundle is gated on its worker RXDB_VERSION against its l
 	const steps = publish.jobs.publish.steps.map(({ name }) => name);
 	const stage = findStep(publish, 'publish', '📌 Stage the worker/lane gate from the workflow revision');
 	const gate = findStep(publish, 'publish', "🧬 Gate the worker's RXDB_VERSION against its bundle lane");
-	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch == 'main'/);
+	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch != 'next'/);
 	// Staged from THIS workflow revision: an older monorepo_ref has no gate script.
 	assert.ok(steps.indexOf(stage.name) < steps.indexOf('📥 Check out monorepo'));
 	assert.ok(steps.indexOf('🔨 Build web bundle') < steps.indexOf(gate.name));
