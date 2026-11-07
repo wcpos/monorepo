@@ -194,7 +194,6 @@ export function RegisterCount({
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
-				variant="box"
 				value={amount}
 				onChangeText={(value) => {
 					setPieces({});

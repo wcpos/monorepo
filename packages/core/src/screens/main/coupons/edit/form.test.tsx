@@ -56,6 +56,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	SavedFieldProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => mockSavedName,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;

@@ -95,8 +95,8 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
+jest.mock('@wcpos/components/input', () => {
+	function Field({
 		value,
 		onChangeText,
 		testID,
@@ -108,16 +108,24 @@ jest.mock('@wcpos/components/input', () => ({
 		testID: string;
 		secureTextEntry?: boolean;
 		maxLength?: number;
-	}) => (
-		<input
-			type={secureTextEntry ? 'password' : 'text'}
-			maxLength={maxLength}
-			data-testid={testID}
-			value={value}
-			onChange={(e) => onChangeText(e.target.value)}
-		/>
-	),
-}));
+	}) {
+		return (
+			<input
+				type={secureTextEntry ? 'password' : 'text'}
+				maxLength={maxLength}
+				data-testid={testID}
+				value={value}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
+		);
+	}
+	function Wrap({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	return {
+		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
+	};
+});
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
@@ -387,9 +395,10 @@ it.each([
 		/>
 	);
 	const input = screen.getByTestId('amount');
-	expect(input.previousElementSibling?.textContent ?? '').toBe(prefix);
-	expect(input.nextElementSibling?.textContent ?? '').toBe(suffix);
+	expect(input.previousElementSibling?.firstElementChild?.textContent ?? '').toBe(prefix);
+	expect(input.nextElementSibling?.firstElementChild?.textContent ?? '').toBe(suffix);
 	expect(input.parentElement?.children).toHaveLength(2);
+	expect(input.parentElement?.querySelectorAll('span')).toHaveLength(1);
 });
 
 // Revert: pass undefined for a null store, selecting bound GBP denominations instead of store zero.

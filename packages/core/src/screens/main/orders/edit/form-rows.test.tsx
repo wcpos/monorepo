@@ -35,6 +35,7 @@ jest.mock('@wcpos/components/form', () => {
 		SavedMark: () => null,
 		useSavedName: () => '',
 		useMarkSaved: () => jest.fn(),
+		useMarkFailed: () => jest.fn(),
 	};
 });
 jest.mock('@wcpos/components/property-row', () =>
