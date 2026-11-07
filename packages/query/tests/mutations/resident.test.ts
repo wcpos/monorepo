@@ -159,3 +159,21 @@ it('recreates a reborn order from its current resident, as a create carrying the
 it('refuses to recreate an order that is not resident', async () => {
 	await expect(recreateRebornOrder(manager, recordId)).rejects.toThrow('missing');
 });
+
+it('does not write the create when the engine scope moved during the read', async () => {
+	await insertEngineResident({
+		manager,
+		collection: 'orders',
+		recordId,
+		payload: { id: 0, status: 'pos-open' },
+	});
+	const scopes = ['scope-a', 'scope-b'];
+	jest
+		.spyOn(manager.engine, 'status')
+		.mockImplementation(() => ({ activeScopeId: scopes.shift() ?? 'scope-b' }) as never);
+	const write = jest.spyOn(manager.engine, 'write');
+	await expect(recreateRebornOrder(manager, recordId)).rejects.toThrow(
+		'Active engine scope changed'
+	);
+	expect(write).not.toHaveBeenCalled();
+});

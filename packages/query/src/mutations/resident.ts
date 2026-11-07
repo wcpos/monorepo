@@ -276,8 +276,14 @@ export async function rebirthOrderResident(
  * because an order write names its collection (the orders-write fence, ADR 0033 item 6).
  */
 export async function recreateRebornOrder(manager: QueryManager, recordId: string): Promise<void> {
+	// Same scope guard as patchAndEnqueueEngineResident: a store or cashier switch between the
+	// read and the write would enqueue the outgoing scope's cart into the incoming scope.
+	const scopeId = manager.engine.status().activeScopeId;
 	const resident = await findEngineResident(manager, 'orders', recordId);
 	if (!resident) throw new Error(`Engine resident "${recordId}" is missing from "orders"`);
+	if (manager.engine.status().activeScopeId !== scopeId) {
+		throw new ActiveScopeChangedTwiceError('orders');
+	}
 	// Plain snapshot, not an RxDB payload proxy: it crosses the storage worker boundary.
 	await manager.engine.write({
 		collection: 'orders',
