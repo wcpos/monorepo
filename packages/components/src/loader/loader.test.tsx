@@ -159,13 +159,49 @@ describe('Loader', () => {
 		const inlineStyle = animatedViewProps.at(-1)?.style;
 		expect(JSON.stringify(inlineStyle ?? {})).not.toMatch(/rotate/);
 	});
+
+	// The Android E2E bundle keeps the Loader at rest (`spinnersRest`, motion.ts): the emulator
+	// renders every frame in software and Maestro's reads queue behind them (#3345).
+	describe('the Android E2E bundle', () => {
+		const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+
+		afterEach(() => {
+			if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+			else process.env.EXPO_PUBLIC_WCPOS_E2E = originalFlag;
+			mockPlatform.OS = 'ios';
+		});
+
+		it('flag on, Android: starts no rotation and still renders, at rest', () => {
+			process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+			mockPlatform.OS = 'android';
+			const { getByTestId } = render(<Loader />);
+			expect(withRepeatMock).not.toHaveBeenCalled();
+			expect(withTimingMock).not.toHaveBeenCalled();
+			expect(sharedValues[0].value).toBe(0);
+			expect(getByTestId('loader-spin')).toBeTruthy();
+		});
+
+		it('flag on, iOS: rotates', () => {
+			process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+			mockPlatform.OS = 'ios';
+			render(<Loader />);
+			expect(withRepeatMock).toHaveBeenCalledTimes(1);
+		});
+
+		it('flag off, Android: rotates', () => {
+			delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+			mockPlatform.OS = 'android';
+			render(<Loader />);
+			expect(withRepeatMock).toHaveBeenCalledTimes(1);
+		});
+	});
 });
 
 it('uses the muted foreground and the named spinner beat', () => {
 	const { container } = render(<Loader variant="muted" />);
 	expect(container.firstChild).toHaveClass('text-muted-foreground');
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toMatch(/import \{ SPINNER \} from '\.\.\/lib\/motion'/);
+	expect(source).toMatch(/import \{ SPINNER(, spinnersRest)? \} from '\.\.\/lib\/motion'/);
 	expect(source).not.toContain('1000');
 	expect(source).not.toMatch(/duration:\s*\d/);
 });

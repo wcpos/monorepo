@@ -132,3 +132,44 @@ it('web: keeps the class until the animation iteration after the work ends', () 
 	fireEvent(getByTestId('spin'), new Event('animationiteration'));
 	expect(getByTestId('spin').className).not.toContain('animate-spin');
 });
+
+// The Android E2E bundle keeps the glyph at rest (`spinnersRest`, motion.ts): the emulator renders
+// every frame in software and Maestro's reads queue behind them (#3345). Only that bundle.
+describe('the Android E2E bundle', () => {
+	const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+	const originalOS = mockPlatform.OS;
+
+	afterEach(() => {
+		if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		else process.env.EXPO_PUBLIC_WCPOS_E2E = originalFlag;
+		mockPlatform.OS = originalOS;
+	});
+
+	it('flag on, Android: an active glyph starts no turn and still renders its child', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		mockPlatform.OS = 'android';
+		const { getByText } = render(
+			<Spin active>
+				<span>glyph</span>
+			</Spin>
+		);
+		expect(repeats).toHaveLength(0);
+		expect(timings).toHaveLength(0);
+		expect(sharedValues[0].value).toBe(0);
+		expect(getByText('glyph')).toBeTruthy();
+	});
+
+	it('flag on, iOS: the glyph turns', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		mockPlatform.OS = 'ios';
+		render(<Spin active>{null}</Spin>);
+		expect(repeats).toHaveLength(1);
+	});
+
+	it('flag off, Android: the glyph turns', () => {
+		delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		mockPlatform.OS = 'android';
+		render(<Spin active>{null}</Spin>);
+		expect(repeats).toHaveLength(1);
+	});
+});

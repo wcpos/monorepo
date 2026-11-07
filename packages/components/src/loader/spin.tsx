@@ -13,7 +13,7 @@ import Animated, {
 
 import { Platform } from '@wcpos/utils/platform';
 
-import { SPINNER } from '../lib/motion';
+import { SPINNER, spinnersRest } from '../lib/motion';
 
 const TURN = {
 	duration: SPINNER,
@@ -47,7 +47,9 @@ const INSTANT = 0;
  * load), toggled on the node itself so no render is needed to end it, and takes it off on the
  * animation's iteration boundary, where the glyph is upright again.
  */
-export function Spin({ active, children }: { active: boolean; children: React.ReactNode }) {
+export function Spin({ active: wanted, children }: { active: boolean; children: React.ReactNode }) {
+	// The Android E2E bundle keeps the glyph at rest (`spinnersRest`, motion.ts).
+	const active = wanted && !spinnersRest();
 	const rotation = useSharedValue(0);
 	const ref = React.useRef<React.ElementRef<typeof Animated.View> | null>(null);
 

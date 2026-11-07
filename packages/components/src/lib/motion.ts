@@ -1,5 +1,7 @@
 import { Easing, Keyframe } from 'react-native-reanimated';
 
+import { Platform } from '@wcpos/utils/platform';
+
 // Durations already used across the package, centralised.
 export const PRESS = 80;
 // The count badge: the swell before its spring, and the old number's fade under it.
@@ -19,6 +21,18 @@ export const PANEL_SLIDE_OUT = 200;
 export const PANE = 280;
 export const STAMP = 380;
 export const SPINNER = 1000;
+/**
+ * The spinners (`Spin`, `Loader`) rest, upright, in the Android E2E bundle only. The emulator
+ * renders every frame in software (`-gpu swiftshader_indirect`, 3 vCPUs), and a turning glyph
+ * keeps it busy enough that Maestro's hierarchy reads queue behind the frames: on run
+ * 42376002108 the sync glyph and the grid Loader were the only pixels moving and flow 04 took
+ * 3,416 s; run 42380851808 stopped both and flow 04 took 257 s. No product bundle sets the flag,
+ * so the turning (and its `ReduceMotion.Never`) is unchanged everywhere else. Read at call time,
+ * in the dotted form Expo inlines, so a test can set it.
+ */
+export function spinnersRest() {
+	return process.env.EXPO_PUBLIC_WCPOS_E2E === '1' && Platform.OS === 'android';
+}
 export const INDETERMINATE = 1100;
 
 // The control points, for the three forms a curve is needed in: a Reanimated easing (shared

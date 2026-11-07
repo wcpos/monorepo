@@ -17,7 +17,7 @@ import { useCSSVariable } from 'uniwind';
 import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
-import { SPINNER } from '../lib/motion';
+import { SPINNER, spinnersRest } from '../lib/motion';
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text/context';
@@ -75,6 +75,8 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 	const rotation = useSharedValue(0);
 	React.useEffect(() => {
 		if (!Platform.isNative) return;
+		// The Android E2E bundle keeps the Loader at rest (`spinnersRest`, motion.ts).
+		if (spinnersRest()) return;
 		// One full turn per second, linear — matches tailwind's `animate-spin`.
 		// ReduceMotion.Never on both layers (the repeat suppression is separate
 		// from the timing's): a spinner is a functional progress indicator, and

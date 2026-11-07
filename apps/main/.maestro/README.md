@@ -327,6 +327,15 @@ handling lives. A fix without a row is a fix nobody can recognise next time.
   AVD-shaping value is part of the snapshot cache key and pinned by
   `scripts/ci-workflows.test.mjs`; change them together, and delete stale AVD
   cache entries when you do (a dead entry is ~2 GB and evicts the dev client).
+- **The spinners rest on the Android emulator.** The emulator has no GPU
+  (`-gpu swiftshader_indirect`), so every animation frame is rendered in
+  software, and Maestro's hierarchy reads queue behind that work. On run
+  42376002108 the sync glyph and the grid Loader were the only pixels moving
+  and flow 04 took 3,416 s; run 42380851808 stopped both and flow 04 took
+  257 s. So when `EXPO_PUBLIC_WCPOS_E2E=1` and the platform is Android, `Spin`
+  and `Loader` render upright and never turn (`spinnersRest` in
+  `packages/components/src/lib/motion.ts`, #3345). iOS, web and every product
+  bundle still turn. A flow cannot assert a turning glyph on Android.
 - iOS runs each flow under a 20-minute deadline; Android runs the whole suite
   in one Maestro process, so nothing kills a hung command mid-flow. A command
   that eventually returns produces a `[Passed]` at 45+ minutes that the timing
