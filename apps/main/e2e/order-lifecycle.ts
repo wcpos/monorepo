@@ -77,26 +77,33 @@ export function createPushOrdersResponseMatcher(
 	};
 }
 
-/** A record uuid directly after a `/cart/` segment, as `posPathFor` writes it. */
-const CART_RECORD_PATH =
-	/\/cart\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
+/** `open-order-tab-<uuid>` exactly: a tab's own sub-elements carry a suffix after the uuid. */
+const CART_TAB_ID =
+	/^open-order-tab-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
-/** The uuid in a POS address, or null on the blank cart, a receipt or any other page. */
-export function cartRecordUuidFromUrl(url: string): string | null {
-	return new URL(url, 'http://localhost').pathname.match(CART_RECORD_PATH)?.[1] ?? null;
+/** The uuid in an open-order tab's test id, or null for the blank cart's tab or anything else. */
+export function cartRecordUuidFromTabId(testId: string | null): string | null {
+	return testId?.match(CART_TAB_ID)?.[1] ?? null;
 }
 
 /**
- * The open cart's record uuid. The address bar names it at every width, written a
- * frame after the cart changes, so this polls up to 15 s; fails naming the current URL.
+ * The open cart's record uuid. The active tab of the cart strip names the record at
+ * every width; a phone's address bar does not (the Cart tab press lands on bare `/cart`).
+ * The tab appears once the cart has its first line, so this polls up to 15 s.
  */
 export async function cartRecordUuid(page: Page): Promise<string> {
+	const active = page.getByTestId(/^open-order-tab-/).and(page.locator('[aria-selected="true"]'));
+	const read = () =>
+		active
+			.first()
+			.getAttribute('data-testid', { timeout: 1_000 })
+			.then(cartRecordUuidFromTabId, () => null);
 	await expect
-		.poll(() => cartRecordUuidFromUrl(page.url()), { timeout: 15_000 })
+		.poll(read, { timeout: 15_000 })
 		.not.toBeNull()
 		.catch(() => {});
-	const uuid = cartRecordUuidFromUrl(page.url());
-	if (!uuid) throw new Error(`No open cart record in the address bar after 15 s: ${page.url()}`);
+	const uuid = await read();
+	if (!uuid) throw new Error(`No active open-order tab names a record after 15 s: ${page.url()}`);
 	return uuid;
 }
 

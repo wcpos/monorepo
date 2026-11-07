@@ -1,6 +1,6 @@
 import { expect, test } from './test';
 import {
-	cartRecordUuidFromUrl,
+	cartRecordUuidFromTabId,
 	createPushOrdersResponseMatcher,
 	expectRateSetParity,
 	expectTaxParity,
@@ -146,18 +146,17 @@ test.describe('createPushOrdersResponseMatcher', () => {
 	});
 });
 
-test.describe('cartRecordUuidFromUrl', () => {
+test.describe('cartRecordUuidFromTabId', () => {
 	const UUID = '0b6f6c1e-2f4a-4c1d-9e3b-7a5d8c2f1e04';
 
-	test('reads the uuid after /cart/, under any base path and before any query', () => {
-		expect(cartRecordUuidFromUrl(`/cart/${UUID}`)).toBe(UUID);
-		expect(cartRecordUuidFromUrl(`/cart/${UUID}/checkout/cash`)).toBe(UUID);
-		expect(cartRecordUuidFromUrl(`/shop/pos/cart/${UUID}?x=1`)).toBe(UUID);
+	test('reads the uuid from open-order-tab-<uuid>', () => {
+		expect(cartRecordUuidFromTabId(`open-order-tab-${UUID}`)).toBe(UUID);
 	});
 
-	test('is null on the blank cart, a receipt and any other page', () => {
-		expect(cartRecordUuidFromUrl('/cart')).toBeNull();
-		expect(cartRecordUuidFromUrl(`/cart/receipt/${UUID}`)).toBeNull();
-		expect(cartRecordUuidFromUrl('/products')).toBeNull();
+	test("is null for the blank cart's tab, a tab's sub-element, a bare prefix and no id", () => {
+		expect(cartRecordUuidFromTabId('new-order-tab')).toBeNull();
+		expect(cartRecordUuidFromTabId(`open-order-tab-${UUID}-amount`)).toBeNull();
+		expect(cartRecordUuidFromTabId('open-order-tab-')).toBeNull();
+		expect(cartRecordUuidFromTabId(null)).toBeNull();
 	});
 });
