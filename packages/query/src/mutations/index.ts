@@ -6,7 +6,7 @@ export {
 	ActiveScopeChangedTwiceError,
 	documentRecordId,
 	findEngineResident,
-	rebirthEngineResident,
+	rebirthOrderResident,
 	residentPayload,
 	insertEngineResident,
 	patchAndEnqueueEngineResident,

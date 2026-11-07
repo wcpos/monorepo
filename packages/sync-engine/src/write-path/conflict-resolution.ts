@@ -1,3 +1,4 @@
+import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
 import {
 	type QueuedMutation,
 	type RecordMutationQueue,
@@ -12,6 +13,7 @@ import { removeManifestByWooIds } from '../local-coverage/rx-existence-manifest-
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { type ResidentSync, stampedSync } from './order-revision';
+import { OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 import { requeueRejectedMutation } from './write-intents';
 import { scopeBoundObserver } from '../scope-bound';
 import { removeRefundChildren } from './refund-children';
@@ -63,10 +65,6 @@ export function rejectionSuggestsServerRecord(reason: string | null | undefined)
 	return typeof reason === 'string' && SERVER_MAY_HOLD_RECORD_REASONS.has(reason);
 }
 
-export function isRecordGoneRejection(status: unknown, reason: unknown): boolean {
-	return status === 404 && reason === 'woo_rxdb_sync_record_not_found';
-}
-
 /** The confirmation verdict and the engine's born-local decision share one identity rule. */
 export function discardConsequence({
 	row,
@@ -75,7 +73,12 @@ export function discardConsequence({
 }: {
 	row: Pick<
 		QueuedMutation,
-		'collectionName' | 'operation' | 'payload' | 'conflictDocument' | 'rejectedReason'
+		| 'collectionName'
+		| 'operation'
+		| 'payload'
+		| 'conflictDocument'
+		| 'rejectedReason'
+		| 'rejectedStatus'
 	>;
 	resident: Record<string, unknown> | null | 'read-failed';
 	remoteIdField?: string;
@@ -87,8 +90,15 @@ export function discardConsequence({
 		(row.collectionName === 'orders'
 			? null
 			: (remoteIdOrNull(row.payload.id) ?? remoteIdOrNull(row.conflictDocument?.id)));
-	if (remoteId !== null)
-		return row.collectionName === 'orders' ? 'keeps-record' : 'may-destroy-record';
+	if (remoteId !== null) {
+		if (row.collectionName !== 'orders') return 'may-destroy-record';
+		const status =
+			resident.status ?? (resident.payload as Record<string, unknown> | undefined)?.status;
+		return isRecordGoneRejection(row.rejectedStatus, row.rejectedReason) &&
+			status !== OPEN_CART_ORDER_STATUS
+			? 'destroys-record'
+			: 'keeps-record';
+	}
 	return row.operation === 'create' && !rejectionSuggestsServerRecord(row.rejectedReason)
 		? 'destroys-record'
 		: 'keeps-record';
@@ -430,19 +440,16 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								//
 								// An update keeps its resident unless the store proved it is gone.
 								const remoteId = facet ? row?.[facet.remoteIdField] : undefined;
-								if (
-									entry.collectionName === 'orders' &&
-									isRecordGoneRejection(entry.rejectedStatus, entry.rejectedReason) &&
-									remoteIdOrNull(row?.remoteId) !== null
-								)
-									discardRemovesResident = true;
+								const orderRemoteId = remoteIdOrNull(remoteId);
+								const verdict = discardConsequence({
+									row: entry,
+									resident: row ?? null,
+									remoteIdField: facet?.remoteIdField,
+								});
+								if (entry.collectionName === 'orders')
+									discardRemovesResident = verdict === 'destroys-record';
 								const bornLocalCreate =
-									discardServerDocument === null &&
-									discardConsequence({
-										row: entry,
-										resident: row ?? null,
-										remoteIdField: facet?.remoteIdField,
-									}) === 'destroys-record';
+									discardServerDocument === null && verdict === 'destroys-record';
 								const removesResident = discardRemovesResident || bornLocalCreate;
 								// Destroying is only safe when NOTHING is queued to send for this
 								// record. A live row means a push is pending or in flight, and for a
@@ -486,7 +493,6 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// survives crashes and failed fetches (a failed task re-runs once
 								// its retry gate elapses), so discard can never strand the record
 								// silently posing as synced with the re-pull lost in memory.
-								const orderRemoteId = remoteIdOrNull(remoteId);
 								if (
 									entry.collectionName === 'orders' &&
 									orderRemoteId !== null &&
@@ -601,7 +607,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										]);
 									// The store proved the order gone: its manifest row would otherwise claim a
 									// resident this device no longer holds. After the resident, like the refunds.
-									if (discardRemovesResident && orderRemoteId !== null)
+									if (
+										entry.collectionName === 'orders' &&
+										discardRemovesResident &&
+										orderRemoteId !== null
+									)
 										await removeManifestByWooIds(database.collections.existenceManifestOrders, [
 											wooIdOf(orderRemoteId),
 										]);

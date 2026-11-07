@@ -22,7 +22,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('@wcpos/query/mutations', () => ({
 	findEngineResident: (...args: unknown[]) => mockFind(...args),
-	rebirthEngineResident: (...args: unknown[]) => mockRebirth(...args),
+	rebirthOrderResident: (...args: unknown[]) => mockRebirth(...args),
 	residentPayload: (resident: { toMutableJSON(): { payload: unknown } }) =>
 		resident.toMutableJSON().payload,
 }));
@@ -41,7 +41,12 @@ const row = {
 	rejectedStatus: 404,
 	rejectedReason: 'woo_rxdb_sync_record_not_found',
 };
-const resident = (status: string, number: string | undefined = '33827') => ({
+const resident = (
+	status: string,
+	number: string | undefined = '33827',
+	remoteId: string | null = '33827'
+) => ({
+	toJSON: () => ({ remoteId }),
 	toMutableJSON: () => ({ payload: { id: 33827, status, number } }),
 });
 const emit = async (rows = [row]) => {
@@ -69,11 +74,8 @@ it('rebirths an open cart, discards then writes a plain create and toasts once',
 		collectionName: 'orders',
 	});
 	await emit();
-	expect(mockRebirth).toHaveBeenCalledWith({
-		manager: mockRuntime,
-		collection: 'orders',
-		recordId: 'a',
-	});
+	expect(mockRebirth).toHaveBeenCalledWith(mockRuntime, 'a');
+	expect(mockFind).toHaveBeenCalledTimes(1);
 	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
 	expect(mockEngine.write).toHaveBeenCalledWith({
 		collection: 'orders',
@@ -94,7 +96,7 @@ it('rebirths an open cart, discards then writes a plain create and toasts once',
 			showToast: true,
 			toast: {
 				title: 'pos_checkout.order_deleted_on_store',
-				description: 'pos_checkout.order_deleted_on_store_recreated:33827',
+				text2: 'pos_checkout.order_deleted_on_store_recreated:33827',
 			},
 			context: { orderId: 'a', orderNumber: '33827', mutationId: 'm1', outcome: 'recreated' },
 		})
@@ -121,7 +123,7 @@ it.each(['completed', 'pos-partial', 'pending', 'processing', 'custom'])(
 				showToast: true,
 				toast: {
 					title: 'pos_checkout.order_deleted_on_store',
-					description: 'pos_checkout.order_deleted_on_store_removed:33827',
+					text2: 'pos_checkout.order_deleted_on_store_removed:33827',
 				},
 				context: { orderId: 'a', orderNumber: '33827', mutationId: 'm1', outcome: 'removed' },
 			})
@@ -150,35 +152,64 @@ it('discards an absent resident silently', async () => {
 });
 
 it('uses a title-only toast when the order number is absent', async () => {
-	mockFind.mockResolvedValue({ toMutableJSON: () => ({ payload: { status: 'completed' } }) });
+	mockFind.mockResolvedValue({
+		toJSON: () => ({ remoteId: '33827' }),
+		toMutableJSON: () => ({ payload: { status: 'completed' } }),
+	});
 	renderHook(() => useStoreDeletedOrdersSettler(1));
 	await emit();
 	expect(mockWarn.mock.calls[0][1].toast).toEqual({ title: 'pos_checkout.order_deleted_on_store' });
 });
 
-it('does not retry a failed mutation or settle another row of that record in flight', async () => {
-	let reject!: (error: Error) => void;
-	mockFind.mockReturnValue(
-		new Promise((_resolve, no) => {
-			reject = no;
-		})
-	);
+it('retries a thrown settle only on the next emission and shows a failure toast', async () => {
+	mockFind.mockRejectedValueOnce(new Error('storage failed'));
 	renderHook(() => useStoreDeletedOrdersSettler(1));
-	await emit([row, { ...row, mutationId: 'm2' }]);
-	await emit();
-	expect(mockFind).toHaveBeenCalledTimes(1);
-	await act(async () => {
-		reject(new Error('storage failed'));
-	});
 	await emit();
 	expect(mockFind).toHaveBeenCalledTimes(1);
 	expect(mockError).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({
 			code: 'SYNC201',
+			showToast: true,
+			toast: { title: 'pos_checkout.order_refused', text2: 'storage failed' },
 			context: expect.objectContaining({ error: 'storage failed' }),
 		})
 	);
 	expect(mockWarn).not.toHaveBeenCalled();
-	expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
+	await emit();
+	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+	expect(mockEngine.write).toHaveBeenCalledTimes(1);
+});
+
+it('drains the latest second row for a record after the first settles without another emission', async () => {
+	let finish!: () => void;
+	mockEngine.resolveConflict.mockImplementationOnce(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	renderHook(() => useStoreDeletedOrdersSettler(1));
+	await emit([row, { ...row, mutationId: 'stale' }]);
+	await emit([row, { ...row, mutationId: 'm2' }]);
+	expect(mockFind).toHaveBeenCalledTimes(1);
+	mockFind.mockResolvedValue(resident('pos-open', undefined, null));
+	await act(async () => {
+		finish();
+	});
+	expect(mockEngine.resolveConflict.mock.calls).toEqual([
+		['m1', 'discard'],
+		['m2', 'discard'],
+	]);
+	expect(mockEngine.write).toHaveBeenCalledTimes(2);
+	expect(mockWarn).toHaveBeenCalledTimes(1);
+});
+
+it('discards and creates an already-reborn cart without another toast', async () => {
+	mockFind.mockResolvedValue(resident('pos-open', undefined, null));
+	renderHook(() => useStoreDeletedOrdersSettler(1));
+	await emit();
+	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+	expect(mockEngine.write).toHaveBeenCalledTimes(1);
+	expect(mockWarn).not.toHaveBeenCalled();
 });

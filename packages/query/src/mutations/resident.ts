@@ -213,44 +213,59 @@ export async function findEngineResident(
 	return (await resolveEngineResident(manager, collection, recordId))?.resident ?? null;
 }
 
+const SERVER_ORDER_IDENTITY_FIELDS = [
+	'number',
+	'order_key',
+	'date_created',
+	'date_created_gmt',
+	'date_modified',
+	'date_modified_gmt',
+	'date_paid',
+	'date_paid_gmt',
+	'date_completed',
+	'date_completed_gmt',
+	'cart_hash',
+	'transaction_id',
+	'links',
+	'_links',
+	'_embedded',
+];
+
+function bornLocalResidentFields(collection: WriteableCollection) {
+	return {
+		remoteId: null,
+		sync: { revision: '', partial: false, source: collection === 'orders' ? 'skeleton' : 'local' },
+	};
+}
+
 /** Keep the cart on its UUID, but remove the deleted store order's identity. */
-export async function rebirthEngineResident(input: {
-	manager: QueryManager;
-	collection: 'orders';
-	recordId: string;
-}): Promise<EngineResident> {
-	const resident = await findEngineResident(input.manager, input.collection, input.recordId);
-	if (!resident)
-		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
+export async function rebirthOrderResident(
+	manager: QueryManager,
+	recordId: string
+): Promise<EngineResident> {
+	const resident = await findEngineResident(manager, 'orders', recordId);
+	if (!resident) throw new Error(`Engine resident "${recordId}" is missing from "orders"`);
 	return resident.incrementalModify((old) => {
-		const payload: Record<string, unknown> = {
-			...((old.payload ?? {}) as Record<string, unknown>),
-			id: 0,
-		};
-		for (const key of [
-			'number',
-			'order_key',
-			'date_created',
-			'date_created_gmt',
-			'date_modified',
-			'date_modified_gmt',
-			'date_paid',
-			'date_paid_gmt',
-			'date_completed',
-			'date_completed_gmt',
-			'cart_hash',
-			'transaction_id',
-			'links',
-			'_links',
-			'_embedded',
-		])
-			delete payload[key];
-		return withPromotedFields(input.collection, {
-			...old,
-			remoteId: null,
-			payload,
-			sync: { ...((old.sync ?? {}) as Record<string, unknown>), revision: '', source: 'skeleton' },
-		});
+		const payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
+		payload.id = 0;
+		for (const key of SERVER_ORDER_IDENTITY_FIELDS) delete payload[key];
+		for (const [field, marker] of Object.entries({
+			line_items: 'product_id',
+			fee_lines: 'name',
+			shipping_lines: 'method_id',
+			coupon_lines: 'code',
+		})) {
+			const lines = payload[field];
+			if (!Array.isArray(lines)) continue;
+			payload[field] = lines.filter(
+				(line) => line[marker] !== null && !(field === 'line_items' && line.quantity === 0)
+			);
+			for (const line of payload[field] as Record<string, unknown>[]) {
+				delete line.id;
+				if (Array.isArray(line.meta_data)) for (const meta of line.meta_data) delete meta.id;
+			}
+		}
+		return withPromotedFields('orders', { ...old, ...bornLocalResidentFields('orders'), payload });
 	});
 }
 
@@ -464,11 +479,7 @@ export async function insertEngineResident(input: {
 	const common: Record<string, unknown> = {
 		uuid: input.recordId,
 		payload,
-		sync: {
-			revision: '',
-			partial: false,
-			source: input.collection === 'orders' ? 'skeleton' : 'local',
-		},
+		...bornLocalResidentFields(input.collection),
 		local: { dirty: false, pendingMutationIds: [] },
 	};
 	const remoteId = remoteIdOrNull(payload.id);

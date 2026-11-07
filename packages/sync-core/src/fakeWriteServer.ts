@@ -356,7 +356,8 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			};
 
 			if (env.operation === 'delete') {
-				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_not_found' });
+				// Match the WooCommerce POS plugin's Write_Controller::apply_update refusal.
+				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_record_not_found' });
 				if (env.baseRevision !== existing.revision) {
 					const c = conflict(existing);
 					return asResponse(c.status, c.body);
@@ -367,7 +368,8 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			}
 
 			if (env.operation === 'update') {
-				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_not_found' });
+				// Match the WooCommerce POS plugin's Write_Controller::apply_update refusal.
+				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_record_not_found' });
 				if (env.baseRevision !== existing.revision) {
 					const c = conflict(existing);
 					return asResponse(c.status, c.body);

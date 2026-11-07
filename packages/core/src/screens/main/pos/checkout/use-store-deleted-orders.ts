@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { observeQueueRows, REJECTED_QUEUE_STATUSES, useQueryRuntime } from '@wcpos/query';
-import { findEngineResident, rebirthEngineResident, residentPayload } from '@wcpos/query/mutations';
-import { isRecordGoneRejection, OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
+import { findEngineResident, rebirthOrderResident, residentPayload } from '@wcpos/query/mutations';
+import { OPEN_CART_ORDER_STATUS, type QueueRow } from '@wcpos/sync-engine';
+import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -17,15 +18,15 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 	React.useEffect(() => {
 		const handled = new Set<string>();
 		const inFlight = new Set<string>();
-		const subscription = observeQueueRows(manager.engine, {
-			statuses: REJECTED_QUEUE_STATUSES,
-			collectionName: 'orders',
-		}).subscribe((rows) => {
-			for (const row of rows) {
+		let latestRows: readonly QueueRow[] = [];
+		const failed = new Set<string>();
+		const scan = () => {
+			for (const row of latestRows) {
 				if (
 					row.operation !== 'update' ||
 					!isRecordGoneRejection(row.rejectedStatus, row.rejectedReason) ||
 					handled.has(row.mutationId) ||
+					failed.has(row.mutationId) ||
 					inFlight.has(row.recordId)
 				)
 					continue;
@@ -37,12 +38,10 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 						const resident = await findEngineResident(manager, 'orders', recordId);
 						const { number, status } = resident ? residentPayload(resident) : {};
 						const recreate = resident && status === OPEN_CART_ORDER_STATUS;
-						if (recreate) await rebirthEngineResident({ manager, collection: 'orders', recordId });
+						const alreadyReborn = resident?.toJSON().remoteId === null;
+						const reborn = recreate ? await rebirthOrderResident(manager, recordId) : null;
 						await manager.engine.resolveConflict(mutationId, 'discard');
-						if (recreate) {
-							const reborn = await findEngineResident(manager, 'orders', recordId);
-							if (!reborn)
-								throw new Error(`Engine resident "${recordId}" is missing after rebirth`);
+						if (reborn) {
 							// Plain snapshot, not an RxDB payload proxy: it crosses the storage worker boundary.
 							await manager.engine.write({
 								collection: 'orders',
@@ -51,7 +50,7 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 								payload: residentPayload(reborn),
 							});
 						}
-						if (!resident) return;
+						if (!resident || alreadyReborn) return;
 						log.warn('Order deleted on the store', {
 							code: ERROR_CODES.RECORD_GONE_ON_STORE,
 							showToast: true,
@@ -59,7 +58,7 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 								title: t('pos_checkout.order_deleted_on_store'),
 								...(number
 									? {
-											description: recreate
+											text2: recreate
 												? t('pos_checkout.order_deleted_on_store_recreated', { number })
 												: t('pos_checkout.order_deleted_on_store_removed', { number }),
 										}
@@ -73,16 +72,35 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 							},
 						});
 					} catch (error) {
+						handled.delete(mutationId);
+						failed.add(mutationId); // Retry on an emission, not in the finally rescan.
 						log.error('Could not settle the store-deleted order', {
 							code: ERROR_CODES.RECORD_REJECTED,
+							showToast: true,
+							toast: {
+								title: t('pos_checkout.order_refused'),
+								text2: getErrorMessage(error),
+							},
 							context: { orderId: recordId, mutationId, error: getErrorMessage(error) },
 						});
 					} finally {
 						inFlight.delete(recordId);
+						scan();
 					}
 				})();
 			}
+		};
+		const subscription = observeQueueRows(manager.engine, {
+			statuses: REJECTED_QUEUE_STATUSES,
+			collectionName: 'orders',
+		}).subscribe((rows) => {
+			latestRows = rows;
+			failed.clear();
+			scan();
 		});
-		return () => subscription.unsubscribe();
+		return () => {
+			latestRows = [];
+			subscription.unsubscribe();
+		};
 	}, [manager, storeId, t]);
 }

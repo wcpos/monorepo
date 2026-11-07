@@ -179,7 +179,7 @@
 		"dataSafety": "order-safe",
 		"escalation": "none",
 		"summary": "Your store no longer has this order, so this device settled its own copy.",
-		"docsBody": "Someone deleted (trashed) the order in WP Admin while this device still held it. An open cart is kept and sent again as a new order with a new number; any other order is removed from this device, because the store's copy is gone. Nothing is waiting to send.",
+		"docsBody": "Someone deleted (trashed) the order in WP Admin while this device still held it. An open cart is kept and sent again as a new order with a new number; any other order is removed from this device, because the store's copy is gone. A kept cart is sent again the next time you press Pay; nothing else is waiting to send.",
 		"troubleshooting": [
 			"Expand the log entry: it names the order number the store deleted and whether this device kept the cart as a new order or removed its copy.",
 			"If the cart was kept, the sale continues as normal — it reaches the store as a new order with a new number when you press Pay.",
