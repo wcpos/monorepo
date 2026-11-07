@@ -29,6 +29,9 @@ const FIXED_TIMEOUT_MS = 10 * 60_000;
 /** A mid-run GC checkpoint between loops once this long has passed since the last one. */
 const CHECKPOINT_EVERY_MS = 30 * 60_000;
 
+// A saved state carries no store tag, so SOAK_STORE_URL may name another store: sign in fresh.
+test.use({ freshLogin: true });
+
 test('sell to a guest, looped', async ({
 	posPage,
 	request,
