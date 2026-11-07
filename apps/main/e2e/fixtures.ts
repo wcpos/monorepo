@@ -169,19 +169,35 @@ export async function setBrowseBy(
  * few seconds for the card: an already-open register resolves as soon as its
  * header renders (this runs several times per checkout), and a slow register
  * hydration still gets the normal readiness budget instead of a short timer
- * that would return just before the card appears.
+ * that would return just before the card appears. A store with several
+ * registers asks the device which one it is at first, and the first row is taken.
+ * Resolves true only when this call opened the session, so a caller that must
+ * leave a shared store as it found it knows whether to close it again.
  */
-export async function ensureRegisterOpen(page: Page): Promise<void> {
+export async function ensureRegisterOpen(
+	page: Page,
+	{ afterPicking }: { afterPicking?: () => Promise<void> } = {}
+): Promise<boolean> {
 	const card = page.getByTestId('open-register-card');
 	const cartReady = page.getByTestId('add-cart-item-menu');
-	await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
-	if (!(await card.isVisible())) return;
+	const picker = page.locator('[data-testid^="register-picker-row-"]');
+	await expect(card.or(cartReady).or(picker.first()).first()).toBeVisible({
+		timeout: CATALOGUE_READY_TIMEOUT_MS,
+	});
+	if (await picker.first().isVisible()) {
+		await picker.first().click();
+		await expect(picker.first()).toBeHidden({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+		await afterPicking?.();
+		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	}
+	if (!(await card.isVisible())) return false;
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
 	await page.getByTestId('open-register-button').click();
 	await expect(card).toBeHidden({ timeout: 30_000 });
 	// A healthy open register has no warning pill; its cart header is ready instead.
 	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
+	return true;
 }
 
 /**
@@ -1128,6 +1144,13 @@ export async function navigateToPage(
 export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
 	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
+	await selectEnglishLanguage(page);
+	await navigateToPage(page, 'pos');
+	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
+}
+
+/** Choose English in the language combobox of the open General settings screen. */
+export async function selectEnglishLanguage(page: Page): Promise<void> {
 	await page.getByTestId('language-select').click();
 	const combobox = page.getByTestId('language-select-content');
 	await expect(combobox).toBeVisible({ timeout: 10_000 });
@@ -1136,8 +1159,6 @@ export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
 	await expect(option).toBeVisible({ timeout: 10_000 });
 	await option.click();
 	await expect(combobox).toBeHidden({ timeout: 10_000 });
-	await navigateToPage(page, 'pos');
-	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
 }
 
 export interface HydrateAuthenticatedPageOptions {

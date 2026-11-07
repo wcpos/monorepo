@@ -659,3 +659,15 @@ _Avoid_: wrap, flow layout, masonry, column grid.
 the edge a POS panel enters from, derived from its subject (cart → over the products,
 products → over the cart, shell → right).
 _Avoid_: overlay side, POS overlay side, products side.
+
+## Language — Journeys
+
+**Journey**:
+A named, ordered thing a cashier does on 2.0, from a stable start state to a
+checkable end state, written once as a module under `apps/main/e2e/journeys/`
+and walked by three callers: its spec, its captures and its soak.
+_Avoid_: flow, scenario, user story
+
+**Journey step**:
+One cashier-named `test.step()` in a journey module. Capture pins and docs
+steps follow its number.

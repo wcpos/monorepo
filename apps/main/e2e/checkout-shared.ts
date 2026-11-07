@@ -29,6 +29,11 @@ export function digitsOf(value: string): string {
 	return value.replace(/\D/g, '');
 }
 
+/** Digits after the last decimal separator of a shown amount: its minor-unit precision. */
+export function decimalPlaces(text: string): number {
+	return /[.,](\d+)\D*$/.exec(text)?.[1].length ?? 0;
+}
+
 export async function readAmountMinor(page: Page, testId: string): Promise<number> {
 	const text = (await page.getByTestId(testId).textContent()) ?? '';
 	const digits = digitsOf(text);
