@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -8,10 +8,16 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout } from './checkout-mode';
 import { Checkout } from './checkout';
-import { columnsCheckoutHref, leaveSheet, STANDALONE_CHECKOUT_PARAM } from './till-route';
+import {
+	columnsCheckoutHref,
+	leaveSheet,
+	routeBeneath,
+	STANDALONE_CHECKOUT_PARAM,
+} from './till-route';
 
 export function CheckoutScreen() {
 	const router = useRouter();
+	const navigation = useNavigation();
 	const params = useLocalSearchParams<{
 		orderId: string;
 		[STANDALONE_CHECKOUT_PARAM]?: string;
@@ -30,8 +36,8 @@ export function CheckoutScreen() {
 		React.useCallback(() => {
 			if (!redirectToColumns) return;
 			enterCheckout(orderId);
-			leaveSheet(router, columnsCheckoutHref(orderId));
-		}, [redirectToColumns, orderId, router])
+			leaveSheet(router, columnsCheckoutHref(orderId), routeBeneath(navigation.getState()));
+		}, [redirectToColumns, orderId, router, navigation])
 	);
 	if (redirectToColumns) return null;
 	return <Checkout resource={resource} />;

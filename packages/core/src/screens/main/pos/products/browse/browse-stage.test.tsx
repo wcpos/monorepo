@@ -184,6 +184,7 @@ jest.mock('../deal-stack', () => ({
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
 	useDealCards: () => null,
+	useDealBackStyle: () => ({}),
 }));
 jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: (props: Parameters<typeof MockStack>[0]) => <MockStack {...props} />,

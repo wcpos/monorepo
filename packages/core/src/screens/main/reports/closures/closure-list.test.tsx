@@ -11,10 +11,35 @@ import { deriveSettled } from '../../../../services/register-session/settled-fig
 import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
 
+// Plain tabs never render the optional phone Select or its native overlay.
+jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
+jest.mock('uniwind', () => ({
+	withUniwind: (component: unknown) => component,
+	useCSSVariable: () => [],
+}));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
 		credentials.populate$('stores'),
+}));
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
+// Keep the real Badge and AmountFigure; jsdom's RN View otherwise drops their className.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		testID,
+		className,
+		children,
+		style,
+	}: React.ComponentProps<typeof import('react-native').View>) => (
+		<div data-testid={testID} className={className} style={style as React.CSSProperties}>
+			{children}
+		</div>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({
@@ -111,6 +136,7 @@ function row(id: string, changes: Partial<ClosureRow> = {}): ClosureRow {
 	};
 }
 beforeEach(() => {
+	mockPhone = false;
 	storeTimezone = 'America/Los_Angeles';
 	jest.useFakeTimers().setSystemTime(new Date('2026-10-01T12:00:00Z'));
 });
@@ -166,14 +192,17 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 	).toBe('Unsynced');
 	expect(screen.getByTestId('closure-badge-2').textContent).toBe('Corrected');
 	expect(screen.queryByTestId('closure-badge-3')).toBeNull();
-	for (const [id, text] of [
-		['1', '£2.00 short'],
-		['2', '£3.00 over'],
-		['3', 'Exact'],
+	for (const [id, text, difference] of [
+		['1', 'Short', '−£2.00'],
+		['2', 'Over', '+£3.00'],
+		['3', 'Exact', '£0.00'],
 	]) {
 		const r = screen.getByTestId(`closure-row-${id}`);
 		expect(screen.getByTestId(`closure-result-${id}`).textContent).toBe(text);
-		expect(r.lastElementChild?.getAttribute('data-icon')).toBe('chevronRight');
+		expect(screen.getByTestId(`closure-difference-${id}`).textContent).toBe(difference);
+		expect(screen.getByTestId(`closure-expected-${id}`).textContent).toBe('£10.00');
+		expect(screen.getByTestId(`closure-counted-${id}`).textContent).toBe('£8.00');
+		expect(r.querySelector('[data-icon="chevronRight"]')).toBeTruthy();
 	}
 	expect(screen.getByTestId('closure-row-1').textContent).toContain('£8.00');
 	expect(screen.getByTestId('closure-day-2026-09-17').textContent).toContain(
@@ -265,13 +294,14 @@ it('distinguishes short, over and exact drawer results with semantic tokens', ()
 			]}
 		/>
 	);
-	for (const [id, token] of [
-		['1', 'text-bad'],
-		['2', 'text-ok'],
-		['3', 'text-muted-foreground'],
+	for (const [id, token, badgeTone] of [
+		['1', 'text-bad', 'bg-bad/15'],
+		['2', 'text-ok', 'bg-ok/15'],
+		['3', 'text-muted-foreground', 'bg-muted'],
 	]) {
-		expect(screen.getByTestId(`closure-result-${id}`).className).toContain(token);
-		expect(screen.getByTestId(`closure-result-${id}`).className).toContain('tabular-nums');
+		expect(screen.getByTestId(`closure-result-${id}`).className).toContain(badgeTone);
+		expect(screen.getByTestId(`closure-difference-${id}`).className).toContain(token);
+		expect(screen.getByTestId(`closure-difference-${id}`).className).toContain('tabular-nums');
 	}
 });
 
@@ -314,7 +344,9 @@ it('formats counted and variance using the viewed currency, precision and separa
 		/>
 	);
 	expect(screen.getByTestId('closure-counted-euro').textContent).toBe('1.234,567 €');
-	expect(screen.getByTestId('closure-result-euro').textContent).toBe('2,345 € short');
+	expect(screen.getByTestId('closure-expected-euro').textContent).toBe('10,000 €');
+	expect(screen.getByTestId('closure-difference-euro').textContent).toBe('−2,345 €');
+	expect(screen.getByTestId('closure-result-euro').textContent).toBe('Short');
 });
 // Revert: check unavailableIds using row.id instead of server_closure_id.
 it('disables a server-identified unavailable row', () => {
@@ -419,6 +451,13 @@ it('totals three closures and one open session in the viewed currency, hiding st
 	]) {
 		expect(screen.getByTestId(`closure-stat-${id}`).textContent).toBe(value);
 	}
+	expect(screen.getAllByTestId(/^closure-stat-/)[0].getAttribute('data-testid')).toBe(
+		'closure-stat-discrepancy'
+	);
+	expect(screen.getByTestId('closure-stat-discrepancy').className).toContain('text-2xl');
+	expect(screen.getByTestId('closures-head').textContent).toBe(
+		'ClosureExpectedCountedDifferenceResult'
+	);
 	expect(screen.getByText('1 open · 3 closed')).toBeTruthy();
 	expect(screen.getByText('1 short · 1 over · 1 exact')).toBeTruthy();
 	view.rerender(<ClosureList rows={rows} sessions={sessions} blind storeId={2} />);
@@ -491,4 +530,22 @@ it('badges carried closures by destination, after Unsynced and before Corrected'
 	expect(screen.getByTestId('closure-badge-2').textContent).toBe('Carried to Market');
 	expect(screen.getByTestId('closure-badge-3').textContent).toBe('Carried');
 	expect(screen.queryByTestId('closure-badge-4')).toBeNull();
+});
+
+// Revert: keep tablet columns on phones instead of labelling their figures in the row body.
+it('labels phone figures and keeps the result beside the status badge', () => {
+	mockPhone = true;
+	render(<ClosureList rows={[row('1')]} />);
+	expect(screen.getByTestId('closure-figures-1').textContent).toBe(
+		'Expected £10.00 · Counted £8.00 · Difference −£2.00'
+	);
+	expect(screen.queryByTestId('closure-expected-1')).toBeNull();
+	expect(screen.queryByTestId('closures-head')).toBeNull();
+	const result = screen.getByTestId('closure-result-1');
+	expect(result.textContent).toBe('Short');
+	expect(result.className).toContain('bg-bad/15');
+	expect(result.parentElement).toBe(screen.getByTestId('closure-badge-1').parentElement);
+	expect(screen.getAllByTestId(/^closure-stat-/)[0].getAttribute('data-testid')).toBe(
+		'closure-stat-discrepancy'
+	);
 });

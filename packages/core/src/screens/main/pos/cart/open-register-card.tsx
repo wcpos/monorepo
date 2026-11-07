@@ -88,7 +88,6 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			<View className="gap-2">
 				<Text className="text-muted-foreground">{t('register.cash_in_drawer')}</Text>
 				<RegisterAmount
-					variant="box"
 					ref={input}
 					testID="open-register-amount"
 					value={amount}

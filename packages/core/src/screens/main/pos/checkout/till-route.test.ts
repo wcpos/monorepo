@@ -1,7 +1,9 @@
 import {
 	columnsCheckoutHref,
 	leaveSheet,
+	openTill,
 	returnToTill,
+	routeBeneath,
 	tillCartHref,
 	tillHref,
 } from './till-route';
@@ -74,12 +76,59 @@ describe('leaveSheet', () => {
 		expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
 		expect(router.dismiss).not.toHaveBeenCalled();
 	});
+
+	it('replaces a sheet over the anchor even though canDismiss reports true', () => {
+		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
+		leaveSheet(router, { pathname: '/cart' }, 'index');
+		expect(router.replace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(router.dismiss).not.toHaveBeenCalled();
+	});
+
+	it('pops a sheet over a till route named beneath it', () => {
+		const router = { replace: jest.fn(), dismiss: jest.fn(), canDismiss: () => true };
+		leaveSheet(router, { pathname: '/cart' }, '(columns)/cart/[...orderId]');
+		expect(router.dismiss).toHaveBeenCalledTimes(1);
+		expect(router.replace).not.toHaveBeenCalled();
+	});
+});
+
+describe('routeBeneath', () => {
+	it('names the route beneath the focused one', () => {
+		const routes = [{ name: 'index' }, { name: '(modals)/cart/[orderId]/checkout' }];
+		expect(routeBeneath({ index: 1, routes })).toBe('index');
+	});
+
+	it('is undefined for the bottom route', () => {
+		expect(routeBeneath({ index: 0, routes: [{ name: 'index' }] })).toBeUndefined();
+	});
 });
 
 it('builds the columns checkout href for one order', () => {
 	expect(columnsCheckoutHref('o1')).toEqual({
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
 		params: { orderId: ['o1', 'checkout'] },
+	});
+});
+
+describe('openTill', () => {
+	it('navigates (never pushes) to the requested order when wide', () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, false, 'o2');
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/cart/[...orderId]',
+			params: { orderId: ['o2'] },
+		});
+	});
+
+	it("navigates to a new cart in the phone's tabs without an order", () => {
+		const router = { navigate: jest.fn() };
+		openTill(router, true);
+		expect(router.navigate).toHaveBeenCalledTimes(1);
+		expect(router.navigate).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]',
+			params: { orderId: [] },
+		});
 	});
 });
 

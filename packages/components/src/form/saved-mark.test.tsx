@@ -3,7 +3,14 @@ import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
 
-import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved, useSavedName } from './saved-mark';
+import {
+	SavedFieldProvider,
+	savedKeys,
+	SavedMark,
+	useMarkFailed,
+	useMarkSaved,
+	useSavedName,
+} from './saved-mark';
 const mockDuration = jest.fn((_duration: number) => 'fade');
 let mockReduced = false;
 jest.mock('react-native-reanimated', () => ({
@@ -14,14 +21,23 @@ jest.mock('react-native-reanimated', () => ({
 	useReducedMotion: () => mockReduced,
 }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+const mockIcon = jest.fn((_props: { name: string; className?: string }) => null);
+jest.mock('@wcpos/components/icon', () => ({ Icon: (props: { name: string }) => mockIcon(props) }));
+// The ink is a class on the Text; the web Text drops className in jest, so a span carries it here.
+jest.mock('@wcpos/components/text', () => ({
+	Text: (props: { className?: string; children?: React.ReactNode }) => (
+		<span data-classes={props.className}>{props.children}</span>
+	),
+}));
 function Marks() {
 	const markSaved = useMarkSaved();
+	const markFailed = useMarkFailed();
 	return (
 		<>
 			<button onClick={() => markSaved(['name'])}>Save name</button>
+			<button onClick={() => markFailed(['name'])}>Fail name</button>
 			<button onClick={() => markSaved(['restore'])}>Restore</button>
-			<SavedMark name="name" label="Saved" />
+			<SavedMark name="name" label="Saved" failedLabel="Not saved" />
 			<SavedMark name="restore" label="Restored" />
 		</>
 	);
@@ -30,6 +46,7 @@ beforeEach(() => {
 	jest.useFakeTimers();
 	mockReduced = false;
 	mockDuration.mockClear();
+	mockIcon.mockClear();
 });
 afterEach(() => {
 	jest.useRealTimers();
@@ -49,6 +66,39 @@ it('shows only the last saved field, holds for 1200ms and uses the short opacity
 	act(() => jest.advanceTimersByTime(1));
 	expect(queryByTestId('saved-name')).toBeNull();
 	expect(mockDuration).toHaveBeenCalledWith(220);
+});
+it('a saved mark is a check in the success colour', () => {
+	const { getByText, getByTestId } = render(
+		<SavedFieldProvider>
+			<Marks />
+		</SavedFieldProvider>
+	);
+	fireEvent.click(getByText('Save name'));
+	expect(mockIcon).toHaveBeenLastCalledWith(
+		expect.objectContaining({ name: 'check', className: 'text-success' })
+	);
+	expect(getByTestId('saved-name').querySelector('[data-classes*="text-success"]')).toBeTruthy();
+	expect(getByTestId('saved-name').querySelector('[data-classes*="text-bad"]')).toBeNull();
+});
+it('a failed write is an alert in the error colour with its own words, and holds until the next write', () => {
+	const { getByText, getByTestId, queryByTestId } = render(
+		<SavedFieldProvider>
+			<Marks />
+		</SavedFieldProvider>
+	);
+	fireEvent.click(getByText('Fail name'));
+	expect(queryByTestId('saved-name')).toBeNull();
+	expect(getByTestId('failed-name').textContent).toBe('Not saved');
+	expect(mockIcon).toHaveBeenLastCalledWith(
+		expect.objectContaining({ name: 'alert', className: 'text-bad' })
+	);
+	expect(getByTestId('failed-name').querySelector('[data-classes*="text-bad"]')).toBeTruthy();
+	// No timer: the record does not hold the edit until a later write lands.
+	act(() => jest.advanceTimersByTime(60_000));
+	expect(getByTestId('failed-name')).toBeTruthy();
+	fireEvent.click(getByText('Save name'));
+	expect(queryByTestId('failed-name')).toBeNull();
+	expect(getByTestId('saved-name').textContent).toBe('Saved');
 });
 it('useSavedName reads the name whose mark shows, and clears with it', () => {
 	function Name() {

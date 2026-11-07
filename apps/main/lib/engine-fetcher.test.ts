@@ -245,7 +245,7 @@ describe('createEngineFetcher', () => {
 	it.each([
 		['orders', 'wcpos/v2/orders'],
 		['products', 'wcpos/v2/products'],
-		['variations', 'wcpos/v1/products/variations'],
+		['variations', 'wcpos/v2/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
 		['refunds', 'wcpos/v2/refunds'],

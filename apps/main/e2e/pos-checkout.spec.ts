@@ -3,8 +3,10 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import {
 	becomesVisible,
 	getStoreUrl,
+	getStoreVariant,
 	isRouteTeardownError,
 	isWcposRestRoute,
+	navigateToPage,
 	openOrderSheet,
 	tryAddProductBySku,
 	wcposRestRoute,
@@ -514,6 +516,37 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			await processPayment(page);
 
 			// Replacing checkout stacked another POS screen, making one scan add N units.
+			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
+			await expect(page.getByTestId('search-products')).toHaveCount(1);
+		}
+	);
+
+	liveTest(
+		're-opening an order from Orders leaves exactly one POS screen',
+		async ({ posPage: page, trackOrder }, testInfo) => {
+			// The Orders page is Pro-only; free draws the upgrade overlay over the rows.
+			liveTest.skip(getStoreVariant(testInfo) !== 'pro', 'Orders page requires Pro');
+			liveTest.slow();
+			const label = newRunLabel();
+			await addTestProductToCart(page);
+			await stampRunLabel(page, label);
+			const { uuid, surface } = await openCheckout(page, {
+				onOrderCreated: (order) => trackOrder({ ...order, label }),
+			});
+			await checkoutControl(page, surface, 'close').click();
+			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+
+			// Re-open from the Orders page: a push from another drawer page used to land a second till.
+			await navigateToPage(page, 'orders');
+			const row = page.getByTestId(`data-table-row-${uuid}`);
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.getByTestId('order-open-button').click();
+			await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+			await page.getByTestId('order-modal-reopen').click();
+			await expect(page.getByTestId('screen-pos').filter({ visible: true }).first()).toBeVisible({
+				timeout: 30_000,
+			});
+
 			await expect(page.getByTestId('screen-pos')).toHaveCount(1, { timeout: 15_000 });
 			await expect(page.getByTestId('search-products')).toHaveCount(1);
 		}
