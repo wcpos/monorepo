@@ -72,9 +72,6 @@ export const useCameraScan = () => {
 						showTooShortFeedback(tRef.current, code, minCharsRef.current);
 						return;
 					}
-					if (!posSectionActiveRef.current) {
-						return;
-					}
 					emitRef.current({
 						code,
 						symbology,
@@ -89,6 +86,13 @@ export const useCameraScan = () => {
 
 	const onScan = React.useCallback(
 		(result: CameraScanResult) => {
+			// Dropped before the session sees it: a read the session recorded while
+			// another section was focused would otherwise hold its cooldown, and a
+			// continuous source extends that hold on every frame, so a product still
+			// in view when the cashier returns to the POS would never be added.
+			if (!posSectionActiveRef.current) {
+				return;
+			}
 			getSession().offer(result.data, result.type);
 		},
 		[getSession]
