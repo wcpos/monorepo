@@ -12,7 +12,13 @@ import {
 } from '@wcpos/components/dialog';
 import { FormItem, FormLabel } from '@wcpos/components/form/common';
 import { FormFieldContext } from '@wcpos/components/form/context';
+import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
+import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
+import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { TONE } from '@wcpos/components/lib/tone';
+import { cn } from '@wcpos/components/lib/utils';
 import { IconButton } from '@wcpos/components/icon-button';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
@@ -38,7 +44,7 @@ import {
 	denominationTotal,
 	overThreshold,
 	validAmount,
-	varianceText,
+	varianceAmount,
 } from './register-count.helpers';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
@@ -124,13 +130,16 @@ export function RegisterCount({
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
 	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
+	const phone = useIsPhone();
 	const currency = useDocField(store, (value) => value.currency);
+	const separator = useDocField(store, (value) => value.price_decimal_sep) || '.';
 	const decimals = countDecimals(useDocField(store, (value) => value.price_num_decimals));
 	const noteForm = useForm({ defaultValues: { note: session?.count_note ?? '' } });
 	const note = useWatch({ control: noteForm.control, name: 'note' });
 	const noteId = React.useId();
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
+	const [keypadOpen, setKeypadOpen] = React.useState(true);
 	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
 		Object.fromEntries(
 			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
@@ -153,6 +162,8 @@ export function RegisterCount({
 		: cash;
 	const valid = validAmount(amount, decimals);
 	const variance = countVariance(amount, expected.cash ?? '0', decimals);
+	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
+	const bandClass = tone.band;
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const counted = {
 		cash: amount,
@@ -194,29 +205,67 @@ export function RegisterCount({
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
-				value={amount}
+				value={amount.replace('.', separator)}
 				onChangeText={(value) => {
 					setPieces({});
-					setCash(value);
+					setCash(value.replace(separator, '.'));
 				}}
+				onBlur={() => {
+					if (valid) setKeypadOpen(false);
+				}}
+				onFocus={() => setKeypadOpen(true)}
+				onPressIn={() => setKeypadOpen(true)}
 			/>
+			{keypadOpen ? (
+				<View testID="count-keypad">
+					<Keypad
+						rows={[
+							...DIGIT_ROWS,
+							decimalRow(decimals > 0 ? separator : undefined, t('common.backspace')),
+						]}
+						fit={phone ? 'shrink' : 'tile'}
+						testID="count"
+						onPress={(key) => {
+							setPieces({});
+							setCash((prev) => typeDecimal(prev, key, decimals));
+						}}
+					/>
+				</View>
+			) : (
+				<Text testID="count-tap-to-change" className="text-muted-foreground">
+					{t('register.tap_amount_to_change')}
+				</Text>
+			)}
 			{!blind && valid && (
-				<View className="min-h-row flex-row items-center justify-between">
-					<Text className="text-muted-foreground">
-						{t('register.expected_line', { amount: format(Number(expected.cash ?? '0')) })}
-					</Text>
-					<View className="flex-row items-center gap-2">
-						<Text
-							testID="count-variance"
-							className={`font-semibold tabular-nums ${variance < 0 ? 'text-bad' : variance === 0 ? 'text-ok' : 'text-foreground'}`}
-						>
-							{varianceText(variance, decimals, format, t)}
-						</Text>
-						{variance === 0 && (
-							<View testID="count-exact">
-								<Icon name="check" className="text-success" />
+				<View testID="count-result" className="border-border rounded-tile border">
+					<View className="min-h-row flex-row items-center justify-between px-3">
+						<Text className="text-muted-foreground">{t('register.expected_label')}</Text>
+						<Text className="tabular-nums">{format(Number(expected.cash ?? '0'))}</Text>
+					</View>
+					<View
+						testID="count-band"
+						className={cn('min-h-row flex-row items-center justify-between px-3', bandClass)}
+					>
+						<HStack className="items-center gap-2">
+							<View testID={variance === 0 ? 'count-exact' : undefined}>
+								<Icon
+									name={variance < 0 ? 'arrowDown' : variance > 0 ? 'arrowUp' : 'check'}
+									className={tone.text}
+								/>
 							</View>
-						)}
+							<Text className="font-semibold">
+								<Text className="capitalize">
+									{variance < 0
+										? t('register.short')
+										: variance > 0
+											? t('register.over')
+											: t('register.exact')}
+								</Text>
+							</Text>
+						</HStack>
+						<Text testID="count-variance" className="font-semibold tabular-nums">
+							{varianceAmount(variance, decimals, format)}
+						</Text>
 					</View>
 				</View>
 			)}
@@ -280,9 +329,10 @@ export function RegisterCount({
 								key={value}
 								value={value}
 								pieces={pieces[value] ?? 0}
-								add={(n) =>
-									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }))
-								}
+								add={(n) => {
+									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }));
+									setKeypadOpen(false);
+								}}
 							/>
 						))}
 					</TileGrid>

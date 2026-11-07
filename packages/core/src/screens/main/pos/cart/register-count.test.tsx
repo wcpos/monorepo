@@ -8,6 +8,19 @@ import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/regi
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
+// RN-web drops className without Uniwind; retain the View's token classes for band assertions.
+jest.mock('react-native', () => {
+	const native = jest.requireActual('react-native');
+	return {
+		...native,
+		View: ({
+			className,
+			...props
+		}: React.ComponentProps<typeof import('react-native').View> & {
+			dataSet?: Record<string, string>;
+		}) => <native.View {...props} dataSet={{ ...props.dataSet, classes: className }} />,
+	};
+});
 // Keep FormLabel and its form context real; the native primitive ships unbound JSX in Jest.
 jest.mock('@rn-primitives/label', () => ({
 	Text: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
@@ -47,12 +60,24 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<span data-testid={testID}>{children}</span>
+	Text: ({
+		children,
+		testID,
+		className,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) => (
+		<span data-testid={testID} className={className}>
+			{children}
+		</span>
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({
-	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
+	Icon: ({ testID, name, className }: { testID?: string; name: string; className?: string }) => (
+		<span data-testid={testID} data-icon={name} className={className} />
+	),
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
@@ -74,6 +99,7 @@ let figuresPending = false;
 let blind = false,
 	approval_required = false,
 	varianceThreshold = '';
+let separator = '.';
 let expectedCash = '480.80',
 	decimals: number | undefined;
 const closure = { id: 's', number: 1 };
@@ -101,7 +127,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
-		store: { currency: 'GBP', price_num_decimals: decimals },
+		store: { currency: 'GBP', price_num_decimals: decimals, price_decimal_sep: separator },
 		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	}),
 }));
@@ -113,11 +139,26 @@ jest.mock('./movement-sheet', () => ({
 		value,
 		onChangeText,
 		testID,
+		onFocus,
+		onBlur,
+		onPressIn,
 	}: {
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
-	}) => <input data-testid={testID} value={value} onChange={(e) => onChangeText(e.target.value)} />,
+		onFocus?: () => void;
+		onBlur?: () => void;
+		onPressIn?: () => void;
+	}) => (
+		<input
+			data-testid={testID}
+			value={value}
+			onChange={(e) => onChangeText(e.target.value)}
+			onFocus={onFocus}
+			onBlur={onBlur}
+			onMouseDown={onPressIn}
+		/>
+	),
 }));
 jest.mock('./approve-sheet', () => ({
 	ApproveSheet: ({ side, portalHost }: { side?: 'left' | 'right'; portalHost?: string | null }) => (
@@ -138,6 +179,7 @@ beforeEach(() => {
 	varianceThreshold = '';
 	expectedCash = '480.80';
 	decimals = undefined;
+	separator = '.';
 	jest.clearAllMocks();
 });
 afterEach(() => jest.useRealTimers());
@@ -150,12 +192,12 @@ it('shows short and exact with check', () => {
 		/>
 	);
 	enter('463.30');
-	expect(screen.getByTestId('count-variance').textContent).toBe('−£17.50 short');
-	expect(screen.getByTestId('count-variance').parentElement?.parentElement?.textContent).toContain(
-		'Expected £480.80'
-	);
+	expect(screen.getByTestId('count-variance').textContent).toBe('−£17.50');
+	expect(screen.getByTestId('count-result').textContent).toContain('Expected£480.80');
+	expect(screen.getByTestId('count-band').textContent).toContain('short');
 	enter('480.80');
-	expect(screen.getByTestId('count-variance').textContent).toContain('Exact');
+	expect(screen.getByTestId('count-variance').textContent).toBe('£0.00');
+	expect(screen.getByTestId('count-band').textContent).toContain('Exact');
 	expect(screen.getByTestId('count-exact')).toBeTruthy();
 });
 it('counts in the store’s decimals: a fil over on a 3-place store is not exact', () => {
@@ -163,7 +205,7 @@ it('counts in the store’s decimals: a fil over on a 3-place store is not exact
 	expectedCash = '1.250';
 	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 	enter('1.254');
-	expect(screen.getByTestId('count-variance').textContent).not.toContain('Exact');
+	expect(screen.getByTestId('count-band').textContent).toContain('over');
 	expect(screen.queryByTestId('count-exact')).toBeNull();
 	enter('1.250');
 	expect(screen.getByTestId('count-exact')).toBeTruthy();
@@ -173,7 +215,7 @@ it('counts in cents on a store that shows no decimals: 12.50 against 12.00 is 0.
 	expectedCash = '12.00';
 	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 	enter('12.50');
-	expect(screen.getByTestId('count-variance').textContent).toBe('+£0.50 over');
+	expect(screen.getByTestId('count-variance').textContent).toBe('+£0.50');
 	expect(screen.queryByTestId('count-exact')).toBeNull();
 });
 it('counts two notes, clears their contribution on typing, and clears the tiles', () => {
@@ -197,6 +239,80 @@ it('counts two notes, clears their contribution on typing, and clears the tiles'
 	fireEvent.click(screen.getByTestId('count-clear'));
 	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('0.00');
 });
+it('the keypad types into the count and collapses on blur, reopens on focus', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	const amount = screen.getByTestId('count-amount');
+	fireEvent.click(screen.getByTestId('count-key-4'));
+	fireEvent.click(screen.getByTestId('count-key-0'));
+	expect((amount as HTMLInputElement).value).toBe('40');
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	fireEvent.blur(amount);
+	expect(screen.queryByTestId('count-keypad')).toBeNull();
+	expect(screen.getByTestId('count-tap-to-change').textContent).toBe('Tap the amount to change it');
+	fireEvent.focus(amount);
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	expect(screen.queryByTestId('count-tap-to-change')).toBeNull();
+	fireEvent.blur(amount);
+	fireEvent.mouseDown(amount);
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+});
+it.each(['', 'invalid'])('does not collapse an invalid count %s on blur', (value) => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	enter(value);
+	fireEvent.blur(screen.getByTestId('count-amount'));
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	expect(screen.queryByTestId('count-result')).toBeNull();
+});
+it('a denomination tap collapses the keypad; keypad entry clears pieces and Clear resets both', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('count-denominations'));
+	fireEvent.click(screen.getByTestId('den-tile-20'));
+	expect(screen.queryByTestId('count-keypad')).toBeNull();
+	expect(screen.getByTestId('count-tap-to-change')).toBeTruthy();
+	fireEvent.focus(screen.getByTestId('count-amount'));
+	fireEvent.click(screen.getByTestId('count-key-7'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('7');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('0');
+	fireEvent.click(screen.getByTestId('den-tile-20'));
+	fireEvent.click(screen.getByTestId('count-clear'));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('0.00');
+	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('0');
+});
+it('uses the store separator for both keypad and field entry but closes with a point', async () => {
+	separator = ',';
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	for (const key of ['4', 'decimal', '5']) fireEvent.click(screen.getByTestId(`count-key-${key}`));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('4,5');
+	expect(screen.getByTestId('count-key-decimal').textContent).toBe(',');
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	enter('12,50');
+	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+	expect(closeSession).toHaveBeenCalledWith({
+		counted: { cash: '12.50' },
+		note: '',
+		denominations: [],
+	});
+});
+it.each([
+	['478.80', 'short', '−£2.00', 'bg-bad-bg', 'arrowDown', 'text-bad'],
+	['483.80', 'over', '+£3.00', 'bg-ok-bg', 'arrowUp', 'text-ok'],
+	['480.80', 'Exact', '£0.00', 'bg-muted', 'check', 'text-muted-foreground'],
+])(
+	'the band for %s is tinted by sign with foreground words and signed amount',
+	(cash, word, signed, tint, icon, ink) => {
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		enter(cash);
+		const band = screen.getByTestId('count-band');
+		expect(band.dataset.classes).toContain(tint);
+		expect(band.textContent).toContain(word);
+		expect(screen.getByTestId('count-variance').textContent).toBe(signed);
+		expect(band.querySelector(`[data-icon="${icon}"]`)?.className).toContain(ink);
+		for (const text of band.querySelectorAll('span:not([data-icon])')) {
+			expect(text.className).not.toMatch(/text-(bad|ok)/);
+		}
+		expect(!!screen.queryByTestId('count-exact')).toBe(word === 'Exact');
+	}
+);
 it('holds for ten, repeats, and does not also single tap', () => {
 	jest.useFakeTimers();
 	render(
