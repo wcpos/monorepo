@@ -140,9 +140,16 @@ export function RegisterCount({
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
 	const [keypadOpen, setKeypadOpen] = React.useState(true);
-	// On the web a key takes focus before its press lands; a blur that moves into the keypad
-	// must not collapse it, or the digit is lost (Codex, #3356).
-	const keypadRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	// The amount and its keypad are one focus region: on the web a key takes focus before its press
+	// lands, and a cashier may enter the count by keys alone, so the keypad collapses when focus
+	// LEAVES the region (to the note, a tile, the footer), never on a move within it (Codex, #3356).
+	const regionRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const leaveRegion = (event?: { nativeEvent?: unknown }) => {
+		const next = (event?.nativeEvent as { relatedTarget?: unknown } | undefined)?.relatedTarget;
+		const region = regionRef.current as unknown as { contains?: (node: unknown) => boolean } | null;
+		if (next && region?.contains?.(next)) return;
+		if (valid) setKeypadOpen(false);
+	};
 	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
 		Object.fromEntries(
 			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
@@ -206,48 +213,43 @@ export function RegisterCount({
 			keyboardShouldPersistTaps="handled"
 		>
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
-			<RegisterAmount
-				testID="count-amount"
-				value={amount.replace('.', separator)}
-				onChangeText={(value) => {
-					setPieces({});
-					setCash(value.replace(separator, '.'));
-				}}
-				onBlur={(event) => {
-					const next = (event?.nativeEvent as { relatedTarget?: unknown } | undefined)
-						?.relatedTarget;
-					const keypad = keypadRef.current as unknown as {
-						contains?: (node: unknown) => boolean;
-					} | null;
-					if (next && keypad?.contains?.(next)) return;
-					if (valid) setKeypadOpen(false);
-				}}
-				onFocus={() => setKeypadOpen(true)}
-				onPressIn={() => setKeypadOpen(true)}
-			/>
-			{keypadOpen ? (
-				<View ref={keypadRef} testID="count-keypad">
-					<Keypad
-						rows={[
-							...DIGIT_ROWS,
-							decimalRow(decimals > 0 ? separator : undefined, t('common.backspace')),
-						]}
-						fit={phone ? 'shrink' : 'tile'}
-						testID="count"
-						onPress={(key) => {
-							// Leaving denomination entry starts a fresh count: the typed buffer behind the
-							// tiles is stale and must not come back (Codex, #3356; ledger line 65).
-							const fresh = Object.keys(pieces).length > 0;
-							setPieces({});
-							setCash((prev) => typeDecimal(fresh ? '' : prev, key, decimals));
-						}}
-					/>
-				</View>
-			) : (
-				<Text testID="count-tap-to-change" className="text-muted-foreground">
-					{t('register.tap_amount_to_change')}
-				</Text>
-			)}
+			{/* The region: a blur leaving the field or a key for a target outside it collapses the keypad. */}
+			<View ref={regionRef} testID="count-entry" className="gap-4" onBlur={leaveRegion}>
+				<RegisterAmount
+					testID="count-amount"
+					value={amount.replace('.', separator)}
+					onChangeText={(value) => {
+						setPieces({});
+						setCash(value.replace(separator, '.'));
+					}}
+					onBlur={leaveRegion}
+					onFocus={() => setKeypadOpen(true)}
+					onPressIn={() => setKeypadOpen(true)}
+				/>
+				{keypadOpen ? (
+					<View testID="count-keypad">
+						<Keypad
+							rows={[
+								...DIGIT_ROWS,
+								decimalRow(decimals > 0 ? separator : undefined, t('common.backspace')),
+							]}
+							fit={phone ? 'shrink' : 'tile'}
+							testID="count"
+							onPress={(key) => {
+								// Leaving denomination entry starts a fresh count: the typed buffer behind the
+								// tiles is stale and must not come back (Codex, #3356; ledger line 65).
+								const fresh = Object.keys(pieces).length > 0;
+								setPieces({});
+								setCash((prev) => typeDecimal(fresh ? '' : prev, key, decimals));
+							}}
+						/>
+					</View>
+				) : (
+					<Text testID="count-tap-to-change" className="text-muted-foreground">
+						{t('register.tap_amount_to_change')}
+					</Text>
+				)}
+			</View>
 			{!blind && valid && (
 				<View testID="count-result" className="border-border rounded-tile border">
 					<View className="min-h-row flex-row items-center justify-between px-3">

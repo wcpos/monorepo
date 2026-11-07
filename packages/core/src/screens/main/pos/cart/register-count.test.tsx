@@ -267,6 +267,22 @@ it('a blur that moves focus into the keypad keeps it open, so the digit lands', 
 	fireEvent.blur(amount, { relatedTarget: screen.getByTestId('count-note') });
 	expect(screen.queryByTestId('count-keypad')).toBeNull();
 });
+it('a count entered by keys alone collapses the keypad when focus leaves for the note', () => {
+	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+	for (const key of ['4', '0']) fireEvent.click(screen.getByTestId(`count-key-${key}`));
+	expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40');
+	// Focus moves from a key to another key: still inside the region.
+	fireEvent.blur(screen.getByTestId('count-key-0'), {
+		relatedTarget: screen.getByTestId('count-key-5'),
+	});
+	expect(screen.getByTestId('count-keypad')).toBeTruthy();
+	// Focus leaves the region for the note: collapsed.
+	fireEvent.blur(screen.getByTestId('count-key-5'), {
+		relatedTarget: screen.getByTestId('count-note'),
+	});
+	expect(screen.queryByTestId('count-keypad')).toBeNull();
+	expect(screen.getByTestId('count-tap-to-change')).toBeTruthy();
+});
 it('the keypad starts a fresh count after denominations; the earlier typed amount never returns', () => {
 	render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 	enter('100');
