@@ -24,6 +24,12 @@ import type { RecordMutation } from './recordMutation';
 export type PushOutcome = 'created' | 'updated' | 'deleted' | 'conflict';
 
 export const WOO_REST_CANNOT_DELETE = 'woocommerce_rest_cannot_delete';
+/** The plugin's `Write_Controller::apply_update` refusal for a uuid that resolves to no live record. */
+export const WOO_RXDB_SYNC_RECORD_NOT_FOUND = 'woo_rxdb_sync_record_not_found';
+/** The store proved the record gone: a 404 carrying that code. One spelling for every reporter. */
+export function isRecordGoneRejection(status: unknown, reason: unknown): boolean {
+	return status === 404 && reason === WOO_RXDB_SYNC_RECORD_NOT_FOUND;
+}
 
 export type PushEndpoint = { url: string; method: string };
 
