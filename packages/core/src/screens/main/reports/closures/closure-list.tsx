@@ -140,13 +140,13 @@ export function ClosureList({
 					<Text variant="caption" className="flex-1">
 						{t('reports.document.closure')}
 					</Text>
-					<Text variant="caption" className="w-24 text-right">
+					<Text variant="caption" className="w-28 text-right">
 						{t('register.expected_label')}
 					</Text>
-					<Text variant="caption" className="w-24 text-right">
+					<Text variant="caption" className="w-28 text-right">
 						{t('reports.counted')}
 					</Text>
-					<Text variant="caption" className="w-24 text-right">
+					<Text variant="caption" className="w-28 text-right">
 						{t('reports.difference')}
 					</Text>
 					<Text variant="caption" className="w-20 text-right">
@@ -225,19 +225,19 @@ export function ClosureList({
 										<>
 											<Text
 												testID={`closure-expected-${row.id}`}
-												className="text-muted-foreground w-24 text-right tabular-nums"
+												className="text-muted-foreground w-28 text-right tabular-nums"
 											>
 												{expected}
 											</Text>
 											<Text
 												testID={`closure-counted-${row.id}`}
-												className="w-24 text-right tabular-nums"
+												className="w-28 text-right tabular-nums"
 											>
 												{counted}
 											</Text>
 											<Text
 												testID={`closure-difference-${row.id}`}
-												className={cn('w-24 text-right tabular-nums', toneClass)}
+												className={cn('w-28 text-right tabular-nums', toneClass)}
 											>
 												{signed}
 											</Text>
