@@ -1615,6 +1615,21 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it('a picked payment without rounding mints an id but writes no fee', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.paymentId).toEqual(expect.any(String));
+		const feeWrite = mockLocalPatch.mock.calls.find(
+			([arg]: [
+				{ data?: Record<string, unknown>; changes?: (c: unknown) => Record<string, unknown> },
+			]) => 'fee_lines' in (arg?.data ?? arg?.changes?.(mockPayload) ?? {})
+		);
+		expect(feeWrite).toBeUndefined();
+	});
+
 	it('the completing payment journals its own picked units under a row id minted before the write (Greptile on #3400)', async () => {
 		setAllocations(order.uuid, { a: { l1: 1 } });
 		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
@@ -1984,6 +1999,15 @@ describe('server tender', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.state.readerId).toBe('reader');
 		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
+	});
+	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l1', units: 1 }));
+		await act(async () => result.current.takeTender());
+		const [{ row }] = mockBegin.mock.calls[0];
+		expect(result.current.state.picked).toEqual({});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { l1: 1 } });
 	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));

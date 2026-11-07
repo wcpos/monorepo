@@ -991,8 +991,19 @@ export function useTenderFlow(
 			// its row id before the write, and a terminal leg has `minted.row.id` before its
 			// provenance save, so the completing payment's own units are never missing from
 			// `_wcpos_paid_units` (Greptile on #3400).
+			// Only live rows' allocations are journaled: a failed or cancelled leg's picks stay
+			// in the store until the sale ends but never describe the completed sale.
 			const withPaidUnits = (paymentId: string | undefined) => {
-				const stored = getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
+				const live = new Set(
+					readLedger(order.getLatest().payload.meta_data)
+						.filter(({ status }) => isLivePaymentStatus(status))
+						.map(({ id }) => id)
+				);
+				const stored = Object.fromEntries(
+					Object.entries(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}).filter(
+						([id]) => live.has(id)
+					)
+				);
 				const allocations =
 					paymentId && Object.keys(state.picked).length > 0
 						? { ...stored, [paymentId]: state.picked }
@@ -1044,6 +1055,15 @@ export function useTenderFlow(
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
 			});
+			// A terminal leg clears the entry (`tender-started`) long before it settles, so its picks
+			// are frozen under the minted row id here; `tenderRecorded` then finds them in the store.
+			const freezePicks = (paymentId: string) => {
+				if (Object.keys(state.picked).length === 0) return;
+				setAllocations(order.uuid, {
+					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					[paymentId]: state.picked,
+				});
+			};
 			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 
@@ -1172,6 +1192,7 @@ export function useTenderFlow(
 				});
 				if (!minted.ok) throw new Error(minted.reason);
 				await saveProvenance(minted.row.id);
+				freezePicks(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1223,6 +1244,7 @@ export function useTenderFlow(
 				});
 				if (!minted.ok) throw new Error(minted.reason);
 				await saveProvenance(minted.row.id);
+				freezePicks(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1309,7 +1331,9 @@ export function useTenderFlow(
 			const paymentId =
 				roundingMinor !== 0 || Object.keys(state.picked).length > 0 ? uuidv4() : undefined;
 			const extraMeta = withPaidUnits(paymentId);
-			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
+			// The id is also minted for picked units; only a rounded leg carries a fee.
+			if (roundingMinor !== 0 && paymentId)
+				await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
 			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
 			// The slot's record has a server id here: the engine resident, never a temporary order.
