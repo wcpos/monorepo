@@ -67,8 +67,11 @@ env:
 # defect-2 keyboard no-op and the lost-press family both land here. The log
 # line makes every occurrence greppable (count evalScriptCommand COMPLETED in
 # the commands JSON — bare maestro.log greps over-count command metadata). A
-# re-add on a cart that already has the line still passes the quantity edit
-# below (it edits the FIRST quantity cell); the suite voids its orders.
+# re-add is only for a tap that never reached the app: when the timing
+# readout's sequence has already advanced (cart-add-reached-handler.yml), the
+# add is in flight but slow, so the branch logs and waits instead, and the
+# timing gate reports the real durationMs (run 42385616022 re-tapped here and
+# hid an 11.9 s add).
 - runFlow:
     when:
       notVisible:
@@ -84,40 +87,51 @@ env:
             notVisible:
               id: "cart-quantity-input"
           commands:
-            - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
-            - evalScript: ${output.cartAddRetried = true}
+            - runFlow:
+                file: ../subflows/cart-add-reached-handler.yml
             - runFlow:
                 when:
-                  visible:
-                    id: "pos-tab-products"
+                  true: "${output.cartAddReachedHandler === true}"
                 commands:
+                  - evalScript: "${console.log('WCPOS_E2E tile tap reached the add handler, waiting for it, not re-adding')}"
+            - runFlow:
+                when:
+                  true: "${output.cartAddReachedHandler !== true}"
+                commands:
+                  - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+                  - evalScript: ${output.cartAddRetried = true}
+                  - runFlow:
+                      when:
+                        visible:
+                          id: "pos-tab-products"
+                      commands:
+                        - tapOn:
+                            id: "pos-tab-products"
+                  # Guarded like ensure-pos-ready.yml: Maestro's Android hideKeyboard is
+                  # `input keyevent 4` (Back). The tab bar is visible here, so the keyboard
+                  # is not covering it, and an unguarded Back at the POS root leaves the app
+                  # for the launcher (run 34124672113, Android phone, flow 06). Dismiss only
+                  # when the tab bar is pushed off screen while the search box stays.
+                  - runFlow:
+                      when:
+                        true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+                        visible:
+                          id: "search-products"
+                        notVisible:
+                          id: "pos-tab-products"
+                      commands:
+                        - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the re-add branch, dismissing')}"
+                        - hideKeyboard:
+                            optional: true
                   - tapOn:
-                      id: "pos-tab-products"
-            # Guarded like ensure-pos-ready.yml: Maestro's Android hideKeyboard is
-            # `input keyevent 4` (Back). The tab bar is visible here, so the keyboard
-            # is not covering it, and an unguarded Back at the POS root leaves the app
-            # for the launcher (run 34124672113, Android phone, flow 06). Dismiss only
-            # when the tab bar is pushed off screen while the search box stays.
-            - runFlow:
-                when:
-                  true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
-                  visible:
-                    id: "search-products"
-                  notVisible:
-                    id: "pos-tab-products"
-                commands:
-                  - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the re-add branch, dismissing')}"
-                  - hideKeyboard:
-                      optional: true
-            - tapOn:
-                id: "product-tile"
-                index: 0
-            - runFlow:
-                when:
-                  true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
-                commands:
-                  - tapOn:
-                      id: "pos-tab-cart"
+                      id: "product-tile"
+                      index: 0
+                  - runFlow:
+                      when:
+                        true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+                      commands:
+                        - tapOn:
+                            id: "pos-tab-cart"
 - extendedWaitUntil:
     visible:
       id: "cart-quantity-input"

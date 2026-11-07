@@ -129,6 +129,13 @@ app's code.
      it papers over. Maestro's own `retry` blocks (the launch wrappers in 01/02,
      the search-input retries in 04/06/07) do **not** log per attempt: count
      their attempts from the `RUNNING`/`FAILED` cycles in `maestro.log`.
+   - **A timed add is re-tapped only when the tap never reached the app.** The
+     cart re-add in flows 04 and 06 first runs `cart-add-reached-handler.yml`:
+     if the timing readout's `sequence` is past the one captured before the
+     tap, the add is in flight but slow, so the flow logs
+     `WCPOS_E2E tile tap reached the add handler, waiting for it, not re-adding`
+     and waits; the timing gate then reports the real `durationMs` instead of
+     a recovery sample (run 42385616022, iOS flow 06).
    - An unquoted `:` followed by a space inside a plain YAML scalar (typically
      that log string)
      breaks the flow parse, and the parse failure is invisible if you filtered

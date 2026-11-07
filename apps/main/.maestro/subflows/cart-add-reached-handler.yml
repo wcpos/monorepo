@@ -1,0 +1,17 @@
+appId: com.wcpos.main.dev
+---
+# Did the tile tap reach the add handler? The readout's sequence advances the
+# moment the handler starts, before the write lands. Past the sequence captured
+# before the tap means the tap arrived and the add is merely slow: a re-tap then
+# only hides its real durationMs (iOS flow 06, run 42385616022). Read from the
+# cart side, as capture-cart-add-sequence.yml reads it.
+- runFlow:
+    when:
+      visible:
+        id: 'pos-tab-cart'
+    commands:
+      - tapOn:
+          id: 'pos-tab-cart'
+- copyTextFrom:
+    id: 'e2e-cart-add-timing'
+- evalScript: ${output.cartAddReachedHandler = JSON.parse(maestro.copiedText).sequence > output.cartAddSequence}
