@@ -15,7 +15,9 @@ import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
 import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
 import { cn } from '@wcpos/components/lib/utils';
 import { amountFigure } from '@wcpos/components/amount-figure';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
+import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -34,78 +36,50 @@ import { useExclusive } from '../../hooks/use-exclusive';
 
 /** The figure typed in place: the amount figure's hero step on the input itself. */
 const HERO = amountFigure({ size: 'hero' });
+const SYMBOL = 'text-2xl text-muted-foreground tabular-nums';
 
+/** One framed figure for every editable register amount. */
 export function RegisterAmount({
 	currencyOptions,
-	variant = 'underline',
+	ref,
 	...props
 }: {
 	currencyOptions?: CurrencyFormatOptions;
-	/**
-	 * `box`: one framed field with the currency inside it (the closed register). `hero`: no frame,
-	 * the figure on the surface with the currency beside it (the movement sheet). The counts keep
-	 * the underline.
-	 */
-	variant?: 'underline' | 'box' | 'hero';
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
 }) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
-	if (variant === 'hero') {
-		// The locale's own zero, without the symbol that already sits beside it.
-		const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
-		// The field hugs the figure so the symbol stays beside it: an invisible copy of the text
-		// sizes the box and the input fills it, on web and native alike.
-		return (
-			<View className="h-tile flex-row items-center self-start">
-				{!!prefix && <Text className={cn(HERO, 'text-muted-foreground')}>{prefix}</Text>}
-				<View className="justify-center">
-					<Text aria-hidden className={cn(HERO, 'pr-1 opacity-0')}>
-						{props.value || zero}
-					</Text>
-					<Input.Root className="web:ring-0 absolute inset-0 h-full border-0 bg-transparent">
-						<Input.InputField
-							{...props}
-							type="decimal"
-							placeholder={zero}
-							className={cn(HERO, 'px-0 py-0')}
-						/>
-					</Input.Root>
-				</View>
-				{!!suffix && <Text className={cn(HERO, 'text-muted-foreground')}>{suffix}</Text>}
-			</View>
-		);
-	}
-	if (variant === 'box') {
-		return (
-			<Input.Root className="h-tile">
-				{!!prefix && (
-					<Input.Left>
-						<Text className="text-amt text-muted-foreground tabular-nums">{prefix}</Text>
-					</Input.Left>
-				)}
-				<Input.InputField {...props} type="decimal" className="text-amt tabular-nums" />
-				{!!suffix && (
-					<Input.Right className="pr-3">
-						<Text className="text-amt text-muted-foreground tabular-nums">{suffix}</Text>
-					</Input.Right>
-				)}
-			</Input.Root>
-		);
-	}
+	// The locale's own zero, without the symbol that already sits beside it.
+	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
+	const inputRef = React.useRef<TextInputInstance>(null);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
+	// The symbol sits inside the field's border, so a tap on it is a tap on the field (as the
+	// Input's own leading glyph): it focuses the numerals rather than being a dead strip.
+	const symbol = (text: string) => (
+		<PressableSurface
+			wash="none"
+			accessible={false}
+			tabIndex={-1}
+			testID={`${props.testID}-symbol`}
+			onPress={() => inputRef.current?.focus()}
+		>
+			<Text className={SYMBOL}>{text}</Text>
+		</PressableSurface>
+	);
 	return (
-		<View className="min-h-row border-border flex-row items-center self-start border-b">
-			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
-			<Input
+		<Input.Root figure>
+			{!!prefix && <Input.Left>{symbol(prefix)}</Input.Left>}
+			<Input.InputField
 				{...props}
+				ref={mergedRef}
 				type="decimal"
-				className="h-tile w-40"
-				inputClassName="text-amt tabular-nums"
+				placeholder={zero}
+				className={cn(HERO, 'placeholder:font-normal', !!prefix && 'pl-1.5', !!suffix && 'pr-1.5')}
 			/>
-			{!!suffix && <Text className="text-amt tabular-nums">{suffix}</Text>}
-		</View>
+			{!!suffix && <Input.Right className="pr-3">{symbol(suffix)}</Input.Right>}
+		</Input.Root>
 	);
 }
 
@@ -227,7 +201,6 @@ export function MovementSheet({
 				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
 					{type !== 'no_sale' && (
 						<RegisterAmount
-							variant="hero"
 							testID="movement-amount"
 							value={amount.replace('.', separator)}
 							onChangeText={(value) => setAmount(value.replace(separator, '.'))}

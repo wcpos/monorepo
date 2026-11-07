@@ -245,7 +245,7 @@ jest.mock('@wcpos/components/input', () => {
 	function Wrap({ children }: { children?: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
-	// The movement amount is the `hero` variant: Input.Root / InputField.
+	// The movement amount is one framed figure: Input.Root / InputField.
 	return {
 		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
 	};

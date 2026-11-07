@@ -24,6 +24,9 @@ export function AmountUnitToggle({
 	const symbol = currencySymbol || currency;
 	return (
 		<SegmentedControl
+			// The segments are `flex-1`, so without a width the control fills the row on native and
+			// the amount field beside it collapses to nothing.
+			className="w-28 shrink-0"
 			testID={testID && `${testID}-group`}
 			segments={[
 				{ value: 'amount', label: symbol },
