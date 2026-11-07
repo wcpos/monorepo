@@ -12,7 +12,12 @@ const mockFind = jest.fn();
 const mockRebirth = jest.fn();
 const mockWarn = jest.fn();
 const mockError = jest.fn();
-const mockEngine = { resolveConflict: jest.fn(), write: jest.fn() };
+let mockScope = 'scope-1';
+const mockEngine = {
+	resolveConflict: jest.fn(),
+	write: jest.fn(),
+	status: () => ({ activeScopeId: mockScope }),
+};
 const mockRuntime = { engine: mockEngine };
 const mockT = (key: string, args?: { number: unknown }) => (args ? `${key}:${args.number}` : key);
 jest.mock('@wcpos/query', () => ({
@@ -55,6 +60,7 @@ const emit = async (rows = [row]) => {
 	});
 };
 beforeEach(() => {
+	mockScope = 'scope-1';
 	mockRows.next([]);
 	jest.resetAllMocks();
 	mockObserve.mockImplementation(() => mockRows.asObservable());
@@ -212,4 +218,44 @@ it('discards and creates an already-reborn cart without another toast', async ()
 	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
 	expect(mockEngine.write).toHaveBeenCalledTimes(1);
 	expect(mockWarn).not.toHaveBeenCalled();
+});
+
+it('stops a settle whose effect was cleaned up mid-flight: the discard lands, the create does not', async () => {
+	let finishDiscard!: () => void;
+	mockEngine.resolveConflict.mockReturnValue(
+		new Promise<void>((resolve) => {
+			finishDiscard = resolve;
+		})
+	);
+	const { unmount } = renderHook(() => useStoreDeletedOrdersSettler(1));
+	await emit();
+	expect(mockRebirth).toHaveBeenCalledTimes(1);
+	unmount();
+	await act(async () => {
+		finishDiscard();
+	});
+	expect(mockEngine.write).not.toHaveBeenCalled();
+	expect(mockWarn).not.toHaveBeenCalled();
+});
+
+it('abandons a settle when the store scope moves before the discard, leaving the row for its own scope', async () => {
+	let finishRebirth!: (value: unknown) => void;
+	mockRebirth.mockReturnValue(
+		new Promise((resolve) => {
+			finishRebirth = resolve;
+		})
+	);
+	renderHook(() => useStoreDeletedOrdersSettler(1));
+	await emit();
+	mockScope = 'scope-2';
+	await act(async () => {
+		finishRebirth(resident('pos-open'));
+	});
+	expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
+	expect(mockEngine.write).not.toHaveBeenCalled();
+	// Back on its own scope, the next emission settles it.
+	mockScope = 'scope-1';
+	mockRebirth.mockResolvedValue(resident('pos-open'));
+	await emit();
+	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
 });

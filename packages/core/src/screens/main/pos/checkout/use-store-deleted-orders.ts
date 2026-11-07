@@ -19,8 +19,16 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 		const handled = new Set<string>();
 		const inFlight = new Set<string>();
 		let latestRows: readonly QueueRow[] = [];
+		let disposed = false;
 		const failed = new Set<string>();
+		// The scope this effect serves. A same-site store switch moves the engine to the new
+		// scope BEFORE the new store id commits and this effect re-runs; in that window no row
+		// is touched — the incoming store's effect instance owns the queue from then on, and
+		// `engine.write` would otherwise enqueue the outgoing store's cart into the new scope.
+		const scopeId = manager.engine.status().activeScopeId;
+		const abandoned = () => disposed || manager.engine.status().activeScopeId !== scopeId;
 		const scan = () => {
+			if (abandoned()) return;
 			for (const row of latestRows) {
 				if (
 					row.operation !== 'update' ||
@@ -34,13 +42,18 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 				inFlight.add(row.recordId);
 				void (async () => {
 					const { recordId, mutationId } = row;
+					// A switch or cleanup between the awaits abandons the settle: the row stays
+					// rejected for its own scope's effect instance.
 					try {
 						const resident = await findEngineResident(manager, 'orders', recordId);
 						const { number, status } = resident ? residentPayload(resident) : {};
 						const recreate = resident && status === OPEN_CART_ORDER_STATUS;
 						const alreadyReborn = resident?.toJSON().remoteId === null;
+						if (abandoned()) return void handled.delete(mutationId);
 						const reborn = recreate ? await rebirthOrderResident(manager, recordId) : null;
+						if (abandoned()) return void handled.delete(mutationId);
 						await manager.engine.resolveConflict(mutationId, 'discard');
+						if (abandoned()) return;
 						if (reborn) {
 							// Plain snapshot, not an RxDB payload proxy: it crosses the storage worker boundary.
 							await manager.engine.write({
@@ -99,6 +112,7 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 			scan();
 		});
 		return () => {
+			disposed = true;
 			latestRows = [];
 			subscription.unsubscribe();
 		};
