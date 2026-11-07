@@ -41,8 +41,22 @@ export const STEPS = [
 ] as const;
 export type JourneyStep = (typeof STEPS)[number];
 
-/** `'done'`: a step's own assertions passed. `'search-settled'`: step 2's tile is on screen. */
-export type CheckpointId = 'done' | 'search-settled';
+/**
+ * `'done'`: a step's own assertions passed. The rest fire inside a step, before it undoes its own
+ * state: `'search-started'` (2) just before the name is typed, `'search-settled'` (2) the tile is
+ * on screen, `'filter-on'` (3) the category filter applies, `'quick-filter-on'` (4) On sale reads
+ * on, `'rows'` (5) the table view shows, `'browse-root'` (6) the term set shows, `'variations'` (8)
+ * the variations pane has dealt.
+ */
+export type CheckpointId =
+	| 'done'
+	| 'search-started'
+	| 'search-settled'
+	| 'filter-on'
+	| 'quick-filter-on'
+	| 'rows'
+	| 'browse-root'
+	| 'variations';
 
 /** The annotation type a declared gap is recorded under. */
 export const DECLARED_GAP = 'declared-gap';
@@ -102,12 +116,24 @@ export interface Catalogue {
 }
 export type ProductWalk = { layout: 'phone' | 'columns'; catalogue: Catalogue };
 
-type WcProduct = { id: number; name: string; sku?: string; variations?: number[] };
+type WcProduct = {
+	id: number;
+	name: string;
+	sku?: string;
+	variations?: number[];
+	meta_data?: { key: string; value: unknown }[];
+};
 export type WcCategory = { id: number; name: string; slug: string; count: number };
 type Options = { headers: Record<string, string>; params: Record<string, string> };
 
 /** A name a cashier would type: no undecoded entity, never an E2E probe's (made mid-run). */
 const typeable = (name: string) => name.trim().length > 2 && !/[&<>#;]|\bE2E\b/.test(name);
+
+/** `wc/v3` lists what the POS hides: a product marked online only never reaches a till. */
+const onPos = (product: WcProduct) =>
+	!product.meta_data?.some(
+		({ key, value }) => key === '_pos_visibility' && value === 'online_only'
+	);
 
 /** The most products a searched name may share, so its tile shows without scrolling. */
 const DISTINCT_NAME_MAX = 4;
@@ -175,7 +201,9 @@ export async function readCatalogue(
 		return undefined;
 	};
 	const sellable = { ...published, stock_status: 'instock' };
-	const inStock = (await read<WcProduct>('products', { ...sellable, type: 'simple' })).records;
+	const inStock = (
+		await read<WcProduct>('products', { ...sellable, type: 'simple' })
+	).records.filter(onPos);
 	// The searched product carries the scan code when the store has one the burst can carry (Woo
 	// keeps SKUs unique, so a code found here names exactly one product).
 	const scannable = inStock.filter((product) => burstCanCarry(product.sku ?? '', scan));
@@ -195,13 +223,17 @@ export async function readCatalogue(
 			orderby: 'title',
 			order: 'asc',
 		};
-		const member = (await read<WcProduct>('products', query)).records.find((p) => typeable(p.name));
+		const member = (await read<WcProduct>('products', query)).records.find(
+			(p) => onPos(p) && typeable(p.name)
+		);
 		category = member && { id: candidate.id, name: candidate.name, productId: member.id };
 		if (category) break;
 	}
 	if (!category) throw new Error('the store has no category holding a published, in-stock product');
 	const variable = await read<WcProduct>('products', { ...sellable, type: 'variable' });
-	const found = await distinct(variable.records.filter((p) => (p.variations ?? []).length > 0));
+	const found = await distinct(
+		variable.records.filter((p) => onPos(p) && (p.variations ?? []).length > 0)
+	);
 	return {
 		searchTerm: { id: searched.id, name: searched.name },
 		category,
@@ -251,6 +283,22 @@ async function onCart<T>(page: Page, layout: ProductWalk['layout'], body: () => 
 	return result;
 }
 
+/**
+ * Put the panel on the products themselves. A device starts on Browse by Categories on demo,
+ * and the walks need tiles on screen, so a browse root moves to All. The tile wait covers a
+ * catalogue still arriving after a store switch.
+ */
+export async function showAllProducts(page: Page): Promise<void> {
+	if ((await posLayout(page)) === 'phone') await showPhoneTab(page, 'products');
+	const stage = page.getByTestId('pos-products-grid-scroller').or(page.getByTestId('browse-root'));
+	await expect(stage.filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
+	if (await page.getByTestId('browse-root').filter({ visible: true }).count()) {
+		await setBrowseBy(page, 'all');
+	}
+	const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+	await expect(tiles.filter({ visible: true }).first()).toBeVisible({ timeout: 60_000 });
+}
+
 /** 1. See the products: the grid, its search, the filter bar and the panel's controls. */
 export async function seeProducts(ctx: FindAProductContext): Promise<ProductWalk> {
 	return journeyStep(ctx, 1, async () => {
@@ -259,6 +307,7 @@ export async function seeProducts(ctx: FindAProductContext): Promise<ProductWalk
 		const layout = await posLayout(page);
 		if (layout === 'phone') await showPhoneTab(page, 'products');
 		await ensureGridView(page);
+		await showAllProducts(page);
 		const pills = ['stock_status', 'featured', 'on_sale', 'categories'];
 		const controls = ['pos-products-grid-scroller', 'view-mode-toggle', 'products-settings-button'];
 		for (const testID of [...controls, ...pills.map((key) => `filter-pill-${key}`)]) {
@@ -277,6 +326,7 @@ export async function search(ctx: FindAProductContext, walk: ProductWalk): Promi
 		const tiles = idTiles(page);
 		await expect(tiles.first()).toBeVisible({ timeout: 30_000 });
 		const before = await tiles.count();
+		await ctx.onCheckpoint?.(STEPS[1], 'search-started');
 		await productsSearch(page).fill(searchTerm.name);
 		// The search commits 250 ms after the last key; the grid narrowing is the proof it did. A
 		// grid already this small has nothing to narrow, so it goes straight to the tile.
@@ -307,6 +357,7 @@ export async function filterByCategory(ctx: FindAProductContext, walk: ProductWa
 		const remove = page.getByTestId('filter-pill-remove-categories');
 		await expect(remove).toBeVisible({ timeout: 15_000 });
 		await expect(tileOf(page, category.productId)).toBeVisible({ timeout: 45_000 });
+		await ctx.onCheckpoint?.(STEPS[2], 'filter-on');
 		await remove.click();
 		await expect(remove).toHaveCount(0, { timeout: 15_000 });
 	});
@@ -319,6 +370,7 @@ export async function quickFilter(ctx: FindAProductContext): Promise<void> {
 		await expect(pill).toHaveAttribute('aria-pressed', 'false');
 		await pill.click();
 		await expect(pill).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+		await ctx.onCheckpoint?.(STEPS[3], 'quick-filter-on');
 		await pill.click();
 		await expect(pill).toHaveAttribute('aria-pressed', 'false', { timeout: 10_000 });
 	});
@@ -330,6 +382,7 @@ export async function tilesAndRows(ctx: FindAProductContext): Promise<void> {
 		const { page } = ctx;
 		await ensureTableView(page);
 		await expect(page.getByTestId('data-table-scroller-products').first()).toBeVisible();
+		await ctx.onCheckpoint?.(STEPS[4], 'rows');
 		await ensureGridView(page);
 		await expect(page.getByTestId('pos-products-grid-scroller')).toBeVisible();
 	});
@@ -341,6 +394,7 @@ export async function browseBy(ctx: FindAProductContext): Promise<void> {
 		const { page } = ctx;
 		await setBrowseBy(page, 'categories');
 		await expect(page.getByTestId('browse-root').first()).toBeVisible({ timeout: 30_000 });
+		await ctx.onCheckpoint?.(STEPS[5], 'browse-root');
 		await setBrowseBy(page, 'all');
 		await expect(page.getByTestId('browse-root')).toHaveCount(0, { timeout: 15_000 });
 	});
@@ -403,6 +457,7 @@ export async function seeVariations(ctx: FindAProductContext, walk: ProductWalk)
 		// A dealt tile is "visible" while still transparent: let the deal land before going back.
 		const opacity = () => variation.evaluate((n) => getComputedStyle(n.parentElement!).opacity);
 		await expect.poll(opacity, { timeout: 15_000 }).toBe('1');
+		await ctx.onCheckpoint?.(STEPS[7], 'variations');
 		await pane.getByTestId('variations-parent-tile').click();
 		await expect(pane).toBeHidden({ timeout: 15_000 });
 		await productsSearch(page).clear();
