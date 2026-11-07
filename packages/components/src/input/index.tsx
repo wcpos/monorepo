@@ -34,17 +34,19 @@ function useInputContext() {
 }
 
 interface RootProps {
+	figure?: boolean;
 	children: React.ReactNode;
 	className?: string;
 	disabled?: boolean;
 }
 
-function Root({ children, className, disabled = false }: RootProps) {
+function Root({ children, className, disabled = false, figure }: RootProps) {
 	const [isFocused, setIsFocused] = React.useState(false);
 
 	return (
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<FieldBox
+				figure={figure}
 				state={disabled ? 'disabled' : isFocused ? 'open' : 'rest'}
 				className={cn('w-full', className)}
 			>
