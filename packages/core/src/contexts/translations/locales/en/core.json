@@ -77,6 +77,7 @@
 	"reports.put_them_back": "Put them back",
 	"reports.col_paid_by": "Paid by",
 	"reports.counted": "Counted",
+	"reports.difference": "Difference",
 	"reports.order_time_cashier": "{time} · {cashier}",
 	"pro.strip_title": "You're on the free version of WCPOS.",
 	"pro.strip_body": "Pro adds receipt templates, held orders, reports and priority support.",

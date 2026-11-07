@@ -6,7 +6,9 @@ import get from 'lodash/get';
 
 import { useDocField } from '@wcpos/query';
 import { Icon } from '@wcpos/components/icon';
-import { SegmentedControl } from '@wcpos/components/segmented-control';
+import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
 import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
@@ -63,6 +65,7 @@ export function ClosureList({
 	onSelect?: (row: ClosureRow) => void;
 }) {
 	const t = useT();
+	const phone = useIsPhone();
 	const viewedStore = useViewedStore(storeId);
 	const settings = useDocField(viewedStore, (value) => value);
 	const { format } = useCurrencyFormat({
@@ -114,20 +117,44 @@ export function ClosureList({
 	const visibleRows = filter === 'open' ? [] : rows;
 	const card = (
 		<Card>
-			<View className="flex-row items-center justify-between border-b px-3 py-2">
-				<SegmentedControl
-					value={filter}
-					onValueChange={(value) => setFilter(value as ClosureFilter)}
-					segments={[
-						{ value: 'all', label: t('reports.all'), testID: 'closures-filter-all' },
-						{ value: 'open', label: t('reports.open'), testID: 'closures-filter-open' },
-						{ value: 'closed', label: t('register.closed'), testID: 'closures-filter-closed' },
-					]}
-				/>
+			<View className="flex-row items-center justify-between px-3 py-2">
+				<Tabs value={filter} onValueChange={(value) => setFilter(value as ClosureFilter)}>
+					<TabsList>
+						<TabsTrigger value="all" testID="closures-filter-all">
+							<Text>{t('reports.all')}</Text>
+						</TabsTrigger>
+						<TabsTrigger value="open" testID="closures-filter-open">
+							<Text>{t('reports.open')}</Text>
+						</TabsTrigger>
+						<TabsTrigger value="closed" testID="closures-filter-closed">
+							<Text>{t('register.closed')}</Text>
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
 				<Text className="text-muted-foreground">
 					{t('reports.n_sessions', { count: rows.length + sessions.length })}
 				</Text>
 			</View>
+			{!phone && (
+				<View testID="closures-head" className="flex-row items-center gap-3 px-4 py-2">
+					<Text variant="caption" className="flex-1">
+						{t('reports.document.closure')}
+					</Text>
+					<Text variant="caption" className="w-24 text-right">
+						{t('register.expected_label')}
+					</Text>
+					<Text variant="caption" className="w-24 text-right">
+						{t('reports.counted')}
+					</Text>
+					<Text variant="caption" className="w-24 text-right">
+						{t('reports.difference')}
+					</Text>
+					<Text variant="caption" className="w-20 text-right">
+						{t('reports.result')}
+					</Text>
+					<View className="w-4.5" />
+				</View>
+			)}
 			{(sessions.length > 0 || todayRows.length > 0) && dayHeading(today, todayRows)}
 			{/* Keep the readers mounted when filtering, so toggling Closed neither drops summaries nor reloads. */}
 			<View style={filter === 'closed' || !inPeriod ? { display: 'none' } : undefined}>
@@ -147,6 +174,26 @@ export function ClosureList({
 
 			{visibleRows.map((row, index) => {
 				const variance = Number(row.variance.cash ?? 0);
+				const expected = format(Number(row.expected.cash ?? 0));
+				const counted = format(Number(row.counted.cash ?? 0));
+				const signed = variance
+					? `${variance < 0 ? '−' : '+'}${format(Math.abs(variance))}`
+					: format(0);
+				const toneClass = tone(variance);
+				const resultBadge = (
+					<Badge
+						testID={`closure-result-${row.id}`}
+						tinted
+						size="lg"
+						variant={variance < 0 ? 'bad' : variance > 0 ? 'ok' : 'muted'}
+					>
+						{variance < 0
+							? t('reports.document.short')
+							: variance > 0
+								? t('reports.document.over')
+								: t('reports.exact')}
+					</Badge>
+				);
 				const destination = get(row.breakdowns, 'labels.carried_to_store_name');
 				const badge = !row.synced_rows_at
 					? t('register.unsynced')
@@ -170,21 +217,35 @@ export function ClosureList({
 							onPress={() => onSelect?.(row)}
 							testID={`closure-row-${row.id}`}
 							// Ruled above, not below: each day's heading opens its rows inside the card.
-							className="border-t border-b-0"
+							className="border-t border-b-0 px-4"
 							bodyClassName="gap-1"
 							trailing={
-								<>
-									<Text testID={`closure-counted-${row.id}`} className="tabular-nums">
-										{format(Number(row.counted.cash ?? 0))}
-									</Text>
-									<Text
-										testID={`closure-result-${row.id}`}
-										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground'}`}
-									>
-										{result(variance)}
-									</Text>
+								<View className="flex-row items-center gap-3">
+									{!phone && (
+										<>
+											<Text
+												testID={`closure-expected-${row.id}`}
+												className="text-muted-foreground w-24 text-right tabular-nums"
+											>
+												{expected}
+											</Text>
+											<Text
+												testID={`closure-counted-${row.id}`}
+												className="w-24 text-right tabular-nums"
+											>
+												{counted}
+											</Text>
+											<Text
+												testID={`closure-difference-${row.id}`}
+												className={cn('w-24 text-right tabular-nums', toneClass)}
+											>
+												{signed}
+											</Text>
+											<View className="w-20 items-end">{resultBadge}</View>
+										</>
+									)}
 									<Icon name="chevronRight" className="text-muted-foreground" />
-								</>
+								</View>
 							}
 						>
 							<Text>
@@ -199,21 +260,36 @@ export function ClosureList({
 								{time(row.opened_at)} → {time(row.closed_at)} ·{' '}
 								{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
 							</Text>
+							{phone && (
+								<Text
+									testID={`closure-figures-${row.id}`}
+									className="text-muted-foreground tabular-nums"
+								>
+									{t('register.expected_label')} <Text className="text-foreground">{expected}</Text>{' '}
+									· {t('reports.counted')} <Text className="text-foreground">{counted}</Text> ·{' '}
+									{t('reports.difference')} <Text className={toneClass}>{signed}</Text>
+								</Text>
+							)}
 							{unavailableIds?.has(row.server_closure_id ?? row.id) && (
 								<Text testID={`closure-unavailable-${row.id}`}>
 									{t('reports.unavailable_offline')}
 								</Text>
 							)}
-							{badge && (
-								<Badge
-									testID={`closure-badge-${row.id}`}
-									tinted
-									variant="warning"
-									size="lg"
-									className="self-start"
-								>
-									<Text>{badge}</Text>
-								</Badge>
+							{(phone || badge) && (
+								<View className="flex-row gap-2">
+									{phone && resultBadge}
+									{badge && (
+										<Badge
+											testID={`closure-badge-${row.id}`}
+											tinted
+											variant="warning"
+											size="lg"
+											className="self-start"
+										>
+											<Text>{badge}</Text>
+										</Badge>
+									)}
+								</View>
 							)}
 						</ListRow>
 					</React.Fragment>
