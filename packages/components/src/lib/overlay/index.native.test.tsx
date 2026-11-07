@@ -1,13 +1,15 @@
 import * as React from 'react';
 import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from 'react-native';
 
-import { render, screen } from '@testing-library/react';
+import * as DialogPrimitive from '@rn-primitives/dialog';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { EASE, EASE_EXIT } from '../motion';
 import {
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
 	type OverlayPresentation,
+	type OverlayScrimProps,
 	OverlayShell,
 	useOverlay,
 	useSheetInset,
@@ -347,4 +349,26 @@ it.each([true, false, undefined])('exposes the native fill decision for fill=%s'
 		</OverlayShell>
 	);
 	expect(seen.at(-1)).toMatchObject({ fill: fill === true });
+});
+
+// #3337: a fill shell's scrim is only the inset band, not "outside": a press there keeps it open.
+it.each([true, false])('dismisses from a scrim press only off a fill shell (fill=%s)', (fill) => {
+	const given: OverlayScrimProps[] = [];
+	function Scrim(props: OverlayScrimProps) {
+		given.push(props);
+		return <DialogPrimitive.Overlay {...props} />;
+	}
+	const onOpenChange = jest.fn();
+	render(
+		<DialogPrimitive.Root open onOpenChange={onOpenChange}>
+			<OverlayShell presentation="center" open fill={fill} Scrim={Scrim} testID="d">
+				<View />
+			</OverlayShell>
+		</DialogPrimitive.Root>
+	);
+	expect(given.at(-1)?.closeOnPress).toBe(fill ? false : undefined);
+	// The primitive still renders a Pressable, so the press is taken, not passed through.
+	expect(given.at(-1)?.pointerEvents).toBeUndefined();
+	fireEvent.click(screen.getByTestId('d-scrim'));
+	expect(onOpenChange.mock.calls).toEqual(fill ? [] : [[false]]);
 });

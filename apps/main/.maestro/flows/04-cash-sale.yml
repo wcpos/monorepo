@@ -168,11 +168,12 @@ env:
 # Tender. The first enabled tile is preselected and the entry pre-filled with
 # the balance (use-tender-flow.ts). `checkout-quick-exact` renders only while a
 # change-giving method is selected, so waiting on it waits for the tiles and
-# proves this is a cash sale; tapping it sets the entry to the balance. On a
-# phone `checkout-commit` sits under the keypad, below the fold of the pane's
-# ScrollView (the ❌ frame of run 36882430308); on a tablet it is on screen and
-# the scroll returns at once. `enabled`: the commit is disabled until an amount
-# applies, and a tap on a disabled button is a silent no-op.
+# proves this is a cash sale; tapping it sets the entry to the balance.
+# `checkout-commit` sits under the pane's ScrollView, outside it, so it is on
+# screen on a phone and a tablet and the scroll returns at once (#3337; it used
+# to sit below the fold on a phone, the ❌ frame of run 36882430308). `enabled`:
+# the commit is disabled until an amount applies, and a tap on a disabled button
+# is a silent no-op.
 - runFlow:
     when:
       true: "${output.checkoutMode === 'tender'}"

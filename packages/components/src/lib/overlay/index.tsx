@@ -65,6 +65,8 @@ export type OverlayScrimProps = {
 	accessibilityElementsHidden?: boolean;
 	/** Native: a blocking scrim takes no touches (see `OverlayShellProps.blocking`). */
 	pointerEvents?: 'auto' | 'none';
+	/** Native: the primitive `Overlay`'s own switch; `false` keeps the touch but does not close. */
+	closeOnPress?: boolean;
 	onPress?: (event: GestureResponderEvent) => void;
 	onPressIn?: (event: GestureResponderEvent) => void;
 };
@@ -575,6 +577,11 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				// server settings: Cancel and Confirm dead). Every other scrim dismisses on a
 				// press (the primitives' Overlay), so it keeps its touches.
 				pointerEvents={blocking && !isWeb ? 'none' : undefined}
+				// A full-size panel IS the screen, so the only scrim left is the inset band, which is
+				// not "outside": a press there (just under a phone checkout's pay button, #3337) must
+				// not close it. The scrim still takes the touch, so nothing beneath gets it; the
+				// close button and hardware back still dismiss.
+				closeOnPress={fill ? false : undefined}
 				testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 			/>
 			<KeyboardAvoidingView
