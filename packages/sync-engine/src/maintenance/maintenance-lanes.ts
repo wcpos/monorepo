@@ -75,6 +75,7 @@ import {
 } from './lane-registry';
 import { scopeBoundFailureStreak } from '../failure-streak';
 import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
+import { findAllUncached } from '../collections/find-all-uncached';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import { OPEN_CART_ORDER_STATUS } from '../write-path/open-cart-hold';
 
@@ -643,9 +644,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			// manual-mode harnesses advance one deterministic clock).
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
-		const heldOpenCarts = await db.collections.orders
-			.find({ selector: { status: OPEN_CART_ORDER_STATUS } })
-			.exec();
+		// Uncached: a bare `.exec()` every tick would pin this query and its cart documents in
+		// RxDB's query cache with no subscriber (the #2541 background-read class).
+		const heldOpenCarts = await findAllUncached(db.collections.orders, {
+			selector: { status: OPEN_CART_ORDER_STATUS },
+		});
 		const remoteIds = heldOpenCarts
 			.map((doc): OrderDocument => doc.toJSON())
 			.flatMap((doc) => (doc.remoteId !== null && !hasPendingLocalWork(doc) ? [doc.remoteId] : []));
