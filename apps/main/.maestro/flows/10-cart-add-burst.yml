@@ -135,10 +135,12 @@ env:
     repeat: 19
     delay: 200
 - evalScript: ${output.burstTappedAt = Date.now()}
+# Tablets have no pos-tab-bar and show the cart in a column; a phone must tap,
+# so a missing cart tab fails at this tap, not at the quantity check below.
 - runFlow:
     when:
       visible:
-        id: "pos-tab-cart"
+        id: "pos-tab-bar"
     commands:
       - tapOn:
           id: "pos-tab-cart"
