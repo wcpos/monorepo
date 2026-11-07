@@ -8,6 +8,8 @@
  */
 import { type APIRequestContext, expect, type TestInfo } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { readPins, recordCapture } from '../capture-manifest';
 import {
 	applyScale,
@@ -157,7 +159,7 @@ async function freeRegisterId(
 		const rowFree = !session || session.status === 'closed';
 		if (rowFree && lists.every((list) => list.length === 0)) free.push(id);
 	}
-	console.log(`[register] ${registers.length} register(s), free: ${free.join(', ') || 'none'}`);
+	log.info(`[register] ${registers.length} register(s), free: ${free.join(', ') || 'none'}`);
 	if (free.length === 0) {
 		throw new Error(`all ${registers.length} register(s) have an open session; none is free`);
 	}
@@ -170,7 +172,7 @@ for (const { device, viewport } of COMBINATIONS) {
 		test('open the register, every step', async ({ page, request, storeAuthorization }, info) => {
 			// The walk's two holds, plus the theme, language and register put back on the store.
 			test.setTimeout(REGISTER_PUSH_TIMEOUT_MS + CLOSE_PUSH_TIMEOUT_MS + 360_000);
-			const docsShoot = (process.env.E2E_STORE_URL_PRO ?? '').includes(DOCS_STORE);
+			const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 			// The app's own register list names the store it reads (none on a single-store plugin).
 			const registersRequest = page
 				.waitForRequest(
@@ -193,7 +195,7 @@ for (const { device, viewport } of COMBINATIONS) {
 			const shoot = async (number: number, slug: string): Promise<void> => {
 				// A navigation or reload drops the added style tag; re-scale before the shot.
 				if (!(await hasScaleStyle(page))) {
-					console.log(`[rescale] ${info.titlePath.at(-2)}: before j1-${number}-${slug}`);
+					log.info(`[rescale] ${info.titlePath.at(-2)}: before j1-${number}-${slug}`);
 					unscale = await applyScale(page, 'regular');
 				}
 				// A movement's toast covers the panel in the shot; wait for every toast to leave.
@@ -237,7 +239,7 @@ for (const { device, viewport } of COMBINATIONS) {
 					await expect(row).toBeVisible({ timeout: 60_000 });
 					await row.click();
 					await expect(row).toBeHidden({ timeout: 60_000 });
-					console.log(`[register] ${info.titlePath.at(-2)}: picked ${id}`);
+					log.info(`[register] ${info.titlePath.at(-2)}: picked ${id}`);
 				}
 				unscale = await applyScale(page, 'regular');
 				await openTheRegister({
