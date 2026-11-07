@@ -46,26 +46,58 @@ export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
  * Pretty permalinks put the route in the pathname; plain permalinks carry it
  * as `?rest_route=` — matching only the pretty form makes a spec time out on a
  * plain-permalink store despite a successful save (#1114 review). Same dual
- * form orders.spec.ts always used. The first 401 starts the fetcher's single
+ * form orders.spec.ts always used. Only the push for `recordId` (the open
+ * cart's uuid, see {@link cartRecordUuid}) matches, because a session can
+ * re-push an older order at any moment and a waiter that took it would read
+ * the wrong sale (#3372). The first 401 starts the fetcher's single
  * refresh-and-retry cycle; a second 401 is the terminal retry response.
  */
-export function createPushOrdersResponseMatcher(): (response: {
+export function createPushOrdersResponseMatcher(
+	recordId: string
+): (response: {
 	url: () => string;
-	request: () => { method: () => string };
+	request: () => { method: () => string; postDataJSON: () => unknown };
 	status: () => number;
 }) => boolean {
 	let sawUnauthorized = false;
 	return (response) => {
-		if (response.request().method() !== 'POST') return false;
+		const request = response.request();
+		if (request.method() !== 'POST') return false;
 		const url = new URL(response.url());
 		const isPushOrders =
 			PUSH_ORDERS.test(response.url()) ||
 			url.searchParams.get('rest_route') === '/wcpos/v2/push/orders';
-		if (!isPushOrders || response.status() !== 401) return isPushOrders;
+		if (!isPushOrders) return false;
+		// Another record's push is not ours, and its 401 must not use up our retry cycle.
+		if (((request.postDataJSON() ?? {}) as PushEnvelope).recordId !== recordId) return false;
+		if (response.status() !== 401) return true;
 		if (sawUnauthorized) return true;
 		sawUnauthorized = true;
 		return false;
 	};
+}
+
+/** A record uuid directly after a `/cart/` segment, as `posPathFor` writes it. */
+const CART_RECORD_PATH =
+	/\/cart\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
+
+/** The uuid in a POS address, or null on the blank cart, a receipt or any other page. */
+export function cartRecordUuidFromUrl(url: string): string | null {
+	return new URL(url, 'http://localhost').pathname.match(CART_RECORD_PATH)?.[1] ?? null;
+}
+
+/**
+ * The open cart's record uuid. The address bar names it at every width, written a
+ * frame after the cart changes, so this polls up to 15 s; fails naming the current URL.
+ */
+export async function cartRecordUuid(page: Page): Promise<string> {
+	await expect
+		.poll(() => cartRecordUuidFromUrl(page.url()), { timeout: 15_000 })
+		.not.toBeNull()
+		.catch(() => {});
+	const uuid = cartRecordUuidFromUrl(page.url());
+	if (!uuid) throw new Error(`No open cart record in the address bar after 15 s: ${page.url()}`);
+	return uuid;
 }
 
 /** The checkout route, `/cart/<uuid>/checkout`. */
@@ -287,7 +319,8 @@ export async function openCheckout(
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
 ): Promise<{ orderId: number; uuid: string; sent: OrderPayload; surface: CheckoutSurface }> {
 	await ensureRegisterOpen(page);
-	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+	const recordId = await cartRecordUuid(page);
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 		timeout: 90_000,
 	});
 	// If the click below throws, this waiter is left pending and rejects later with
