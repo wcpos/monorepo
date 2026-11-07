@@ -69,12 +69,17 @@ main() {
 	done
 	if [[ -n "${GITHUB_REPOSITORY:-}" && -n "${GH_TOKEN:-}" ]]; then
 		# A GitHub hiccup must never replace the probe verdict: warn and carry on.
+		# A failed lookup also skips every issue action, or an outage with an open
+		# issue would get a duplicate on the next tick.
+		lookup_ok=true
 		issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
 			--search 'in:title "CDN probe failing"' --json number,title |
 			jq -r '[.[] | select(.title == "CDN probe failing")][0].number // empty') ||
-			{ echo 'warning: gh issue list failed; no issue action this run' >&2; issue=''; }
+			{ echo 'warning: gh issue list failed; no issue action this run' >&2; lookup_ok=false; issue=''; }
 		run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-		if [[ "$verdict" == 1 ]]; then
+		if [[ "$lookup_ok" == false ]]; then
+			:
+		elif [[ "$verdict" == 1 ]]; then
 			body="${failures}"$'\n'"Run: $run_url"
 			if [[ -n "$issue" ]]; then
 				gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "$body" || echo 'warning: gh issue comment failed' >&2

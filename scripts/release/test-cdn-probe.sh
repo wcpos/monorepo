@@ -84,7 +84,7 @@ run_probe() {
 		fi
 	) > "$tmpdir/out" 2> "$tmpdir/err" || status=$?
 	expect_eq "probe exit status" "$want" "$status"
-	expect_eq "probe writes no stderr" "" "$(cat "$tmpdir/err")"
+	expect_eq "probe writes only the expected stderr" "${EXPECT_STDERR:-}" "$(cat "$tmpdir/err")"
 	expect_eq "one verdict per URL" 3 "$(grep -Ec '^(OK|FAIL) ' "$tmpdir/out" || true)"
 }
 size_failure() {
@@ -161,6 +161,22 @@ reset_case; open_issue
 run_probe 0 actions
 contains "recovery comment" 'Recovered: every probe OK (run https://github.com/wcpos/monorepo/actions/runs/123)' "$MOCK_DIR/gh-calls"
 contains "closes recovered issue" 'issue close 7 --repo wcpos/monorepo' "$MOCK_DIR/gh-calls"
+
+reset_case; size_failure
+cat > "$tmpdir/bin/gh" <<'MOCK'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$MOCK_DIR/gh-calls"
+exit 1
+MOCK
+EXPECT_STDERR='warning: gh issue list failed; no issue action this run' run_probe 1 actions
+expect_eq "a failed lookup skips every issue action" 1 "$(wc -l < "$MOCK_DIR/gh-calls" | tr -d ' ')"
+expect_eq "a failed lookup still reports the probe" 1 "$(grep -c '^FAIL jsDelivr @1.11:' "$tmpdir/out")"
+cat > "$tmpdir/bin/gh" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$MOCK_DIR/gh-calls"
+if [[ "$1 $2" == 'issue list' ]]; then cat "$MOCK_DIR/issues"; fi
+MOCK
 
 reset_case
 run_probe 0 actions
