@@ -328,17 +328,22 @@ expect_status "a bundle with no vendored worker is refused" fail run MOCK_VERSIO
 # --- publish workflow retention and working-tree size gate ---
 # Exercise the actual shell block, stopping before it stages or publishes anything.
 publish_tree() {
-	env WB="$tmpdir/publish" BUILD_DIR="$tmpdir/new-build" BRANCH=main bash -euo pipefail -c \
+	env WB="${1:-$tmpdir/publish}" BUILD_DIR="${2:-$tmpdir/new-build}" BRANCH=main bash -euo pipefail -c \
 		"$(sed -n '/^          mkdir -p "\$WB\/build"/,/^          git add -A/{ /git add -A/d; p; }' "$SCRIPT_DIR/../../.github/workflows/publish-web-bundle.yml")"
 }
-mkdir -p "$tmpdir/publish/build/_expo" "$tmpdir/new-build/_expo"
+init_publish_repo() {
+	mkdir -p "$1/build/_expo"
+	git -C "$1" init -q
+	git -C "$1" config user.name Test
+	git -C "$1" config user.email test@example.com
+	git -C "$1" config commit.gpgsign false
+	git -C "$1" config core.hooksPath /dev/null
+}
+# No previous inventory (the first publish after it was introduced): the last-touch fallback.
+mkdir -p "$tmpdir/new-build/_expo"
+init_publish_repo "$tmpdir/publish"
 (
 	cd "$tmpdir/publish"
-	git init -q
-	git config user.name Test
-	git config user.email test@example.com
-	git config commit.gpgsign false
-	git config core.hooksPath /dev/null
 	printf old > build/_expo/old.js
 	printf stale > build/old.worker.js
 	git add build
@@ -353,6 +358,7 @@ mkdir -p "$tmpdir/publish/build/_expo" "$tmpdir/new-build/_expo"
 printf new > "$tmpdir/new-build/_expo/new.js"
 printf metadata > "$tmpdir/new-build/metadata.json"
 expect_status "workflow accepts a small working tree" pass publish_tree
+expect_eq "workflow says it fell back without an inventory" 1 "$(grep -c '^no previous build/publish-inventory.txt; keeping' "$tmpdir/out" || true)"
 expect_status "workflow drops a hashed file older than the previous build" pass test ! -e "$tmpdir/publish/build/_expo/old.js"
 expect_status "workflow retains the previous build despite a later docs commit" pass test -f "$tmpdir/publish/build/_expo/previous.js"
 expect_status "workflow keeps the new build" pass test -f "$tmpdir/publish/build/_expo/new.js"
@@ -361,6 +367,32 @@ dd if=/dev/zero of="$tmpdir/new-build/_expo/large.js" bs=1048576 count=46 2>/dev
 expect_status "workflow refuses oversized new, untracked files" fail publish_tree
 expect_eq "workflow size refusal names the branch" 1 "$(grep -c '::error::web-bundle@main would be .* MiB; jsDelivr refuses' "$tmpdir/out" || true)"
 expect_eq "workflow lists the largest new file" 1 "$(grep -c '^48234496 build/_expo/large.js$' "$tmpdir/out" || true)"
+
+# With an inventory: build A emits shared.css + a-only.js; build B emits shared.css
+# (unchanged, so A last touched it) + b.js and lists both. Build C carries none of them.
+init_publish_repo "$tmpdir/publish-inv"
+(
+	cd "$tmpdir/publish-inv"
+	printf shared > build/_expo/shared.css
+	printf a > build/_expo/a-only.js
+	git add build
+	git commit -qm 'chore(release): build web bundle (A)'
+	printf b > build/_expo/b.js
+	printf '_expo/b.js\n_expo/shared.css\n' > build/publish-inventory.txt
+	git add build
+	git commit -qm 'chore(release): build web bundle (B)'
+)
+mkdir -p "$tmpdir/build-c/_expo/static"
+printf c > "$tmpdir/build-c/_expo/static/c.js"
+printf c > "$tmpdir/build-c/_expo/c.css"
+printf metadata > "$tmpdir/build-c/metadata.json"
+expect_status "workflow publishes over an inventory" pass publish_tree "$tmpdir/publish-inv" "$tmpdir/build-c"
+expect_status "workflow keeps a previous-build file an older build last touched" pass test -f "$tmpdir/publish-inv/build/_expo/shared.css"
+expect_status "workflow drops a file the previous inventory does not list" pass test ! -e "$tmpdir/publish-inv/build/_expo/a-only.js"
+expect_status "workflow keeps the previous build's own file" pass test -f "$tmpdir/publish-inv/build/_expo/b.js"
+expect_eq "workflow inventory lists exactly the new build's _expo files" $'_expo/c.css\n_expo/static/c.js' \
+	"$(cat "$tmpdir/publish-inv/build/publish-inventory.txt")"
+expect_status "workflow never writes the inventory into the build directory" pass test ! -e "$tmpdir/build-c/publish-inventory.txt"
 
 if [[ $failures -gt 0 ]]; then echo "$failures tag-web-bundle test(s) failed" >&2; exit 1; fi
 echo "All tag-web-bundle tests passed."
