@@ -22,6 +22,7 @@
 		},
 		"./logger": "./src/logger/index.ts",
 		"./logger/constants": "./src/logger/constants.ts",
+		"./logger/rejected-write-code": "./src/logger/rejected-write-code.ts",
 		"./open-external-url": {
 			"browser": "./src/open-external-url.web.ts",
 			"default": "./src/open-external-url.ts"
