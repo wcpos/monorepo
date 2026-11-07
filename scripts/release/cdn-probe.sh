@@ -68,20 +68,22 @@ main() {
 		fi
 	done
 	if [[ -n "${GITHUB_REPOSITORY:-}" && -n "${GH_TOKEN:-}" ]]; then
+		# A GitHub hiccup must never replace the probe verdict: warn and carry on.
 		issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
 			--search 'in:title "CDN probe failing"' --json number,title |
-			jq -r '[.[] | select(.title == "CDN probe failing")][0].number // empty')
+			jq -r '[.[] | select(.title == "CDN probe failing")][0].number // empty') ||
+			{ echo 'warning: gh issue list failed; no issue action this run' >&2; issue=''; }
 		run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 		if [[ "$verdict" == 1 ]]; then
 			body="${failures}"$'\n'"Run: $run_url"
 			if [[ -n "$issue" ]]; then
-				gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "$body"
+				gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "$body" || echo 'warning: gh issue comment failed' >&2
 			else
-				gh issue create --repo "$GITHUB_REPOSITORY" --title 'CDN probe failing' --body "$body"
+				gh issue create --repo "$GITHUB_REPOSITORY" --title 'CDN probe failing' --body "$body" || echo 'warning: gh issue create failed' >&2
 			fi
 		elif [[ -n "$issue" ]]; then
-			gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "Recovered: every probe OK (run $run_url)"
-			gh issue close "$issue" --repo "$GITHUB_REPOSITORY"
+			gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "Recovered: every probe OK (run $run_url)" || echo 'warning: gh issue comment failed' >&2
+			gh issue close "$issue" --repo "$GITHUB_REPOSITORY" || echo 'warning: gh issue close failed' >&2
 		fi
 	fi
 	return "$verdict"
