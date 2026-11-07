@@ -29,7 +29,14 @@ export {
 	type RxRecordMutationCollection,
 } from './recordMutationQueue';
 // prettier-ignore
-export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_CANNOT_DELETE } from './recordPushAdapter';
+export {
+	isRecordGoneRejection,
+	pushEndpointResolver,
+	pushRecordMutation,
+	reconcileCreateAck,
+	WOO_REST_CANNOT_DELETE,
+	WOO_RXDB_SYNC_RECORD_NOT_FOUND,
+} from './recordPushAdapter';
 // prettier-ignore
 export { foldSearchText, SCAN_MIN_TERM_LENGTH, SEARCH_TOKEN_BOUNDARY, searchTerms } from './searchText';
 export {

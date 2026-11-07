@@ -8,7 +8,7 @@ import {
 	residentPayload,
 } from '@wcpos/query/mutations';
 import { OPEN_CART_ORDER_STATUS, type QueueRow } from '@wcpos/sync-engine';
-import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
+import { isRecordGoneRejection } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 

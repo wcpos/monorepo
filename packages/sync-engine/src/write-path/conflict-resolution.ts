@@ -1,5 +1,5 @@
-import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
 import {
+	isRecordGoneRejection,
 	type QueuedMutation,
 	type RecordMutationQueue,
 	type RemoteId,

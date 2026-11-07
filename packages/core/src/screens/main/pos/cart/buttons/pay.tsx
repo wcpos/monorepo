@@ -10,7 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
-import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
+import { isRecordGoneRejection } from '@wcpos/sync-core';
 
 import { useRegisterSurface } from '../../../../../extensions/commands/use-register-surface';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';

@@ -1,10 +1,9 @@
 import { ERROR_CODES, type ErrorCode } from './generated/error-codes.generated';
 
-export const WOO_RXDB_SYNC_RECORD_NOT_FOUND = 'woo_rxdb_sync_record_not_found';
-
-export function isRecordGoneRejection(status: unknown, reason: unknown): boolean {
-	return status === 404 && reason === WOO_RXDB_SYNC_RECORD_NOT_FOUND;
-}
+// The plugin's "no live record for this uuid" refusal. Canonical spelling and the
+// `isRecordGoneRejection` predicate live in `@wcpos/sync-core` (recordPushAdapter.ts); this
+// package is a leaf and only maps the refusal to its code, so the string is repeated here.
+const WOO_RXDB_SYNC_RECORD_NOT_FOUND = 'woo_rxdb_sync_record_not_found';
 
 /** Store refusals that name a field the cashier can correct where it was entered. */
 const INVALID_FIELD_REASONS = new Set(['pos_data_invalid', 'rest_invalid_param']);
@@ -22,6 +21,7 @@ export function rejectedWriteCode(status: unknown, reason: unknown): ErrorCode {
 	if (typeof reason === 'string' && INVALID_FIELD_REASONS.has(reason)) {
 		return ERROR_CODES.RECORD_INVALID_FIELD;
 	}
-	if (isRecordGoneRejection(status, reason)) return ERROR_CODES.RECORD_GONE_ON_STORE;
+	if (status === 404 && reason === WOO_RXDB_SYNC_RECORD_NOT_FOUND)
+		return ERROR_CODES.RECORD_GONE_ON_STORE;
 	return ERROR_CODES.RECORD_REJECTED;
 }

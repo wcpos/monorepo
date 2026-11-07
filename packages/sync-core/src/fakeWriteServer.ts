@@ -1,4 +1,5 @@
 import responseFixtures from '../contracts/write-contract/fixtures/responses.json';
+import { WOO_RXDB_SYNC_RECORD_NOT_FOUND } from './recordPushAdapter';
 import { RECORD_UUID_META_KEY } from './recordIdentity';
 
 /**
@@ -356,8 +357,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			};
 
 			if (env.operation === 'delete') {
-				// Match the WooCommerce POS plugin's Write_Controller::apply_update refusal.
-				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_record_not_found' });
+				if (!existing) return asResponse(404, { code: WOO_RXDB_SYNC_RECORD_NOT_FOUND });
 				if (env.baseRevision !== existing.revision) {
 					const c = conflict(existing);
 					return asResponse(c.status, c.body);
@@ -368,8 +368,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			}
 
 			if (env.operation === 'update') {
-				// Match the WooCommerce POS plugin's Write_Controller::apply_update refusal.
-				if (!existing) return asResponse(404, { code: 'woo_rxdb_sync_record_not_found' });
+				if (!existing) return asResponse(404, { code: WOO_RXDB_SYNC_RECORD_NOT_FOUND });
 				if (env.baseRevision !== existing.revision) {
 					const c = conflict(existing);
 					return asResponse(c.status, c.body);
