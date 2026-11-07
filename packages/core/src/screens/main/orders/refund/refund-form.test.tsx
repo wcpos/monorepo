@@ -646,6 +646,47 @@ describe('RefundOrderForm', () => {
 			);
 			expect(mockRefundCall).not.toHaveBeenCalled();
 		});
+
+		it.each([
+			['hides the lookup-failed line offline', 'offline', false],
+			['keeps the lookup-failed line online', 'online-website-available', true],
+		])('%s', async (_name, status, shown) => {
+			mockOnlineStatus = status;
+			mockGet.mockRejectedValue(new Error('boom'));
+			render(<RefundOrderForm order={order} />);
+
+			// The confirm action ignores the connection; it frees once the failed lookup settles.
+			await waitFor(() =>
+				expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled()
+			);
+			const line = screen.queryByText('orders.original_method_refund_lookup_failed');
+			const reason = screen.queryByText('orders.refund_needs_connection');
+			if (shown) {
+				expect(line).toBeInTheDocument();
+			} else {
+				expect(line).not.toBeInTheDocument();
+				expect(reason).toBeInTheDocument();
+			}
+		});
+
+		it('gives the button back when the connection returns', async () => {
+			mockOnlineStatus = 'offline';
+			mockGateways(Promise.resolve({ data: [] }));
+			const { rerender } = render(<RefundOrderForm order={cashOrder} />);
+			enterAmount('45');
+			await labelReads('orders.submit_refund_cash:€45.00');
+			expect(processButton()).toBeDisabled();
+			expect(screen.getByText('orders.refund_needs_connection')).toBeInTheDocument();
+
+			mockOnlineStatus = 'online-website-available';
+			rerender(<RefundOrderForm order={cashOrder} />);
+			await waitFor(() => expect(processButton()).toBeEnabled());
+			expect(screen.queryByText('orders.refund_needs_connection')).not.toBeInTheDocument();
+
+			fireEvent.click(processButton());
+			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+			await waitFor(() => expect(mockRefundCall).toHaveBeenCalledTimes(1));
+		});
 	});
 });
 

@@ -592,19 +592,21 @@ export function RefundOrderForm({ order }: Props) {
 					</VStack>
 				) : null}
 
-				{gatewaysError && !isPosCash ? (
+				{gatewaysError && !isPosCash && online ? (
 					<Text className="text-muted-foreground">
 						{t('orders.original_method_refund_lookup_failed')}
 					</Text>
 				) : null}
 
 				<MoneyList.Total label={t('orders.refund_total')} amount={formattedRefundTotal} />
-				{online ? null : (
+			</DialogBody>
+			{online ? null : (
+				<VStack className="px-4 pb-2">
 					<Text testID="refund-offline-reason" variant="help">
 						{t('orders.refund_needs_connection')}
 					</Text>
-				)}
-			</DialogBody>
+				</VStack>
+			)}
 			<DialogFooter
 				close
 				intent={{
