@@ -5,6 +5,8 @@
  */
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { getStoreUrl, type StoreAuthorization } from '../fixtures';
 import { resolveProbeOptions } from '../probe-credential';
 import { openCashierSheet, posLayout, showPhoneTab } from './open-register';
@@ -96,7 +98,7 @@ export async function showStore(
 		const place = page.getByTestId('register-bar-place').first();
 		await expect(place).toHaveText(String(store.name), { timeout: 120_000 });
 	}
-	console.log(`[register] on store ${storeId}`);
+	log.info(`[register] on store ${storeId}`);
 }
 
 /**
@@ -137,5 +139,5 @@ export async function pickDocsRegister(
 	await expect(row).toBeHidden({ timeout: 60_000 });
 	// On a phone the card stays mounted off-screen: attached, not visible, is the signal.
 	await expect(page.getByTestId('open-register-card')).toBeAttached({ timeout: 60_000 });
-	console.log(`[register] ${info.titlePath.at(-2)}: picked ${id}`);
+	log.info(`[register] ${info.titlePath.at(-2)}: picked ${id}`);
 }

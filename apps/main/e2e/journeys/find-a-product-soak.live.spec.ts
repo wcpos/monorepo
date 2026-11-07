@@ -10,6 +10,8 @@
  */
 import { expect } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { authenticatedTest as test } from '../fixtures';
 import { FIND_A_PRODUCT, findAProduct, type FindAProductContext } from './find-a-product';
 import { createSoakSampler } from './soak-sampler';
@@ -41,7 +43,7 @@ test('find a product, looped', async ({ posPage, request, storeAuthorization }, 
 		onCheckpoint: async (_step, id) => {
 			if (id === 'search-started') searchStartedAt = Date.now();
 			if (id === 'search-settled' && searchStartedAt !== null) {
-				console.log(`[soak] loop ${loop}: search settled in ${Date.now() - searchStartedAt} ms`);
+				log.info(`[soak] loop ${loop}: search settled in ${Date.now() - searchStartedAt} ms`);
 			}
 		},
 	};
@@ -52,7 +54,7 @@ test('find a product, looped', async ({ posPage, request, storeAuthorization }, 
 		// Each loop starts from the start state: step 9 of the last one put it back.
 		await findAProduct(ctx);
 		const wallMs = Date.now() - startedAt;
-		console.log(`[soak] loop ${loop}: ${wallMs} ms`);
+		log.info(`[soak] loop ${loop}: ${wallMs} ms`);
 		await sampler.endLoop({ journey: FIND_A_PRODUCT.key, loop, wallMs, cartAddMs: null });
 	};
 
