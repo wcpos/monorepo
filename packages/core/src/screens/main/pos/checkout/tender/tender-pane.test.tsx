@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { DeviceScope } from '@wcpos/components/lib/device';
+import { TONE } from '@wcpos/components/lib/tone';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
@@ -1457,4 +1458,59 @@ it('a settlesLater tile says Sent later and Store may refuse; a plain manual til
 		'Sent laterStore may refuse'
 	);
 	expect(screen.queryByTestId('checkout-method-sent-later-other')).toBeNull();
+});
+
+describe('change due leads once tendered exceeds the amount due', () => {
+	function changeFlow(over: Partial<TenderFlow> = {}): TenderFlow {
+		return {
+			...makeFlow(),
+			saveState: null,
+			totalMinor: 4500,
+			balanceMinor: 4500,
+			thisPaymentMinor: 4500,
+			roundedDueMinor: 4500,
+			entryAppliedMinor: 4500,
+			entryChangeMinor: 500,
+			state: {
+				...initialTenderState,
+				view: 'amount',
+				methodId: method.id,
+				entryMinor: 5000,
+				entryDirty: true,
+			},
+			...over,
+		};
+	}
+
+	it('leads with the change once tendered exceeds the amount due', () => {
+		render(<TenderPane flow={changeFlow()} format={String} />);
+		const hint = screen.getByTestId('checkout-entry-hint');
+		expect(hint.textContent).toBe('Change 500');
+		expect(hint.className).toContain('text-amt');
+		expect(hint.className).toContain(TONE.ok.text);
+		const entry = screen.getByTestId('checkout-entry');
+		expect(entry.textContent).toBe('5000');
+		expect(entry.className).not.toContain('text-amt');
+		expect(screen.getByTestId('checkout-tendered-line').textContent).toBe('Tendered 5000');
+	});
+
+	it('keeps the tendered amount as the figure up to the amount due', () => {
+		const base = changeFlow();
+		render(
+			<TenderPane
+				flow={{ ...base, entryChangeMinor: 0, state: { ...base.state, entryMinor: 4500 } }}
+				format={String}
+			/>
+		);
+		expect(screen.getByTestId('checkout-entry').className).toContain('text-amt');
+		expect(screen.getByTestId('checkout-entry-hint').className).not.toContain('text-amt');
+		expect(screen.queryByTestId('checkout-tendered-line')).toBeNull();
+	});
+
+	it('names the total under the change on a part-paid order', () => {
+		render(<TenderPane flow={changeFlow({ totalMinor: 9000 })} format={String} />);
+		expect(screen.getByTestId('checkout-tendered-line').textContent).toBe(
+			'Tendered 5000 · Total 9000'
+		);
+	});
 });
