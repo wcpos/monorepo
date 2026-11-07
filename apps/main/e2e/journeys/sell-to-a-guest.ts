@@ -19,7 +19,11 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
-import { addCheckoutProbeProduct, addCheckoutProbeProductAgain } from '../checkout-probe';
+import {
+	addCheckoutProbeProduct,
+	addCheckoutProbeProductAgain,
+	checkoutProbeAddControl,
+} from '../checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
 	type Descriptor,
@@ -175,8 +179,16 @@ export async function addProduct(ctx: SellToAGuestContext, sale: SaleInProgress)
 			await productsSearch(page, 'phone').clear();
 			await showPhoneTab(page, 'cart');
 		} else {
-			// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
-			await (probeAddedOn.has(page) ? addCheckoutProbeProductAgain : addCheckoutProbeProduct)(page);
+			const again = probeAddedOn.has(page);
+			if (again && checkoutProbeAddControl(page) === null) {
+				// Without a probe, the grid's first simple tile may manage stock; a looped walk would
+				// drain it until the stock guard refuses the quantity. Sell the shared SKU again instead.
+				await (await sharedProductTile(page)).click();
+				await productsSearch(page, sale.layout).clear();
+			} else {
+				// A repeat search of a satisfied demand fires no wire request: later walks re-add locally.
+				await (again ? addCheckoutProbeProductAgain : addCheckoutProbeProduct)(page);
+			}
 			probeAddedOn.add(page);
 		}
 		await expect(page.getByTestId('cart-quantity-input')).toHaveCount(1, { timeout: 15_000 });
