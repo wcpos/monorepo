@@ -625,6 +625,8 @@ export async function recordLiveSession(
 		if (live) {
 			register.live = {
 				...live,
+				// The directory copies the server's space form: one form in the cache, as in the rows.
+				opened_at_gmt: isoGmt(live.opened_at_gmt),
 				counting_here:
 					live.session_id === register.live?.session_id && live.status === 'counting'
 						? (register.live.counting_here ?? false)

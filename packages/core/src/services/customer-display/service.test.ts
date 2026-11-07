@@ -184,9 +184,47 @@ describe('CustomerDisplayService', () => {
 		peers[0].open(false);
 		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
 
-		await jest.advanceTimersByTimeAsync(5000);
+		await jest.advanceTimersByTimeAsync(2000);
 
 		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads + 1);
+		service.stop();
+	});
+
+	test('polls every 2 s while an online display is not configured', async () => {
+		const { service, requests } = setup([{ ...registryRow('one'), connected: true }]);
+		await service.refreshDisplays();
+		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
+
+		await jest.advanceTimersByTimeAsync(2000);
+
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads + 1);
+		service.stop();
+	});
+
+	test('keeps the 5 s poll for a display the server reports offline', async () => {
+		const { service, requests } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
+
+		await jest.advanceTimersByTimeAsync(4999);
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
+
+		await jest.advanceTimersByTimeAsync(1);
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads + 1);
+		service.stop();
+	});
+
+	test('stops polling once the online display is configured', async () => {
+		const { service, peers, requests } = setup([{ ...registryRow('one'), connected: true }]);
+		await service.refreshDisplays();
+		expect(jest.getTimerCount()).toBe(1);
+
+		peers[0].open();
+		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
+		await jest.advanceTimersByTimeAsync(10000);
+
+		expect(jest.getTimerCount()).toBe(0);
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
 		service.stop();
 	});
 

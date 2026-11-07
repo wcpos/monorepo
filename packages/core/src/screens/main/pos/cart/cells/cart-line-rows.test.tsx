@@ -26,6 +26,7 @@ jest.mock('@wcpos/components/form', () => {
 		SavedFieldProvider: mockWrap,
 		SavedMark: () => null,
 		useMarkSaved: () => jest.fn(),
+		useMarkFailed: () => jest.fn(),
 		useSavedName: () => '',
 		FormItem: ({ children, nativeID }: React.PropsWithChildren<{ nativeID?: string }>) => (
 			<div data-form-item={nativeID ?? ''}>{children}</div>

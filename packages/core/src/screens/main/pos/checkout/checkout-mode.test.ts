@@ -13,17 +13,21 @@ import {
 	finishReceipt,
 	getCheckoutModeSnapshot,
 	getOrderSaveState,
+	isReceiptAutoPrintClaimed,
 	isReceiptStage,
 	leaveCheckout,
 	markOrderQueuedOffline,
 	markOrderSaveRejected,
 	markOrderSaving,
+	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
 	setTenderMethod,
+	settleHeadlessPrint,
 	subscribeCheckoutMode,
+	useHeadlessPrints,
 	useOrderCheckoutStage,
 } from './checkout-mode';
 import { useOrderSaveState, useOrderSaving } from './use-order-save-state';
@@ -319,6 +323,12 @@ it('releaseUnconfirmedReceipt frees the claim for a sale paid again', () => {
 	releaseUnconfirmedReceipt('a');
 	expect(claimReceiptAutoPrint('a')).toBe(true);
 });
+it('isReceiptAutoPrintClaimed reads the claim without taking it', () => {
+	expect(isReceiptAutoPrintClaimed('a')).toBe(false);
+	expect(isReceiptAutoPrintClaimed('a')).toBe(false);
+	expect(claimReceiptAutoPrint('a')).toBe(true);
+	expect(isReceiptAutoPrintClaimed('a')).toBe(true);
+});
 it('useOrderCheckoutStage reads the status off the record', () => {
 	enterCheckout('a');
 	const paid = {
@@ -342,4 +352,31 @@ it('leaveCheckout drops a selection pointing at the derived receipt it ends', ()
 	selectReceipt('a');
 	leaveCheckout('a');
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+});
+describe('headless prints', () => {
+	it('a uuid is queued once per session', () => {
+		const { result } = renderHook(() => useHeadlessPrints());
+		act(() => queueHeadlessPrint('a'));
+		expect([...result.current]).toEqual(['a']);
+		act(() => queueHeadlessPrint('a'));
+		expect([...result.current]).toEqual(['a']);
+		act(() => settleHeadlessPrint('a'));
+		expect([...result.current]).toEqual([]);
+		// A finished tab or a remount never queues the same sale a second print.
+		act(() => finishReceipt('a'));
+		act(() => queueHeadlessPrint('a'));
+		expect([...result.current]).toEqual([]);
+	});
+	it('reset clears the queue', () => {
+		const { result } = renderHook(() => useHeadlessPrints());
+		act(() => {
+			queueHeadlessPrint('a');
+			queueHeadlessPrint('b');
+		});
+		expect([...result.current]).toEqual(['a', 'b']);
+		act(() => resetCheckoutMode());
+		expect([...result.current]).toEqual([]);
+		act(() => queueHeadlessPrint('a'));
+		expect([...result.current]).toEqual(['a']);
+	});
 });

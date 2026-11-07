@@ -65,7 +65,9 @@ export default function TabsLayout() {
 	// the home indicator inside its own card colour.
 	return (
 		<EdgeSurface testID="screen-pos" edges={TOP} className="bg-background flex-1">
-			<ThemedTabs />
+			<View testID="pos-tabs-navigator" style={{ flex: 1 }}>
+				<ThemedTabs />
+			</View>
 		</EdgeSurface>
 	);
 }

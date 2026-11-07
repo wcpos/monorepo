@@ -5,10 +5,10 @@ const { basename, join } = require('node:path');
 // Only list a patch after reading it: no native code, config plugin, prebuild,
 // autolinking or Codegen input. Hashing an unlisted patch is the safe default.
 const JS_ONLY_PATCHES = Object.freeze({
-	'@expo__cli@58.1.11.patch': 'dev-server manifest middleware (expo start), not prebuild or build',
+	'@expo__cli@58.1.19.patch': 'dev-server manifest middleware (expo start), not prebuild or build',
 	'@shopify__flash-list@2.3.2.patch': 'RecyclerView runtime JS bundled by Metro',
 	'@shopify__react-native-skia@2.14.0.patch': 'Platform.web files, never in a native bundle',
-	'expo@58.0.14.patch': 'TypeScript declarations only',
+	'expo@58.0.23.patch': 'TypeScript declarations only',
 	'@rn-primitives__popover@1.5.2.patch': 'Platform.web files, never in a native bundle',
 	'@rn-primitives__select@1.5.2.patch': 'Platform.web files, never in a native bundle',
 	'@rn-primitives__tooltip@1.5.2.patch': 'Platform.web files, never in a native bundle',

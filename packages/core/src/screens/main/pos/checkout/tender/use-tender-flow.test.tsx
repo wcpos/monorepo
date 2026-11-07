@@ -53,6 +53,7 @@ import {
 	setTenderPlan,
 	useOrderCheckoutStage,
 } from '../checkout-mode';
+import * as checkoutMode from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useLedgerView } from './use-ledger-view';
@@ -203,9 +204,12 @@ const mockRuntime = {
 	engine: { require: mockRequire, db$: () => () => {}, events: () => () => {} },
 };
 let mockAutoShowReceipt = true;
+let mockAutoPrintReceipt = false;
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { autoShowReceipt: mockAutoShowReceipt } }),
+	useUISettings: () => ({
+		uiSettings: { autoShowReceipt: mockAutoShowReceipt, autoPrintReceipt: mockAutoPrintReceipt },
+	}),
 }));
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({
@@ -1919,6 +1923,7 @@ describe('server tender', () => {
 	});
 	it('applies a late remembered read when no reader has been picked', async () => {
 		mockReaderPreferences.terminal = { id: 'reader', label: 'Reader' };
+		// Two readers and no default: nothing is preselected until the memory arrives.
 		mockMethods = [
 			{
 				...terminal,
@@ -1927,7 +1932,10 @@ describe('server tender', () => {
 					hardware: {
 						...terminal.capture.hardware,
 						default_reader: null,
-						readers: [{ ...terminal.capture.hardware.readers[0], default: false }],
+						readers: [
+							{ ...terminal.capture.hardware.readers[0], default: false },
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
 					},
 				},
 			},
@@ -2021,7 +2029,32 @@ describe('server tender', () => {
 			})
 		);
 	});
-	it('never preselects the first reader without a default', async () => {
+	it('never preselects among several readers without a default', async () => {
+		mockMethods = [
+			{
+				...terminal,
+				capture: {
+					...terminal.capture,
+					hardware: {
+						...terminal.capture.hardware,
+						default_reader: null,
+						readers: [
+							{ id: 'reader', label: 'Front', status: 'online', default: false },
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
+					},
+				},
+			},
+		];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('terminal'));
+		expect(result.current.state.readerId).toBeNull();
+		act(() => result.current.pickReader('reader'));
+		expect(result.current.state.readerId).toBe('reader');
+		await act(async () => {});
+	});
+	// Remember over configure (wcpos/roadmap#523): a till with one usable reader needs no choice.
+	it('preselects the only usable reader without a default', async () => {
 		mockMethods = [
 			{
 				...terminal,
@@ -2037,8 +2070,6 @@ describe('server tender', () => {
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('terminal'));
-		expect(result.current.state.readerId).toBeNull();
-		act(() => result.current.pickReader('reader'));
 		expect(result.current.state.readerId).toBe('reader');
 		await act(async () => {});
 	});
@@ -2450,6 +2481,13 @@ describe('device tender', () => {
 		expect(mockReaderPreferences.device.id).toBe('replacement');
 		mockRealService.stop();
 		mockRealService = null;
+	});
+	it('ignores a cloud reader memory on a device method (wcpos/roadmap#523)', async () => {
+		registerDriver(createSimulatedDriver());
+		mockReaderPreferences.device = { id: 'tmr_front', label: 'Front counter' };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.pickMethod('device'));
+		expect(result.current.rememberedReaderId).toBeNull();
 	});
 	it('refuses a press on an order the store has not created, before the reader starts', async () => {
 		delete mockPayload.id;
@@ -3294,6 +3332,36 @@ it.each([
 		} finally {
 			mockSize = 'sm';
 			mockAutoShowReceipt = true;
+		}
+	}
+);
+
+// With the receipt hidden no tab is left to auto-print when tapped, so the sale prints now, once.
+it.each([
+	['on', true, [['order-1']]],
+	['off', false, []],
+] as const)(
+	'a sale completing with the receipt hidden and auto-print %s finishes its receipt and prints accordingly',
+	async (_, autoPrint, queued) => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockAutoShowReceipt = false;
+		mockAutoPrintReceipt = autoPrint;
+		mockLeg = terminalState({ phase: 'final', outcome: 'captured' });
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: true };
+		const queue = jest.spyOn(checkoutMode, 'queueHeadlessPrint');
+		const finish = jest.spyOn(checkoutMode, 'finishReceipt');
+		try {
+			const hook = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => {});
+			expect(queue.mock.calls).toEqual(queued);
+			expect(finish).toHaveBeenCalledWith('order-1');
+			hook.unmount();
+		} finally {
+			queue.mockRestore();
+			finish.mockRestore();
+			mockAutoShowReceipt = true;
+			mockAutoPrintReceipt = false;
 		}
 	}
 );
