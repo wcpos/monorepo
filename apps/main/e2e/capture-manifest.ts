@@ -78,7 +78,8 @@ export function recordCapture(args: {
 	fs.mkdirSync(dir, { recursive: true });
 	const file = path.basename(args.imagePath);
 
-	// Read-modify-write without a lock: captures run at one worker.
+	// Read-modify-write without a lock: safe only because the captures spec runs serial
+	// (`test.describe.configure({ mode: 'serial' })` in sell-to-a-guest-captures.spec.ts).
 	const manifestPath = path.join(dir, 'manifest.json');
 	const existing: CaptureManifest | null = fs.existsSync(manifestPath)
 		? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))

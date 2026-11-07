@@ -764,7 +764,8 @@ const CLEANED_UP = new Set(['trash', 'cancelled', 'wc-cancelled']);
  * or the whole test already failed — the id is still in the report, so a leaked
  * order is traceable rather than anonymous. Cleanup NEVER throws; a failed
  * teardown must not convert a passing test into a red one, nor mask a real
- * failure with a cleanup error.
+ * failure with a cleanup error. Resolves true only when the store confirmed the order trashed or
+ * cancelled (the fallback, and how every order ends on dev-pro).
  *
  * SAFETY: on a live shared store, the only thing worse than leaking an order is
  * trashing somebody else's. So the order is read back first and only touched
@@ -775,7 +776,7 @@ export async function trashOrder(
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
 	order: TrackedOrder
-): Promise<void> {
+): Promise<boolean> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
 		.attach(`created-order-${order.id}`, {
@@ -804,7 +805,7 @@ export async function trashOrder(
 				`Refusing to modify an order this test may not have created. ` +
 				`Prune by hand using the id above.`
 		);
-		return;
+		return false;
 	}
 
 	const attempts: string[] = [];
@@ -863,7 +864,7 @@ export async function trashOrder(
 
 		if (applied) {
 			console.log(`[e2e-cleanup] order ${order.id} -> ${status}`);
-			return;
+			return true;
 		}
 	}
 
@@ -871,6 +872,48 @@ export async function trashOrder(
 		`[e2e-cleanup] could not trash order ${order.id}. It is labelled "${order.label}" and ` +
 			`listed above for manual pruning. Attempts: ${attempts.join(' | ')}`
 	);
+	return false;
+}
+
+/**
+ * Trash every order in `tracked` and drop each one the store confirms trashed or cancelled; returns
+ * how many are left. The one routine both the per-loop `trashTracked` and the teardown run.
+ */
+async function trashTrackedOrders(
+	request: APIRequestContext,
+	testInfo: TestInfo,
+	storeAuthorization: () => StoreAuthorization | null,
+	tracked: Map<number, TrackedOrder>
+): Promise<number> {
+	if (tracked.size === 0) return 0;
+
+	// Resolve the credential ONCE, against the namespace trashOrder uses. The captured
+	// value is the last credential the app was seen SENDING: on a restored session that
+	// is routinely an expired token, and replaying it makes the ownership read fail —
+	// which trashOrder correctly treats as "ownership not proven" and skips, leaking
+	// every order this test created. Falling back to the captured value on a failed
+	// resolve keeps the previous behaviour rather than dropping cleanup entirely.
+	const authorization = await resolveProbeAuthorization(
+		request,
+		getStoreUrl(testInfo),
+		storeAuthorization,
+		{ route: '/wcpos/v2/orders', timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS }
+	).catch((error) => {
+		console.warn(
+			'[e2e-cleanup] no live store credential for teardown; trying the captured one:',
+			error instanceof Error ? error.message : String(error)
+		);
+		return storeAuthorization();
+	});
+
+	for (const order of [...tracked.values()]) {
+		const trashed = await trashOrder(request, testInfo, authorization, order).catch((error) => {
+			console.warn(`[e2e-cleanup] teardown failed for order ${order.id}:`, error);
+			return false;
+		});
+		if (trashed) tracked.delete(order.id);
+	}
+	return tracked.size;
 }
 
 /**
@@ -884,41 +927,26 @@ export async function trashOrder(
  * a hard timeout.
  */
 export const liveOrderTest = isolatedProductTest.extend<{
+	trackedOrders: Map<number, TrackedOrder>;
 	trackOrder: (order: TrackedOrder) => void;
+	/** Trash what is tracked so far (a soak, between loops); resolves to how many it could not. */
+	trashTracked: () => Promise<number>;
 }>({
-	trackOrder: async ({ request, storeAuthorization }, use, testInfo) => {
+	// The registry `trackOrder` fills and `trashTracked` empties; its teardown takes what is left.
+	trackedOrders: async ({ request, storeAuthorization }, use, testInfo) => {
 		const tracked = new Map<number, TrackedOrder>();
-
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+		await use(tracked);
+		await trashTrackedOrders(request, testInfo, storeAuthorization, tracked);
+	},
+	trackOrder: async ({ trackedOrders: tracked }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use((order) => {
 			tracked.set(order.id, { ...tracked.get(order.id), ...order });
 		});
-
-		if (tracked.size === 0) return;
-
-		// Resolve the credential ONCE, against the namespace trashOrder uses. The captured
-		// value is the last credential the app was seen SENDING: on a restored session that
-		// is routinely an expired token, and replaying it makes the ownership read fail —
-		// which trashOrder correctly treats as "ownership not proven" and skips, leaking
-		// every order this test created. Falling back to the captured value on a failed
-		// resolve keeps the previous behaviour rather than dropping cleanup entirely.
-		const authorization = await resolveProbeAuthorization(
-			request,
-			getStoreUrl(testInfo),
-			storeAuthorization,
-			{ route: '/wcpos/v2/orders', timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS }
-		).catch((error) => {
-			console.warn(
-				'[e2e-cleanup] no live store credential for teardown; trying the captured one:',
-				error instanceof Error ? error.message : String(error)
-			);
-			return storeAuthorization();
-		});
-
-		for (const order of tracked.values()) {
-			await trashOrder(request, testInfo, authorization, order).catch((error) => {
-				console.warn(`[e2e-cleanup] teardown failed for order ${order.id}:`, error);
-			});
-		}
+	},
+	trashTracked: async ({ request, storeAuthorization, trackedOrders }, use, testInfo) => {
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+		await use(() => trashTrackedOrders(request, testInfo, storeAuthorization, trackedOrders));
 	},
 });

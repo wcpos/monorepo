@@ -4,13 +4,16 @@
  */
 import { type ScaleStep, scaleVariables } from '@wcpos/components/lib/scale';
 
-import { becomesVisible, selectEnglishLanguage } from './fixtures';
+import { becomesVisible } from './fixtures';
 import { expect } from './test';
 
 import type { Page, TestInfo } from '@playwright/test';
 
 // A capture shows a settled screen: entrances are over within PANE (280 ms) plus a frame.
 export const SETTLE_MS = 350;
+
+/** The app language every capture is shot in. */
+const ENGLISH = 'en_US';
 
 export const CAPTURE_DEVICES = {
 	tablet: { width: 1024, height: 768 },
@@ -57,16 +60,56 @@ export async function captureViewport(
 	return path;
 }
 
+/** The theme whose tile the open theme screen marks selected. */
+async function selectedTheme(page: Page): Promise<string> {
+	const tile = page.locator('[data-testid^="theme-option-"][aria-selected="true"]');
+	await expect(tile).toHaveCount(1, { timeout: 10_000 });
+	return ((await tile.getAttribute('data-testid')) ?? '').replace('theme-option-', '');
+}
+
+/** The open General screen's language code: its label searched, and the row marked selected. */
+async function selectedLanguage(page: Page): Promise<string> {
+	const label = (await page.getByTestId('language-select').textContent())?.trim() ?? '';
+	const combobox = await openLanguages(page, label);
+	const row = combobox.locator('[data-testid^="language-select-option-"][aria-selected="true"]');
+	await expect(row, `the list marks "${label}" selected`).toHaveCount(1, { timeout: 10_000 });
+	const testId = (await row.getAttribute('data-testid')) ?? '';
+	// Picking the selected row again closes the list (a phone's sheet ignores Escape), unchanged.
+	await row.click();
+	await expect(combobox).toBeHidden({ timeout: 10_000 });
+	return testId.replace('language-select-option-', '');
+}
+
+async function openLanguages(page: Page, search: string) {
+	await page.getByTestId('language-select').click();
+	const combobox = page.getByTestId('language-select-content');
+	await expect(combobox).toBeVisible({ timeout: 10_000 });
+	await page.getByTestId('combobox-search').fill(search);
+	return combobox;
+}
+
+/** `selectEnglishLanguage` for any code, in the open General screen's combobox. */
+async function selectLanguage(page: Page, code: string): Promise<void> {
+	const combobox = await openLanguages(page, code);
+	const option = combobox.getByTestId(`language-select-option-${code}`);
+	await expect(option).toBeVisible({ timeout: 10_000 });
+	await option.click();
+	await expect(combobox).toBeHidden({ timeout: 10_000 });
+	await page.waitForTimeout(SETTLE_MS);
+}
+
 /**
  * The store's theme is persisted on its record (`store.theme`); a shared store may carry an
  * explicit light or dark choice, and only "System" lets the emulated colour scheme decide.
  * Set once per test through the theme settings page and return to the POS.
  * With `english`, the same visit also picks English on General, so no second trip is needed.
+ * Resolves to `restore`, which puts back only what changed on the (shared) store, then reads
+ * the screens again and throws unless they show what was found. No change, no screens opened.
  */
 export async function ensureSystemTheme(
 	page: Page,
 	{ english = false }: { english?: boolean } = {}
-) {
+): Promise<() => Promise<void>> {
 	// The phone keeps its navigation in the front drawer. Its items count as "visible" while
 	// the closed drawer sits off-screen, so the hamburger decides: when one is on screen the
 	// drawer must be opened first (forced, the bar is stacked per tab), and pressed only after
@@ -82,31 +125,68 @@ export async function ensureSystemTheme(
 			}
 		}
 	};
-	const settings = page.getByTestId('drawer-item-settings');
-	await openDrawer();
-	await settings.click();
-	// Wide opens General beside the list; the phone shows the list alone. The Theme entry is
-	// the one element both render.
-	await expect(page.getByTestId('settings-nav-theme')).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId('settings-nav-theme').click();
-	await expect(page.getByTestId('screen-settings-theme')).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId('theme-option-system').click();
-	await page.waitForTimeout(SETTLE_MS);
+	const openSettings = async () => {
+		await openDrawer();
+		await page.getByTestId('drawer-item-settings').click();
+		// Wide opens General beside the list; the phone shows the list alone. The Theme entry is
+		// the one element both render.
+		await expect(page.getByTestId('settings-nav-theme')).toBeVisible({ timeout: 15_000 });
+	};
+	const openLeaf = async (leaf: 'theme' | 'general') => {
+		await page.getByTestId(`settings-nav-${leaf}`).click();
+		await expect(page.getByTestId(`screen-settings-${leaf}`)).toBeVisible({ timeout: 15_000 });
+	};
+	const pickTheme = async (theme: string) => {
+		await page.getByTestId(`theme-option-${theme}`).click();
+		await page.waitForTimeout(SETTLE_MS);
+	};
 	// The phone's settings leaf carries no menu, only the crumb back to the index, which has one.
 	const goBack = async () => {
 		const back = page.getByTestId('settings-navigation-back').locator('visible=true').first();
 		if (await becomesVisible(back, 1_000)) await back.click();
 	};
+	const toPos = async () => {
+		await openDrawer();
+		await page.getByTestId('drawer-item-pos').click();
+		await expect(page.getByTestId('search-products').first()).toBeVisible({ timeout: 30_000 });
+	};
+
+	await openSettings();
+	await openLeaf('theme');
+	const theme = await selectedTheme(page);
+	await pickTheme('system');
 	await goBack();
+	let language = ENGLISH;
 	if (english) {
-		await page.getByTestId('settings-nav-general').click();
-		await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 15_000 });
-		await selectEnglishLanguage(page);
-		await page.waitForTimeout(SETTLE_MS);
+		await openLeaf('general');
+		language = await selectedLanguage(page);
+		await selectLanguage(page, ENGLISH);
 		await goBack();
 	}
-	const pos = page.getByTestId('drawer-item-pos');
-	await openDrawer();
-	await pos.click();
-	await expect(page.getByTestId('search-products').first()).toBeVisible({ timeout: 30_000 });
+	await toPos();
+	console.log(`[settings] found theme ${theme}, language ${english ? language : '(untouched)'}`);
+
+	return async () => {
+		if (theme === 'system' && language === ENGLISH) {
+			console.log('[settings] nothing to restore');
+			return;
+		}
+		await openSettings();
+		if (theme !== 'system') {
+			await openLeaf('theme');
+			await pickTheme(theme);
+			const now = await selectedTheme(page);
+			if (now !== theme) throw new Error(`restore: the theme reads ${now}, not ${theme}`);
+			await goBack();
+		}
+		if (language !== ENGLISH) {
+			await openLeaf('general');
+			await selectLanguage(page, language);
+			const now = await selectedLanguage(page);
+			if (now !== language) throw new Error(`restore: the language reads ${now}, not ${language}`);
+			await goBack();
+		}
+		await toPos();
+		console.log(`[settings] restored theme ${theme}, language ${language}`);
+	};
 }

@@ -171,11 +171,13 @@ export async function setBrowseBy(
  * hydration still gets the normal readiness budget instead of a short timer
  * that would return just before the card appears. A store with several
  * registers asks the device which one it is at first, and the first row is taken.
+ * Resolves true only when this call opened the session, so a caller that must
+ * leave a shared store as it found it knows whether to close it again.
  */
 export async function ensureRegisterOpen(
 	page: Page,
 	{ afterPicking }: { afterPicking?: () => Promise<void> } = {}
-): Promise<void> {
+): Promise<boolean> {
 	const card = page.getByTestId('open-register-card');
 	const cartReady = page.getByTestId('add-cart-item-menu');
 	const picker = page.locator('[data-testid^="register-picker-row-"]');
@@ -188,13 +190,14 @@ export async function ensureRegisterOpen(
 		await afterPicking?.();
 		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
 	}
-	if (!(await card.isVisible())) return;
+	if (!(await card.isVisible())) return false;
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
 	await page.getByTestId('open-register-button').click();
 	await expect(card).toBeHidden({ timeout: 30_000 });
 	// A healthy open register has no warning pill; its cart header is ready instead.
 	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
+	return true;
 }
 
 /**

@@ -5,8 +5,10 @@
  * does. It answers how many loops 8 hours hold and whether `measureUserAgentSpecificMemory` works.
  * Hand-run only, against a served build (see playwright.soak.config.ts):
  *
- *   BASE_URL=https://wcpos.expo.app SOAK_LOOPS=6 SOAK_WARMUP_LOOPS=2 \
+ *   BASE_URL=https://wcpos.expo.app \
  *     npx playwright test -c playwright.soak.config.ts --project=sell-to-a-guest-soak
+ *
+ * Each loop trashes its own order once its row is recorded, so a killed run leaks at most one.
  */
 import { expect } from '@playwright/test';
 
@@ -15,10 +17,11 @@ import { liveOrderTest as test } from '../order-lifecycle';
 import { SELL_TO_A_GUEST, sellToAGuest, type SellToAGuestContext } from './sell-to-a-guest';
 import { createSoakSampler } from './soak-sampler';
 
-/** Measured loops between the two attribution checkpoints when SOAK_LOOPS is not given. */
-const DEFAULT_SOAK_LOOPS = 10;
-/** Warm-up loops before the first checkpoint when SOAK_WARMUP_LOOPS is not given. */
-const DEFAULT_WARMUP_LOOPS = 2;
+// Edit these two here for a longer hand run.
+/** Measured loops between the two attribution checkpoints. */
+const SOAK_LOOPS = 10;
+/** Warm-up loops before the first checkpoint. */
+const SOAK_WARMUP_LOOPS = 2;
 /** Per-loop allowance in the test timeout; a healthy loop takes a fraction of it. */
 const LOOP_TIMEOUT_MS = 4 * 60_000;
 /** Fixed allowance for sign-in, checkpoints, the end UA-memory reading and teardown. */
@@ -26,28 +29,12 @@ const FIXED_TIMEOUT_MS = 10 * 60_000;
 /** A mid-run GC checkpoint between loops once this long has passed since the last one. */
 const CHECKPOINT_EVERY_MS = 30 * 60_000;
 
-/** A hand run chooses its own length (the `SOAK_MS` precedent in idle-backfill-soak-duration.ts). */
-function loopCount(name: string, raw: string | undefined, fallback: number): number {
-	if (raw === undefined || raw === '') return fallback;
-	const value = Number(raw);
-	if (!Number.isInteger(value) || value <= 0) {
-		throw new Error(`${name}=${raw} must be a positive integer`);
-	}
-	return value;
-}
-
-const SOAK_LOOPS = loopCount('SOAK_LOOPS', process.env.SOAK_LOOPS, DEFAULT_SOAK_LOOPS);
-const SOAK_WARMUP_LOOPS = loopCount(
-	'SOAK_WARMUP_LOOPS',
-	process.env.SOAK_WARMUP_LOOPS,
-	DEFAULT_WARMUP_LOOPS
-);
-
 test('sell to a guest, looped', async ({
 	posPage,
 	request,
 	storeAuthorization,
 	trackOrder,
+	trashTracked,
 }, testInfo) => {
 	test.setTimeout((SOAK_LOOPS + SOAK_WARMUP_LOOPS) * LOOP_TIMEOUT_MS + FIXED_TIMEOUT_MS);
 	const sampler = await createSoakSampler(posPage, testInfo);
@@ -66,6 +53,8 @@ test('sell to a guest, looped', async ({
 		},
 	};
 	let loop = 0;
+	// Orders left neither trashed nor cancelled (the fallback, and how every order ends on dev-pro).
+	let ordersNotTrashed = 0;
 	const runLoop = async () => {
 		loop += 1;
 		cartAddMs = null;
@@ -73,6 +62,12 @@ test('sell to a guest, looped', async ({
 		await sellToAGuest(ctx);
 		const wallMs = Date.now() - startedAt;
 		await sampler.endLoop({ journey: SELL_TO_A_GUEST.key, loop, wallMs, cartAddMs });
+		// After the row, so the loop's wall time leaves it out; what stays is the teardown's.
+		// Outstanding, not summed: an order one loop leaves is retried, and counted, by the next.
+		ordersNotTrashed = await trashTracked();
+		if (ordersNotTrashed > 0) {
+			console.warn(`[e2e-cleanup] after loop ${loop}: ${ordersNotTrashed} order(s) not trashed`);
+		}
 	};
 
 	try {
@@ -91,10 +86,10 @@ test('sell to a guest, looped', async ({
 		await sampler.checkpoint('end');
 	} catch (error) {
 		// A journey failure still stops the timers and attaches what was recorded up to it.
-		await sampler.finish().catch(() => undefined);
+		await sampler.finish({ ordersNotTrashed }).catch(() => undefined);
 		throw error;
 	}
-	const summary = await sampler.finish();
+	const summary = await sampler.finish({ ordersNotTrashed });
 
 	// Harness sanity only: no memory, timing or main-thread threshold is asserted here (#517).
 	expect(summary.loops, 'every loop recorded its row').toBe(SOAK_LOOPS + SOAK_WARMUP_LOOPS);
