@@ -10,6 +10,7 @@
 		"test": "jest",
 		"test:watch": "jest --watchAll",
 		"test:plugins": "node --test plugins/*.test.js",
+		"test:showcase": "node --test e2e/showcase/*.check.mjs",
 		"test:e2e": "playwright test",
 		"test:e2e:native": "maestro test .maestro",
 		"test:e2e:native:check": "node ../../scripts/check-maestro-testids.mjs",
