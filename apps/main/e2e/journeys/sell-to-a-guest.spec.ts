@@ -7,19 +7,40 @@
  * - table-view add supersedes `products.spec.ts:119`
  * - five-add toast burst supersedes `pos-cart-toast-burst.spec.ts:37`
  * - read-only cart add timing supersedes `pos-cart.spec.ts:58` and `pos-cart.spec.ts:69`
+ * - save ack with no payment link supersedes `pos-checkout.spec.ts:284`
+ * - built-in POS gateway on the legacy webview supersedes `pos-checkout.spec.ts:538`
+ * - standard, reduced and non-taxable per-line tax parity supersedes `pos-money-oracle.spec.ts:514`
  */
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { beginCartAddMeasurement, readCartAddMeasurement } from '../cart-add-timing';
 import { checkoutProbeAddControl } from '../checkout-probe';
+import {
+	gatewaysResponse,
+	isGatewayBootstrapUrl,
+	isOrderCheckoutUrl,
+	isPaymentGatewaysUrl,
+	omitPaymentLinkFromPushAcks,
+} from '../checkout-route-stubs';
 import { digitsOf, ledgerRows, pollOrder } from '../checkout-shared';
-import { getStoreUrl, getStoreVariant, waitForCadenceStart } from '../fixtures';
+import { getStoreUrl, getStoreVariant, tryAddProductBySku, waitForCadenceStart } from '../fixtures';
+import { assertMixedTaxTreatment } from '../money-oracle-guards';
+import {
+	assertSaleParity,
+	captureDivergenceLog,
+	expectNoBanner,
+	saveAndCapture,
+	TAX_CLASS_SKU,
+} from '../money-oracle-sale';
 import {
 	checkoutControl,
 	type CheckoutSurface,
 	expectOrderPaid,
+	expectPaymentBlocked,
+	newRunLabel,
 	readOrder,
 	type ServerOrder,
+	stampRunLabel,
 	liveOrderTest as test,
 } from '../order-lifecycle';
 import { ensureGridView, ensureTableView } from '../pos-view-mode';
@@ -373,5 +394,114 @@ test.describe('J2 Sell to a guest', () => {
 			testInfo.attachments.map((attachment) => attachment.name),
 			'the single-add timing reading is attached'
 		).toContain('cart-add-performance');
+	});
+
+	test('a save ack with no payment link blocks payment', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		test.slow();
+		const { page } = ctx;
+		await omitPaymentLinkFromPushAcks(page);
+		const started = await startGuestSale(ctx);
+		await addProduct(ctx, started);
+
+		// Listening before checkout opens, so the gateway fetch on mount is not missed.
+		const gatewaysLoaded = gatewaysResponse(page);
+		// Step 4 saves the order and hands it to trackOrder, so teardown trashes it.
+		await checkOut(ctx, started);
+		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
+			? 'pane'
+			: 'modal';
+		await expectPaymentBlocked(page, surface, gatewaysLoaded, 15_000);
+	});
+
+	test('a built-in POS gateway stays on the legacy webview even with supports_checkout=true', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		test.slow();
+		const { page } = ctx;
+		let contractCheckoutRequested = false;
+		await page.route(isGatewayBootstrapUrl, async (route) => {
+			contractCheckoutRequested = true;
+			await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+		});
+		await page.route(isOrderCheckoutUrl, async (route) => {
+			contractCheckoutRequested = true;
+			await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+		});
+		await page.route(isPaymentGatewaysUrl, async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify([
+					{
+						id: 'pos_cash',
+						provider: 'wcpos',
+						pos_type: 'manual',
+						capabilities: { supports_checkout: true },
+					},
+				]),
+			});
+		});
+
+		await omitPaymentLinkFromPushAcks(page);
+		const started = await startGuestSale(ctx);
+		await addProduct(ctx, started);
+		const gatewaysLoaded = gatewaysResponse(page);
+		await checkOut(ctx, started);
+		const surface: CheckoutSurface = (await page.getByTestId('checkout-tender-pane').isVisible())
+			? 'pane'
+			: 'modal';
+		await expectPaymentBlocked(page, surface, gatewaysLoaded, 10_000);
+		expect(contractCheckoutRequested).toBe(false);
+	});
+
+	test('a standard, reduced and non-taxable cart saves with per-line tax parity', async ({
+		posPage,
+		request,
+		storeAuthorization,
+		trackOrder,
+	}, testInfo) => {
+		const ctx = journeyContext({ posPage, request, storeAuthorization, trackOrder }, testInfo);
+		test.slow();
+		const { page } = ctx;
+		const label = newRunLabel();
+		const divergence = captureDivergenceLog(page);
+		// Step 1 only: all three lines come from the owned tax-class fixtures, never step 2's add.
+		await startGuestSale(ctx);
+		const added = {
+			standard: await tryAddProductBySku(page, TAX_CLASS_SKU.standard),
+			reduced: await tryAddProductBySku(page, TAX_CLASS_SKU.reduced),
+			nonTaxable: await tryAddProductBySku(page, TAX_CLASS_SKU.nonTaxable),
+		};
+		const missing = Object.entries(added).filter(([, outcome]) => outcome !== 'added');
+		if (missing.length > 0) {
+			test.skip(
+				true,
+				`tax-class fixtures unavailable on this store (` +
+					missing
+						.map(
+							([role, outcome]) =>
+								`${TAX_CLASS_SKU[role as keyof typeof TAX_CLASS_SKU]}: ${outcome}`
+						)
+						.join(', ') +
+					`). Run e2e/scripts/tax-class-fixtures.php against it — see that file's header.`
+			);
+			return;
+		}
+		await stampRunLabel(page, label);
+
+		const sale = await saveAndCapture(page, trackOrder, label, testInfo);
+		assertMixedTaxTreatment(sale.doc, 'mixed-class cart');
+		assertSaleParity(sale, page, 'line_items', 'mixed-class cart');
+		await expectNoBanner(page, 'mixed-class cart', divergence);
 	});
 });
