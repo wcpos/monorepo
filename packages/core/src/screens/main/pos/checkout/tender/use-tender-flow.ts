@@ -25,6 +25,7 @@ import {
 	type PaymentTransport,
 	readGatewayAttempts,
 	readLedger,
+	readPaidUnits,
 	roundedDue,
 	settlesAtRoundedDue,
 	SPLIT_META_KEY,
@@ -301,10 +302,15 @@ export function useTenderFlow(
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
-	const allocations = useAllocations(order.uuid);
+	const storeAllocations = useAllocations(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
+	// The order's saved units (a completed sale reopened, a restart) under this till's live ones.
+	const allocations = React.useMemo(
+		() => ({ ...readPaidUnits(payload.meta_data), ...(storeAllocations ?? {}) }),
+		[payload.meta_data, storeAllocations]
+	);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const [gated, setGated] = React.useState(false);
@@ -1000,10 +1006,12 @@ export function useTenderFlow(
 						.filter(({ status }) => isLivePaymentStatus(status))
 						.map(({ id }) => id)
 				);
+				const meta = order.getLatest().payload.meta_data;
 				const stored = Object.fromEntries(
-					Object.entries(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}).filter(
-						([id]) => live.has(id)
-					)
+					Object.entries({
+						...readPaidUnits(meta),
+						...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					}).filter(([id]) => live.has(id))
 				);
 				const allocations =
 					paymentId && Object.keys(state.picked).length > 0
@@ -1012,7 +1020,7 @@ export function useTenderFlow(
 				if (Object.keys(allocations).length > 0)
 					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
 				// A refused completing attempt can leave its units on the order: cleared like a stale split.
-				const stale = (order.getLatest().payload.meta_data ?? []).some(
+				const stale = (meta ?? []).some(
 					({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
 				);
 				return stale
@@ -1876,7 +1884,7 @@ export function useTenderFlow(
 			planMore,
 			lines,
 			linesPaidBy: state.linesPaidBy,
-			allocations: allocations ?? {},
+			allocations,
 			rows,
 			liveRows,
 			retainedRows,

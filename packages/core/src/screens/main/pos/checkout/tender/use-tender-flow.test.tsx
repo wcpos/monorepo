@@ -1626,6 +1626,22 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('keeps the saved units of a live payment when the store is empty (a reopened sale), and exposes them', async () => {
+		mockPayload.meta_data = withLedger(
+			[{ key: '_wcpos_paid_units', value: '{"a":{"l1":1},"dead":{"l2":2}}' }],
+			[payment({ id: 'a', amount: '30.00', tendered: null })]
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.allocations).toEqual({ a: { l1: 1 }, dead: { l2: 2 } });
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		const paidUnits = input.extraMeta?.find(
+			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
+		);
+		expect(JSON.parse(paidUnits?.value as string)).toEqual({ a: { l1: 1 } });
+	});
+
 	it('a picked payment without rounding mints an id but writes no fee', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
