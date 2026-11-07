@@ -60,6 +60,7 @@ export function ClosureWritten({
 					blind={count.blind}
 					context={context}
 					printCount={printCount}
+					paperOpen
 				/>
 				{!count.blind && !error && printed && (
 					<Text testID="closure-printed" className="text-success">
