@@ -381,6 +381,7 @@ export function RegisterPanel({
 							<MenuRow
 								testID="register-panel-expected"
 								label={t('register.expected_in_drawer')}
+								aria-expanded={ledgerOpen}
 								onPress={() => setLedgerOpen((v) => !v)}
 								trailing={
 									<>
@@ -497,6 +498,7 @@ export function RegisterPanel({
 									<MenuRow
 										testID="register-panel-other-tenders"
 										label={t('register.other_tenders')}
+										aria-expanded={othersOpen}
 										onPress={() => setOthersOpen((v) => !v)}
 										trailing={
 											<>
