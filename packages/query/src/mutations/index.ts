@@ -6,9 +6,6 @@ export {
 	ActiveScopeChangedTwiceError,
 	documentRecordId,
 	findEngineResident,
-	rebirthOrderResident,
-	recreateRebornOrder,
-	residentPayload,
 	insertEngineResident,
 	patchAndEnqueueEngineResident,
 	patchEngineResident,
@@ -31,7 +28,4 @@ export {
 export { recordReceiptPrint } from './record-receipt-print';
 export { resolveQueuedChange } from './resolve-queued-change';
 export { enqueueRecordWrite, pushRecord, readWrittenResident } from './push-record';
-export {
-	settleStoreDeletedOrder,
-	type StoreDeletedOrderSettlement,
-} from './settle-store-deleted-order';
+export { settleStoreDeletedOrder } from './settle-store-deleted-order';

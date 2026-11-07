@@ -3,9 +3,13 @@ import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { REJECTED_QUEUE_STATUSES } from '@wcpos/query';
-import type { settleStoreDeletedOrder, StoreDeletedOrderSettlement } from '@wcpos/query/mutations';
+import type { settleStoreDeletedOrder } from '@wcpos/query/mutations';
 
 import { useStoreDeletedOrdersSettler } from './use-store-deleted-orders';
+
+// Derived here: the type is not a public export of @wcpos/query (the export census keeps the
+// public surface to what production code imports).
+type StoreDeletedOrderSettlement = Awaited<ReturnType<typeof settleStoreDeletedOrder>>;
 
 const mockRows = new BehaviorSubject<unknown[]>([]);
 const mockObserve = jest.fn((..._args: unknown[]) => mockRows.asObservable());

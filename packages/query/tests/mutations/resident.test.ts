@@ -6,7 +6,7 @@ import {
 	rebirthOrderResident,
 	recreateRebornOrder,
 	residentPayload,
-} from '../../src/mutations';
+} from '../../src/mutations/resident';
 import { createEngineDatabase, createFakeEngine } from '../../src/testing';
 
 import type { QueryRuntime } from '../../src/provider';
