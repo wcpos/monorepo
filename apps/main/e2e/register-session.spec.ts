@@ -87,6 +87,8 @@ test('opens a register, records paid out, and undoes it', async ({ posPage: page
 	await page.getByTestId('movement-amount').fill('20');
 	await page.getByTestId('movement-reason').fill('Session probe');
 	await page.getByTestId('movement-confirm').click();
+	// The ledger folds under Expected (V2 slice 2): open it before reading the paid-out row.
+	await page.getByTestId('register-panel-expected').click();
 	await page.getByTestId('register-panel-movements').click();
 	await expect(page.getByTestId(/^movement-void-/)).toHaveCount(1);
 	// No force: the toast shows over the modal panel, and a forced click at its point landed on the

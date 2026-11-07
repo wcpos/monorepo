@@ -54,7 +54,7 @@ export function RegisterAmount({
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
-}) {
+} & Pick<React.ComponentProps<typeof Input.InputField>, 'onBlur' | 'onFocus' | 'onPressIn'>) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
 	// The locale's own zero, without the symbol that already sits beside it.
 	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();

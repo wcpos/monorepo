@@ -14,6 +14,14 @@ export const overThreshold = (variance: number, decimals: number, threshold?: st
 	!!threshold?.trim() && Math.abs(variance) > toMinor(threshold, decimals);
 export const denominationTotal = (pieces: Record<string, number>, decimals: number) =>
 	Object.entries(pieces).reduce((sum, [value, count]) => sum + toMinor(value, decimals) * count, 0);
+export function varianceAmount(
+	variance: number,
+	decimals: number,
+	format: (value: number) => string
+) {
+	const abs = Math.abs(Number(fromMinor(variance, decimals)));
+	return variance < 0 ? `−${format(abs)}` : variance > 0 ? `+${format(abs)}` : format(0);
+}
 export function varianceText(
 	variance: number,
 	decimals: number,
@@ -21,5 +29,5 @@ export function varianceText(
 	t: (key: string) => string
 ) {
 	if (!variance) return t('register.exact');
-	return `${variance < 0 ? '−' : '+'}${format(Number(fromMinor(Math.abs(variance), decimals)))} ${variance < 0 ? t('register.short') : t('register.over')}`;
+	return `${varianceAmount(variance, decimals, format)} ${variance < 0 ? t('register.short') : t('register.over')}`;
 }
