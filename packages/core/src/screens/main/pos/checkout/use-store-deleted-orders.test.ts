@@ -72,7 +72,13 @@ beforeEach(() => {
 
 it('rebirths an open cart, discards then writes a plain create and toasts once', async () => {
 	const reborn = { toMutableJSON: () => ({ payload: { id: 0, status: 'pos-open' } }) };
-	mockFind.mockResolvedValueOnce(resident('pos-open')).mockResolvedValue(reborn);
+	// The resident as it stands AFTER the discard: an edit landed while it awaited storage.
+	const edited = {
+		toMutableJSON: () => ({
+			payload: { id: 0, status: 'pos-open', line_items: [{ quantity: 2 }] },
+		}),
+	};
+	mockFind.mockResolvedValueOnce(resident('pos-open')).mockResolvedValue(edited);
 	mockRebirth.mockResolvedValue(reborn);
 	const { unmount } = renderHook(() => useStoreDeletedOrdersSettler(1));
 	expect(mockObserve).toHaveBeenCalledWith(mockEngine, {
@@ -81,13 +87,13 @@ it('rebirths an open cart, discards then writes a plain create and toasts once',
 	});
 	await emit();
 	expect(mockRebirth).toHaveBeenCalledWith(mockRuntime, 'a');
-	expect(mockFind).toHaveBeenCalledTimes(1);
+	expect(mockFind).toHaveBeenCalledTimes(2);
 	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
 	expect(mockEngine.write).toHaveBeenCalledWith({
 		collection: 'orders',
 		operation: 'create',
 		recordId: 'a',
-		payload: { id: 0, status: 'pos-open' },
+		payload: { id: 0, status: 'pos-open', line_items: [{ quantity: 2 }] },
 	});
 	expect(mockRebirth.mock.invocationCallOrder[0]).toBeLessThan(
 		mockEngine.resolveConflict.mock.invocationCallOrder[0]
@@ -258,4 +264,13 @@ it('abandons a settle when the store scope moves before the discard, leaving the
 	mockRebirth.mockResolvedValue(resident('pos-open'));
 	await emit();
 	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+});
+
+it('binds its scope at the first emission, so a POS mounted before the database opened still settles', async () => {
+	mockScope = null as unknown as string;
+	renderHook(() => useStoreDeletedOrdersSettler(1));
+	mockScope = 'scope-1';
+	await emit();
+	expect(mockEngine.resolveConflict).toHaveBeenCalledWith('m1', 'discard');
+	expect(mockEngine.write).toHaveBeenCalledTimes(1);
 });

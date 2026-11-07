@@ -25,9 +25,13 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 		// scope BEFORE the new store id commits and this effect re-runs; in that window no row
 		// is touched — the incoming store's effect instance owns the queue from then on, and
 		// `engine.write` would otherwise enqueue the outgoing store's cart into the new scope.
-		const scopeId = manager.engine.status().activeScopeId;
-		const abandoned = () => disposed || manager.engine.status().activeScopeId !== scopeId;
+		// Bound lazily, at the first emission: before the engine's database opens the active
+		// scope is still null, and binding to null would abandon every later row.
+		let scopeId: string | null = null;
+		const abandoned = () =>
+			disposed || scopeId === null || manager.engine.status().activeScopeId !== scopeId;
 		const scan = () => {
+			if (scopeId === null) scopeId = manager.engine.status().activeScopeId;
 			if (abandoned()) return;
 			for (const row of latestRows) {
 				if (
@@ -55,12 +59,17 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 						await manager.engine.resolveConflict(mutationId, 'discard');
 						if (abandoned()) return;
 						if (reborn) {
-							// Plain snapshot, not an RxDB payload proxy: it crosses the storage worker boundary.
+							// Re-read AFTER the discard: an edit the cashier made while it awaited storage is
+							// on the resident, and a create built from the pre-discard snapshot would layer
+							// over that newer queued intent. Plain snapshot, not an RxDB payload proxy: it
+							// crosses the storage worker boundary.
+							const current = await findEngineResident(manager, 'orders', recordId);
+							if (abandoned()) return;
 							await manager.engine.write({
 								collection: 'orders',
 								operation: 'create',
 								recordId,
-								payload: residentPayload(reborn),
+								payload: residentPayload(current ?? reborn),
 							});
 						}
 						if (!resident || alreadyReborn) return;
