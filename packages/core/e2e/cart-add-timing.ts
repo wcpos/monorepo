@@ -103,3 +103,50 @@ export function startJsStallProbe() {
 	(handle as { unref?: () => void }).unref?.();
 }
 startJsStallProbe();
+
+// TEMP #3345 load: one WCPOS_E2E_JS_LOAD line per 5 s: CPU gauge, rAF and timer callbacks, React
+// commits (apps/main/lib/e2e-react-commit-hook.js). Installed after the stall probe, uncounted.
+if (isCartAddTimingEnabled()) {
+	// TEMP #3345 load
+	const g = globalThis as unknown as Record<string, unknown> & { __wcposE2eCommits?: number };
+	const realSetInterval = g.setInterval as typeof setInterval;
+	let [raf, timerCalls, timerMs] = [0, 0, 0];
+	let lastCommits = g.__wcposE2eCommits ?? 0;
+	const timed = (cb: unknown) =>
+		typeof cb !== 'function'
+			? cb
+			: function (this: unknown, ...args: unknown[]) {
+					const start = performance.now();
+					try {
+						return cb.apply(this, args);
+					} finally {
+						timerCalls++;
+						timerMs += performance.now() - start;
+					}
+				};
+	for (const name of ['setTimeout', 'setInterval']) {
+		const real = g[name] as (...args: unknown[]) => unknown;
+		g[name] = (cb: unknown, ...rest: unknown[]) => real.call(g, timed(cb), ...rest);
+	}
+	const realRaf = g.requestAnimationFrame as ((cb: (t: number) => void) => number) | undefined;
+	if (typeof realRaf === 'function')
+		g.requestAnimationFrame = (cb: (t: number) => void) =>
+			realRaf.call(g, (t: number) => {
+				raf++;
+				return cb(t);
+			});
+	const handle = realSetInterval(() => {
+		const start = performance.now();
+		let sum = 0;
+		for (let i = 0; i < 200_000; i++) sum = (sum + i) | 0;
+		g.__wcposE2eSpinSink = sum;
+		const spinMs = Math.round((performance.now() - start) * 10) / 10;
+		const total = g.__wcposE2eCommits;
+		const commits = total === undefined ? undefined : total - lastCommits;
+		lastCommits = total ?? 0;
+		const line = { at: Date.now(), spinMs, raf, timerCalls, timerMs: Math.round(timerMs), commits };
+		writeE2eLine(`WCPOS_E2E_JS_LOAD ${JSON.stringify(line)}`);
+		raf = timerCalls = timerMs = 0;
+	}, 5_000);
+	(handle as { unref?: () => void }).unref?.();
+} // TEMP #3345 load

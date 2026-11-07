@@ -25,6 +25,8 @@ const FIELD_ALLOWLIST = [
 	'count',
 	'timedOut',
 	'attempt',
+	'lane', // TEMP #3345 load
+	'reason', // TEMP #3345 load
 ] as const;
 
 type LedgerValue = string | number | boolean;

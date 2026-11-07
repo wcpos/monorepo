@@ -20,6 +20,13 @@ if (!config.resolver.assetExts.includes('wasm')) {
 	config.resolver.assetExts.push('wasm');
 }
 
+if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') {
+	// TEMP #3345 load: count React commits in the E2E bundle (lib/e2e-react-commit-hook.js).
+	const basePolyfills = config.serializer.getPolyfills;
+	const commitHook = path.join(__dirname, 'lib/e2e-react-commit-hook.js');
+	config.serializer.getPolyfills = (options) => [...basePolyfills(options), commitHook];
+} // TEMP #3345 load
+
 // rxdb and rxdb-premium ship both CJS and ESM builds. Metro resolves bare-specifier
 // imports (e.g. `rxdb/plugins/utils`, `rxdb-premium/plugins/shared`) via the "require"
 // export condition → CJS, while internal relative imports within the ESM builds stay ESM.
