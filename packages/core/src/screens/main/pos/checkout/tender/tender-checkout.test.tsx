@@ -8,6 +8,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
 
@@ -415,6 +416,32 @@ describe('TenderCheckout', () => {
 		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
 		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 	});
+
+	it.each(['sm', 'lg'] as const)(
+		'leaves and closes the sheet from the offline state (%s)',
+		(size) => {
+			const offline = (id: string) => ({
+				method: method({ id }),
+				disabled: true,
+				reason: 'offline' as const,
+				worksOffline: false,
+				settlesLater: false,
+			});
+			mockScreenSize = size;
+			resetCheckoutMode();
+			enterCheckout('order-1');
+			mockFlow = makeFlow({
+				online: false,
+				state: { ...initialTenderState, splitView: true },
+				tiles: [offline('pos_cash'), offline('other')],
+			});
+			render(<TenderCheckout order={order} />);
+			fireEvent.click(screen.getByTestId('checkout-offline-leave'));
+			expect(mockBack).toHaveBeenCalledTimes(1);
+			expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
+			expect(mockFlow.dispatch).not.toHaveBeenCalled();
+		}
+	);
 
 	it('offers a completion action for a zero-total order', () => {
 		const takeTender = jest.fn();
