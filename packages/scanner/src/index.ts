@@ -12,6 +12,7 @@ export {
 export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from './hid-pos-decoder';
 export {
 	createScanSession,
+	DEFAULT_COOLDOWN_MS,
 	hasValidRetailCheckDigit,
 	normalizeRetailCode,
 	type ScanSession,
