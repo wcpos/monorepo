@@ -80,7 +80,7 @@ jest.mock('@wcpos/components/input', () => {
 	function Wrap({ children }: { children?: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
-	// The card's amount is the `box` variant: Input.Root / Left / InputField / Right.
+	// The card's amount is one framed figure: Input.Root / Left / InputField / Right.
 	return {
 		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
 	};
