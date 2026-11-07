@@ -19,6 +19,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 import { useGround } from '@wcpos/components/lib/ground';
+import { TileGrid } from '@wcpos/components/tile-grid';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
@@ -423,7 +424,19 @@ function ReportsShell({
 													initialHistoryLimit={outsideHistory}
 												/>
 											}
-											chips={<ClosuresCashierChip scope={scope} onScopeChange={setSelection} />}
+											chips={
+												phone ? (
+													<TileGrid columns={2}>
+														<ClosuresCashierChip
+															className="self-stretch"
+															scope={scope}
+															onScopeChange={setSelection}
+														/>
+													</TileGrid>
+												) : (
+													<ClosuresCashierChip scope={scope} onScopeChange={setSelection} />
+												)
+											}
 											actions={actions}
 										/>
 									</View>
