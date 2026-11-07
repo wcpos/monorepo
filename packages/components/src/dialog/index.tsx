@@ -368,12 +368,12 @@ export function DialogFooter({
 		>
 			{phone ? (
 				<>
+					{aside}
 					{primary}
 					{other}
 					{dismiss}
 					{own}
 					{losing}
-					{aside}
 				</>
 			) : (
 				<>

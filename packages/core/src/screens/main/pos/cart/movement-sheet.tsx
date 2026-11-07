@@ -54,7 +54,10 @@ export function RegisterAmount({
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
-} & Pick<React.ComponentProps<typeof Input.InputField>, 'onBlur' | 'onFocus' | 'onPressIn'>) {
+} & Pick<
+	React.ComponentProps<typeof Input.InputField> & React.AriaAttributes,
+	'onBlur' | 'onFocus' | 'onPressIn' | 'aria-invalid' | 'aria-describedby'
+>) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
 	// The locale's own zero, without the symbol that already sits beside it.
 	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
@@ -112,6 +115,7 @@ export function MovementSheet({
 }) {
 	const { actions, expected, blind, binding } = useRegisterSession();
 	const phone = useIsPhone();
+	const invalidId = React.useId();
 	const { openDrawer } = useSessionReport();
 	const { format } = useCurrencyFormat();
 	const [amount, setAmount] = React.useState('');
@@ -230,6 +234,8 @@ export function MovementSheet({
 						<>
 							<RegisterAmount
 								testID="movement-amount"
+								aria-invalid={invalid === 'amount'}
+								aria-describedby={invalid === 'amount' ? invalidId : undefined}
 								value={amount.replace('.', separator)}
 								onChangeText={(value) => setAmount(value.replace(separator, '.'))}
 							/>
@@ -242,7 +248,7 @@ export function MovementSheet({
 						</>
 					)}
 					<Text className="text-muted-foreground">{t('register.reason')}</Text>
-					<TileGrid columns={3}>
+					<TileGrid columns={phone ? 2 : 3}>
 						{type &&
 							[...REASONS[type], 'other'].map((key) => {
 								const label = words[key];
@@ -265,6 +271,8 @@ export function MovementSheet({
 					<Input
 						ref={noteRef}
 						testID="movement-reason"
+						aria-invalid={invalid === 'reason'}
+						aria-describedby={invalid === 'reason' ? invalidId : undefined}
 						placeholder={t('register.reason')}
 						value={reason}
 						onChangeText={setReason}
@@ -277,7 +285,11 @@ export function MovementSheet({
 						!!invalid && (
 							<HStack className="items-center gap-1">
 								<Icon name="info" size="sm" className="text-muted-foreground" />
-								<Text testID="movement-invalid" className="text-muted-foreground">
+								<Text
+									testID="movement-invalid"
+									nativeID={invalidId}
+									className="text-muted-foreground"
+								>
 									{words[invalid]}
 								</Text>
 							</HStack>

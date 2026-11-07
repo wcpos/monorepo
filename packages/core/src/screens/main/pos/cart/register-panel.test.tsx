@@ -30,6 +30,11 @@ jest.mock('@rn-primitives/label', () => ({
 jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'text-muted-foreground' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -248,13 +253,24 @@ jest.mock('@wcpos/components/input', () => {
 		value,
 		onChangeText,
 		testID,
+		nativeID,
+		'aria-invalid': invalid,
+		'aria-describedby': describedBy,
 	}: {
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
-	}) {
+		nativeID?: string;
+	} & Pick<React.ComponentProps<'input'>, 'aria-invalid' | 'aria-describedby'>) {
 		return (
-			<input value={value} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />
+			<input
+				id={nativeID}
+				value={value}
+				data-testid={testID}
+				aria-invalid={invalid}
+				aria-describedby={describedBy}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
 		);
 	}
 	function Wrap({ children }: { children?: React.ReactNode }) {
@@ -311,12 +327,14 @@ jest.mock('@wcpos/components/text', () => ({
 		children,
 		testID,
 		className,
+		nativeID,
 	}: {
 		children: React.ReactNode;
 		testID?: string;
 		className?: string;
+		nativeID?: string;
 	}) => (
-		<span data-testid={testID} data-classes={className}>
+		<span id={nativeID} data-testid={testID} data-classes={className}>
 			{children}
 		</span>
 	),
@@ -386,6 +404,7 @@ jest.mock('../../hooks/use-payment-methods', () => ({
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
+	mockPhone = false;
 	currentLoaded = true;
 	currentFiguresPending = false;
 	blind = false;
@@ -603,15 +622,41 @@ it('the keypad sits under the amount and the reasons are a three-column grid', (
 	}
 });
 
+it('the reasons are a two-column grid on the phone', () => {
+	mockPhone = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
+	const supplier = screen.getByTestId('movement-reason-supplier');
+	const grid = supplier.parentElement!.parentElement!.parentElement!;
+	expect(grid.children).toHaveLength(3);
+	for (const row of Array.from(grid.children)) {
+		expect(row.children).toHaveLength(2);
+		expect(within(row as HTMLElement).getAllByTestId(/^movement-reason-/)).toHaveLength(2);
+	}
+});
+
 it('the reason why the button is held sits beside it', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-in'));
 	expect(confirmButton().disabled).toBe(true);
 	const footer = confirmButton().closest('footer')!;
 	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('amount');
-	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '20' } });
+	const invalidId = within(footer).getByTestId('movement-invalid').id;
+	expect(invalidId).toBeTruthy();
+	const amount = screen.getByTestId('movement-amount');
+	const reason = screen.getByTestId('movement-reason');
+	expect(amount.getAttribute('aria-invalid')).toBe('true');
+	expect(amount.getAttribute('aria-describedby')).toBe(invalidId);
+	expect(reason.getAttribute('aria-invalid')).toBe('false');
+	expect(reason.hasAttribute('aria-describedby')).toBe(false);
+	fireEvent.change(amount, { target: { value: '20' } });
 	expect(confirmButton().disabled).toBe(true);
 	expect(within(footer).getByTestId('movement-invalid').textContent).toContain('reason');
+	expect(within(footer).getByTestId('movement-invalid').id).toBe(invalidId);
+	expect(reason.getAttribute('aria-invalid')).toBe('true');
+	expect(reason.getAttribute('aria-describedby')).toBe(invalidId);
+	expect(amount.getAttribute('aria-invalid')).toBe('false');
+	expect(amount.hasAttribute('aria-describedby')).toBe(false);
 });
 
 it('the consequence line says what is left after a paid out', () => {
