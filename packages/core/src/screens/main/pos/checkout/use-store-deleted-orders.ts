@@ -1,7 +1,12 @@
 import * as React from 'react';
 
 import { observeQueueRows, REJECTED_QUEUE_STATUSES, useQueryRuntime } from '@wcpos/query';
-import { findEngineResident, rebirthOrderResident, residentPayload } from '@wcpos/query/mutations';
+import {
+	findEngineResident,
+	rebirthOrderResident,
+	recreateRebornOrder,
+	residentPayload,
+} from '@wcpos/query/mutations';
 import { OPEN_CART_ORDER_STATUS, type QueueRow } from '@wcpos/sync-engine';
 import { isRecordGoneRejection } from '@wcpos/utils/logger/rejected-write-code';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -59,18 +64,9 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 						await manager.engine.resolveConflict(mutationId, 'discard');
 						if (abandoned()) return;
 						if (reborn) {
-							// Re-read AFTER the discard: an edit the cashier made while it awaited storage is
-							// on the resident, and a create built from the pre-discard snapshot would layer
-							// over that newer queued intent. Plain snapshot, not an RxDB payload proxy: it
-							// crosses the storage worker boundary.
-							const current = await findEngineResident(manager, 'orders', recordId);
-							if (abandoned()) return;
-							await manager.engine.write({
-								collection: 'orders',
-								operation: 'create',
-								recordId,
-								payload: residentPayload(current ?? reborn),
-							});
+							// The create is built from the resident as it stands AFTER the discard (an edit
+							// made meanwhile is on it); the query package owns the write.
+							await recreateRebornOrder(manager, recordId);
 						}
 						if (!resident || alreadyReborn) return;
 						log.warn('Order deleted on the store', {

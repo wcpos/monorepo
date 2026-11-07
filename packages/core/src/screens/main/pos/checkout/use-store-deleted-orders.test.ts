@@ -28,6 +28,16 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('@wcpos/query/mutations', () => ({
 	findEngineResident: (...args: unknown[]) => mockFind(...args),
 	rebirthOrderResident: (...args: unknown[]) => mockRebirth(...args),
+	// Mirrors the real helper: re-read the resident, write a create from its payload.
+	recreateRebornOrder: async (manager: unknown, recordId: string) => {
+		const current = await mockFind(manager, 'orders', recordId);
+		return mockEngine.write({
+			collection: 'orders',
+			operation: 'create',
+			recordId,
+			payload: (current as { toMutableJSON(): { payload: unknown } }).toMutableJSON().payload,
+		});
+	},
 	residentPayload: (resident: { toMutableJSON(): { payload: unknown } }) =>
 		resident.toMutableJSON().payload,
 }));

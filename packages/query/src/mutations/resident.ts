@@ -269,6 +269,24 @@ export async function rebirthOrderResident(
 	});
 }
 
+/**
+ * Enqueue the create for a reborn order from its CURRENT resident: an edit the cashier made
+ * while the dead letter was being discarded is on the resident, and a create built from an
+ * earlier snapshot would layer over that newer queued intent. Lives here, not in the screen,
+ * because an order write names its collection (the orders-write fence, ADR 0033 item 6).
+ */
+export async function recreateRebornOrder(manager: QueryManager, recordId: string): Promise<void> {
+	const resident = await findEngineResident(manager, 'orders', recordId);
+	if (!resident) throw new Error(`Engine resident "${recordId}" is missing from "orders"`);
+	// Plain snapshot, not an RxDB payload proxy: it crosses the storage worker boundary.
+	await manager.engine.write({
+		collection: 'orders',
+		operation: 'create',
+		recordId,
+		payload: residentPayload(resident),
+	});
+}
+
 export async function patchEngineResident(input: {
 	manager: QueryManager;
 	collection: WriteableCollection;

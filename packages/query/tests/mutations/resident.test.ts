@@ -4,6 +4,7 @@ import {
 	findEngineResident,
 	insertEngineResident,
 	rebirthOrderResident,
+	recreateRebornOrder,
 	residentPayload,
 } from '../../src/mutations';
 import { createEngineDatabase, createFakeEngine } from '../../src/testing';
@@ -123,4 +124,38 @@ it('drops removed lines and server line/meta ids, preserving line uuids and othe
 	);
 	expect(payload.line_items[0].id).toBe(1);
 	expect(meta[0].id).toBe(81);
+});
+
+it('recreates a reborn order from its current resident, as a create carrying the latest payload', async () => {
+	await insertEngineResident({
+		manager,
+		collection: 'orders',
+		recordId,
+		payload: {
+			id: 33827,
+			number: '33827',
+			status: 'pos-open',
+			line_items: [{ id: 9, quantity: 1 }],
+		},
+	});
+	await rebirthOrderResident(manager, recordId);
+	const current = await findEngineResident(manager, 'orders', recordId);
+	await current!.incrementalModify((old) => ({
+		...old,
+		payload: { ...(old.payload as Record<string, unknown>), line_items: [{ quantity: 2 }] },
+	}));
+	const write = jest
+		.spyOn(manager.engine, 'write')
+		.mockResolvedValue({ mutationId: 'create' } as never);
+	await recreateRebornOrder(manager, recordId);
+	expect(write).toHaveBeenCalledWith({
+		collection: 'orders',
+		operation: 'create',
+		recordId,
+		payload: expect.objectContaining({ id: 0, status: 'pos-open', line_items: [{ quantity: 2 }] }),
+	});
+});
+
+it('refuses to recreate an order that is not resident', async () => {
+	await expect(recreateRebornOrder(manager, recordId)).rejects.toThrow('missing');
 });

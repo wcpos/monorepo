@@ -7,6 +7,7 @@ export {
 	documentRecordId,
 	findEngineResident,
 	rebirthOrderResident,
+	recreateRebornOrder,
 	residentPayload,
 	insertEngineResident,
 	patchAndEnqueueEngineResident,
