@@ -64,6 +64,9 @@ function List<T>({
 	// FlashList v2 recycles views by item identity, so props must stay referentially stable
 	const renderItemWithContext = React.useCallback<NonNullable<typeof renderItem>>(
 		({ item, index, ...rest }) => {
+			// FlashList can ask for an index past the end of a `data` that just shrank (a search
+			// keystroke), so the item is undefined; callers read it, so render nothing (#3395).
+			if (item === undefined) return null;
 			const key = keyExtractor ? keyExtractor(item, index) : String(index);
 			return (
 				<ItemContext.Provider key={key} value={{ item, index } as BaseItemContext<T>}>
@@ -74,6 +77,13 @@ function List<T>({
 		[renderItem, keyExtractor]
 	);
 
+	// Same guard for keys: callers such as `(row) => termKey(row[0])` read the item (#3395).
+	const safeKeyExtractor = React.useCallback(
+		(item: T, index: number) =>
+			item === undefined || !keyExtractor ? String(index) : keyExtractor(item, index),
+		[keyExtractor]
+	);
+
 	return (
 		<Parent {...wrapperProps}>
 			<FlashList
@@ -82,7 +92,7 @@ function List<T>({
 				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
 				{...(nestedScrollEnabled ? { nestedScrollEnabled: true } : {})}
 				style={{ flex: 1 }}
-				keyExtractor={keyExtractor}
+				keyExtractor={keyExtractor ? safeKeyExtractor : undefined}
 				renderItem={renderItemWithContext}
 				drawDistance={overscan * estimatedItemSize}
 				onEndReached={onEndReached}
