@@ -9,11 +9,16 @@ import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Chip } from '@wcpos/components/chip';
 import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
+import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
+import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { Toast } from '@wcpos/components/toast';
+import { useDocField } from '@wcpos/query';
 
-import { useStoreSession } from '../../../../contexts/app-state';
+import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useT } from '../../../../contexts/translations';
@@ -24,21 +29,30 @@ import { RegisterAmount } from './movement-sheet';
 export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
 	const { binding, lastClosed, lastClosure, actions, blind, closedElsewhere } =
 		useRegisterSession();
-	const { site, store } = useStoreSession();
+	const { site, store: sessionStore } = useStoreSession();
+	const { store } = useAppState();
+	const separator = (useDocField(store, (value) => value.price_decimal_sep) as string) || '.';
+	const places = Number(useDocField(store, (value) => value.price_num_decimals) ?? 2);
+	const phone = useIsPhone();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const { time } = useStoreDayLabel(store.id);
+	const { time } = useStoreDayLabel(sessionStore.id);
 	const defaultFloat = binding.registers.find(
 		(row) => row.id === binding.registerId
 	)?.default_float;
 	const lastCount = lastClosed?.counted?.cash;
 	const expectedFloat = defaultFloat ?? lastCount ?? null;
-	const [enteredAmount, setAmount] = React.useState<string | null>(null);
-	const amount = enteredAmount ?? expectedFloat ?? '';
+	const [typed, setTyped] = React.useState<string | null>(null);
+	const [chosen, setChosen] = React.useState<string | null>(null);
+	const amount = typed ?? chosen ?? expectedFloat ?? '';
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const input = React.useRef<TextInputInstance>(null);
 	const t = useT();
 	const { format } = useCurrencyFormat();
+	const press = (key: string) => {
+		setTyped((prev) => typeDecimal(prev ?? '', key, places));
+		setChosen(null);
+	};
 	const open = async () => {
 		if (busy) return;
 		setBusy(true);
@@ -90,29 +104,48 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 				<RegisterAmount
 					ref={input}
 					testID="open-register-amount"
-					value={amount}
-					onChangeText={setAmount}
+					value={amount.replace('.', separator)}
+					onChangeText={(value) => {
+						setTyped(value.replace(separator, '.'));
+						setChosen(null);
+					}}
 				/>
 			</View>
-			{[
-				[defaultFloat, 'default'],
-				[blind ? null : lastCount, 'last'],
-			].map(
-				([value, source]) =>
-					value != null && (
-						<Chip
-							key={source}
-							testID={`open-register-chip-${source}`}
-							on={amount === value}
-							label={
-								source === 'default'
-									? t('register.float_default_chip', { amount: format(Number(value)) })
-									: t('register.float_last_chip', { amount: format(Number(value)) })
-							}
-							onPress={() => setAmount(value)}
-						/>
-					)
-			)}
+			{/* One column at every width: the chips carry money and a label (Default float: $100.00) that the 1024 tablet's cart column truncates at half width. */}
+			<TileGrid columns={1}>
+				{[
+					[defaultFloat, 'default'],
+					[blind ? null : lastCount, 'last'],
+				].map(
+					([value, source]) =>
+						value != null && (
+							<Chip
+								key={source}
+								className="justify-center self-stretch"
+								testID={`open-register-chip-${source}`}
+								on={amount === value}
+								label={
+									source === 'default'
+										? t('register.float_default_chip', { amount: format(Number(value)) })
+										: t('register.float_last_chip', { amount: format(Number(value)) })
+								}
+								onPress={() => {
+									setChosen(value);
+									setTyped(null);
+								}}
+							/>
+						)
+				)}
+			</TileGrid>
+			<Keypad
+				rows={[
+					...DIGIT_ROWS,
+					decimalRow(places > 0 ? separator : undefined, t('common.backspace')),
+				]}
+				fit={phone ? 'shrink' : 'tile'}
+				testID="open-register"
+				onPress={press}
+			/>
 			<Button
 				testID="open-register-button"
 				size="lg"
