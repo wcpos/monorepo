@@ -9,6 +9,7 @@ import {
 	of,
 	startWith,
 	Subject,
+	type Subscription,
 	switchMap,
 	tap,
 } from 'rxjs';
@@ -23,6 +24,7 @@ import type {
 import { readLedger } from '@wcpos/order-math';
 import { mintRemoteId, POS_META_KEYS } from '@wcpos/sync-core';
 import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { openSessionSelector } from './session-store';
 import { observeEngineQuery } from '../engine-query';
@@ -32,6 +34,8 @@ import { observeFollowedCollection } from '../use-local-collection';
 import type { RxCollection } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { RegisterStoreDatabase } from './store-database';
+
+const logger = getLogger(['wcpos', 'registerSession']);
 
 /** Absent → null. Keep reactive documents until the closure/report consumers move in PR D. */
 export function observeRegisterSessions(storeDB: RegisterStoreDatabase, registerId: string | null) {
@@ -188,7 +192,7 @@ export function observeOpenSessionPresence(
 }
 
 /** Shared across read rebindings so an in-flight close keeps receiving parent accounting. */
-export function createSessionAccountingState() {
+function createSessionAccountingState() {
 	const missingParentKey = { current: '' };
 	const pendingParents = { current: [] as RequirementHandle[] };
 	const accountingChanges = new Subject<void>();
@@ -202,11 +206,18 @@ export function createSessionAccountingState() {
 	return { missingParentKey, pendingParents, accountingChanges, latestAccounting };
 }
 
-/** The synchronous controller state lets close wait for parents before the async render emission. */
+/** A session's sales, refunds and refund parents; a missing parent is asked of the engine. */
 export function observeSessionAccounting(
 	engine: RxdbSyncEngine,
+	current: Observable<RegisterSessionRow | undefined | null>
+) {
+	return sessionAccounting(engine, current, createSessionAccountingState());
+}
+
+function sessionAccounting(
+	engine: RxdbSyncEngine,
 	current: Observable<RegisterSessionRow | undefined | null>,
-	state = createSessionAccountingState()
+	state: ReturnType<typeof createSessionAccountingState>
 ) {
 	const { missingParentKey, pendingParents, accountingChanges, latestAccounting } = state;
 	const stream: Observable<{
@@ -318,5 +329,74 @@ export function observeSessionAccounting(
 			);
 		})
 	);
-	return { stream, missingParentKey, pendingParents, accountingChanges, latestAccounting };
+	return stream;
+}
+
+// A drain that has not answered in fifteen seconds is offline or stalled, and the till must
+// still close; the closure then carries the fallback and the parent arrives later.
+const REFUND_PARENT_WAIT_MS = 15_000;
+
+/**
+ * The session's accounting once its missing refund parents have arrived, or the deadline has
+ * passed (§ 4.9 invariant 2: a close waits for its accounting). The read is the close's own,
+ * so no rebinding of another read can end the wait early.
+ */
+export async function settleSessionAccounting(engine: RxdbSyncEngine, session: RegisterSessionRow) {
+	const state = createSessionAccountingState();
+	const { missingParentKey, pendingParents, accountingChanges, latestAccounting } = state;
+	let subscription: Subscription | undefined;
+	try {
+		await new Promise<void>((resolve, reject) => {
+			subscription = sessionAccounting(engine, of(session), state).subscribe({
+				next: () => resolve(),
+				error: reject,
+			});
+		});
+		const handles = pendingParents.current;
+		if (handles.length > 0) {
+			let timeout: ReturnType<typeof setTimeout> | undefined;
+			let timedOut = false;
+			const deadline = new Promise<void>((resolve) => {
+				timeout = setTimeout(() => {
+					timedOut = true;
+					logger.warn('Refund parent wait timed out; closing with available accounting');
+					resolve();
+				}, REFUND_PARENT_WAIT_MS);
+			});
+			try {
+				let generation = handles;
+				do {
+					await Promise.race([
+						Promise.allSettled(generation.map((handle) => handle.ready)),
+						deadline,
+					]);
+					if (timedOut || !missingParentKey.current) break;
+					if (pendingParents.current === generation) {
+						// Readiness precedes RxDB's query emission. Unrelated accounting
+						// emissions must not end the wait for a changed missing-parent set.
+						const key = missingParentKey.current;
+						let changed: Subscription | undefined;
+						try {
+							await Promise.race([
+								new Promise<void>((resolve) => {
+									changed = accountingChanges.subscribe(() => {
+										if (missingParentKey.current !== key) resolve();
+									});
+								}),
+								deadline,
+							]);
+						} finally {
+							changed?.unsubscribe();
+						}
+					}
+					generation = pendingParents.current;
+				} while (!timedOut && generation.length > 0);
+			} finally {
+				clearTimeout(timeout);
+			}
+		}
+		return latestAccounting.current!;
+	} finally {
+		subscription?.unsubscribe();
+	}
 }

@@ -37,7 +37,9 @@ import {
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
+import { baselineContains } from './baseline';
 
+import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { ReadonlyClosureDocument } from './reads';
 
 export const pending = {
@@ -371,7 +373,7 @@ export async function writeClosure({
 	otherTenders,
 	movements,
 	orders,
-	tillExpected,
+	baseline,
 	refundRecords = [],
 	labels,
 	resolveCashierName,
@@ -410,7 +412,11 @@ export async function writeClosure({
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];
 	orders: readonly ClosureOrder[];
-	tillExpected?: Record<string, string>;
+	/** The session as it stands now and its refunds: what the server's snapshot already counts. */
+	baseline?: {
+		session: RegisterSessionRow;
+		refundSources: readonly ReadonlyEngineRecord<'refunds'>[];
+	};
 	refundRecords?: readonly RefundDocumentType[];
 	resolveCashierName?: (id: number) => string;
 	labels?: {
@@ -457,9 +463,15 @@ export async function writeClosure({
 		(row) => row.session_id === session.id && row.status === 'captured'
 	);
 	const entries = movements.filter((row) => row.session_id === session.id);
-	const till_expected =
-		tillExpected ??
-		deriveExpected({ session, movements: entries, ledgerRowsBySession: ledgerRows, refundRecords });
+	const till_expected = deriveExpected(
+		{
+			session: baseline?.session ?? session,
+			movements: entries,
+			ledgerRowsBySession: ledgerRows,
+			refundRecords,
+		},
+		baseline && baselineContains(orders, baseline.refundSources, entries, baseline.session)
+	);
 	const counts = { cash: counted, ...otherTenders };
 	const sum = (values: (string | null | undefined)[]) =>
 		fromMinor(

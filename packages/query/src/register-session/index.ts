@@ -26,7 +26,6 @@ export { failureFacts } from './failure-facts';
 export { sessionRefreshRequests } from './refresh';
 export {
 	backToSelling,
-	closeSession,
 	findOpenSession,
 	IllegalSessionTransitionError,
 	isRegisterCounting,
@@ -36,11 +35,9 @@ export {
 	RegisterSessionRequiredError,
 	requireOpenSession,
 	retryMovement,
-	requeueClose,
 	startCounting,
 	readMovement,
 	voidMovement,
-	writeClosure,
 	setClosureReceiptSnapshot,
 	refreshClosureRow,
 	recordClosurePrint,
@@ -48,7 +45,6 @@ export {
 export { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
 
 export {
-	createSessionAccountingState,
 	observeRegisterSessions,
 	observeRegisterSessionAvailability,
 	readClosure,
@@ -62,5 +58,7 @@ export {
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
 export { abandonCount, beginCount, type CountContext } from './count';
+export { closeRegister, type CloseContext, type RegisterCount } from './close';
+export { afterBaseline, baselineContains, outsideBaseline } from './baseline';
 
 export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';
