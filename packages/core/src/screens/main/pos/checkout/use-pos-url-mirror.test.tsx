@@ -86,6 +86,17 @@ it.each([
 	expect(window.history.replaceState).toHaveBeenCalledTimes(1);
 	expect(window.location.pathname).toBe('/cart/receipt/u');
 });
+it('leaves the address bar to a drawer page while the POS stays mounted behind it', () => {
+	mockSegments = ['(app)', '(drawer)', 'orders', '(modals)', 'receipt', '[orderId]'];
+	window.history.replaceState(null, '', '/orders');
+	const { rerender } = renderHook(usePosUrlMirror);
+	// The receipt modal closes over the orders page: still not the POS's address bar.
+	mockSegments = ['(app)', '(drawer)', 'orders'];
+	rerender();
+	flush();
+	expect(window.history.replaceState).toHaveBeenCalledTimes(1);
+	expect(window.location.pathname).toBe('/orders');
+});
 it('omits draft ids and cancels a stale frame', () => {
 	const { rerender } = renderHook(usePosUrlMirror);
 	mockRecord.isNew = true;
