@@ -39,6 +39,7 @@ import { registerCollections, type RegisterStoreDatabase } from './store-databas
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 import { baselineContains } from './baseline';
 
+import type { DeepReadonly } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { ReadonlyClosureDocument } from './reads';
 
@@ -697,17 +698,7 @@ export async function writeClosure({
 		await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
 		const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
 			.closure_reservation!.row;
-		try {
-			row = await closures.insert({
-				...reserved,
-				order_ids: [...reserved.order_ids],
-				movement_ids: [...reserved.movement_ids],
-			});
-		} catch (error) {
-			const winner = await closures.findOne(reserved.id).exec();
-			if (!winner) throw error;
-			row = winner;
-		}
+		row = await insertReserved(storeDB, reserved);
 	}
 	await advancePerpetual(userDB, siteUuid, session.register_id, {
 		sales: row.period_sales_total,
@@ -715,6 +706,38 @@ export async function writeClosure({
 		closureId: row.id,
 	});
 	return row;
+}
+
+/** The reserved closure as the local row; a concurrent writer's row is the row. */
+async function insertReserved(storeDB: RegisterStoreDatabase, reserved: DeepReadonly<ClosureRow>) {
+	const closures = registerCollections(storeDB).closures;
+	try {
+		return await closures.insert({
+			...reserved,
+			order_ids: [...reserved.order_ids],
+			movement_ids: [...reserved.movement_ids],
+		});
+	} catch (error) {
+		const winner = await closures.findOne(reserved.id).exec();
+		if (!winner) throw error;
+		return winner;
+	}
+}
+
+/** Finish a close a restart interrupted after its reservation: the reserved row is the closure. */
+export async function recoverClosureReservation(
+	ctx: { storeDB: RegisterStoreDatabase; userDB: UserDatabase; siteUuid: string },
+	reserved: DeepReadonly<ClosureRow>
+) {
+	const { register_sessions: sessions, closures } = registerCollections(ctx.storeDB);
+	if (!(await sessions.findOne(reserved.session_id).exec())) return;
+	const row =
+		(await closures.findOne(reserved.id).exec()) ?? (await insertReserved(ctx.storeDB, reserved));
+	await advancePerpetual(ctx.userDB, ctx.siteUuid, row.register_id, {
+		sales: row.period_sales_total,
+		refunds: row.period_refunds_total,
+		closureId: row.id,
+	});
 }
 
 type ClosureOrder = {

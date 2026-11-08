@@ -15,10 +15,14 @@ import { getLogger } from '@wcpos/utils/logger';
 import { type CloseContext, closeRegister } from '../../src/register-session/close';
 import {
 	readLiveSession,
+	readRegister,
 	recordLiveSession,
 	remintRegister,
 } from '../../src/register-session/register-document';
-import { RegisterSessionRequiredError } from '../../src/register-session/session-store';
+import {
+	recoverClosureReservation,
+	RegisterSessionRequiredError,
+} from '../../src/register-session/session-store';
 import {
 	createEngineDatabase,
 	createFakeEngine,
@@ -327,4 +331,54 @@ it('rejects a missing session with the domain error', async () => {
 	await expect(closeRegister(ctx, 'missing', { counted: { cash: '0' } })).rejects.toBeInstanceOf(
 		RegisterSessionRequiredError
 	);
+});
+
+describe('recovering a closure reservation a restart interrupted', () => {
+	/** A close that reserved its closure (numbered, figures fixed) and stopped before the row. */
+	const interrupted = async () => {
+		await insert();
+		const closure = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const row = closure.toJSON();
+		await closure.remove();
+		// The reservation as the write left it: not yet applied to the register's totals.
+		await userDB.upsertLocal('register', {
+			...(await readRegister(userDB))!,
+			sites: {
+				site: {
+					...(await readRegister(userDB))!.sites.site,
+					registers: {
+						A: { last_closure_number: 1, closure_reservation: { row, applied: false } },
+					},
+				},
+			},
+		});
+		return row;
+	};
+	const register = async () => (await readRegister(userDB))!.sites.site.registers!.A;
+
+	it('writes the reserved row as the closure and applies its period once', async () => {
+		const row = await interrupted();
+		await recoverClosureReservation(ctx, row);
+		await recoverClosureReservation(ctx, row);
+		expect(await closureRow()).toMatchObject({ ...row, sync_status: 'pending' });
+		expect(await register()).toMatchObject({
+			closure_reservation: { applied: true },
+			perpetual_sales_total: row.perpetual_sales_total,
+		});
+	});
+
+	it('keeps a closure row already written, and only applies its period', async () => {
+		const row = await interrupted();
+		await storeDB.closures.insert({ ...row, order_ids: [], movement_ids: [] });
+		await recoverClosureReservation(ctx, { ...row, counted: { cash: '1' } });
+		expect((await closureRow())?.counted).toEqual(row.counted);
+		expect((await register()).closure_reservation?.applied).toBe(true);
+	});
+
+	it('leaves a reservation whose session this store does not hold', async () => {
+		const row = await interrupted();
+		await recoverClosureReservation(ctx, { ...row, id: 'other', session_id: 'other' });
+		expect(await storeDB.closures.findOne('other').exec()).toBeNull();
+		expect((await register()).closure_reservation?.applied).toBe(false);
+	});
 });
