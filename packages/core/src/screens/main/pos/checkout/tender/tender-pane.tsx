@@ -934,6 +934,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								{/* A tap on the name picks every unpaid unit; the stepper beside it is not inside it. */}
 								<PressableSurface
 									role="button"
+									minTarget
 									testID={`checkout-line-${key}-pick`}
 									disabled={busy || unpaid === 0}
 									onPress={() => flow.dispatch({ type: 'pick-units', lineId: key, units: unpaid })}

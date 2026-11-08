@@ -41,6 +41,9 @@ export interface LedgerView {
 /** The order's item lines as a split picks them: keyed as the bill's rows, tax inside the money. */
 export function tenderLines(items: EngineRecord<'orders'>['payload']['line_items'], dp: number) {
 	return (items ?? []).flatMap(({ name, quantity, total, total_tax, ...line }) => {
+		// A line removed offline stays as a tombstone (`product_id: null`, as `useCartLines` filters)
+		// until the deletion syncs: it is not on the bill and cannot be picked or paid for.
+		if (line.product_id === null) return [];
 		const id = getUuidFromLineItem(line) ?? line.id;
 		// Tax is always inside the money a unit adds to a payment, whatever the cart shows.
 		const totalMinor = toMinor(total ?? '0', dp) + toMinor(total_tax ?? '0', dp);

@@ -281,6 +281,7 @@ let mockPayload: {
 	billing?: { email?: string; phone?: string };
 	line_items?: {
 		id?: number;
+		product_id?: number | null;
 		name: string;
 		quantity: number;
 		total: string;
@@ -1544,6 +1545,15 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
 		expect(result.current.lines[0]?.totalMinor).toBe(1200);
+		await act(async () => {});
+	});
+	it('a line removed offline (a product_id null tombstone) is not on the bill to pick (Codex on #3412)', async () => {
+		mockPayload.line_items = [
+			{ id: 1, product_id: null, name: 'Gone', quantity: 1, total: '10.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '10.00' },
+		];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.lines.map(({ id }) => id)).toEqual([2]);
 		await act(async () => {});
 	});
 	it('prices a unit with its tax inside on an exclusive-display store', async () => {

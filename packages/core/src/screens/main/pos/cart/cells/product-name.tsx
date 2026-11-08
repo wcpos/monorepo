@@ -84,6 +84,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					// The split picker: a tap on the name puts every unpaid unit in THIS payment.
 					<PressableSurface
 						role="button"
+						minTarget
 						testID={`checkout-line-${key}-pick`}
 						onPress={() => picker.pick(key, unpaid)}
 					>
