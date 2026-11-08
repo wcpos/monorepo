@@ -50,12 +50,15 @@ export function ProductRow({
 	expanded,
 	className,
 	footerSpace,
+	onTrailingLayout,
 }: {
 	record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	expanded?: boolean;
 	className?: string;
 	/** Reserve a variations line under the body (`VariableRowContent` lays its button over it). */
 	footerSpace?: boolean;
+	/** The trailing column's width, so the button over the reserved line stops before it. */
+	onTrailingLayout?: (width: number) => void;
 }) {
 	const product = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
@@ -123,7 +126,12 @@ export function ProductRow({
 				/>
 			}
 			trailing={
-				<>
+				<View
+					className="flex-row items-center gap-3"
+					onLayout={
+						footerSpace ? (event) => onTrailingLayout?.(event.nativeEvent.layout.width) : undefined
+					}
+				>
 					<View className="items-end gap-1 tabular-nums">
 						<View className="flex-row items-center gap-1">
 							{price(range?.min ?? product.price ?? '')}
@@ -140,7 +148,7 @@ export function ProductRow({
 						/>
 					</View>
 					<Icon name="chevronRight" className="text-muted-foreground" />
-				</>
+				</View>
 			}
 		>
 			<Text decodeHtml numberOfLines={1}>
@@ -165,8 +173,12 @@ export function VariableRow(props: VariableRowProps) {
 		</VariationRowProvider>
 	);
 }
+/** ListRow's `gap-3` before the trailing plus its `px-3` after it: the trailing's distance from the edge. */
+const TRAILING_GAP = 24;
 function VariableRowContent({ item, table }: VariableRowProps) {
 	const meta = table.options.meta;
+	// Until the first layout the button is bounded by the gap alone, for one frame.
+	const [trailingWidth, setTrailingWidth] = React.useState(0);
 	const { expanded } = useRowExpansion(item, table);
 	// The drill style slides the variations in from the button; nothing renders under the row.
 	const inline = !meta?.drill;
@@ -179,9 +191,15 @@ function VariableRowContent({ item, table }: VariableRowProps) {
 					record={item.original.record}
 					expanded={inline ? expanded : undefined}
 					footerSpace
+					onTrailingLayout={setTrailingWidth}
 				/>
-				{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
-				<View className="absolute bottom-2 left-16">
+				{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units; it
+				    stops at the trailing column, so a long label truncates instead of covering the stock. */}
+				<View
+					className="absolute bottom-2 left-16"
+					style={{ right: trailingWidth + TRAILING_GAP }}
+					testID="products-variations-overlay"
+				>
 					<VariationsButton row={item} table={table} />
 				</View>
 			</View>

@@ -86,7 +86,7 @@ describe('Input text cap', () => {
 		render(<Input value="x" />);
 
 		const classes = String(fieldProps.at(-1)?.className).split(' ');
-		expect(classes).toEqual(expect.arrayContaining(['web:leading-none', 'native:leading-[1.2]']));
+		expect(classes).toEqual(expect.arrayContaining(['leading-none', 'native:leading-[1.2]']));
 		expect(classes).not.toContain('leading-none');
 	});
 

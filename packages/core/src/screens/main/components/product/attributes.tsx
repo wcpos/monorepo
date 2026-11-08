@@ -145,7 +145,7 @@ export function VariationsButton<TFeatures extends TableFeatures>({
 			testID="variable-product-expand"
 			variant="ghost"
 			size="sm"
-			className="self-start"
+			className="max-w-full self-start"
 			leftIcon={drill ? undefined : expanded ? 'chevronDown' : 'chevronRight'}
 			rightIcon={drill ? 'chevronRight' : undefined}
 			aria-expanded={drill ? undefined : expanded}
