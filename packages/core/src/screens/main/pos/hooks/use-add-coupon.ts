@@ -20,8 +20,8 @@ import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useWcVersion } from '../commands/use-tax-exempt';
-import { useCartWrite } from '../commands/use-cart-write';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCartCommand } from '../commands/use-cart-command';
+import { useCurrentOrderActions } from '../contexts/current-order';
 import { refusalText } from '../../../../extensions/actions/present';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
@@ -34,27 +34,24 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  * and adds it to the order's coupon_lines.
  */
 export const useAddCoupon = () => {
-	const { localPatch } = useCartWrite();
+	const command = useCartCommand('cart.coupon.apply');
 	const wcVersion = useWcVersion();
 	const t = useT();
-	const { currentOrderRecord } = useCurrentOrder();
+	// Resolved at the press, not subscribed in render (current-order ledger 1).
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { getCouponContext } = useCouponContext();
 	const { recalculate } = useRecalculateCoupons();
-	const { ctx, actor } = useActionContext();
 	const couponRejectionMessage = useCouponRejectionMessage();
-
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrderRecord.uuid,
-				orderID: currentOrderRecord.payload.id,
-				orderNumber: currentOrderRecord.payload.number,
-			}),
-		[currentOrderRecord]
-	);
+	const { ctx } = useActionContext();
 
 	const addCoupon = React.useCallback(
 		async (couponCode: string) => {
+			const currentOrderRecord = getCurrentOrderRecord();
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
+			});
 			/**
 			 * The cashier gets a translated sentence; the LOG gets the code.
 			 *
@@ -121,7 +118,7 @@ export const useAddCoupon = () => {
 				// The cart the coupon was validated against must be the cart it is applied to: the
 				// writer compares when its queue slot starts and again after its recalculation.
 				const outcome = await applyCouponLine(
-					{ ctx, actor, recalculate, localPatch, wcVersion },
+					{ command, recalculate, wcVersion },
 					currentOrderRecord,
 					newCouponLine,
 					validated
@@ -157,7 +154,7 @@ export const useAddCoupon = () => {
 				if (error instanceof CartChangedError) {
 					return { success: false, error: t('pos_cart.cart_changed') };
 				}
-				// localPatch already reported its own rethrow (a scope that moved twice).
+				// The settled write already reported its own rethrow (a scope that moved twice).
 				if (!isErrorReported(error)) {
 					reportCartFailure(orderLogger, 'Coupon could not be applied', {
 						toastTitle: t('pos_cart.coupon_apply_failed'),
@@ -169,14 +166,12 @@ export const useAddCoupon = () => {
 		},
 		[
 			getCouponContext,
-			currentOrderRecord,
-			localPatch,
+			getCurrentOrderRecord,
+			command,
 			t,
-			orderLogger,
 			recalculate,
 			couponRejectionMessage,
 			ctx,
-			actor,
 			wcVersion,
 		]
 	);

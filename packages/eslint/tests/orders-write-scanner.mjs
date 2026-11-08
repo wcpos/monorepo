@@ -30,8 +30,9 @@ const ENGINE_WRITES = new Set([
 	'write',
 ]);
 const ENGINE_COLLECTION_KEY = 'collection';
-// Local mutation helpers take the order in their document property.
-const LOCAL_WRITES = new Set(['localPatch', 'localModify']);
+// Local mutation helpers take the order in their document property; `settledWrite` is the
+// cart's (`useCartWrite`), which only a commands module or a listed bottom handler may call.
+const LOCAL_WRITES = new Set(['localPatch', 'localModify', 'settledWrite']);
 // Collection methods that create or replace orders.
 const COLLECTION_WRITES = new Set([
 	'insert',
@@ -57,16 +58,8 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/checkout/commit-sale.ts',
 	// cart.line.add: the queued cart-line writer.
 	'packages/core/src/screens/main/pos/hooks/use-add-item-to-order.ts',
-	// cart.line.update: the shared writer (actions ledger 35).
-	'packages/core/src/screens/main/pos/hooks/use-update-cart-line.ts',
-	// cart.line.split: the one split writer (actions ledger 38).
-	'packages/core/src/screens/main/pos/hooks/use-split-line-item.ts',
-	// cart.line.remove, and Undo's cart.line.add restore (actions ledger 27).
-	'packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts',
-	// cart.coupon.apply / cart.coupon.remove: the one coupon-line writer (actions ledger 28).
-	'packages/core/src/screens/main/pos/hooks/coupon-line-actions.ts',
-	// cart.customer.set: the one writer for the order's customer and addresses (actions ledger 29).
-	'packages/core/src/screens/main/pos/hooks/use-set-cart-customer.ts',
+	// cart.line.update, .split, .remove, the coupon events and cart.customer.set write through
+	// the cart command (`commands/use-cart-command.ts`): their hooks hand it the bottom only.
 	// checkout.tender.commit: the tender sequence, including zero-balance completion.
 	'packages/core/src/screens/main/pos/checkout/tender/use-tender-flow.ts',
 	// checkout.complete: finishSale is the completion writer (actions ledger 23).

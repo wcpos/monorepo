@@ -19,6 +19,10 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
 	}),
 }));
+// The customer write names its order; the current order is never read.
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: jest.fn() }),
+}));
 jest.mock('./use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {

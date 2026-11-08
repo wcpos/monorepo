@@ -12,6 +12,7 @@ import {
 	removeCouponLine,
 } from './coupon-line-actions';
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
+import { cartCommand } from '../commands/cart-command';
 
 const log = jest.fn();
 const ctx = createActionContext({
@@ -25,9 +26,11 @@ const ctx = createActionContext({
 });
 const actor = { userId: 7, registerId: 'till', sessionId: null };
 const recalculate = jest.fn();
-const localPatch = jest.fn();
+const settledWrite = jest.fn();
 const wcVersion = jest.fn(() => '11.3.0');
-const writer = { ctx, actor, recalculate, localPatch, wcVersion } as never;
+const deps = { ctx, actor, settledWrite, currentRecord: () => order };
+const writer = { recalculate, wcVersion, command: cartCommand('cart.coupon.apply', deps) };
+const remover = { recalculate, command: cartCommand('cart.coupon.remove', deps) };
 
 const lineItems = [{ product_id: 1, quantity: 1, total: '100' }];
 let couponLines: Record<string, unknown>[] = [];
@@ -44,7 +47,7 @@ beforeEach(() => {
 		lineItems: lines.map((line: Record<string, unknown>) => ({ ...line, total: '90' })),
 		couponLines: coupons,
 	}));
-	localPatch.mockResolvedValue({ uuid: 'order' });
+	settledWrite.mockResolvedValue({ uuid: 'order' });
 });
 
 it('apply: dispatches the entering line with the cart, then recalculates and patches both lists', async () => {
@@ -75,7 +78,7 @@ it('apply: dispatches the entering line with the cart, then recalculates and pat
 		{ code: 'existing' },
 		saved,
 	]);
-	expect(localPatch).toHaveBeenCalledWith({
+	expect(settledWrite).toHaveBeenCalledWith({
 		document: order,
 		queue: expect.objectContaining({ dispatchToken: expect.any(Object) }),
 		data: {
@@ -94,7 +97,7 @@ it('apply: a guard refusal is returned and nothing is recalculated or written', 
 	const outcome = await applyCouponLine(writer, order, saved, cartSnapshotOf(cart()));
 	expect(isActionRefusal(outcome)).toBe(true);
 	expect(recalculate).not.toHaveBeenCalled();
-	expect(localPatch).not.toHaveBeenCalled();
+	expect(settledWrite).not.toHaveBeenCalled();
 });
 
 it('apply: a cart that moved under the recalculation is refused with CartChangedError, unwritten', async () => {
@@ -105,7 +108,7 @@ it('apply: a cart that moved under the recalculation is refused with CartChanged
 	await expect(
 		applyCouponLine(writer, order, saved, cartSnapshotOf(cart()))
 	).rejects.toBeInstanceOf(CartChangedError);
-	expect(localPatch).not.toHaveBeenCalled();
+	expect(settledWrite).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -122,7 +125,7 @@ it.each([
 		},
 		{ id: 'test.observer', tier: 'extension' }
 	);
-	await expect(removeCouponLine(writer, order, ' SAVE10 ')).resolves.toMatchObject({
+	await expect(removeCouponLine(remover, order, ' SAVE10 ')).resolves.toMatchObject({
 		patched: { uuid: 'order' },
 	});
 	expect(seen[0].payload).toEqual({
@@ -135,7 +138,7 @@ it.each([
 		...remaining,
 		{ code: 'keep' },
 	]);
-	expect(localPatch).toHaveBeenCalledTimes(1);
+	expect(settledWrite).toHaveBeenCalledTimes(1);
 });
 
 it('remove: a code that is not on the order dispatches nothing and resolves false', async () => {
@@ -144,9 +147,9 @@ it('remove: a code that is not on the order dispatches nothing and resolves fals
 		id: 'test.observer',
 		tier: 'extension',
 	});
-	await expect(removeCouponLine(writer, order, 'missing')).resolves.toBe(false);
+	await expect(removeCouponLine(remover, order, 'missing')).resolves.toBe(false);
 	expect(seen).not.toHaveBeenCalled();
-	expect(localPatch).not.toHaveBeenCalled();
+	expect(settledWrite).not.toHaveBeenCalled();
 });
 
 it('remove: a guard refusal keeps the coupon on the order', async () => {
@@ -155,8 +158,8 @@ it('remove: a guard refusal keeps the coupon on the order', async () => {
 		id: 'test.guard',
 		tier: 'guard',
 	});
-	expect(isActionRefusal(await removeCouponLine(writer, order, 'save10'))).toBe(true);
-	expect(localPatch).not.toHaveBeenCalled();
+	expect(isActionRefusal(await removeCouponLine(remover, order, 'save10'))).toBe(true);
+	expect(settledWrite).not.toHaveBeenCalled();
 });
 
 it('apply: a write queued ahead that moves the cart refuses the apply at slot entry, before any hook', async () => {
@@ -177,12 +180,12 @@ it('apply: a write queued ahead that moves the cart refuses the apply at slot en
 	await expect(pending).rejects.toBeInstanceOf(CartChangedError);
 	expect(hook).not.toHaveBeenCalled();
 	expect(recalculate).not.toHaveBeenCalled();
-	expect(localPatch).not.toHaveBeenCalled();
+	expect(settledWrite).not.toHaveBeenCalled();
 });
 
 it('remove: every line carrying the code leaves, not only the first', async () => {
 	couponLines = [{ id: 1, code: 'save10' }, { code: 'keep' }, { code: 'SAVE10' }];
-	await removeCouponLine(writer, order, 'save10');
+	await removeCouponLine(remover, order, 'save10');
 	expect(recalculate).toHaveBeenCalledWith(expect.objectContaining({ line_items: lineItems }), [
 		{ id: 1, code: null },
 		{ code: 'keep' },
@@ -205,7 +208,7 @@ it('apply: lands on the saved order a first add left on the slot, not the record
 	const pending = applyCouponLine(writer, order, saved, cartSnapshotOf(cart()));
 	release();
 	await expect(pending).resolves.toMatchObject({ patched: { uuid: 'order' } });
-	expect(localPatch).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
+	expect(settledWrite).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
 });
 
 it('remove: lands on the saved order the queue remembers for this order', async () => {
@@ -217,8 +220,8 @@ it('remove: lands on the saved order the queue remembers for this order', async 
 	await enqueueOrderMutation('order', async (queue) => {
 		queue.order = savedOrder;
 	});
-	await removeCouponLine(writer, order, 'save10');
-	expect(localPatch).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
+	await removeCouponLine(remover, order, 'save10');
+	expect(settledWrite).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
 });
 
 it.each([
@@ -245,5 +248,5 @@ it.each([
 	if (!allowed) expect(result).toEqual({ deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } });
 	expect(dispatched).toHaveBeenCalledTimes(allowed ? 1 : 0);
 	expect(recalculate).toHaveBeenCalledTimes(allowed ? 1 : 0);
-	expect(localPatch).toHaveBeenCalledTimes(allowed ? 1 : 0);
+	expect(settledWrite).toHaveBeenCalledTimes(allowed ? 1 : 0);
 });

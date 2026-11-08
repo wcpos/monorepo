@@ -42,7 +42,7 @@ export const useAddItemToOrder = () => {
 	// render-time subscription re-rendered the whole grid on every cart write.
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
-	const { localPatch, settleIntent } = useCartWrite();
+	const { settledWrite, settleIntent } = useCartWrite();
 	const { ctx, actor, readCounting } = useActionContext();
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
@@ -268,7 +268,7 @@ export const useAddItemToOrder = () => {
 										meta_data: ensurePosOrderIdentityMeta(latest.payload.meta_data, identity, true),
 									}
 								: {};
-							result = await localPatch({
+							result = await settledWrite({
 								queue: context,
 								document: latest,
 								data: {
@@ -296,7 +296,7 @@ export const useAddItemToOrder = () => {
 			actor,
 			getCurrentOrderRecord,
 			identity,
-			localPatch,
+			settledWrite,
 			runtime,
 			reportEngineWarnings,
 			saveNewOrder,

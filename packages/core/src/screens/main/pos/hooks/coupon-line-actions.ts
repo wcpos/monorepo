@@ -1,16 +1,10 @@
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { exemptCouponsSupported } from '../commands/tax-exempt';
-import {
-	type ActionActor,
-	type ActionContext,
-	type ActionRefusal,
-	dispatchAction,
-	isActionRefusal,
-} from '../../../../extensions/actions';
-import { enqueueOrderMutation, type OrderMutationContext } from './order-mutation-queue';
+import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
 
 import type { RecalculateResult } from './coupon-recalculate';
+import type { CartCommand, SlotWrite } from '../commands/cart-command';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/query').OrderPayload;
@@ -25,16 +19,11 @@ export class CartChangedError extends Error {
 	}
 }
 
+type Recalculate = (order: OrderDocument, couponLines: CouponLine[]) => Promise<RecalculateResult>;
 export interface CouponLineWriter {
 	wcVersion: () => string;
-	ctx: ActionContext;
-	actor: ActionActor;
-	recalculate: (order: OrderDocument, couponLines: CouponLine[]) => Promise<RecalculateResult>;
-	localPatch: (input: {
-		document: CurrentOrderRecord;
-		data: Plain;
-		queue: OrderMutationContext;
-	}) => Promise<unknown>;
+	recalculate: Recalculate;
+	command: CartCommand<'cart.coupon.apply'>;
 }
 
 /** The cart a coupon decision is made against: a hook takes it from the very order it validated. */
@@ -51,23 +40,19 @@ function cartSnapshot(order: CurrentOrderRecord): string {
  * two coupon events, inside the order's mutation queue.
  */
 async function writeCouponLines(
-	writer: Omit<CouponLineWriter, 'wcVersion'>,
+	recalculate: Recalculate,
+	write: SlotWrite,
 	order: CurrentOrderRecord,
 	before: string,
-	couponLines: CouponLine[],
-	queue: OrderMutationContext
+	couponLines: CouponLine[]
 ) {
 	const latest = order.getLatest();
-	const result = await writer.recalculate(latest.payload, couponLines);
+	const result = await recalculate(latest.payload, couponLines);
 	// A recalculation that could not price the cart writes nothing (kept from the hook it replaced).
 	if (!result) return false;
 	// The recalculation reads the engine; a cart that moved meanwhile is not the cart it priced.
 	if (cartSnapshot(order) !== before) throw new CartChangedError();
-	const patched = await writer.localPatch({
-		document: order,
-		queue,
-		data: { coupon_lines: result.couponLines, line_items: result.lineItems },
-	});
+	const patched = await write({ coupon_lines: result.couponLines, line_items: result.lineItems });
 	if (isActionRefusal(patched)) return patched;
 	return patched ? { patched, couponLines: result.couponLines } : false;
 }
@@ -91,72 +76,62 @@ export function applyCouponLine(
 	couponLine: CouponLine,
 	validated: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
-	return enqueueOrderMutation(order.uuid, async (queue) => {
-		// A first add queued ahead left the saved order on the slot; the coupon lands on it.
-		const target = queue.order ?? order;
-		const before = cartSnapshot(target);
-		if (before !== validated) throw new CartChangedError();
-		const latest = target.getLatest().payload;
-		if (wooMetaCarrier.vatExempt(latest.meta_data) && !exemptCouponsSupported(writer.wcVersion()))
-			return { deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } };
-		const couponLines = latest.coupon_lines ?? [];
-		return dispatchAction({
-			event: 'cart.coupon.apply',
-			token: queue.dispatchToken,
-			ctx: writer.ctx,
-			input: {
-				orderId: target.uuid,
-				actor: writer.actor,
-				source: 'user',
-				payload: {
-					couponLine: couponLine as Plain,
-					lineItems: (latest.line_items ?? []) as Plain[],
-					couponLines: couponLines as Plain[],
-				},
-			},
-			bottom: () => writeCouponLines(writer, target, before, [...couponLines, couponLine], queue),
-		}) as Promise<ActionRefusal | CouponWriteResult | false>;
-	});
+	return writer.command(
+		async ({ target, dispatch }) => {
+			// A first add queued ahead left the saved order on the slot; the coupon lands on it.
+			const before = cartSnapshot(target);
+			if (before !== validated) throw new CartChangedError();
+			const latest = target.getLatest().payload;
+			if (wooMetaCarrier.vatExempt(latest.meta_data) && !exemptCouponsSupported(writer.wcVersion()))
+				return { deny: { reasonKey: 'pos_cart.tax_exempt_wc_version' } };
+			const couponLines = latest.coupon_lines ?? [];
+			const input = {
+				couponLine: couponLine as Plain,
+				lineItems: (latest.line_items ?? []) as Plain[],
+				couponLines: couponLines as Plain[],
+			};
+			return dispatch(input, (_e, write) =>
+				writeCouponLines(writer.recalculate, write, target, before, [...couponLines, couponLine])
+			) as Promise<ActionRefusal | CouponWriteResult | false>;
+		},
+		'caller',
+		order
+	);
 }
 
 /** A coupon line leaves the order: a synced line is retired by nulling its code, a local one dropped. */
 export function removeCouponLine(
-	writer: Omit<CouponLineWriter, 'wcVersion'>,
+	writer: { recalculate: Recalculate; command: CartCommand<'cart.coupon.remove'> },
 	order: CurrentOrderRecord,
 	code: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
-	return enqueueOrderMutation(order.uuid, (queue) => {
-		const target = queue.order ?? order;
-		const before = cartSnapshot(target);
-		const latest = target.getLatest().payload;
-		const couponLines = latest.coupon_lines ?? [];
-		const normalized = code.toLowerCase().trim();
-		const matches = (line: CouponLine) => (line.code ?? '').toLowerCase() === normalized;
-		const removed = couponLines.find(matches);
-		if (!removed) return Promise.resolve(false);
-		// Every line carrying the code leaves (a duplicate is reachable through overlapping
-		// applies); the first is what the event names.
-		const remaining = couponLines
-			.map((line) => (matches(line) ? (line.id ? { ...line, code: null } : null) : line))
-			.filter((line): line is CouponLine => line !== null);
-		return dispatchAction({
-			event: 'cart.coupon.remove',
-			token: queue.dispatchToken,
-			ctx: writer.ctx,
-			input: {
-				orderId: target.uuid,
-				actor: writer.actor,
-				source: 'user',
-				payload: {
-					code,
-					couponLine: removed as Plain,
-					lineItems: (latest.line_items ?? []) as Plain[],
-					couponLines: couponLines as Plain[],
-				},
-			},
-			bottom: () => writeCouponLines(writer, target, before, remaining, queue),
-		}) as Promise<ActionRefusal | CouponWriteResult | false>;
-	});
+	return writer.command(
+		async ({ target, dispatch }) => {
+			const before = cartSnapshot(target);
+			const latest = target.getLatest().payload;
+			const couponLines = latest.coupon_lines ?? [];
+			const normalized = code.toLowerCase().trim();
+			const matches = (line: CouponLine) => (line.code ?? '').toLowerCase() === normalized;
+			const removed = couponLines.find(matches);
+			if (!removed) return false;
+			// Every line carrying the code leaves (a duplicate is reachable through overlapping
+			// applies); the first is what the event names.
+			const remaining = couponLines
+				.map((line) => (matches(line) ? (line.id ? { ...line, code: null } : null) : line))
+				.filter((line): line is CouponLine => line !== null);
+			const input = {
+				code,
+				couponLine: removed as Plain,
+				lineItems: (latest.line_items ?? []) as Plain[],
+				couponLines: couponLines as Plain[],
+			};
+			return dispatch(input, (_e, write) =>
+				writeCouponLines(writer.recalculate, write, target, before, remaining)
+			) as Promise<ActionRefusal | CouponWriteResult | false>;
+		},
+		'caller',
+		order
+	);
 }
 
 export { isActionRefusal };

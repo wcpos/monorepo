@@ -8,13 +8,9 @@ import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import { enqueueCartAction } from './enqueue-cart-action';
 import { reducedStockQuantity } from './stock-guard';
-import { useActionContext } from './use-action-context';
 import { useCartConfigReader } from './use-cart-config';
-import { dispatchAction } from '../../../../extensions/actions';
-import { useCartWrite } from '../commands/use-cart-write';
-import { useCurrentOrderActions } from '../contexts/current-order';
+import { useCartCommand } from '../commands/use-cart-command';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 type OrderDocument = import('@wcpos/query').OrderPayload;
@@ -84,18 +80,13 @@ function splitLine(lineItemToSplit: LineItem, cartConfig: CartConfig) {
 }
 
 export const useSplitLineItem = () => {
-	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { localPatch } = useCartWrite();
+	const command = useCartCommand('cart.line.split');
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
-	const { ctx, actor } = useActionContext();
 	const splitLineItem = React.useCallback(
-		async (uuid: string) => {
-			const record = getCurrentOrderRecord();
-			if (!record.uuid) throw new Error('Order is missing its uuid');
-			return enqueueCartAction(
-				record,
-				async (target, queue) => {
+		(uuid: string) =>
+			command(
+				async ({ target, ctx, dispatch }) => {
 					const order = target.getLatest();
 					const lineItems = order.toMutableJSON().payload.line_items ?? [];
 					const index = lineItems.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
@@ -109,34 +100,22 @@ export const useSplitLineItem = () => {
 					}
 					if ((line.quantity ?? 0) <= 1) return;
 					const { lines, warnings } = splitLine(line, configForOrder(order.payload));
-					return dispatchAction({
-						event: 'cart.line.split',
-						token: queue.dispatchToken,
-						ctx,
-						input: {
-							orderId: order.uuid,
-							actor,
-							source: 'user',
-							payload: { lineUuid: uuid, line, lines, lineItems },
-						},
-						bottom: (e) => {
-							// `index` was found in this same snapshot of `order`, so it still points at the line.
-							const currentLines = order.payload.line_items ?? [];
-							const line_items = [
-								...currentLines.slice(0, index),
-								...e.payload.lines.map((item) => ({ ...item })),
-								...currentLines.slice(index + 1),
-							];
-							// Reported here, after the chain, so a refused split logs nothing.
-							reportEngineWarnings(warnings, { orderId: order.uuid, site: 'splitLineItem' });
-							return localPatch({ document: order, queue, data: { line_items } });
-						},
+					return dispatch({ lineUuid: uuid, line, lines, lineItems }, (e, write) => {
+						// `index` was found in this same snapshot of `order`, so it still points at the line.
+						const currentLines = order.payload.line_items ?? [];
+						const line_items = [
+							...currentLines.slice(0, index),
+							...e.payload.lines.map((item) => ({ ...item })),
+							...currentLines.slice(index + 1),
+						];
+						// Reported here, after the chain, so a refused split logs nothing.
+						reportEngineWarnings(warnings, { orderId: order.uuid, site: 'splitLineItem' });
+						return write({ line_items }, order);
 					});
 				},
-				{ ctx, context: { orderId: record.uuid, uuid } }
-			);
-		},
-		[actor, configForOrder, ctx, getCurrentOrderRecord, localPatch, reportEngineWarnings]
+				(record) => ({ orderId: record.uuid, uuid })
+			),
+		[command, configForOrder, reportEngineWarnings]
 	);
 	return { splitLineItem };
 };

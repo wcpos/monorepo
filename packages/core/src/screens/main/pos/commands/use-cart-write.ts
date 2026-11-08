@@ -9,7 +9,10 @@ import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
-/** Same-slot write: callers already hold the per-order queue, including coupon writers. */
+/**
+ * `settledWrite`: the cart write settled for money and ownership, inside the order's held queue
+ * slot (it needs `queue`), answering the patch or the refusal that stopped it.
+ */
 export function useCartWrite() {
 	const { localPatch } = useLocalMutation();
 	const commitAtBoundary = useBoundaryCommit(localPatch);
@@ -39,5 +42,5 @@ export function useCartWrite() {
 			),
 		[configForOrder, serverOwnsMoney]
 	);
-	return { localPatch: write, settleIntent };
+	return { settledWrite: write, settleIntent };
 }

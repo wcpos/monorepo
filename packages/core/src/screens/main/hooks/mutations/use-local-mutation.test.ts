@@ -438,7 +438,7 @@ describe('cart changes at the resident modifier', () => {
 									...(scenario === 'lines-and-money' ? { line_items: [] } : {}),
 								}),
 							} as never)
-						: result.current.cart.localPatch({
+						: result.current.cart.settledWrite({
 								queue: {
 									dispatchToken: {},
 								} as import('../../pos/hooks/order-mutation-queue').OrderMutationContext,

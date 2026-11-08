@@ -8,7 +8,7 @@ import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
@@ -36,25 +36,21 @@ export const useAddShipping = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
 	const cartConfig = useCartConfig();
-	const { currentOrderRecord } = useCurrentOrder();
+	// Resolved at the press, not subscribed in render (current-order ledger 1).
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const reportEngineWarnings = useReportEngineWarnings();
-
-	// Create order-specific logger
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrderRecord.uuid,
-				orderID: currentOrderRecord.payload.id,
-				orderNumber: currentOrderRecord.payload.number,
-			}),
-		[currentOrderRecord]
-	);
 
 	/**
 	 * NOTE: be careful not to mutate the data object passed in, especially the meta_data array.
 	 */
 	const addShipping = React.useCallback(
 		async (data: ShippingData) => {
+			const currentOrderRecord = getCurrentOrderRecord();
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
+			});
 			try {
 				const meta_data = Array.isArray(data.meta_data) ? [...data.meta_data] : [];
 
@@ -110,7 +106,7 @@ export const useAddShipping = () => {
 				});
 			}
 		},
-		[addItemToOrder, cartConfig, currentOrderRecord, reportEngineWarnings, t, orderLogger]
+		[addItemToOrder, cartConfig, getCurrentOrderRecord, reportEngineWarnings, t]
 	);
 
 	return { addShipping };
