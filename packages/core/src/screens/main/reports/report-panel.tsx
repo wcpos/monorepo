@@ -7,7 +7,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 
 const BOTTOM = ['bottom'] as const;
 
-/** A Reports panel: a side panel hosted in Reports, on a phone a page in its place (closures ledger 30). */
+/** A Reports panel: a side panel on the drawer's `scene` host, beside the rail and over the page bar; on a phone a page in its place. */
 export function ReportPanel({
 	testID,
 	wide = false,
@@ -23,7 +23,7 @@ export function ReportPanel({
 		);
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
-			<DialogContent side="right" size={wide ? 'xl' : 'lg'} portalHost="reports" testID={testID}>
+			<DialogContent side="right" size={wide ? 'xl' : 'lg'} portalHost="scene" testID={testID}>
 				{children}
 			</DialogContent>
 		</Dialog>

@@ -53,3 +53,5 @@ Sales panels share the escaper (`csvCell`) and file handoff (`saveOrShareCsv`) f
 Status (2026-10-16, C7 B3): `closure-panel` and `recount-sheet` now compose `@wcpos/components/v2/dialog`; existing side, portal host and close testIDs are retained.
 
 32. `useClosureView` shares the closure document, settled figures, retained snapshot and reprint state with the POS written moment; ClosurePanel keeps its existing behaviour — evidence: the unchanged `closure-panel.test.tsx` suite passed before and after extraction (19 tests); `closure-written.test.tsx` covers the written host — platform: all.
+
+33. Supersedes the "hosted inside Reports" clause of line 30: the closure panel renders on the drawer layout's `scene` host, and its print and recount sheets use `usePageSheetHost` — beside the rail, over the page bar on wide, as the page bar's cashier sheet (#3061); a phone keeps its page in place and its sheets on the root. Reports mounts no host of its own — evidence: `closure-panel.test.tsx` 'hosts the tablet panel on the drawer's scene host…'; owner, 2026-11-08 ('the modal slides in under the header; inconsistent with other modals') — platform: all. _(added 2026-11-08)_

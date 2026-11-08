@@ -54,19 +54,22 @@ it.each([
 });
 
 // The cashier sheet opens beside the rail on wide (the drawer layout's `scene` host, #3061), never
-// over it; a phone has no rail, so the root. The bell stays on the root; a named host wins.
+// over it; a phone has no rail, so the root. The bell shares the page host; a named host wins.
 it.each([
-	['sm', 'null'],
-	['lg', 'scene'],
-] as const)('on %s puts the entry on the %s host unless the bar names one', (size, host) => {
-	mockSize = size;
-	const { unmount } = render(<BarControls testID="orders-bar" />);
-	expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe('undefined');
-	expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
-	unmount();
-	render(<BarControls testID="register-bar" portalHost="pos" />);
-	expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
-});
+	['sm', 'null', 'undefined'],
+	['lg', 'scene', 'scene'],
+] as const)(
+	'on %s puts the entry on the %s host unless the bar names one',
+	(size, host, bellHost) => {
+		mockSize = size;
+		const { unmount } = render(<BarControls testID="orders-bar" />);
+		expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe(bellHost);
+		expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
+		unmount();
+		render(<BarControls testID="register-bar" portalHost="pos" />);
+		expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
+	}
+);
 
 // One form for every bar: Offline as a StatusBadge in the warning tone, an unreachable store
 // included; nothing while the store answers.

@@ -33,6 +33,7 @@ import {
 } from '@wcpos/printer';
 import { savePrinterProfile } from '@wcpos/query';
 
+import { usePageSheetHost } from '../../../components/page-sheet-host';
 import { PRINTER_TEXT_WIDTHS, usePrinterOptions } from '../options';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
@@ -105,6 +106,7 @@ export function PrinterSetupDialog({
 	platform?: SetupPlatform;
 	prefill?: PrinterDialogPrefill;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const printerOptions = usePrinterOptions();
 	const web = platform === 'web';
@@ -620,7 +622,7 @@ export function PrinterSetupDialog({
 	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="xl" closeLabel={t('common.close')}>
+			<DialogContent portalHost={host} side="right" size="xl" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>{t('settings.add_printer')}</DialogTitle>
 				</DialogHeader>

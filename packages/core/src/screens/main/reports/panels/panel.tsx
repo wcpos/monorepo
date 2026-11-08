@@ -16,6 +16,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
@@ -68,10 +69,12 @@ export function DetailPanel() {
 }
 
 function DetailPanelContent() {
+	const host = usePageSheetHost();
 	const { detail, setDetail } = useReportsScope(),
 		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
 	const included = useIncludedStatus();
-	const { unselectedRowIds } = useReportsSelection();
+	const selection = useReportsSelection();
+	const { unselectedRowIds } = selection;
 	const includedOrders = allOrders
 		.filter(included)
 		.sort((a, b) => (saleMomentOf(b) ?? '').localeCompare(saleMomentOf(a) ?? ''));
@@ -435,7 +438,7 @@ function DetailPanelContent() {
 			{header}
 			<View testID="detail-panel-body" className="min-h-0 flex-1 px-4">
 				{ready ? (
-					<OrdersPanel spec={spec} quantity={formats.quantity} />
+					<OrdersPanel spec={spec} quantity={formats.quantity} selection={selection} />
 				) : (
 					<Text>{t('common.loading')}</Text>
 				)}
@@ -455,6 +458,7 @@ function DetailPanelContent() {
 				]}
 			/>
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={doc}

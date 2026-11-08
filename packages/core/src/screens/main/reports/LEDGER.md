@@ -62,6 +62,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 42. The Products panel’s Category and Brand chips match the first category / first brand; a parent includes its sub-categories. They narrow the products rows, total, margin footer, CSV and print only; the filters are device state, reset on open — evidence: this PR, Paul 2026-11-02 “what would the cashier expect to see” — platform: all.
 
+43. Supersedes the host clause of line 39: every `ReportPanel` and every sheet opened from Reports (the print sheets, the recount sheet) renders on the drawer layout's `scene` host through `usePageSheetHost` — beside the rail, over the page bar, as the page bar's cashier sheet (#3061); Reports mounts no host of its own, and the orders panel takes its selection as a prop because that host sits outside `ReportsProvider` on native — evidence: `panel.test.tsx` 'opens the payments panel…' (host `scene`), `closure-panel.test.tsx` 'hosts the tablet panel on the drawer's scene host…'; owner, 2026-11-08 ('the modal slides in under the header; inconsistent with other modals') — platform: all. _(added 2026-11-08)_
+
 ## Retired orders ledger lines
 
 - Orders 3: ~~Pass selection through FlashList `extraData` — checkbox changes must repaint recycled rows~~ — **struck** (wcpos/roadmap#332 PR 3d): no FlashList. Original evidence: `reports/orders/index.tsx:181`, “Extra data is needed to force a re-render of FlashList when the selection state changes” — platform: native FlashList path.
@@ -77,5 +79,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 ## Evidence footnotes
 
 [^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.
+
 [^timezone]: `f2b5a84f70 2026-09-16 Date filters and reports follow the store's timezone, not the device's (#2098)`; body also names `wcpos/roadmap#324`.
+
 [^closures]: `21b57723e9 2026-09-17 Land the Closures room on Reports: the page bar with Sales | Closures, closures by business day, the drill-in through the closure template with settled figures, Reprint, Recount and Export CSV (#2131)`. Commit body and diffstat inspected; its body records the specific follow-up behaviours cited above.

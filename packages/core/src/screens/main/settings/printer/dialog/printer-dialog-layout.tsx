@@ -13,6 +13,7 @@ import {
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
+import { usePageSheetHost } from '../../../components/page-sheet-host';
 import { PrinterSettingsRows } from './printer-rows';
 import { FormErrors } from '../../../components/form-errors';
 import { useT } from '../../../../../contexts/translations';
@@ -49,10 +50,11 @@ export function PrinterDialogLayout({
 	errorSection,
 	footer,
 }: PrinterDialogLayoutProps) {
+	const host = usePageSheetHost();
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="2xl" closeLabel={t('common.close')}>
+			<DialogContent portalHost={host} side="right" size="2xl" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>{t('settings.edit_printer')}</DialogTitle>
 				</DialogHeader>

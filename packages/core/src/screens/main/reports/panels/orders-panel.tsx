@@ -5,20 +5,23 @@ import { Checkbox } from '@wcpos/components/checkbox';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsSelection } from '../context';
 
 import type { PanelSpec } from './specs';
+import type { ReportsSelection } from '../context';
 
 /** The full spec feeds export/print; only the first sixty checklist rows are painted. */
 export function OrdersPanel({
 	spec,
 	quantity,
+	selection,
 }: {
+	// read on the panel's side of the portal: the host is outside the provider on native
+	selection: ReportsSelection;
 	spec: PanelSpec;
 	quantity: (n: number) => string;
 }) {
 	const t = useT();
-	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	const { unselectedRowIds, setUnselectedRowIds } = selection;
 	const leftOut = spec.rows.filter((row) => unselectedRowIds[row.key]).length;
 	const toggle = (keys: (string | number)[], include: boolean) =>
 		setUnselectedRowIds((previous) => {

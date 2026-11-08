@@ -186,8 +186,6 @@ it('does not open an unavailable server-identified closure', () => {
 
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
-jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
-
 // Revert: match only row.id, losing local route UUIDs when paging selects the server copy.
 it('keeps a local deep link open after historical paging replaces the row', () => {
 	const view = render(<Closures scope={scope} initialClosureId="c" />);

@@ -423,12 +423,12 @@ it('opens recount online and reloads the closure after success', async () => {
 	expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 
-// Revert: use the unnamed portal, thumbnail preview, or omit the panel close action.
-it('hosts the tablet panel in Reports with a full-width document and close action', () => {
+// Revert: use the root or a page-mounted host, thumbnail preview, or omit the panel close action.
+it("hosts the tablet panel on the drawer's scene host with a full-width document and close action", () => {
 	mockPhone = false;
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
-	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
+	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('scene');
 	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
 	expect(screen.getByTestId('closure-panel-close')).toBeTruthy();
