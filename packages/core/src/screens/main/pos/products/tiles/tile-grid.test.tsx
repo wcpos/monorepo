@@ -18,6 +18,11 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: { gridColumns: number }, read: (doc: { gridColumns: number }) => number) =>
 		read(doc),
 }));
+// The ground's row end: nothing in a window, the stack's reach on a right inner edge.
+let mockTileRow = '';
+jest.mock('@wcpos/components/lib/ground', () => ({
+	useGround: () => ({ tileRow: mockTileRow }),
+}));
 jest.mock('react-native', () => ({
 	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
 		<div className={className}>{children}</div>
@@ -62,6 +67,15 @@ const contents = () => rows().map((row) => row.textContent);
 
 beforeEach(() => {
 	mockColumns = 3;
+	mockTileRow = '';
+});
+
+// On a right inner edge the row keeps the 2 px a stack reaches past the last tile's margin, inside
+// the scroller that clips it (lib/ground `tileRow`); a window's row carries nothing.
+it("keeps the ground's row end inside the scroller", () => {
+	mockTileRow = 'pr-0.5';
+	render(<TileGrid tiles={['a', 'b', 'c']} renderTile={renderTile} />);
+	expect(rows()[0].firstElementChild?.className).toBe('flex-row pr-0.5');
 });
 
 it('chunks tiles into rows of the grid-columns setting', () => {

@@ -21,6 +21,7 @@ import {
 	savedKeys,
 	SavedMark,
 	useFormChangeHandler,
+	useMarkFailed,
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { PropertyRow } from '@wcpos/components/property-row';
@@ -118,6 +119,7 @@ function GeneralSettingsForm({
 	);
 	const countries = useCountries();
 	const markSaved = useMarkSaved();
+	const markFailed = useMarkFailed();
 	const [restoreOpen, setRestoreOpen] = React.useState(false);
 	const [restoreFailed, setRestoreFailed] = React.useState(false);
 	const formData = useDocField(store, (latest) => {
@@ -177,9 +179,9 @@ function GeneralSettingsForm({
 			// `patchStoreSettings` logs and toasts a failed write and resolves undefined.
 			const keys = savedKeys(store.getLatest?.() ?? store, changes);
 			const result = await patchStoreSettings(store, changes, t);
-			if (result && keys.length > 0) markSaved(keys);
+			if (keys.length > 0) (result ? markSaved : markFailed)(keys);
 		},
-		[t, store, markSaved]
+		[t, store, markSaved, markFailed]
 	);
 
 	useFormChangeHandler({

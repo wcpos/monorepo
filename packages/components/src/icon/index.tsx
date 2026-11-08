@@ -6,6 +6,7 @@ import { useCSSVariable } from 'uniwind';
 
 import { Platform } from '@wcpos/utils/platform';
 
+import { Badge } from '../badge';
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
@@ -20,6 +21,18 @@ export type { IconName } from './names';
 export type { IconSetId } from './sets';
 export { ICON_SET_IDS, DEFAULT_ICON_SET, ICON_SETTING_AUTO } from './sets';
 export { IconSetProvider, useIconSet } from './set-context';
+
+/** The glyph's box per size; a counted icon's outer box takes the same class (`count`). */
+const ICON_SIZE = {
+	default: 'size-4.5',
+	xs: 'size-3.5',
+	sm: 'size-4',
+	lg: 'size-5',
+	xl: 'size-6',
+	'2xl': 'size-7',
+	'3xl': 'size-8',
+	'4xl': 'size-9',
+} as const;
 
 /**
  * We need to make the icons bigger for native apps
@@ -38,16 +51,7 @@ const iconVariants = cva('inset-0 content-center items-center', {
 			accent: 'text-accent-foreground',
 			attention: 'text-attention',
 		},
-		size: {
-			default: 'size-4.5',
-			xs: 'size-3.5',
-			sm: 'size-4',
-			lg: 'size-5',
-			xl: 'size-6',
-			'2xl': 'size-7',
-			'3xl': 'size-8',
-			'4xl': 'size-9',
-		},
+		size: ICON_SIZE,
 	},
 	defaultVariants: {
 		variant: 'default',
@@ -66,6 +70,13 @@ export type IconProps = VariantProps<typeof iconVariants> & {
 	 */
 	spin?: boolean;
 	fill?: string;
+	/**
+	 * A count on the glyph's shoulder (an unread badge), measured from the glyph's own box so it
+	 * sits the same over any parent. 0 draws nothing but stays mounted to see the first arrive.
+	 */
+	count?: number;
+	/** The most `count` shows before "N+". Default: 99. */
+	max?: number;
 	className?: string;
 	pointerEvents?: ViewProps['pointerEvents'];
 };
@@ -81,6 +92,8 @@ export function Icon({
 	spin,
 	className,
 	fill,
+	count,
+	max = 99,
 	pointerEvents,
 	...props
 }: IconProps) {
@@ -126,9 +139,33 @@ export function Icon({
 		/>
 	);
 
+	const body = spin === undefined ? glyph : <Spin active={spin}>{glyph}</Spin>;
+	if (count === undefined) {
+		return (
+			<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
+				{body}
+			</View>
+		);
+	}
+
 	return (
-		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
-			{spin === undefined ? glyph : <Spin active={spin}>{glyph}</Spin>}
+		<View
+			className={cn('relative', ICON_SIZE[size ?? 'default'])}
+			pointerEvents={pointerEvents}
+			{...props}
+		>
+			<View className={combinedClassName}>{body}</View>
+			{/* Centred 4px inside the glyph's right edge, bottom edge at a quarter of the glyph's
+			    height (the /mockup climb of 2026-11-08; the drawer's -top-1 -right-0.5 on an 18 glyph
+			    sat on its centre). The box is 64 wide and shifted left by half of it, so the badge
+			    centres on that point at any width: a zero-width box centres too on web, but Yoga
+			    gives its children no width and a two-digit count wrapped on native. */}
+			<View
+				pointerEvents="none"
+				className="absolute bottom-3/4 left-full -ml-1 w-16 -translate-x-8 items-center"
+			>
+				<Badge count={count} max={max} variant="bad" size="sm" />
+			</View>
 		</View>
 	);
 }

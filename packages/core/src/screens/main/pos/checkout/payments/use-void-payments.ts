@@ -18,7 +18,10 @@ import type { VoidPaymentsOutcome } from './void-payments';
 const logger = getLogger(['wcpos', 'pos', 'checkout', 'payments']);
 
 /** Wire payment voiding to REST and the engine's offline/resident write seams. */
-export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<VoidPaymentsOutcome> {
+export function useVoidPayments(): (
+	order: EngineRecord<'orders'>,
+	paymentIds?: readonly string[]
+) => Promise<VoidPaymentsOutcome> {
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
 	const { recordLedger } = useOrderLedgerWrite();
@@ -28,7 +31,7 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 
 	return React.useCallback(
-		async (order) => {
+		async (order, paymentIds) => {
 			const latest = () => order.getLatest?.().payload ?? order.payload;
 			const payload = latest();
 			const enqueue = async (changes: Parameters<typeof recordLedger>[1]) => {
@@ -53,7 +56,8 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 					post,
 					isOnline: () => onlineStatus.status === 'online-website-available',
 					mirror: ({ payment, order: summary }) => post.mirror({ payment, order: summary }),
-				}
+				},
+				{ paymentIds }
 			);
 			// Reversing a cash leg reverses its rounding: the one sweep after every settle. The store
 			// has already answered for the legs, so a failed drop must not read as a failed void, which

@@ -7,7 +7,11 @@ import {
 	openOrderSheet,
 	tryAddProductBySku,
 } from './fixtures';
-import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import {
+	addCheckoutProbeProductAgain,
+	isolatedProductTest as test,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import {
 	checkoutControl,
@@ -196,6 +200,35 @@ test.describe('Orders Page (Pro)', () => {
 
 		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByTestId('order-modal-delete')).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('a phone reopen from Orders lands on the tabs with that order in the cart (#2374)', async ({
+		posPage: page,
+	}, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+		const { uuid, surface } = await openCheckout(page);
+		await checkoutControl(page, surface, 'close').click();
+		// A second saved order takes the cart, so only the reopen can bring the first one back.
+		// (A bare new-order tab would not do: the cart treats the route's old id as an echo.)
+		await page.getByTestId('new-order-tab').click();
+		await addCheckoutProbeProductAgain(page);
+		const second = await openCheckout(page);
+		await checkoutControl(page, second.surface, 'close').click();
+
+		const screen = await navigateToOrders(page);
+		await screen.getByTestId(`data-table-row-${uuid}`).getByTestId('order-open-button').click();
+		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+		await page.setViewportSize({ width: 412, height: 915 });
+		await page.getByTestId('order-modal-reopen').filter({ visible: true }).click();
+
+		await expect(page).toHaveURL(new RegExp(`/cart/${uuid}$`), { timeout: 30_000 });
+		// The (tabs) navigator, not the (columns) fallback that draws the same tab bar. The web
+		// document title cannot tell them apart: it reads "WCPOS" on both.
+		await expect(page.getByTestId('pos-tabs-navigator')).toBeVisible({ timeout: 30_000 });
+		await expect(
+			page.getByTestId(`open-order-tab-${uuid}`).filter({ visible: true })
+		).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
 	});
 });
 

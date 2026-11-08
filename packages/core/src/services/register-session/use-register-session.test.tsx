@@ -2,6 +2,7 @@
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
+import { TZDate } from '@date-fns/tz';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject, map, merge, of, startWith, Subject } from 'rxjs';
 import { Query } from 'mingo';
@@ -15,7 +16,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 import * as actions from '@wcpos/query/register-session';
 
-import { useRegisterSession } from './use-register-session';
+import { isPastClose, useRegisterSession } from './use-register-session';
 import {
 	markCountingHere,
 	markSeededIn,
@@ -58,6 +59,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 	readMovement: jest.fn(),
 	voidMovement: jest.fn(),
 	retryMovement: jest.fn(),
+	requeueClose: jest.fn(),
 	requireOpenSession: jest.fn(),
 	writeClosure: jest.fn(),
 	sessionRefreshRequests: { next: (...args: unknown[]) => mockRequestRefresh(...args) },
@@ -1273,8 +1275,9 @@ it.each([
 );
 
 describe('overdue', () => {
-	// Local noon, so the close times below sit either side of it whatever the runner's zone.
-	const noon = new Date(2026, 9, 13, 12, 0);
+	// Noon on the store's clock (the mocked store is in Los Angeles), so the close times below
+	// sit either side of it whatever the runner's zone; the session opened at 09:00 that day.
+	const noon = new TZDate(2026, 9, 13, 12, 0, 'America/Los_Angeles');
 
 	function rendered() {
 		const counter = { renders: 0, overdueWithSession: [] as boolean[] };
@@ -1306,6 +1309,7 @@ describe('overdue', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		jest.setSystemTime(noon);
+		active = [{ ...active[0], opened_at_gmt: '2026-10-13T16:00:00.000Z' }];
 	});
 	afterEach(() => {
 		jest.useRealTimers();
@@ -1400,6 +1404,59 @@ describe('overdue', () => {
 		expect(result.current.overdue).toBe(true);
 		// Catches the replacement stream re-rendering per minute rather than once at its flip.
 		expect(counter.renders).toBe(settledRenders + 1);
+	});
+});
+
+describe('isPastClose', () => {
+	const la = 'America/Los_Angeles';
+	const at = (zone: string, ...parts: [number, number, number, number, number]) =>
+		new TZDate(...parts, zone);
+	// A TZDate prints its own offset; the session row carries GMT without the `Z`.
+	const gmt = (date: Date) => new Date(date.getTime()).toISOString().replace('.000Z', '');
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+	const pastAt = (now: Date, close: string | null, opened: Date, zone: string) => {
+		jest.useFakeTimers().setSystemTime(now);
+		return isPastClose(close, gmt(opened), zone);
+	};
+
+	it('is not past for a session opened after tonight’s close: it is due at tomorrow’s', () => {
+		// Catches measuring against today's close: 22:00 is behind 23:30 on the same day.
+		expect(pastAt(at(la, 2026, 9, 13, 23, 30), '22:00', at(la, 2026, 9, 13, 23, 0), la)).toBe(
+			false
+		);
+		expect(pastAt(at(la, 2026, 9, 14, 22, 1), '22:00', at(la, 2026, 9, 13, 23, 0), la)).toBe(true);
+	});
+
+	it('stays overdue past midnight for a session left open from yesterday', () => {
+		// Catches measuring against today's close: 17:00 today is still ahead of 08:00.
+		expect(pastAt(at(la, 2026, 9, 13, 8, 0), '17:00', at(la, 2026, 9, 12, 9, 0), la)).toBe(true);
+	});
+
+	it('reads the close on the store’s clock, not the device’s', () => {
+		const tokyo = 'Asia/Tokyo';
+		const opened = at(tokyo, 2026, 9, 13, 9, 0);
+		// 17:00 in Tokyo is 08:00 GMT, whatever zone the runner is in.
+		expect(pastAt(new Date('2026-10-13T07:59:00Z'), '17:00', opened, tokyo)).toBe(false);
+		expect(pastAt(new Date('2026-10-13T08:01:00Z'), '17:00', opened, tokyo)).toBe(true);
+	});
+
+	it('finds the next day’s close across a DST change', () => {
+		// Opened 18:00 PDT on 31 October; the clocks go back overnight, so the next 17:00 is PST,
+		// 01:00 GMT on 2 November. A close taken as 24 hours after the 31st's would fall at 00:00.
+		const opened = at(la, 2026, 9, 31, 18, 0);
+		expect(pastAt(new Date('2026-11-02T00:30:00Z'), '17:00', opened, la)).toBe(false);
+		expect(pastAt(new Date('2026-11-02T01:01:00Z'), '17:00', opened, la)).toBe(true);
+	});
+
+	it('is never past with no or an unreadable close or open time', () => {
+		const opened = at(la, 2026, 9, 12, 9, 0);
+		const now = at(la, 2026, 9, 13, 12, 0);
+		expect(pastAt(now, null, opened, la)).toBe(false);
+		expect(pastAt(now, 'late', opened, la)).toBe(false);
+		jest.useFakeTimers().setSystemTime(now);
+		expect(isPastClose('11:00', null, la)).toBe(false);
 	});
 });
 
@@ -2069,4 +2126,232 @@ it('replays a closed session using the stored note and denominations', async () 
 	expect(actions.writeClosure).toHaveBeenCalledWith(
 		expect.objectContaining({ note: 'Stored note', denominations: [{ value: '50', pieces: 2 }] })
 	);
+});
+
+describe('#2016: a refused close', () => {
+	const refused = (patch: Row = {}) => {
+		const row: Row = {
+			...session,
+			status: 'closed',
+			closure_id: session.id,
+			sync_status: 'failed',
+			server_status: 'counting',
+			counted: { cash: '105' },
+			...patch,
+		};
+		row.getLatest = () => row;
+		return row;
+	};
+	const reopened = (patch: Row = {}) => {
+		const row: Row = {
+			...session,
+			status: 'counting',
+			server_status: 'counting',
+			closure_id: null,
+			counted: { cash: '105' },
+			...patch,
+		};
+		row.getLatest = () => row;
+		return row;
+	};
+	const closure = (sync_status: string) => ({
+		id: session.id,
+		session_id: session.id,
+		sync_status,
+	});
+	async function current() {
+		const { result } = renderHook(() => useRegisterSession());
+		await waitFor(() => expect(result.current.loaded).toBe(true));
+		return result;
+	}
+
+	it('keeps a refused close with an unaccepted closure current, and says so', async () => {
+		active = [];
+		closed = [refused()];
+		closureRows = [closure('pending')];
+		const result = await current();
+		expect(result.current.session?.id).toBe(session.id);
+		expect(result.current.refusedClose).toBe(true);
+	});
+	it.each([
+		['a pending close', { sync_status: 'pending' }, 'pending'],
+		['a close whose closure the store accepted', {}, 'synced'],
+		['a close whose closure is already on file', {}, 'superseded'],
+	])('is history for %s', async (_, patch, closureStatus) => {
+		active = [];
+		closed = [refused(patch)];
+		closureRows = [closure(closureStatus)];
+		const result = await current();
+		expect(result.current.session).toBeNull();
+		expect(result.current.refusedClose).toBe(false);
+	});
+	it('reads a session the store reopened at counting as this till’s refused count', async () => {
+		active = [reopened()];
+		closureRows = [closure('failed')];
+		const result = await current();
+		expect(result.current.refusedClose).toBe(true);
+		expect(result.current.countingElsewhere).toBe(false);
+	});
+	it.each([
+		['abandoned', { status: 'open', sync_status: 'pending', pending_status: 'open' }],
+		['refused at open', { status: 'open', sync_status: 'failed' }],
+	])('reads a session %s with an unaccepted closure as a refused close', async (_, patch) => {
+		active = [reopened(patch)];
+		closureRows = [closure('pending')];
+		const result = await current();
+		expect(result.current.session?.id).toBe(session.id);
+		expect(result.current.refusedClose).toBe(true);
+	});
+	it.each([
+		['at open with an accepted closure', { status: 'open' }, 'synced'],
+		['at open for a refused override', { status: 'open', approval_required: true }, 'pending'],
+		['for a refused override', { approval_required: true }, 'pending'],
+		['once the store closed it', { server_status: 'closed' }, 'pending'],
+		['with an accepted closure', {}, 'synced'],
+		['with a closure already on file', {}, 'superseded'],
+	])('is not a refused close %s', async (_, patch, closureStatus) => {
+		active = [reopened(patch)];
+		closureRows = [closure(closureStatus)];
+		const result = await current();
+		expect(result.current.session?.id).toBe(session.id);
+		expect(result.current.refusedClose).toBe(false);
+	});
+	/** The store's closeSession on a session with an unaccepted closure: closed, and held. */
+	const holdOnClose = (row: Row) =>
+		jest.mocked(actions.closeSession).mockImplementationOnce(async (_db, _id, input) => {
+			Object.assign(row, { status: 'closed', sync_status: 'failed', counted: input.counted });
+			row.toMutableJSON = () => json(row);
+			return row as never;
+		});
+	/** A document's data, as `toMutableJSON` gives it: no methods. */
+	const json = (row: Row) =>
+		Object.fromEntries(Object.entries(row).filter(([, value]) => typeof value !== 'function'));
+	// Revert the action to requeue first: the close goes out before the closure is rewritten.
+	it.each([
+		['a refused close', () => ((closed = [refused()]), (active = []), closed[0]), 'pending'],
+		['a counting row after a refresh', () => ((active = [reopened()]), active[0]), 'failed'],
+		['a counting row the store reopened', () => ((active = [reopened()]), active[0]), 'pending'],
+	])(
+		'retries %s by closing again, rewriting the closure, then requeueing',
+		async (_, shape, cs) => {
+			const row = shape();
+			closureRows = [closure(cs)];
+			holdOnClose(row);
+			jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
+			const result = await current();
+			await act(() => result.current.actions.closeSession({ counted: { cash: '110' } }));
+			expect(actions.closeSession).toHaveBeenCalledWith(
+				mockStoreSession.storeDB,
+				session.id,
+				expect.objectContaining({ counted: { cash: '110' } })
+			);
+			expect(row.counted).toEqual({ cash: '110' });
+			expect(actions.writeClosure).toHaveBeenCalledWith(
+				expect.objectContaining({ revise: true, counted: '110' })
+			);
+			expect(actions.requeueClose).toHaveBeenCalledWith(
+				mockStoreSession.storeDB,
+				session.id,
+				expect.objectContaining({ status: 'closed', counted: { cash: '110' } })
+			);
+			expect(jest.mocked(actions.writeClosure).mock.invocationCallOrder[0]).toBeLessThan(
+				jest.mocked(actions.requeueClose).mock.invocationCallOrder[0]
+			);
+		}
+	);
+	// Requeue from the latest row: a refresh that lands while the closure is written loses the close.
+	it('requeues the held close when a refresh adopts the store’s row while the closure is written', async () => {
+		const row = reopened();
+		active = [row];
+		closureRows = [closure('pending')];
+		let held: Row = {};
+		jest.mocked(actions.closeSession).mockImplementationOnce(async (_db, _id, input) => {
+			Object.assign(row, { status: 'closed', sync_status: 'failed', counted: input.counted });
+			held = json(row);
+			return { ...held, getLatest: () => row, toMutableJSON: () => held } as never;
+		});
+		jest.mocked(actions.writeClosure).mockImplementationOnce(async () => {
+			// The refresh adopts the store's row: back at counting, synced, no closure.
+			Object.assign(row, { status: 'counting', sync_status: 'synced', closure_id: null });
+			return { id: session.id } as never;
+		});
+		const result = await current();
+		await act(() => result.current.actions.closeSession({ counted: { cash: '110' } }));
+		expect(held).toMatchObject({ status: 'closed', counted: { cash: '110' } });
+		expect(actions.requeueClose).toHaveBeenCalledWith(mockStoreSession.storeDB, session.id, held);
+	});
+	// Drop the failed-active clause from the accounting: the retry records none of its sales.
+	it('a retry from a refused abandon reads the accounting of the failed session', async () => {
+		const row = reopened({ status: 'open', sync_status: 'failed' });
+		active = [row];
+		closureRows = [closure('pending')];
+		mockOrders.next([parentHit('session', true, '2026-09-15')]);
+		holdOnClose(row);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
+		const result = await current();
+		await act(() => result.current.actions.closeSession({ counted: { cash: '110' } }));
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({
+				orders: [parentHit('session', true, '2026-09-15').record],
+				tillExpected: { cash: '120.0000', stripe: '-20.0000' },
+			})
+		);
+	});
+	// Drop the unaccepted test from that clause: a settled session's sales feed the accounting.
+	it.each([
+		['an unaccepted closure', 'pending', true],
+		['a closure the store accepted', 'synced', false],
+	])('the accounting follows a failed active session with %s: %s', async (_, cs, followed) => {
+		active = [reopened({ status: 'open', sync_status: 'failed' })];
+		closureRows = [closure(cs)];
+		await current();
+		const rows: unknown[] = [];
+		jest
+			.mocked(actions.observeSessionAccounting)
+			.mock.calls.at(-1)![1]
+			.subscribe((row) => rows.push(row))
+			.unsubscribe();
+		expect(rows.at(-1)).toEqual(followed ? expect.objectContaining({ id: session.id }) : undefined);
+	});
+	it('leaves the close held when the closure write fails', async () => {
+		const row = reopened();
+		active = [row];
+		closureRows = [closure('pending')];
+		holdOnClose(row);
+		jest.mocked(actions.writeClosure).mockRejectedValueOnce(new Error('disk write'));
+		const result = await current();
+		await expect(
+			act(() => result.current.actions.closeSession({ counted: { cash: '110' } }))
+		).rejects.toThrow('disk write');
+		expect(actions.requeueClose).not.toHaveBeenCalled();
+		expect(row.sync_status).toBe('failed');
+	});
+	it('does not requeue a first close', async () => {
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: session.id } as never);
+		const result = await settled();
+		await act(() => result.current.actions.closeSession({ counted: { cash: '105' } }));
+		expect(actions.writeClosure).toHaveBeenCalledWith(expect.objectContaining({ revise: true }));
+		expect(actions.requeueClose).not.toHaveBeenCalled();
+	});
+	it.each(['open', 'counting'])(
+		'keeps a refused %s session with an unaccepted closure current until the refresh',
+		async (status) => {
+			active = [reopened({ status, sync_status: 'failed' })];
+			closureRows = [closure('pending')];
+			const result = await current();
+			expect(result.current.session?.id).toBe(session.id);
+		}
+	);
+	it.each([
+		['no closure', []],
+		['an accepted closure', [closure('synced')]],
+	])('drops a refused active session with %s, as before', async (_, rows) => {
+		active = [reopened({ status: 'open', sync_status: 'failed' })];
+		closureRows = rows;
+		const result = await current();
+		expect(result.current.session).toBeNull();
+	});
 });

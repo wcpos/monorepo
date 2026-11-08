@@ -18,7 +18,6 @@ import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { TitleBarStripContent } from '@wcpos/core/screens/main/components/bar-controls/title-bar';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { useRailWidth } from '@wcpos/core/screens/main/components/drawer-content/rail';
-import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
 	useDrawerPanelHidden,
@@ -126,7 +125,7 @@ function ThemedDrawer({
 					{...props}
 					presentation={phone ? 'front' : 'rail'}
 					icons={DRAWER_ICONS}
-					badges={{ health: <LogsBadge unread={unreadErrorCount} /> }}
+					counts={{ health: unreadErrorCount }}
 				/>
 			)}
 		>

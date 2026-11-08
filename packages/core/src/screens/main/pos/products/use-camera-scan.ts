@@ -60,6 +60,9 @@ export const useCameraScan = () => {
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
 			sessionRef.current = createScanSession({
+				// The decoder re-reports a barcode every frame it stays in view: one
+				// sighting adds the item once, however long the camera rests on it.
+				continuous: true,
 				onAccept: (code, symbology) => {
 					if (code.length < minCharsRef.current) {
 						// A decoded-but-too-short code must not vanish silently (#905):
@@ -67,9 +70,6 @@ export const useCameraScan = () => {
 						// cashier learns why nothing was added and can adjust the
 						// minimum-length setting if it's misconfigured.
 						showTooShortFeedback(tRef.current, code, minCharsRef.current);
-						return;
-					}
-					if (!posSectionActiveRef.current) {
 						return;
 					}
 					emitRef.current({
@@ -86,6 +86,13 @@ export const useCameraScan = () => {
 
 	const onScan = React.useCallback(
 		(result: CameraScanResult) => {
+			// Dropped before the session sees it: a read the session recorded while
+			// another section was focused would otherwise hold its cooldown, and a
+			// continuous source extends that hold on every frame, so a product still
+			// in view when the cashier returns to the POS would never be added.
+			if (!posSectionActiveRef.current) {
+				return;
+			}
 			getSession().offer(result.data, result.type);
 		},
 		[getSession]

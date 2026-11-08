@@ -31,11 +31,11 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		[formatCurrency, flow.dp]
 	);
 	const t = useT();
+	const leave = React.useCallback(() => leaveCheckout(order.uuid), [order.uuid]);
 	const back = React.useCallback(() => {
-		if (flow.state.splitView) flow.dispatch({ type: 'close-split' });
-		else if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
-		else leaveCheckout(order.uuid);
-	}, [flow, order.uuid]);
+		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
+		else leave();
+	}, [flow, leave]);
 	useCheckoutBack(back);
 	const body = (() => {
 		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
@@ -47,7 +47,10 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		if (flow.state.tab === 'legacy') {
 			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
+		// press completes it (zero-balance close). An unanswered attempt keeps the pane (it is cleared first),
+		// and so does a terminal leg still on screen (a live leg is never hidden behind another view).
+		if (flow.balanceMinor === 0 && !flow.unansweredAttempt && !flow.terminalLeg) {
 			return (
 				<View className="p-4">
 					<Button
@@ -63,7 +66,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				</View>
 			);
 		}
-		return <TenderPane flow={flow} format={format} />;
+		return <TenderPane flow={flow} format={format} onLeave={leave} />;
 	})();
 
 	return (

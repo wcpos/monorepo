@@ -18,6 +18,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedFieldProvider: mockWrap,
 	SavedMark: () => null,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => '',
 	FormItem: mockWrap,
 	FormLabel: mockWrap,

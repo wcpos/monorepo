@@ -24,6 +24,7 @@ import { stories as browseTiles } from '@wcpos/core/screens/main/pos/products/br
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as chip } from '@wcpos/components/chip/gallery';
 import { stories as keypad } from '@wcpos/components/keypad/gallery';
+import { stories as priceKeypad } from '@wcpos/components/price-keypad/gallery';
 import { stories as segmentedControl } from '@wcpos/components/segmented-control/gallery';
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
 import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
@@ -35,6 +36,10 @@ import { stories as input } from '@wcpos/components/input/gallery';
 import { stories as navItem } from '@wcpos/components/nav-item/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
+import { IconSetProvider } from '@wcpos/components/icon';
+import { ThemeTraitsContext } from '@wcpos/components/lib/theme-traits';
+import { iconSetForTheme, traitsForTheme, typeSetForTheme } from '@wcpos/components/lib/themes';
+import { useThemeType } from '@wcpos/core/contexts/theme-traits';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
 import { stories as select } from '@wcpos/components/select/gallery';
@@ -101,6 +106,7 @@ const registry: Record<string, Story[]> = {
 	'icon-button': iconButton,
 	chip,
 	keypad,
+	'price-keypad': priceKeypad,
 	'segmented-control': segmentedControl,
 	input,
 	button,
@@ -121,23 +127,46 @@ const registry: Record<string, Story[]> = {
 	'v2-dialog': dialogV2,
 };
 
-// The gallery shoots the five original themes; the personality themes are not baselined (Paul decides after his pass, 2026-10-30).
-const THEMES = ['light', 'dark', 'ocean', 'sunset', 'monochrome'] as const;
+// Every theme is baselined: the five original ones since decision 12 (2026-10-16), the four personality
+// themes since 2026-11-06 (Paul: "proceed as you recommend", after a Bold field regression no cell could catch).
+const THEMES = [
+	'light',
+	'dark',
+	'ocean',
+	'sunset',
+	'monochrome',
+	'paper',
+	'warm',
+	'bold',
+	'market',
+] as const;
 type Theme = (typeof THEMES)[number];
 const isTheme = (theme: string | undefined): theme is Theme =>
 	(THEMES as readonly string[]).includes(theme ?? '');
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
+	const selected = isTheme(theme) ? theme : 'light';
+	const { type, status } = useThemeType(typeSetForTheme(selected));
 	// Sync the URL's external theme selection before painting the cells.
 	React.useLayoutEffect(() => {
-		Uniwind.setTheme(isTheme(theme) ? theme : 'light');
-	}, [theme]);
+		Uniwind.setTheme(selected);
+	}, [selected]);
+	// The page loads the theme's faces first, as the app's provider does.
+	const traits = React.useMemo(() => ({ ...traitsForTheme(selected), type }), [selected, type]);
+	if (status === 'loading') return null;
+	if (status === 'failed') return <Text>Theme fonts failed to load</Text>;
 	return (
-		<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
-			{children}
-			<PortalHost />
-		</ScrollView>
+		// The icon set is a rule of the theme (decision 45); the app's provider is not mounted here,
+		// so the page supplies it, and a cell is shot with the glyphs the merchant sees.
+		<IconSetProvider set={iconSetForTheme(selected)}>
+			<ThemeTraitsContext.Provider value={traits}>
+				<ScrollView className="bg-background flex-1" contentContainerClassName="p-6">
+					{children}
+					<PortalHost />
+				</ScrollView>
+			</ThemeTraitsContext.Provider>
+		</IconSetProvider>
 	);
 }
 

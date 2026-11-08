@@ -192,6 +192,55 @@ test('configures and reconfigures from reactive store receipt fields', async () 
 	);
 });
 
+test('sends the advertised store logo in display.config', async () => {
+	mockStore = {
+		...mockStore,
+		display: { contract: 1, signaling: '/wcpos/v2/display', logo: 'https://shop.test/logo.png' },
+	};
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockConfigure).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			store: expect.objectContaining({ logo: 'https://shop.test/logo.png' }),
+		})
+	);
+
+	// A logo change alone must re-send display.config without restarting the service.
+	mockStore.display = {
+		contract: 1,
+		signaling: '/wcpos/v2/display',
+		logo: 'https://shop.test/new.png',
+	};
+	rerender();
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledTimes(1);
+	expect(mockConfigure).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			store: expect.objectContaining({ logo: 'https://shop.test/new.png' }),
+		})
+	);
+});
+
+test('omits logo from display.config when the store advertises none', async () => {
+	mockStore = {
+		...mockStore,
+		display: { contract: 1, signaling: '/wcpos/v2/display', logo: '' },
+	};
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockConfigure).toHaveBeenCalled();
+	expect(mockConfigure.mock.lastCall[0].store).not.toHaveProperty('logo');
+
+	mockStore.display = { contract: 1, signaling: '/wcpos/v2/display' };
+	rerender();
+	await flushEffects();
+
+	expect(mockConfigure.mock.lastCall[0].store).not.toHaveProperty('logo');
+});
+
 test('does not start for a signaling path outside the WCPOS v2 API root', async () => {
 	mockStore = { ...mockStore, display: { contract: 1, signaling: '/wp-json/display' } };
 	renderHook(() => useCustomerDisplayService());

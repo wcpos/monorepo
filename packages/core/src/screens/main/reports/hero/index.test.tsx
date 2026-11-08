@@ -135,6 +135,17 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
+// The real Chip, with the `stretch` each one was given: a phone tile's chip fills it (chip line 24).
+const mockStretch = new Map<string, boolean | undefined>();
+jest.mock('@wcpos/components/chip', () => {
+	const { Chip } = jest.requireActual('@wcpos/components/chip');
+	return {
+		Chip: (props: { testID: string; stretch?: boolean }) => {
+			mockStretch.set(props.testID, props.stretch);
+			return <Chip {...props} />;
+		},
+	};
+});
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({
 		testID,
@@ -300,6 +311,7 @@ function setup({
 }
 beforeEach(() => {
 	mockPhone = true;
+	mockStretch.clear();
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
 	mockPrint.mockReset().mockResolvedValue(true);
 	mockPrintDocument.templatesReady = true;
@@ -646,10 +658,42 @@ it('on phone prints from an icon button and puts comparison above the chart togg
 	expect(print.getAttribute('aria-label')).toBe('Print summary');
 	const strip = screen.getByTestId('reports-scope-strip');
 	expect(strip.contains(print)).toBe(true);
-	expect(strip.contains(screen.getByTestId('hero-chips'))).toBe(true);
+	const chips = screen.getByTestId('hero-chips');
+	expect(strip.contains(chips)).toBe(true);
+	expect(chips.parentElement).toBe(strip);
+	const initialRows = Array.from(chips.children);
+	expect(initialRows.map((row) => row.children.length)).toEqual([2]);
+	expect(initialRows[0].children[0].contains(screen.getByTestId('hero-chip-cashier'))).toBe(true);
+	expect(initialRows[0].children[1].contains(screen.getByTestId('hero-chip-status'))).toBe(true);
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	fireEvent.click(screen.getByTestId('exclude'));
+	const rows = Array.from(chips.children);
+	expect(rows.map((row) => row.children.length)).toEqual([2, 2]);
+	expect(rows[0].children[0].contains(screen.getByTestId('hero-chip-cashier'))).toBe(true);
+	expect(rows[0].children[1].contains(screen.getByTestId('hero-chip-status'))).toBe(true);
+	expect(rows[1].children[0].contains(screen.getByTestId('hero-chip-left-out'))).toBe(true);
+	expect(rows[1].children[1].children.length).toBe(0);
+	for (const id of ['hero-chip-cashier', 'hero-chip-status', 'hero-chip-left-out'])
+		expect(mockStretch.get(id)).toBe(true);
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-clear'));
+	expect(Array.from(chips.children).map((row) => row.children.length)).toEqual([2]);
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	const compare = screen.getByTestId('hero-chip-compare');
 	expect(screen.getByTestId('reports-hero').contains(compare)).toBe(true);
 	expect(compare.parentElement!.nextElementSibling).toBe(screen.getByTestId('hero-chart-toggle'));
+});
+it('on tablet keeps the chips in an unpadded wrapping row', () => {
+	mockPhone = false;
+	setup();
+	fireEvent.click(screen.getByTestId('exclude'));
+	const chips = screen.getByTestId('hero-chips');
+	expect(Array.from(chips.children)).toEqual([
+		screen.getByTestId('hero-chip-cashier'),
+		screen.getByTestId('hero-chip-status'),
+		screen.getByTestId('hero-chip-left-out'),
+	]);
+	for (const id of ['hero-chip-cashier', 'hero-chip-status', 'hero-chip-left-out'])
+		expect(mockStretch.get(id)).toBe(false);
 });
 it.each([true, false])('renders unsettled scope without report data (phone: %s)', (phone) => {
 	mockPhone = phone;

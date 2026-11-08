@@ -15,6 +15,8 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	/** A number beside the label, or its own text (`+3`). */
 	count?: number | string;
 	on?: boolean;
+	/** A choice shown, not made here (the reader a till pays with): no press, not a button. */
+	readOnly?: boolean;
 	dimmed?: boolean;
 	add?: boolean;
 	onLongPress?: PressableProps['onLongPress'];
@@ -39,6 +41,12 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	 * on-state at both sizes (ruled 2026-10-16, decision 10).
 	 */
 	size?: 'default' | 'sm';
+	/**
+	 * A chip in a grid tile fills the tile (the phone Reports chips): the label half takes the
+	 * slack, so a clear control or action sits at the tile's edge. A zero basis is safe there
+	 * because the tile gives the pill an exact width.
+	 */
+	stretch?: boolean;
 };
 
 /**
@@ -60,6 +68,7 @@ export function Chip({
 	leading,
 	count,
 	on,
+	readOnly,
 	dimmed,
 	add,
 	onClear: clearProp,
@@ -67,6 +76,7 @@ export function Chip({
 	clearTestID,
 	action,
 	size = 'default',
+	stretch = false,
 	disabled,
 	testID,
 	className,
@@ -97,6 +107,7 @@ export function Chip({
 	const onClear = action ? undefined : clearProp;
 	// The trailing cell's press: the action's, or the clear control's. Either makes the chip split.
 	const trail = action?.onPress ?? onClear;
+	const button = !trail && !readOnly;
 	// `sm` is drawn under 44 for a dense cell; each press target still gets 44 (§ Design 2).
 	const band = sm && <MinTargetBand />;
 	const content = (
@@ -131,18 +142,19 @@ export function Chip({
 			disabled={inactive}
 			// With a trailing cell the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
-			onPress={trail ? undefined : onPress}
+			onPress={button ? onPress : undefined}
 			onLongPress={onLongPress}
 			{...contextMenu}
-			role={trail ? undefined : 'button'}
-			{...(trail ? {} : selectedState(on))}
-			tabIndex={trail ? -1 : 0}
+			role={button ? 'button' : undefined}
+			{...(button ? selectedState(on) : {})}
+			tabIndex={button ? 0 : -1}
 			accessible={trail ? false : undefined}
 			className={cn(
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
-				// drawn chip is inline-flex.
+				// drawn chip is inline-flex. `stretch` is the one opt-in to fill (the merge drops `self-start`).
 				'bg-chip rounded-chip max-w-full flex-row items-center gap-1.5 self-start border-[length:var(--shape-ctl-border)]',
+				stretch && 'self-stretch',
 				sm ? 'h-8 px-2.5' : 'h-ctl px-3',
 				// With an action each cell fills on its own (the strip rule, 2026-10-09), so the
 				// label half carries the padding and the pill neither fills nor pads.
@@ -164,8 +176,14 @@ export function Chip({
 							role="button"
 							{...selectedState(on)}
 							disabled={inactive}
+							// `shrink`, never a zero basis: with `flex-1` the half's width was whatever Yoga had
+							// measured for the pill's parent, and the cart header's shrinking wrapper gave it
+							// zero on a cold start, so the customer chip showed only its avatar and pin until a
+							// hot reload re-measured it (owner, iPad, 2026-11-08). Content width, shrinking to
+							// truncate, is what a hugging pill's half wants; `stretch` is the one case that fills.
 							className={cn(
-								'flex-1 flex-row items-center gap-1.5 self-stretch',
+								stretch ? 'flex-1' : 'shrink',
+								'flex-row items-center gap-1.5 self-stretch',
 								!action
 									? 'active:opacity-70'
 									: cn(

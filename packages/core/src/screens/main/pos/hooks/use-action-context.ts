@@ -2,7 +2,11 @@ import * as React from 'react';
 
 import { readStockPayload, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { findOpenSession, readBoundRegister } from '@wcpos/query/register-session';
+import {
+	findOpenSession,
+	isRegisterCounting,
+	readBoundRegister,
+} from '@wcpos/query/register-session';
 
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -23,6 +27,8 @@ export function useActionContext(): {
 	ctx: ActionContext;
 	actor: ActionActor;
 	cashier: Cashier | null;
+	/** Whether the bound register's session is being counted; an event-time read, never a subscription. */
+	readCounting: () => Promise<boolean>;
 } {
 	const runtime = useQueryRuntime();
 	const t = useT();
@@ -73,6 +79,13 @@ export function useActionContext(): {
 							id: String(userId),
 							name: wpCredentials.display_name || wpCredentials.username || '',
 						},
+			// Every product tile mounts the add hooks: this runs on the tap or scan, not in render.
+			readCounting: async () => {
+				if (!sessionsOn) return false;
+				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
+				if (!registerId) return false;
+				return isRegisterCounting(storeDB, registerId);
+			},
 		}),
 		[
 			runtime,

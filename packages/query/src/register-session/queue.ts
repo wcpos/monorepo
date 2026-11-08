@@ -21,6 +21,7 @@ import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import {
 	adoptCounters,
+	isoGmt,
 	mintClosureNumber,
 	readCounters,
 	readRegister,
@@ -180,6 +181,12 @@ export const synced = {
 } as const;
 const due = (row: { sync_status: string; sync_next_at?: number | null }) =>
 	row.sync_status === 'pending' && (!row.sync_next_at || row.sync_next_at <= Date.now());
+/**
+ * A server row without a count never empties the cashier's (#2016): after a refused close the
+ * store's row has no `counted`, and the count is the only copy of what was in the drawer.
+ */
+const noCount = (counted: unknown) =>
+	counted == null || Object.keys(counted as object).length === 0;
 
 /** Keep a newer cashier transition when a response to an older request arrives. */
 async function acknowledge(
@@ -190,7 +197,10 @@ async function acknowledge(
 	await doc.incrementalModify((local) => {
 		const outstanding =
 			local.pending_status && (sentAt === undefined || local.status_at !== sentAt);
-		const incoming = { ...server };
+		const incoming = {
+			...server,
+			opened_at_gmt: isoGmt(server.opened_at_gmt ?? local.opened_at_gmt),
+		};
 		if (local.counted_float != null && incoming.counted_float === null)
 			delete incoming.counted_float;
 		return {
@@ -203,7 +213,7 @@ async function acknowledge(
 			status_at: local.status_at,
 			approver_token: outstanding ? local.approver_token : null,
 			closure_id: local.closure_id ?? server.closure_id,
-			counted: outstanding ? local.counted : server.counted,
+			counted: outstanding || noCount(server.counted) ? local.counted : server.counted,
 			counting_by: server.counting_by,
 			counting_started_at_gmt: outstanding
 				? local.counting_started_at_gmt
@@ -626,7 +636,14 @@ export async function adoptSessionRow(
 	// `closure_id` with `server_status` unchanged, and the server's row is its recovery.
 	if (local?.server_status === 'closed' && local.status === 'closed' && row.status !== 'closed')
 		return;
-	const adopted = { ...row, ...synced, server_status: row.status, pending_status: null };
+	const adopted = {
+		...row,
+		...synced,
+		// The detail route's row may omit it: the local value stands.
+		...(row.opened_at_gmt ? { opened_at_gmt: isoGmt(row.opened_at_gmt) } : {}),
+		server_status: row.status,
+		pending_status: null,
+	};
 	/**
 	 * Merge over the local document, never replace it: the list route serves only the
 	 * session's own columns (see `mergeIntoDocument`). Replacing reset the detail route's
@@ -644,6 +661,7 @@ export async function adoptSessionRow(
 			const incoming = { ...adopted };
 			if (current.counted_float != null && incoming.counted_float === null)
 				delete incoming.counted_float;
+			if (noCount(incoming.counted)) delete incoming.counted;
 			return current.sync_status === 'pending' ? current : { ...current, ...incoming };
 		},
 		() => adopted

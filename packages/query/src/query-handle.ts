@@ -524,6 +524,8 @@ export type QuerySnapshot<R extends QueryResult<RxCollection> = QueryResult<RxCo
 	count: number;
 	searchActive: boolean;
 	searchState: R['searchState'];
+	/** The result is the placeholder from before any engine database was bound (#3186). */
+	unbound: boolean;
 	/** The engine is pulling the collection(s) this query reads. */
 	active: boolean;
 	/** From demand declaration until the standing declaration settles. */
@@ -617,6 +619,7 @@ function emptySnapshot<R extends QueryResult<RxCollection>>(result: R): QuerySna
 		count: result.count ?? result.hits.length,
 		searchActive: Boolean(result.searchActive),
 		searchState: result.searchState,
+		unbound: Boolean(result.unbound),
 		active: false,
 		pending: false,
 		exhausted: null,
@@ -731,6 +734,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 					count: result.count ?? result.hits.length,
 					searchActive: Boolean(result.searchActive),
 					searchState: result.searchState,
+					unbound: Boolean(result.unbound),
 					active,
 					pending,
 					exhausted,
