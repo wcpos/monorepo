@@ -718,14 +718,17 @@ jobs:
         # The update shards shoot the merge ref, so a cell the base deleted after this
         # branch left it has no shot and no PNG in their artifacts, while the head checkout
         # still carries its old baseline, which the orphan check would refuse. Remove what
-        # the merge ref lacks; the check below still refuses a PNG nobody shot.
+        # the merge commit lacks; the check below still refuses a PNG nobody shot. The
+        # run's own merge commit (`github.sha`, what the update shards checked out), not
+        # the moving merge ref: a base change during the run must not strip a PNG this
+        # run shot.
         env:
-          MERGE_REF: refs/pull/${{ github.event.pull_request.number }}/merge
+          MERGE_SHA: ${{ github.sha }}
         run: |
-          git fetch --depth=1 origin "+$MERGE_REF:refs/remotes/pull/merge"
+          git fetch --depth=1 origin "$MERGE_SHA"
           comm -23 \
             <(git ls-files -- 'apps/main/gallery/*-snapshots/*.png' | sort) \
-            <(git ls-tree -r --name-only refs/remotes/pull/merge -- apps/main/gallery | grep -E -- '-snapshots/.*\.png$' | sort) \
+            <(git ls-tree -r --name-only "$MERGE_SHA" -- apps/main/gallery | grep -E -- '-snapshots/.*\.png$' | sort) \
           | while IFS= read -r path; do
               echo "removing $path (not in the merge ref)"
               git rm -q -- "$path"
