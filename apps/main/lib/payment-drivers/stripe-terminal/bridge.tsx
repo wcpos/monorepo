@@ -126,7 +126,13 @@ function SdkBinding({ driver, methods }: Props) {
 }
 export function StripeTerminalDriverBridge({ driver, methods }: Props) {
 	return (
-		<StripeTerminalProvider tokenProvider={tokenProvider} logLevel={__DEV__ ? 'verbose' : 'error'}>
+		// beta.34 makes localeConfig required (it localizes SDK error messages only). beta.32
+		// passed none and the native SDK used the device locale; this is the README default.
+		<StripeTerminalProvider
+			tokenProvider={tokenProvider}
+			logLevel={__DEV__ ? 'verbose' : 'error'}
+			localeConfig={{ type: 'cardLanguagePreferenceIfAvailable' }}
+		>
 			<SdkBinding driver={driver} methods={methods} />
 		</StripeTerminalProvider>
 	);

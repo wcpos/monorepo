@@ -74,9 +74,16 @@ export const THEME_TRAITS: Record<ThemeName, Omit<ThemeTraits, 'type'>> = {
 	dark: DEFAULT_TRAITS,
 	ocean: DEFAULT_TRAITS,
 	sunset: DEFAULT_TRAITS,
-	monochrome: DEFAULT_TRAITS,
-	paper: { ...DEFAULT_TRAITS, media: 'initial', wordsAlign: 'center', tear: true },
-	bold: { ...DEFAULT_TRAITS, priceChip: true, paidFlash: true },
+	// Where the link ink is the foreground, a verb is marked by its underline, not its colour.
+	monochrome: { ...DEFAULT_TRAITS, linkUnderline: true },
+	paper: {
+		...DEFAULT_TRAITS,
+		media: 'initial',
+		wordsAlign: 'center',
+		tear: true,
+		linkUnderline: true,
+	},
+	bold: { ...DEFAULT_TRAITS, priceChip: true, paidFlash: true, linkUnderline: true },
 	warm: { ...DEFAULT_TRAITS, media: 'initial' },
 	market: { ...DEFAULT_TRAITS, media: 'initial', tear: true },
 };

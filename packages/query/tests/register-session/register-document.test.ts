@@ -27,6 +27,7 @@ import {
 	recordCarriedFrom,
 	recordLiveSession,
 	remintRegister,
+	reviseClosureReservation,
 	settleRegister,
 	unbindRegister,
 } from '../../src/register-session/register-document';
@@ -701,5 +702,79 @@ it('binds a target store without moving the current register or its counters', a
 			'1': { register_id: 'A', register_name: 'Front' },
 			'2': { register_id: 'B', register_name: 'Back' },
 		},
+	});
+});
+
+describe('reviseClosureReservation (#3304)', () => {
+	type Closure = Parameters<typeof reviseClosureReservation>[3];
+	const closure = (period: string, extra: Partial<Closure> = {}) =>
+		({ id: 'c1', period_sales_total: period, period_refunds_total: '0', ...extra }) as Closure;
+	const bucket = async () => (await readRegister(db))!.sites.site.registers!.a;
+	/** Totals at 20 before the close; the close reserves a period of 10. */
+	async function reserved(applied: boolean) {
+		await remintRegister(db);
+		await adoptCounters(db, 'site', 'a', {
+			last_closure_number: 4,
+			perpetual_sales_total: '20',
+			perpetual_refunds_total: '0',
+		});
+		await mintClosureNumber(db, 'site', 'a', closure('10'));
+		if (applied)
+			await advancePerpetual(db, 'site', 'a', { sales: '10', refunds: '0', closureId: 'c1' });
+	}
+
+	it('takes an applied period out and puts the revised one in, keeping the number', async () => {
+		await reserved(true);
+		expect((await bucket()).perpetual_sales_total).toBe('30.0000');
+		const row = await reviseClosureReservation(db, 'site', 'a', closure('25', { number: 0 }));
+		expect(row).toMatchObject({
+			number: 5,
+			number_retried: false,
+			perpetual_sales_total: '45.0000',
+		});
+		expect(await bucket()).toMatchObject({
+			last_closure_number: 5,
+			perpetual_sales_total: '45.0000',
+			closure_reservation: { applied: true, row: { number: 5, period_sales_total: '25' } },
+		});
+		// Run twice with the same closure: the reserved period is the revised one, counted once.
+		await reviseClosureReservation(db, 'site', 'a', closure('25'));
+		expect((await bucket()).perpetual_sales_total).toBe('45.0000');
+	});
+
+	it('leaves an unapplied reservation for one advancePerpetual to apply', async () => {
+		await reserved(false);
+		const row = await reviseClosureReservation(db, 'site', 'a', closure('25'));
+		expect(row.perpetual_sales_total).toBe('45.0000');
+		expect(await bucket()).toMatchObject({
+			perpetual_sales_total: '20.0000',
+			closure_reservation: { applied: false },
+		});
+		await advancePerpetual(db, 'site', 'a', { sales: '25', refunds: '0', closureId: 'c1' });
+		await advancePerpetual(db, 'site', 'a', { sales: '25', refunds: '0', closureId: 'c1' });
+		expect((await bucket()).perpetual_sales_total).toBe('45.0000');
+	});
+
+	it('keeps a retried number', async () => {
+		await reserved(true);
+		await mintClosureNumber(db, 'site', 'a', closure('10', { number_retried: true }));
+		const row = await reviseClosureReservation(db, 'site', 'a', closure('25'));
+		expect(row).toMatchObject({
+			number: 6,
+			number_retried: true,
+			perpetual_sales_total: '45.0000',
+		});
+	});
+
+	it.each([
+		['missing', () => remintRegister(db)],
+		['foreign', () => reserved(true)],
+	])('refuses a %s reservation and changes nothing', async (_, setup) => {
+		await setup();
+		const before = await readRegister(db);
+		await expect(
+			reviseClosureReservation(db, 'site', 'a', closure('25', { id: 'other' }))
+		).rejects.toThrow('closure_reservation_missing');
+		expect(await readRegister(db)).toEqual(before);
 	});
 });

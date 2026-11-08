@@ -11,11 +11,18 @@ import {
 	settlementPatch,
 	snapshotFromOrderJSON,
 } from '@wcpos/order-math';
-import { observeCatalogChanges, observeCoverage, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	observeCatalogChanges,
+	observeCoverage,
+	readCoverageGeneration,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { observeOpenSessionPresence } from '@wcpos/query/register-session';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { useCoverageGeneration } from '@wcpos/query/query-state';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { couponReferences } from './coupon-continuation';
 import { useRepairTaxExempt } from './use-tax-exempt';
@@ -43,6 +50,7 @@ import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-h
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { useCartConfigInputs, useCartConfigReader } from '../hooks/use-cart-config';
+import { useTaxSettings } from '../../contexts/tax-rates';
 
 import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -51,6 +59,8 @@ import type { OrderPayload } from './cart-config-for-order';
 const logger = getLogger(['wcpos', 'pos', 'settlement']);
 const observe = (event: SettlementDiagnostic) => logger.warn(event.type, { context: event });
 const inCheckout = (uuid: string) => getCheckoutModeSnapshot().checkoutOrders.has(uuid);
+// Per engine, not per mount: compaction drops the lane and a remount never sees `complete` again.
+const ratesLanded = new WeakMap<RxdbSyncEngine, number>();
 
 /** Session-owned, beside the config reader; no cart tab owns this subscription. */
 export function SettlementCoordinatorProvider() {
@@ -67,6 +77,8 @@ export function SettlementCoordinatorProvider() {
 	const closeSale = useCloseSale();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
+	// Coverage says the lane synced once; only a database read says `allRates` is an answer (#3186).
+	const { ratesRead } = useTaxSettings();
 	const read = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const report = useReportEngineWarnings();
@@ -139,8 +151,12 @@ export function SettlementCoordinatorProvider() {
 	// Publish readiness only with committed config inputs, never ahead of the rates render.
 	React.useLayoutEffect(() => {
 		inputs$.next(inputs);
-		ratesReady$.next({ ready: coverage.complete, generation });
-	}, [inputs, inputs$, ratesReady$, coverage, generation]);
+		if (coverage.complete) ratesLanded.set(manager.engine, generation);
+		ratesReady$.next({
+			ready: ratesRead && ratesLanded.get(manager.engine) === generation,
+			generation,
+		});
+	}, [inputs, inputs$, ratesReady$, coverage, generation, manager.engine, ratesRead]);
 	React.useEffect(() => {
 		const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(null);
 		const coordinator = createSettlementCoordinator({
@@ -223,7 +239,11 @@ export function SettlementCoordinatorProvider() {
 			}
 		});
 		const rates = coverage$.subscribe((value) => {
-			if (!value.complete) ratesReady$.next({ ...ratesReady$.value, ready: false });
+			if (
+				!value.complete &&
+				ratesLanded.get(manager.engine) !== readCoverageGeneration(manager.engine, 'taxRates')
+			)
+				ratesReady$.next({ ...ratesReady$.value, ready: false });
 		});
 		const orders = handle.observe().subscribe((value) => {
 			if (value.ready && !value.error)

@@ -44,6 +44,10 @@ module.exports = {
 		'^react-native$': 'react-native-web',
 		// ESM only; see the mock. Every pressable surface imports it through `lib/haptics`.
 		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',
+		// ESM only; see the mock. Every Icon imports it through `Badge`'s count beat (#3402).
+		'^react-native-reanimated$': '<rootDir>/jest/__mocks__/react-native-reanimated.js',
+		// ESM only; see the mock. Every overlay imports it through `lib/use-spacing-unit` (#3410).
+		'^uniwind$': '<rootDir>/jest/__mocks__/uniwind.js',
 		// react-native-svg's web elements import `@react-native/assets-registry/registry`, a package
 		// React Native 0.88 no longer depends on and whose 0.88 build is ESM, which this CommonJS
 		// runner cannot load. These suites already run react-native as react-native-web, so use its

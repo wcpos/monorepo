@@ -6,8 +6,9 @@ import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { useCheckoutMode } from '../checkout/checkout-mode';
+import { pickUnits, usePickedUnits, useSplitOn } from '../checkout/checkout-mode';
 import { LedgerLegs } from '../checkout/tender/ledger-pane';
+import { type TenderLineId, unitsMinor } from '../checkout/tender/tender-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import {
 	CurrentOrderContext,
@@ -42,8 +43,27 @@ export function StilledCart({ order }: { order: EngineRecord<'orders'> }) {
 
 function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
-	const paidBy = useCheckoutMode().linesPaidBy.get(order.uuid);
 	const view = useLedgerView(order);
+	const splitOn = useSplitOn(order.uuid);
+	const picked = usePickedUnits(order.uuid);
+	// While Split is on the bill is the picker; the pane (the other column) reads the same picks.
+	const picker = splitOn
+		? {
+				picked: picked ?? {},
+				paid: view.paidUnits,
+				// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
+				unitMinor: (key: TenderLineId, units: number) => {
+					const line = view.lines.find(({ id }) => String(id) === String(key));
+					const paid = view.paidUnits[key]?.units ?? 0;
+					return line
+						? unitsMinor(line.totalMinor, line.quantity, paid + units) -
+								unitsMinor(line.totalMinor, line.quantity, paid)
+						: 0;
+				},
+				format: view.format,
+				pick: (key: TenderLineId, units: number) => pickUnits(order.uuid, key, units),
+			}
+		: undefined;
 	return (
 		<View className="flex-1">
 			<ErrorBoundary>
@@ -53,7 +73,8 @@ function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 				<ErrorBoundary>
 					<CartTable
 						readOnly
-						paidBy={paidBy}
+						paid={view.paidUnits}
+						picker={picker}
 						footer={
 							<View>
 								<Totals readOnly />

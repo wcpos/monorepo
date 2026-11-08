@@ -18,7 +18,7 @@ type DeviceRowProps = {
 	icon?: IconName;
 	/** The icon square spins while the device is being looked for. */
 	busy?: boolean;
-	/** A short tag at the name line's right edge: the provider, the template kind, Default. */
+	/** A short tag at the row's right, centred on the lines: the provider, the template kind, Default. */
 	tag?: string;
 	/** Line 2, joined by a middle dot: serial · location, address · vendor. Blanks drop out. */
 	identifiers?: readonly (string | null | undefined | false)[];
@@ -59,8 +59,8 @@ export function DeviceList({ children }: { children: React.ReactNode }) {
 /**
  * One device in a settings list (CODING_STANDARDS § Rows and cards): a flush row in a `DeviceList`,
  * a hairline above every row but the first, with an icon square tinted by the state, the name and
- * its tag, the identifiers and ONE state line, the actions (`DeviceRowActions`) at the right of the
- * same line on a wide pane.
+ * its tag (centred on the lines, Paul 2026-11-06: on the name line it looked high), the identifiers
+ * and ONE state line, the actions (`DeviceRowActions`) at the right of the same line on a wide pane.
  */
 export function DeviceRow({
 	name,
@@ -94,16 +94,9 @@ export function DeviceRow({
 					</View>
 				) : null}
 				<View className="min-w-0 flex-1 gap-0.5">
-					<View className="flex-row items-start gap-2">
-						<Text variant="subheading" className="flex-1" numberOfLines={1}>
-							{name}
-						</Text>
-						{tag ? (
-							<Badge testID={id('tag')} variant="muted" className="max-w-32">
-								{tag}
-							</Badge>
-						) : null}
-					</View>
+					<Text variant="subheading" numberOfLines={1}>
+						{name}
+					</Text>
 					{line2 ? (
 						<Text testID={id('identifiers')} variant="key" numberOfLines={1}>
 							{line2}
@@ -118,6 +111,11 @@ export function DeviceRow({
 						/>
 					) : null}
 				</View>
+				{tag ? (
+					<Badge testID={id('tag')} variant="muted" className="max-w-32">
+						{tag}
+					</Badge>
+				) : null}
 				{phone ? null : actions}
 			</View>
 			{progress ? (

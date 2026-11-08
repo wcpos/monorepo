@@ -58,7 +58,7 @@ on:
         required: true
         default: next
       bundle_branch:
-        description: web-bundle branch to publish to — `next` IS the next lane's jsDelivr ref (@next); released lanes use the major.minor tag cut at release
+        description: web-bundle branch to publish to — `next` IS the next lane's jsDelivr ref (@next); released lanes publish to `main` (the trunk lane) or `<major>.<minor>.x` (a stable lane) and load the major.minor tag cut at release
         required: true
         default: next
       override_release_gate:
@@ -66,7 +66,7 @@ on:
         type: string
         default: ''
       allow_frozen_lane:
-        description: bundle_branch=main only — build for a lane a higher lane has frozen (a deliberate patch to old plugins; the RXDB_VERSION check still applies)
+        description: released lanes only (bundle_branch=main or <major>.<minor>.x) — build for a lane a higher lane has frozen (a deliberate patch to old plugins; the RXDB_VERSION check still applies)
         type: boolean
         default: false
 
@@ -126,7 +126,7 @@ jobs:
           fetch-depth: 1
 
       - name: 📌 Stage the worker/lane gate from the workflow revision
-        if: ${{ github.event.inputs.bundle_branch == 'main' }}
+        if: ${{ github.event.inputs.bundle_branch != 'next' }}
         run: cp scripts/release/check-worker-rxdb-lane.sh "$RUNNER_TEMP/check-worker-rxdb-lane.sh"
 
       - name: 📌 Stage CDN verification from the workflow revision
@@ -234,7 +234,7 @@ jobs:
       # The build copies apps/main/public into build/ and web-bundle's build.js keeps
       # its pinned indexeddb.worker.js; gate every worker about to be published.
       - name: 🧬 Gate the worker's RXDB_VERSION against its bundle lane
-        if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch == 'main' }}
+        if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch != 'next' }}
         env:
           GH_TOKEN: ${{ github.token }}
           ALLOW_FROZEN_LANE: ${{ github.event.inputs.allow_frozen_lane }}
@@ -310,7 +310,7 @@ jobs:
           # Publish via a fresh clone of web-bundle on the target branch, decoupled
           # from the apps/web submodule (so a deps re-check during the build can't
           # reset the submodule out from under us). Full history without blobs, not
-          # --depth 1: the retention below asks `git log -1 -- <path>` when each
+          # --depth 1: the no-inventory fallback below asks `git log -1 -- <path>` when each
           # file was last published, and a shallow clone answers "the tip" for every
           # file, so nothing ever aged out while publishes were under a day apart
           # (web-bundle@next carried chunks from 2026-10-13 on 2026-10-15). Blobless
@@ -320,26 +320,69 @@ jobs:
           git clone --filter=blob:none --branch "$BRANCH" \
             "https://x-access-token:${GH_TOKEN}@github.com/wcpos/web-bundle.git" "$WB"
 
-          # Lay the fresh build over build/, then drop only what the new build does not
-          # carry AND has been published for more than a day. A jsDelivr edge keeps the
-          # old metadata.json for up to 12 h; the hashed entry it names must still exist
-          # on the branch, or every tab on that edge fails with "Failed to load script …
-          # entry-….js" (dev-next, 2026-10-05: the previous entry was deleted minutes
-          # after it was published). Unhashed files (metadata.json, index.html, the
-          # workers) are simply overwritten.
+          # Lay the fresh build over build/, retaining exactly the previous build's
+          # hashed files for edges still serving its metadata.json: the ones its
+          # build/publish-inventory.txt lists. That bounds the tree to two builds (a
+          # day's builds can exceed jsDelivr's 50 MB package limit, which refuses every
+          # file). Asking which commit last touched a file was wrong: a chunk unchanged
+          # from build A to B was last touched by A, so build C dropped it while edges
+          # serving B's metadata.json still named it. Unhashed files (metadata.json,
+          # index.html, the workers) are simply overwritten.
           mkdir -p "$WB/build"
           cp -R "$BUILD_DIR/." "$WB/build/"
           cd "$WB"
-          keep_until=$(( $(date +%s) - 24 * 3600 ))
+          INVENTORY=build/publish-inventory.txt
+          if previous_inventory=$(git show "HEAD:$INVENTORY" 2>/dev/null); then
+            previous_build=""
+          else
+            previous_inventory=""
+            previous_build=$(git log -1 --format=%H --grep='^chore(release): build web bundle' HEAD)
+            echo "no previous $INVENTORY; keeping the hashed files the most recent build commit last touched"
+          fi
           git ls-files build | while read -r path; do
             [ -e "$BUILD_DIR/${path#build/}" ] && continue
-            last=$(git log -1 --format=%ct -- "$path" 2>/dev/null || echo 0)
-            if [ "${last:-0}" -lt "$keep_until" ]; then
-              git rm -q "$path"
+            # Only hashed files under _expo/ get retained: a stale metadata.json
+            # names those and nothing else. A root file this build does not carry is
+            # another lane's (both lanes publish to this branch): the 2.0.9 build's
+            # sqlite.worker.js and sqlite3.wasm rode onto the 1.11.11 bundle on
+            # 2026-11-06 and tag-web-bundle.sh refused the lane tag. Drop it now.
+            # The previous build's own publish-inventory.txt is one; it is rewritten below.
+            case "${path#build/}" in
+              */*) ;;
+              *) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;
+            esac
+            if [ -n "$previous_build" ]; then
+              keep=$([ "$(git log -1 --format=%H -- "$path")" = "$previous_build" ] && echo yes || echo no)
             else
-              echo "keeping $path (published $(( ($(date +%s) - last) / 3600 )) h ago; an edge may still name it)"
+              keep=$(grep -Fxq -- "${path#build/}" <<< "$previous_inventory" && echo yes || echo no)
+            fi
+            if [ "$keep" = yes ]; then
+              echo "keeping $path (from the previous build; an edge may still name it)"
+            else
+              git rm -q "$path"
             fi
           done
+          # This build's own _expo/ files, for the next publish's retention. Written
+          # here, never into $BUILD_DIR, which the CDN job uploads.
+          (cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"
+
+          # 45 MiB, under jsDelivr's 50 MB limit whichever unit they mean, and under it
+          # with one retained previous build.
+          WEB_BUNDLE_TREE_LIMIT_BYTES=47185920
+          # Include new, untracked files too: git add -A below will publish them.
+          sizes=$(git ls-files --cached --others --exclude-standard -z build | while IFS= read -r -d '' path; do
+            size=$(wc -c < "$path" | tr -d ' ')
+            printf '%s %s\n' "$size" "$path"
+          done)
+          total=$(awk '{ n += $1 } END { printf "%.0f", n }' <<< "$sizes")
+          mib=$(awk -v n="$total" 'BEGIN { printf "%.2f", n / 1048576 }')
+          echo "tree $BRANCH: $total bytes ($mib MiB)"
+          if ((total > WEB_BUNDLE_TREE_LIMIT_BYTES)); then
+            sort -nr <<< "$sizes" | sed -n '1,10p'
+            echo "::error::web-bundle@$BRANCH would be $mib MiB; jsDelivr refuses every file of a version over 50 MB. Drop the retained files listed above or publish to a lane branch."
+            exit 1
+          fi
+          echo "tree_bytes=$total" >> "$GITHUB_OUTPUT"
 
           git add -A
           if git diff --staged --quiet; then
@@ -359,9 +402,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
+          TREE_BYTES: ${{ steps.web-bundle.outputs.tree_bytes }}
         run: |
           set -euo pipefail
           source "$RUNNER_TEMP/cdn-verify.sh"
+          # A size 403 on a tree the gate measured is jsDelivr's stale verdict (runs 42441099287, 42478472683).
+          # On a re-dispatch of an already-published SHA the publish step is skipped and its output is
+          # empty, so measure the branch this step verifies (check_tree_size sets the same flag).
+          # shellcheck disable=SC2034 # Read by verify_cdn_paths.
+          if [[ -n "$TREE_BYTES" ]]; then
+            if ((TREE_BYTES <= WEB_BUNDLE_TREE_LIMIT_BYTES)); then CDN_TREE_UNDER_GATE=1; fi
+          else
+            check_tree_size "$BRANCH" || true
+          fi
           BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
           purge_cdn_root "$BRANCH"
           if [ -f "$BUILD_DIR/metadata.json" ]; then

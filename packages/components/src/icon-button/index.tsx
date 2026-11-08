@@ -46,6 +46,8 @@ type ButtonProps = Omit<PressableSurfaceProps, 'role' | 'wash' | 'minTarget' | '
 		loading?: boolean;
 		/** Turn the glyph itself while true (Icon `spin`), instead of swapping it for the Loader. */
 		spin?: boolean;
+		/** A count on the glyph's shoulder (Icon `count`): the bell's unread notifications. */
+		count?: number;
 		on?: boolean;
 		iconClassName?: string;
 		className?: string;
@@ -59,6 +61,7 @@ function IconButton({
 	size,
 	loading,
 	spin,
+	count,
 	on,
 	...props
 }: ButtonProps) {
@@ -85,6 +88,7 @@ function IconButton({
 					size={size}
 					loading={loading}
 					spin={spin}
+					count={count}
 					className={cn(
 						(!variant || variant === 'default') && 'text-muted-foreground',
 						// Muted at rest, the foreground under the pointer or the finger, as a macOS title bar.

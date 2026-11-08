@@ -70,6 +70,45 @@ const answered = (url: string) => {
 };
 
 describe('voidPayments', () => {
+	it('voids only the named live row', async () => {
+		const deps = createDeps();
+		deps.post.mockImplementation(async (url: string) => answered(url));
+		const result = await voidPayments(
+			order([payment('first', 'captured'), payment('second', 'captured')]),
+			deps,
+			{ paymentIds: ['first'] }
+		);
+		expect(deps.post.mock.calls).toEqual([['orders/42/payments/first/void', {}]]);
+		expect(result).toMatchObject({
+			kind: 'voided',
+			rows: [expect.objectContaining({ id: 'first', status: 'voided' })],
+			failed: [],
+		});
+	});
+
+	it('reports only the named captured completion row as retained without voiding others', async () => {
+		const deps = createDeps();
+		deps.post.mockImplementation(async (url: string) => answered(url));
+		const sale = order([
+			payment('counted', 'captured'),
+			payment('other-counted', 'captured'),
+			payment('open', 'captured'),
+		]);
+		sale.meta_data.push({
+			id: 6,
+			key: '_wcpos_completions',
+			value: JSON.stringify([{ payment_ids: ['counted', 'other-counted'] }]),
+		});
+		const result = await voidPayments(sale, deps, { paymentIds: ['counted'] });
+		expect(result).toMatchObject({
+			kind: 'voided',
+			rows: [],
+			failed: [{ paymentId: 'counted', message: 'captured_refund_required', refused: true }],
+		});
+		expect(deps.post).not.toHaveBeenCalled();
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
 	it('writes nothing when the ledger has no live legs', async () => {
 		const deps = createDeps();
 

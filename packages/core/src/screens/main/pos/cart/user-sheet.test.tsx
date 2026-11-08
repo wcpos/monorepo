@@ -160,7 +160,7 @@ let mockStoreId = 2;
 let mockStoreTimezone: string | undefined;
 let mockStores = ['store-a'];
 let mockSwitching = false;
-const mockSwitch = jest.fn(async () => {});
+const mockSwitch = jest.fn(async (): Promise<boolean> => true);
 jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => 'stores' }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('./use-switch-store', () => ({
@@ -654,6 +654,21 @@ describe('store band', () => {
 		expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 		expect(screen.getByTestId('user-sheet')).toBeTruthy();
 		expect(screen.queryByTestId('store-switch-overlay')).toBeNull();
+	});
+	it('keeps the sheet open, with no navigation or second toast, when the switch is refused', async () => {
+		// switchStore resolves false for an incomplete target session; AUTH131 has told the cashier.
+		mockSwitch.mockResolvedValueOnce(false);
+		jest.mocked(Toast.show).mockClear();
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} />);
+		fireEvent.click(screen.getByTestId('user-sheet-store-switch'));
+		await act(async () => fireEvent.click(screen.getByTestId('user-sheet-store-store-b')));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+		expect(mockSwitch).toHaveBeenCalledWith(expect.objectContaining({ localID: 'store-b' }));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(Toast.show).not.toHaveBeenCalled();
+		expect(screen.getByTestId('user-sheet')).toBeTruthy();
 	});
 });
 
@@ -1376,7 +1391,7 @@ describe('carrying the drawer before a store switch', () => {
 		mockDrawer.figuresPending = false;
 		mockT = createTestT();
 		mockCarry.mockReset().mockResolvedValue({ closureId: 'c', sessionId: 'target' });
-		mockSwitch.mockReset().mockResolvedValue(undefined);
+		mockSwitch.mockReset().mockResolvedValue(true);
 		mockLogError.mockClear();
 		jest.mocked(Toast.show).mockClear();
 		onOpenChange.mockClear();
@@ -1392,7 +1407,7 @@ describe('carrying the drawer before a store switch', () => {
 	};
 	it('carries once, holds the rows until the switch resolves, then closes the sheet', async () => {
 		let carried!: () => void;
-		let switched!: () => void;
+		let switched!: (value: boolean) => void;
 		mockCarry.mockImplementationOnce(
 			() =>
 				new Promise<void>((resolve) => {
@@ -1401,7 +1416,7 @@ describe('carrying the drawer before a store switch', () => {
 		);
 		mockSwitch.mockImplementationOnce(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<boolean>((resolve) => {
 					switched = resolve;
 				})
 		);
@@ -1428,7 +1443,7 @@ describe('carrying the drawer before a store switch', () => {
 		fireEvent.click(screen.getByTestId('user-sheet-store-store-b'));
 		expect(screen.queryByTestId('switch-confirm')).toBeNull();
 		expect(mockCarry).toHaveBeenCalledTimes(1);
-		await act(async () => switched());
+		await act(async () => switched(true));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 	it('does not switch on a refused carry; closes the confirm and re-enables rows', async () => {

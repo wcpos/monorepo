@@ -36,6 +36,7 @@ const examples: ({ id: string } & Props)[] = [
 	{ id: 'on', name: 'plus', accessibilityLabel: ADD, on: true },
 	{ id: 'loading', name: 'plus', accessibilityLabel: ADD, loading: true },
 	{ id: 'disabled', name: 'plus', accessibilityLabel: ADD, disabled: true },
+	{ id: 'count', name: 'notifications', accessibilityLabel: 'Notifications', count: 3 },
 ];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,

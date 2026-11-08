@@ -1,5 +1,12 @@
-import { type ScaleStep, scaleVariables } from '@wcpos/components/lib/scale';
-
+import {
+	applyScale,
+	CAPTURE_DEVICES,
+	CAPTURE_SCHEMES,
+	CAPTURE_STEPS,
+	captureViewport,
+	ensureSystemTheme,
+	SETTLE_MS,
+} from './capture-matrix';
 import { fetchDescriptors, readAmountMinor } from './checkout-shared';
 import {
 	becomesVisible,
@@ -19,79 +26,15 @@ import type { Page, TestInfo } from '@playwright/test';
 // open orders: captured at the live review (these require dedicated fixtures).
 test.skip(process.env.CAPTURES !== '1', 'Register captures run only with CAPTURES=1');
 
-// A capture shows a settled screen: entrances are over within PANE (280 ms) plus a frame.
-const SETTLE_MS = 350;
-
-/**
- * The store has no scale override, so the step's nine production tokens are scoped to the
- * existing provider (and portals). Applied BEFORE a state is entered: layout the state measures
- * on entry (the strip's width, a sheet's box) must be the scaled layout, not a rescale of it.
- */
-async function applyScale(page: Page, step: ScaleStep): Promise<() => Promise<void>> {
-	const tokens = Object.entries(scaleVariables(step, 'coarse'))
-		.map(([name, value]) => `${name}: ${value}px !important;`)
-		.join('');
-	const style = await page.addStyleTag({ content: `:root, [style*="--spacing:"] { ${tokens} }` });
-	return async () => {
-		await style.evaluate((element) => element.parentNode?.removeChild(element)).catch(() => {});
-	};
-}
-
 async function capture(page: Page, info: TestInfo, state: string, settle: number = SETTLE_MS) {
-	if (settle) await page.waitForTimeout(settle);
-	const combo = info.titlePath.find((title) => /^(tablet|phone)-/.test(title)) ?? 'unknown';
-	const path = info.outputPath(`${combo}--${state}.png`);
-	// Viewport only: a full-page shot under `hasTouch` resets Chromium's touch emulation, so
-	// `(pointer: fine)` flips to true for every later state and the phone renders as a table.
-	await page.screenshot({ path });
-	await info.attach(`register-captures-${state}`, { path, contentType: 'image/png' });
+	await captureViewport(page, info, 'register-captures', state, settle);
 	const header = page.getByTestId('checkout-ledger-header');
 	return (await header.isVisible()) ? (await header.boundingBox())?.y : undefined;
 }
 
-/**
- * The store's theme is persisted on its record (`store.theme`); a shared store may carry an
- * explicit light or dark choice, and only "System" lets the emulated colour scheme decide.
- * Set once per test through the theme settings page and return to the POS.
- */
-async function ensureSystemTheme(page: Page) {
-	// The phone keeps its navigation in the front drawer. Its items count as "visible" while
-	// the closed drawer sits off-screen, so the hamburger decides: when one is on screen the
-	// drawer must be opened first (forced, the bar is stacked per tab), and pressed only after
-	// the slide ends.
-	const openDrawer = async () => {
-		// The POS screen's hamburger is the register bar's; every other screen's is the header's.
-		for (const id of ['pos-drawer-open-button', 'drawer-open-button']) {
-			const hamburger = page.getByTestId(id).locator('visible=true').first();
-			if (await becomesVisible(hamburger, 1_000)) {
-				await hamburger.click({ force: true });
-				await page.waitForTimeout(600);
-				return;
-			}
-		}
-	};
-	const settings = page.getByTestId('drawer-item-settings');
-	await openDrawer();
-	await settings.click();
-	// Wide opens General beside the list; the phone shows the list alone. The Theme entry is
-	// the one element both render.
-	await expect(page.getByTestId('settings-nav-theme')).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId('settings-nav-theme').click();
-	await expect(page.getByTestId('screen-settings-theme')).toBeVisible({ timeout: 15_000 });
-	await page.getByTestId('theme-option-system').click();
-	await page.waitForTimeout(SETTLE_MS);
-	const pos = page.getByTestId('drawer-item-pos');
-	await openDrawer();
-	await pos.click();
-	await expect(page.getByTestId('search-products').first()).toBeVisible({ timeout: 30_000 });
-}
-
-for (const [device, viewport] of Object.entries({
-	tablet: { width: 1024, height: 768 },
-	phone: { width: 390, height: 844 },
-})) {
-	for (const colorScheme of ['light', 'dark'] as const) {
-		for (const step of ['compact', 'regular', 'spacious'] as const) {
+for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
+	for (const colorScheme of CAPTURE_SCHEMES) {
+		for (const step of CAPTURE_STEPS) {
 			test.describe(`${device}-${colorScheme}-${step}`, () => {
 				test.use({ viewport, colorScheme, hasTouch: true });
 				test('reachable register states', async ({ page }, info) => {

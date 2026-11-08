@@ -147,3 +147,106 @@ test('pool capacity: the cap sits below the 253-handle WebKit ceiling, in whole 
 		0
 	);
 });
+// Like the SAHPool: growth takes time, so a second grower can interleave, and a file past
+// capacity is SQLITE_CANTOPEN (#2347).
+const slowPool = (state) => ({
+	calls: [],
+	getFileCount: () => state.files,
+	getCapacity: () => state.capacity,
+	async addCapacity(n) {
+		this.calls.push(n);
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		state.capacity += n;
+		return state.capacity;
+	},
+	claim() {
+		if (state.files >= state.capacity) throw new Error('SQLITE_CANTOPEN');
+		state.files++;
+	},
+});
+const reservations = async (state, maxCapacity = 30) => {
+	const { createPoolReservations } = await import('./sqlite-pool-capacity.mjs');
+	const pool = slowPool(state);
+	const limits = { filesPerDatabase: 2, growthStep: 16, maxCapacity };
+	return { pool, reserve: createPoolReservations(pool, limits).reserve };
+};
+test('pool reservations: concurrent opens that fit only together grow the pool once', async () => {
+	for (const files of [20, 22]) {
+		const state = { files, capacity: 22 };
+		const { pool, reserve } = await reservations(state, 246);
+		await Promise.all([reserve(), reserve()]);
+		assert.deepEqual(pool.calls, [16], `from ${files} files`);
+		for (let i = 0; i < 4; i++) pool.claim();
+	}
+});
+test('pool reservations: concurrent opens near the cap get every slot and a named refusal', async () => {
+	const state = { files: 28, capacity: 28 };
+	const { reserve } = await reservations(state);
+	const results = await Promise.allSettled([reserve(), reserve()]);
+	assert.deepEqual(results.map((result) => result.status).sort(), ['fulfilled', 'rejected']);
+	assert.equal(results.find((result) => result.reason).reason.name, 'SqlitePoolFullError');
+	assert.equal(state.capacity, 30);
+});
+test('pool reservations: claimed then released gives back exactly the rest, once', async () => {
+	const state = { files: 20, capacity: 24 };
+	const { pool, reserve } = await reservations(state, 24);
+	const first = await reserve();
+	pool.claim();
+	first.claimed(1);
+	first.release();
+	first.release();
+	const second = await reserve();
+	await assert.rejects(reserve(), { name: 'SqlitePoolFullError' });
+	second.release();
+	await reserve();
+});
+test('pool reservations: a claimed file is not counted twice near the cap', async () => {
+	const state = { files: 26, capacity: 30 };
+	const { pool, reserve } = await reservations(state);
+	const first = await reserve();
+	pool.claim();
+	first.claimed(1);
+	await reserve();
+	for (let i = 0; i < 3; i++) pool.claim();
+});
+test('pool reservations: a refused open holds nothing and leaves the next one working', async () => {
+	const state = { files: 29, capacity: 30 };
+	const { reserve } = await reservations(state);
+	await assert.rejects(reserve(), { name: 'SqlitePoolFullError' });
+	state.files = 28;
+	await reserve();
+});
+// SQLITE_FCNTL_JOURNAL_POINTER answers the WAL file once the pager has opened it.
+const walOpen = ({ capi, wasm }, db) =>
+	wasm.pstack.call(() => {
+		const pointer = wasm.pstack.allocPtr();
+		wasm.pokePtr(pointer, 0);
+		capi.sqlite3_file_control(db, 'main', capi.SQLITE_FCNTL_JOURNAL_POINTER, pointer);
+		const file = wasm.peekPtr(pointer);
+		return file !== 0 && wasm.peekPtr(file) !== 0;
+	});
+test('oo1 adapter settles an open after its WAL is claimed, on a refused journal mode and on close', async () => {
+	const { getSQLiteBasicsOo1 } = await import('./sqlite-basics-oo1.mjs');
+	const sqlite3 = await sqlite3InitModule();
+	const settled = [];
+	const openDb = (name) => new sqlite3.oo1.DB(name, 'c');
+	const settleOpen = (db) => settled.push({ db, wal: walOpen(sqlite3, db) });
+	const basics = getSQLiteBasicsOo1({ openDb, journalMode: 'WAL', settleOpen });
+	const db = await basics.open('/settle-test.sqlite');
+	await basics.setPragma(db, 'journal_mode', 'WAL');
+	assert.deepEqual(settled, [{ db, wal: true }]);
+	await basics.setPragma(db, 'synchronous', 'normal');
+	assert.equal(settled.length, 1);
+	await basics.close(db);
+	assert.equal(settled.length, 2);
+	const memory = await basics.open(':memory:');
+	await assert.rejects(basics.setPragma(memory, 'journal_mode', 'WAL'), /requested but memory/);
+	assert.equal(settled.at(-1).db, memory);
+	const unused = await basics.open(':memory:');
+	await basics.close(unused);
+	assert.equal(settled.at(-1).db, unused);
+	const plain = getSQLiteBasicsOo1({ openDb, journalMode: 'WAL' });
+	const plainDb = await plain.open('/settle-plain.sqlite');
+	await plain.setPragma(plainDb, 'journal_mode', 'WAL');
+	await plain.close(plainDb);
+});

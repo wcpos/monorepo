@@ -25,13 +25,13 @@
     "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix"
   },
   "peerDependencies": {
-    "expo-file-system": "~58.0.9"
+    "expo-file-system": "~58.0.13"
   },
   "dependencies": {
     "@wcpos/sync-core": "workspace:*",
     "@wcpos/utils": "workspace:*",
     "ajv": "^8.20.0",
-    "expo-sqlite": "~58.0.13",
+    "expo-sqlite": "~58.0.15",
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
     "rxdb": "17.6.0",
@@ -42,8 +42,8 @@
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",
     "@types/jest": "^30.0.0",
-    "@types/lodash": "^4.17.26",
+    "@types/lodash": "^4.17.27",
     "jest": "^30.5.2",
-    "ts-jest": "29.4.12"
+    "ts-jest": "29.4.15"
   }
 }

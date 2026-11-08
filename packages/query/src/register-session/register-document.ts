@@ -87,6 +87,14 @@ export function mintUuid(): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+// The server serves `opened_at_gmt` as `YYYY-MM-DD HH:MM:SS` (UTC, no zone); built by string
+// because `new Date()` reads that form as local time and moves the instant off UTC.
+export function isoGmt(value: string): string {
+	return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+		? `${value.replace(' ', 'T')}.000Z`
+		: value;
+}
+
 export async function readRegister(userDB: UserDatabase): Promise<RegisterDocument | null> {
 	const register = (await userDB.getLocal<RegisterDocument>('register'))?.toJSON(true).data ?? null;
 	currentRegisterId = register?.id ?? null;
@@ -544,6 +552,61 @@ export async function mintClosureNumber(
 	});
 	return number;
 }
+/**
+ * Rewrite this closure's reservation with a refused close's revised figures (#3304), keeping
+ * its number. An applied period comes out of the register's totals and the revised one goes
+ * in, in the same write, so a crash before the row is rewritten leaves the period counted once.
+ */
+export async function reviseClosureReservation(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	closure: DeepReadonly<ClosureRow>
+): Promise<DeepReadonly<ClosureRow>> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	let row: DeepReadonly<ClosureRow> = closure;
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const register = bucket.registers?.[registerId] ?? {};
+		const reservation = register.closure_reservation;
+		if (!reservation || reservation.row.id !== closure.id)
+			throw new Error('closure_reservation_missing');
+		const old = reservation.applied ? reservation.row : null;
+		const sales =
+			toMinor(register.perpetual_sales_total ?? '0', 4) -
+			(old ? toMinor(old.period_sales_total, 4) : 0) +
+			toMinor(closure.period_sales_total, 4);
+		const refunds =
+			toMinor(register.perpetual_refunds_total ?? '0', 4) -
+			(old ? toMinor(old.period_refunds_total, 4) : 0) +
+			toMinor(closure.period_refunds_total, 4);
+		row = {
+			...closure,
+			number: reservation.row.number,
+			number_retried: reservation.row.number_retried ?? false,
+			perpetual_sales_total: fromMinor(sales, 4),
+			perpetual_refunds_total: fromMinor(refunds, 4),
+		};
+		const registers = {
+			...bucket.registers,
+			[registerId]: {
+				...register,
+				closure_reservation: { row, applied: reservation.applied },
+				// An unapplied reservation leaves the totals to `advancePerpetual`, which applies it once.
+				...(reservation.applied
+					? {
+							perpetual_sales_total: row.perpetual_sales_total,
+							perpetual_refunds_total: row.perpetual_refunds_total,
+						}
+					: {}),
+			},
+		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+	return row;
+}
 export async function advancePerpetual(
 	userDB: UserDatabase,
 	siteUuid: string,
@@ -617,6 +680,8 @@ export async function recordLiveSession(
 		if (live) {
 			register.live = {
 				...live,
+				// The directory copies the server's space form: one form in the cache, as in the rows.
+				opened_at_gmt: isoGmt(live.opened_at_gmt),
 				counting_here:
 					live.session_id === register.live?.session_id && live.status === 'counting'
 						? (register.live.counting_here ?? false)

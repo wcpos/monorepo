@@ -1,12 +1,39 @@
 import {
 	hasSaleProvenance,
 	hasSaleTime,
+	PAID_UNITS_META_KEY,
+	paidUnitsMeta,
 	readCompletions,
+	readPaidUnits,
 	saleProvenanceMeta,
 	splitPlanMeta,
 	withMetaReplaced,
 	withSaleProvenance,
 } from './provenance';
+
+it('round-trips per-payment units, including numeric line ids', () => {
+	const allocations = { first: { lemonade: 1, 42: 2 }, second: { lemonade: 2 } };
+	const meta = paidUnitsMeta(allocations);
+	expect(meta).toEqual({ key: PAID_UNITS_META_KEY, value: JSON.stringify(allocations) });
+	expect(readPaidUnits([meta])).toEqual(allocations);
+	expect(readPaidUnits(undefined)).toEqual({});
+	expect(readPaidUnits(null)).toEqual({});
+	expect(readPaidUnits([])).toEqual({});
+});
+
+it.each([
+	null,
+	'not json',
+	'null',
+	'[]',
+	'1',
+	'{"p":null}',
+	'{"p":[]}',
+	'{"p":{"line":"1"}}',
+	'{"p":{"line":null}}',
+])('rejects malformed paid-unit metadata: %p', (value) => {
+	expect(readPaidUnits([{ key: PAID_UNITS_META_KEY, value }])).toEqual({});
+});
 
 it('stamps seconds precision at the device offset, with timezone and optional session', () => {
 	const offset = jest.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-120);

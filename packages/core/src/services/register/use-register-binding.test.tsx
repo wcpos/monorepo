@@ -8,6 +8,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import type { UserDatabase } from '@wcpos/database';
 import {
 	bindRegister,
+	getCurrentBoundRegisterId,
 	readBoundRegister,
 	readRegister,
 	recordLiveSession,
@@ -32,11 +33,13 @@ const logger = jest.mocked(getLogger(['wcpos', 'register']));
 // The real adoption by default; one test makes the local write fail after a good store read.
 const mockAdoptCounters = jest.fn();
 const mockRecordLiveSession = jest.fn();
+const mockBindRegister = jest.fn();
 jest.mock('@wcpos/query/register-session', () => {
 	const actual = jest.requireActual('@wcpos/query/register-session');
 	return {
 		...actual,
 		adoptCounters: (...args: unknown[]) => mockAdoptCounters(...args),
+		bindRegister: (...args: unknown[]) => mockBindRegister(...args),
 		recordLiveSession: (...args: unknown[]) => mockRecordLiveSession(...args),
 	};
 });
@@ -74,6 +77,9 @@ beforeEach(async () => {
 	);
 	mockAdoptCounters.mockImplementation(
 		jest.requireActual('@wcpos/query/register-session').adoptCounters
+	);
+	mockBindRegister.mockImplementation(
+		jest.requireActual('@wcpos/query/register-session').bindRegister
 	);
 });
 afterEach(async () => {
@@ -274,6 +280,31 @@ it('rebinds the site pointer when the store changes', async () => {
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'b', name: 'b' });
 	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: 3 } });
 	expect(mockHttp.get).toHaveBeenLastCalledWith('registers/b');
+});
+
+it("drops store A's late directory answer once the session has moved to store B", async () => {
+	let answerA: ((value: unknown) => void) | undefined;
+	mockHttp.get.mockImplementation((url: string, options?: { params?: { store_id?: number } }) =>
+		url === 'registers' && options?.params?.store_id === 2
+			? new Promise((resolve) => {
+					answerA = resolve;
+				})
+			: Promise.resolve({ data: url === 'registers' ? [rows[1]] : rows[1] })
+	);
+	const view = mount();
+	await waitFor(() => expect(answerA).toBeDefined());
+	mockStoreId = 3;
+	view.rerender();
+	await waitFor(() => expect(view.result.current.registerId).toBe('b'));
+	await act(async () => {
+		answerA!({ data: [rows[0]] });
+		for (let tick = 0; tick < 20; tick++) await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+	expect(mockBindRegister).toHaveBeenCalledTimes(1);
+	expect(mockBindRegister).toHaveBeenCalledWith(mockDB, mockSite, rows[1], 3);
+	// New orders are stamped from the module's current site/store: still store B's register.
+	expect(getCurrentBoundRegisterId()).toBe('b');
+	expect(await readBoundRegister(mockDB, mockSite, 2)).toBeNull();
 });
 
 it('clears the inherited store filter for the default store', async () => {

@@ -2,6 +2,7 @@ import {
 	checkpointInstantMs,
 	type CustomPullCheckpointStore,
 	type CustomPullRepository,
+	mintRemoteId,
 	normalizeCheckpoint,
 	type OrderDocument,
 	orderDocumentId,
@@ -32,7 +33,7 @@ import {
 	parseOrderBrowserSchedulerDescriptor,
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
-import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-collection-fetcher';
+import { chunk, httpGet } from './rx-scheduler-collection-fetcher';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
@@ -1123,11 +1124,20 @@ async function fetchTargetedOrders(
 		}
 
 		const payloads = (await response.json()) as WooOrderPayload[];
-		assertReturnedRequestedIds(
-			{ restLabel: 'order', payloadWooId: (payload: WooOrderPayload) => Number(payload.id) },
-			idsBatch,
-			payloads
-		);
+		// An id Woo omits from `include` is an order the store no longer has: the proxy forwards
+		// `include` untouched, orders carry no POS visibility rule, and the request names no
+		// `status`, so Woo answers with every live status and leaves out a trashed or deleted order.
+		// Removal is the F6 delete channel's own guarded call: a resident with local work (dirty or
+		// a pending mutation) is kept, so a cart the cashier is still building never goes with it.
+		const returnedIds = new Set(payloads.map((payload) => Number(payload.id)));
+		const missingWooIds = idsBatch.filter((id) => !returnedIds.has(id));
+		if (missingWooIds.length > 0) {
+			const missingRemoteIds = missingWooIds.map((id) => mintRemoteId(id, 'order delete id'));
+			await input.repository.removeDeletedOrders?.(
+				missingRemoteIds,
+				await input.pendingMutationOrderIds?.()
+			);
+		}
 		const materialized = payloads.map((payload) => materializedOrderFromWooPayload(payload));
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		// Offline-first: re-read the pending set per batch (not once up front) so a

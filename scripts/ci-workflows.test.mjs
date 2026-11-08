@@ -557,6 +557,35 @@ test('release workflows require green main with an explicit typed override', () 
 	);
 });
 
+test('the web-bundle retention keeps the previous build inventory; a root file the build does not carry is dropped', () => {
+	const publish = readWorkflow('publish-web-bundle.yml');
+	const step = publish.jobs.publish.steps.find(({ name }) =>
+		String(name).startsWith('🚀 Publish to web-bundle')
+	);
+	assert.ok(step, 'publish step');
+	// Both lanes publish to the same branch. Hashed _expo/ files the previous
+	// build emitted (its publish-inventory.txt) stay for edges still serving its
+	// metadata.json; a root file the new build does not carry (another lane's
+	// worker or wasm) must go at once, or the lane tag script refuses the bundle
+	// (1.11.11, 2026-11-06).
+	const run = step.run;
+	const readInventory = run.indexOf('git show "HEAD:$INVENTORY"');
+	assert.match(run, /INVENTORY=build\/publish-inventory\.txt/);
+	const loopStart = run.indexOf('git ls-files build | while read');
+	assert.ok(readInventory > 0 && readInventory < loopStart, 'the previous inventory is read before the loop');
+	const loop = run.slice(loopStart, run.indexOf('\ndone', loopStart));
+	const drop = loop.indexOf('*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;');
+	const listed = loop.indexOf('grep -Fxq -- "${path#build/}" <<< "$previous_inventory"');
+	assert.ok(drop > 0, 'root files this build does not carry are dropped');
+	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the inventory check');
+	assert.ok(listed > drop, 'the drop runs before the inventory check; listed files are kept');
+	// The new inventory comes from the fresh build, after the loop, never into
+	// $BUILD_DIR (the CDN job uploads it), and before git add -A publishes it.
+	const write = run.indexOf('(cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"');
+	assert.ok(write > loopStart + loop.length, 'the inventory is written after the retention loop');
+	assert.ok(write < run.indexOf('git add -A'), 'the inventory is written before git add -A');
+});
+
 test('a main-branch web bundle is gated on its worker RXDB_VERSION against its lane', () => {
 	const publish = readWorkflow('publish-web-bundle.yml');
 	const steps = publish.jobs.publish.steps.map(({ name }) => name);
@@ -570,7 +599,7 @@ test('a main-branch web bundle is gated on its worker RXDB_VERSION against its l
 		'publish',
 		"🧬 Gate the worker's RXDB_VERSION against its bundle lane"
 	);
-	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch == 'main'/);
+	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch != 'next'/);
 	// Staged from THIS workflow revision: an older monorepo_ref has no gate script.
 	assert.ok(steps.indexOf(stage.name) < steps.indexOf('📥 Check out monorepo'));
 	assert.ok(steps.indexOf('🔨 Build web bundle') < steps.indexOf(gate.name));
@@ -1567,10 +1596,17 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 	const gateStep = workflow.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
 	// 'Gallery' is test.yml's aggregator over the read-only shoot and the label-driven
 	// baseline update (roadmap#355): SKIPPED when the gallery path filter did not fire.
-	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	// The 1.11.x lane has no gallery job, and pull_request_target evaluates main's copy
+	// of this file for a PR based on 1.11.x (#3281 timed out on it), so the list is
+	// chosen by the PR's base.
+	const requiredFor = (baseRef) =>
+		evaluateExpression(gateStep.env.MERGE_GATE_REQUIRED_CHECKS, {
+			'github.event.pull_request.base.ref': baseRef,
+		}).split('|');
+	assert.deepEqual(requiredFor('main'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	assert.deepEqual(requiredFor('1.11.x'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
 	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
 });
 
@@ -3796,4 +3832,53 @@ git push origin main next`,
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
+});
+
+test('native E2E trusted-ref guard still works while next does not exist', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'build', '🔒 Validate trusted ref');
+	// Actions runs `run:` under `bash -e`; without it a failed fetch would be ignored.
+	const script = `set -e\n${step.run}`;
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-trusted-ref-no-next-'));
+	const clone = path.join(workspace, 'clone');
+	try {
+		const setup = runShell(
+			`set -e
+git init --bare --initial-branch=main origin.git
+git clone origin.git clone
+cd clone
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main
+git checkout -b stray main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m stray
+git checkout main
+git push origin main`,
+			{ cwd: workspace }
+		);
+		assert.equal(setup.status, 0, setup.stdout + setup.stderr);
+
+		for (const branch of ['main', 'stray']) {
+			const checkout = runShell(`git checkout ${branch}`, { cwd: clone });
+			assert.equal(checkout.status, 0, checkout.stdout + checkout.stderr);
+			const result = runShell(script, { cwd: clone });
+			if (branch === 'stray') {
+				assert.notEqual(result.status, 0, result.stdout + result.stderr);
+				assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+			} else {
+				assert.equal(result.status, 0, `${branch}: ${result.stdout}${result.stderr}`);
+			}
+		}
+
+		const spoof = runShell('git tag origin/next stray && git checkout stray', { cwd: clone });
+		assert.equal(spoof.status, 0, spoof.stdout + spoof.stderr);
+		const result = runShell(script, { cwd: clone });
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the development profile builds Android on the large worker', () => {
+	// The default worker's Gradle daemon dies on the 2.0 tree (#3206).
+	const eas = JSON.parse(readFileSync(path.join(ROOT, 'apps/main/eas.json'), 'utf8'));
+	assert.equal(eas.build.development.android.resourceClass, 'large');
 });

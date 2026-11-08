@@ -18,11 +18,15 @@ const tiles = (children: React.ReactNode): React.ReactNode[] =>
 	);
 
 /** Tiles in fixed columns (§ Design 4): columns in, equal cells out, a short last row padded. */
-type TileGridProps = React.PropsWithChildren<{ columns: number; className?: string }>;
+type TileGridProps = React.PropsWithChildren<{
+	columns: number;
+	className?: string;
+	testID?: string;
+}>;
 
-export function TileGrid({ columns, children, className }: TileGridProps) {
+export function TileGrid({ columns, children, className, testID }: TileGridProps) {
 	return (
-		<View className={cn('w-full gap-2', className)}>
+		<View testID={testID} className={cn('w-full gap-2', className)}>
 			{chunk(tiles(children), columns).map((row, index) => (
 				<View key={index} className="flex-row gap-2">
 					{Array.from({ length: columns }, (_, cell) => (

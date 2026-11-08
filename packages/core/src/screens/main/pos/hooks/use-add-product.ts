@@ -3,6 +3,7 @@ import * as React from 'react';
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { showAddedToCartToast } from './added-to-cart-toast';
@@ -24,11 +25,20 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 type ProductDocument = import('@wcpos/query').ProductPayload;
 
+/** A refused add during a count: one notice, shared id so repeated taps update it in place. */
+export function showCountingNotice(t: ReturnType<typeof useT>) {
+	Toast.show({
+		id: 'pos-counting-refused',
+		type: 'info',
+		title: t('pos_products.counting_items_after_count'),
+	});
+}
+
 /**
  *
  */
 export const useAddProduct = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, readCounting } = useAddItemToOrder();
 	const cartConfig = useCartConfig();
 	/**
 	 * Resolved when the button is pressed, NOT subscribed during render.
@@ -54,6 +64,11 @@ export const useAddProduct = () => {
 			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
+			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
+			if (await readCounting()) {
+				showCountingNotice(t);
+				return false;
+			}
 			const timingStart = process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ? performance.now() : 0;
 			const timing =
 				process.env.EXPO_PUBLIC_WCPOS_E2E === '1'
@@ -173,6 +188,7 @@ export const useAddProduct = () => {
 			}
 		},
 		[
+			readCounting,
 			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,

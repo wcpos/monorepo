@@ -16,6 +16,7 @@ import {
 	SavedFieldProvider,
 	savedKeys,
 	useFormChangeHandler,
+	useMarkFailed,
 	useMarkSaved,
 } from '@wcpos/components/form';
 import { PropertyRow } from '@wcpos/components/property-row';
@@ -52,6 +53,7 @@ export function TaxSettings() {
 
 function TaxSettingsForm() {
 	const markSaved = useMarkSaved();
+	const markFailed = useMarkFailed();
 	const { store, site } = useStoreSession();
 	const t = useT();
 	const lists = useOptionLists();
@@ -117,9 +119,9 @@ function TaxSettingsForm() {
 				),
 				t
 			);
-			if (result && keys.length > 0) markSaved(keys);
+			if (keys.length > 0) (result ? markSaved : markFailed)(keys);
 		},
-		[t, store, markSaved]
+		[t, store, markSaved, markFailed]
 	);
 
 	useFormChangeHandler({

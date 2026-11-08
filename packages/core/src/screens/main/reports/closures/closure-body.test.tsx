@@ -32,6 +32,10 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The web View drops className, so the disc names its tone in the DOM.
+jest.mock('@wcpos/components/tone-disc', () => ({
+	ToneDisc: ({ tone }: { tone: string }) => <span data-testid="tone-disc" data-tone={tone} />,
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -43,7 +47,8 @@ jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front till' }),
 }));
 jest.mock('../../../../services/register-session/use-closure-document-context', () => ({
-	useClosureDocumentContext: () => context,
+	// The viewed store's context: store 3 is a 3-place (fils) store.
+	useClosureDocumentContext: (storeId: number) => (storeId === 3 ? filsContext : context),
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	// The pane's Print closure door mounts a closed PrintSheet: a controlled Dialog that renders nothing while shut.
@@ -79,6 +84,13 @@ const context = {
 	printedAt: '2026-09-11T18:00:00Z',
 	i18n: {},
 	formatMoney: (value: string) => `$${Number(value).toFixed(2)}`,
+};
+// A 3-place store (KWD): one fil is 0.001, which a 2-place count rounds away.
+const filsContext = {
+	...context,
+	store: { name: 'Souq', price_num_decimals: 3 },
+	currency: 'KWD',
+	formatMoney: (value: string) => `KD ${Number(value).toFixed(3)}`,
 };
 const row: ClosureRow = {
 	id: 'c',
@@ -136,10 +148,10 @@ const doc = { receiptData: { closure: row } } as unknown as React.ComponentProps
 
 // Reading the frozen row rather than deriveSettled would show 99 / 100 / short in every case.
 it.each([
-	['103', '−$1.00 short', 'text-bad'],
-	['104', 'Exact', 'text-ok'],
-	['105', '+$1.00 over', 'text-ok'],
-])('shows settled cash and result tone for count %s', (counted, result, tone) => {
+	['103', '−$1.00', 'short', 'text-bad'],
+	['104', '$0.00', 'Exact', 'text-foreground'],
+	['105', '+$1.00', 'over', 'text-ok'],
+])('shows settled cash and result tone for count %s', (counted, result, word, tone) => {
 	const corrections: Correction[] = [
 		{ ...correction, figures: { counted: { cash: counted } } },
 		{ ...correction, id: 2, type: 'late_movement', figures: { cash_delta: '4' } },
@@ -157,8 +169,30 @@ it.each([
 	expect(screen.getByTestId('closure-figure-counted').textContent).toBe(`$${counted}.00`);
 	expect(screen.getByTestId('closure-figure-expected').textContent).toBe('$104.00');
 	expect(screen.getByTestId('closure-figure-result').textContent).toBe(result);
+	expect(screen.getByTestId('closure-figure-result').parentElement?.textContent).toContain(
+		`Variance · ${word}`
+	);
 	expect(screen.getByTestId('closure-figure-result').className).toContain(tone);
 	expect(screen.getByTestId('closure-drawer').textContent).toContain('$104.00');
+});
+
+it('an exact closure leads with Variance · Exact in the default tone', () => {
+	const exact = { ...row, counted: { cash: '100' } };
+	render(
+		<ClosureBody
+			row={exact}
+			doc={doc}
+			{...deriveSettled(exact, [])}
+			corrections={[]}
+			blind={false}
+			context={context}
+		/>
+	);
+	const result = screen.getByTestId('closure-figure-result');
+	expect(result.textContent).toBe('$0.00');
+	expect(result.parentElement?.textContent).toContain('Variance · Exact');
+	expect(result.className).toContain('text-foreground');
+	expect(result.className).toContain('text-amt');
 });
 
 // Blind mode must not reveal the expected drawer balance or variance in its ladder.
@@ -362,4 +396,30 @@ it.each([false, true])('renders closure counters and note only when present: %s'
 		expect(screen.getByText('$20.00')).toBeTruthy();
 		expect(screen.getByText('2')).toBeTruthy();
 	}
+});
+
+// Revert: count the variance in 2 places, so one fil over reads Exact on a 3-place store.
+it('counts the result in the store’s decimals: a fil over on a 3-place store is not exact', () => {
+	const fils = { ...row, store_id: 3, counted: { cash: '100.001' } };
+	render(
+		<ClosureBody
+			row={fils}
+			doc={doc}
+			{...deriveSettled(fils, [])}
+			corrections={[]}
+			blind={false}
+			context={filsContext}
+		/>
+	);
+	expect(screen.getByTestId('closure-figure-result').textContent).toBe('+KD 0.001');
+	expect(screen.getByTestId('closure-figure-result').parentElement?.textContent).toContain(
+		'Variance · over'
+	);
+});
+
+// Revert: the heading counts in 2 places, so one fil short wears the ok disc on a 3-place store.
+it('tones the heading in the store’s decimals: a fil short on a 3-place store is bad', () => {
+	const fils = { ...row, store_id: 3, counted: { cash: '99.999' } };
+	render(<ClosureHeading row={fils} {...deriveSettled(fils, [])} blind={false} />);
+	expect(screen.getByTestId('tone-disc').dataset.tone).toBe('bad');
 });

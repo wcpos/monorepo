@@ -25,11 +25,11 @@ jest.mock('react-native', () => {
 });
 jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('../icon', () => ({
-	Icon: ({ name, className }: { name: string; className?: string }) => {
+	Icon: ({ name, className, count }: { name: string; className?: string; count?: number }) => {
 		const { TextClassContext } = jest.requireActual('../text');
 		const { cn } = jest.requireActual('../lib/utils');
 		const inherited = React.useContext(TextClassContext);
-		return <span data-icon={name} data-classes={cn(inherited, className)} />;
+		return <span data-icon={name} data-count={count} data-classes={cn(inherited, className)} />;
 	},
 }));
 
@@ -118,4 +118,21 @@ it('one ink: element slots inherit selected ink; the chevron stays muted', () =>
 				? 'text-muted-foreground'
 				: 'text-rail-selected-foreground'
 		);
+});
+
+// A count rides the string icon (`Icon count`), measured from the glyph; an element icon paints
+// itself, so it gets none, and the trailing `badge` slot stays separate.
+it('hands count to a string icon only', () => {
+	const { container, unmount } = render(
+		<NavItem size="drawer" icon="health" count={3} label="Store health" chevron />
+	);
+	expect(container.querySelector('[data-icon="health"]')?.getAttribute('data-count')).toBe('3');
+	expect(container.querySelector('[data-icon="chevronRight"]')?.hasAttribute('data-count')).toBe(
+		false
+	);
+	unmount();
+	const own = render(<NavItem icon={<Icon name="health" />} count={3} label="Store health" />);
+	expect(own.container.querySelector('[data-icon="health"]')?.hasAttribute('data-count')).toBe(
+		false
+	);
 });

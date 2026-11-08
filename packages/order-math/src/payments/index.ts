@@ -4,6 +4,9 @@
 
 export {
 	saleProvenanceMeta,
+	PAID_UNITS_META_KEY,
+	paidUnitsMeta,
+	readPaidUnits,
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	hasSaleProvenance,
@@ -42,6 +45,8 @@ export type {
 	MintDevicePaymentInput,
 	MintServerPaymentResult,
 } from './ledger';
+export { captureEntry, serverHardware } from './capture-modes';
+export type { ServerHardware } from './capture-modes';
 export { toMinor, fromMinor } from './money';
 export { roundToIncrement, roundedDue, settlesAtRoundedDue } from './rounding';
 export type { PaymentRounding } from './rounding';
@@ -62,6 +67,7 @@ export {
 export type {
 	PaymentKind,
 	CaptureMode,
+	CaptureModeEntry,
 	OpenEnum,
 	PaymentTransport,
 	PaymentMethodDescriptor,
