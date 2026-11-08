@@ -49,6 +49,7 @@ import {
 	markOrderSaving,
 	resetCheckoutMode,
 	resolveStage,
+	setAllocations,
 	setTenderMethod,
 	setTenderPlan,
 	useOrderCheckoutStage,
@@ -1614,6 +1615,66 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
+		mockPayload.meta_data = [{ key: '_wcpos_paid_units', value: '{"dead":{"l1":1}}' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.extraMeta).toEqual(
+			expect.arrayContaining([{ key: '_wcpos_paid_units', value: null }])
+		);
+	});
+
+	it('keeps the saved units of a live payment when the store is empty (a reopened sale), and exposes them', async () => {
+		mockPayload.meta_data = withLedger(
+			[{ key: '_wcpos_paid_units', value: '{"a":{"l1":1},"dead":{"l2":2}}' }],
+			[payment({ id: 'a', amount: '30.00', tendered: null })]
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.allocations).toEqual({ a: { l1: 1 }, dead: { l2: 2 } });
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		const paidUnits = input.extraMeta?.find(
+			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
+		);
+		expect(JSON.parse(paidUnits?.value as string)).toEqual({ a: { l1: 1 } });
+	});
+
+	it('a picked payment without rounding mints an id but writes no fee', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.paymentId).toEqual(expect.any(String));
+		const feeWrite = mockLocalPatch.mock.calls.find(
+			([arg]: [
+				{ data?: Record<string, unknown>; changes?: (c: unknown) => Record<string, unknown> },
+			]) => 'fee_lines' in (arg?.data ?? arg?.changes?.(mockPayload) ?? {})
+		);
+		expect(feeWrite).toBeUndefined();
+	});
+
+	it('the completing payment journals its own picked units under a row id minted before the write (Greptile on #3400)', async () => {
+		setAllocations(order.uuid, { a: { l1: 1 } });
+		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.paymentId).toEqual(expect.any(String));
+		const paidUnits = input.extraMeta?.find(
+			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
+		);
+		expect(JSON.parse(paidUnits?.value as string)).toEqual({
+			a: { l1: 1 },
+			[input.paymentId as string]: { l2: 2 },
+		});
+	});
+
 	it('does not pick a disabled tile', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
@@ -1965,6 +2026,15 @@ describe('server tender', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.state.readerId).toBe('reader');
 		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
+	});
+	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l1', units: 1 }));
+		await act(async () => result.current.takeTender());
+		const [{ row }] = mockBegin.mock.calls[0];
+		expect(result.current.state.picked).toEqual({});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { l1: 1 } });
 	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));

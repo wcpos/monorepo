@@ -34,6 +34,28 @@ export function saleProvenanceMeta(input: {
 }
 
 export const SPLIT_META_KEY = '_wcpos_split';
+export const PAID_UNITS_META_KEY = '_wcpos_paid_units';
+
+export function paidUnitsMeta(
+	allocations: Record<string, Record<string | number, number>>
+): MetaDataEntry {
+	return { key: PAID_UNITS_META_KEY, value: JSON.stringify(allocations) };
+}
+
+export function readPaidUnits(
+	meta: readonly MetaDataEntry[] | null | undefined
+): Record<string, Record<string, number>> {
+	const value = parseMetaValue(meta?.find(({ key }) => key === PAID_UNITS_META_KEY)?.value);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+	const valid = Object.values(value).every(
+		(lines) =>
+			typeof lines === 'object' &&
+			lines !== null &&
+			!Array.isArray(lines) &&
+			Object.values(lines).every((units) => typeof units === 'number' && Number.isFinite(units))
+	);
+	return valid ? (value as Record<string, Record<string, number>>) : {};
+}
 
 export function splitPlanMeta(input: {
 	kind: 'even' | 'fixed' | 'items';

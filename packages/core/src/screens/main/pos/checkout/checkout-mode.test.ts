@@ -24,6 +24,7 @@ import {
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
+	setAllocations,
 	setTenderMethod,
 	settleHeadlessPrint,
 	subscribeCheckoutMode,
@@ -46,6 +47,26 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 beforeEach(() => {
 	resetCheckoutMode();
 	mockStatus = 'online-website-available';
+});
+
+it('sets, replaces and deletes allocations independently per order', () => {
+	expect(getCheckoutModeSnapshot().allocations.size).toBe(0);
+	setAllocations('a', { first: { lemonade: 1 } });
+	const before = getCheckoutModeSnapshot();
+	setAllocations('a', { second: { lemonade: 2 } });
+	setAllocations('b', { third: { burger: 1 } });
+	expect(before.allocations.get('a')).toEqual({ first: { lemonade: 1 } });
+	expect(getCheckoutModeSnapshot().allocations.get('a')).toEqual({ second: { lemonade: 2 } });
+	setAllocations('a', null);
+	expect(getCheckoutModeSnapshot().allocations.has('a')).toBe(false);
+	expect(getCheckoutModeSnapshot().allocations.get('b')).toEqual({ third: { burger: 1 } });
+});
+
+it.each([leaveCheckout, finishReceipt, resetCheckoutMode])('%p clears allocations', (clear) => {
+	enterCheckout('a');
+	setAllocations('a', { first: { lemonade: 1 } });
+	clear('a');
+	expect(getCheckoutModeSnapshot().allocations.has('a')).toBe(false);
 });
 
 it('defaults to cart and ignores ended legs', () => {

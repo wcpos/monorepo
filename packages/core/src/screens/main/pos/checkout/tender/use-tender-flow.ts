@@ -17,12 +17,15 @@ import {
 	isOfflineDeviceAuthorization,
 	mintDevicePayment,
 	mintServerPayment,
+	PAID_UNITS_META_KEY,
+	paidUnitsMeta,
 	partitionVoidableRows,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
 	readGatewayAttempts,
 	readLedger,
+	readPaidUnits,
 	roundedDue,
 	settlesAtRoundedDue,
 	SPLIT_META_KEY,
@@ -82,9 +85,11 @@ import {
 	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	selectReceipt,
+	setAllocations,
 	setLinesPaidBy,
 	setTenderMethod,
 	setTenderPlan,
+	useAllocations,
 	useTenderMethod,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
@@ -189,6 +194,7 @@ export interface TenderFlow {
 	planMore: boolean;
 	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
 	linesPaidBy: TenderState['linesPaidBy'];
+	allocations: Record<string, Record<TenderLineId, number>>;
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -296,9 +302,15 @@ export function useTenderFlow(
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
+	const storeAllocations = useAllocations(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
+	// The order's saved units (a completed sale reopened, a restart) under this till's live ones.
+	const allocations = React.useMemo(
+		() => ({ ...readPaidUnits(payload.meta_data), ...(storeAllocations ?? {}) }),
+		[payload.meta_data, storeAllocations]
+	);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const [gated, setGated] = React.useState(false);
@@ -777,6 +789,12 @@ export function useTenderFlow(
 			// of a short split must come back with the plan, or that leg wipes the split record.
 			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
+			if (Object.keys(state.picked).length > 0) {
+				setAllocations(order.uuid, {
+					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					[row.id]: state.picked,
+				});
+			}
 		},
 		[order, state, dp, byId, actor, orderContext]
 	);
@@ -976,6 +994,39 @@ export function useTenderFlow(
 				: hasStaleSplit
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
+			// The per-payment allocations, THIS leg's included: a manual leg with picked units mints
+			// its row id before the write, and a terminal leg has `minted.row.id` before its
+			// provenance save, so the completing payment's own units are never missing from
+			// `_wcpos_paid_units` (Greptile on #3400).
+			// Only live rows' allocations are journaled: a failed or cancelled leg's picks stay
+			// in the store until the sale ends but never describe the completed sale.
+			const withPaidUnits = (paymentId: string | undefined) => {
+				const live = new Set(
+					readLedger(order.getLatest().payload.meta_data)
+						.filter(({ status }) => isLivePaymentStatus(status))
+						.map(({ id }) => id)
+				);
+				const meta = order.getLatest().payload.meta_data;
+				const stored = Object.fromEntries(
+					Object.entries({
+						...readPaidUnits(meta),
+						...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					}).filter(([id]) => live.has(id))
+				);
+				const allocations =
+					paymentId && Object.keys(state.picked).length > 0
+						? { ...stored, [paymentId]: state.picked }
+						: stored;
+				if (Object.keys(allocations).length > 0)
+					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
+				// A refused completing attempt can leave its units on the order: cleared like a stale split.
+				const stale = (meta ?? []).some(
+					({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
+				);
+				return stale
+					? [...(splitMeta ?? []), { key: PAID_UNITS_META_KEY, value: null }]
+					: splitMeta;
+			};
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
 			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
@@ -1019,7 +1070,16 @@ export function useTenderFlow(
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
 			});
-			const saveProvenance = async () => {
+			// A terminal leg clears the entry (`tender-started`) long before it settles, so its picks
+			// are frozen under the minted row id here; `tenderRecorded` then finds them in the store.
+			const freezePicks = (paymentId: string) => {
+				if (Object.keys(state.picked).length === 0) return;
+				setAllocations(order.uuid, {
+					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+					[paymentId]: state.picked,
+				});
+			};
+			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 
 				savingProvenance = sale.lane === 'online';
@@ -1027,7 +1087,7 @@ export function useTenderFlow(
 					order,
 					sessionId,
 					online: savingProvenance,
-					extraMeta: splitMeta,
+					extraMeta: withPaidUnits(paymentId),
 				});
 				savingProvenance = false;
 			};
@@ -1146,7 +1206,8 @@ export function useTenderFlow(
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
-				await saveProvenance();
+				await saveProvenance(minted.row.id);
+				freezePicks(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1197,7 +1258,8 @@ export function useTenderFlow(
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
-				await saveProvenance();
+				await saveProvenance(minted.row.id);
+				freezePicks(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1281,8 +1343,12 @@ export function useTenderFlow(
 
 			if (!sale.lane) throw new Error('press_lane_missing');
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
-			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
-			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
+			const paymentId =
+				roundingMinor !== 0 || Object.keys(state.picked).length > 0 ? uuidv4() : undefined;
+			const extraMeta = withPaidUnits(paymentId);
+			// The id is also minted for picked units; only a rounded leg carries a fee.
+			if (roundingMinor !== 0 && paymentId)
+				await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
 			const unround = () => sweepDeadRounding(storeDB, target, dp, patchFees);
 			// The slot's record has a server id here: the engine resident, never a temporary order.
@@ -1291,7 +1357,7 @@ export function useTenderFlow(
 				tendered,
 				lane: sale.lane,
 				...(paymentId ? { paymentId } : {}),
-				...(splitMeta ? { extraMeta: splitMeta } : {}),
+				...(extraMeta ? { extraMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
 			}).catch(async (error: unknown) => {
@@ -1818,6 +1884,7 @@ export function useTenderFlow(
 			planMore,
 			lines,
 			linesPaidBy: state.linesPaidBy,
+			allocations,
 			rows,
 			liveRows,
 			retainedRows,
@@ -1854,6 +1921,7 @@ export function useTenderFlow(
 		}),
 		[
 			plan,
+			allocations,
 			figures,
 			planLabel,
 			planMore,
