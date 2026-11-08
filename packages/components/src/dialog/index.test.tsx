@@ -724,7 +724,8 @@ it('14. a bottom sheet pads the bottom inset the shell leaves (native answer: li
 				</DialogContent>
 			</Dialog>
 		);
-		expect(inset).toHaveBeenLastCalledWith(16);
+		// 4 spacing units: the `py-4` the inset style stands in for, so Compact/Spacious still scale it.
+		expect(inset).toHaveBeenLastCalledWith(4);
 		expect(screen.getByTestId('d')).toHaveStyle({ paddingBottom: '50px' });
 		expect(screen.getByTestId('d')).not.toHaveClass('max-h-[92%]');
 	} finally {

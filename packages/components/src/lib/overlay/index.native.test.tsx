@@ -39,6 +39,9 @@ jest.mock('react-native', () => {
 		},
 	};
 });
+// The spacing unit: Regular's 4 unless a test steps it (Spacious 5).
+let mockSpacingUnit = 4;
+jest.mock('../use-spacing-unit', () => ({ useSpacingUnit: () => mockSpacingUnit }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
@@ -244,7 +247,7 @@ it.each([
 	(presentation, expected) => {
 		const seen: unknown[] = [];
 		function InsetProbe() {
-			seen.push(useSheetInset(16));
+			seen.push(useSheetInset(4));
 			return null;
 		}
 		render(
@@ -276,12 +279,32 @@ it.each(['left', 'right', 'page', 'center', 'bottom'] as OverlayPresentation[])(
 	}
 );
 
+it('scales the panel padding with the spacing step, on top of the inset (Spacious)', () => {
+	mockSpacingUnit = 5;
+	try {
+		const seen: ReturnType<typeof useSheetInset>[] = [];
+		function Probe() {
+			seen.push(useSheetInset(4));
+			return null;
+		}
+		render(
+			<OverlayShell presentation="right" open Scrim={Pressable}>
+				<Probe />
+			</OverlayShell>
+		);
+		// `py-4` would be 20 on Spacious; the inset style stands in for it, so it must be 20 too.
+		expect(seen.at(-1)).toEqual({ paddingTop: 20 + 20, paddingBottom: 34 + 20, paddingRight: 12 });
+	} finally {
+		mockSpacingUnit = 4;
+	}
+});
+
 it.each(['left', 'right', 'page'] as const)(
 	'owes no top inset for a %s panel under a host surface that pads the status bar',
 	(presentation) => {
 		const seen: { top: number; inset: ReturnType<typeof useSheetInset> }[] = [];
 		function Probe() {
-			seen.push({ top: useOverlay().insetTop, inset: useSheetInset(16) });
+			seen.push({ top: useOverlay().insetTop, inset: useSheetInset(4) });
 			return null;
 		}
 		render(

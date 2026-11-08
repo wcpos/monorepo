@@ -102,7 +102,8 @@ it('is a blocking confirmation whose phone sheet pads the bottom inset', () => {
 	try {
 		render(<Confirm phone />);
 		expect(shell).toHaveBeenLastCalledWith(expect.objectContaining({ blocking: true }), undefined);
-		expect(inset).toHaveBeenLastCalledWith(16, 'bottom');
+		// 4 spacing units: the `py-4` the inset style stands in for, so Compact/Spacious still scale it.
+		expect(inset).toHaveBeenLastCalledWith(4, 'bottom');
 		expect(content).toHaveBeenLastCalledWith(
 			expect.objectContaining({ style: [{ paddingBottom: 50 }, undefined] }),
 			undefined

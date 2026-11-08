@@ -77,6 +77,8 @@ module.exports = {
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
 		'^expo-haptics$': '<rootDir>/jest/__mocks__/expo-haptics.js',
 		'^react-native-reanimated$': '<rootDir>/jest/__mocks__/react-native-reanimated.js',
+		// ESM only; see the mock. Every overlay imports it through `@wcpos/components` (#3410).
+		'^uniwind$': '<rootDir>/jest/__mocks__/uniwind.js',
 		'^expo-modules-core$': '<rootDir>/jest/__mocks__/expo-modules-core.js',
 		'^react-native$': 'react-native-web',
 		'^react-native-svg$': '<rootDir>/jest/__mocks__/react-native-svg.js',

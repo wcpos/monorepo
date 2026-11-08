@@ -213,7 +213,7 @@ it.each(['left', 'right', 'page'] as const)(
 	'pads nothing on web for a %s panel',
 	(presentation) => {
 		function InsetProbe() {
-			return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(16)) } }} />;
+			return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(4)) } }} />;
 		}
 		render(
 			<OverlayShell presentation={presentation} open Scrim={Pressable} testID="w">
@@ -227,7 +227,7 @@ it.each(['left', 'right', 'page'] as const)(
 
 it('lets a blocking scrim keep its clicks on web, where the panel sits inside it', () => {
 	function InsetProbe() {
-		return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(16)) } }} />;
+		return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(4)) } }} />;
 	}
 	render(
 		<OverlayShell presentation="bottom" open Scrim={Pressable} blocking testID="b">

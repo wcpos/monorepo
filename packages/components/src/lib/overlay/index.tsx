@@ -26,6 +26,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEdgeInsets, useTitleBarStrip } from '../../edge-surface';
+import { useSpacingUnit } from '../use-spacing-unit';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
 import { TextClassContext } from '../../text/context';
 import { useIsPhone } from '../device';
@@ -135,15 +136,17 @@ type PanelInset = Partial<
  * the shell leaves those strips unpadded so the scrim never shows as a band beside the panel.
  * A phone sheet pads the bottom (owner, 2026-10-13); a side panel and the phone page pad the top
  * and bottom and the side edges they touch (owner, iPad landscape, 2026-11-08: grey bands above
- * and below the cart-settings panel). `padding` is the panel's own top and bottom padding on top
- * of the inset. A panel that renders the shell itself (the alert) is outside the shell's context
- * and names its presentation.
+ * and below the cart-settings panel). `units` is the panel's own top and bottom padding on top of
+ * the inset, in spacing units, so it follows Compact/Regular/Spacious the way the `py-4` class it
+ * stands in for does (a style wins over the class). A panel that renders the shell itself (the
+ * alert) is outside the shell's context and names its presentation.
  */
 export function useSheetInset(
-	padding: number,
+	units: number,
 	presentation?: OverlayPresentation
 ): PanelInset | undefined {
 	const insets = useSafeAreaInsets();
+	const padding = units * useSpacingUnit();
 	const context = React.useContext(OverlayContext);
 	const current = presentation ?? context?.presentation;
 	if (isWeb) return undefined;
@@ -265,7 +268,7 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
-	const inset = useSheetInset(8);
+	const inset = useSheetInset(2);
 	const setNode = React.useCallback(
 		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);

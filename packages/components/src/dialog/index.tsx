@@ -160,8 +160,8 @@ function DialogPanel(allProps: DialogContentProps) {
 		onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>
 	);
 	const { open } = DialogPrimitive.useRootContext();
-	// The sheet and a native full-height panel paint their own insets; 16 keeps the `py-4` the class gives.
-	const inset = useSheetInset(16);
+	// The sheet and a native full-height panel paint their own insets; 4 units keep the `py-4` the class gives.
+	const inset = useSheetInset(4);
 	// A native full-height panel pads the status bar inside its card, so its close (an absolute
 	// child, placed from the card's edge, not its padding) drops with the title by the same inset,
 	// and in from a padded right edge (owner, iPad landscape, 2026-11-08).
