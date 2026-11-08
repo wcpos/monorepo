@@ -125,11 +125,15 @@ export function SegmentedControl({
 					)}
 				>
 					<TextClassContext.Provider
-						value={segment.value === value ? 'text-selected-foreground' : 'text-muted-foreground'}
+						// One weight in both states: selection never changes weight (2026-10-30). The weight
+						// rides the context with the ink, so the label's own literal is only its size.
+						value={cn(
+							'font-medium',
+							segment.value === value ? 'text-selected-foreground' : 'text-muted-foreground'
+						)}
 					>
 						{segment.icon && <Icon name={segment.icon} />}
-						{/* One weight in both states: selection never changes weight (2026-10-30). */}
-						<Text className="shrink text-center text-base font-medium">{segment.label}</Text>
+						<Text className="shrink text-center text-base">{segment.label}</Text>
 					</TextClassContext.Provider>
 				</Pressable>
 			))}
