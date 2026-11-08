@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { filter } from 'rxjs';
-import { format } from 'date-fns/format';
 import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
@@ -26,9 +25,9 @@ import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useQueryHandleFields, useQueryState, useQueryStateActions } from '../../../../query';
+import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import { stores as storeRows, tenders } from '../cards/aggregate';
@@ -44,16 +43,11 @@ import {
 import { calculateTotals } from '../report/utils';
 import { summarySpec } from '../report/summary';
 import { useReportCashier } from '../report/use-report-cashier';
-import { buildReportDocument } from '../panels/document';
-import { usePrintWaiting } from '../panels/use-print-waiting';
-import { periodLabel } from '../date-button';
+import { useReportPrint } from '../panels/use-report-print';
 import {
 	useRegisterNames,
 	useRegisterNamesReady,
 } from '../../../../services/register/use-register-names';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
@@ -240,20 +234,11 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
-	const { dateRange, timezone } = useReportsPeriod();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
-	const { presets } = useStoreDay(storeId),
-		{ formatDate } = useLocalDate();
-	const scope = {
-		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
-		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
-	};
-	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
+	const { store: storeFilter } = useQueryState<'orders'>().filters;
 	const names = useRegisterNames(storeId),
 		namesLoaded = useRegisterNamesReady(storeId);
-	const binding = useRegisterBinding();
 	const { site, wpCredentials } = useStoreSession();
 	const storesSource = React.useMemo(
 		() =>
@@ -268,13 +253,6 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const storeNames = Object.fromEntries(
 		(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
 	);
-	const register = allStores
-		? t('reports.all_stores')
-		: registerId
-			? names[registerId] ||
-				(binding.registerId === registerId ? binding.registerName : '') ||
-				t('common.unknown')
-			: t('reports.all_registers');
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
 	const source = React.useMemo(
@@ -282,8 +260,6 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		[site]
 	);
 	const directory = useObservableState(source);
-	const [generatedAt] = React.useState(() => new Date().toISOString());
-	const [printError, setPrintError] = React.useState('');
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
@@ -303,44 +279,14 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		t,
 		formats
 	);
-	const context = useClosureDocumentContext(storeId);
-	const document = buildReportDocument(
+	const { doc, waiting, print, error, scopeLine } = useReportPrint({
+		key: 'summary',
+		title: t('reports.summary_title'),
 		spec,
-		spec.keys.map((key, i) => ({
-			key,
-			label: spec.head[i],
-			type: spec.types[i],
-			align: spec.align[i],
-		})),
-		{
-			key: 'summary',
-			title: t('reports.summary_title'),
-			label: [
-				t('reports.panel_scope', { period, register }),
-				cashier.name,
-				statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing'),
-			].join(' · '),
-			storeId: storeId ?? 0,
-			registerId: registerId ?? '',
-			registerName: register,
-			from: dateRange.start.toISOString(),
-			to: dateRange.end.toISOString(),
-			generatedAt,
-		},
-		context
-	);
-	const doc = useReceiptDocument({
-		autoPrintAllowed: false,
-		templateType: 'report',
-		storeId,
-		localReport: document,
-	});
-	const { handle: salesHandle, refundsHandle } = useReportsHandles();
-	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
-	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
-	const { waiting, label } = usePrintWaiting({
-		doc,
-		storeReady: !!formats.store,
+		scope: [
+			cashier.name,
+			statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing'),
+		],
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
@@ -350,18 +296,8 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				!online ||
 				totals.registerArray.length < 2 ||
 				totals.registerArray.every(({ registerId }) => !!names[registerId])),
-		salesLane: sales.ready && !!sales.laneProgress,
-		refundsLane: refunds.ready && !!refunds.laneProgress,
 		needsRefunds: true,
 	});
-	const print = async () => {
-		setPrintError('');
-		try {
-			if ((await doc.print()) === false) setPrintError(t('reports.print_failed'));
-		} catch {
-			setPrintError(t('reports.print_failed'));
-		}
-	};
 	return (
 		<View className="items-end gap-2">
 			{phone ? (
@@ -387,10 +323,10 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				onOpenChange={setSheetOpen}
 				doc={doc}
 				title={t('reports.summary_title')}
-				description={t('reports.panel_scope', { period, register })}
+				description={scopeLine}
 				printLabel={t('reports.print_summary')}
-				waiting={waiting ? label : null}
-				error={printError || doc.documentError?.message || null}
+				waiting={waiting}
+				error={error}
 				onPrint={print}
 				testID="hero-print-sheet"
 			/>

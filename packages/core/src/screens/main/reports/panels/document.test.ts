@@ -60,12 +60,6 @@ const context = {
 function document(id: DetailId, spec: PanelSpec = panelSpec(id, inputs)) {
 	return buildReportDocument(
 		spec,
-		spec.keys.map((key, i) => ({
-			key,
-			label: spec.head[i],
-			type: spec.types[i],
-			align: spec.align[i],
-		})),
 		{
 			key: id,
 			title: 'Sales',
@@ -80,6 +74,28 @@ function document(id: DetailId, spec: PanelSpec = panelSpec(id, inputs)) {
 		context
 	);
 }
+// The columns are the spec's own: a caller cannot hand the document columns its cells disagree with.
+it('a spec gives this document: its columns, rows and totals', () => {
+	const { report } = document('payments');
+	expect(report.columns).toEqual([
+		{ key: 'method', label: 'Method', type: 'text', align: 'left', is_first: true },
+		{ key: 'orders', label: 'Orders', type: 'number', align: 'right', is_first: false },
+		{ key: 'amount', label: 'Amount', type: 'money', align: 'right', is_first: false },
+		{ key: 'share', label: 'Share', type: 'number', align: 'right', is_first: false },
+	]);
+	expect(report.rows.map((row) => row.cells.map((cell) => cell.formatted))).toEqual([
+		['Cash', '1', '£10.00', '100%'],
+	]);
+	expect(report.totals.cells.map((cell) => cell.formatted)).toEqual(['Total', '1', '£10.00', '']);
+	expect(report).toMatchObject({
+		key: 'payments',
+		title: 'Sales',
+		count: 1,
+		has_rows: true,
+		has_groups: false,
+	});
+	expect(report.scope).toMatchObject({ label: 'Today · Front', store_id: 1, register_id: 'front' });
+});
 // Wrong wire types, omitted totals, drifting cell order or client-local dates invalidate reports.
 it("builds a document the plugin's validator accepts: column_count equals the columns and every cells array lists the column keys in order", () => {
 	for (const id of ['payments', 'orders'] as const) {
