@@ -12,6 +12,7 @@ import { Toast } from '@wcpos/components/toast';
 import {
 	readAwaitingCustomer,
 	readLedger,
+	readPaidUnits,
 	withAwaitingCustomer,
 	withGatewayAttempt,
 	withLedger,
@@ -1760,6 +1761,69 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	it.each([false, true])(
+		'journals a partial leg once even when recorded again (%s)',
+		async (repeat) => {
+			const row = payment();
+			setAllocations(order.uuid, { [row.id]: { line: 1 } });
+			mockRecordManualPayment.mockImplementationOnce(async () => {
+				mockPayload.meta_data = withLedger(mockPayload.meta_data, [row]);
+				return { ...recorded, row };
+			});
+			mockLocalPatch.mockImplementationOnce(async ({ data }) => {
+				mockPayload.meta_data = data.meta_data;
+				return { document: order };
+			});
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.takeTender());
+			if (repeat) await act(async () => result.current.takeTender());
+
+			expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+			const [{ document, data }] = mockLocalPatch.mock.calls[0];
+			expect(document).toBe(order);
+			expect(readPaidUnits(data.meta_data)).toEqual({ [row.id]: { line: 1 } });
+			expect(readLedger(data.meta_data)).toEqual([row]);
+		}
+	);
+
+	it('does not stamp paid units again when the recorded leg completes the sale', async () => {
+		const row = payment({ amount: '92.95' });
+		setAllocations(order.uuid, { [row.id]: { line: 1 } });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [row]);
+			return { ...recorded, row };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.takeTender());
+
+		expect(mockCompleteOrderFlow).toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
+
+	it('a failed paid-units stamp does not fail the recorded partial payment', async () => {
+		const row = payment();
+		setAllocations(order.uuid, { [row.id]: { line: 1 } });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [row]);
+			return { ...recorded, row };
+		});
+		mockLocalPatch.mockRejectedValueOnce(new Error('local write failed'));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {
+			await expect(result.current.takeTender()).resolves.toBeUndefined();
+		});
+
+		expect(mockWarn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ error: 'local write failed' }),
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(readLedger(mockPayload.meta_data)).toEqual([row]);
+		expect(result.current.state.entryMinor).toBe(4295);
+	});
+
 	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
 		mockPayload.meta_data = [{ key: '_wcpos_paid_units', value: '{"dead":{"l1":1}}' }];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -1874,9 +1938,16 @@ describe('useTenderFlow', () => {
 	it('cancelOnePayment voids only the named payment and frees its units, after the cancel question', async () => {
 		const kept = payment({ id: 'a', amount: '23.00', method_id: 'pos_card', kind: 'card' });
 		const cancelled = payment({ id: 'b', amount: '15.00', tendered: null });
-		mockPayload.meta_data = withLedger([], [kept, cancelled]);
+		mockPayload.meta_data = withLedger(
+			[{ id: 17, key: '_wcpos_paid_units', value: '{"a":{"l1":1},"b":{"l2":1}}' }],
+			[kept, cancelled]
+		);
 		setAllocations(order.uuid, { a: { l1: 1 }, b: { l2: 1 } });
-		mockVoidPayments.mockResolvedValue({ rows: [{ ...cancelled, status: 'voided' }], failed: [] });
+		mockVoidPayments.mockImplementationOnce(async () => {
+			const voided = { ...cancelled, status: 'voided' as const };
+			mockPayload.meta_data = withLedger(mockPayload.meta_data, [kept, voided]);
+			return { rows: [voided], failed: [] };
+		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
 		await act(async () => result.current.cancelOnePayment('b'));
@@ -1891,6 +1962,14 @@ describe('useTenderFlow', () => {
 		expect(mockVoidPayments).toHaveBeenCalledTimes(1);
 		expect(mockVoidPayments).toHaveBeenCalledWith(order, ['b']);
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ a: { l1: 1 } });
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		const [{ data }] = mockLocalPatch.mock.calls[0];
+		expect(readPaidUnits(data.meta_data)).toEqual({ a: { l1: 1 } });
+		expect(data.meta_data).toContainEqual({
+			id: 17,
+			key: '_wcpos_paid_units',
+			value: '{"a":{"l1":1}}',
+		});
 		expect(mockInfo).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
@@ -1903,6 +1982,28 @@ describe('useTenderFlow', () => {
 			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
 		).toHaveLength(0);
 		expect(mockDismissTo).not.toHaveBeenCalled();
+	});
+
+	it('cancelling the last allocated leg clears saved paid units', async () => {
+		const row = payment();
+		mockPayload.meta_data = withLedger(
+			[{ id: 17, key: '_wcpos_paid_units', value: '{"payment-1":{"line":1}}' }],
+			[row]
+		);
+		mockVoidPayments.mockImplementationOnce(async () => {
+			const voided = { ...row, status: 'voided' as const };
+			mockPayload.meta_data = withLedger(mockPayload.meta_data, [voided]);
+			return { rows: [voided], failed: [] };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.cancelOnePayment(row.id));
+
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			id: 17,
+			key: '_wcpos_paid_units',
+			value: null,
+		});
 	});
 
 	it('cancelOnePayment re-plans the next payment over what is left (Greptile on #3405)', async () => {

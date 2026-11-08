@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
@@ -31,6 +32,7 @@ import {
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	toMinor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import {
 	type EngineRecord,
@@ -865,6 +867,58 @@ export function useTenderFlow(
 		[payload.id, order.uuid]
 	);
 
+	/**
+	 * The allocations to journal: the order's `_wcpos_paid_units` under the till's, for the rows
+	 * of `ledger` that are live. The caller passes the ledger it knows to be current: the stored
+	 * meta can lag the row that just landed or the void that just answered.
+	 */
+	const journaledPaidUnits = React.useCallback(
+		(ledger: PaymentRow[], paymentId?: string, legUnits?: Record<string, number> | null) => {
+			const meta = order.getLatest().payload.meta_data;
+			const live = new Set(
+				ledger.filter(({ status }) => isLivePaymentStatus(status)).map(({ id }) => id)
+			);
+			const stored = Object.fromEntries(
+				Object.entries({
+					...readPaidUnits(meta),
+					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
+				}).filter(([id]) => live.has(id))
+			);
+			// The completing leg can be journaled before its row exists in the ledger.
+			return paymentId && legUnits ? { ...stored, [paymentId]: legUnits } : stored;
+		},
+		[order]
+	);
+
+	const stampPaidUnits = React.useCallback(
+		async (ledger: PaymentRow[]) => {
+			try {
+				const meta = order.getLatest().payload.meta_data;
+				const allocations = journaledPaidUnits(ledger);
+				const hasUnits = Object.keys(allocations).length > 0;
+				if (
+					hasUnits
+						? isEqual(allocations, readPaidUnits(meta))
+						: !(meta ?? []).some(({ key, value }) => key === PAID_UNITS_META_KEY && value !== null)
+				)
+					return;
+				const patched = await ctx.stampCompletion(
+					order,
+					withMetaReplaced(meta, [
+						hasUnits ? paidUnitsMeta(allocations) : { key: PAID_UNITS_META_KEY, value: null },
+					])
+				);
+				if (!patched) throw new Error('paid_units_save_failed');
+			} catch (error) {
+				// Best effort: a local meta write must never fail a sale; completion journals again.
+				logger.warn('Failed to journal paid units', {
+					context: { ...orderContext, error: getErrorMessage(error) },
+				});
+			}
+		},
+		[ctx, order, orderContext, journaledPaidUnits]
+	);
+
 	const tenderRecorded = React.useCallback(
 		(row: PaymentRow, via?: 'online' | 'offline') => {
 			if (via) {
@@ -907,8 +961,11 @@ export function useTenderFlow(
 			// A leg's allocation is frozen at the press (`freezePicks`, every manual and terminal leg);
 			// nothing is read from the picks when it settles, or units picked while a terminal
 			// payment waited would land on it (Greptile and Codex on #3412). A gateway leg carries none.
+			// Journaled on the order after every partial leg (the completing leg's provenance write
+			// carries them), so a reload or another till mid-split keeps the paid marks.
+			if (action.balanceMinor > 0) void stampPaidUnits(latest);
 		},
-		[order, state, dp, byId, actor, orderContext, reducerDispatch]
+		[order, state, dp, byId, actor, orderContext, reducerDispatch, stampPaidUnits]
 	);
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
@@ -1118,19 +1175,8 @@ export function useTenderFlow(
 			// Only live rows' allocations are journaled: a failed or cancelled leg's picks stay
 			// in the store until the sale ends but never describe the completed sale.
 			const withPaidUnits = (paymentId: string | undefined) => {
-				const live = new Set(
-					readLedger(order.getLatest().payload.meta_data)
-						.filter(({ status }) => isLivePaymentStatus(status))
-						.map(({ id }) => id)
-				);
 				const meta = order.getLatest().payload.meta_data;
-				const stored = Object.fromEntries(
-					Object.entries({
-						...readPaidUnits(meta),
-						...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
-					}).filter(([id]) => live.has(id))
-				);
-				const allocations = paymentId && legUnits ? { ...stored, [paymentId]: legUnits } : stored;
+				const allocations = journaledPaidUnits(readLedger(meta), paymentId, legUnits);
 				if (Object.keys(allocations).length > 0)
 					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
 				// A refused completing attempt can leave its units on the order: cleared like a stale split.
@@ -1608,6 +1654,7 @@ export function useTenderFlow(
 		bindingStatus,
 		state.plan,
 		legUnits,
+		journaledPaidUnits,
 		fixedAmount,
 		rowsSinceFrom,
 		state.readerId,
@@ -1987,13 +2034,14 @@ export function useTenderFlow(
 		const { [paymentId]: _dropped, ...kept } =
 			getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
 		setAllocations(order.uuid, kept);
+		const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
+			candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
+		);
+		await stampPaidUnits(latest);
 		// The next payment is re-planned over what is left: an untouched entry follows the
 		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405); an
 		// amount the cashier typed stays theirs (CodeRabbit).
 		if (!state.entryDirty) {
-			const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
-				candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
-			);
 			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
 			reducerDispatch({
 				type: 'tender-recorded',
