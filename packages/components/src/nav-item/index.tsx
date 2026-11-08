@@ -91,7 +91,8 @@ export function NavItem({
 						{label}
 					</Text>
 				) : null}
-				{badge ? <View className="relative h-5 w-5">{badge}</View> : null}
+				{/* Inline in the row: the 20 box here was the anchor of a hand-placed badge, gone with it. */}
+				{badge}
 				{chevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
 			</TextClassContext.Provider>
 		</PressableSurface>
