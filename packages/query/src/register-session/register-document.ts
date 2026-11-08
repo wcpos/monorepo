@@ -724,12 +724,12 @@ export function recordLiveSessionFrom(
 		| 'sync_status'
 		| 'server_status'
 	> & { status: LiveSession['status'] },
-	signedIn: { id: string; name: string } | null
+	signedIn: { id: string; name: string }
 ) {
 	const held = readLiveSession(siteUuid, row.register_id)?.opened_by;
 	const opener = (id: number) => ({
 		id,
-		name: held?.id === id ? held.name : signedIn && String(id) === signedIn.id ? signedIn.name : '',
+		name: held?.id === id ? held.name : String(id) === signedIn.id ? signedIn.name : '',
 	});
 	return recordLiveSession(userDB, siteUuid, row.register_id, {
 		session_id: row.id,
