@@ -5991,6 +5991,22 @@ describe('offline manual tenders', () => {
 		});
 	});
 
+	// A re-opened paid sale takes no money: no offline confirm, the close refuses offline itself.
+	it('a zero-balance press with a settles-later tile is never asked to confirm offline', async () => {
+		const paid = payment({ id: 'row-a', amount: '10.00', tendered: null });
+		mockPayload = { id: 42, total: '10.00', meta_data: withLedger([], [paid]) };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.balanceMinor).toBe(0);
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			settlesLater: true,
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockConfirm).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+
 	it('the cashier declines the offline confirmation → nothing journaled', async () => {
 		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));

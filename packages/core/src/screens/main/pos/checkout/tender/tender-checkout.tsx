@@ -106,7 +106,10 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
+		// press completes it (zero-balance close). An unanswered attempt keeps the pane (it is cleared first),
+		// and so does a terminal leg still on screen (a live leg is never hidden behind another view).
+		if (flow.balanceMinor === 0 && !flow.unansweredAttempt && !flow.terminalLeg) {
 			return (
 				<View className="p-4">
 					<Button
