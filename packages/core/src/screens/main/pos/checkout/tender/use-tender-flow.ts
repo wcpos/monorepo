@@ -1057,7 +1057,12 @@ export function useTenderFlow(
 			return;
 		// The gate is held across the offline confirmation: a second press cannot open a second prompt.
 		// Only a tile that settles later asks (rule 1); a disabled one is refused below, with its reason.
-		if (tiles.find((tile) => tile.method.id === method?.id)?.settlesLater && method) {
+		// A zero-balance press takes no money: it goes straight to the close, which refuses offline itself.
+		if (
+			balanceMinor !== 0 &&
+			tiles.find((tile) => tile.method.id === method?.id)?.settlesLater &&
+			method
+		) {
 			// The amount that will be RECORDED: cash rounding's, not the keyed entry.
 			const take = {
 				amount: format(Number(fromMinor(entryAppliedMinor, dp))),
