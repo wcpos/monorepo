@@ -890,10 +890,20 @@ export function useTenderFlow(
 		[order]
 	);
 
-	const stampPaidUnits = React.useCallback(
-		async (ledger: PaymentRow[]) => {
+	/**
+	 * Stamps run one after another and read the order at write time, never at call time: a
+	 * partial leg's stamp that a later leg or cancel overtook would otherwise put its older
+	 * units back (Greptile on #3421). `rows` are the caller's newer facts (the row that just
+	 * landed, the void that just answered), laid over the ledger as the order has it.
+	 */
+	const writePaidUnits = React.useCallback(
+		async (rows: PaymentRow[]) => {
 			try {
 				const meta = order.getLatest().payload.meta_data;
+				const ledger = readLedger(meta).map(
+					(row) => rows.find((candidate) => candidate.id === row.id) ?? row
+				);
+				for (const row of rows) if (!ledger.some(({ id }) => id === row.id)) ledger.push(row);
 				const allocations = journaledPaidUnits(ledger);
 				const hasUnits = Object.keys(allocations).length > 0;
 				if (
@@ -917,6 +927,15 @@ export function useTenderFlow(
 			}
 		},
 		[ctx, order, orderContext, journaledPaidUnits]
+	);
+	const stampChain = React.useRef<Promise<void>>(Promise.resolve());
+	const stampPaidUnits = React.useCallback(
+		(rows: PaymentRow[]) => {
+			const next = stampChain.current.then(() => writePaidUnits(rows));
+			stampChain.current = next;
+			return next;
+		},
+		[writePaidUnits]
 	);
 
 	const tenderRecorded = React.useCallback(
@@ -1241,6 +1260,8 @@ export function useTenderFlow(
 			};
 			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
+				// A stamp the last leg left in flight lands before this leg's own provenance write.
+				await stampChain.current;
 
 				savingProvenance = sale.lane === 'online';
 				await persistSaleProvenance(ctx, {
@@ -1504,6 +1525,8 @@ export function useTenderFlow(
 			if (!sale.lane) throw new Error('press_lane_missing');
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 || legUnits ? uuidv4() : undefined;
+			// A stamp the last leg left in flight lands before this leg's meta is composed.
+			await stampChain.current;
 			const extraMeta = withPaidUnits(paymentId);
 			if (paymentId) freezePicks(paymentId);
 			// The id is also minted for picked units; only a rounded leg carries a fee.
