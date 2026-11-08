@@ -815,6 +815,7 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 		deferAutoFocus: false,
 		onPanelNode: jest.fn(),
 		fill,
+		insetTop: 0,
 	});
 	try {
 		render(
@@ -843,6 +844,44 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 		}
 	} finally {
 		context.mockRestore();
+	}
+});
+
+it('20. a native right panel keeps its close on the title row, under the inset it pads', () => {
+	jest.replaceProperty(overlay, 'isWeb', false);
+	jest.spyOn(overlay, 'useOverlay').mockReturnValue({
+		presentation: 'right',
+		open: true,
+		deferAutoFocus: false,
+		onPanelNode: jest.fn(),
+		fill: false,
+		insetTop: 20,
+	});
+	jest.spyOn(overlay, 'useSheetInset').mockReturnValue({
+		paddingTop: 36,
+		paddingBottom: 50,
+		paddingRight: 12,
+	});
+	const native = jest.requireMock<typeof import('react-native')>('react-native');
+	const View = native.View;
+	const views: ViewProps[] = [];
+	jest.spyOn(native, 'View').mockImplementation((props: ViewProps) => {
+		views.push(props);
+		return <View {...props} />;
+	});
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side="right">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		// The wrapper drops `top-1` / `right-1`: under the status bar the panel now pads, inside its padded edge.
+		const close = views.find((props) => props.className === 'absolute');
+		expect(close?.style).toEqual({ top: 20 + 4, right: 12 + 4 });
+	} finally {
+		jest.restoreAllMocks();
 	}
 });
 

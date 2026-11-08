@@ -154,14 +154,19 @@ function DialogPanel(allProps: DialogContentProps) {
 		testID: closeButtonTestID,
 		...closeProps
 	} = closeButtonProps ?? {};
-	const { presentation, deferAutoFocus, onPanelNode, fill } = useOverlay();
+	const { presentation, deferAutoFocus, onPanelNode, fill, insetTop } = useOverlay();
 	const composedRef = useComposedRefs(
 		ref,
 		onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>
 	);
 	const { open } = DialogPrimitive.useRootContext();
-	// The bottom sheet paints its own inset; 16 keeps the `py-4` the class gives.
+	// The sheet and a native full-height panel paint their own insets; 16 keeps the `py-4` the class gives.
 	const inset = useSheetInset(16);
+	// A native full-height panel pads the status bar inside its card, so its close (an absolute
+	// child, placed from the card's edge, not its padding) drops with the title by the same inset,
+	// and in from a padded right edge (owner, iPad landscape, 2026-11-08).
+	const ownsInsets =
+		!isWeb && (presentation === 'left' || presentation === 'right' || presentation === 'page');
 	const sizeClass =
 		presentation === 'center' || presentation === 'left' || presentation === 'right'
 			? sizes[size]
@@ -198,7 +203,16 @@ function DialogPanel(allProps: DialogContentProps) {
 			{...props}
 		>
 			{children}
-			<View className={cn('absolute right-1', fill ? 'top-0' : 'top-1')}>
+			<View
+				className={cn(
+					'absolute',
+					!ownsInsets && 'right-1',
+					!ownsInsets && (fill ? 'top-0' : 'top-1')
+				)}
+				style={
+					ownsInsets ? { top: insetTop + 4, right: 4 + (inset?.paddingRight ?? 0) } : undefined
+				}
+			>
 				<DialogPrimitive.Close asChild>
 					<IconButton
 						name="close"

@@ -209,6 +209,22 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 	}
 );
 
+it.each(['left', 'right', 'page'] as const)(
+	'pads nothing on web for a %s panel',
+	(presentation) => {
+		function InsetProbe() {
+			return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(16)) } }} />;
+		}
+		render(
+			<OverlayShell presentation={presentation} open Scrim={Pressable} testID="w">
+				<InsetProbe />
+			</OverlayShell>
+		);
+		// The browser owns the viewport's edges; the native inset path is not taken.
+		expect(screen.getByTestId('inset')).toHaveAttribute('data-inset', 'undefined');
+	}
+);
+
 it('lets a blocking scrim keep its clicks on web, where the panel sits inside it', () => {
 	function InsetProbe() {
 		return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(16)) } }} />;
