@@ -426,10 +426,12 @@ describe('TenderCheckout', () => {
 			state: { ...initialTenderState, view: 'cancel' },
 		});
 		render(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-cancel-confirm')).not.toBeNull();
 
 		mockOnClose?.();
 
 		expect(mockBack).not.toHaveBeenCalled();
+		expect(mockFlow.dispatch).not.toHaveBeenCalled();
 	});
 
 	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
