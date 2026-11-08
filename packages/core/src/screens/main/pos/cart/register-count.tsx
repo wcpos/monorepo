@@ -4,6 +4,7 @@ import { Platform, ScrollView, View } from 'react-native';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Checkbox } from '@wcpos/components/checkbox';
 import {
 	DialogDescription,
 	DialogFooter,
@@ -12,15 +13,22 @@ import {
 } from '@wcpos/components/dialog';
 import { FormItem, FormLabel } from '@wcpos/components/form/common';
 import { FormFieldContext } from '@wcpos/components/form/context';
+import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
+import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
+import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { TONE } from '@wcpos/components/lib/tone';
+import { cn } from '@wcpos/components/lib/utils';
 import { IconButton } from '@wcpos/components/icon-button';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
-import { fromMinor } from '@wcpos/order-math';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
@@ -30,14 +38,16 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ApproveSheet } from './approve-sheet';
+import { keptCount, RefusedCloseNotice } from './refused-close-notice';
 import { RegisterAmount } from './movement-sheet';
 import { denominations } from './register-count.denominations';
 import {
+	countDecimals,
 	countVariance,
 	denominationTotal,
 	overThreshold,
 	validAmount,
-	varianceText,
+	varianceAmount,
 } from './register-count.helpers';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
@@ -118,17 +128,34 @@ export function RegisterCount({
 		varianceThreshold,
 		unsyncedCount,
 		figuresPending,
+		refusedClose,
+		lastClosure,
+		movements,
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
 	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
 	const actor = useRegisterActor();
+	const phone = useIsPhone();
 	const currency = useDocField(store, (value) => value.currency);
+	const separator = useDocField(store, (value) => value.price_decimal_sep) || '.';
+	const decimals = countDecimals(useDocField(store, (value) => value.price_num_decimals));
 	const noteForm = useForm({ defaultValues: { note: session?.count_note ?? '' } });
 	const note = useWatch({ control: noteForm.control, name: 'note' });
 	const noteId = React.useId();
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
+	const [keypadOpen, setKeypadOpen] = React.useState(true);
+	// The amount and its keypad are one focus region: on the web a key takes focus before its press
+	// lands, and a cashier may enter the count by keys alone, so the keypad collapses when focus
+	// LEAVES the region (to the note, a tile, the footer), never on a move within it (Codex, #3356).
+	const regionRef = React.useRef<React.ComponentRef<typeof View>>(null);
+	const leaveRegion = (event?: { nativeEvent?: unknown }) => {
+		const next = (event?.nativeEvent as { relatedTarget?: unknown } | undefined)?.relatedTarget;
+		const region = regionRef.current as unknown as { contains?: (node: unknown) => boolean } | null;
+		if (next && region?.contains?.(next)) return;
+		if (valid) setKeypadOpen(false);
+	};
 	const [pieces, setPieces] = React.useState<Record<string, number>>(() =>
 		Object.fromEntries(
 			(session?.count_denominations ?? []).map(({ value, pieces }) => [value, pieces])
@@ -139,6 +166,23 @@ export function RegisterCount({
 			Object.entries(session?.counted ?? {}).filter(([method]) => method !== 'cash')
 		)
 	);
+	// A refused close (#2016) starts from the count it kept, also when the refusal lands after the
+	// pane mounted: the close leaves no current session until the store answers.
+	const prefill = React.useEffectEvent(() => {
+		if (!session) return;
+		const kept = keptCount(session, lastClosure);
+		setCash(kept.counted.cash ?? '');
+		setOthers(
+			Object.fromEntries(Object.entries(kept.counted).filter(([method]) => method !== 'cash'))
+		);
+		if (kept.denominations)
+			setPieces(Object.fromEntries(kept.denominations.map(({ value, pieces }) => [value, pieces])));
+		if (kept.note !== undefined) noteForm.setValue('note', kept.note);
+	});
+	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply, often after mount; the kept count seeds editable state once per refusal, so it cannot be derived without overwriting the cashier's edits.
+		if (refusedClose) prefill();
+	}, [refusedClose]);
 	const [notesOpen, setNotesOpen] = React.useState(false);
 	const [tendersOpen, setTendersOpen] = React.useState(false);
 	const [approving, setApproving] = React.useState(false);
@@ -146,9 +190,36 @@ export function RegisterCount({
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const t = useT();
-	const amount = Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : cash;
-	const valid = validAmount(amount);
-	const variance = countVariance(amount, expected.cash ?? '0');
+	const amount = Object.keys(pieces).length
+		? fromMinor(denominationTotal(pieces, decimals), decimals)
+		: cash;
+	const valid = validAmount(amount, decimals);
+	// This session's cash the store refused: the closure records it as not on the server (#3271),
+	// and Close waits for the cashier to say so once. A refused no-sale moves no cash.
+	const refusedCash = movements.filter(
+		(row) => row.sync_status === 'failed' && Number(row.amount) > 0
+	);
+	const refusedTotal = fromMinor(
+		refusedCash.reduce((total, row) => total + toMinor(row.amount, 4), 0),
+		4
+	);
+	// Keyed by the refused rows, so a further refusal after the tick asks again.
+	const refusedKey = refusedCash
+		.map((row) => row.id)
+		.sort()
+		.join();
+	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
+	const acknowledged = refusedKey === '' || acknowledgedKey === refusedKey;
+	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : refusedKey);
+	// The sheet's confirm closes the session, so a refusal that lands while it is open sends the
+	// count back for a new tick.
+	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply; it lands while the sheet is open, so there is no event handler to close it from.
+		if (!acknowledged) setApproving(false);
+	}, [acknowledged]);
+	const variance = countVariance(amount, expected.cash ?? '0', decimals);
+	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
+	const bandClass = tone.band;
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const counted = {
 		cash: amount,
@@ -165,7 +236,7 @@ export function RegisterCount({
 		!approvedThisCount &&
 		(!!session?.approval_required ||
 			!!session?.approved_counted ||
-			(!blind && valid && overThreshold(variance, varianceThreshold)));
+			(!blind && valid && overThreshold(variance, decimals, varianceThreshold)));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
@@ -187,33 +258,82 @@ export function RegisterCount({
 			contentContainerClassName="gap-4 px-4 py-5"
 			keyboardShouldPersistTaps="handled"
 		>
+			{/* The footer is this pane's Retry: it sends the count as edited here. */}
+			{refusedClose && <RefusedCloseNotice />}
 			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
-			<RegisterAmount
-				testID="count-amount"
-				variant="box"
-				value={amount}
-				onChangeText={(value) => {
-					setPieces({});
-					setCash(value);
-				}}
-			/>
-			{!blind && valid && (
-				<View className="min-h-row flex-row items-center justify-between">
-					<Text className="text-muted-foreground">
-						{t('register.expected_line', { amount: format(Number(expected.cash ?? '0')) })}
+			{/* The region: a blur leaving the field or a key for a target outside it collapses the keypad. */}
+			<View ref={regionRef} testID="count-entry" className="gap-4" onBlur={leaveRegion}>
+				<RegisterAmount
+					testID="count-amount"
+					value={amount.replace('.', separator)}
+					onChangeText={(value) => {
+						setPieces({});
+						setCash(value.replace(separator, '.'));
+					}}
+					onBlur={leaveRegion}
+					onFocus={() => setKeypadOpen(true)}
+					onPressIn={() => setKeypadOpen(true)}
+				/>
+				{keypadOpen ? (
+					<View testID="count-keypad">
+						<Keypad
+							rows={[
+								...DIGIT_ROWS,
+								decimalRow(decimals > 0 ? separator : undefined, t('common.backspace')),
+							]}
+							fit={phone ? 'shrink' : 'tile'}
+							testID="count"
+							onPress={(key) => {
+								// Leaving denomination entry starts a fresh count: the typed buffer behind the
+								// tiles is stale and must not come back (Codex, #3356; ledger line 65). So does a
+								// zero whose places are full (Clear writes 0.00): a digit could not join it.
+								const tiles = Object.keys(pieces).length > 0;
+								setPieces({});
+								setCash((prev) => {
+									const point = prev.indexOf('.');
+									const fullZero =
+										Number(prev) === 0 && point >= 0 && prev.length - point - 1 >= decimals;
+									return typeDecimal(tiles || fullZero ? '' : prev, key, decimals);
+								});
+							}}
+						/>
+					</View>
+				) : (
+					<Text testID="count-tap-to-change" className="text-muted-foreground">
+						{t('register.tap_amount_to_change')}
 					</Text>
-					<View className="flex-row items-center gap-2">
-						<Text
-							testID="count-variance"
-							className={`font-semibold tabular-nums ${variance < 0 ? 'text-bad' : variance === 0 ? 'text-ok' : 'text-foreground'}`}
-						>
-							{varianceText(variance, format, t)}
-						</Text>
-						{variance === 0 && (
-							<View testID="count-exact">
-								<Icon name="check" className="text-success" />
+				)}
+			</View>
+			{!blind && valid && (
+				<View testID="count-result" className="border-border rounded-tile border">
+					<View className="min-h-row flex-row items-center justify-between px-3">
+						<Text className="text-muted-foreground">{t('register.expected_label')}</Text>
+						<Text className="tabular-nums">{format(Number(expected.cash ?? '0'))}</Text>
+					</View>
+					<View
+						testID="count-band"
+						className={cn('min-h-row flex-row items-center justify-between px-3', bandClass)}
+					>
+						<HStack className="items-center gap-2">
+							<View testID={variance === 0 ? 'count-exact' : undefined}>
+								<Icon
+									name={variance < 0 ? 'arrowDown' : variance > 0 ? 'arrowUp' : 'check'}
+									className={tone.text}
+								/>
 							</View>
-						)}
+							<Text className="font-semibold">
+								<Text className="capitalize">
+									{variance < 0
+										? t('register.short')
+										: variance > 0
+											? t('register.over')
+											: t('register.exact')}
+								</Text>
+							</Text>
+						</HStack>
+						<Text testID="count-variance" className="font-semibold tabular-nums">
+							{varianceAmount(variance, decimals, format)}
+						</Text>
 					</View>
 				</View>
 			)}
@@ -277,9 +397,10 @@ export function RegisterCount({
 								key={value}
 								value={value}
 								pieces={pieces[value] ?? 0}
-								add={(n) =>
-									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }))
-								}
+								add={(n) => {
+									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }));
+									setKeypadOpen(false);
+								}}
 							/>
 						))}
 					</TileGrid>
@@ -327,6 +448,32 @@ export function RegisterCount({
 							/>
 						</View>
 					))}
+			{refusedCash.length > 0 && (
+				<Notice
+					tone="warning"
+					live={false}
+					testID="count-refused-cash"
+					title={t('register.refused_cash_title', { amount: format(Number(refusedTotal)) })}
+					description={t('register.refused_cash_body')}
+				>
+					{/* The row is the checkbox; the mark only draws its state. */}
+					<PressableSurface
+						testID="count-refused-cash-ack"
+						role="checkbox"
+						selected={acknowledged}
+						wash="none"
+						onPress={toggleAcknowledged}
+						className="min-h-ctl flex-row items-center gap-2"
+					>
+						<Checkbox
+							checked={acknowledged}
+							onCheckedChange={toggleAcknowledged}
+							className="pointer-events-none"
+						/>
+						<Text>{t('register.refused_cash_ack')}</Text>
+					</PressableSurface>
+				</Notice>
+			)}
 			{unsyncedCount > 0 && (
 				<Notice
 					tone="info"
@@ -369,8 +516,11 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							// A closed session awaiting its closure write is not one to reopen.
-							if (session?.status === 'counting') await actions.backToSelling();
+							// A closed session awaiting its closure write is not one to reopen; a close the
+							// store refused is (#2016): back to selling is its abandon, the count kept. One
+							// already back at open needs no second abandon.
+							if (session?.status === 'counting' || (refusedClose && session?.status !== 'open'))
+								await actions.backToSelling();
 							onBack();
 						})
 					}
@@ -387,21 +537,26 @@ export function RegisterCount({
 			<DialogFooter
 				size="lg"
 				intent={{
-					label: needsManager ? t('register.approve_and_close') : t('register.close_and_print'),
+					label: needsManager
+						? t('register.approve_and_close')
+						: refusedClose
+							? t('register.retry')
+							: t('register.close_and_print'),
 					testID: 'count-close',
 					loading: busy,
 					disabled:
 						!valid ||
 						figuresPending ||
-						Object.values(others).some((value) => value !== '' && !validAmount(value)),
+						!acknowledged ||
+						Object.values(others).some((value) => value !== '' && !validAmount(value, decimals)),
 					onPress: () => {
-						if (!blind && valid && overThreshold(variance, varianceThreshold))
+						if (!blind && valid && overThreshold(variance, decimals, varianceThreshold))
 							recordRegisterFact({
 								kind: 'variance-over-threshold',
 								actor,
 								sessionId: session?.id,
 								registerId: session?.register_id,
-								variance: fromMinor(variance, 2),
+								variance: fromMinor(variance, decimals),
 								threshold: varianceThreshold,
 							});
 						if (needsManager) setApproving(true);

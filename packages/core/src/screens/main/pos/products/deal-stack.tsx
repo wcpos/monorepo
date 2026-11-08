@@ -733,11 +733,13 @@ export function DealCell({
 			{parent ? (
 				<CopyPictureContext.Provider value={holdPicture}>
 					<DealCardsContext.Provider value={count}>
-						{/* Laid out afresh at the pinned box: the copy mounts (unseen) in the level's column
-					    before the tapped tile is measured, and on Android its words kept the frames of
-					    that first layout when the box was pinned — the name broke a letter early
-					    ("Uncatego / rized" in a box that holds "Uncategor", Pixel, 2026-10-07). */}
-						<React.Fragment key={size ? 'pinned' : 'free'}>{children}</React.Fragment>
+						<DealWalkContext.Provider value={travel}>
+							{/* Laid out afresh at the pinned box: the copy mounts (unseen) in the level's column
+						    before the tapped tile is measured, and on Android its words kept the frames of
+						    that first layout when the box was pinned — the name broke a letter early
+						    ("Uncatego / rized" in a box that holds "Uncategor", Pixel, 2026-10-07). */}
+							<React.Fragment key={size ? 'pinned' : 'free'}>{children}</React.Fragment>
+						</DealWalkContext.Provider>
 					</DealCardsContext.Provider>
 				</CopyPictureContext.Provider>
 			) : (
@@ -812,6 +814,25 @@ export function useDealCards(): SharedValue<number> | null {
 		);
 	}, [count, dealt, cards]);
 	return count === null ? null : cards;
+}
+
+// The parent's copy, to its back badge: the copy's walk, 0 on the tapped tile and 1 in slot 0.
+const DealWalkContext = React.createContext<SharedValue<number> | null>(null);
+
+/**
+ * For the back badge on the tile in slot 0: its style. The badge belongs to the slot, not to
+ * the tile that walks there, so it has a dealt tile's own opacity against the copy's walk
+ * (`FADE_IN_BY`): out, it is whole by 80% of the walk; home, it is whole for the first 20% and
+ * reaches 0 as the parent lands on the tile it left — which has no badge. Cut at the landing
+ * instead, it vanished in one frame as the root took over (web film, 2026-11-06). One curve for
+ * both directions, as the tiles have: a walk reversed mid-flight keeps its opacity. Off the copy
+ * the badge is simply shown.
+ */
+export function useDealBackStyle() {
+	const walk = React.useContext(DealWalkContext);
+	return useAnimatedStyle(() => ({
+		opacity: walk ? Math.min(1, Math.max(0, walk.value) / FADE_IN_BY) : 1,
+	}));
 }
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */

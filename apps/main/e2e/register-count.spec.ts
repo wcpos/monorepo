@@ -97,7 +97,8 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await page.getByTestId('den-tile-20').click();
 	await page.getByTestId('den-tile-20').click();
 	await expect(page.getByTestId('den-tile-20-badge')).toHaveText('2');
-	await expect(page.getByTestId('count-amount')).toHaveValue('40.00');
+	// The field shows the store's decimal separator (V2 slice 4): the Spanish dev store reads 40,00.
+	await expect(page.getByTestId('count-amount')).toHaveValue(/^40[.,]00$/);
 	await page.getByTestId('count-close').click();
 	await expect(page.getByTestId('closure-written')).toBeVisible();
 	await page.getByTestId('closure-done').click();

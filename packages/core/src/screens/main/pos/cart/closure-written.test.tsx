@@ -26,6 +26,8 @@ let mockClosure = {
 	breakdowns: {},
 };
 const mockContext = {
+	// The real context always carries the store; the count reads its decimals from it.
+	store: { name: 'UK Store' },
 	i18n: {},
 	timezone: 'UTC',
 	locale: 'en',
@@ -173,14 +175,20 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 
 const count = () => ({ closure: mockClosure as never, counted: '0', expected: '0', blind: false });
-it('shows the written heading and the three row figures; Done closes', () => {
+it('shows the written heading, variance hero and two tiles with the paper open; Done closes', () => {
 	const onDone = jest.fn();
 	render(<ClosureWritten count={count()} onDone={onDone} />);
 	expect(screen.getByTestId('closure-written')).toBeTruthy();
 	expect(screen.getByTestId('closure-title').textContent).toContain('Closure 1 written');
 	expect(screen.getByTestId('closure-figure-counted').textContent).toBe('£463.30');
 	expect(screen.getByTestId('closure-figure-expected').textContent).toBe('£480.80');
-	expect(screen.getByTestId('closure-figure-result').textContent).toContain('−£17.50 short');
+	expect(screen.getByTestId('closure-figure-result').textContent).toBe('−£17.50');
+	expect(screen.getByTestId('closure-figure-result').parentElement?.textContent).toContain(
+		'Variance · short'
+	);
+	expect(screen.getByTestId('z-preview')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closure-paper'));
+	expect(screen.queryByTestId('z-preview')).toBeNull();
 	expect(screen.queryByTestId('print-sheet-error')).toBeNull();
 	fireEvent.click(screen.getByTestId('closure-done'));
 	expect(onDone).toHaveBeenCalledTimes(1);
@@ -235,6 +243,7 @@ it('keeps blind figures and printing hidden, with a full-height Done', () => {
 	expect(screen.queryByTestId('closure-figure-expected')).toBeNull();
 	expect(screen.queryByTestId('closure-figure-result')).toBeNull();
 	expect(screen.queryByTestId('closure-print')).toBeNull();
+	expect(screen.queryByTestId('z-preview')).toBeNull();
 	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.queryByTestId('z-preview')).toBeNull();
 	expect(screen.getByTestId('closure-done').getAttribute('data-size')).toBe('lg');
@@ -261,6 +270,22 @@ it.each([
 	try {
 		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
 		expect(useClosureView).toHaveBeenCalledWith(mockClosure, { isReprint });
+	} finally {
+		mockClosure = previous;
+	}
+});
+
+it("names a register the directory no longer lists from the closure's own record", () => {
+	const previous = mockClosure;
+	mockClosure = {
+		...mockClosure,
+		register_id: 'retired',
+		breakdowns: { register_name: 'Back till' },
+	};
+	try {
+		render(<ClosureWritten count={count()} onDone={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('closure-print'));
+		expect(screen.getByText(/^Back till · /)).toBeTruthy();
 	} finally {
 		mockClosure = previous;
 	}

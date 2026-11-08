@@ -760,6 +760,14 @@ export const APP_EDITABLE_STORE_FIELDS = [
 	'price_thousand_sep',
 	'price_decimal_sep',
 	'price_num_decimals',
+	// Settings > Tax: how tax is based is a per-order choice and the four display
+	// choices are the till's own (roadmap#93, ruled 2026-09-11). The calculation
+	// inputs the server ignores stay out of this list and read-only on that screen.
+	'tax_based_on',
+	'tax_display_shop',
+	'tax_display_cart',
+	'price_display_suffix',
+	'tax_total_display',
 ] as const satisfies readonly (typeof SERVER_OWNED_STORE_FIELDS)[number][];
 
 /**

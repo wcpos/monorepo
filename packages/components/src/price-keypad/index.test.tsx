@@ -196,6 +196,8 @@ it('Escape closes and keeps the stored price', async () => {
 it('a press outside commits what was typed', async () => {
 	await open();
 	await press('keypad-key-7');
+	fireEvent.mouseDown(screen.getByTestId('overlay-scrim'));
+	await act(async () => jest.runOnlyPendingTimers());
 	await press('overlay-scrim');
 	expect(isOpen()).toBe(false);
 	expect(onChange).toHaveBeenCalledWith(7);
@@ -243,6 +245,8 @@ it('opened and closed with ✓, nothing pressed: nothing is written', async () =
 
 it('opened and pressed outside, nothing pressed: nothing is written', async () => {
 	await open();
+	fireEvent.mouseDown(screen.getByTestId('overlay-scrim'));
+	await act(async () => jest.runOnlyPendingTimers());
 	await press('overlay-scrim');
 	expect(isOpen()).toBe(false);
 	expect(onChange).not.toHaveBeenCalled();

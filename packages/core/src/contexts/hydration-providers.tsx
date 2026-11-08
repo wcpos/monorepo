@@ -24,7 +24,7 @@ function TranslatedDialogLabels({ children }: HydrationProvidersProps) {
 		[t]
 	);
 	const rowLabels = React.useMemo(
-		() => ({ saved: t('settings.saved'), open: t('common.open') }),
+		() => ({ saved: t('settings.saved'), failed: t('settings.not_saved'), open: t('common.open') }),
 		[t]
 	);
 	return (

@@ -1,14 +1,23 @@
 import * as React from 'react';
 
-import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+import { isActiveLineItem } from '@wcpos/order-math';
+import { useQueryRuntime } from '@wcpos/query';
+import { GUEST_CUSTOMER_ID, POS_META_KEYS } from '@wcpos/sync-core';
+import type { EngineWarning } from '@wcpos/order-math';
 
 import { enqueueCartAction } from './enqueue-cart-action';
 import { useActionContext } from './use-action-context';
+import { useCartConfigReader } from './use-cart-config';
+import { readCatalogTaxStatuses } from './use-coupon-context';
 import { dispatchAction } from '../../../../extensions/actions';
+import { retaxForCustomerWrite } from '../commands/retax-for-customer-write';
 import { useCartWrite } from '../commands/use-cart-write';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
+import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 
 import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
+import type { OrderPayload } from '../commands/cart-config-for-order';
 
 type Plain = Record<string, unknown>;
 
@@ -35,13 +44,26 @@ export interface CartCustomerFields {
 export const useSetCartCustomer = () => {
 	const { localPatch } = useCartWrite();
 	const { ctx, actor } = useActionContext();
+	const configForOrder = useCartConfigReader();
+	const serverOwnsMoney = useServerOwnsMoneyReader();
+	const reportEngineWarnings = useReportEngineWarnings();
+	const runtime = useQueryRuntime();
 
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
-			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
+			const run = async (target: CurrentOrderRecord, queue: OrderMutationContext) => {
 				// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
 				// customer this write keeps, not the one the form last rendered.
 				const current = target.getLatest().payload.customer_id ?? null;
+				// In the slot, so no later action overtakes this write while the catalog is read.
+				const taxStatusFor = await readCatalogTaxStatuses(
+					runtime.engine,
+					(target.getLatest().payload.line_items ?? []).filter(
+						(line) =>
+							isActiveLineItem(line) &&
+							!line.meta_data?.some(({ key }) => key === POS_META_KEYS.posData)
+					)
+				);
 				const setsCustomer = fields.customerId !== undefined;
 				return dispatchAction({
 					event: 'cart.customer.set',
@@ -60,17 +82,28 @@ export const useSetCartCustomer = () => {
 							taxIds: fields.taxIds,
 						},
 					},
-					bottom: (e) =>
-						localPatch({
-							queue,
-							document: target,
-							data: {
-								...(setsCustomer ? { customer_id: e.payload.customerId } : {}),
-								billing: e.payload.billing ?? undefined,
-								shipping: e.payload.shipping ?? undefined,
-								...(e.payload.taxIds ? { tax_ids: e.payload.taxIds } : {}),
-							},
-						}),
+					bottom: async (e) => {
+						const intent = {
+							...(setsCustomer ? { customer_id: e.payload.customerId } : {}),
+							billing: e.payload.billing ?? undefined,
+							shipping: e.payload.shipping ?? undefined,
+							...(e.payload.taxIds ? { tax_ids: e.payload.taxIds } : {}),
+						};
+						let warnings: readonly EngineWarning[] = [];
+						const data = (currentPayload: OrderPayload) => {
+							warnings = [];
+							const retaxed = retaxForCustomerWrite(currentPayload, intent, {
+								configForOrder,
+								ownedElsewhere: serverOwnsMoney(target.uuid),
+								taxStatusFor,
+							});
+							warnings = retaxed.warnings;
+							return { ...intent, ...retaxed.lines };
+						};
+						const result = await localPatch({ queue, document: target, data });
+						reportEngineWarnings(warnings, { orderId: target.uuid, site: 'useSetCartCustomer' });
+						return result;
+					},
 				});
 			};
 			return (await enqueueCartAction(order, run, {
@@ -78,6 +111,6 @@ export const useSetCartCustomer = () => {
 				context: { orderId: order.uuid, customerId: fields.customerId ?? null },
 			})) as Awaited<ReturnType<typeof localPatch>> | false;
 		},
-		[localPatch, ctx, actor]
+		[localPatch, ctx, actor, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime]
 	);
 };

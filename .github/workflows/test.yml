@@ -560,12 +560,16 @@ jobs:
       - &gallery-checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # The update job must shoot the PR head, whose baselines gallery-commit pushes
-          # back to the branch. The read-only shoot takes the default merge ref, so a PR
-          # opened before the gallery landed on its base is still shot with the gallery
+          # Both jobs shoot the default merge ref, so what the update job writes is what
+          # the compare job sees. It used to shoot the PR head (whose baselines
+          # gallery-commit pushes back to the branch): on 2026-11-08 #3401 landed on main
+          # between #3402's branch point and its label, the head build drew the
+          # personality themes in the system font and the merge build in their
+          # typefaces, and every compare run failed one theme per component (four
+          # rounds) until the compare run's own shots replaced the bot's. The merge ref
+          # also keeps a PR opened before the gallery landed on its base shootable
           # (on 2026-09-18 #2176's head predated it and the compare step had no
           # config to run).
-          ref: ${{ github.job == 'gallery-update' && github.event.pull_request.head.sha || '' }}
           submodules: false
       - &gallery-setup
         name: Setup monorepo
@@ -697,7 +701,33 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # The merge below needs the common history of the head and the base.
+          fetch-depth: 0
           submodules: false
+      - name: Bring in the base the shards shot
+        # The shards shot the run's merge commit (`github.sha`: this head merged with the
+        # base as it stood when the run started). Baselines rendered from that merge are
+        # committed onto that same merge, so a cell the base added or removed since the
+        # branch point is a change on a shared ancestor, never an add/add conflict against
+        # the base or an orphan in the check below. The base parent of the run's merge
+        # commit, not the moving branch: a base change during the run is not part of what
+        # was shot. GitHub merged these two commits cleanly to make the run, so git does
+        # too; a refusal here is a bug to read, not a branch to retry. The merge commit's
+        # FIRST parent is the base and its second this head (`Merge <head> into <base>`);
+        # the fetch takes no depth, so the full clone above keeps the history the merge
+        # needs.
+        env:
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin "$MERGE_SHA"
+          base=$(git rev-parse "${MERGE_SHA}^1")
+          if git merge-base --is-ancestor "$base" HEAD; then
+            echo "the head already carries the base the shards shot ($base)"
+          else
+            git merge --no-edit -m "Merge the base into $GITHUB_HEAD_REF for the gallery baselines" "$base"
+          fi
       - name: Download baselines
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

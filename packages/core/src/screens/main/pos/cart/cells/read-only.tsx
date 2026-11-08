@@ -2,16 +2,24 @@ import * as React from 'react';
 
 import type { TenderLineId } from '../../checkout/tender/tender-state';
 
+/** The units each line's live payments covered, with their methods (`paidUnitsByLine`). */
+export type PaidUnits = Record<TenderLineId, { units: number; methods: string[] }>;
+
 /**
  * The cart table's read-only mode (checkout and receipt). Each cell renders what its input
- * shows, as text, and nothing on a row is pressable: the stilled cart is the same table with
- * the same columns, not a copy of it (decision 9, board §6).
- *
- * `paidBy` is the split-payment annotation per line, keyed by the POS line uuid and falling
- * back to the server line id, from `useCheckoutMode().linesPaidBy`.
+ * shows, as text, and nothing on a row is pressable but the split picker's stepper and name:
+ * the stilled cart is the same table with the same columns, not a copy of it (decision 9,
+ * board §6). `picker` is there while the Split chip is on; both maps use `readOnlyLineKey`.
  */
 export interface CartTableReadOnly {
-	paidBy?: Record<TenderLineId, string[]>;
+	paid?: PaidUnits;
+	picker?: {
+		picked: Record<TenderLineId, number>;
+		paid: PaidUnits;
+		unitMinor: (key: TenderLineId, units: number) => number;
+		format: (minor: number) => string;
+		pick: (key: TenderLineId, units: number) => void;
+	};
 }
 
 const CartTableReadOnlyContext = React.createContext<CartTableReadOnly | null>(null);
@@ -23,7 +31,7 @@ export function useCartTableReadOnly() {
 	return React.useContext(CartTableReadOnlyContext);
 }
 
-/** A line's key for `paidBy` and the testIDs: the POS uuid, else the server line id. */
+/** A line's key for `paid`, `picker` and the testIDs: the POS uuid, else the server line id. */
 export function readOnlyLineKey(uuid: string, item: { id?: number | null }) {
 	return uuid || String(item.id ?? '');
 }

@@ -80,6 +80,7 @@ jest.mock('@wcpos/components/form', () => ({
 		.useFormChangeHandler,
 	SavedMark: () => null,
 	useMarkSaved: () => jest.fn(),
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => '',
 	Form: jest.requireActual('react-hook-form').FormProvider,
 	FormField: jest.requireActual('react-hook-form').Controller,

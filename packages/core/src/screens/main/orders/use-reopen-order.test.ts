@@ -11,7 +11,12 @@ import { log } from '@wcpos/utils/logger';
 import { useReopenOrder } from './use-reopen-order';
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// Re-open goes through openTill(): a navigate, never a push (a push from the Orders page
+// stacked a second POS screen). The refused-reopen toast still pushes the standalone checkout.
+const mockNavigate = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+}));
 const mockListeners = new Set<(event: EngineEvent) => void>();
 let mockConnectivity: 'online' | 'offline' = 'online';
 // A drain that answers the reopen with the server's refusal, as the engine would.
@@ -69,6 +74,9 @@ jest.mock('../../../contexts/translations', () => ({
 		args ? `${key} ${JSON.stringify(args)}` : key,
 }));
 jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
+// Wide unless a test says otherwise: the phone pushes the explicit (tabs) cart (#2374).
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 jest.mock('../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ blockIfDegraded: () => false }),
 }));
@@ -85,6 +93,7 @@ beforeEach(() => {
 	mockListeners.clear();
 	mockConnectivity = 'online';
 	mockOnDrain = () => {};
+	mockPhone = false;
 });
 
 const leg = {
@@ -130,6 +139,7 @@ it('a reopen refused with wcpos_money_in_motion names the leg and offers Cancel 
 
 	// Never a silent local pos-open: the till stays where it is and says why.
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 	const toast = reportedToast();
 	expect(toast).toMatchObject({
 		type: 'error',
@@ -163,6 +173,7 @@ it('a reopen refused for another reason says the store refused it and stays put'
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
 	await act(async () => result.current.reopen());
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 	expect(reportedToast()).toMatchObject({
 		title: 'pos_checkout.order_refused',
 		text2: 'Not allowed.',
@@ -178,7 +189,7 @@ it('an offline reopen stays queued and reports the refusal when it drains', asyn
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
 	await act(async () => result.current.reopen());
 	// Offline the reopen is queued as before: the cashier goes on to the cart.
-	expect(mockPush).toHaveBeenCalledWith({
+	expect(mockNavigate).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
@@ -198,7 +209,7 @@ it('a late refusal of an offline-queued reopen undoes it too, even with the cash
 		.mockResolvedValueOnce({ document: paidOrder, mutationId: 'm-reopen' } as never);
 	const { result } = renderHook(() => useReopenOrder(paidOrder));
 	await act(async () => result.current.reopen());
-	expect(mockPush).toHaveBeenCalledTimes(1);
+	expect(mockNavigate).toHaveBeenCalledTimes(1);
 	expect(mockEngine.require).not.toHaveBeenCalled();
 
 	// The refusal is the store's word: a pos-open left on the resident would get every later
@@ -229,7 +240,7 @@ it('a reopen held for sign-in frees the actions and keeps its late refusal', asy
 		await Promise.race([result.current.reopen(), new Promise((r) => setTimeout(r, 50))]);
 	});
 	expect(result.current.reopening).toBe(false);
-	expect(mockPush).toHaveBeenCalledTimes(1);
+	expect(mockNavigate).toHaveBeenCalledTimes(1);
 
 	await act(async () => emit(moneyInMotion()));
 	expect(mockEngine.require).toHaveBeenCalledWith(expect.objectContaining({ readopt: true }));
@@ -241,6 +252,7 @@ it('does not navigate when the local write resolves undefined', async () => {
 	const { result } = renderHook(() => useReopenOrder(order));
 	await act(async () => result.current.reopen());
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 it('keeps the local mutation failure toast and does not navigate', async () => {
@@ -252,14 +264,27 @@ it('keeps the local mutation failure toast and does not navigate', async () => {
 		expect.objectContaining({ showToast: true })
 	);
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 it('navigates to the order cart after a successful local write', async () => {
 	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
 	const { result } = renderHook(() => useReopenOrder(order));
 	await act(async () => result.current.reopen());
-	expect(mockPush).toHaveBeenCalledWith({
+	expect(mockNavigate).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
+		params: { orderId: ['order-1'] },
+	});
+});
+
+it("on a phone, navigates to the order cart in the phone's tabs", async () => {
+	mockPhone = true;
+	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(mockNavigate).toHaveBeenCalledTimes(1);
+	expect(mockNavigate).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/(pos)/(tabs)/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
 });
@@ -278,6 +303,7 @@ it('a second press while the reopen awaits the store is ignored and never bypass
 	expect(result.current.reopening).toBe(true);
 	await act(async () => result.current.reopen());
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 	expect(applyLocalPatch).toHaveBeenCalledTimes(1);
 
 	await act(async () => {
@@ -286,6 +312,7 @@ it('a second press while the reopen awaits the store is ignored and never bypass
 	});
 	expect(result.current.reopening).toBe(false);
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 	expect(reportedToast()).toMatchObject({ action: { label: 'pos_checkout.cancel_payment' } });
 });
 
@@ -360,6 +387,7 @@ it('a refused reopen whose store copy cannot be fetched puts the order back as i
 		})
 	);
 	expect(mockPush).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 it('a refusal that names an attempt resolves it through the awaiting-customer stamp', async () => {
@@ -423,7 +451,7 @@ it('queues the reopen as an explicit write, which the open-cart hold never holds
 		expect.objectContaining({ data: expect.objectContaining({ status: 'pos-open' }) }),
 		expect.objectContaining({ explicit: true })
 	);
-	expect(mockPush).toHaveBeenCalledWith({
+	expect(mockNavigate).toHaveBeenCalledWith({
 		pathname: '/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});

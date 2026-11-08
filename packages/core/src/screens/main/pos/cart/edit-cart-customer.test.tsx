@@ -124,6 +124,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: ({ name }: { name: string }) =>
 		mockSavedName === name ? <span data-testid={`saved-${name}`} /> : null,
 	useMarkSaved: () => mockMarkSaved,
+	useMarkFailed: () => jest.fn(),
 	useSavedName: () => mockSavedName,
 }));
 jest.mock('@wcpos/components/hstack', () => ({
@@ -500,4 +501,9 @@ jest.mock('../commands/use-boundary-commit', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: {} }),
 	useStoreSession: () => ({}),
+}));
+
+jest.mock('../hooks/use-coupon-context', () => ({
+	...jest.requireActual('../hooks/use-coupon-context'),
+	readCatalogTaxStatuses: async () => () => undefined,
 }));

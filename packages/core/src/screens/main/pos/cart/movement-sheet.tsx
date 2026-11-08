@@ -1,21 +1,28 @@
 import * as React from 'react';
-import { type TextInputInstance, View } from 'react-native';
+import { type TextInputInstance } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Input } from '@wcpos/components/input';
 import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
 import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { amountFigure } from '@wcpos/components/amount-figure';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
+import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -34,78 +41,53 @@ import { useExclusive } from '../../hooks/use-exclusive';
 
 /** The figure typed in place: the amount figure's hero step on the input itself. */
 const HERO = amountFigure({ size: 'hero' });
+const SYMBOL = 'text-2xl text-muted-foreground tabular-nums';
 
+/** One framed figure for every editable register amount. */
 export function RegisterAmount({
 	currencyOptions,
-	variant = 'underline',
+	ref,
 	...props
 }: {
 	currencyOptions?: CurrencyFormatOptions;
-	/**
-	 * `box`: one framed field with the currency inside it (the closed register). `hero`: no frame,
-	 * the figure on the surface with the currency beside it (the movement sheet). The counts keep
-	 * the underline.
-	 */
-	variant?: 'underline' | 'box' | 'hero';
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
-}) {
+} & Pick<
+	React.ComponentProps<typeof Input.InputField> & React.AriaAttributes,
+	'onBlur' | 'onFocus' | 'onPressIn' | 'aria-invalid' | 'aria-describedby'
+>) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
-	if (variant === 'hero') {
-		// The locale's own zero, without the symbol that already sits beside it.
-		const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
-		// The field hugs the figure so the symbol stays beside it: an invisible copy of the text
-		// sizes the box and the input fills it, on web and native alike.
-		return (
-			<View className="h-tile flex-row items-center self-start">
-				{!!prefix && <Text className={cn(HERO, 'text-muted-foreground')}>{prefix}</Text>}
-				<View className="justify-center">
-					<Text aria-hidden className={cn(HERO, 'pr-1 opacity-0')}>
-						{props.value || zero}
-					</Text>
-					<Input.Root className="web:ring-0 absolute inset-0 h-full border-0 bg-transparent">
-						<Input.InputField
-							{...props}
-							type="decimal"
-							placeholder={zero}
-							className={cn(HERO, 'px-0 py-0')}
-						/>
-					</Input.Root>
-				</View>
-				{!!suffix && <Text className={cn(HERO, 'text-muted-foreground')}>{suffix}</Text>}
-			</View>
-		);
-	}
-	if (variant === 'box') {
-		return (
-			<Input.Root className="h-tile">
-				{!!prefix && (
-					<Input.Left>
-						<Text className="text-amt text-muted-foreground tabular-nums">{prefix}</Text>
-					</Input.Left>
-				)}
-				<Input.InputField {...props} type="decimal" className="text-amt tabular-nums" />
-				{!!suffix && (
-					<Input.Right className="pr-3">
-						<Text className="text-amt text-muted-foreground tabular-nums">{suffix}</Text>
-					</Input.Right>
-				)}
-			</Input.Root>
-		);
-	}
+	// The locale's own zero, without the symbol that already sits beside it.
+	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
+	const inputRef = React.useRef<TextInputInstance>(null);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
+	// The symbol sits inside the field's border, so a tap on it is a tap on the field (as the
+	// Input's own leading glyph): it focuses the numerals rather than being a dead strip.
+	const symbol = (text: string) => (
+		<PressableSurface
+			wash="none"
+			accessible={false}
+			tabIndex={-1}
+			testID={`${props.testID}-symbol`}
+			onPress={() => inputRef.current?.focus()}
+		>
+			<Text className={SYMBOL}>{text}</Text>
+		</PressableSurface>
+	);
 	return (
-		<View className="min-h-row border-border flex-row items-center self-start border-b">
-			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
-			<Input
+		<Input.Root figure>
+			{!!prefix && <Input.Left>{symbol(prefix)}</Input.Left>}
+			<Input.InputField
 				{...props}
+				ref={mergedRef}
 				type="decimal"
-				className="h-tile w-40"
-				inputClassName="text-amt tabular-nums"
+				placeholder={zero}
+				className={cn(HERO, 'placeholder:font-normal', !!prefix && 'pl-1.5', !!suffix && 'pr-1.5')}
 			/>
-			{!!suffix && <Text className="text-amt tabular-nums">{suffix}</Text>}
-		</View>
+			{!!suffix && <Input.Right className="pr-3">{symbol(suffix)}</Input.Right>}
+		</Input.Root>
 	);
 }
 
@@ -131,7 +113,9 @@ export function MovementSheet({
 	onDone: (id: string, type: MovementType, amount: string) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { actions, expected, blind } = useRegisterSession();
+	const { actions, expected, blind, binding } = useRegisterSession();
+	const phone = useIsPhone();
+	const invalidId = React.useId();
 	const { openDrawer } = useSessionReport();
 	const { format } = useCurrencyFormat();
 	const [amount, setAmount] = React.useState('');
@@ -140,11 +124,16 @@ export function MovementSheet({
 	const { busy, exclusive } = useExclusive();
 	const noteRef = React.useRef<TextInputInstance>(null);
 	const [error, setError] = React.useState('');
+	// A no-sale already recorded when its drawer refused: the retry only opens the drawer (#2001).
+	const noSaleRecorded = React.useRef(false);
 	const t = useT();
 	const words: Record<string, string> = {
 		paid_in: t('register.question_paid_in'),
 		paid_out: t('register.question_paid_out'),
 		no_sale: t('register.question_no_sale'),
+		title_paid_in: t('register.paid_in'),
+		title_paid_out: t('register.paid_out'),
+		title_no_sale: t('register.no_sale'),
 		amount: t('register.movement_needs_amount'),
 		reason: t('register.movement_needs_reason'),
 		supplier: t('register.reason_supplier'),
@@ -197,9 +186,18 @@ export function MovementSheet({
 		// characters and a trailing space passes here and 400s on arrival if sent raw.
 		const trimmedReason = reason.trim();
 		try {
-			const row = await actions.recordMovement({ type, amount: normalized, reason: trimmedReason });
-			onDone(row.id, type, normalized);
-			if (type === 'no_sale') await openDrawer();
+			if (!noSaleRecorded.current) {
+				const row = await actions.recordMovement({
+					type,
+					amount: normalized,
+					reason: trimmedReason,
+				});
+				onDone(row.id, type, normalized);
+			}
+			if (type === 'no_sale') {
+				noSaleRecorded.current = true;
+				await openDrawer();
+			}
 			onOpenChange(false);
 		} catch (e) {
 			setError(String(e));
@@ -210,21 +208,11 @@ export function MovementSheet({
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost={portalHost}>
 				<DialogHeader>
-					<DialogTitle>{type ? words[type] : ''}</DialogTitle>
-				</DialogHeader>
-				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
-				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
-					{type !== 'no_sale' && (
-						<RegisterAmount
-							variant="hero"
-							testID="movement-amount"
-							value={amount.replace('.', separator)}
-							onChangeText={(value) => setAmount(value.replace(separator, '.'))}
-						/>
-					)}
+					<DialogTitle>{type ? words[`title_${type}`] : ''}</DialogTitle>
 					{/* The consequence, said once: what the drawer holds, and what it will after. */}
 					{!blind && (
-						<Text testID="movement-after" variant="key" tabular>
+						<DialogDescription testID="movement-after">
+							{binding.registerName} ·{' '}
 							{hasAmount ? (
 								<>
 									{beforeAfter}
@@ -236,9 +224,31 @@ export function MovementSheet({
 							) : (
 								t('register.drawer_holds', { drawer: holds })
 							)}
-						</Text>
+						</DialogDescription>
 					)}
-					<View className="flex-row flex-wrap gap-2">
+				</DialogHeader>
+				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
+				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
+					<Text variant="section">{type ? words[type] : ''}</Text>
+					{type !== 'no_sale' && (
+						<>
+							<RegisterAmount
+								testID="movement-amount"
+								aria-invalid={invalid === 'amount'}
+								aria-describedby={invalid === 'amount' ? invalidId : undefined}
+								value={amount.replace('.', separator)}
+								onChangeText={(value) => setAmount(value.replace(separator, '.'))}
+							/>
+							<Keypad
+								rows={keypadRows}
+								onPress={press}
+								fit={phone ? 'shrink' : 'tile'}
+								testID="movement"
+							/>
+						</>
+					)}
+					<Text className="text-muted-foreground">{t('register.reason')}</Text>
+					<TileGrid columns={phone ? 2 : 3}>
 						{type &&
 							[...REASONS[type], 'other'].map((key) => {
 								const label = words[key];
@@ -246,6 +256,8 @@ export function MovementSheet({
 								return (
 									<Chip
 										key={key}
+										stretch
+										className="justify-center"
 										label={label}
 										on={!other && reason === label}
 										testID={`movement-reason-${key.replace(/_/g, '-')}`}
@@ -256,26 +268,34 @@ export function MovementSheet({
 									/>
 								);
 							})}
-					</View>
+					</TileGrid>
 					<Input
 						ref={noteRef}
 						testID="movement-reason"
+						aria-invalid={invalid === 'reason'}
+						aria-describedby={invalid === 'reason' ? invalidId : undefined}
 						placeholder={t('register.reason')}
 						value={reason}
 						onChangeText={setReason}
 					/>
-					{!!invalid && (
-						<Text testID="movement-invalid" variant="key">
-							{words[invalid]}
-						</Text>
-					)}
 					{!!error && <Text className="text-bad text-sm">{error}</Text>}
-					{type !== 'no_sale' && (
-						<Keypad rows={keypadRows} onPress={press} fit="tile" testID="movement" />
-					)}
 				</DialogBody>
 				<DialogFooter
 					size="lg"
+					aside={
+						!!invalid && (
+							<HStack className="items-center gap-1">
+								<Icon name="info" size="sm" className="text-muted-foreground" />
+								<Text
+									testID="movement-invalid"
+									nativeID={invalidId}
+									className="text-muted-foreground"
+								>
+									{words[invalid]}
+								</Text>
+							</HStack>
+						)
+					}
 					intent={{
 						label: verb,
 						testID: 'movement-confirm',

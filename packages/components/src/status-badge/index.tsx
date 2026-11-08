@@ -54,7 +54,11 @@ export function StatusBadge({ label, variant, size, className, ...props }: Statu
 			<View aria-hidden className={statusDotVariants({ variant, size })} />
 			{/* Same colour-contract reset as `Badge` — see the note there (#1369). */}
 			<TextClassContext.Provider value={undefined}>
-				<Text variant={caption ? 'help' : undefined} className={caption ? undefined : 'text-sm'}>
+				{/* `shrink`: beside a tag or an action the label wraps inside its column, never over them. */}
+				<Text
+					variant={caption ? 'help' : undefined}
+					className={cn('shrink', caption ? undefined : 'text-sm')}
+				>
 					{label}
 				</Text>
 			</TextClassContext.Provider>

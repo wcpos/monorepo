@@ -138,6 +138,15 @@ it('announces the on-state on the press target, with or without a clear control'
 	rerender(<Chip label="Menu" testID="chip" on={false} />);
 	expect(screen.getByTestId('chip')).toHaveAttribute('aria-pressed', 'false');
 });
+it('a read-only chip shows its on-state without being a button', () => {
+	const onPress = jest.fn();
+	render(<Chip label="Selected" testID="chip" on readOnly onPress={onPress} />);
+	const chip = screen.getByTestId('chip');
+	expect(chip).not.toHaveAttribute('role', 'button');
+	expect(chip).not.toHaveAttribute('aria-pressed');
+	fireEvent.click(chip);
+	expect(onPress).not.toHaveBeenCalled();
+});
 it('renders count zero and a leading icon', () => {
 	const { container } = render(<Chip label="Menu" count={0} icon="plus" testID="chip" />);
 	expect(screen.getByTestId('chip-count')).toHaveTextContent('0');
@@ -282,6 +291,32 @@ describe('action', () => {
 		render(<Chip label="Ada" testID="chip" onClear={jest.fn()} action={action()} />);
 		expect(screen.queryByTestId('chip-clear')).toBeNull();
 		expect(screen.getByTestId('chip-address')).toBeTruthy();
+	});
+	it('the label half hugs its content and shrinks, never a zero flex basis', () => {
+		// With `flex-1` the cart customer chip showed only its avatar and pin on a cold start
+		// (owner, iPad, 2026-11-08; ledger line 23).
+		render(<Chip label="Ada" testID="chip" action={action()} />);
+		const classes = screen.getByTestId('chip-label').getAttribute('data-classes') ?? '';
+		expect(classes.split(' ')).toContain('shrink');
+		expect(classes.split(' ')).not.toContain('flex-1');
+	});
+	// A chip in a phone grid tile fills it, and the trailing cell sits at the tile's edge
+	// (ledger line 24); every other chip hugs its label (line 9).
+	it.each([
+		['action', { action: action() }],
+		['clear control', { onClear: jest.fn() }],
+	])('stretch fills the tile and lets the label half take the slack (%s)', (_, trail) => {
+		const classes = (id: string) => screen.getByTestId(id).dataset.classes?.split(' ') ?? [];
+		const { rerender } = render(<Chip label="Ada" testID="chip" {...trail} />);
+		expect(classes('chip')).toContain('self-start');
+		expect(classes('chip')).not.toContain('self-stretch');
+		expect(classes('chip-label')).toContain('shrink');
+		expect(classes('chip-label')).not.toContain('flex-1');
+		rerender(<Chip label="Ada" testID="chip" stretch {...trail} />);
+		expect(classes('chip')).toContain('self-stretch');
+		expect(classes('chip')).not.toContain('self-start');
+		expect(classes('chip-label')).toContain('flex-1');
+		expect(classes('chip-label')).not.toContain('shrink');
 	});
 	it('fills each cell on its own, never the pill (read from source)', () => {
 		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');

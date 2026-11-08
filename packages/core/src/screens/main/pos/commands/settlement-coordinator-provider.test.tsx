@@ -20,6 +20,7 @@ import { completeSale } from '../checkout/sale-completion';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
+import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
@@ -27,6 +28,12 @@ import type { OrderPayload } from './cart-config-for-order';
 jest.mock('@wcpos/order-math', () => ({
 	...jest.requireActual('@wcpos/order-math'),
 	settleCart: jest.fn(jest.requireActual('@wcpos/order-math').settleCart),
+}));
+jest.mock('./settlement-coordinator', () => ({
+	...jest.requireActual('./settlement-coordinator'),
+	createSettlementCoordinator: jest.fn(
+		jest.requireActual('./settlement-coordinator').createSettlementCoordinator
+	),
 }));
 
 const mockRepairTaxExempt = jest.fn(async (_record: CurrentOrderRecord, _exempt: boolean) => {});
@@ -124,6 +131,10 @@ jest.mock('../hooks/use-cart-config', () => ({
 	useCartConfigInputs: () => mockInputs,
 	useCartConfigReader: () => readConfig,
 }));
+let mockRatesRead = true;
+jest.mock('../../contexts/tax-rates', () => ({
+	useTaxSettings: () => ({ ratesRead: mockRatesRead }),
+}));
 jest.mock('../contexts/order-money-divergence', () => ({
 	useServerOwnsMoneyReader: () => ownsMoney,
 }));
@@ -159,7 +170,10 @@ const flush = async () => {
 	});
 };
 beforeEach(() => {
+	// A fresh engine identity per test: the provider's rates latch is per engine and outlives renders.
+	manager.engine = { ...engine };
 	currentConfig = config;
+	mockRatesRead = true;
 	sessionOpen = true;
 	ownsMoney.mockReset().mockReturnValue(false);
 	beforeResolve.mockReset().mockResolvedValue(undefined);
@@ -182,17 +196,16 @@ it('binds, rebinds on scope/reset, waits for rates, reports once and tears down'
 	});
 	await flush();
 	expect(writes).toHaveLength(2);
+	// The engine's order: generation bump, then the event, then the unknown verdict, in one tick.
 	act(() => {
+		statuses.next({ collections: { taxRates: { coverageGeneration: 2 } } });
 		events.next({ type: 'collection-reset', collection: 'taxRates' });
 		coverage.next({ complete: false });
 		orders.next({ ready: true, hits: [{ record: record() }] });
 	});
 	await flush();
 	expect(writes).toHaveLength(2);
-	act(() => {
-		statuses.next({ collections: { taxRates: { coverageGeneration: 2 } } });
-		coverage.next({ complete: true });
-	});
+	act(() => coverage.next({ complete: true }));
 	await flush();
 	expect(writes).toHaveLength(3);
 	view.unmount();
@@ -1004,3 +1017,179 @@ it.each([false, true])(
 		}
 	}
 );
+
+describe('#3243 the rates gate stays open once a generation has landed', () => {
+	const code = 'pos-discount';
+	const intent = { discount_type: 'percent' as const, amount: '10' };
+	const couponed = () =>
+		record({
+			line_items: [{ product_id: 1, quantity: 1, subtotal: '10', total: '10' }],
+			coupon_lines: [{ code, meta_data: [{ key: '_wcpos_quick_discount', value: intent }] }],
+		});
+	const discounted = expect.objectContaining({ total: '9', discount_total: '1' });
+	beforeEach(() => {
+		context.coupons = new Map([[code, quickDiscountCouponInput(code, intent)]]);
+	});
+
+	it('a couponed cart still settles after compaction removes the rates lane', async () => {
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(writes).toHaveLength(1);
+		// Compaction deletes the lane: the verdict goes unknown, the generation stays.
+		act(() => coverage.next({ complete: false }));
+		await flush();
+		act(() => orders.next({ ready: true, hits: [{ record: couponed() }] }));
+		await flush();
+		expect(writes).toHaveLength(2);
+		expect(writes[1]).toEqual(discounted);
+		view.unmount();
+	});
+
+	it('an incomplete verdict in a landed generation never pulses ready false', async () => {
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		const { ratesReady$ } = jest.mocked(createSettlementCoordinator).mock.calls[0][0];
+		const ready: boolean[] = [];
+		const sub = ratesReady$.subscribe((value) => ready.push(value.ready));
+		act(() => coverage.next({ complete: false }));
+		await flush();
+		sub.unsubscribe();
+		expect(ready[0]).toBe(true);
+		expect(ready).not.toContain(false);
+		view.unmount();
+	});
+
+	it('a remount keeps the rates ready after the lane is gone', async () => {
+		const first = render(<SettlementCoordinatorProvider />);
+		await flush();
+		first.unmount();
+		act(() => {
+			coverage.next({ complete: false });
+			orders.next({ ready: true, hits: [{ record: couponed() }] });
+		});
+		const second = render(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(writes).toHaveLength(2);
+		expect(writes[1]).toEqual(discounted);
+		second.unmount();
+	});
+
+	it('a new generation waits for its own complete verdict', async () => {
+		const view = render(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(writes).toHaveLength(1);
+		const next = statuses.value.collections.taxRates.coverageGeneration + 1;
+		act(() => {
+			statuses.next({ collections: { taxRates: { coverageGeneration: next } } });
+			events.next({ type: 'collection-reset', collection: 'taxRates' });
+			coverage.next({ complete: false });
+			orders.next({ ready: true, hits: [{ record: couponed() }] });
+		});
+		await flush();
+		expect(writes).toHaveLength(1);
+		act(() => coverage.next({ complete: true }));
+		await flush();
+		expect(writes).toHaveLength(2);
+		expect(writes[1]).toEqual(discounted);
+		view.unmount();
+	});
+});
+
+describe('#3186 the rates gate waits for rates read from the database', () => {
+	const rates = [{ id: 1, rate: '10', class: 'standard', shipping: true, priority: 1 }];
+	// The order's rate is resident in storage; only the rates read has not answered yet.
+	const taxed = () =>
+		record({
+			line_items: [
+				{
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					subtotal_tax: '1',
+					total_tax: '1',
+					taxes: [{ id: 1, subtotal: '1', total: '1' }],
+				},
+			],
+		});
+	const ready = () => {
+		const { ratesReady$ } = jest.mocked(createSettlementCoordinator).mock.calls[0][0];
+		let latest: boolean | undefined;
+		ratesReady$.subscribe((value) => (latest = value.ready)).unsubscribe();
+		return latest;
+	};
+
+	it('stays shut while coverage is complete but the rates are the unbound placeholder', async () => {
+		mockRatesRead = false;
+		currentConfig = createCartConfig({ ...config, calcTaxes: true });
+		mockInputs = { ...mockInputs, rates: [] };
+		const a = taxed();
+		orders.next({ ready: true, hits: [{ record: a }] });
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			expect(coverage.value.complete).toBe(true);
+			// Catches: a gate that trusts coverage alone and settles against no rates.
+			expect(ready()).toBe(false);
+			expect(writes).toEqual([]);
+			expect(report).not.toHaveBeenCalled();
+
+			mockRatesRead = true;
+			currentConfig = createCartConfig({ ...config, calcTaxes: true, rates, allRates: rates });
+			mockInputs = { ...mockInputs, rates };
+			view.rerender(<SettlementCoordinatorProvider />);
+			await flush();
+			expect(ready()).toBe(true);
+			expect(writes).toEqual([expect.objectContaining({ total: '11' })]);
+			expect(report).toHaveBeenCalledTimes(1);
+			expect(report.mock.calls[0][0]).not.toContainEqual(
+				expect.objectContaining({ code: 'unknown_tax_rate_id' })
+			);
+		} finally {
+			view.unmount();
+		}
+	});
+
+	it('opens and settles for a store with no tax rates once that read has answered', async () => {
+		currentConfig = createCartConfig({ ...config, calcTaxes: true });
+		mockInputs = { ...mockInputs, rates: [] };
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			// Catches: "no rates" mistaken for "not read", which would never settle this store.
+			expect(ready()).toBe(true);
+			expect(writes).toEqual([expect.objectContaining({ total: '10' })]);
+		} finally {
+			view.unmount();
+		}
+	});
+
+	it('opens when only the rates read answers, with inputs, coverage and generation unchanged', async () => {
+		mockRatesRead = false;
+		currentConfig = createCartConfig({ ...config, calcTaxes: true });
+		mockInputs = { ...mockInputs, rates: [] };
+		const view = render(<SettlementCoordinatorProvider />);
+		try {
+			await flush();
+			const coverageBefore = coverage.value;
+			const inputsBefore = mockInputs;
+			const statusesBefore = statuses.value;
+			expect(coverageBefore.complete).toBe(true);
+			expect(ready()).toBe(false);
+			expect(writes).toEqual([]);
+
+			// A zero-rate store: the read answering leaves `allRates` at [], so nothing else moves.
+			mockRatesRead = true;
+			view.rerender(<SettlementCoordinatorProvider />);
+			await flush();
+			expect(coverage.value).toBe(coverageBefore);
+			expect(mockInputs).toBe(inputsBefore);
+			expect(statuses.value).toBe(statusesBefore);
+			// Catches: `ratesRead` missing from the readiness effect's deps, a gate that never opens.
+			expect(ready()).toBe(true);
+			expect(writes).toEqual([expect.objectContaining({ total: '10' })]);
+		} finally {
+			view.unmount();
+		}
+	});
+});

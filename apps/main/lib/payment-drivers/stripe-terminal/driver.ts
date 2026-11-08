@@ -62,8 +62,9 @@ const isCanceled = (code: string | undefined) => sameCode(code, 'CANCELED');
 const discoveryMethod = (transport: PaymentTransport) =>
 	transport === 'tap_to_pay' ? 'tapToPay' : 'bluetoothScan';
 const readerInfo = (reader: Reader.Type, transport: PaymentTransport): ReaderInfo => ({
-	id: reader.serialNumber,
-	label: `${reader.deviceType} ${reader.serialNumber}`,
+	// beta.34 makes `serialNumber` (and `id`) optional; readers report it in practice.
+	id: reader.serialNumber ?? reader.id ?? '',
+	label: `${reader.deviceType} ${reader.serialNumber ?? ''}`.trim(),
 	model: reader.deviceType,
 	serial: reader.serialNumber,
 	// The SDK reports the level as a 0–1 fraction; the status line shows a percentage.
@@ -176,16 +177,13 @@ export function createStripeTerminalDriver({
 			else publish({ connection: connection === 'reconnecting' ? 'connecting' : connection });
 		},
 		onDidStartInstallingUpdate: () => publish({ connection: 'updating', progress: null }),
-		onDidReportReaderSoftwareUpdateProgress: (value: string) => {
-			const progress = Number.parseFloat(value);
-			publish({
-				connection: 'updating',
-				progress: Number.isFinite(progress) ? progress / (value.includes('%') ? 100 : 1) : null,
-			});
-		},
-		onDidFinishInstallingUpdate: (result: { error?: SdkError }) => {
-			if (result.error) {
-				reportError(result.error);
+		// beta.34 reports progress as a 0–1 number (beta.32 sent a string).
+		onDidReportReaderSoftwareUpdateProgress: (progress: number) =>
+			publish({ connection: 'updating', progress: Number.isFinite(progress) ? progress : null }),
+		// beta.34 passes (update, error) as separate optional arguments.
+		onDidFinishInstallingUpdate: (_update?: Reader.SoftwareUpdate, error?: SdkError) => {
+			if (error) {
+				reportError(error);
 				publish({ connection: 'disconnected', reader: null });
 			} else publish({ connection: 'connecting', progress: null });
 		},
@@ -244,7 +242,10 @@ export function createStripeTerminalDriver({
 			settlements.forEach((listener) =>
 				listener({
 					rowId,
-					provider_refs: { payment_intent: pi.id, charge: pi.charges?.[0]?.id ?? null },
+					provider_refs: {
+						payment_intent: pi.id,
+						charge: pi.latestChargeId ?? pi.latestCharge?.id ?? null,
+					},
 				})
 			);
 		},
@@ -492,8 +493,9 @@ export function createStripeTerminalDriver({
 				const confirmed = paymentIntent(
 					await api.confirmPaymentIntent({ paymentIntent: collected })
 				);
-				const charge = confirmed.charges?.[0];
-				// beta.32 uses cardPresentDetails; also accept the handoff contract's cardPresent spelling.
+				// beta.34 replaced the `charges` array with `latestCharge` / `latestChargeId`.
+				const charge = confirmed.latestCharge;
+				// The SDK uses cardPresentDetails; also accept the handoff contract's cardPresent spelling.
 				const details = charge?.paymentMethodDetails;
 				const card =
 					details?.cardPresentDetails ??
@@ -513,7 +515,10 @@ export function createStripeTerminalDriver({
 					: {};
 				return {
 					outcome: 'captured',
-					provider_refs: { payment_intent: confirmed.id, charge: charge?.id ?? null },
+					provider_refs: {
+						payment_intent: confirmed.id,
+						charge: charge?.id ?? confirmed.latestChargeId ?? null,
+					},
 					receipt,
 					amount: fromMinor(confirmed.amount, dp),
 					transport: input.transport,

@@ -204,6 +204,28 @@ describe('TaxRatesProvider query-state consumption', () => {
 		expect(screen.getByTestId('all-rate-ids').textContent).toBe('2');
 	});
 
+	it('says rates are read only once a bound read answers, zero rates included (#3186)', () => {
+		function ReadProbe() {
+			const { ratesRead, allRates: published } = useTaxSettings();
+			return <output data-testid="rates-read">{`${ratesRead}:${published.length}`}</output>;
+		}
+		activeResult = { hits: [], unbound: true } as typeof activeResult;
+		render(
+			<TaxRatesProvider>
+				<ReadProbe />
+			</TaxRatesProvider>
+		);
+		// Catches: the pre-database placeholder published as a read of no rates.
+		expect(screen.getByTestId('rates-read').textContent).toBe('false:0');
+
+		// Catches: a store with no tax rates at all mistaken for an unread one.
+		act(() => mockHandle?.set({ result: { hits: [] } }));
+		expect(screen.getByTestId('rates-read').textContent).toBe('true:0');
+
+		act(() => mockHandle?.set({ result: mockResult }));
+		expect(screen.getByTestId('rates-read').textContent).toBe('true:2');
+	});
+
 	it('throws a failed read to its own boundary, whose reset asks the handle again', async () => {
 		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
 		const retry = jest.fn(() => failed.set({ error: null, ready: false }));

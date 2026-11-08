@@ -75,7 +75,16 @@ export function reportPrintFailure(
 	message: string,
 	error: unknown,
 	t: Translate,
-	{ autoPrint = false, context }: { autoPrint?: boolean; context?: Record<string, unknown> } = {}
+	{
+		autoPrint = false,
+		context,
+		toastAction,
+	}: {
+		autoPrint?: boolean;
+		context?: Record<string, unknown>;
+		/** The toast's own button (it replaces the code's Help link), e.g. Reprint. */
+		toastAction?: { label: string; onClick: () => void };
+	} = {}
 ): void {
 	const failure = classifyPrintFailure(error, { autoPrint });
 	const fullContext = { ...context, error: getErrorMessage(error) };
@@ -85,11 +94,14 @@ export function reportPrintFailure(
 	}
 	const { key } = describePrinterError(error);
 	const level = ERROR_CATALOGUE[failure.code].severity === 'error' ? 'error' : 'warn';
+	// The generic line adds nothing to the code's own hint; a specific one does.
+	const text2 = key !== 'settings.setup_err_generic' ? printerErrorText(key, t) : undefined;
 	logger[level](message, {
 		showToast: true,
 		code: failure.code,
-		// The generic line adds nothing to the code's own hint; a specific one does.
-		...(key !== 'settings.setup_err_generic' ? { toast: { text2: printerErrorText(key, t) } } : {}),
+		...(text2 || toastAction
+			? { toast: { ...(text2 ? { text2 } : {}), ...(toastAction ? { action: toastAction } : {}) } }
+			: {}),
 		context: fullContext,
 	});
 }

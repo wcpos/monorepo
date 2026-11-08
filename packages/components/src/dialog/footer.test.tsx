@@ -145,7 +145,7 @@ it('omits the dismiss outside an overlay shell even with close true', () => {
 });
 it.each([
 	[false, ['Aside', 'Destructive', 'Record', 'Close', 'Secondary', 'Other', 'Intent']],
-	[true, ['Intent', 'Secondary', 'Other', 'Close', 'Record', 'Destructive', 'Aside']],
+	[true, ['Aside', 'Intent', 'Secondary', 'Other', 'Close', 'Record', 'Destructive']],
 ] as const)('orders every role explicitly (phone=%s)', (phone, order) => {
 	footer(slots, phone);
 	expect(

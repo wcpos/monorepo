@@ -5,6 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -27,7 +28,11 @@ interface Props {
 export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const readOnly = useCartTableReadOnly();
-	const paidBy = readOnly?.paidBy?.[readOnlyLineKey(uuid, item)];
+	const picker = readOnly?.picker;
+	const key = readOnlyLineKey(uuid, item);
+	const paid = (picker?.paid ?? readOnly?.paid)?.[key];
+	const unpaid = (item.quantity ?? 1) - (paid?.units ?? 0);
+	const picked = picker?.picked[key] ?? 0;
 	const { currentOrderRecord } = useCurrentOrder();
 	const { updateCartLine } = useUpdateCartLine();
 	const stockRejection = useObservableEagerState(stockRejection$);
@@ -75,7 +80,19 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			<View className="w-full" ref={readOnly ? undefined : scrollRef}>
 				{/* Two lines: the name is what the cashier reads, and the amount columns hold
 				    their width at every scale step, so a long name wraps rather than truncates. */}
-				{readOnly ? (
+				{picker && unpaid > 0 ? (
+					// The split picker: a tap on the name puts every unpaid unit in THIS payment.
+					<PressableSurface
+						role="button"
+						minTarget
+						testID={`checkout-line-${key}-pick`}
+						onPress={() => picker.pick(key, unpaid)}
+					>
+						<Text className="py-1.5" numberOfLines={2} decodeHtml>
+							{item.name ?? ''}
+						</Text>
+					</PressableSurface>
+				) : readOnly ? (
 					<Text className="py-1.5" numberOfLines={2} decodeHtml>
 						{item.name ?? ''}
 					</Text>
@@ -89,10 +106,20 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					/>
 				)}
 			</View>
-			{paidBy ? (
+			{picker && picked > 0 ? (
+				<Text variant="help" tabular>
+					{t('pos_checkout.unit_price_each', { amount: picker.format(picker.unitMinor(key, 1)) })}
+				</Text>
+			) : null}
+			{paid ? (
 				<StatusBadge
 					variant="ok"
-					label={t('pos_checkout.line_paid_by', { methods: paidBy.join(' + ') })}
+					testID={`checkout-line-${key}-paid`}
+					label={t('pos_checkout.units_paid_of', {
+						n: paid.units,
+						total: item.quantity ?? 1,
+						methods: paid.methods.join(' + '),
+					})}
 				/>
 			) : null}
 			{stockMark && (

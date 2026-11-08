@@ -25,8 +25,8 @@ type Props = DrawerContentComponentProps & {
 	presentation: 'rail' | 'front';
 	/** Each route's icon by route name; the item paints its tint from its selected state. */
 	icons: Partial<Record<string, IconName>>;
-	/** Drawn on a route's icon by route name (Store health's unread errors). */
-	badges?: Partial<Record<string, React.ReactNode>>;
+	/** A count on a route's icon by route name (Store health's unread errors). */
+	counts?: Partial<Record<string, number>>;
 };
 
 /**
@@ -40,7 +40,7 @@ type Props = DrawerContentComponentProps & {
  * (`DrawerProgressContext`, `DrawerGestureContext`). Anything that needs those has to be a
  * rendered element instead. The insets and the spacing unit are fine: their providers are far above.
  */
-export function DrawerContent({ presentation, icons, badges, ...props }: Props) {
+export function DrawerContent({ presentation, icons, counts, ...props }: Props) {
 	const rail = presentation === 'rail';
 	const { state, navigation, descriptors } = props;
 	// The panel touches the top and bottom edges, and insets its items by the dense-strip gutter
@@ -72,12 +72,12 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 	const renderItem = (route: (typeof state.routes)[number]) => {
 		const focused = route.key === focusedKey;
 		const label = descriptors[route.key]?.options.title ?? route.name;
-		const badge = badges?.[route.name];
 		const item = (
 			<NavItem
 				size="drawer"
 				selected={focused}
 				icon={icons[route.name]}
+				count={counts?.[route.name]}
 				label={rail ? undefined : label}
 				accessibilityLabel={label}
 				className={rail ? 'w-12' : undefined}
@@ -104,12 +104,6 @@ export function DrawerContent({ presentation, icons, badges, ...props }: Props) 
 				) : (
 					item
 				)}
-				{/* Over the item's icon box: `px-3` in, centred in its 48 (`size-6` at `xl`). */}
-				{badge ? (
-					<View pointerEvents="none" className="absolute top-3 left-3 size-6">
-						{badge}
-					</View>
-				) : null}
 			</View>
 		);
 	};

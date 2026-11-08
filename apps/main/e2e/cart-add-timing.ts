@@ -92,3 +92,38 @@ export async function expectCartAddMeasurement(
 			.catch(() => undefined);
 	}
 }
+
+/** Read the armed add's timing WITHOUT asserting a budget; a `null` budget gates nothing. */
+export async function readCartAddMeasurement(
+	page: Page,
+	testInfo: TestInfo,
+	budgetMs: number | null
+): Promise<number | null> {
+	const readSample = () =>
+		page.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.sample);
+	// A timeout is a reading ("none"), never a failure: the gate it feeds is quarantined.
+	await expect
+		.poll(async () => (await readSample())?.status, { timeout: 15_000 })
+		.toBe('complete')
+		.catch(() => undefined);
+	const rawSample = (await readSample().catch(() => null)) ?? null;
+	console.log(
+		`[cart-add-timing] project=${testInfo.project.name} retry=${testInfo.retry} durationMs=${rawSample?.durationMs ?? 'none'} budgetMs=${budgetMs ?? 'none'} status=${rawSample?.status ?? 'none'}`
+	);
+	await testInfo.attach('cart-add-performance', {
+		body: JSON.stringify({
+			metric: 'dom-add-intent-to-cart-quantity',
+			platform: 'web',
+			project: testInfo.project.name,
+			budgetMs: budgetMs ?? 'none',
+			rawSamples: [rawSample],
+			asserted: false,
+		}),
+		contentType: 'application/json',
+	});
+	await page
+		.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.stop())
+		.catch(() => undefined);
+	const durationMs = rawSample?.status === 'complete' ? rawSample.durationMs : null;
+	return Number.isFinite(durationMs) ? durationMs : null;
+}

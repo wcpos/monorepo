@@ -16,6 +16,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { describeEvent, type EventTone, failureReasonLabel, providerErrorMessage } from './labels';
 import { CapturedUnfinishedNotice } from './captured-unfinished-notice';
+import { primaryServerHardware } from './tiles';
 import { useDriverStatus } from './use-driver-status';
 import { readerName } from '../../../settings/card-readers/reader-name';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
@@ -38,12 +39,8 @@ export function TerminalLegView({
 	const { row } = leg;
 	const final = leg.phase === 'final';
 	const method = flow.tiles.find(({ method }) => method.id === row.method_id)?.method;
-	const hardware = method?.capture.hardware;
 	const readerId = row.provider_refs?.reader ?? leg.reader ?? '';
-	const reader =
-		hardware && 'readers' in hardware
-			? hardware.readers.find(({ id }) => id === readerId)
-			: undefined;
+	const reader = primaryServerHardware(method)?.readers.find(({ id }) => id === readerId);
 	// One name app-wide: a Tap to Pay reader is "This device", as in Settings and the pay sheet.
 	const readerLabel =
 		row.transport === 'tap_to_pay'

@@ -9,6 +9,7 @@ import {
 import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { ensureRegisterOpen, getStoreUrl, wcposRestRoute } from './fixtures';
 import {
+	cartRecordUuid,
 	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
 	newRunLabel,
@@ -27,6 +28,11 @@ import {
 
 export function digitsOf(value: string): string {
 	return value.replace(/\D/g, '');
+}
+
+/** Digits after the last decimal separator of a shown amount: its minor-unit precision. */
+export function decimalPlaces(text: string): number {
+	return /[.,](\d+)\D*$/.exec(text)?.[1].length ?? 0;
 }
 
 export async function readAmountMinor(page: Page, testId: string): Promise<number> {
@@ -208,7 +214,10 @@ export async function openCheckout(
 	onOrderCreated: (order: TrackedOrder) => void
 ): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy' }> {
 	await ensureRegisterOpen(page);
-	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), { timeout: 90_000 });
+	const recordId = await cartRecordUuid(page);
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
+		timeout: 90_000,
+	});
 	// An unhandled rejection here takes down the whole worker process (#997).
 	saved.catch(() => {});
 
