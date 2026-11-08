@@ -197,9 +197,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		paidMinor: 0,
 		plan: null,
 		planLabel: null,
-		lines: [],
-		picked: {},
-		splitOn: false,
 		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
@@ -226,7 +223,6 @@ const reopenedPaid = {
 	totalMinor: 1683,
 	balanceMinor: 0,
 	paidMinor: 1683,
-	allocations: {},
 	rows: [
 		{ id: 'r1', method_id: 'pos_cash', amount: '16.83', status: 'captured', kind: 'cash' },
 	] as TenderFlow['rows'],

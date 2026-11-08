@@ -38,8 +38,6 @@ jest.mock('../contexts/current-order', () => {
 let mockSplitOn = false;
 const mockPickUnits = jest.fn();
 jest.mock('../checkout/checkout-mode', () => ({
-	useSplitOn: () => mockSplitOn,
-	usePickedUnits: () => ({ 'line-1': 1 }),
 	pickUnits: (...args: unknown[]) => mockPickUnits(...args),
 }));
 jest.mock('../checkout/tender/use-ledger-view', () => ({
@@ -48,10 +46,14 @@ jest.mock('../checkout/tender/use-ledger-view', () => ({
 		paidMinor: 705,
 		balanceMinor: 4295,
 		rows: [],
-		allocations: {},
-		// 10.00 over three units: 3.33, 3.33, then 3.34 on the last.
-		lines: [{ id: 'line-1', name: 'Tea', quantity: 3, totalMinor: 1000 }],
-		paidUnits: { 'line-1': { units: 1, methods: ['Cash'] } },
+		split: {
+			allocations: {},
+			// 10.00 over three units: 3.33, 3.33, then 3.34 on the last.
+			lines: [{ id: 'line-1', name: 'Tea', quantity: 3, totalMinor: 1000 }],
+			paidUnits: { 'line-1': { units: 1, methods: ['Cash'] } },
+			picked: { 'line-1': 1 },
+			splitOn: mockSplitOn,
+		},
 		format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
 	}),
 }));

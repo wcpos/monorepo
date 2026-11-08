@@ -11,7 +11,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
-import { withFigures } from './tender-figures.test-utils';
+import { splitWith, withFigures } from './tender-figures.test-utils';
 
 import type { TenderFlow } from './use-tender-flow';
 
@@ -229,7 +229,6 @@ const reopenedPaid = {
 	totalMinor: 1683,
 	balanceMinor: 0,
 	paidMinor: 1683,
-	allocations: {},
 	rows: [
 		{ id: 'r1', method_id: 'pos_cash', amount: '16.83', status: 'captured', kind: 'cash' },
 	] as TenderFlow['rows'],
@@ -252,9 +251,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		paidMinor: 0,
 		plan: null,
 		planLabel: null,
-		lines: [],
-		picked: {},
-		splitOn: false,
 		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
@@ -353,7 +349,9 @@ describe('TenderCheckout', () => {
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
 			},
 		];
-		mockFlow = makeFlow({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } });
+		mockFlow = makeFlow({
+			split: splitWith({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } }),
+		});
 
 		render(<TenderCheckout order={order} />);
 
