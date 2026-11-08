@@ -1078,6 +1078,30 @@ describe('split V1: the pane builds each payment', () => {
 	const text = (id: string) => screen.getByTestId(id).textContent;
 	const pressed = (id: string) => screen.getByTestId(id).getAttribute('aria-pressed');
 
+	// Paul, 2026-11-08 ("as you recommend (a)"): the six tiles are one strip that scrolls sideways,
+	// never a second row that pushes the keypad down.
+	it('Split on puts Percent and the five ways in one horizontal strip that scrolls', () => {
+		render(<TenderPane flow={splitFlow()} format={String} />);
+		const strip = screen.getByTestId('checkout-split-ways');
+		expect(strip.hasAttribute('data-horizontal')).toBe(true);
+		expect(strip.dataset.contentClasses?.split(' ')).toEqual(
+			expect.arrayContaining(['grow', 'gap-2'])
+		);
+		const ids = ['checkout-percent', ...[2, 3, 4, 5, 6].map((ways) => `checkout-even-${ways}`)];
+		for (const id of ids) {
+			const tile = screen.getByTestId(id);
+			expect(strip.contains(tile)).toBe(true);
+			// Each tile's cell shares the row and never drops under 112.
+			expect(tile.parentElement?.className.split(' ')).toEqual(
+				expect.arrayContaining(['min-w-28', 'flex-1'])
+			);
+		}
+		expect(strip.children).toHaveLength(6);
+		// The strip holds its own line in the wrapping helpers row: a full-width plain wrapper.
+		expect(strip.parentElement?.className).toBe('w-full');
+		expect(strip.className).not.toContain('w-full');
+	});
+
 	it('Split on shows the even row, Percent and five ways, and no sub-view', () => {
 		const flow = splitFlow();
 		render(<TenderPane flow={flow} format={String} />);
@@ -1448,11 +1472,15 @@ jest.mock('react-native', () => {
 		className,
 		onLayout,
 		contentContainerStyle,
+		horizontal,
+		contentContainerClassName,
 	}: React.PropsWithChildren<{
 		testID?: string;
 		className?: string;
 		onLayout?: (typeof mockLayouts)[string];
 		contentContainerStyle?: unknown;
+		horizontal?: boolean;
+		contentContainerClassName?: string;
 	}>) {
 		// The jsdom host has no layout engine; expose its committed layout callback to the test.
 		React.useLayoutEffect(() => {
@@ -1463,7 +1491,12 @@ jest.mock('react-native', () => {
 			if (testID && contentContainerStyle) mockContentStyles[testID] = contentContainerStyle;
 		}, [testID, contentContainerStyle]);
 		return (
-			<div data-testid={testID} className={className}>
+			<div
+				data-testid={testID}
+				className={className}
+				data-horizontal={horizontal ? '' : undefined}
+				data-content-classes={contentContainerClassName}
+			>
 				{children}
 			</div>
 		);

@@ -762,35 +762,55 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									? t('pos_checkout.after_this_payment', { amount: format(restMinor) })
 									: t('pos_checkout.split_the_rest')}
 							</Text>
-							<TileGrid columns={phone ? 2 : 5}>
-								{choice(
-									'checkout-percent',
-									t('pos_checkout.percent_tile'),
-									t('pos_checkout.percent_tile_sub'),
-									() => flow.dispatch({ type: 'set-entry-mode', mode: 'percent' })
-								)}
-								{[2, 3, 4, 5, 6].map((count) =>
-									choice(
-										`checkout-even-${count}`,
-										t('pos_checkout.n_ways', { ways: count }),
-										t('pos_checkout.amount_each', {
-											amount: format(evenSplitShareMinor(restMinor, count)),
-										}),
-										() =>
-											setPlan(
-												typed
-													? {
-															kind: 'fixed',
-															firstMinor: flow.entryAppliedMinor,
-															title: null,
-															thenWays: count,
-															from: flow.rows.length,
-														}
-													: { kind: 'even', ways: count, from: flow.rows.length }
+							{/* One row that scrolls sideways when the six do not fit, as the filter strip
+							    does, never a second row that pushes the keypad down (Paul, 2026-11-08:
+							    "as you recommend (a)"). */}
+							{/* The View holds the line in the wrapping row: a horizontal ScrollView grows and
+							    shrinks on its own, so beside the quick amounts it gave up most of the line. */}
+							<View className="w-full">
+								<ScrollView
+									horizontal
+									showsHorizontalScrollIndicator={false}
+									keyboardShouldPersistTaps="handled"
+									contentContainerClassName="grow gap-2"
+									testID="checkout-split-ways"
+								>
+									{[
+										choice(
+											'checkout-percent',
+											t('pos_checkout.percent_tile'),
+											t('pos_checkout.percent_tile_sub'),
+											() => flow.dispatch({ type: 'set-entry-mode', mode: 'percent' })
+										),
+										...[2, 3, 4, 5, 6].map((count) =>
+											choice(
+												`checkout-even-${count}`,
+												t('pos_checkout.n_ways', { ways: count }),
+												t('pos_checkout.amount_each', {
+													amount: format(evenSplitShareMinor(restMinor, count)),
+												}),
+												() =>
+													setPlan(
+														typed
+															? {
+																	kind: 'fixed',
+																	firstMinor: flow.entryAppliedMinor,
+																	title: null,
+																	thenWays: count,
+																	from: flow.rows.length,
+																}
+															: { kind: 'even', ways: count, from: flow.rows.length }
+													)
 											)
-									)
-								)}
-							</TileGrid>
+										),
+									].map((tile) => (
+										// Equal shares of the row while 112 each fits; past that the strip scrolls.
+										<View key={tile.key} className="min-w-28 flex-1">
+											{tile}
+										</View>
+									))}
+								</ScrollView>
+							</View>
 						</>
 					) : null}
 					{percent ? (
