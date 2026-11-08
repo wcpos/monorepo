@@ -58,7 +58,7 @@ import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
 import { MenuChip } from '../menu-chip';
 
-function CashierChip({ className }: { className?: string }) {
+function CashierChip({ stretch }: { stretch?: boolean }) {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -73,7 +73,7 @@ function CashierChip({ className }: { className?: string }) {
 	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
 		<MenuChip
-			className={className}
+			stretch={stretch}
 			name="cashier"
 			icon="cashier"
 			scroll
@@ -399,7 +399,7 @@ function useLeftOutCount(): number {
 	const { unselectedRowIds } = useReportsSelection();
 	return allOrders.filter((order) => included(order) && unselectedRowIds[order.uuid]).length;
 }
-function LeftOutChip({ count, className }: { count: number; className?: string }) {
+function LeftOutChip({ count, stretch }: { count: number; stretch?: boolean }) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
 	const { quantity } = useReportFormats(storeId);
@@ -407,7 +407,7 @@ function LeftOutChip({ count, className }: { count: number; className?: string }
 	const { setUnselectedRowIds } = useReportsSelection();
 	return (
 		<Chip
-			className={className}
+			stretch={stretch}
 			testID="hero-chip-left-out"
 			icon="cart"
 			on
@@ -432,18 +432,18 @@ function ChipsLayout({ phone, children }: { phone: boolean; children: React.Reac
 }
 function SettledChips({
 	phone,
-	cell,
+	stretch,
 	children,
 }: {
 	phone: boolean;
-	cell?: string;
+	stretch?: boolean;
 	children: React.ReactNode;
 }) {
 	const count = useLeftOutCount();
 	return (
 		<ChipsLayout phone={phone}>
 			{children}
-			{count > 0 && <LeftOutChip count={count} className={cell} />}
+			{count > 0 && <LeftOutChip count={count} stretch={stretch} />}
 		</ChipsLayout>
 	);
 }
@@ -451,16 +451,15 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { statusMode, setStatusMode } = useReportsScope();
-	const cell = phone ? 'self-stretch' : undefined;
 	const shared = (
 		<>
 			<React.Suspense
 				fallback={<View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />}
 			>
-				<CashierChip className={cell} />
+				<CashierChip stretch={phone} />
 			</React.Suspense>
 			<MenuChip
-				className={cell}
+				stretch={phone}
 				name="status"
 				icon="cartDone"
 				value={statusMode}
@@ -474,7 +473,7 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 		</>
 	);
 	return settled ? (
-		<SettledChips phone={phone} cell={cell}>
+		<SettledChips phone={phone} stretch={phone}>
 			{shared}
 		</SettledChips>
 	) : (
