@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { mockState, render } from '../cards/test-utils';
+import { figuresOf, mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
-import { calculateTotals } from '../report/utils';
 import { PageSheetHostContext } from '../../components/page-sheet-host';
 
 import type * as Context from '../context';
@@ -141,7 +140,7 @@ export function preparePanel() {
 		return {
 			...mockState.data,
 			selectedOrders,
-			totals: calculateTotals({ orders: selectedOrders }),
+			figures: figuresOf(mockState.data, selectedOrders),
 		};
 	});
 }

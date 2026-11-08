@@ -48,7 +48,7 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 		live,
 		wholeComparisonOrders,
 		comparisonOrders,
-		totals,
+		figures,
 	} = useReportsData();
 	const { timezone, period: rangePeriod, storeId } = useReportsPeriod();
 	const period = rangePeriod as 'day' | 'week' | 'month';
@@ -381,7 +381,9 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 						'hero-chart-total',
 						Math.max(0, currentEnd),
 						data[currentEnd]?.current ?? 0,
-						live ? t('reports.amount_now', { amount: format(totals.total) }) : format(totals.total),
+						live
+							? t('reports.amount_now', { amount: format(figures.gross) })
+							: format(figures.gross),
 						primaryColor
 					)}
 				{run &&

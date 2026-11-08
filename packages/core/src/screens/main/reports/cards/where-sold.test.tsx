@@ -28,10 +28,12 @@ beforeEach(() => {
 		},
 		{ total: '4', created_via: 'checkout' },
 	] as ReportOrder[]);
-	mockState.data.totals.registerArray = [
-		{ registerId: 'abcdefgh-1234', totalAmount: 6, totalOrders: 1 },
-		{ registerId: 'second-register', totalAmount: 3, totalOrders: 1 },
-	];
+	mockState.figures = {
+		registersStamped: [
+			{ registerId: 'abcdefgh-1234', totalAmount: 6, totalOrders: 1 },
+			{ registerId: 'second-register', totalAmount: 3, totalOrders: 1 },
+		],
+	};
 	mockState.register = undefined;
 	mockState.names = {};
 	mockState.namesReady = true;
@@ -56,7 +58,7 @@ it('the view control appears only under All registers with more than one registe
 	view.rerender(<WhereSoldCard />);
 	expect(screen.queryByTestId('card-where-sold-view')).toBeNull();
 	mockState.register = undefined;
-	mockState.data.totals.registerArray = mockState.data.totals.registerArray.slice(0, 1);
+	mockState.figures = { registersStamped: mockState.figures!.registersStamped!.slice(0, 1) };
 	view.rerender(<WhereSoldCard />);
 	expect(screen.queryByTestId('card-where-sold-view')).toBeNull();
 });

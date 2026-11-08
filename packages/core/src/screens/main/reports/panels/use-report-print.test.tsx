@@ -5,16 +5,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { createTestT } from '../../../../../jest/translate';
-import {
-	cashiers,
-	categories,
-	channels,
-	registers,
-	taxesByRate,
-	tenders,
-	topProducts,
-} from '../cards/aggregate';
-import { calculateTotals } from '../report/utils';
+import { salesFigures } from '../report/sales-figures';
 import { ReportsDirectoriesProvider, ReportsFilterScopeProvider } from '../scope';
 import { panelSpec } from './specs';
 import { useReportPrint } from './use-report-print';
@@ -105,24 +96,13 @@ jest.mock('../../../../services/register-session/use-closure-document-context', 
 }));
 
 const orders = [{ uuid: 'one', total: '10', payment_method: 'cash' }] as ReportOrder[];
-const totals = calculateTotals({ orders });
-const spec = panelSpec('payments', {
-	orders,
-	totals,
-	payments: tenders(orders, totals),
-	products: topProducts(orders, totals),
-	categories: categories(orders, [], totals),
-	cashiers: cashiers(totals),
-	channels: channels(orders, totals),
-	registers: registers(orders, totals),
-	registerNames: {},
-	stores: [],
-	storeNames: {},
-	taxes: taxesByRate(orders, totals),
-	cashierNames: {},
-	formats: { money: String, number: String, quantity: String, percent: String },
-	t: createTestT(),
-});
+const spec = panelSpec(
+	'payments',
+	salesFigures({ orders }),
+	{ money: String, number: String, quantity: String, percent: String },
+	createTestT(),
+	{ orders, names: { cashier: {}, register: {}, store: {} } }
+);
 
 function Scope({ children }: React.PropsWithChildren) {
 	return (

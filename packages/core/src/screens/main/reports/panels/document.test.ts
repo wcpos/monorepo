@@ -1,14 +1,5 @@
 import { createTestT } from '../../../../../jest/translate';
-import {
-	cashiers,
-	categories,
-	channels,
-	registers,
-	taxesByRate,
-	tenders,
-	topProducts,
-} from '../cards/aggregate';
-import { calculateTotals } from '../report/utils';
+import { salesFigures } from '../report/sales-figures';
 import { buildReportDocument } from './document';
 import { panelSpec } from './specs';
 import fixture from './__fixtures__/report-sales.json';
@@ -25,29 +16,15 @@ const orders = [
 		line_items: [{ product_id: 1, name: 'Tea', quantity: 1.5, total: '10' }],
 	},
 ] as ReportOrder[];
-const totals = calculateTotals({ orders });
-const inputs = {
-	orders,
-	totals,
-	payments: tenders(orders, totals),
-	products: topProducts(orders, totals),
-	categories: categories(orders, [], totals),
-	cashiers: cashiers(totals),
-	channels: channels(orders, totals),
-	registers: registers(orders, totals),
-	registerNames: {},
-	stores: [],
-	storeNames: {},
-	taxes: taxesByRate(orders, totals),
-	cashierNames: {},
-	formats: {
-		money: (n: number | null | undefined) => `£${Number(n).toFixed(2)}`,
-		number: String,
-		quantity: String,
-		percent: String,
-	},
-	t: createTestT(),
+const figures = salesFigures({ orders });
+const view = { orders, names: { cashier: {}, register: {}, store: {} } };
+const formats = {
+	money: (n: number | null | undefined) => `£${Number(n).toFixed(2)}`,
+	number: String,
+	quantity: String,
+	percent: String,
 };
+const specOf = (id: DetailId) => panelSpec(id, figures, formats, createTestT(), view);
 const context = {
 	store: fixture.store,
 	currency: 'GBP',
@@ -57,7 +34,7 @@ const context = {
 	formatMoney: String,
 	i18n: fixture.i18n,
 };
-function document(id: DetailId, spec: PanelSpec = panelSpec(id, inputs)) {
+function document(id: DetailId, spec: PanelSpec = specOf(id)) {
 	return buildReportDocument(
 		spec,
 		{
@@ -170,7 +147,7 @@ it("generated_at and the scope dates are the server's date bundles", () => {
 
 // Grouped reports must keep the plugin's exact group shape and ordered cells.
 it('pins grouped rows and subtotals against the report fixture', () => {
-	const spec = panelSpec('payments', inputs);
+	const spec = specOf('payments');
 	spec.groups = [
 		{ key: '_cash', label: 'Cash', rows: spec.rows, total: spec.total, totalRaw: spec.totalRaw },
 		{ key: 'empty', label: 'Empty', rows: [], total: spec.total, totalRaw: spec.totalRaw },

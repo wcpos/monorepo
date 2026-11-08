@@ -2,23 +2,15 @@ import round from 'lodash/round';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
-import { refundsSummary, tenderLabel } from '../cards/aggregate';
-import { chainLabel, cogsEnabled, lineCost, marginOf } from '../margin';
+import { tenderLabel } from '../cards/aggregate';
+import { chainLabel, lineCost, marginOf } from '../margin';
 
-import type { brands, CategoryTree } from '../margin';
-import type {
-	cashiers,
-	categories,
-	channels,
-	registers,
-	stores,
-	taxesByRate,
-	tenders,
-	topProducts,
-} from '../cards/aggregate';
+import type { LocalProduct } from '../cards/aggregate';
+import type { CategoryTree } from '../margin';
 import type { DetailId, RefundRow, ReportOrder } from '../context';
-import type { calculateTotals } from '../report/utils';
+import type { SalesFigures } from '../report/sales-figures';
 import type { useReportFormats } from '../use-report-formats';
+import type { ReportsFilterScope } from '../scope';
 
 export type PanelSpec = {
 	groups?: {
@@ -37,51 +29,39 @@ export type PanelSpec = {
 	total: string[];
 	align: ('left' | 'right')[];
 };
-type Inputs = {
-	periodRefunds?: RefundRow[];
-	brands?: ReturnType<typeof brands>;
-	categoryTree?: CategoryTree;
-	cogs?: boolean;
-	num_decimals?: number;
-	channels: ReturnType<typeof channels>;
-	registers: ReturnType<typeof registers>;
-	registerNames: Record<string, string>;
-	stores: ReturnType<typeof stores>;
-	storeNames: Record<string, string>;
-	payments: ReturnType<typeof tenders>;
-	products: ReturnType<typeof topProducts>;
-	categories: ReturnType<typeof categories>;
-	cashiers: ReturnType<typeof cashiers>;
-	taxes: ReturnType<typeof taxesByRate>;
+/** What a panel shows besides the figures: its own rows, names and product joins. */
+type PanelView = {
+	/** The included orders on the Orders panel; the counted orders on every other. */
 	orders: ReportOrder[];
+	names: ReportsFilterScope['names'];
+	directory?: LocalProduct[];
+	categoryTree?: CategoryTree;
+	/** The Products panel's lines after its Category and Brand chips (ledger 42). */
+	productLines?: { orders: ReportOrder[]; refunds: RefundRow[] };
 	unselectedRowIds?: Record<string, boolean>;
 	orderTime?: (
 		order: Pick<ReportOrder, 'date_created_gmt' | 'date_paid_gmt' | 'meta_data'>
 	) => string;
-	totals: ReturnType<typeof calculateTotals>;
-	cashierNames: Record<string, string>;
-	formats: Pick<ReturnType<typeof useReportFormats>, 'money' | 'number' | 'quantity' | 'percent'>;
-	t: (key: string, values?: Record<string, unknown>) => string;
 };
-export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
-	const {
-		payments,
-		products,
-		categories,
-		cashiers,
-		taxes,
-		orders,
-		totals,
-		cashierNames,
-		formats,
-		t,
-	} = inputs;
+/** One panel's rows, read from the figure that panel shows and no other. */
+export function panelSpec(
+	id: DetailId,
+	figures: SalesFigures,
+	formats: Pick<ReturnType<typeof useReportFormats>, 'money' | 'number' | 'quantity' | 'percent'>,
+	t: (key: string, values?: Record<string, unknown>) => string,
+	view: PanelView
+): PanelSpec {
+	const { orders, directory } = view;
+	const productRows = () =>
+		figures.products.netOfRefunds(directory, view.productLines?.orders, view.productLines?.refunds);
+	const groupParts = () =>
+		(id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory).parts;
 	const { money, number, quantity, percent } = formats;
 	const share = (value: number) => t('reports.percent', { value: percent(value * 100) });
 	const unknown = t('common.unknown'),
 		total = t('common.total');
 	const count = number(orders.length),
-		amount = money(totals.total);
+		amount = money(figures.gross);
 	// Column heads as literal translation calls: the string extractor reads no computed key.
 	const col = {
 		order: t('common.order'),
@@ -150,13 +130,11 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		};
 		const groups =
 			id === 'products'
-				? products
-				: id === 'categories'
-					? categories.parts
-					: id === 'brands'
-						? (inputs.brands?.parts ?? [])
-						: null;
-		if (groups && (inputs.cogs ?? cogsEnabled(orders, []))) {
+				? productRows()
+				: id === 'categories' || id === 'brands'
+					? groupParts()
+					: null;
+		if (groups && figures.margin.shownNetOfRefunds(directory)) {
 			const insert = <T>(values: T[], extra: T[]) => values.splice(3, 0, ...extra);
 			insert(result.keys, ['cost', 'profit', 'margin']);
 			insert(result.head, [col.cost, col.profit, col.margin]);
@@ -184,13 +162,13 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				known = groups.some((group) => (group.lines ?? []).some((line) => lineCost(line) !== null));
 			groups.forEach((group, index) => {
 				const lines = group.lines ?? [],
-					row = marginOf(lines, inputs.num_decimals);
+					row = marginOf(lines, figures.decimals);
 				append(rows[index].cells, rows[index].raw, row, row.missing < lines.length);
 				for (const key of ['net', 'cost', 'profit', 'missing', 'items', 'missingItems'] as const)
 					value[key] += row[key];
 			});
-			value.cost = round(value.cost, inputs.num_decimals ?? 2);
-			value.profit = round(value.profit, inputs.num_decimals ?? 2);
+			value.cost = round(value.cost, figures.decimals ?? 2);
+			value.profit = round(value.profit, figures.decimals ?? 2);
 			value.marginPct =
 				value.cost + value.profit ? value.profit / (value.cost + value.profit) : null;
 			append(total, totalRaw, value, known);
@@ -213,11 +191,11 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 							: unknown;
 					const cells = [
 						order.number ? `#${order.number}` : unknown,
-						inputs.orderTime?.(order) || unknown,
-						cashierNames[cashier] || unknown,
+						view.orderTime?.(order) || unknown,
+						view.names.cashier[cashier] || unknown,
 						method,
 						money(Number(order.total || 0)),
-						inputs.unselectedRowIds?.[order.uuid] ? t('common.no') : t('common.yes'),
+						view.unselectedRowIds?.[order.uuid] ? t('common.no') : t('common.yes'),
 					];
 					return {
 						key: order.uuid,
@@ -226,7 +204,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 							index === 4
 								? Number(order.total || 0)
 								: index === 5
-									? inputs.unselectedRowIds?.[order.uuid]
+									? view.unselectedRowIds?.[order.uuid]
 										? 'no'
 										: 'yes'
 									: cell
@@ -234,20 +212,21 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 					};
 				}),
 				[t('reports.counted'), '', '', '', amount, ''],
-				[t('reports.counted'), '', '', '', totals.total, '']
+				[t('reports.counted'), '', '', '', figures.gross, '']
 			);
 		case 'payments':
 			return spec(
 				[col.method, col.orders, col.amount, col.share],
-				payments.map((row) => ({
+				figures.takenByTender.map((row) => ({
 					key: row.key,
 					raw: [tenderLabel(row, t), row.orders, row.amount, row.share * 100],
 					cells: [tenderLabel(row, t), number(row.orders), money(row.amount), share(row.share)],
 				})),
 				[total, count, amount, ''],
-				[total, orders.length, totals.total, '']
+				[total, orders.length, figures.gross, '']
 			);
-		case 'products':
+		case 'products': {
+			const products = productRows();
 			return spec(
 				[col.product, col.qty, col.amount],
 				products.map((row) => ({
@@ -267,12 +246,13 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 					products.reduce((sum, row) => sum + row.amount, 0),
 				]
 			);
+		}
 		case 'brands':
 		case 'categories': {
-			const grouping = id === 'brands' ? (inputs.brands?.parts ?? []) : categories.parts;
-			const label = (row: (typeof categories.parts)[number]) =>
-				(id === 'categories' && inputs.categoryTree
-					? chainLabel(Number(row.key), inputs.categoryTree, t('reports.chain_separator'), unknown)
+			const grouping = groupParts();
+			const label = (row: (typeof grouping)[number]) =>
+				(id === 'categories' && view.categoryTree
+					? chainLabel(Number(row.key), view.categoryTree, t('reports.chain_separator'), unknown)
 					: '') ||
 				row.label ||
 				labels[row.key] ||
@@ -307,8 +287,8 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		case 'registers':
 		case 'stores': {
 			const byChannel = id === 'channels';
-			const rows = byChannel ? inputs.channels : id === 'stores' ? inputs.stores : inputs.registers;
-			const names = id === 'stores' ? inputs.storeNames : inputs.registerNames;
+			const rows = figures[byChannel ? 'byChannel' : id === 'stores' ? 'byStore' : 'byRegister'];
+			const names = id === 'stores' ? view.names.store : view.names.register;
 			const n = rows.reduce((sum, row) => sum + row.orders, 0);
 			const sum = rows.reduce((sum, row) => sum + row.amount, 0);
 			const totalShare = rows.reduce((sum, row) => sum + row.share, 0);
@@ -348,25 +328,26 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		case 'cashiers':
 			return spec(
 				[col.cashier, col.orders, col.avgOrder, col.amount],
-				cashiers.map((row) => ({
+				figures.byCashier.map((row) => ({
 					key: row.key,
 					raw: [
-						cashierNames[row.key] || unknown,
+						view.names.cashier[row.key] || unknown,
 						row.orders,
 						row.orders ? row.amount / row.orders : 0,
 						row.amount,
 					],
 					cells: [
-						cashierNames[row.key] || unknown,
+						view.names.cashier[row.key] || unknown,
 						number(row.orders),
 						money(row.orders ? row.amount / row.orders : 0),
 						money(row.amount),
 					],
 				})),
-				[total, count, money(totals.averageOrderValue), amount],
-				[total, orders.length, totals.averageOrderValue, totals.total]
+				[total, count, money(figures.average), amount],
+				[total, orders.length, figures.average, figures.gross]
 			);
-		case 'taxes':
+		case 'taxes': {
+			const taxes = figures.taxesByRate;
 			return spec(
 				[col.rate, col.net, col.tax, col.gross],
 				taxes.rows.map((row) => ({
@@ -387,16 +368,17 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				[total, money(taxes.net), money(taxes.tax), money(taxes.gross)],
 				[total, taxes.net, taxes.tax, taxes.gross]
 			);
+		}
 		case 'refunds': {
-			const refunds = inputs.periodRefunds ?? [];
-			const refunded = refundsSummary(refunds, totals, inputs.num_decimals).refunded;
+			const refunds = figures.refundRows ?? [];
+			const refunded = figures.refunds.refunded;
 			return spec(
 				[col.order, col.refundTime, col.reason, col.amount],
 				refunds.map((refund) => {
 					const amount = Math.abs(Number(refund.amount ?? refund.total ?? 0));
 					const cells = [
 						`#${refund.parentNumber || orders.find((order) => order.id === refund.parent_id)?.number || refund.parent_id}`,
-						inputs.orderTime?.(refund) || unknown,
+						view.orderTime?.(refund) || unknown,
 						refund.reason || '—',
 						money(amount),
 					];

@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { taxesByRate } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Legend, ProportionalBar, StatGrid } from './primitives';
 
@@ -12,14 +11,10 @@ const colors = ['bg-c1', 'bg-c2', 'bg-c3', 'bg-c4', 'bg-c5'];
 export function TaxesCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData();
+		{ figures } = useReportsData();
 	const { storeId } = useReportsPeriod(),
 		{ store, money } = useReportFormats(storeId);
-	const decimals = store?.price_num_decimals;
-	const summary = React.useMemo(
-		() => taxesByRate(selectedOrders, totals, decimals),
-		[selectedOrders, totals, decimals]
-	);
+	const summary = figures.taxesByRate;
 	if (!store) return <CardSkeleton testID="card-taxes" name={t('reports.card_taxes')} />;
 	return (
 		<ReportCard
