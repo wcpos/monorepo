@@ -121,7 +121,8 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 						value != null && (
 							<Chip
 								key={source}
-								className="justify-center self-stretch"
+								stretch
+								className="justify-center"
 								testID={`open-register-chip-${source}`}
 								on={amount === value}
 								label={

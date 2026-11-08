@@ -256,7 +256,8 @@ export function MovementSheet({
 								return (
 									<Chip
 										key={key}
-										className="justify-center self-stretch"
+										stretch
+										className="justify-center"
 										label={label}
 										on={!other && reason === label}
 										testID={`movement-reason-${key.replace(/_/g, '-')}`}
