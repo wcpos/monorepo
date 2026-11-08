@@ -88,6 +88,9 @@ module.exports = {
 		'^@wcpos/receipt-renderer$': '<rootDir>/../receipt-renderer/src/index.ts',
 		'^@wcpos/receipt-renderer/(.*)$': '<rootDir>/../receipt-renderer/src/$1',
 		'^@wcpos/printer/(.*)$': '<rootDir>/../printer/src/$1',
+		// The real dialog and row do not load here: their pinned fakes. A suite's jest.mock still wins.
+		'^@wcpos/components/dialog$': '<rootDir>/../components/src/dialog/testing',
+		'^@wcpos/components/property-row$': '<rootDir>/../components/src/property-row/testing',
 		'^@wcpos/components/(.*)$': '<rootDir>/../components/src/$1',
 		// jsdom jest has no platform-extension resolution, and the default
 		// app-info variant imports expo-constants — map to the web variant.
