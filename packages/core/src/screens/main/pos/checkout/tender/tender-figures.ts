@@ -149,7 +149,7 @@ export function tenderFigures(facts: TenderFacts) {
 		legs,
 		/** The plan's untranslated label pieces; the flow localizes them. */
 		label: split?.label ?? null,
-		/** "Payment n of ways", numbered across the bill. */
+		/** "Payment n of ways", numbered across the bill; `ways` is 0 without a plan. */
 		n,
 		ways,
 		/** Planned payments still to come after this one. */
@@ -168,7 +168,9 @@ export function tenderFigures(facts: TenderFacts) {
 		percentMinor,
 		/** The entry as the cashier sees it: picks, percent share or the (rounded) prefill. */
 		entryMinor,
+		/** The leg the entry makes before rounding (the commit's `amountMinor`). */
 		enteredLegMinor,
+		/** That leg after cash rounding: what the entry applies to the order. */
 		entryAppliedMinor,
 		entryChangeMinor: changeMinor(entryMinor, entryAppliedMinor, givesChange),
 		/** THIS payment: the applied entry on the keypad, the planned share in the select view. */
@@ -181,12 +183,12 @@ export function tenderFigures(facts: TenderFacts) {
 				)
 			: [],
 		dueMinor,
-		// The Exact chip offers the rounded due whenever this leg is the whole balance: tapping it settles.
+		/** The Exact chip: the rounded due whenever this leg is the whole balance, since tapping it settles. */
 		exactMinor: thisPaymentMinor === balanceMinor ? roundedDueMinor : dueMinor,
 		/** The big figure. */
 		shownMinor:
 			state.view === 'select' ? dueMinor : fixedAmount || percent ? entryAppliedMinor : entryMinor,
-		// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
+		/** A no-change method typed past the balance; a fixed-amount gateway applies the balance whatever is typed. */
 		noChange:
 			method !== null && !givesChange && !fixedAmount && !percent && entryMinor > balanceMinor,
 		/** An amount typed below the balance is THIS payment; the split helpers divide the rest. */
