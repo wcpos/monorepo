@@ -458,17 +458,21 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const first = Math.floor(balance / 2);
 			await enterAmount(page, cash!.id, first);
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
-			// The label's payment number and remaining-money sentence are the referent here.
-			await expect(
-				page.getByTestId('checkout-label'),
-				'S3: the label advances to payment 2'
-			).toContainText(/Payment 2 · .+ left/);
+			// Store language is not pinned: the label's digits (`Payment 2 · {left} left` in any
+			// language) are the referent, never its words.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), {
 					timeout: 60_000,
 					message: 'S3: payment 2 is the unpaid rest, not the amount just typed',
 				})
 				.toBe(balance - first);
+			const entryDigits = digitsOf((await page.getByTestId('checkout-entry').textContent()) ?? '');
+			await expect
+				.poll(
+					async () => digitsOf((await page.getByTestId('checkout-label').textContent()) ?? ''),
+					{ timeout: 15_000, message: 'S3: the label advances to payment 2 with the rest left' }
+				)
+				.toBe(`2${entryDigits}`);
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			await expect(page.getByTestId('checkout-paid'), 'S3: the sale is paid').toBeVisible({
@@ -494,6 +498,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				rows.map((row) => row.method_id),
 				'S3: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id]);
+			expect(
+				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				'S3: each leg is saved at the amount it was taken for'
+			).toEqual([first, balance - first]);
 			expect(
 				rows.reduce((sum, row) => sum + Number(row.amount), 0),
 				'S3: the legs add up to the order total'
@@ -565,6 +573,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S4: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id]);
 			expect(
+				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				'S4: each leg is saved at the amount it was taken for'
+			).toEqual([first, balance - first]);
+			expect(
 				rows.reduce((sum, row) => sum + Number(row.amount), 0),
 				'S4: the legs add up to the order total'
 			).toBeCloseTo(Number(server.total), 2);
@@ -596,11 +608,16 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				page.getByTestId('checkout-plan'),
 				'S9: one tap plans all three payments'
 			).toBeVisible();
-			// The commit's plan-position tail is the referent, not its formatted money.
-			await expect(
-				page.getByTestId('checkout-commit'),
-				'S9: the commit starts at 1 of 3'
-			).toHaveText(/· 1 of 3$/);
+			// Store language is not pinned: the strip's three legs and their money are the
+			// referent, never the commit's `1 of 3` sentence.
+			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
+			await expect(legs, 'S9: one tap plans three legs').toHaveCount(3);
+			for (const [index, amount] of planned.entries()) {
+				expect(
+					await readAmountMinor(page, `checkout-plan-leg-${index}`),
+					`S9: leg ${index + 1} is planned at its share`
+				).toBe(amount);
+			}
 			for (const [index, amount] of planned.entries()) {
 				await expect
 					.poll(() => readAmountMinor(page, 'checkout-entry'), {
@@ -634,6 +651,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				rows.map((row) => row.method_id),
 				'S9: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id, cash!.id]);
+			expect(
+				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				'S9: each leg is saved at its planned share'
+			).toEqual(planned);
 			expect(
 				rows.reduce((sum, row) => sum + Number(row.amount), 0),
 				'S9: the legs add up to the order total'
