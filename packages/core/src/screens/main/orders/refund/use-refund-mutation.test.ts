@@ -20,7 +20,7 @@ const mockEngineRequire = jest.fn();
 const mockUseRegisterSession = jest.fn();
 
 beforeEach(() => {
-	mockUseRegisterSession.mockReturnValue({ binding: { registerId: null }, session: null });
+	mockUseRegisterSession.mockReturnValue({ registerId: null, session: null });
 });
 
 const makeOrder = (id: number | undefined) => {
@@ -41,8 +41,8 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	}),
 }));
 
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => mockUseRegisterSession(),
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => mockUseRegisterSession(),
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -188,7 +188,7 @@ describe('useRefundMutation', () => {
 			metaData: [{ key: '_wcpos_register', value: 'register-2' }],
 		},
 	])('posts only known current till metadata: $name', async ({ registerId, session, metaData }) => {
-		mockUseRegisterSession.mockReturnValue({ binding: { registerId }, session });
+		mockUseRegisterSession.mockReturnValue({ registerId, session });
 		const { result } = renderHook(() => useRefundMutation());
 
 		await act(async () => {

@@ -6,8 +6,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CartFoot } from './foot';
 let mockSession: { sessionsOn: boolean; session: object | null; overdue: boolean };
 const mockOrder = { payload: { line_items: [] as object[], customer_note: 'Gift' } };
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => mockSession,
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => mockSession,
 }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),

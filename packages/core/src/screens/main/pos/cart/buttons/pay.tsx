@@ -21,7 +21,7 @@ import {
 	leaveCheckout,
 	markOrderSaving,
 } from '../../checkout/checkout-mode';
-import { useRegisterSession } from '../../../../../services/register-session/use-register-session';
+import { useRegisterStatus } from '../../../../../services/register-session/use-register-status';
 import { useT } from '../../../../../contexts/translations';
 import { scrollToLine, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { reportPushFailure } from '../../../contexts/push-failure-code';
@@ -43,7 +43,7 @@ const BLOCKED_OPACITY = 0.38; // the dimmed Pay of the checkout-conditions board
 export function PayButton() {
 	const { currentOrderRecord } = useCurrentOrder();
 	// Held while the drawer is counted or a close awaits its closure write (kept for recovery).
-	const status = useRegisterSession().session?.status;
+	const status = useRegisterStatus().session?.status;
 	const counting = status === 'counting' || status === 'closed';
 	const total = useRecordField(currentOrderRecord, (order) => order.payload.total);
 	const refunds = useRecordField(currentOrderRecord, (order) => order.payload.refunds);

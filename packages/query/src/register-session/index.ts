@@ -47,7 +47,7 @@ export {
 	type ReadonlyClosureDocument,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
-export { observeRegisterDrawer } from './drawer';
+export { observeRegisterDrawer, observeRegisterStatus } from './drawer';
 export { isLiveMovement } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
 export { closeRegister, type RegisterCount } from './close';

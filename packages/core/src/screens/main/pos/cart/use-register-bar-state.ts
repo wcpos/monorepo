@@ -3,7 +3,7 @@ import { useDocField } from '@wcpos/query';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { useOnlineBadge } from '../../components/bar-controls';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { describeRegisterBar } from './register-bar.helpers';
@@ -14,7 +14,7 @@ import { describeRegisterBar } from './register-bar.helpers';
  * every read is the store session's, so it works outside the till.
  */
 export function useRegisterBarState(): { place: string; pillLabel: string | undefined } {
-	const { session, sessionsOn, overdue } = useRegisterSession();
+	const { session, sessionsOn, overdue } = useRegisterStatus();
 	const { store } = useStoreSession();
 	const t = useT();
 	const binding = useRegisterBinding();
