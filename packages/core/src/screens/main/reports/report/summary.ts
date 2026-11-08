@@ -1,6 +1,6 @@
 import sumBy from 'lodash/sumBy';
 
-import { refundsSummary } from '../cards/aggregate';
+import { refundsSummary, tenderLabel } from '../cards/aggregate';
 
 import type { tenders } from '../cards/aggregate';
 import type { RefundRow } from '../context';
@@ -56,11 +56,6 @@ export function summarySpec(
 		groups.push({ key, label, rows, total: subtotal.cells, totalRaw: subtotal.raw });
 	};
 	const totalLabel = t('reports.total_sales_line');
-	const tenderLabels: Record<string, string> = {
-		cash: t('common.cash'),
-		unpaid: t('reports.unpaid'),
-		unknown: t('common.unknown'),
-	};
 	const refunded =
 		periodRefunds === undefined
 			? totals.refundTotal
@@ -82,14 +77,7 @@ export function summarySpec(
 	group(
 		'payments',
 		t('reports.payment_methods'),
-		payments.map((tender) =>
-			row(
-				tender.key,
-				tender.label || tenderLabels[tender.key] || t('common.unknown'),
-				'',
-				tender.amount
-			)
-		),
+		payments.map((tender) => row(tender.key, tenderLabel(tender, t), '', tender.amount)),
 		// Taken is money taken: what an order still owes is not in it.
 		row(
 			'total',

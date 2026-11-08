@@ -5,7 +5,7 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { tenders } from './aggregate';
+import { tenderLabel, tenders } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
@@ -21,11 +21,6 @@ export function PaymentsCard() {
 		[selectedOrders, totals, decimals]
 	);
 	if (!store) return <CardSkeleton testID="card-payments" name={t('reports.card_payments')} />;
-	const labels: Record<string, string> = {
-		cash: t('common.cash'),
-		unpaid: t('reports.unpaid'),
-		unknown: t('common.unknown'),
-	};
 	return (
 		<ReportCard
 			onOpen={() => setDetail('payments')}
@@ -42,7 +37,7 @@ export function PaymentsCard() {
 					}}
 					parts={rows.map((row) => ({
 						key: row.key,
-						label: row.label || labels[row.key] || t('common.unknown'),
+						label: tenderLabel(row, t),
 						value: row.amount,
 						valueText: money(row.amount),
 						shareText: t('reports.percent', { value: percent(row.share * 100) }),

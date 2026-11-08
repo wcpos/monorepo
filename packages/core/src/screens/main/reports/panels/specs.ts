@@ -2,7 +2,7 @@ import round from 'lodash/round';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
-import { refundsSummary } from '../cards/aggregate';
+import { refundsSummary, tenderLabel } from '../cards/aggregate';
 import { chainLabel, cogsEnabled, lineCost, marginOf } from '../margin';
 
 import type { brands, CategoryTree } from '../margin';
@@ -236,28 +236,17 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				[t('reports.counted'), '', '', '', amount, ''],
 				[t('reports.counted'), '', '', '', totals.total, '']
 			);
-		case 'payments': {
-			const labels: Record<string, string> = {
-				cash: t('common.cash'),
-				unpaid: t('reports.unpaid'),
-				unknown,
-			};
+		case 'payments':
 			return spec(
 				[col.method, col.orders, col.amount, col.share],
 				payments.map((row) => ({
 					key: row.key,
-					raw: [row.label || labels[row.key] || unknown, row.orders, row.amount, row.share * 100],
-					cells: [
-						row.label || labels[row.key] || unknown,
-						number(row.orders),
-						money(row.amount),
-						share(row.share),
-					],
+					raw: [tenderLabel(row, t), row.orders, row.amount, row.share * 100],
+					cells: [tenderLabel(row, t), number(row.orders), money(row.amount), share(row.share)],
 				})),
 				[total, count, amount, ''],
 				[total, orders.length, totals.total, '']
 			);
-		}
 		case 'products':
 			return spec(
 				[col.product, col.qty, col.amount],
