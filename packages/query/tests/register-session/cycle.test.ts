@@ -80,6 +80,7 @@ const cycle = (registerId = 'A', online = false) =>
 		online,
 		engine,
 		http,
+		actor: { id: '7', name: 'Pat' },
 	});
 it("offline, seeds the bound register's cached open session into a store database that has no row", async () => {
 	await recordLiveSession(userDB, 'site', 'A', live);
@@ -236,6 +237,17 @@ it("online, after the refresh, records the register's active session on the devi
 		counted_float: '123.0000',
 		business_day: '2026-10-28',
 	});
+});
+it.each([
+	['the copy it already holds', { ...live, session_id: 's9' }, 7, 'Demo Cashier'],
+	['the signed-in user when they opened it', null, 7, 'Pat'],
+	['nobody when another user opened it', null, 8, ''],
+] as const)('names the opener from %s', async (_, held, openedBy, name) => {
+	if (held) await recordLiveSession(userDB, 'site', 'A', held);
+	const server = { ...existing, id: 's9', opened_by: openedBy };
+	http.get.mockResolvedValueOnce({ data: [server] }).mockResolvedValueOnce({ data: server });
+	await cycle('A', true);
+	expect(readLiveSession('site', 'A')?.opened_by).toEqual({ id: openedBy, name });
 });
 it("a refresh during this device's count keeps the counting mark", async () => {
 	await recordLiveSession(userDB, 'site', 'A', { ...live, session_id: 's9', status: 'counting' });

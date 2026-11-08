@@ -11,7 +11,7 @@ import {
 	sessionRefreshRequests,
 } from '@wcpos/query/register-session';
 
-import { recordRegisterFact } from './audit';
+import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';
@@ -22,6 +22,12 @@ export function RegisterSessionBridge() {
 	const http = useRestHttpClient();
 	const { registerId } = useRegisterBinding();
 	const online = useOnlineStatus().status === 'online-website-available';
+	// The cycle names the opener by the signed-in user; a cashier switch is no reason to re-run it.
+	const actor = useRegisterActor();
+	const actorRef = React.useRef(actor);
+	React.useEffect(() => {
+		actorRef.current = actor;
+	}, [actor]);
 	// One cycle failing is a blip; the same cycle still failing a minute later is the merchant's
 	// problem. The rubric's terminal-outcome rule puts the verdict here, where the arc is visible.
 	const consecutiveFailures = React.useRef(0);
@@ -67,6 +73,7 @@ export function RegisterSessionBridge() {
 				online,
 				engine: runtime.engine,
 				http,
+				actor: actorRef.current,
 			})
 				.then(() => {
 					consecutiveFailures.current = 0;

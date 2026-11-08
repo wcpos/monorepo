@@ -133,14 +133,38 @@ export function openSession(
 		...pending,
 	});
 }
+type SessionStatus = RegisterSessionRow['status'];
+/**
+ * The statuses each local move may start from, read from today's callers. Counting starts from
+ * open, and again over a count (Sign out while the session is counting). Selling resumes from a
+ * count, or from a close the store refused (#2016). The close comes from a count, from open (a
+ * refresh can reopen the row under the count pane), and again from closed (a refused close's
+ * retry, #3304). A second abandon and a count over a closed session are refused.
+ */
+const ALLOWED_FROM: Record<SessionStatus, readonly SessionStatus[]> = {
+	counting: ['open', 'counting'],
+	open: ['counting', 'closed'],
+	closed: ['open', 'counting', 'closed'],
+};
+export class IllegalSessionTransitionError extends Error {
+	constructor(
+		readonly from: SessionStatus,
+		readonly to: SessionStatus
+	) {
+		super(`register_session_illegal_transition: ${from} -> ${to}`);
+		this.name = 'IllegalSessionTransitionError';
+	}
+}
 async function transition(
 	sessions: RegisterSessionCollection,
 	id: string,
-	status: RegisterSessionRow['status'],
+	status: SessionStatus,
 	extra: Partial<RegisterSessionRow> = {}
 ) {
 	const row = await sessions.findOne(id).exec();
 	if (!row) throw new RegisterSessionRequiredError();
+	if (!ALLOWED_FROM[status].includes(row.status))
+		throw new IllegalSessionTransitionError(row.status, status);
 	const at = new Date().toISOString();
 	return row.incrementalPatch({
 		...pending,

@@ -6,6 +6,7 @@ import {
 	readLiveSession,
 	readRegister,
 	recordLiveSession,
+	recordLiveSessionFrom,
 } from './register-document';
 import { seedSessionFromCache } from './seed';
 import { writeClosure } from './session-store';
@@ -34,6 +35,7 @@ export async function runRegisterSessionCycle({
 	online,
 	engine,
 	http,
+	actor,
 }: {
 	storeDB: RegisterStoreDatabase;
 	userDB: UserDatabase;
@@ -43,6 +45,8 @@ export async function runRegisterSessionCycle({
 	online: boolean;
 	engine: RxdbSyncEngine;
 	http: SessionHttp;
+	/** The signed-in user, who names the opener when the live copy does not. */
+	actor: { id: string; name: string };
 }) {
 	const { register_sessions: sessions } = registerCollections(storeDB);
 	// Which half of the cycle broke is the first thing a diagnosis needs, and the rejection
@@ -103,23 +107,7 @@ export async function runRegisterSessionCycle({
 		})
 		.exec();
 	if (row && (row.status === 'open' || row.status === 'counting')) {
-		const opener = readLiveSession(siteUuid, registerId)?.opened_by;
-		await recordLiveSession(userDB, siteUuid, registerId, {
-			session_id: row.id,
-			status: row.status,
-			opened_at_gmt: row.opened_at_gmt,
-			opened_by:
-				row.opened_by == null
-					? null
-					: {
-							id: row.opened_by,
-							name: opener?.id === row.opened_by ? opener.name : '',
-						},
-			acknowledged: row.sync_status === 'synced' || row.server_status != null,
-			expected_float: row.expected_float ?? null,
-			counted_float: row.counted_float ?? null,
-			business_day: row.business_day ?? null,
-		});
+		await recordLiveSessionFrom(userDB, siteUuid, { ...row.toJSON(), status: row.status }, actor);
 	} else if (live && (await sessions.findOne(live.session_id).exec())?.status === 'closed') {
 		await recordLiveSession(userDB, siteUuid, registerId, null);
 	}

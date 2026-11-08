@@ -576,6 +576,8 @@ it('requires approval for the same count after returning to selling and counting
 	const sessions = {
 		findOne: () => ({
 			exec: async () => ({
+				// A status both moves start from: the fake row never changes it (the transition table).
+				status: 'counting',
 				incrementalPatch: async (patch: Record<string, unknown>) => {
 					if ('approved_counted' in patch)
 						approved_counted = patch.approved_counted as typeof approved_counted;
