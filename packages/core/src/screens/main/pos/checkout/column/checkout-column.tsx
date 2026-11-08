@@ -90,7 +90,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						]}
 					/>
 					{flow.hasLiveLeg ? (
-						<Text variant="help" testID="checkout-legacy-whole-bill">
+						<Text variant="help" className="text-right" testID="checkout-legacy-whole-bill">
 							{t('pos_checkout.whole_bill_only')}
 						</Text>
 					) : null}

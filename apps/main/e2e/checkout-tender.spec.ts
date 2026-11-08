@@ -20,6 +20,7 @@ import { log } from '@wcpos/utils/logger';
 import { addCheckoutProbeProductAgain, checkoutProbeAddControl } from './checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
+	decimalPlaces,
 	type Descriptor,
 	digitsOf,
 	ledgerRows,
@@ -466,12 +467,14 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 					message: 'S3: payment 2 is the unpaid rest, not the amount just typed',
 				})
 				.toBe(balance - first);
-			const entryDigits = digitsOf((await page.getByTestId('checkout-entry').textContent()) ?? '');
+			// `innerText`, not `textContent`: the label nests the balance, hidden once a payment is
+			// taken, and `textContent` would read its digits too (Codex on #3414).
+			const entryDigits = digitsOf(await page.getByTestId('checkout-entry').innerText());
 			await expect
-				.poll(
-					async () => digitsOf((await page.getByTestId('checkout-label').textContent()) ?? ''),
-					{ timeout: 15_000, message: 'S3: the label advances to payment 2 with the rest left' }
-				)
+				.poll(async () => digitsOf(await page.getByTestId('checkout-label').innerText()), {
+					timeout: 15_000,
+					message: 'S3: the label advances to payment 2 with the rest left',
+				})
 				.toBe(`2${entryDigits}`);
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
@@ -610,13 +613,30 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			).toBeVisible();
 			// Store language is not pinned: the strip's three legs and their money are the
 			// referent, never the commit's `1 of 3` sentence.
+			// Two equal payments to come fold into one `Then 2 × {amount}` pill, so the strip has
+			// two or three legs; the pill's digits are the run count then the amount.
+			const grouped = planned[1] === planned[2];
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
-			await expect(legs, 'S9: one tap plans three legs').toHaveCount(3);
-			for (const [index, amount] of planned.entries()) {
+			await expect(legs, 'S9: one tap plans the amount and the two shares').toHaveCount(
+				grouped ? 2 : 3
+			);
+			expect(await readAmountMinor(page, 'checkout-plan-leg-0'), 'S9: leg 1 is the amount').toBe(
+				first
+			);
+			const legOne = await page.getByTestId('checkout-plan-leg-1').innerText();
+			if (grouped) {
+				const dp = decimalPlaces(legOne);
+				const unit = 10 ** dp;
+				const amountDigits = `${Math.floor(planned[1] / unit)}${String(planned[1] % unit).padStart(dp, '0')}`;
+				expect(digitsOf(legOne), 'S9: the two shares fold into one `Then 2 ×` pill').toBe(
+					`2${amountDigits}`
+				);
+			} else {
+				expect(digitsOf(legOne), 'S9: leg 2 is the larger share').toBe(String(planned[1]));
 				expect(
-					await readAmountMinor(page, `checkout-plan-leg-${index}`),
-					`S9: leg ${index + 1} is planned at its share`
-				).toBe(amount);
+					await readAmountMinor(page, 'checkout-plan-leg-2'),
+					'S9: leg 3 is the rest of the share'
+				).toBe(planned[2]);
 			}
 			for (const [index, amount] of planned.entries()) {
 				await expect
