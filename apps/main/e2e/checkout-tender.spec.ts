@@ -370,7 +370,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	);
 
 	liveTest(
-		'splits evenly through the split view and records two legs',
+		'splits evenly from the Split chip and records two legs',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -385,9 +385,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
+			// Split V1 (#3405): no sub-view; the Split chip turns the helpers row into the even row.
 			await page.getByTestId('checkout-split-chip').click();
-			await expect(page.getByTestId('checkout-split-tab-even')).toBeVisible();
-			await page.getByTestId('checkout-split-option-2').click();
+			await expect(page.getByTestId('checkout-even-2')).toBeVisible();
+			await page.getByTestId('checkout-even-2').click();
 			await expect(page.getByTestId('checkout-plan')).toBeVisible();
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
 			await expect(legs).toHaveCount(2);
@@ -440,6 +441,9 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	liveTest(
 		'shares a ticked line between two payments',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			// Split V1 slice 2 (#3405) retired the Item tab; the bill's rows become the picker in
+			// slice 3, which rewrites this walk over `checkout-line-<key>-pick` and `checkout-share-2`.
+			liveTest.fixme(true, 'picking lines on the bill lands in split V1 slice 3');
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
 			const { authorization, descriptors } = await requireTenderCheckout(

@@ -1486,6 +1486,23 @@ describe('useTenderFlow', () => {
 		expect(result.current.pickedMinor).toBe(550);
 		await act(async () => {});
 	});
+	it('picking every unit carries stray cents but never shipping or fees (CodeRabbit on #3405)', async () => {
+		// 92.95 total, 80.00 of lines: picking all four units leaves 12.95 of shipping in the rest.
+		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '80.00' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 4 }));
+		expect(result.current.allUnpaidPicked).toBe(false);
+		expect(result.current.state.entryMinor).toBe(8000);
+		// 92.95 of lines in three units floors to 3098 × 3 = 9294: the odd cent rides along.
+		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 3, total: '92.95' }];
+		const { result: odd } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => odd.current.pickMethod('pos_cash'));
+		act(() => odd.current.dispatch({ type: 'pick-units', lineId: 1, units: 3 }));
+		expect(odd.current.allUnpaidPicked).toBe(true);
+		expect(odd.current.state.entryMinor).toBe(9295);
+		await act(async () => {});
+	});
 	it('a shared item payment allocates the units to the first leg of the group only', async () => {
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
 		const units = { 1: 3 };
@@ -1689,9 +1706,13 @@ describe('useTenderFlow', () => {
 	});
 
 	it('a picked payment without rounding mints an id but writes no fee', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 2, units: 2 }));
 		await act(async () => result.current.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
@@ -1704,11 +1725,15 @@ describe('useTenderFlow', () => {
 	});
 
 	it('the completing payment journals its own picked units under a row id minted before the write (Greptile on #3400)', async () => {
-		setAllocations(order.uuid, { a: { l1: 1 } });
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
+		setAllocations(order.uuid, { a: { 1: 1 } });
 		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l2', units: 2 }));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 2, units: 2 }));
 		await act(async () => result.current.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
@@ -1716,8 +1741,8 @@ describe('useTenderFlow', () => {
 			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
 		);
 		expect(JSON.parse(paidUnits?.value as string)).toEqual({
-			a: { l1: 1 },
-			[input.paymentId as string]: { l2: 2 },
+			a: { 1: 1 },
+			[input.paymentId as string]: { 2: 2 },
 		});
 	});
 
@@ -2135,13 +2160,17 @@ describe('server tender', () => {
 		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
 	});
 	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('terminal'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 'l1', units: 1 }));
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 1 }));
 		await act(async () => result.current.takeTender());
 		const [{ row }] = mockBegin.mock.calls[0];
 		expect(result.current.state.picked).toEqual({});
-		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { l1: 1 } });
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { 1: 1 } });
 	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));

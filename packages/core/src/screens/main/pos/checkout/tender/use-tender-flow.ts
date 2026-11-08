@@ -668,8 +668,15 @@ export function useTenderFlow(
 		: state.plan?.kind === 'items' && !groupAllocated
 			? (state.plan.units ?? null)
 			: null;
+	// Every unpaid unit picked, and what is left is only the cents `unitsMinor` floors away
+	// (under one minor unit per unit): shipping, fees and a rounding fee stay in the rest,
+	// never swallowed as "rounding" (CodeRabbit on #3405).
+	const strayMinor = balanceMinor - pickedMinor;
 	const allUnpaidPicked =
-		picking && lines.every(({ id }) => (state.picked[id] ?? 0) >= unpaidUnits(id));
+		picking &&
+		lines.every(({ id }) => (state.picked[id] ?? 0) >= unpaidUnits(id)) &&
+		strayMinor >= 0 &&
+		strayMinor < lines.reduce((sum, { quantity }) => sum + quantity, 0);
 	const pickedEntryMinor =
 		picking && (state.extraMinor !== null || !state.entryDirty)
 			? heroForPicked(pickedMinor, balanceMinor, allUnpaidPicked) + (state.extraMinor ?? 0)
