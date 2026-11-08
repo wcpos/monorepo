@@ -95,7 +95,7 @@ export function useRepairTaxExempt(
 	return React.useCallback(
 		(record: CurrentOrderRecord, exempt: boolean, valid: () => boolean = () => true) =>
 			setTaxExempt(
-				{ ...deps, commitAtBoundary: (o, r, q, c) => commitAtBoundary(o, r, q, c, valid) },
+				{ ...deps, commitAtBoundary: (o, q, c) => commitAtBoundary(o, q, c, valid) },
 				record,
 				{ exempt, source: 'repair', valid }
 			),

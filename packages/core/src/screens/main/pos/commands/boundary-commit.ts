@@ -2,11 +2,6 @@ import {
 	type CartConfig,
 	type CouponContext,
 	hasLiveSettlementLeg,
-	serverOwnsMoney,
-	settleAggregate,
-	settleCart,
-	settlementPatch,
-	snapshotFromOrderJSON,
 	toMinor,
 } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
@@ -30,11 +25,7 @@ import {
 	type SaleOutcome,
 } from '../checkout/sale-completion';
 import { landAnswer } from './land-answer';
-import {
-	type BoundaryResult,
-	crossesPaidBalanceBoundary,
-	netPaidForBoundary,
-} from './paid-balance-boundary';
+import { settlePayload } from './settle-payload';
 import { writeZeroBalanceCompletion } from './zero-balance-completion';
 
 import type { useCloseSale } from './close-sale';
@@ -69,7 +60,6 @@ export async function commitAtBoundary(
 		coupons?: CouponContext;
 		allowed?: (payload: OrderPayload, ignoreCheckout?: boolean) => boolean;
 		order: EngineRecord<'orders'>;
-		result: BoundaryResult;
 		queue: OrderMutationContext;
 	}
 ) {
@@ -165,28 +155,25 @@ export async function commitAtBoundary(
 						conditionReason = 'session_changed';
 						return null;
 					}
+					// Before `allowed`: a live leg never marks the pass aggregate-only.
 					if (hasLiveSettlementLeg(payload.meta_data)) return null;
 					if (allowed && !allowed(payload)) {
 						if (!allowed(payload, true)) return null;
 						aggregateOnly = true;
 					}
-					if (serverOwnsMoney(payload.meta_data) || ctx.serverOwnsMoney(order.uuid)) return null;
 					const config = ctx.configForOrder(payload);
-					const snapshot = snapshotFromOrderJSON(payload);
-					const fresh = coupons
-						? settleCart(snapshot, config, { coupons })
-						: settleAggregate(snapshot, config);
-					if (
-						'error' in fresh ||
-						!crossesPaidBalanceBoundary({ payload, result: fresh, dp: config.dp })
-					)
-						return null;
-					const patch = settlementPatch(fresh);
-					const netPaid = netPaidForBoundary(payload, config.dp);
-					if (toMinor(patch.total, config.dp) < toMinor(netPaid, config.dp))
-						overpaid = { orderId: order.uuid, total: patch.total, netPaid };
+					const fresh = settlePayload({
+						payload,
+						config,
+						coupons,
+						owner: { uuid: order.uuid, serverOwnsMoney: ctx.serverOwnsMoney },
+					});
+					if (fresh.kind !== 'boundary') return null;
+					const { changes, netPaid } = fresh;
+					if (toMinor(changes.total, config.dp) < toMinor(netPaid, config.dp))
+						overpaid = { orderId: order.uuid, total: changes.total, netPaid };
 					if (aggregateOnly) conditionReason = 'in_checkout';
-					return patch;
+					return changes;
 				},
 			});
 			// A system pass that cannot close (offline, refused) leaves the order pos-partial; the

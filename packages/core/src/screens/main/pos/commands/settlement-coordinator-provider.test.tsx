@@ -80,10 +80,18 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('./boundary-commit', () => ({
-	commitAtBoundary: jest.fn(async (_ctx, { result, write }) => {
+	commitAtBoundary: jest.fn(async (ctx, { order, coupons, write }) => {
 		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };
-		const patch = { ...orderMath.settlementPatch(result), status: 'completed' };
-		await write(() => patch);
+		const { settlePayload } = jest.requireActual('./settle-payload');
+		await write((payload: OrderPayload) => {
+			const outcome = settlePayload({
+				payload,
+				config: ctx.configForOrder(payload),
+				coupons,
+				owner: { uuid: order.uuid, serverOwnsMoney: () => false },
+			});
+			return outcome.kind === 'boundary' ? { ...outcome.changes, status: 'completed' } : {};
+		});
 	}),
 }));
 const mockComplete = jest.fn();
@@ -773,11 +781,7 @@ it('maps an unknown binding to none in both cart and coordinator boundary commit
 	try {
 		await flush();
 		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(
-				a as CurrentOrderRecord,
-				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
-				queue
-			)
+			hook.result.current(a as CurrentOrderRecord, queue)
 		);
 		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
 		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls)
@@ -806,11 +810,7 @@ it('both boundary hosts hand their completion the outcome unchanged', async () =
 	try {
 		await flush();
 		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(
-				a as CurrentOrderRecord,
-				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
-				queue
-			)
+			hook.result.current(a as CurrentOrderRecord, queue)
 		);
 		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
 		const order = a as never;
@@ -885,11 +885,7 @@ it('keeps both in-flight boundary binding readers current across a render', asyn
 	try {
 		await flush();
 		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(
-				a as CurrentOrderRecord,
-				orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
-				queue
-			)
+			hook.result.current(a as CurrentOrderRecord, queue)
 		);
 		const readers = jest.mocked(commitAtBoundary).mock.calls.map(([ctx]) => ctx.readBindingStatus);
 		expect(readers).toHaveLength(2);
@@ -929,6 +925,8 @@ it('passes the context lookup to replay', async () => {
 			expect.anything(),
 			expect.objectContaining({
 				coupons: expect.objectContaining({ taxStatusFor: context.taxStatusFor }),
+				// The coordinator settles with the context's catalog tax statuses, as the cart write does.
+				taxStatusFor: context.taxStatusFor,
 			})
 		);
 	} finally {
@@ -949,9 +947,8 @@ it('dispatches the hook repair and gives it the shared system boundary commit', 
 		expect(mockRepairTaxExempt).toHaveBeenCalledWith(a, true, expect.any(Function));
 		const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
 		const valid = jest.fn(() => true);
-		const result = orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config);
 		await enqueueOrderMutation(a.uuid, (queue) =>
-			systemCommit(a as CurrentOrderRecord, result, queue, undefined, valid)
+			systemCommit(a as CurrentOrderRecord, queue, undefined, valid)
 		);
 		const [ctx, input] = jest.mocked(commitAtBoundary).mock.calls[0];
 		expect(ctx.source).toBe('system');
@@ -998,13 +995,7 @@ it.each([false, true])(
 			jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
 			const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
 			await enqueueOrderMutation(a.uuid, (queue) =>
-				systemCommit(
-					a as CurrentOrderRecord,
-					orderMath.settleAggregate(orderMath.snapshotFromOrderJSON(a.payload), config),
-					queue,
-					coupons,
-					() => true
-				)
+				systemCommit(a as CurrentOrderRecord, queue, coupons, () => true)
 			);
 			const input = jest.mocked(commitAtBoundary).mock.calls[0][1];
 			expect(input.coupons).toEqual({

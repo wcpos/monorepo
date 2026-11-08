@@ -225,12 +225,11 @@ it('threads the repair validity and coupons into its system boundary', async () 
 	await result.current(order, true, valid);
 	const [deps, , input] = jest.mocked(setTaxExempt).mock.lastCall!;
 	expect(input.valid).toBe(valid);
-	const boundaryResult = {} as Parameters<typeof deps.commitAtBoundary>[1];
-	const queue = {} as Parameters<typeof deps.commitAtBoundary>[2];
+	const queue = {} as Parameters<typeof deps.commitAtBoundary>[1];
 	const coupons = {
 		context: { coupons: new Map(), productCategories: new Map() },
 		missing: { deny: { reasonKey: 'missing' } },
 	};
-	await deps.commitAtBoundary(order, boundaryResult, queue, coupons);
-	expect(systemBoundary).toHaveBeenCalledWith(order, boundaryResult, queue, coupons, valid);
+	await deps.commitAtBoundary(order, queue, coupons);
+	expect(systemBoundary).toHaveBeenCalledWith(order, queue, coupons, valid);
 });

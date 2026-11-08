@@ -550,7 +550,6 @@ it.each(['repair', 'user'] as const)('couponed paid-balance crossing from %s', a
 	} else {
 		expect(h.deps.commitAtBoundary).toHaveBeenCalledWith(
 			h.order,
-			expect.objectContaining({ totals: expect.objectContaining({ total: '14' }) }),
 			expect.anything(),
 			expect.objectContaining({
 				context: expect.objectContaining({

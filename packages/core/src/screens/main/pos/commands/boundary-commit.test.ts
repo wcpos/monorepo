@@ -153,7 +153,6 @@ it.each(['4', '3'])(
 	'completes %s in one stamped write, journals first and audits in the same slot',
 	async (total) => {
 		const order = orderFor(total);
-		const result = settleAggregate(snapshotFromOrderJSON(order.payload), config);
 		await enqueueOrderMutation(order.uuid, async (queue) => {
 			await commitAtBoundary(
 				{
@@ -167,7 +166,7 @@ it.each(['4', '3'])(
 						return completeSale(ctx, target, outcome, { host: 'background' }, slot);
 					},
 				},
-				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
+				{ order, queue, write: (changes) => write({ document: order, changes }) }
 			);
 		});
 		expect(write).toHaveBeenCalledTimes(1);
@@ -214,7 +213,6 @@ describe('an answered close', () => {
 				},
 				{
 					order,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -296,7 +294,6 @@ it('an offline boundary returns offline and leaves no completion attempt behind'
 			},
 			{
 				order,
-				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 				queue,
 				write: (changes) => write({ document: order, changes }),
 			}
@@ -325,7 +322,6 @@ it.each(['session', 'register'])(
 				},
 				{
 					order,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -353,7 +349,6 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 	'supersedes a boundary when %s changes during guards',
 	async (change) => {
 		const order = orderFor();
-		const result = settleAggregate(snapshotFromOrderJSON(order.payload), config);
 		resolveSession.mockImplementationOnce(async () => {
 			if (change === 'lines') order.payload.line_items = [{ total: '8', subtotal: '8' }];
 			if (change === 'status') order.payload.status = 'completed';
@@ -381,7 +376,7 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 					bindingStatus: 'bound',
 					complete,
 				},
-				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
+				{ order, queue, write: (changes) => write({ document: order, changes }) }
 			)
 		);
 		expect(outcome).toBe('superseded');
@@ -422,7 +417,6 @@ it.each([undefined, 'system'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -480,7 +474,6 @@ it.each(['amount', 'status', 'refund'])(
 						},
 						{
 							order,
-							result,
 							queue,
 							write: (changes) => write({ document: order, changes }),
 						}
@@ -537,7 +530,7 @@ it('presents a refused boundary to the cashier while retaining the cart edit', a
 						Object.assign(order.payload, changes(order.payload));
 						return order;
 					},
-					commitAtBoundary: (target, result, slot) =>
+					commitAtBoundary: (target, slot) =>
 						commitAtBoundary(
 							{
 								...ctx,
@@ -548,7 +541,6 @@ it('presents a refused boundary to the cashier while retaining the cart edit', a
 							},
 							{
 								order: target as EngineRecord<'orders'>,
-								result,
 								queue: slot,
 								write: (changes) => write({ document: order, changes }),
 							}
@@ -587,7 +579,6 @@ it('supersedes coupon completion when references change during the guard window'
 			{
 				order,
 				queue,
-				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 				allowed: () => generation === 0,
 				coupons: {
 					coupons: new Map([
@@ -662,7 +653,6 @@ it.each(['product', 'variation', 'read-once', 'read-twice'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -699,7 +689,6 @@ it.each([false, true])(
 					order,
 					queue,
 					allowed: () => valid,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -732,7 +721,6 @@ it.each(['none', 'choose'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -760,10 +748,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 			);
 		};
 		const complete = jest.fn();
-		const commit = (
-			result: Parameters<typeof commitAtBoundary>[1]['result'],
-			queue: Parameters<typeof commitAtBoundary>[1]['queue']
-		) =>
+		const commit = (queue: Parameters<typeof commitAtBoundary>[1]['queue']) =>
 			commitAtBoundary(
 				{
 					...ctx,
@@ -774,7 +759,6 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 				},
 				{
 					order,
-					result,
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -782,7 +766,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 		const data = { line_items: [{ total: '4', subtotal: '4' }] };
 		if (scenario.startsWith('cart')) {
 			authorize();
-			const dispatch = jest.fn((_order, result, queue) => commit(result, queue));
+			const dispatch = jest.fn((_order, queue) => commit(queue));
 			await enqueueOrderMutation(order.uuid, (queue) =>
 				settleCartWrite(
 					{ document: order, data, queue },
@@ -804,9 +788,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 				authorize();
 				return { registerId: 'register', sessionId: 'session' };
 			});
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
-				commit(settleAggregate(snapshotFromOrderJSON(order.payload), config), queue)
-			);
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) => commit(queue));
 			expect(outcome).toBe('superseded');
 		}
 		expect(order.payload).toMatchObject({
@@ -861,7 +843,6 @@ it.each(['stock', 'predicate', 'unchanged'])(
 					order,
 					queue,
 					allowed: () => allowed,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -915,7 +896,6 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 					order,
 					queue,
 					allowed,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			),
@@ -982,7 +962,6 @@ it.each([
 							queue,
 							allowed,
 							coupons,
-							result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 							write: async (changes) => {
 								await Promise.resolve(); // applyLocalPatch awaits resolveEngineResident before the modifier.
 								if (change === 'catalog') catalog.next({});
@@ -1046,7 +1025,6 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: async (changes) => {
 						if (change === 'register_changed') registerId = 'other';
 						if (change === 'session_changed') mockSession.status = 'closed';
