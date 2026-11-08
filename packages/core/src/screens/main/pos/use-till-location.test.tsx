@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
-import { useTillLocation } from './use-till-location';
+import { useTillLocation, useTillOrderId } from './use-till-location';
 
 let mockSegments: string[] = [];
 let mockParams: { orderId?: string | string[] } = {};
@@ -22,11 +22,14 @@ const routes = {
 	settingsModal: ['(app)', '(modals)', 'settings'],
 };
 
-/** Mounts the hook once and walks it through route states, as one mounted (pos) layout sees them. */
+/** Mounts the hooks once and walks them through route states, as the mounted (pos) layout does. */
 function walk() {
 	mockSegments = routes.columns;
 	mockParams = {};
-	const view = renderHook(() => useTillLocation());
+	const view = renderHook(() => {
+		const location = useTillLocation();
+		return { ...location, tillOrderId: useTillOrderId(location) };
+	});
 	return (segments: string[], orderId?: string | string[]) => {
 		mockSegments = segments;
 		mockParams = orderId === undefined ? {} : { orderId };

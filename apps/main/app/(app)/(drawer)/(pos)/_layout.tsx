@@ -32,7 +32,7 @@ import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
-import { useTillLocation } from '@wcpos/core/screens/main/pos/use-till-location';
+import { useTillLocation, useTillOrderId } from '@wcpos/core/screens/main/pos/use-till-location';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -49,9 +49,10 @@ export default function POSLayout() {
 	useResetCheckoutModeOnStoreChange(storeID);
 	useRejectedOrderSavesSync(storeID);
 	useStoreDeletedOrdersSettler(storeID);
-	// The provider follows the till, never a sheet's order (#3150): see `useTillLocation`.
-	const { tillOrderId, seed } = useTillLocation();
-	useCheckoutUrlSeed(seed);
+	const location = useTillLocation();
+	useCheckoutUrlSeed(location.seed);
+	// The provider follows the till, never a sheet's order (#3150).
+	const tillOrderId = useTillOrderId(location);
 
 	// The open orders are scoped IN STORAGE by cashier, store and register (#2242, `openOrdersSelector`).
 	const { registerId } = useRegisterBinding();
