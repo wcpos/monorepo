@@ -25,6 +25,7 @@ import {
 	PropertyRow,
 } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
+import { allowedOrderStatuses, readLedger } from '@wcpos/order-math';
 import {
 	type EngineRecord,
 	useRecordField,
@@ -186,6 +187,7 @@ function EditOrderFormFields({ order }: Props) {
 
 	// Status is read, never written, until Update status: reactive values are right here.
 	const currentStatus = useRecordField(order, (record) => record.payload.status) ?? '';
+	const paymentRows = useRecordField(order, (record) => readLedger(record.payload.meta_data));
 	const statusForm = useForm<{ status: string }>({
 		resolver: zodResolver(statusSchema),
 		values: { status: currentStatus },
@@ -201,7 +203,18 @@ function EditOrderFormFields({ order }: Props) {
 			setLoading(false);
 			return;
 		}
-		const previous = order.getLatest().payload.status;
+		const latest = order.getLatest().payload;
+		const previous = latest.status ?? '';
+		const allowed = allowedOrderStatuses(
+			PUSHABLE_ORDER_STATUSES,
+			previous,
+			readLedger(latest.meta_data)
+		);
+		if (!allowed.includes(data.status)) {
+			statusForm.reset({ status: previous });
+			setLoading(false);
+			return;
+		}
 		if (data.status === previous) {
 			setLoading(false);
 			return;
@@ -354,9 +367,12 @@ function EditOrderFormFields({ order }: Props) {
 
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
 	const statusPushable = isPushableOrderStatus(currentStatus);
-	const allowedStatuses = statusPushable
-		? PUSHABLE_ORDER_STATUSES
-		: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
+	const allowedStatuses = React.useMemo(() => {
+		const base = statusPushable
+			? PUSHABLE_ORDER_STATUSES
+			: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
+		return allowedOrderStatuses(base, currentStatus, paymentRows);
+	}, [currentStatus, paymentRows, statusPushable]);
 
 	// Billing holds the order's contact facts too, so a name or an email alone is a Billing row
 	// (never hidden behind an add that would write the store's country), and Remove clears them all.

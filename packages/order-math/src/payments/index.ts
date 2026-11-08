@@ -15,7 +15,7 @@ export {
 	withMetaReplaced,
 	readCompletions,
 } from './provenance';
-export { countsTowardPaid, derive, isCompletingStatus } from './derive';
+export { allowedOrderStatuses, countsTowardPaid, derive, isCompletingStatus } from './derive';
 export {
 	readLedger,
 	withLedger,
