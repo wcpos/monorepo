@@ -13,7 +13,7 @@ const mockUseCSSVariable = jest.fn((_name: string) => '#123456');
 jest.mock('uniwind', () => ({ useCSSVariable: (name: string) => mockUseCSSVariable(name) }));
 jest.mock('../text', () => ({
 	TextClassContext: React.createContext(''),
-	Text: ({ children }: any) =>
+	Text: ({ children }: React.PropsWithChildren) =>
 		React.createElement('span', { 'data-testid': 'badge-text' }, children),
 }));
 // Jest does not compile Uniwind: expose the classes and pointer events the count box carries.
@@ -21,7 +21,11 @@ jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	return {
 		...actual,
-		View: ({ className, pointerEvents, children }: any) =>
+		View: ({
+			className,
+			pointerEvents,
+			children,
+		}: React.PropsWithChildren<{ className?: string; pointerEvents?: string }>) =>
 			React.createElement(
 				'div',
 				{ 'data-class': className, 'data-pointer-events': pointerEvents },
@@ -31,7 +35,9 @@ jest.mock('react-native', () => {
 });
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
-	default: { View: ({ children }: any) => React.createElement('div', null, children) },
+	default: {
+		View: ({ children }: React.PropsWithChildren) => React.createElement('div', null, children),
+	},
 	ReduceMotion: { System: 'system' },
 	Easing: { bezier: () => 'ease', linear: 'linear' },
 	Extrapolation: { CLAMP: 'clamp' },
@@ -44,7 +50,7 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('../loader', () => ({
 	Loader: () => null,
-	Spin: ({ active, children }: any) =>
+	Spin: ({ active, children }: React.PropsWithChildren<{ active: boolean }>) =>
 		React.createElement('div', { 'data-testid': 'spin', 'data-active': String(active) }, children),
 }));
 jest.mock('react-native-svg', () => {
