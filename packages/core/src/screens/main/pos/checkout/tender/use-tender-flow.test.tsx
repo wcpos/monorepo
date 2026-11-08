@@ -1839,6 +1839,19 @@ describe('useTenderFlow', () => {
 		expect(result.current.state.entryMinor).toBe(2398);
 	});
 
+	it('cancelOnePayment leaves a typed amount alone (CodeRabbit on #3405)', async () => {
+		const first = payment({ id: 'a', amount: '10.00', tendered: null });
+		mockPayload.meta_data = withLedger([], [first]);
+		mockVoidPayments.mockResolvedValue({ rows: [{ ...first, status: 'voided' }], failed: [] });
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 2500 }));
+
+		await act(async () => result.current.cancelOnePayment('a'));
+
+		expect(result.current.state.entryMinor).toBe(2500);
+	});
+
 	it('cancelOnePayment voids nothing when the cashier keeps the payment', async () => {
 		mockPayload.meta_data = withLedger([], [payment({ id: 'b' })]);
 		mockConfirm.mockResolvedValueOnce(false);

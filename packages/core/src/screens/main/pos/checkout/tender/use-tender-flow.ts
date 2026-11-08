@@ -1947,8 +1947,10 @@ export function useTenderFlow(
 		const { [paymentId]: _dropped, ...kept } =
 			getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
 		setAllocations(order.uuid, kept);
-		// The next payment is re-planned over what is left: the untouched entry follows the
-		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405).
+		// The next payment is re-planned over what is left: an untouched entry follows the
+		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405); an
+		// amount the cashier typed stays theirs (CodeRabbit).
+		if (state.entryDirty) return;
 		const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
 			candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
 		);
