@@ -87,7 +87,8 @@ describe('Input text cap', () => {
 
 		const classes = String(fieldProps.at(-1)?.className).split(' ');
 		expect(classes).toEqual(expect.arrayContaining(['leading-none', 'native:leading-[1.2]']));
-		expect(classes).not.toContain('leading-none');
+		// Bare on web on purpose: a `web:` variant loses to a caller's `text-amt` line-height.
+		expect(classes).not.toContain('web:leading-none');
 	});
 
 	it("lets a caller's prop win", () => {
