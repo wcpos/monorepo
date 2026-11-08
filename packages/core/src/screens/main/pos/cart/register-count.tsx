@@ -60,10 +60,8 @@ export function RegisterCount({
 	onClosed,
 	onBusyChange,
 	side,
-	portalHost,
 }: {
 	side?: 'left' | 'right';
-	portalHost?: string | null;
 	description: React.ReactNode;
 	onBack: () => void;
 	onClosed: (count: ClosureCount) => void;
@@ -424,7 +422,6 @@ export function RegisterCount({
 			{approving && (
 				<ApproveSheet
 					side={side}
-					portalHost={portalHost}
 					counted={counted}
 					note={note}
 					denominations={countedDenominations}

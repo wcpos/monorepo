@@ -7,13 +7,15 @@ import { act, fireEvent, render as renderUI, screen, waitFor } from '@testing-li
 import type { ClosureRow } from '@wcpos/database';
 import type { PrinterProfile } from '@wcpos/printer';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
 import { ClosurePanel } from './closure-panel';
-import { PageSheetHostContext } from '../../components/page-sheet-host';
 import { mergeAvailablePrinterProfiles } from '../../settings/printer/available-printer-profiles';
 
 const wrapper = ({ children }: React.PropsWithChildren) => (
-	<PageSheetHostContext.Provider value="scene:reports">{children}</PageSheetHostContext.Provider>
+	<OverlayHostProvider name="scene:reports" phoneUsesRoot>
+		{children}
+	</OverlayHostProvider>
 );
 const render = (ui: React.ReactElement) => renderUI(ui, { wrapper });
 

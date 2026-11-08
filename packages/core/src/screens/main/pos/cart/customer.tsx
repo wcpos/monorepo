@@ -52,7 +52,7 @@ export function Customer({
 					muted: !(billing?.address_1 || billing?.city || billing?.postcode),
 				}}
 			/>
-			<DialogContent side={side} testID="customer-address-dialog" size="lg" portalHost="pos">
+			<DialogContent side={side} testID="customer-address-dialog" size="lg">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>

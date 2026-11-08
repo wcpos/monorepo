@@ -6,6 +6,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 // The strip's context alone: the surface module brings the safe-area ESM into every bar's suite.
 import { useTitleBarStrip } from '@wcpos/components/edge-surface/title-bar-strip';
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
@@ -53,14 +54,11 @@ export function useBarStatus(): ReturnType<typeof useOnlineBadge> {
 /** The bar's trailing pair: the bell, then the cashier entry, on every size (the rail lists pages only). */
 export function BarControls({
 	testID,
-	portalHost = null,
 	onOpenRegister,
 	inTitleBar = false,
 }: {
 	/** The bar's testID: the bell is `<testID>-bell`, the avatar `<testID>-avatar`. */
 	testID: string;
-	/** The POS host inside the till; elsewhere the bell and cashier sheet share the page host. */
-	portalHost?: string | null;
 	/** The register bar's: the cashier sheet's drawer figure opens its panel (the one door). */
 	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The desktop title bar's own pair (`TitleBarStripContent`). */
@@ -71,33 +69,25 @@ export function BarControls({
 	// window (Paul, 2026-10-29): every other bar draws neither. Full screen (0) gives them back.
 	const titleBarShown = useTitleBarStrip().height > 0;
 	const inTill = useCurrentOrderOptional() !== undefined;
-	// The bell and cashier sheet share the page host: beside the rail on wide (#3061),
-	// the root on a phone. The POS keeps its own host inside the till.
-	const entryHost: string | null = portalHost ?? pageHost ?? null;
+	// The bell and cashier sheet take the bar's host: the till's `pos`, else the page's, beside the
+	// rail on wide (#3061) and the root on a phone.
 	if (titleBarShown && !inTitleBar) {
 		// A till bar keeps the sheet's host, avatarless: the title bar's requests open it with the order.
 		return inTill ? (
-			<CashierEntry
-				testID={`${testID}-avatar`}
-				portalHost={entryHost}
-				onOpenRegister={onOpenRegister}
-				headless
-			/>
+			<CashierEntry testID={`${testID}-avatar`} onOpenRegister={onOpenRegister} headless />
 		) : null;
 	}
-	return (
+	const controls = (
 		<>
-			<NotificationBell
-				testID={`${testID}-bell`}
-				portalHost={portalHost ?? pageHost}
-				bare={inTitleBar}
-			/>
-			<CashierEntry
-				testID={`${testID}-avatar`}
-				portalHost={entryHost}
-				onOpenRegister={onOpenRegister}
-				bare={inTitleBar}
-			/>
+			<NotificationBell testID={`${testID}-bell`} bare={inTitleBar} />
+			<CashierEntry testID={`${testID}-avatar`} onOpenRegister={onOpenRegister} bare={inTitleBar} />
 		</>
+	);
+	// The title bar sits above every screen, outside any host: its pair takes the focused page's
+	// host, never the root, which would cover the rail (Greptile, #3419).
+	return inTitleBar ? (
+		<OverlayHostProvider name={pageHost}>{controls}</OverlayHostProvider>
+	) : (
+		controls
 	);
 }

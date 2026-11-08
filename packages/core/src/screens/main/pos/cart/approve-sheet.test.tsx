@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 import { Toast } from '@wcpos/components/toast';
 
 import * as audit from '../../../../services/register-session/audit';
@@ -91,7 +92,16 @@ jest.mock('@wcpos/components/dialog', () => ({
 		side?: 'left' | 'right';
 		portalHost?: string | null;
 	}) => (
-		<div data-testid={testID} data-side={side} data-portal={String(portalHost)}>
+		<div
+			data-testid={testID}
+			data-side={side}
+			// The host DialogContent resolves: a named one (`null` the root), else the nearest provided.
+			data-portal={String(
+				portalHost === undefined
+					? (jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null)
+					: portalHost
+			)}
+		>
 			{children}
 		</div>
 	),
@@ -128,11 +138,15 @@ beforeEach(() => {
 	online = 'online-website-available';
 });
 it("takes the side and host it is given; defaults to the cart's side and the POS host", () => {
-	const view = render(<ApproveSheet {...props} />);
+	const view = render(
+		<OverlayHostProvider name="pos">
+			<ApproveSheet {...props} />
+		</OverlayHostProvider>
+	);
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('pos');
 	view.unmount();
-	render(<ApproveSheet {...props} side="left" portalHost={null} />);
+	render(<ApproveSheet {...props} side="left" />);
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-side')).toBe('left');
 	expect(screen.getByTestId('approve-sheet').getAttribute('data-portal')).toBe('null');
 });

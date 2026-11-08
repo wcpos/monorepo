@@ -93,7 +93,6 @@ interface Props {
 	/** Footer ids, per page where more than one panel can exist; the generic ids otherwise. */
 	closeTestID?: string;
 	restoreTestID?: string;
-	portalHost?: string;
 	side?: 'left' | 'right';
 }
 
@@ -110,7 +109,6 @@ function UISettingsDialog({
 	contentTestID,
 	closeTestID = 'ui-settings-close',
 	restoreTestID = 'ui-settings-restore-defaults',
-	portalHost,
 	side = 'right',
 }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
@@ -144,7 +142,7 @@ function UISettingsDialog({
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID={contentTestID}>
+				<DialogContent side={side} size="lg" testID={contentTestID}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

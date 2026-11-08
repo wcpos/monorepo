@@ -1,8 +1,9 @@
 import * as React from 'react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import { figuresOf, mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
-import { PageSheetHostContext } from '../../components/page-sheet-host';
 
 import type * as Context from '../context';
 
@@ -162,13 +163,13 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 }
 export const room = () =>
 	render(
-		<PageSheetHostContext.Provider value="scene:reports">
+		<OverlayHostProvider name="scene:reports" phoneUsesRoot>
 			<real.ReportsScopeProvider>
 				<SelectionProvider>
 					<Reports date="Sales" />
 				</SelectionProvider>
 			</real.ReportsScopeProvider>
-		</PageSheetHostContext.Provider>
+		</OverlayHostProvider>
 	);
 
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');

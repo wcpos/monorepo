@@ -36,14 +36,7 @@ function EditCartItemButton({ title, item, form }: Props) {
 				>
 					{t('pos_cart.edit_line')}
 				</Button>
-				<RecordDialog
-					side={side}
-					portalHost="pos"
-					title={title}
-					record={item}
-					form={() => form}
-					payload={item}
-				/>
+				<RecordDialog side={side} title={title} record={item} form={() => form} payload={item} />
 			</Dialog>
 		</ErrorBoundary>
 	);

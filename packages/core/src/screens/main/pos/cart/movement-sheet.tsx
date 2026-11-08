@@ -47,13 +47,11 @@ const AFTER_MARK = '\u0001';
 
 export function MovementSheet({
 	side: sideProp,
-	portalHost = 'pos',
 	type,
 	onDone,
 	onOpenChange,
 }: {
 	side?: 'left' | 'right';
-	portalHost?: string | null;
 	type: MovementType | null;
 	onDone: (id: string, type: MovementType, amount: string) => void;
 	onOpenChange: (open: boolean) => void;
@@ -151,7 +149,7 @@ export function MovementSheet({
 	const confirm = () => exclusive('confirm', runConfirm);
 	return (
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost={portalHost}>
+			<DialogContent side={side} size="lg">
 				<DialogHeader>
 					<DialogTitle>{type ? words[`title_${type}`] : ''}</DialogTitle>
 					{/* The consequence, said once: what the drawer holds, and what it will after. */}

@@ -34,7 +34,6 @@ export function OrderSheet({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<RecordDialog
 				side={side}
-				portalHost="pos"
 				title={t('pos_cart.order_details')}
 				record={order}
 				form={(record) => <EditOrderMeta order={record} flushRef={flushRef} />}

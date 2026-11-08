@@ -13,6 +13,7 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
+import { useOverlayHost } from '@wcpos/components/lib/overlay-host';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type CarryTarget, readCarriedFrom } from '@wcpos/query/register-session';
@@ -49,18 +50,18 @@ export type SwitchRequest =
 
 export function SwitchConfirm({
 	request,
-	portalHost,
 	onOpenChange,
 	onConfirm,
 	onSignOutAnyway,
 }: {
 	request: SwitchRequest | null;
-	portalHost?: string;
 	onOpenChange: (open: boolean) => void;
 	onConfirm: (request: SwitchRequest) => void;
 	onSignOutAnyway: () => void;
 }) {
 	const t = useT();
+	// The sheet's host: an alert takes none of its own, so it is told it.
+	const host = useOverlayHost();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const [choice, setChoice] = React.useState('take');
 	const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -272,7 +273,7 @@ export function SwitchConfirm({
 	return (
 		<>
 			<AlertDialog open={!sheetOpen} onOpenChange={onOpenChange}>
-				<AlertDialogContent portalHost={portalHost} testID="switch-confirm">
+				<AlertDialogContent portalHost={host} testID="switch-confirm">
 					<AlertDialogHeader>
 						<AlertDialogTitle>{title}</AlertDialogTitle>
 						<AlertDialogDescription>{description}</AlertDialogDescription>
@@ -330,7 +331,6 @@ export function SwitchConfirm({
 						);
 					}
 				}}
-				portalHost={portalHost}
 				testID="switch-confirm-handover-sheet"
 			/>
 		</>

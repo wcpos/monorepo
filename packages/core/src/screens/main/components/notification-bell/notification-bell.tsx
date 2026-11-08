@@ -15,11 +15,9 @@ import { usePanelSide } from '../../pos/contexts/overlay-side';
  */
 export function NotificationBell({
 	testID,
-	portalHost,
 	bare = false,
 }: {
 	testID: string;
-	portalHost?: string;
 	/** The title bar's (`IconButton` `bare`): no surface on hover or press. */
 	bare?: boolean;
 }) {
@@ -47,7 +45,7 @@ export function NotificationBell({
 					accessibilityLabel={t('common.notifications')}
 				/>
 			</DialogTrigger>
-			<DialogContent side={side} size="lg" portalHost={portalHost} testID="notifications-sheet">
+			<DialogContent side={side} size="lg" testID="notifications-sheet">
 				{isOpen && <NotificationPanelContent />}
 			</DialogContent>
 		</Dialog>

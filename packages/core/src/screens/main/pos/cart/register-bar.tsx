@@ -86,11 +86,7 @@ export function RegisterBar({
 					<StatusBadge testID="register-bar-pill" label={pillLabel} variant="warning" />
 				)}
 				<View className="flex-1" />
-				<BarControls
-					testID="register-bar"
-					portalHost="pos"
-					onOpenRegister={(pane) => requestRegisterPanel(pane)}
-				/>
+				<BarControls testID="register-bar" onOpenRegister={(pane) => requestRegisterPanel(pane)} />
 			</HStack>
 			{/* Always mounted: on web the shell can only play the panel's exit while the caller keeps
 			    rendering the closed Dialog (OVERLAY_EXIT_MOUNTED); a conditional mount tore it down in
