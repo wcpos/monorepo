@@ -329,7 +329,7 @@ describe('InputSources — quiet by default', () => {
 		fireEvent.click(screen.getByTestId('scanner-setup-guide-link'));
 
 		expect(mockOpenExternalURL).toHaveBeenCalledWith(
-			'https://docs.wcpos.com/hardware/scanner-setup-wizard'
+			'https://docs.wcpos.com/hardware/scanners/setup-wizard'
 		);
 	});
 });

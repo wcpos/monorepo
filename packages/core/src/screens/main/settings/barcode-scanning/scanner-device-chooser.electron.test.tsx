@@ -93,7 +93,7 @@ describe('ScannerDeviceChooser (electron)', () => {
 		expect(getByTestId('scanner-chooser-empty-hint')).toBeTruthy();
 		fireEvent.click(getByTestId('scanner-chooser-wizard-link'));
 		expect(mockOpenExternalURL).toHaveBeenCalledWith(
-			'https://docs.wcpos.com/hardware/scanner-setup-wizard'
+			'https://docs.wcpos.com/hardware/scanners/setup-wizard'
 		);
 	});
 
