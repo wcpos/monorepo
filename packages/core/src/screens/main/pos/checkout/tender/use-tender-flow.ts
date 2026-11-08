@@ -16,6 +16,7 @@ import {
 	type GatewayAttempt,
 	isLivePaymentStatus,
 	isOfflineDeviceAuthorization,
+	type MetaDataEntry,
 	mintDevicePayment,
 	mintServerPayment,
 	PAID_UNITS_META_KEY,
@@ -873,8 +874,12 @@ export function useTenderFlow(
 	 * meta can lag the row that just landed or the void that just answered.
 	 */
 	const journaledPaidUnits = React.useCallback(
-		(ledger: PaymentRow[], paymentId?: string, legUnits?: Record<string, number> | null) => {
-			const meta = order.getLatest().payload.meta_data;
+		(
+			meta: MetaDataEntry[] | undefined,
+			ledger: PaymentRow[],
+			paymentId?: string,
+			legUnits?: Record<string, number> | null
+		) => {
 			const live = new Set(
 				ledger.filter(({ status }) => isLivePaymentStatus(status)).map(({ id }) => id)
 			);
@@ -887,7 +892,7 @@ export function useTenderFlow(
 			// The completing leg can be journaled before its row exists in the ledger.
 			return paymentId && legUnits ? { ...stored, [paymentId]: legUnits } : stored;
 		},
-		[order]
+		[order.uuid]
 	);
 
 	/**
@@ -899,26 +904,31 @@ export function useTenderFlow(
 	const writePaidUnits = React.useCallback(
 		async (rows: PaymentRow[]) => {
 			try {
-				const meta = order.getLatest().payload.meta_data;
-				const ledger = readLedger(meta).map(
-					(row) => rows.find((candidate) => candidate.id === row.id) ?? row
-				);
-				for (const row of rows) if (!ledger.some(({ id }) => id === row.id)) ledger.push(row);
-				const allocations = journaledPaidUnits(ledger);
-				const hasUnits = Object.keys(allocations).length > 0;
-				if (
-					hasUnits
-						? isEqual(allocations, readPaidUnits(meta))
-						: !(meta ?? []).some(({ key, value }) => key === PAID_UNITS_META_KEY && value !== null)
-				)
-					return;
-				const patched = await ctx.stampCompletion(
-					order,
-					withMetaReplaced(meta, [
-						hasUnits ? paidUnitsMeta(allocations) : { key: PAID_UNITS_META_KEY, value: null },
-					])
-				);
-				if (!patched) throw new Error('paid_units_save_failed');
+				// Resolved inside the atomic write against the payload as it is then: an adoption
+				// from the store or another till between the call and the commit is merged, not
+				// overwritten (Codex on #3421). An unchanged key is no write at all.
+				await writeLedgerChanges(order, (payload) => {
+					const meta = payload.meta_data as MetaDataEntry[] | undefined;
+					const ledger = readLedger(meta).map(
+						(row) => rows.find((candidate) => candidate.id === row.id) ?? row
+					);
+					for (const row of rows) if (!ledger.some(({ id }) => id === row.id)) ledger.push(row);
+					const allocations = journaledPaidUnits(meta, ledger);
+					const hasUnits = Object.keys(allocations).length > 0;
+					if (
+						hasUnits
+							? isEqual(allocations, readPaidUnits(meta))
+							: !(meta ?? []).some(
+									({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
+								)
+					)
+						return {};
+					return {
+						meta_data: withMetaReplaced(meta, [
+							hasUnits ? paidUnitsMeta(allocations) : { key: PAID_UNITS_META_KEY, value: null },
+						]),
+					};
+				});
 			} catch (error) {
 				// Best effort: a local meta write must never fail a sale; completion journals again.
 				logger.warn('Failed to journal paid units', {
@@ -926,7 +936,7 @@ export function useTenderFlow(
 				});
 			}
 		},
-		[ctx, order, orderContext, journaledPaidUnits]
+		[order, orderContext, journaledPaidUnits, writeLedgerChanges]
 	);
 	const stampChain = React.useRef<Promise<void>>(Promise.resolve());
 	const stampPaidUnits = React.useCallback(
@@ -1195,7 +1205,7 @@ export function useTenderFlow(
 			// in the store until the sale ends but never describe the completed sale.
 			const withPaidUnits = (paymentId: string | undefined) => {
 				const meta = order.getLatest().payload.meta_data;
-				const allocations = journaledPaidUnits(readLedger(meta), paymentId, legUnits);
+				const allocations = journaledPaidUnits(meta, readLedger(meta), paymentId, legUnits);
 				if (Object.keys(allocations).length > 0)
 					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
 				// A refused completing attempt can leave its units on the order: cleared like a stale split.

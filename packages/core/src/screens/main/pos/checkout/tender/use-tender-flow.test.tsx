@@ -1770,19 +1770,24 @@ describe('useTenderFlow', () => {
 				mockPayload.meta_data = withLedger(mockPayload.meta_data, [row]);
 				return { ...recorded, row };
 			});
-			mockLocalPatch.mockImplementationOnce(async ({ data }) => {
-				mockPayload.meta_data = data.meta_data;
+			// The resolver write door: the stamp is resolved against the payload at write time.
+			mockLocalPatch.mockImplementation(async ({ changes }) => {
+				const resolved = changes(mockPayload);
+				if (resolved.meta_data) mockPayload.meta_data = resolved.meta_data;
 				return { document: order };
 			});
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			await act(async () => result.current.takeTender());
 			if (repeat) await act(async () => result.current.takeTender());
 
-			expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-			const [{ document, data }] = mockLocalPatch.mock.calls[0];
+			// Every stamp goes through the door; only the first resolves to a write.
+			expect(mockLocalPatch).toHaveBeenCalledTimes(repeat ? 2 : 1);
+			const [{ document, changes }] = mockLocalPatch.mock.calls[0];
 			expect(document).toBe(order);
-			expect(readPaidUnits(data.meta_data)).toEqual({ [row.id]: { line: 1 } });
-			expect(readLedger(data.meta_data)).toEqual([row]);
+			expect(readPaidUnits(mockPayload.meta_data)).toEqual({ [row.id]: { line: 1 } });
+			expect(readLedger(mockPayload.meta_data)).toEqual([row]);
+			expect(typeof changes).toBe('function');
+			if (repeat) expect(mockLocalPatch.mock.calls[1][0].changes(mockPayload)).toEqual({});
 		}
 	);
 
@@ -1963,9 +1968,9 @@ describe('useTenderFlow', () => {
 		expect(mockVoidPayments).toHaveBeenCalledWith(order, ['b']);
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ a: { l1: 1 } });
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		const [{ data }] = mockLocalPatch.mock.calls[0];
-		expect(readPaidUnits(data.meta_data)).toEqual({ a: { l1: 1 } });
-		expect(data.meta_data).toContainEqual({
+		const resolved = mockLocalPatch.mock.calls[0][0].changes(mockPayload);
+		expect(readPaidUnits(resolved.meta_data)).toEqual({ a: { l1: 1 } });
+		expect(resolved.meta_data).toContainEqual({
 			id: 17,
 			key: '_wcpos_paid_units',
 			value: '{"a":{"l1":1}}',
@@ -1999,7 +2004,7 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.cancelOnePayment(row.id));
 
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload).meta_data).toContainEqual({
 			id: 17,
 			key: '_wcpos_paid_units',
 			value: null,
