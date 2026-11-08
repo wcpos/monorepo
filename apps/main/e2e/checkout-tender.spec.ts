@@ -638,7 +638,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const legOne = await page.getByTestId('checkout-plan-leg-1').innerText();
 			if (grouped) {
 				const dp = decimalPlaces(legOne);
-				const amountDigits = `${Math.floor(planned[1] / unit)}${String(planned[1] % unit).padStart(dp, '0')}`;
+				const amountDigits =
+					dp > 0
+						? `${Math.floor(planned[1] / unit)}${String(planned[1] % unit).padStart(dp, '0')}`
+						: String(planned[1]);
 				expect(digitsOf(legOne), 'S9: the two shares fold into one `Then 2 ×` pill').toBe(
 					`2${amountDigits}`
 				);
