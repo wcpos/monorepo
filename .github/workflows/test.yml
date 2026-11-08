@@ -712,14 +712,17 @@ jobs:
         # the base or an orphan in the check below. The base parent of the run's merge
         # commit, not the moving branch: a base change during the run is not part of what
         # was shot. GitHub merged these two commits cleanly to make the run, so git does
-        # too; a refusal here is a bug to read, not a branch to retry.
+        # too; a refusal here is a bug to read, not a branch to retry. The merge commit's
+        # FIRST parent is the base and its second this head (`Merge <head> into <base>`);
+        # the fetch takes no depth, so the full clone above keeps the history the merge
+        # needs.
         env:
           MERGE_SHA: ${{ github.sha }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch --depth=2 origin "$MERGE_SHA"
-          base=$(git rev-parse "${MERGE_SHA}^2")
+          git fetch origin "$MERGE_SHA"
+          base=$(git rev-parse "${MERGE_SHA}^1")
           if git merge-base --is-ancestor "$base" HEAD; then
             echo "the head already carries the base the shards shot ($base)"
           else
