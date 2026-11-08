@@ -3,7 +3,11 @@ import * as React from 'react';
 import { loadAsync } from 'expo-font';
 
 import { FONT_FACES } from '@wcpos/components/lib/fonts';
-import { SYSTEM_TYPE, ThemeTraitsContext } from '@wcpos/components/lib/theme-traits';
+import {
+	SYSTEM_TYPE,
+	ThemeTraitsContext,
+	type ThemeType,
+} from '@wcpos/components/lib/theme-traits';
 import {
 	familiesForType,
 	traitsForTheme,
@@ -21,11 +25,10 @@ export function resolveTypeSet(value: unknown, theme: string | undefined): TypeS
 	return TYPE_SET_IDS.includes(value as TypeSetId) ? (value as TypeSetId) : typeSetForTheme(theme);
 }
 
-export function ThemeTraitsSettingProvider({ children }: { children: React.ReactNode }) {
-	const { store } = useAppState();
-	const theme = useDocField(store, (latest) => latest.theme) ?? 'system';
-	const fonts = useDocField(store, (latest) => latest.fonts);
-	const setId = resolveTypeSet(fonts, theme);
+export function useThemeType(setId: TypeSetId): {
+	type: ThemeType;
+	status: 'loading' | 'loaded' | 'failed';
+} {
 	const [state, setState] = React.useState<{
 		setId: TypeSetId;
 		status: 'loaded' | 'failed';
@@ -56,12 +59,26 @@ export function ThemeTraitsSettingProvider({ children }: { children: React.React
 		};
 	}, [setId]);
 
+	const status =
+		familiesForType(TYPE_SETS[setId]).length === 0
+			? 'loaded'
+			: state?.setId === setId
+				? state.status
+				: 'loading';
+	return { type: status === 'loaded' ? TYPE_SETS[setId] : SYSTEM_TYPE, status };
+}
+
+export function ThemeTraitsSettingProvider({ children }: { children: React.ReactNode }) {
+	const { store } = useAppState();
+	const theme = useDocField(store, (latest) => latest.theme) ?? 'system';
+	const fonts = useDocField(store, (latest) => latest.fonts);
+	const { type } = useThemeType(resolveTypeSet(fonts, theme));
 	const value = React.useMemo(
 		() => ({
 			...traitsForTheme(theme),
-			type: state?.status === 'loaded' && state.setId === setId ? TYPE_SETS[setId] : SYSTEM_TYPE,
+			type,
 		}),
-		[state, theme, setId]
+		[theme, type]
 	);
 	return <ThemeTraitsContext.Provider value={value}>{children}</ThemeTraitsContext.Provider>;
 }

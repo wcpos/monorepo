@@ -18,6 +18,7 @@
 		"./contexts/persisted-state": "./src/contexts/persisted-state.tsx",
 		"./contexts/scale": "./src/contexts/scale/index.tsx",
 		"./contexts/theme": "./src/contexts/theme/index.tsx",
+		"./contexts/theme-traits": "./src/contexts/theme-traits/index.tsx",
 		"./contexts/translations": "./src/contexts/translations/index.tsx",
 		"./hooks/use-app-info": "./src/hooks/use-app-info.ts",
 		"./hooks/use-locale": "./src/hooks/use-locale/index.ts",
