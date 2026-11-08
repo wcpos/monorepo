@@ -43,17 +43,19 @@ export function useTillLocation(): TillLocation {
 	const seed = readCheckoutSeed(orderIdParam);
 	const inPos = segments.includes('(pos)');
 	const atCart = segments.includes('cart');
+	const sheet = sheetOf(segments);
 
 	// Remember the last valid orderId when at a cart route with an orderId.
 	// This prevents losing the orderId when a modal (like settings) is opened, which
-	// navigates away from the POS routes. We only remember when explicitly at a cart
-	// route with an orderId so that /cart (new order) still shows a new order.
+	// navigates away from the POS routes. We only remember when explicitly at a till cart
+	// route with an orderId so that /cart (new order) still shows a new order, and never a
+	// sheet's order: the sheets live under `(modals)/cart` but are not the till (#3150).
 	//
 	// This uses React's "adjusting state during render" pattern: when a new candidate
 	// orderId is observed we store it immediately during render (no effect, no ref), so
 	// the value survives the transition out of the POS routes when a modal opens.
 	const [lastOrderId, setLastOrderId] = React.useState<string | undefined>(undefined);
-	if (inPos && atCart && seed.orderId && seed.orderId !== lastOrderId) {
+	if (inPos && atCart && !sheet && seed.orderId && seed.orderId !== lastOrderId) {
 		setLastOrderId(seed.orderId);
 	}
 
@@ -67,5 +69,5 @@ export function useTillLocation(): TillLocation {
 	});
 	if (resolved.tillOrderId !== routeTillOrderId) setRouteTillOrderId(resolved.tillOrderId);
 
-	return { inPos, sheet: sheetOf(segments), atCart, tillOrderId: resolved.orderId, seed };
+	return { inPos, sheet, atCart, tillOrderId: resolved.orderId, seed };
 }

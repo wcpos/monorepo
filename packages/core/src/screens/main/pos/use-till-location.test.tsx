@@ -74,6 +74,13 @@ it('keeps the last cart order outside the POS and on return to a sheet', () => {
 	expect(go(routes.checkout, 'B').tillOrderId).toBe('C');
 });
 
+it("remembers the till order, never a sheet's, for the routes outside the POS (#3150)", () => {
+	const go = walk();
+	go(routes.columnsCart, ['A']);
+	go(routes.checkout, 'B');
+	expect(go(routes.settings).tillOrderId).toBe('A');
+});
+
 it('gives a cold-loaded sheet no till order', () => {
 	const go = walk();
 	expect(go(routes.checkout, 'B')).toMatchObject({ sheet: 'checkout', tillOrderId: undefined });
