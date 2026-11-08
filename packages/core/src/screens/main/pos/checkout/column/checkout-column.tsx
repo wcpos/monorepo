@@ -76,7 +76,10 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 			</Text>
 			<HStack className="items-center gap-3 p-2">
 				<View>
+					{/* A row beside the close: hug, or Yoga hands the control the whole row and the close,
+					    the cashier's way out of a checkout, falls off screen. */}
 					<SegmentedControl
+						hug
 						value={flow.state.tab}
 						onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
 						segments={[

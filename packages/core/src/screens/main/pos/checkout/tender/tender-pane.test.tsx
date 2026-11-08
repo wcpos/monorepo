@@ -1439,6 +1439,7 @@ const mockLayouts: Record<
 	string,
 	(event: { nativeEvent: { layout: { height?: number; y?: number } } }) => void
 > = {};
+const mockContentStyles: Record<string, unknown> = {};
 jest.mock('react-native', () => {
 	const native = jest.requireActual('react-native');
 	function Box({
@@ -1446,15 +1447,21 @@ jest.mock('react-native', () => {
 		testID,
 		className,
 		onLayout,
+		contentContainerStyle,
 	}: React.PropsWithChildren<{
 		testID?: string;
 		className?: string;
 		onLayout?: (typeof mockLayouts)[string];
+		contentContainerStyle?: unknown;
 	}>) {
 		// The jsdom host has no layout engine; expose its committed layout callback to the test.
 		React.useLayoutEffect(() => {
 			if (testID && onLayout) mockLayouts[testID] = onLayout;
 		}, [testID, onLayout]);
+		// And the content container's committed style (the pane's fit).
+		React.useLayoutEffect(() => {
+			if (testID && contentContainerStyle) mockContentStyles[testID] = contentContainerStyle;
+		}, [testID, contentContainerStyle]);
 		return (
 			<div data-testid={testID} className={className}>
 				{children}
@@ -1472,6 +1479,20 @@ it('shrinks the shared keypad under a short measured pane and restores tile fit'
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
 	act(() => mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 900 } } }));
 	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+});
+
+// A native ScrollView scrolls only to its content container's height: content taller than the
+// fit (Split's "N ways" tiles wrapping) must grow the container, so it is a floor, never a height.
+it('the shrunk pane floors its content at the fit and never fixes its height, so overflow scrolls', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
+	expect(style).not.toHaveProperty('height');
+	expect(style.minHeight).toBeGreaterThanOrEqual(400);
 });
 
 // Fractional widths plus a gap must not wrap five methods into four columns.

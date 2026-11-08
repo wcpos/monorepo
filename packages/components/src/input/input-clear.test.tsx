@@ -82,6 +82,15 @@ describe('Input text cap', () => {
 		expect(fieldProps.at(-1)?.maxFontSizeMultiplier).toBe(MAX_FONT_SCALE);
 	});
 
+	it('one tight line box on web, SF ascent + descent on native, so the text sits centred', () => {
+		render(<Input value="x" />);
+
+		const classes = String(fieldProps.at(-1)?.className).split(' ');
+		expect(classes).toEqual(expect.arrayContaining(['leading-none', 'native:leading-[1.2]']));
+		// Bare on web on purpose: a `web:` variant loses to a caller's `text-amt` line-height.
+		expect(classes).not.toContain('web:leading-none');
+	});
+
 	it("lets a caller's prop win", () => {
 		render(<Input value="x" maxFontSizeMultiplier={2} />);
 
