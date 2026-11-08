@@ -17,7 +17,11 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { type MetaDataEntry, readAwaitingCustomer } from '@wcpos/order-math';
 import { log } from '@wcpos/utils/logger';
 
-import { addCheckoutProbeProductAgain, checkoutProbeAddControl } from './checkout-probe';
+import {
+	addCheckoutProbeProductAgain,
+	checkoutProbeAddControl,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
 	decimalPlaces,
@@ -686,7 +690,28 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		'picked units plus an amount is one payment',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
-			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+			// Two units of the probe product: on a one-line order a unit plus 1.00 would exceed
+			// the balance (the first CI run skipped the walk), so the line is doubled before
+			// checkout and ONE of its two units is picked.
+			await ensureRegisterOpen(page);
+			const added = await tryAddRunPrivateSimpleProduct(page);
+			liveTest.skip(!added, 'product-writer credentials are unavailable');
+			const { total: oneUnit } = await readCartMoney(page);
+			const add = checkoutProbeAddControl(page);
+			expect(add, 'S7: the run-private probe must carry its row testID').not.toBeNull();
+			await add!.click({ timeout: 30_000 });
+			await expect
+				.poll(async () => (await readCartMoney(page)).total, {
+					timeout: 30_000,
+					message: 'S7: the second add doubles the cart',
+				})
+				.not.toBe(oneUnit);
+			const label = newRunLabel();
+			await stampRunLabel(page, label);
+			await readCartMoney(page);
+			const { orderId, mode } = await openCheckout(page, (order) =>
+				trackOrder({ ...order, label })
+			);
 			const { authorization, descriptors } = await requireTenderCheckout(
 				request,
 				testInfo,
@@ -707,18 +732,19 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S7: read the saved order lines before picking or paying'
 			);
 			liveTest.skip(
-				before.line_items!.length !== 1 || Number(before.line_items![0].quantity) !== 1,
-				'the picked-unit walk needs exactly one line with quantity 1'
+				before.line_items!.length !== 1 || Number(before.line_items![0].quantity) !== 2,
+				'the picked-unit walk needs exactly one line with quantity 2'
 			);
 			const line = before.line_items![0];
-			const price = Math.round((Number(line.total) + Number(line.total_tax)) * 100);
-			expect(price, 'S7: the server line has a positive tax-inclusive price').toBeGreaterThan(0);
-			const first = price + 100;
-			liveTest.skip(first > balance, 'the line price plus 1.00 exceeds the order balance');
-			liveTest.skip(
-				first === balance,
-				'the line price plus 1.00 leaves no positive second payment'
+			// A unit's price has its tax inside and the odd cent sits on the LAST unit: the first
+			// unit is the floor of the line's half.
+			const lineMinor = Math.round((Number(line.total) + Number(line.total_tax)) * 100);
+			const price = Math.floor(lineMinor / 2);
+			expect(price, 'S7: the server line has a positive tax-inclusive unit price').toBeGreaterThan(
+				100
 			);
+			const first = price + 100;
+			expect(first, 'S7: a unit plus 1.00 leaves a positive second payment').toBeLessThan(balance);
 
 			await page.getByTestId('checkout-split-chip').click();
 			const pick = page
@@ -729,11 +755,19 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const pickId = await pick.getAttribute('data-testid');
 			expect(pickId, 'S7: the line picker carries its POS uuid').toMatch(/^checkout-line-.+-pick$/);
 			const lineKey = pickId!.replace(/^checkout-line-/, '').replace(/-pick$/, '');
+			// A tap on the name picks every unpaid unit (both); the stepper's minus leaves one.
 			await pick.click();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), {
 					timeout: 15_000,
-					message: 'S7: picking the only unit includes its tax',
+					message: 'S7: the name tap picks both units',
+				})
+				.toBe(lineMinor);
+			await page.getByTestId(`checkout-line-${lineKey}-minus`).click();
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 15_000,
+					message: 'S7: one picked unit is priced with its tax inside',
 				})
 				.toBe(price);
 			await page.getByTestId('checkout-plus-amount').click();
