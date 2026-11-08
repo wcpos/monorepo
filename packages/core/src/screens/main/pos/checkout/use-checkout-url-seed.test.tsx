@@ -2,6 +2,7 @@
 import { renderHook } from '@testing-library/react';
 
 import { getCheckoutModeSnapshot, leaveCheckout, resetCheckoutMode } from './checkout-mode';
+import { readCheckoutSeed } from './pos-url';
 import { useCheckoutUrlSeed } from './use-checkout-url-seed';
 
 let mockSize = 'lg';
@@ -28,7 +29,7 @@ beforeEach(() => {
 	mockReplace.mockClear();
 });
 it('seeds wide checkout once per distinct seed, including across tab switches', () => {
-	const { rerender } = renderHook(({ param }) => useCheckoutUrlSeed(param), {
+	const { rerender } = renderHook(({ param }) => useCheckoutUrlSeed(readCheckoutSeed(param)), {
 		initialProps: { param: ['u', 'checkout', 'cash'] },
 	});
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(true);
@@ -44,7 +45,7 @@ it('seeds wide checkout once per distinct seed, including across tab switches', 
 });
 it('routes phone checkout links to the sheet and still seeds the store', () => {
 	mockSize = 'sm';
-	renderHook(() => useCheckoutUrlSeed(['u', 'checkout', 'cash']));
+	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash'])));
 	expect(mockReplace).toHaveBeenCalledWith({
 		pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
 		params: { orderId: 'u' },
@@ -54,7 +55,9 @@ it('routes phone checkout links to the sheet and still seeds the store', () => {
 });
 it('waits for the payment-methods contract before seeding', () => {
 	mockLoaded = false;
-	const { rerender } = renderHook(() => useCheckoutUrlSeed(['u', 'checkout', 'cash']));
+	const { rerender } = renderHook(() =>
+		useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash']))
+	);
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	mockLoaded = true;
 	rerender();
@@ -62,13 +65,13 @@ it('waits for the payment-methods contract before seeding', () => {
 });
 it('sends a store without the contract to the legacy modal without seeding', () => {
 	mockUnsupported = true;
-	renderHook(() => useCheckoutUrlSeed(['u', 'checkout', 'cash']));
+	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash'])));
 	expect(mockReplace).toHaveBeenCalledTimes(1);
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(getCheckoutModeSnapshot().tenderMethods.size).toBe(0);
 });
 it('ignores ordinary cart links', () => {
-	renderHook(() => useCheckoutUrlSeed(['u']));
+	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u'])));
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockReplace).not.toHaveBeenCalled();
 });

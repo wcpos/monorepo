@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
-
 import { Platform } from '@wcpos/utils/platform';
 
 import { useCurrentOrder } from '../contexts/current-order';
+import { useTillLocation } from '../use-till-location';
 import { useCheckoutMode, useOrderCheckoutStage, useTenderMethod } from './checkout-mode';
 import { posBasePath, posPathFor } from './pos-url';
 
@@ -13,10 +12,10 @@ export function usePosUrlMirror() {
 	const { selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(record);
 	const methodId = useTenderMethod(record.uuid);
-	const segments: string[] = useSegments();
+	const { sheet } = useTillLocation();
 	// The phone checkout sheet and the receipt modal are routes of their own: while one is up
 	// it owns the address bar, and a cold load of it must not be rewritten to the cart underneath.
-	const routedModal = segments.includes('(modals)');
+	const routedModal = sheet !== null;
 	const path =
 		posBasePath() +
 		posPathFor({

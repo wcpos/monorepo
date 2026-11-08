@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
-
 import { useRecordField } from '@wcpos/query';
 
 import { hasSurface, invokeSurface } from './surfaces';
@@ -16,6 +14,7 @@ import {
 	useCurrentOrderActions,
 } from '../../screens/main/pos/contexts/current-order/context';
 import { useActionContext } from '../../screens/main/pos/hooks/use-action-context';
+import { useTillLocation } from '../../screens/main/pos/use-till-location';
 
 import type { CommandContext } from './types';
 
@@ -28,7 +27,7 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const { receiptOrders, selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(currentOrderRecord);
-	const segments: string[] = useSegments();
+	const { inPos, sheet } = useTillLocation();
 	const lineCount = useRecordField(
 		currentOrderRecord,
 		(order) =>
@@ -39,12 +38,9 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 	const hasOpenOrder = !(currentOrderRecord as { isNew?: boolean }).isNew;
 	const openOrderCount = openOrders.filter(({ id }) => !receiptOrders.has(id)).length;
 	const route =
-		!segments.includes('(pos)') ||
-		segments.includes('receipt') ||
-		selectedReceiptOrder !== null ||
-		stage === 'receipt'
+		!inPos || sheet === 'receipt' || selectedReceiptOrder !== null || stage === 'receipt'
 			? 'other'
-			: segments.includes('checkout') || stage === 'checkout'
+			: sheet === 'checkout' || stage === 'checkout'
 				? 'checkout'
 				: 'cart';
 

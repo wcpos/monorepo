@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
-
 import { createScanSession, type ScanSession } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
 
@@ -9,6 +7,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useScanHub } from '../../hooks/barcodes/scan-hub-context';
 import { showTooShortFeedback } from '../../hooks/barcodes/too-short-feedback';
+import { useTillLocation } from '../use-till-location';
 
 // The retail set we ask the camera decoder for (spec §4: narrowing formats is a
 // documented speed win). expo-camera's BarcodeType strings.
@@ -35,8 +34,7 @@ export const useCameraScan = () => {
 	// keeps running in a backgrounded POS tree and the hub is app-scoped, so a
 	// decode arriving while another section is focused must be dropped at the
 	// source — the old POS-scoped bus never delivered these beyond the section.
-	const segments: string[] = useSegments();
-	const posSectionActive = segments.includes('(pos)');
+	const { inPos: posSectionActive } = useTillLocation();
 	const posSectionActiveRef = React.useRef(posSectionActive);
 	React.useEffect(() => {
 		posSectionActiveRef.current = posSectionActive;

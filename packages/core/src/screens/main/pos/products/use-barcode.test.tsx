@@ -144,6 +144,7 @@ let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(tabs)', 'index'];
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockRouterPush }),
 	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
 }));
 
 // Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops

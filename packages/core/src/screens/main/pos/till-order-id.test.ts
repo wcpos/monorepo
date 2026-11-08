@@ -1,4 +1,4 @@
-import { tillOrderIdForRoute } from './pos-till-order-id';
+import { tillOrderIdForRoute } from './till-order-id';
 
 const pos = ['(app)', '(drawer)', '(pos)'];
 const cart = [...pos, '(columns)', 'cart', '[...orderId]'];
