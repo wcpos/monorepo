@@ -109,6 +109,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		salesCount: 2,
 		movements,
 		refusedMovements,
+		refusedCash: [],
 		lastClosure: mockHasClosure
 			? {
 					id: 'c',

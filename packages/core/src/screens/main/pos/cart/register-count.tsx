@@ -81,7 +81,7 @@ export function RegisterCount({
 		figuresPending,
 		refusedClose,
 		lastClosure,
-		movements,
+		refusedCash: refusedRows,
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -147,7 +147,7 @@ export function RegisterCount({
 	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
 	const decision = countDecision(
 		session,
-		{ expected, movements, figuresPending, refusedClose },
+		{ expected, refusedCash: refusedRows, figuresPending, refusedClose },
 		{ cash: amount, others, decimals, acknowledgedKey },
 		{ blind, varianceThreshold }
 	);

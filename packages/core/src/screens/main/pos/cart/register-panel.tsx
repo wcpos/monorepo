@@ -24,7 +24,7 @@ import { Notice } from '@wcpos/components/notice';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
-import { readCarriedFrom } from '@wcpos/query/register-session';
+import { isLiveMovement, readCarriedFrom } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -190,10 +190,7 @@ export function RegisterPanel({
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
 	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
-	const activeMovements = movements.filter(
-		(row) =>
-			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
-	);
+	const activeMovements = movements.filter((row) => isLiveMovement(row, movements));
 	// A movement the server refused is cash in the drawer that the ledger will never show.
 	// Nothing in this pane used to read sync_status, so it went missing in silence. The list
 	// comes from the hook already scoped to this register and NOT to the current session, so
