@@ -14,6 +14,7 @@ import { CheckoutColumn } from './checkout-column';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { LedgerLegs } from '../tender/ledger-pane';
 import { initialTenderState } from '../tender/tender-state';
+import { withFigures } from '../tender/tender-figures.test-utils';
 
 import type { LedgerView } from '../tender/use-ledger-view';
 import type { TenderFlow } from '../tender/use-tender-flow';
@@ -188,16 +189,13 @@ jest.mock('@wcpos/components/button', () => ({
 const order = { uuid: 'order-1' } as EngineRecord<'orders'>;
 
 function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
-	return {
+	return withFigures({
 		state: initialTenderState,
 		dispatch: jest.fn(),
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
-		thisPaymentMinor: 9295,
-		afterThisPaymentMinor: 0,
 		plan: null,
-		planLegs: [],
 		planLabel: null,
 		lines: [],
 		picked: {},
@@ -211,12 +209,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		online: true,
 		tiles: [{ method: method(), disabled: false, reason: null, worksOffline: true }],
 		legacyMethods: [],
-		methodsLoaded: true,
-		unsupportedSchema: false,
 		method: null,
-		entryAppliedMinor: 0,
-		entryChangeMinor: 0,
-		quickAmountsMinor: [],
 		readers: [],
 		lockToDefault: false,
 		deviceReady: false,
@@ -226,7 +219,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
 		...overrides,
-	} as TenderFlow;
+	} as TenderFlow);
 }
 
 const reopenedPaid = {

@@ -11,6 +11,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
+import { withFigures } from './tender-figures.test-utils';
 
 import type { TenderFlow } from './use-tender-flow';
 
@@ -243,16 +244,13 @@ const strandedAttempt = {
 	title: 'Email Invoice',
 } as TenderFlow['unansweredAttempt'];
 function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
-	return {
+	return withFigures({
 		state: initialTenderState,
 		dispatch: jest.fn(),
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
-		thisPaymentMinor: 9295,
-		afterThisPaymentMinor: 0,
 		plan: null,
-		planLegs: [],
 		planLabel: null,
 		lines: [],
 		picked: {},
@@ -268,12 +266,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 			{ method: method(), disabled: false, reason: null, worksOffline: true, settlesLater: false },
 		],
 		legacyMethods: [],
-		methodsLoaded: true,
-		unsupportedSchema: false,
 		method: null,
-		entryAppliedMinor: 0,
-		entryChangeMinor: 0,
-		quickAmountsMinor: [],
 		busy: false,
 		saveState: null,
 		terminalLeg: null,
@@ -285,7 +278,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
 		...overrides,
-	} as TenderFlow;
+	} as TenderFlow);
 }
 
 describe('TenderCheckout', () => {
@@ -549,7 +542,7 @@ it('reader chips require an explicit choice when there is no default', () => {
 	});
 	mockFlow = makeFlow({
 		method: server,
-		entryAppliedMinor: 500,
+		state: { ...initialTenderState, view: 'amount', methodId: server.id, entryMinor: 500 },
 		readers: [
 			{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
 			{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },

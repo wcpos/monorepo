@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { DeviceScope } from '@wcpos/components/lib/device';
 import { TONE } from '@wcpos/components/lib/tone';
@@ -11,6 +11,7 @@ import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
+import { withFigures } from './tender-figures.test-utils';
 import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
 
@@ -220,7 +221,7 @@ const method: PaymentMethodDescriptor = {
 };
 
 function makeFlow(count = 1): TenderFlow {
-	return {
+	return withFigures({
 		bootstrapReader: mockBootstrap,
 		rememberedReaderId: null,
 		rememberReader: jest.fn(async () => {}),
@@ -230,10 +231,7 @@ function makeFlow(count = 1): TenderFlow {
 		totalMinor: 9295,
 		paidMinor: 0,
 		balanceMinor: 9295,
-		thisPaymentMinor: 9295,
-		afterThisPaymentMinor: 0,
 		plan: null,
-		planLegs: [],
 		planLabel: null,
 		lines: [],
 		picked: {},
@@ -241,8 +239,6 @@ function makeFlow(count = 1): TenderFlow {
 		allocations: {},
 		discountMinor: 0,
 		paidUnits: {},
-		pickedMinor: 0,
-		allUnpaidPicked: false,
 		unpaidUnits: () => 0,
 		rows: [],
 		liveRows: [],
@@ -267,14 +263,7 @@ function makeFlow(count = 1): TenderFlow {
 			settlesLater: false,
 		})),
 		legacyMethods: [],
-		methodsLoaded: true,
-		unsupportedSchema: false,
 		method,
-		entryAppliedMinor: 0,
-		entryChangeMinor: 0,
-		roundedDueMinor: 9295,
-		roundingMinor: 0,
-		quickAmountsMinor: [],
 		busy: false,
 		running: null,
 		saveState: { kind: 'saving' },
@@ -292,7 +281,7 @@ function makeFlow(count = 1): TenderFlow {
 		unansweredCommand: false,
 		retryCommand: jest.fn(async () => undefined),
 		confirmDialog: null,
-	};
+	});
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
 // swap one layout for another under the cashier's eyes.
@@ -310,18 +299,17 @@ it.each([0, 1])('draws the inert keypad while saving (%s tiles)', (count) => {
 	expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
 });
 it('keeps the plan and unavailable controls inert while saving', () => {
-	const flow = makeFlow(2);
-	flow.tiles[1] = {
-		...flow.tiles[1],
+	const base = makeFlow(2);
+	base.tiles[1] = {
+		...base.tiles[1],
 		method: { ...method, id: 'other' },
 		disabled: true,
 		reason: 'offline',
 	};
-	flow.plan = { kind: 'even', ways: 2, from: 0 };
-	flow.planLegs = [
-		{ state: 'now', minor: 4648 },
-		{ state: 'rest', minor: 4647 },
-	];
+	const flow = withFigures({
+		...base,
+		state: { ...base.state, plan: { kind: 'even', ways: 2, from: 0 } },
+	});
 	render(<TenderPane flow={flow} format={String} compact />);
 	for (const id of ['checkout-plan-change', 'checkout-unavailable-toggle'])
 		expect(screen.getByTestId(id).hasAttribute('disabled')).toBe(true);
@@ -485,21 +473,19 @@ it.each([
 ])(
 	'labels the amount and commit for entry %s, applied %s, balance %s',
 	(entry, applied, balance, change, label) => {
-		const flow = {
+		const flow = withFigures({
 			...makeFlow(),
 			saveState: null,
 			balanceMinor: balance,
-			roundedDueMinor: balance,
-			thisPaymentMinor: balance,
-			entryAppliedMinor: applied,
-			entryChangeMinor: change ? entry - applied : 0,
 			state: {
 				...initialTenderState,
 				view: 'amount' as const,
 				methodId: method.id,
 				entryMinor: entry,
 			},
-		};
+		});
+		expect(flow.figures.entryAppliedMinor).toBe(applied);
+		expect(flow.figures.entryChangeMinor).toBe(change ? entry - applied : 0);
 		render(<TenderPane flow={flow} format={String} />);
 		expect(screen.getByTestId('checkout-commit').textContent).toBe(label);
 		expect(screen.getByTestId('checkout-label').textContent).toBe(
@@ -525,16 +511,15 @@ it('says the amount once: the eyebrow and Full balance drop it while the entry i
 		kind: 'other',
 		capabilities: { ...method.capabilities, change: false },
 	};
-	const flow = {
+	const flow = withFigures({
 		...makeFlow(),
 		saveState: null,
 		method: card,
 		tiles: [
 			{ method: card, disabled: false, reason: null, worksOffline: true, settlesLater: false },
 		],
-		entryAppliedMinor: 9295,
 		state: { ...initialTenderState, view: 'amount' as const, methodId: card.id, entryMinor: 9295 },
-	};
+	});
 	const { rerender } = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
 	expect(screen.getByTestId('checkout-balance').className).toContain('hidden');
@@ -543,7 +528,7 @@ it('says the amount once: the eyebrow and Full balance drop it while the entry i
 	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 9295 in Card');
 	rerender(
 		<TenderPane
-			flow={{ ...flow, entryAppliedMinor: 2000, state: { ...flow.state, entryMinor: 2000 } }}
+			flow={withFigures({ ...flow, state: { ...flow.state, entryMinor: 2000 } })}
 			format={String}
 		/>
 	);
@@ -551,6 +536,11 @@ it('says the amount once: the eyebrow and Full balance drop it while the entry i
 	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Full balance 9295');
 });
 
+// Cash rounded to the nearest 0.05 (#66, #84).
+const rounding: PaymentMethodDescriptor = {
+	...method,
+	defaults: { ...method.defaults, rounding: { increment: '0.05', mode: 'nearest' } },
+};
 it.each([
 	// 10.03 rounds up to 10.05; 10.02 down to 10.00 (#66, #84).
 	[1003, 1005, 1005, '', 'Take 1005 in Cash'],
@@ -559,19 +549,16 @@ it.each([
 ])(
 	'shows a cash tender of %s at its rounded due %s (entry %s)',
 	(balance, due, entry, hint, label) => {
-		const flow: TenderFlow = {
+		const flow: TenderFlow = withFigures({
 			...makeFlow(),
 			saveState: null,
+			method: rounding,
 			totalMinor: balance,
 			balanceMinor: balance,
-			thisPaymentMinor: balance,
-			roundedDueMinor: due,
-			roundingMinor: due - balance,
-			entryAppliedMinor: due,
-			entryChangeMinor: entry - due,
-			quickAmountsMinor: [due, 1500],
 			state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: entry },
-		};
+		});
+		expect(flow.figures.roundingMinor).toBe(due - balance);
+		expect(flow.figures.entryChangeMinor).toBe(entry - due);
 		render(<TenderPane flow={flow} format={String} />);
 		expect(screen.getByTestId('checkout-entry').textContent).toBe(String(entry));
 		expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(hint);
@@ -585,17 +572,14 @@ it.each([
 );
 
 it('a partial cash entry is not rounded, but the exact chip still offers the rounded due', () => {
-	const flow: TenderFlow = {
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
 		saveState: null,
+		method: rounding,
 		totalMinor: 1003,
 		balanceMinor: 1003,
-		thisPaymentMinor: 1003,
-		roundedDueMinor: 1005,
-		roundingMinor: 0,
-		entryAppliedMinor: 500,
 		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 500 },
-	};
+	});
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.queryByTestId('checkout-rounded-from')).toBeNull();
 	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 500 in Cash · 503 left');
@@ -603,16 +587,20 @@ it('a partial cash entry is not rounded, but the exact chip still offers the rou
 });
 
 it('an exact unrounded cash entry pays it off, as the hook lets it', () => {
-	const flow: TenderFlow = {
+	// Typed: an untouched prefill of the balance is the rounded due, as the hook shows it.
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
 		saveState: null,
+		method: rounding,
 		balanceMinor: 1003,
-		thisPaymentMinor: 1003,
-		roundedDueMinor: 1005,
-		roundingMinor: 0,
-		entryAppliedMinor: 1003,
-		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 1003 },
-	};
+		state: {
+			...initialTenderState,
+			view: 'amount',
+			methodId: method.id,
+			entryMinor: 1003,
+			entryDirty: true,
+		},
+	});
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
 	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 1003 in Cash · pays it off');
@@ -620,22 +608,21 @@ it('an exact unrounded cash entry pays it off, as the hook lets it', () => {
 });
 
 it('a split share the hook will settle previews the rounded due', () => {
-	const flow: TenderFlow = {
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
 		saveState: null,
-		plan: { kind: 'fixed', firstMinor: 1001, title: null, from: 0 },
-		planLegs: [
-			{ minor: 1001, state: 'now' },
-			{ minor: 1, state: 'rest' },
-		],
+		method: rounding,
 		balanceMinor: 1002,
-		thisPaymentMinor: 1001,
-		roundedDueMinor: 1000,
-		roundingMinor: -2,
-		entryAppliedMinor: 1000,
-		entryChangeMinor: 1000,
-		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 2000 },
-	};
+		state: {
+			...initialTenderState,
+			view: 'amount',
+			methodId: method.id,
+			entryMinor: 2000,
+			plan: { kind: 'fixed', firstMinor: 1001, title: null, from: 0 },
+		},
+	});
+	expect(flow.figures.thisPaymentMinor).toBe(1001);
+	expect(flow.figures.roundingMinor).toBe(-2);
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('Change 1000');
 	expect(screen.getByTestId('checkout-rounded-from').textContent).toBe('Rounded from 1002');
@@ -648,14 +635,12 @@ it('blocks no-change over-tender and restores full balance from a partial entry'
 		title: 'Card',
 		capabilities: { ...method.capabilities, change: false },
 	};
-	const flow = {
+	const flow = withFigures({
 		...makeFlow(),
 		saveState: null,
 		method: card,
-		thisPaymentMinor: 9295,
-		entryAppliedMinor: 9295,
 		state: { ...initialTenderState, methodId: method.id, entryMinor: 10000 },
-	};
+	});
 	const { rerender } = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
 		"Only 9295 is due — Card can't give change"
@@ -665,12 +650,7 @@ it('blocks no-change over-tender and restores full balance from a partial entry'
 	expect(flow.takeTender).not.toHaveBeenCalled();
 	rerender(
 		<TenderPane
-			flow={{
-				...flow,
-				thisPaymentMinor: 9295,
-				entryAppliedMinor: 2000,
-				state: { ...flow.state, entryMinor: 2000 },
-			}}
+			flow={withFigures({ ...flow, state: { ...flow.state, entryMinor: 2000 } })}
 			format={String}
 		/>
 	);
@@ -680,30 +660,35 @@ it('blocks no-change over-tender and restores full balance from a partial entry'
 });
 
 it('shows plan legs, labels, a short entry hint and numbered commit tail', () => {
-	const flow: TenderFlow = {
-		...makeFlow(),
-		saveState: null,
-		plan: { kind: 'even', ways: 3, from: 0 },
-		planLabel: 'Payment 2 of 3',
-		rows: [
-			{
-				id: 'r1',
-				method_id: 'pos_card',
-				amount: '1.00',
-				status: 'captured',
-			} as TenderFlow['rows'][number],
-		],
-		planLegs: [
-			{ minor: 100, state: 'done', title: 'Card' },
-			{ minor: 450, state: 'now' },
-			{ minor: 450, state: 'todo' },
-		],
-		thisPaymentMinor: 450,
-		balanceMinor: 900,
-		roundedDueMinor: 900,
-		entryAppliedMinor: 200,
-		state: { ...initialTenderState, view: 'amount', entryMinor: 200, entryDirty: true },
-	};
+	const flow: TenderFlow = withFigures(
+		{
+			...makeFlow(),
+			saveState: null,
+			planLabel: 'Payment 2 of 3',
+			rows: [
+				{
+					id: 'r1',
+					method_id: 'pos_card',
+					amount: '1.00',
+					status: 'captured',
+				} as TenderFlow['rows'][number],
+			],
+			balanceMinor: 900,
+			state: {
+				...initialTenderState,
+				view: 'amount',
+				entryMinor: 200,
+				entryDirty: true,
+				plan: { kind: 'even', ways: 3, from: 0 },
+			},
+		},
+		{ titleOf: (id) => (id === 'pos_card' ? 'Card' : id) }
+	);
+	expect(flow.figures.legs).toEqual([
+		{ minor: 100, state: 'done', title: 'Card' },
+		{ minor: 450, state: 'now' },
+		{ minor: 450, state: 'todo' },
+	]);
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-label').textContent).toContain('Payment 2 of 3 · 900 left');
 	expect(screen.getByTestId('checkout-plan-done').textContent).toContain('Card 100');
@@ -720,16 +705,15 @@ it('shows plan legs, labels, a short entry hint and numbered commit tail', () =>
 	});
 });
 it('renders a paid line badge beside an items plan', () => {
-	const flow: TenderFlow = {
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
 		saveState: null,
-		plan: { kind: 'items', ways: 1, firstMinor: 100, units: { 1: 1 }, from: 0 },
 		planLabel: 'Rest of the order',
-		planLegs: [
-			{ minor: 100, state: 'done', title: 'Card' },
-			{ minor: 500, state: 'now' },
-		],
-	};
+		state: {
+			...initialTenderState,
+			plan: { kind: 'items', ways: 1, firstMinor: 100, units: { 1: 1 }, from: 0 },
+		},
+	});
 	render(
 		<>
 			<TenderPane flow={flow} format={String} />
@@ -748,7 +732,7 @@ it('renders a paid line badge beside an items plan', () => {
 it('keeps the keypad visible without a method and disables commit', () => {
 	render(
 		<TenderPane
-			flow={{ ...makeFlow(), method: null, saveState: null, online: false }}
+			flow={withFigures({ ...makeFlow(), method: null, saveState: null, online: false })}
 			format={String}
 			compact
 		/>
@@ -791,7 +775,7 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 	// Scanning, errors and Disconnect live on Settings → Card readers (roadmap#407).
 	const driver = createSimulatedDriver();
 	registerDriver(driver);
-	const flow = {
+	const flow = withFigures({
 		...makeFlow(),
 		saveState: null,
 		method: deviceMethod,
@@ -807,10 +791,9 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 		deviceTransport: 'bluetooth' as const,
 		pickTransport: jest.fn(),
 		deviceReady: false,
-		entryAppliedMinor: 1000,
 		// The battery shows on the selected tile only.
-		state: { ...initialTenderState, methodId: deviceMethod.id },
-	};
+		state: { ...initialTenderState, methodId: deviceMethod.id, entryMinor: 1000 },
+	});
 	const rendered = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('No reader connected');
 	expect(screen.queryByTestId(`checkout-method-dot-${deviceMethod.id}`)).toBeNull();
@@ -985,21 +968,20 @@ it('keeps typed entry when switching methods without taking money', () => {
 });
 
 it('does not cap manual card at the planned split share', () => {
-	const flow: TenderFlow = {
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
-		plan: { kind: 'even', ways: 2, from: 0 },
 		saveState: null,
 		balanceMinor: 2000,
-		roundedDueMinor: 2000,
-		thisPaymentMinor: 1000,
-		entryAppliedMinor: 1500,
 		method: { ...method, title: 'Card', capabilities: { ...method.capabilities, change: false } },
 		state: {
 			...initialTenderState,
 			methodId: method.id,
 			entryMinor: 1500,
+			plan: { kind: 'even', ways: 2, from: 0 },
 		},
-	};
+	});
+	expect(flow.figures.thisPaymentMinor).toBe(1000);
+	expect(flow.figures.entryAppliedMinor).toBe(1500);
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
@@ -1007,28 +989,31 @@ it('does not cap manual card at the planned split share', () => {
 });
 
 it('keeps fixed plans numbered out of two, but stops numbering a completed item group', () => {
-	const flow: TenderFlow = {
+	const flow: TenderFlow = withFigures({
 		...makeFlow(),
 		saveState: null,
 		balanceMinor: 1,
-		roundedDueMinor: 1,
-		thisPaymentMinor: 1,
-		entryAppliedMinor: 1,
-		plan: { kind: 'fixed', firstMinor: 1, title: null, from: 0 },
-		planLegs: [{ minor: 1, state: 'now' }],
-	};
+		state: { ...initialTenderState, plan: { kind: 'fixed', firstMinor: 1, title: null, from: 0 } },
+	});
 	const { rerender } = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-commit').textContent).toContain(' · 1 of 2');
 	rerender(
 		<TenderPane
-			flow={{
+			flow={withFigures({
 				...flow,
-				plan: { kind: 'items', firstMinor: 100, units: { 1: 1 }, ways: 1, from: 0 },
-				planLegs: [
-					{ minor: 100, state: 'done', title: 'Cash' },
-					{ minor: 1, state: 'now' },
+				rows: [
+					{
+						id: 'r1',
+						method_id: 'pos_cash',
+						amount: '1.00',
+						status: 'captured',
+					} as TenderFlow['rows'][number],
 				],
-			}}
+				state: {
+					...flow.state,
+					plan: { kind: 'items', firstMinor: 100, units: { 1: 1 }, ways: 1, from: 0 },
+				},
+			})}
 			format={String}
 		/>
 	);
@@ -1052,29 +1037,29 @@ describe('split V1: the pane builds each payment', () => {
 	];
 	const row = (id: string, amount: string, method_id = 'pos_cash') =>
 		({ id, method_id, amount, status: 'captured', kind: 'cash' }) as TenderFlow['rows'][number];
+	// A plan given with the flow is the reducer's: the figures derive its legs and numbering.
 	const splitFlow = (
-		over: Partial<Omit<TenderFlow, 'state'>> = {},
+		over: Partial<Omit<TenderFlow, 'state' | 'figures'>> = {},
 		state: Partial<TenderFlow['state']> = {}
-	): TenderFlow => ({
-		...makeFlow(),
-		saveState: null,
-		totalMinor: 18250,
-		balanceMinor: 18250,
-		thisPaymentMinor: 18250,
-		roundedDueMinor: 18250,
-		entryAppliedMinor: 18250,
-		lines,
-		unpaidUnits: (id) => lines.find((line) => line.id === id)?.quantity ?? 0,
-		splitOn: true,
-		...over,
-		state: {
-			...initialTenderState,
-			view: 'amount',
-			methodId: method.id,
-			entryMinor: 18250,
-			...state,
-		},
-	});
+	): TenderFlow =>
+		withFigures({
+			...makeFlow(),
+			saveState: null,
+			totalMinor: 18250,
+			balanceMinor: 18250,
+			lines,
+			unpaidUnits: (id) => lines.find((line) => line.id === id)?.quantity ?? 0,
+			splitOn: true,
+			...over,
+			state: {
+				...initialTenderState,
+				view: 'amount',
+				methodId: method.id,
+				entryMinor: 18250,
+				plan: over.plan ?? null,
+				...state,
+			},
+		});
 	const text = (id: string) => screen.getByTestId(id).textContent;
 	const pressed = (id: string) => screen.getByTestId(id).getAttribute('aria-pressed');
 
@@ -1123,7 +1108,7 @@ describe('split V1: the pane builds each payment', () => {
 	});
 
 	it('an amount typed divides what is left after it, and 3 ways plans it plus three payments', () => {
-		const flow = splitFlow({ entryAppliedMinor: 2000 }, { entryMinor: 2000, entryDirty: true });
+		const flow = splitFlow({}, { entryMinor: 2000, entryDirty: true });
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-helpers')).toContain('After this payment · 16250');
 		expect(text('checkout-even-3')).toBe('3 ways5417 each');
@@ -1140,7 +1125,7 @@ describe('split V1: the pane builds each payment', () => {
 		const { rerender } = render(<TenderPane flow={flow} format={String} />);
 		fireEvent.click(screen.getByTestId('checkout-percent'));
 		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry-mode', mode: 'percent' });
-		const typing = splitFlow({ entryAppliedMinor: 0 }, { entryMode: 'percent', entryMinor: 0 });
+		const typing = splitFlow({}, { entryMode: 'percent', entryMinor: 0 });
 		rerender(<TenderPane flow={typing} format={String} />);
 		expect(text('checkout-helpers')).toContain('Percent of the rest');
 		expect(pressed('checkout-percent-type')).toBe('true');
@@ -1148,7 +1133,7 @@ describe('split V1: the pane builds each payment', () => {
 		fireEvent.click(screen.getByTestId('checkout-percent-25'));
 		expect(typing.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 25 });
 		// The flow derives the money: the reducer's entry is the share.
-		const share = splitFlow({ entryAppliedMinor: 4563 }, { entryMode: 'percent', entryMinor: 25 });
+		const share = splitFlow({}, { entryMode: 'percent', entryMinor: 25 });
 		rerender(<TenderPane flow={share} format={String} />);
 		expect(text('checkout-entry')).toBe('4563');
 		expect(text('checkout-entry-hint')).toBe('25 % of 18250 · type another share');
@@ -1159,7 +1144,7 @@ describe('split V1: the pane builds each payment', () => {
 	});
 
 	it('picked lines show their leg chips, + amount and Share', () => {
-		const flow = splitFlow({ pickedMinor: 3700, picked: { l1: 3, l2: 1 } });
+		const flow = splitFlow({ picked: { l1: 3, l2: 1 } });
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-leg-l1')).toBe('3 Lemonade');
 		expect(text('checkout-leg-l2')).toBe('1 Fish & chips');
@@ -1175,10 +1160,7 @@ describe('split V1: the pane builds each payment', () => {
 	});
 
 	it('Share then 3 ways plans the picked units shared three ways', () => {
-		const flow = splitFlow(
-			{ pickedMinor: 3700, picked: { l1: 3, l2: 1 } },
-			{ shareOpen: true, extraMinor: 0 }
-		);
+		const flow = splitFlow({ picked: { l1: 3, l2: 1 } }, { shareOpen: true, extraMinor: 0 });
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-helpers')).toContain('Share this payment');
 		expect(text('checkout-plus-amount')).toBe('+ 0');
@@ -1211,7 +1193,7 @@ describe('split V1: the pane builds each payment', () => {
 		fireEvent.click(screen.getByTestId('checkout-pick-items'));
 		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'toggle-picker' });
 		const open = splitFlow(
-			{ paidUnits: paid, unpaidUnits, picked: { l1: 2 }, pickedMinor: 1000 },
+			{ paidUnits: paid, unpaidUnits, picked: { l1: 2 } },
 			{ pickerOpen: true }
 		);
 		rerender(
@@ -1224,7 +1206,8 @@ describe('split V1: the pane builds each payment', () => {
 		expect(text('checkout-line-l1-pick')).toContain('Lemonade');
 		expect(text('checkout-line-l1-pick')).toContain('500 each');
 		expect(text('checkout-line-l1-units')).toBe('2 of 4');
-		expect(screen.getByText('1000')).toBeTruthy();
+		// The picks are the entry too (the big figure says 1000): the line's own price is in the list.
+		expect(within(screen.getByTestId('checkout-pick-list')).getByText('1000')).toBeTruthy();
 		expect(text('checkout-line-l2-pick')).toContain('Fish & chips');
 		expect(text('checkout-line-l2-pick')).toContain('1 of 3 paid · Card');
 		expect(text('checkout-line-l2-units')).toBe('0 of 2');
@@ -1261,7 +1244,7 @@ describe('split V1: the pane builds each payment', () => {
 			<TenderPane flow={splitFlow({ discountMinor: 1825 })} format={String} />
 		);
 		expect(screen.queryByTestId('checkout-discount-note')).toBeNull();
-		const picks = { picked: { l1: 1 }, pickedMinor: 500 };
+		const picks = { picked: { l1: 1 } };
 		rerender(<TenderPane flow={splitFlow({ ...picks, discountMinor: 1825 })} format={String} />);
 		expect(text('checkout-discount-note')).toBe('Prices include the discount');
 		rerender(<TenderPane flow={splitFlow(picks)} format={String} />);
@@ -1298,23 +1281,24 @@ describe('split V1: the pane builds each payment', () => {
 		const flow = splitFlow({
 			plan: { kind: 'even', ways: 3, from: 0 },
 			planLabel: 'Payment 1 of 3',
-			planLegs: [
-				{ minor: 6083, state: 'now' },
-				{ minor: 6083, state: 'todo' },
-				{ minor: 6084, state: 'todo' },
-			],
 		});
+		expect(flow.figures.legs).toEqual([
+			{ minor: 6083, state: 'now' },
+			{ minor: 6083, state: 'todo' },
+			{ minor: 6084, state: 'todo' },
+		]);
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-plan-leg-1')).toBe('6083');
 		expect(text('checkout-plan-leg-2')).toBe('6084');
 		const even = splitFlow({
-			plan: { kind: 'even', ways: 3, from: 0 },
-			planLegs: [
-				{ minor: 100, state: 'now' },
-				{ minor: 50, state: 'todo' },
-				{ minor: 50, state: 'todo' },
-			],
+			balanceMinor: 200,
+			plan: { kind: 'fixed', firstMinor: 100, title: null, thenWays: 2, from: 0 },
 		});
+		expect(even.figures.legs).toEqual([
+			{ minor: 100, state: 'now' },
+			{ minor: 50, state: 'todo' },
+			{ minor: 50, state: 'todo' },
+		]);
 		render(<TenderPane flow={even} format={String} />);
 		expect(screen.getAllByTestId('checkout-plan-leg-1').at(-1)?.textContent).toBe('Then 2 × 50');
 	});
@@ -1329,16 +1313,7 @@ describe('split V1: the pane builds each payment', () => {
 				rows: [failed, ...ab],
 				paidMinor: 3800,
 				balanceMinor: 14450,
-				thisPaymentMinor: 2000,
-				roundedDueMinor: 14450,
-				entryAppliedMinor: 2000,
 				plan: { ...s10, from: 3 },
-				planLegs: [
-					{ minor: 2000, state: 'now' },
-					{ minor: 4150, state: 'todo' },
-					{ minor: 4150, state: 'todo' },
-					{ minor: 4150, state: 'todo' },
-				],
 			},
 			{ entryMinor: 2000, entryDirty: true }
 		);
@@ -1352,16 +1327,7 @@ describe('split V1: the pane builds each payment', () => {
 				rows: ab,
 				paidMinor: 3800,
 				balanceMinor: 14450,
-				thisPaymentMinor: 2000,
-				roundedDueMinor: 14450,
-				entryAppliedMinor: 2000,
 				plan: s10,
-				planLegs: [
-					{ minor: 2000, state: 'now' },
-					{ minor: 4150, state: 'todo' },
-					{ minor: 4150, state: 'todo' },
-					{ minor: 4150, state: 'todo' },
-				],
 			},
 			{ entryMinor: 2000, entryDirty: true }
 		);
@@ -1376,48 +1342,21 @@ describe('split V1: the pane builds each payment', () => {
 			rows: [...ab, row('c', '20.00')],
 			paidMinor: 5800,
 			balanceMinor: 12450,
-			thisPaymentMinor: 4150,
-			roundedDueMinor: 12450,
 			plan: s10,
-			planLegs: [
-				{ minor: 2000, state: 'done' as const, title: 'Cash' },
-				{ minor: 4150, state: 'now' as const },
-				{ minor: 4150, state: 'todo' as const },
-				{ minor: 4150, state: 'todo' as const },
-			],
 		};
 		const { rerender } = render(
-			<TenderPane
-				flow={splitFlow({ ...over, entryAppliedMinor: 4150 }, { entryMinor: 4150 })}
-				format={String}
-			/>
+			<TenderPane flow={splitFlow(over, { entryMinor: 4150 })} format={String} />
 		);
 		expect(text('checkout-commit')).toBe('Take 4150 in Cash · 4 of 6');
 		rerender(
-			<TenderPane
-				flow={splitFlow(
-					{ ...over, entryAppliedMinor: 4000 },
-					{ entryMinor: 4000, entryDirty: true }
-				)}
-				format={String}
-			/>
+			<TenderPane flow={splitFlow(over, { entryMinor: 4000, entryDirty: true })} format={String} />
 		);
 		expect(text('checkout-entry-hint')).toBe('Less than planned · 150 moves to payments 5 and 6');
 	});
 
 	it('less than planned with three or more to come names how many', () => {
 		const flow = splitFlow(
-			{
-				plan: { kind: 'even', ways: 4, from: 0 },
-				planLegs: [
-					{ minor: 4563, state: 'now' },
-					{ minor: 4563, state: 'todo' },
-					{ minor: 4563, state: 'todo' },
-					{ minor: 4561, state: 'todo' },
-				],
-				thisPaymentMinor: 4563,
-				entryAppliedMinor: 4000,
-			},
+			{ plan: { kind: 'even', ways: 4, from: 0 } },
 			{ entryMinor: 4000, entryDirty: true }
 		);
 		render(<TenderPane flow={flow} format={String} />);
@@ -1625,7 +1564,7 @@ describe('declared UI (contract 1.2)', () => {
 		},
 	};
 	function invoiceFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
-		return {
+		return withFigures({
 			...makeFlow(),
 			saveState: null,
 			method: invoice,
@@ -1639,13 +1578,12 @@ describe('declared UI (contract 1.2)', () => {
 				},
 			],
 			state: { ...initialTenderState, view: 'amount', methodId: invoice.id, entryMinor: 9295 },
-			entryAppliedMinor: 9295,
 			fieldValues: {
 				woocommerce_pos_invoice_email_address: 'buyer@example.com',
 				woocommerce_pos_save_billing_email: false,
 			},
 			...overrides,
-		};
+		});
 	}
 	it('draws the components in declaration order with the verb on the commit, keypad read-only', () => {
 		const flow = invoiceFlow();
@@ -1923,14 +1861,15 @@ describe('offline with no method that can take the sale', () => {
 		worksOffline: true,
 		settlesLater: true,
 	};
-	const offlineFlow = (overrides: Partial<TenderFlow> = {}): TenderFlow => ({
-		...makeFlow(),
-		saveState: null,
-		online: false,
-		method: null,
-		tiles: [offlineTile('pos_cash'), offlineTile('other')],
-		...overrides,
-	});
+	const offlineFlow = (overrides: Partial<TenderFlow> = {}): TenderFlow =>
+		withFigures({
+			...makeFlow(),
+			saveState: null,
+			online: false,
+			method: null,
+			tiles: [offlineTile('pos_cash'), offlineTile('other')],
+			...overrides,
+		});
 	const pane = (flow: TenderFlow, onLeave = jest.fn()) => (
 		<TenderPane flow={flow} format={String} onLeave={onLeave} />
 	);
@@ -2007,15 +1946,11 @@ describe('offline with no method that can take the sale', () => {
 
 describe('change due leads once tendered exceeds the amount due', () => {
 	function changeFlow(over: Partial<TenderFlow> = {}): TenderFlow {
-		return {
+		return withFigures({
 			...makeFlow(),
 			saveState: null,
 			totalMinor: 4500,
 			balanceMinor: 4500,
-			thisPaymentMinor: 4500,
-			roundedDueMinor: 4500,
-			entryAppliedMinor: 4500,
-			entryChangeMinor: 500,
 			state: {
 				...initialTenderState,
 				view: 'amount',
@@ -2024,7 +1959,7 @@ describe('change due leads once tendered exceeds the amount due', () => {
 				entryDirty: true,
 			},
 			...over,
-		};
+		});
 	}
 
 	it('leads with the change once tendered exceeds the amount due', () => {
@@ -2043,7 +1978,7 @@ describe('change due leads once tendered exceeds the amount due', () => {
 		const base = changeFlow();
 		render(
 			<TenderPane
-				flow={{ ...base, entryChangeMinor: 0, state: { ...base.state, entryMinor: 4500 } }}
+				flow={withFigures({ ...base, state: { ...base.state, entryMinor: 4500 } })}
 				format={String}
 			/>
 		);

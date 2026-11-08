@@ -221,7 +221,22 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	// The entry is pre-typed to the balance and read-only for a method that takes no part payment.
 	const fields = method?.capture.mode === 'gateway' ? (method.fields ?? null) : null;
 	const missing = fields ? firstMissingRequired(fields, flow.fieldValues) : null;
-	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
+	// The hook computed every number (`tenderFigures`); this view only formats them. The eyebrow and
+	// the Full balance chip repeat an amount only when it differs from the big figure (`shownMinor`).
+	const { figures } = flow;
+	const {
+		fixedAmount,
+		plan,
+		n,
+		ways,
+		toCome,
+		groupDone,
+		shared,
+		dueMinor: due,
+		exactMinor,
+	} = figures;
+	const { shownMinor, noChange, typed, restMinor, shareMinor } = figures;
+	const left = figures.afterThisPaymentMinor;
 	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
 	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
 	const needsReader =
@@ -229,7 +244,6 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		(method?.capture.mode === 'device' && !flow.deviceReady);
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
-	const plan = flow.plan;
 	const { extraMinor, shareOpen, doneOpen, pickerOpen } = flow.state;
 	const { splitOn, picked } = flow;
 	const picking = Object.keys(picked).length > 0;
@@ -237,19 +251,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	// On a phone there is no bill on screen: its picks are a list in the keypad's place.
 	const pickList = splitOn && phone && pickerOpen && !doneOpen;
 	const percent = flow.state.entryMode === 'percent';
-	const done = flow.planLegs.filter((leg) => leg.state === 'done');
+	const done = figures.legs.filter((leg) => leg.state === 'done');
 	const counted = flow.rows.filter(countsTowardPaid);
-	// Payments are numbered across the bill: those before the plan count too (ruled 2026-11-08).
-	const n = counted.length + 1;
-	const toCome = flow.planLegs.filter((leg) => leg.state === 'todo').length;
-	const ways =
-		flow.rows.slice(0, plan?.from ?? 0).filter(countsTowardPaid).length +
-		(plan?.kind === 'fixed'
-			? 1 + (plan.thenWays ?? 1)
-			: Math.max(plan?.ways ?? 1, done.length + 1));
-	const groupDone =
-		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
-	const shared = plan?.kind === 'items' && plan.ways > 1 && !groupDone;
 	const name = (id: string | number) =>
 		decode(flow.lines.find((line) => String(line.id) === String(id))?.name ?? '');
 	const doneLeg = (row: TenderFlow['rows'][number]): PlanLeg => ({
@@ -260,24 +263,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	});
 	const setPlan = (next: NonNullable<typeof plan>) =>
 		flow.dispatch({ type: 'set-plan', plan: next, balanceMinor: flow.balanceMinor });
-	// A cash entry the cash.rounding hook will settle is due the rounded amount (#66, #84); the
-	// Exact chip offers it whenever this leg is the whole balance, since tapping it settles.
-	const due = flow.roundingMinor !== 0 ? flow.roundedDueMinor : flow.thisPaymentMinor;
-	const exactMinor = flow.thisPaymentMinor === flow.balanceMinor ? flow.roundedDueMinor : due;
 	const exact = { amount: format(exactMinor) };
-	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
-	const noChange = Boolean(
-		method && !givesChange && !fixedAmount && !percent && flow.state.entryMinor > flow.balanceMinor
-	);
-	const left = flow.balanceMinor + flow.roundingMinor - flow.entryAppliedMinor;
-	// The big figure. The eyebrow and the Full balance chip repeat an amount only when it differs.
-	// Once tendered exceeds the amount due, the change takes the lead and this drops to a line under it.
-	const shownMinor =
-		flow.state.view === 'select'
-			? due
-			: fixedAmount || percent
-				? flow.entryAppliedMinor
-				: flow.state.entryMinor;
 	// A disabled tile, an offline reader included (only manual records journal offline), is listed as
 	// unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
 	const unavailable = flow.tiles.filter((tile) => tile.disabled);
@@ -308,12 +294,12 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					amount: format(flow.balanceMinor),
 					method: method?.title,
 				})
-			: flow.entryChangeMinor > 0
-				? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
-				: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+			: figures.entryChangeMinor > 0
+				? t('pos_checkout.change_due', { amount: format(figures.entryChangeMinor) })
+				: figures.entryAppliedMinor < due && flow.state.entryMinor > 0
 					? plan
 						? t('pos_checkout.less_than_planned', {
-								amount: format(due - flow.entryAppliedMinor),
+								amount: format(due - figures.entryAppliedMinor),
 							})
 						: t('pos_checkout.part_payment_left', { left: format(left) })
 					: '';
@@ -324,7 +310,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				percent: flow.state.entryMinor,
 				amount: format(flow.balanceMinor),
 			})
-		: shared && done.length === 0
+		: shared && plan?.kind === 'items' && done.length === 0
 			? t('pos_checkout.share_hint', {
 					ways: plan.ways,
 					amount: format(plan.firstMinor),
@@ -332,41 +318,34 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						plan.firstMinor - evenSplitShareMinor(plan.firstMinor, plan.ways) * (plan.ways - 1)
 					),
 				})
-			: plan && toCome > 1 && flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+			: plan && toCome > 1 && figures.entryAppliedMinor < due && flow.state.entryMinor > 0
 				? toCome === 2
 					? t('pos_checkout.less_than_planned_n', {
-							amount: format(due - flow.entryAppliedMinor),
+							amount: format(due - figures.entryAppliedMinor),
 							from: n + 1,
 							to: n + 2,
 						})
 					: t('pos_checkout.less_than_planned_next_n', {
-							amount: format(due - flow.entryAppliedMinor),
+							amount: format(due - figures.entryAppliedMinor),
 							n: toCome,
 						})
 				: '';
 	const rounding =
-		flow.allUnpaidPicked && flow.balanceMinor > flow.pickedMinor
+		figures.allUnpaidPicked && flow.balanceMinor > figures.pickedMinor
 			? t('pos_checkout.includes_rounding_left', {
-					amount: format(flow.balanceMinor - flow.pickedMinor),
+					amount: format(flow.balanceMinor - figures.pickedMinor),
 				})
 			: '';
 	const fact =
-		missing || noChange || flow.entryChangeMinor > 0 ? hint : splitHint || hint || rounding;
-	// Split helpers: an amount typed below the balance is THIS payment; the tiles divide the rest.
-	const typed =
-		flow.state.entryDirty &&
-		flow.entryAppliedMinor > 0 &&
-		flow.entryAppliedMinor < flow.balanceMinor;
-	const restMinor = flow.balanceMinor - (typed ? flow.entryAppliedMinor : 0);
-	const shareMinor = flow.pickedMinor + (extraMinor ?? 0);
+		missing || noChange || figures.entryChangeMinor > 0 ? hint : splitHint || hint || rounding;
 	// While the taken payments are unfolded, their list has the keypad's place and no helpers.
 	const showDone = doneOpen && counted.length >= 1;
 	const legs: (PlanLeg & { index: number; run: number })[] = [];
 	(plan
-		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...flow.planLegs]
+		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...figures.legs]
 		: [
 				...counted.map(doneLeg),
-				{ minor: flow.entryAppliedMinor, state: 'now' as const },
+				{ minor: figures.nowMinor, state: 'now' as const },
 				...(left > 0 ? [{ minor: left, state: 'rest' as const }] : []),
 			]
 	).forEach((leg, index) => {
@@ -380,13 +359,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const choice = (testID: string, title: string, sub: string | undefined, onPress: () => void) => (
 		<Tile key={testID} testID={testID} disabled={busy} onPress={onPress} title={title} sub={sub} />
 	);
-	const changeLeads = !missing && !noChange && flow.entryChangeMinor > 0;
-	const entry = { amount: format(flow.entryAppliedMinor), method: method?.title };
+	const changeLeads = !missing && !noChange && figures.entryChangeMinor > 0;
+	const entry = { amount: format(figures.entryAppliedMinor), method: method?.title };
 	const commit = method
 		? (fields
 				? t('pos_checkout.send_verb_amount', {
 						label: fields.verb.label,
-						amount: format(flow.entryAppliedMinor),
+						amount: format(figures.entryAppliedMinor),
 					})
 				: remote
 					? t('pos_checkout.send_amount_to', entry)
@@ -494,7 +473,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</Text>
 				</>
 			)}
-			{flow.roundingMinor !== 0 ? (
+			{figures.roundingMinor !== 0 ? (
 				<Text testID="checkout-rounded-from" variant="key" decodeHtml>
 					{t('pos_checkout.rounded_from', { amount: format(flow.balanceMinor) })}
 				</Text>
@@ -794,7 +773,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 														typed
 															? {
 																	kind: 'fixed',
-																	firstMinor: flow.entryAppliedMinor,
+																	firstMinor: figures.entryAppliedMinor,
 																	title: null,
 																	thenWays: count,
 																	from: flow.rows.length,
@@ -915,7 +894,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						/>
 					) : null}
 					{(method && !fixedAmount && !percent && givesChange && !remote
-						? flow.quickAmountsMinor
+						? figures.quickAmountsMinor
 						: []
 					).map((minor) => (
 						<Chip
@@ -1032,7 +1011,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						!method ||
 						busy ||
 						// A cash due rounded to nothing still settles the sale.
-						(flow.entryAppliedMinor <= 0 && flow.roundingMinor === 0) ||
+						(figures.entryAppliedMinor <= 0 && figures.roundingMinor === 0) ||
 						needsReader ||
 						Boolean(reason) ||
 						noChange ||
