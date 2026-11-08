@@ -21,7 +21,7 @@ import type { ClosureRow } from '@wcpos/query/register-session';
 
 import { usePageSheetHost } from '../components/page-sheet-host';
 import { useStoreSession } from '../../../contexts/app-state';
-import { useTheme } from '../../../contexts/theme';
+import { useRoomy } from '../../../hooks/use-roomy';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
 import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../hooks/use-store-day';
@@ -44,7 +44,7 @@ export function TillStrip({
 }) {
 	const host = usePageSheetHost();
 	const t = useT();
-	const { roomy } = useTheme();
+	const roomy = useRoomy();
 	const phone = useIsPhone();
 	const { session, binding, terms, expected, blind, lastClosure, sessionsOn } =
 		useRegisterSession();
