@@ -150,7 +150,9 @@ export function TestPanel() {
 					editable={!isWeb}
 					aria-disabled={isWeb}
 					onKeyPress={isWeb ? undefined : handleNativeKeyPress}
-					autoFocus={!isWeb}
+					// No autofocus on native: a focused field raises the on-screen keyboard on a tablet
+					// (`showSoftInputOnFocus={false}` did not stop it on iOS, measured 2026-11-08), and the
+					// placeholder already says "Tap here, then scan". Web keeps no autofocus either.
 					placeholder={isWeb ? undefined : t('settings.barcode_test_capture_placeholder')}
 					testID="barcode-test-keys"
 				/>
