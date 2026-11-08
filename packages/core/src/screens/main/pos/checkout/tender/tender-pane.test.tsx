@@ -11,8 +11,9 @@ import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
+import { gatesCheckout } from './checkout-body';
 import { withFigures } from './tender-figures.test-utils';
-import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
+import { TenderPane, UnansweredGate } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
 
 import type { TenderFlow } from './use-tender-flow';
