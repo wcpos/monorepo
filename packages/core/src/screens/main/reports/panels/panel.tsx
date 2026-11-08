@@ -20,9 +20,7 @@ import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useQueryHandleFields, useQueryState } from '../../../../query';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
 import {
 	useRegisterNames,
 	useRegisterNamesReady,
@@ -42,25 +40,20 @@ import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
 	useIncludedStatus,
 	useReportsData,
-	useReportsHandles,
 	useReportsPeriod,
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
 import { brands, cogsEnabled, lineCost } from '../margin';
 import { useLocalCategories } from '../cards/use-local-categories';
-import { periodLabel } from '../date-button';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
 import { MenuChip } from '../menu-chip';
 import { brandChoices, categoryChoices, filterLines } from './line-filters';
 import { panelCsv } from './export-csv';
 import { panelSpec } from './specs';
-import { usePrintWaiting } from './use-print-waiting';
-import { buildReportDocument } from './document';
+import { useReportPrint } from './use-report-print';
 import { OrdersPanel } from './orders-panel';
-import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet, PrintSheetInner } from '../../receipt/print-sheet';
 
 export function DetailPanel() {
@@ -84,17 +77,13 @@ function DetailPanelContent() {
 	const t = useT();
 	const phone = useIsPhone(),
 		close = () => setDetail(null);
-	const { presets } = useStoreDay(storeId),
-		{ formatDate } = useLocalDate();
+	const { formatDate } = useLocalDate();
 	const scope = {
 		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
-	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
 	const names = useRegisterNames(storeId),
-		registerNamesReady = useRegisterNamesReady(storeId),
-		binding = useRegisterBinding();
+		registerNamesReady = useRegisterNamesReady(storeId);
 	const { site, wpCredentials } = useStoreSession();
 	const storesSource = React.useMemo(
 		() =>
@@ -104,15 +93,6 @@ function DetailPanelContent() {
 		[wpCredentials]
 	);
 	const storeDirectory = useObservableState(storesSource);
-	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
-	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
-	const register = allStores
-		? t('reports.all_stores')
-		: registerId
-			? names[registerId] ||
-				(binding.registerId === registerId ? binding.registerName : '') ||
-				t('common.unknown')
-			: t('reports.all_registers');
 	const source = React.useMemo(
 		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
 		[site]
@@ -154,8 +134,6 @@ function DetailPanelContent() {
 	);
 	const filtering = filters.categoryId !== undefined || filters.brandId !== undefined;
 	const [error, setError] = React.useState('');
-	const [generatedAt] = React.useState(() => new Date().toISOString());
-	const [printError, setPrintError] = React.useState('');
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const [busy, setBusy] = React.useState(false);
 
@@ -229,55 +207,21 @@ function DetailPanelContent() {
 		stores: t('reports.panel_stores'),
 	};
 	const title = titles[detail ?? 'orders'];
-	const scopeLine = [
-		t('reports.panel_scope', { period, register }),
-		categoryOptions.find((row) => row.value === filters.categoryId)?.label,
-		brandOptions.find((row) => row.value === filters.brandId)?.label,
-	]
-		.filter(Boolean)
-		.join(' · ');
-	const context = useClosureDocumentContext(storeId);
-	const document = buildReportDocument(
-		spec,
-		spec.keys.map((key, i) => ({
-			key,
-			label: spec.head[i],
-			type: spec.types[i],
-			align: spec.align[i],
-		})),
-		{
-			key: detail ?? 'orders',
-			title,
-			label: scopeLine,
-			storeId: storeId ?? 0,
-			registerId: registerId ?? '',
-			registerName: register,
-			from: dateRange.start.toISOString(),
-			to: dateRange.end.toISOString(),
-			generatedAt,
-		},
-		context
-	);
-	const doc = useReceiptDocument({
-		autoPrintAllowed: false,
-		templateType: 'report',
-		storeId,
-		localReport: document,
-	});
-	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
-	// the document would claim a whole period it does not hold, so Print waits for the lane.
-	const { handle: salesHandle, refundsHandle } = useReportsHandles();
-	// Ready-gated, as the progress line: a read that has not answered reports no lane.
-	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
-	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
-	const laneProgress = sales.ready ? sales.laneProgress : null;
-	const refundLaneProgress = refunds.ready ? refunds.laneProgress : null;
-	const { waiting, label: waitingLabel } = usePrintWaiting({
+	const {
 		doc,
-		storeReady: !!formats.store,
+		waiting,
+		print,
+		error: printError,
+		label: scopeLine,
+	} = useReportPrint({
+		key: detail ?? 'orders',
+		title,
+		spec,
+		scope: [
+			categoryOptions.find((row) => row.value === filters.categoryId)?.label,
+			brandOptions.find((row) => row.value === filters.brandId)?.label,
+		],
 		dataReady: !!ready,
-		salesLane: !!laneProgress,
-		refundsLane: !!refundLaneProgress,
 		needsRefunds: detail === 'refunds' || grouped,
 	});
 	if (!detail) return null;
@@ -312,15 +256,9 @@ function DetailPanelContent() {
 			setBusy(false);
 		}
 	};
-	const print = async () => {
+	const printReport = () => {
 		setError('');
-		setPrintError('');
-		try {
-			const ok = await doc.print();
-			if (ok === false) setPrintError(t('reports.print_failed'));
-		} catch {
-			setPrintError(t('reports.print_failed'));
-		}
+		return print();
 	};
 	const header = (
 		<DialogHeader>
@@ -382,7 +320,6 @@ function DetailPanelContent() {
 			{error}
 		</Text>
 	);
-	const documentError = printError || doc.documentError?.message;
 	const aside = (
 		<Text testID={spec.missing ? 'detail-panel-cost-missing' : undefined} tabular>
 			{detail === 'orders'
@@ -413,18 +350,18 @@ function DetailPanelContent() {
 					title={title}
 					description={scopeLine}
 					printLabel={t('reports.print_report')}
-					waiting={waiting ? waitingLabel : null}
+					waiting={waiting}
 					error={
 						<>
 							{exportError}
-							{documentError ? (
+							{printError ? (
 								<Text variant="key" className="text-bad px-4" testID="print-sheet-error">
-									{documentError}
+									{printError}
 								</Text>
 							) : null}
 						</>
 					}
-					onPrint={print}
+					onPrint={printReport}
 					printTestID="detail-panel-print"
 					footerTestID="detail-panel-footer"
 					aside={aside}
@@ -465,9 +402,9 @@ function DetailPanelContent() {
 				title={title}
 				description={scopeLine}
 				printLabel={t('reports.print_report')}
-				waiting={waiting ? waitingLabel : null}
-				error={printError || doc.documentError?.message || null}
-				onPrint={print}
+				waiting={waiting}
+				error={printError}
+				onPrint={printReport}
 				testID="detail-panel-print-sheet"
 			/>
 		</ReportPanel>
