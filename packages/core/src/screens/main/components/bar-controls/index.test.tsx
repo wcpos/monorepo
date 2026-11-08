@@ -6,7 +6,7 @@ import { render, renderHook, screen } from '@testing-library/react';
 import { TitleBarStripProvider } from '@wcpos/components/edge-surface/title-bar-strip';
 
 import { BarControls, useBarMenu, useBarStatus, useOnlineBadge } from './index';
-import { PageSheetHostContext } from '../page-sheet-host';
+import { PageSheetHostContext, setFocusedPageSheetHost } from '../page-sheet-host';
 
 const wrapper = ({ children }: React.PropsWithChildren) => (
 	<PageSheetHostContext.Provider value="scene:orders">{children}</PageSheetHostContext.Provider>
@@ -110,4 +110,21 @@ it.each([
 	render(<BarControls testID="title-bar" inTitleBar />, { wrapper: strip });
 	expect(screen.getByTestId('title-bar-bell')).toBeTruthy();
 	expect(screen.getByTestId('title-bar-avatar')).toBeTruthy();
+});
+
+// The title bar sits above every screen, outside any Scene's provider: its pair follows the
+// focused screen's host, never the root, which would cover the rail (Greptile, #3419).
+it('puts the title bar pair on the focused screen host', () => {
+	mockSize = 'lg';
+	setFocusedPageSheetHost('scene:orders');
+	try {
+		const strip = ({ children }: React.PropsWithChildren) => (
+			<TitleBarStripProvider value={{ node: null, height: 28 }}>{children}</TitleBarStripProvider>
+		);
+		render(<BarControls testID="title-bar" inTitleBar />, { wrapper: strip });
+		expect(screen.getByTestId('title-bar-bell').getAttribute('data-host')).toBe('scene:orders');
+		expect(screen.getByTestId('title-bar-avatar').getAttribute('data-host')).toBe('scene:orders');
+	} finally {
+		setFocusedPageSheetHost(undefined);
+	}
 });
