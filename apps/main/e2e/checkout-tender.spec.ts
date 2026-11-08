@@ -71,6 +71,11 @@ async function enterAmount(page: Page, methodId: string, amountMinor: number): P
 		.toBe(amountMinor);
 }
 
+/** The store's minor unit per major unit, read from the balance as the pane shows it. */
+async function minorUnit(page: Page): Promise<number> {
+	return 10 ** decimalPlaces(await page.getByTestId('checkout-balance').innerText());
+}
+
 async function isSwitchOn(toggle: Locator): Promise<boolean> {
 	return toggle.evaluate((node) => {
 		const element = node as HTMLElement & { checked?: boolean };
@@ -458,6 +463,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
+			const unit = await minorUnit(page);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.floor(balance / 2);
@@ -506,7 +512,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S3: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id]);
 			expect(
-				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
 				'S3: each leg is saved at the amount it was taken for'
 			).toEqual([first, balance - first]);
 			expect(
@@ -530,6 +536,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
+			const unit = await minorUnit(page);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.floor((balance * 25 + 50) / 100);
@@ -580,7 +587,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S4: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id]);
 			expect(
-				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
 				'S4: each leg is saved at the amount it was taken for'
 			).toEqual([first, balance - first]);
 			expect(
@@ -604,6 +611,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
+			const unit = await minorUnit(page);
 			liveTest.skip(balance < 3, 'order balance is too small for three positive payment legs');
 			const first = Math.floor(balance / 3);
 			const second = Math.floor((balance - first + 1) / 2);
@@ -630,7 +638,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const legOne = await page.getByTestId('checkout-plan-leg-1').innerText();
 			if (grouped) {
 				const dp = decimalPlaces(legOne);
-				const unit = 10 ** dp;
 				const amountDigits = `${Math.floor(planned[1] / unit)}${String(planned[1] % unit).padStart(dp, '0')}`;
 				expect(digitsOf(legOne), 'S9: the two shares fold into one `Then 2 ×` pill').toBe(
 					`2${amountDigits}`
@@ -676,7 +683,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S9: every leg uses the selected cash method'
 			).toEqual([cash!.id, cash!.id, cash!.id]);
 			expect(
-				rows.map((row) => Math.round(Number(row.amount) * 100)),
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
 				'S9: each leg is saved at its planned share'
 			).toEqual(planned);
 			expect(
@@ -721,6 +728,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
+			const unit = await minorUnit(page);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const before = await pollOrder(
@@ -738,12 +746,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const line = before.line_items![0];
 			// A unit's price has its tax inside and the odd cent sits on the LAST unit: the first
 			// unit is the floor of the line's half.
-			const lineMinor = Math.round((Number(line.total) + Number(line.total_tax)) * 100);
+			const lineMinor = Math.round((Number(line.total) + Number(line.total_tax)) * unit);
 			const price = Math.floor(lineMinor / 2);
 			expect(price, 'S7: the server line has a positive tax-inclusive unit price').toBeGreaterThan(
-				100
+				unit
 			);
-			const first = price + 100;
+			const first = price + unit;
 			expect(first, 'S7: a unit plus 1.00 leaves a positive second payment').toBeLessThan(balance);
 
 			await page.getByTestId('checkout-split-chip').click();
@@ -771,9 +779,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				})
 				.toBe(price);
 			await page.getByTestId('checkout-plus-amount').click();
-			await page.getByTestId('checkout-keypad-key-1').click();
-			await page.getByTestId('checkout-keypad-key-0').click();
-			await page.getByTestId('checkout-keypad-key-0').click();
+			// 1.00 in the store's precision: a 1 then one 0 per decimal.
+			for (const digit of String(unit)) {
+				await page.getByTestId(`checkout-keypad-key-${digit}`).click();
+			}
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), {
 					timeout: 15_000,
@@ -820,7 +829,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(
 				Number(rows[0].amount),
 				'S7: the first server leg contains the unit plus 1.00'
-			).toBeCloseTo(first / 100, 2);
+			).toBeCloseTo(first / unit, 6);
 			expect(rows[0].id, 'S7: the first leg has an id for its allocation').toEqual(
 				expect.any(String)
 			);
@@ -853,6 +862,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
+			const unit = await minorUnit(page);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.round(balance / 2);
@@ -928,7 +938,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(
 				Number(rows[0].amount),
 				'S15: the voided record keeps its original amount'
-			).toBeCloseTo(first / 100, 2);
+			).toBeCloseTo(first / unit, 6);
 			expect(Number(rows[1].amount), 'S15: the sole captured leg pays the whole total').toBeCloseTo(
 				Number(server.total),
 				2
