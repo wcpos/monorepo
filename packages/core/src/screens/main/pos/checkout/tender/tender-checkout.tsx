@@ -160,6 +160,8 @@ export function TenderCheckout({ order }: Props) {
 	const tabs = (
 		<View className={compact ? 'flex-1' : undefined}>
 			<SegmentedControl
+				// The header row beside the title: hug, or Yoga hands the control the whole row.
+				hug={!compact}
 				value={flow.state.tab}
 				onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
 				segments={[

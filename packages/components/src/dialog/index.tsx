@@ -16,6 +16,7 @@ import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { useIsPhone } from '../lib/device';
 import {
+	CONTENT_LETS_CHILDREN_SCROLL,
 	EXIT_MARK,
 	isWeb,
 	OVERLAY_EXIT_MOUNTED,
@@ -173,6 +174,8 @@ function DialogPanel(allProps: DialogContentProps) {
 			: undefined;
 	return (
 		<DialogPrimitive.Content
+			// First, so a caller's own responder props still win.
+			{...CONTENT_LETS_CHILDREN_SCROLL}
 			ref={composedRef}
 			onOpenAutoFocus={
 				deferAutoFocus

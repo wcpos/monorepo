@@ -64,7 +64,8 @@ it.each([2, 3, 4])('renders %i divided segments with one tab stop', (length) => 
 		expect(radio).toHaveAttribute('tabindex', index === 0 ? '0' : '-1');
 		expect(radio).toHaveAttribute('aria-checked', index === 0 ? 'true' : 'false');
 	});
-	expect(radios[0].dataset.classes).toContain('bg-muted');
+	expect(radios[0].dataset.classes).toContain('bg-selected');
+	expect(radios[1].dataset.classes).not.toContain('bg-selected');
 });
 it('commits an unselected segment but selected and disabled presses call nothing', () => {
 	const onValueChange = jest.fn();
@@ -159,9 +160,51 @@ it('one ink: selected and unselected segments give every glyph and word the same
 		const inked = Array.from(radio.querySelectorAll<HTMLElement>('[data-classes]'));
 		expect(inked).toHaveLength(2);
 		for (const node of inked) {
-			expect(node.dataset.classes?.match(/\btext-(?:muted-)?foreground\b/g)).toEqual([
-				index === 0 ? 'text-foreground' : 'text-muted-foreground',
+			expect(node.dataset.classes?.match(/\btext-(?:muted-|selected-)?foreground\b/g)).toEqual([
+				index === 0 ? 'text-selected-foreground' : 'text-muted-foreground',
 			]);
 		}
+	}
+});
+
+// The 2026-10-29 light-theme ruling: a selected choice is the tinted block; and selection never
+// changes weight (2026-10-30), so both states are `font-medium`.
+it('the selected segment is the tinted block, at the one weight both states share', () => {
+	render(
+		<SegmentedControl segments={segments} value="a" onValueChange={jest.fn()} testID="picker" />
+	);
+	const [selected, ...rest] = screen.getAllByRole('radio');
+	expect(selected.dataset.classes?.split(' ')).toEqual(
+		expect.arrayContaining(['bg-selected', 'web:hover:bg-selected'])
+	);
+	expect(selected.dataset.classes).not.toContain('bg-muted');
+	for (const radio of [selected, ...rest]) {
+		const label = radio.querySelector<HTMLElement>('[data-classes*="text-center"]');
+		expect(label?.dataset.classes?.split(' ')).toContain('font-medium');
+		expect(label?.dataset.classes).not.toContain('font-semibold');
+	}
+});
+
+// Yoga gives an auto-width container with growing children the whole row, so in a row (the
+// checkout header) the control took it and pushed the close off screen; `hug` keeps the labels'
+// width on native. In a column the default shares the column equally.
+it.each([
+	[false, ['flex-1'], ['web:flex-1', 'native:grow-0', 'native:shrink']],
+	[true, ['web:flex-1', 'native:grow-0', 'native:shrink'], ['flex-1']],
+])('segments are equal on web and hug their content on native (hug=%s)', (hug, present, absent) => {
+	render(
+		<SegmentedControl
+			segments={segments}
+			value="a"
+			onValueChange={jest.fn()}
+			testID="picker"
+			hug={hug}
+		/>
+	);
+	for (const radio of screen.getAllByRole('radio')) {
+		const classes = radio.dataset.classes?.split(' ') ?? [];
+		expect(classes).toEqual(expect.arrayContaining(present));
+		for (const token of absent) expect(classes).not.toContain(token);
+		expect(classes).not.toContain('native:grow');
 	}
 });

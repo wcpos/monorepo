@@ -442,6 +442,7 @@ export function PrinterSetupDialog({
 				</Text>,
 				<SegmentedControl
 					key="paper"
+					hug
 					segments={
 						([32, 48] as const).map((n) => ({
 							value: String(n),

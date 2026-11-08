@@ -51,6 +51,17 @@ export const isWeb = Platform.OS === 'web';
  * scrim. Native's primitives unmount at once and Reanimated plays the exit on the way out.
  */
 export const OVERLAY_EXIT_MOUNTED = isWeb;
+/**
+ * Native: a panel never claims the touch responder. The @rn-primitives native `Content`s
+ * (dialog `dist/dialog.js` ~173, and popover's and select's) set
+ * `onStartShouldSetResponder={() => true}` on the panel, which on RN 0.88 (new architecture)
+ * starves a ScrollView inside it: a long dialog body did not scroll at all on iOS. The shell's
+ * scrim is the panel's sibling, never its ancestor, so declining loses nothing. Spread it before
+ * a caller's props, so a caller can still claim.
+ */
+export const CONTENT_LETS_CHILDREN_SCROLL = isWeb
+	? null
+	: { onStartShouldSetResponder: () => false };
 // Only the native shell has a keyboard wrapper; web never reads the keyboard's state.
 const useKeyboardVisible = isWeb ? () => false : () => useKeyboardState((state) => state.isVisible);
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';

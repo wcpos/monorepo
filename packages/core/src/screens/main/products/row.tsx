@@ -49,10 +49,13 @@ export function ProductRow({
 	record,
 	expanded,
 	className,
+	footerSpace,
 }: {
 	record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	expanded?: boolean;
 	className?: string;
+	/** Reserve a variations line under the body (`VariableRowContent` lays its button over it). */
+	footerSpace?: boolean;
 }) {
 	const product = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
@@ -87,6 +90,8 @@ export function ProductRow({
 		<ListRow
 			testID={`products-row-${record.uuid}`}
 			className={className}
+			// The sm button's 36 plus the 8 above it, so the trailing centres on the whole card.
+			bodyClassName={footerSpace ? 'pb-11' : undefined}
 			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
 			// lost the expanded state of a variable product.
 			// The drill style's row (no `expanded`) is no expander.
@@ -113,7 +118,8 @@ export function ProductRow({
 				<Image
 					source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
 					recyclingKey={record.uuid}
-					className="size-10 rounded"
+					// With a variations line the image stays beside the name, not centred on the card.
+					className={footerSpace ? 'size-10 self-start rounded' : 'size-10 rounded'}
 				/>
 			}
 			trailing={
@@ -166,15 +172,18 @@ function VariableRowContent({ item, table }: VariableRowProps) {
 	const inline = !meta?.drill;
 	return (
 		<>
-			<ProductRow
-				record={item.original.record}
-				expanded={inline ? expanded : undefined}
-				className="border-b-0"
-			/>
-			{/* The button sits under the row, not in it: a button may not nest in the row's button. */}
-			{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
-			<View className="border-border border-b pb-2 pl-16">
-				<VariationsButton row={item} table={table} />
+			{/* The button lies over the row's reserved bottom, not in it: a button may not nest in the
+			    row's button. The row keeps its height, so its trailing centres on the whole card. */}
+			<View className="relative">
+				<ProductRow
+					record={item.original.record}
+					expanded={inline ? expanded : undefined}
+					footerSpace
+				/>
+				{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
+				<View className="absolute bottom-2 left-16">
+					<VariationsButton row={item} table={table} />
+				</View>
 			</View>
 			{inline && expanded && (
 				<InlineVariations row={item} stockStatus={meta?.variationStockStatus} />

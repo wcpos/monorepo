@@ -454,6 +454,29 @@ it('shows a title skeleton while saving an unnumbered order', () => {
 	expect(screen.queryByTestId('checkout-title-skeleton')).toBeNull();
 });
 
+// The real control renders; its props are recorded so the header's `hug` is pinned.
+const mockSegmentedProps: { hug?: boolean; value?: string }[] = [];
+jest.mock('@wcpos/components/segmented-control', () => {
+	const actual = jest.requireActual('@wcpos/components/segmented-control');
+	const react = jest.requireActual<typeof import('react')>('react');
+	return {
+		...actual,
+		SegmentedControl: (props: { hug?: boolean; value?: string }) => {
+			mockSegmentedProps.push(props);
+			return react.createElement(actual.SegmentedControl, props);
+		},
+	};
+});
+
+// Yoga hands an auto-width control with growing segments the whole row: without `hug` the
+// Payments | Legacy switch filled the header and hid the close (owner, iPad, 2026-11-08).
+it("the header's segmented control hugs, so the close stays on screen", () => {
+	mockSegmentedProps.length = 0;
+	mountColumn();
+	expect(mockSegmentedProps.at(-1)?.hug).toBe(true);
+	expect(screen.getByTestId('checkout-close')).toBeTruthy();
+});
+
 it('keeps both segment selectors and removes the redundant order title', () => {
 	mountColumn();
 	expect(screen.getByTestId('checkout-tab-payments')).toBeTruthy();

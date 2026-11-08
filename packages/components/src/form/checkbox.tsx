@@ -27,7 +27,8 @@ export function FormCheckbox({
 	}
 
 	return (
-		<FormItem nativeID={itemNativeID} className="px-1">
+		// No side padding: the box's left edge is the column's, as a form switch's is.
+		<FormItem nativeID={itemNativeID}>
 			<View className="flex-row items-center gap-3">
 				<Checkbox {...ariaProps} onCheckedChange={onChange} checked={value ?? false} {...props} />
 				{!!label && (

@@ -36,10 +36,13 @@ export function FormSwitch({
 	}
 
 	return (
-		<FormItem nativeID={itemNativeID} className="px-1">
-			{/* At least a row tall on native, so the switch's 44 pt square stays inside its own
-			    row and stacked switches never take each other's touches. */}
-			<View className="native:min-h-row w-full flex-row items-center gap-3">
+		// No side padding: the switch's left edge is the column's, where the other fields and the
+		// labels above it start.
+		<FormItem nativeID={itemNativeID}>
+			{/* No row floor: stacked switches keep the web pitch. Their 44 pt squares may overlap
+			    by a few points in the gap between two tracks, where the later row wins; each
+			    square still covers its own track. */}
+			<View className="w-full flex-row items-center gap-3">
 				<Switch
 					ref={switchRef}
 					{...ariaProps}

@@ -408,7 +408,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
 			contentContainerClassName="items-center gap-2"
-			contentContainerStyle={{ height: contentHeight }}
+			// `minHeight`, never `height`: a native ScrollView scrolls only to its content container's
+			// own height, not to children overflowing it (a browser counts overflow, Yoga does not), so
+			// content taller than the fit (Split's tiles wrapping) must grow the container.
+			contentContainerStyle={{ minHeight: contentHeight }}
 			showsVerticalScrollIndicator={false}
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
