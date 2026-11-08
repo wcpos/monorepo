@@ -455,7 +455,7 @@ it('a verb is a small link Button in primary ink', () => {
 });
 
 // A switch row with a help line (Tax exempt): the key and its help run to the switch in a dialog;
-// on a settings page the value column stays so every switch sits in the one trailing column.
+// on a settings page the value column stays and the switch is its value (line 12).
 it.each([
 	['a dialog', false, ['min-w-0', 'flex-1']],
 	['a settings page', true, ['w-64', 'shrink-0']],
@@ -473,7 +473,40 @@ it.each([
 	const key = screen.getByText('Tax exempt').parentElement as HTMLElement;
 	expect(classes(key)).toEqual(expect.arrayContaining(keyClasses));
 	const columns = screen.getByTestId('row').children;
-	expect(columns).toHaveLength(wide ? 3 : 2);
+	// Key and trailing slot in a dialog; key and value column (holding the switch) on a settings page.
+	expect(columns).toHaveLength(2);
+	expect(classes(columns[1] as HTMLElement).includes('max-w-80')).toBe(wide);
+});
+
+describe('a switch row with no value', () => {
+	const row = (
+		<PropertyList wide>
+			<PropertyRow
+				testID="row"
+				label="Default customer is cashier"
+				control={<Probe testID="switch" />}
+			/>
+		</PropertyList>
+	);
+
+	it("on a settings page a switch row's control sits in the value column, not the trailing slot", () => {
+		render(row);
+		const columns = screen.getByTestId('row').children;
+		expect(columns).toHaveLength(2);
+		const valueColumn = columns[1] as HTMLElement;
+		expect(classes(valueColumn)).toEqual(
+			expect.arrayContaining(['flex-1', 'max-w-80', 'items-start'])
+		);
+		expect(valueColumn.contains(screen.getByTestId('switch'))).toBe(true);
+		expect(screen.getByTestId('switch').closest('[data-classes*="gap-2"]')).toBeNull();
+	});
+
+	it('on a phone a switch row keeps its control on the key line', () => {
+		render(<DeviceScope phone>{row}</DeviceScope>);
+		const trailing = screen.getByTestId('switch').closest('[data-classes*="gap-2"]') as HTMLElement;
+		expect(classes(trailing)).toEqual(expect.arrayContaining(['absolute', 'top-1', 'right-0']));
+		expect(classes(trailing.previousElementSibling as HTMLElement)).not.toContain('items-start');
+	});
 });
 
 // A row with no key has no key line for a mark to sit on: on a phone the Saved mark stays in

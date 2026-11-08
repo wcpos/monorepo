@@ -13,6 +13,21 @@ let mockReadOnly = false;
 let mockCanEdit = true;
 let mockCanEditVariations = true;
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// Keep RNW rendering; Jest does not compile Uniwind classes, so expose them on the DOM. The
+// views' props are kept so a test can fire a layout jsdom never measures.
+const mockViewProps: import('react-native').ViewProps[] = [];
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		...actual,
+		View: ({ className, ...props }: import('react-native').ViewProps) => {
+			mockViewProps.push({ className, ...props });
+			return React.createElement(actual.View, { ...props, dataSet: { classes: className } });
+		},
+		Pressable: ({ className, ...props }: import('react-native').PressableProps) =>
+			React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } }),
+	};
+});
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string, options?: { count?: number }) => `${key}:${options?.count}`,
@@ -370,4 +385,88 @@ it('opens on press and drills from the button in the drill style, with no expand
 	expect(
 		within(screen.getByTestId('products-row-one')).getByTestId('icon-chevronRight')
 	).toBeTruthy();
+});
+
+// A variable product's card centres its trailing on the whole card, as a plain row does: the row
+// reserves the variations line in its body and the button lies over it, outside the row's press
+// target (a button may not nest in the row's button).
+it.each([
+	['inline', {}],
+	['drill', { drill: jest.fn() }],
+])(
+	"a variable row's trailing centres on the whole card; its variations button lies outside the press target (%s)",
+	(_style, extra) => {
+		const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
+		const item = {
+			id: 'one',
+			original: { record: { ...record, payload: { ...record.payload, type: 'variable' } } },
+		};
+		render(
+			<VariableRow
+				{...({
+					item,
+					table: { options: { meta: { expanded$, ...extra } } },
+				} as unknown as React.ComponentProps<typeof VariableRow>)}
+			/>
+		);
+		const classes = (node: Element | null) =>
+			(node as HTMLElement | null)?.dataset.classes?.split(' ') ?? [];
+		const row = screen.getByTestId('products-row-one');
+		// The trailing (price, stock, chevron) is the pressable row's own child…
+		expect(row.contains(screen.getByText('12.50'))).toBe(true);
+		expect(within(row).getByTestId('icon-chevronRight')).toBeTruthy();
+		// …beside a body that reserves the variations line (the sm button's 36 + 8).
+		expect(classes(screen.getByText('Hat & scarf').parentElement)).toEqual(
+			expect.arrayContaining(['flex-1', 'pb-11'])
+		);
+		expect(classes(row)).toContain('border-b');
+		expect(classes(row)).not.toContain('border-b-0');
+		// The button is not in the row's press target; it lies over the reserved line.
+		const button = screen.getByTestId('variable-product-expand');
+		expect(row.contains(button)).toBe(false);
+		const overlay = button.closest('[data-classes*="absolute"]');
+		expect(classes(overlay)).toEqual(expect.arrayContaining(['absolute', 'bottom-2', 'left-16']));
+		expect(classes(overlay?.parentElement ?? null)).toContain('relative');
+		expect(overlay?.parentElement?.contains(row)).toBe(true);
+	}
+);
+
+it('a plain product row reserves no variations line', () => {
+	render(<ProductRow record={record} />);
+	expect(screen.getByText('Hat & scarf').parentElement?.dataset.classes).not.toContain('pb-11');
+});
+
+// The overlay is bounded by the trailing column (Codex and Greptile on #3418): a long label or
+// a narrow list truncates the button instead of running it under the price and the stock.
+it("the variations overlay stops at the trailing column's measured width plus the row's gap", () => {
+	mockViewProps.length = 0;
+	const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
+	render(
+		<VariableRow
+			{...({
+				item: {
+					id: 'one',
+					original: { record: { ...record, payload: { ...record.payload, type: 'variable' } } },
+				},
+				table: { options: { meta: { expanded$ } } },
+			} as unknown as React.ComponentProps<typeof VariableRow>)}
+		/>
+	);
+	// The overlay's latest committed style.
+	const right = () =>
+		(
+			mockViewProps.findLast((props) => props.testID === 'products-variations-overlay')?.style as {
+				right?: number;
+			}
+		)?.right;
+	// Before the first layout: the gap alone (ListRow's gap-3 + px-3).
+	expect(right()).toBe(24);
+	const trailing = mockViewProps.find(
+		(props) => props.className === 'flex-row items-center gap-3' && props.onLayout
+	);
+	act(() => {
+		trailing?.onLayout?.({ nativeEvent: { layout: { width: 120 } } } as never);
+	});
+	expect(right()).toBe(120 + 24);
+	expect(screen.getByTestId('products-row-one').contains(screen.getByText('12.50'))).toBe(true);
 });

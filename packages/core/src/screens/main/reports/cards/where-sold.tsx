@@ -87,6 +87,7 @@ export function WhereSoldCard() {
 				canChoose && (
 					<SegmentedControl
 						testID="card-where-sold-view"
+						hug
 						value={activeView}
 						onValueChange={setView}
 						segments={[
