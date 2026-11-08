@@ -24,6 +24,8 @@ jobs:
         env:
           VERSION: ${{ github.event.client_payload.version }}
         run: |
+          # A release is a CalVer tag; refuse an empty or branch-ref payload rather than commit it.
+          [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+$ ]] || { echo "Not a CalVer version: '$VERSION'"; exit 1; }
           echo "Updating translation version to $VERSION"
           FILE=packages/core/src/contexts/translations/translation-version.json
           jq --tab --arg v "$VERSION" '.version = $v' "$FILE" > "$FILE.tmp"
