@@ -1850,6 +1850,10 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.cancelOnePayment('a'));
 
 		expect(result.current.state.entryMinor).toBe(2500);
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_cancelled',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 
 	it('cancelOnePayment voids nothing when the cashier keeps the payment', async () => {

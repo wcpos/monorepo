@@ -1950,22 +1950,23 @@ export function useTenderFlow(
 		// The next payment is re-planned over what is left: an untouched entry follows the
 		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405); an
 		// amount the cashier typed stays theirs (CodeRabbit).
-		if (state.entryDirty) return;
-		const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
-			candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
-		);
-		const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
-		reducerDispatch({
-			type: 'tender-recorded',
-			balanceMinor: toMinor(balance, dp),
-			rowsSinceFrom: latest
-				.slice(state.plan?.from ?? latest.length)
-				.filter(countsTowardPaid)
-				.map((candidate) => ({
-					amountMinor: toMinor(candidate.amount, dp),
-					title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
-				})),
-		});
+		if (!state.entryDirty) {
+			const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
+				candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
+			);
+			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
+			reducerDispatch({
+				type: 'tender-recorded',
+				balanceMinor: toMinor(balance, dp),
+				rowsSinceFrom: latest
+					.slice(state.plan?.from ?? latest.length)
+					.filter(countsTowardPaid)
+					.map((candidate) => ({
+						amountMinor: toMinor(candidate.amount, dp),
+						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
+					})),
+			});
+		}
 		logger.info(t('pos_checkout.payment_cancelled'), {
 			actor,
 			showToast: true,
