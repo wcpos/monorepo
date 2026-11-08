@@ -131,8 +131,14 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 		case 'pick-reader':
 			return { ...state, readerId: action.readerId };
 		case 'picks-changed':
-			// Picking is a different way to build the payment: a percent share ends.
-			return { ...state, entryDirty: false, entryMode: 'money' };
+			// Picking is a different way to build the payment: a percent share ends, and the typed
+			// share is cleared with it so it can never be read back as money (Greptile on #3412).
+			return {
+				...state,
+				entryDirty: false,
+				entryMode: 'money',
+				entryMinor: state.entryMode === 'percent' ? 0 : state.entryMinor,
+			};
 		case 'arm-extra':
 			return state.view === 'amount'
 				? { ...state, extraMinor: 0, entryMinor: 0, entryDirty: false }

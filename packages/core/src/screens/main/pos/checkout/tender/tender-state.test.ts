@@ -172,9 +172,12 @@ describe('tenderReducer', () => {
 			{ ...initialTenderState, view: 'amount', entryDirty: true },
 			{ type: 'set-entry-mode', mode: 'percent' }
 		);
-		expect(tenderReducer(percent, { type: 'picks-changed' })).toMatchObject({
+		const typed = tenderReducer(percent, { type: 'set-entry', minor: 50 });
+		expect(tenderReducer(typed, { type: 'picks-changed' })).toMatchObject({
 			entryMode: 'money',
 			entryDirty: false,
+			// The typed 50 % never becomes $0.50 once the picks are gone (Greptile on #3412).
+			entryMinor: 0,
 		});
 	});
 	it('replaces the pre-fill on the first digit, then shifts later digits in from the right', () => {
