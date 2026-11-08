@@ -72,13 +72,17 @@ async function enterAmount(page: Page, methodId: string, amountMinor: number): P
 }
 
 /**
- * The store's minor unit per major unit, from the saved order's plain `total` string (the
- * REST shape carries `price_num_decimals` decimals and no thousands separator, so a shown
- * `¥1,500` cannot be misread as three decimals).
+ * The store's minor unit per major unit, from a ledger amount the app wrote: `fromMinor`
+ * renders every `_wcpos_payments` amount with the till's `price_num_decimals` and no
+ * thousands separator, where a shown `¥1,500` or an order read back at six decimals would
+ * both mislead.
  */
-function minorUnitOf(order: ServerOrder): number {
-	expect(order.total, 'the saved order must carry its total').toEqual(expect.any(String));
-	return 10 ** decimalPlaces(order.total!);
+function minorUnitOf(rows: readonly { amount?: string }[]): number {
+	const amount = rows[0]?.amount;
+	expect(amount, 'a ledger amount is needed to read the store precision').toEqual(
+		expect.any(String)
+	);
+	return 10 ** decimalPlaces(amount!);
 }
 
 async function isSwitchOn(toggle: Locator): Promise<boolean> {
@@ -468,15 +472,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			const saved = await pollOrder(
-				request,
-				testInfo,
-				authorization,
-				orderId,
-				(order) => typeof order.total === 'string',
-				'S3: read the saved order for the store precision'
-			);
-			const unit = minorUnitOf(saved);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.floor(balance / 2);
@@ -516,6 +511,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			);
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
 			expect(
 				rows.map((row) => row.status),
 				'S3: every leg is captured'
@@ -549,15 +545,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			const saved = await pollOrder(
-				request,
-				testInfo,
-				authorization,
-				orderId,
-				(order) => typeof order.total === 'string',
-				'S4: read the saved order for the store precision'
-			);
-			const unit = minorUnitOf(saved);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.floor((balance * 25 + 50) / 100);
@@ -599,6 +586,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			);
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
 			expect(
 				rows.map((row) => row.status),
 				'S4: every leg is captured'
@@ -632,15 +620,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			const saved = await pollOrder(
-				request,
-				testInfo,
-				authorization,
-				orderId,
-				(order) => typeof order.total === 'string',
-				'S9: read the saved order for the store precision'
-			);
-			const unit = minorUnitOf(saved);
 			liveTest.skip(balance < 3, 'order balance is too small for three positive payment legs');
 			const first = Math.floor(balance / 3);
 			const second = Math.floor((balance - first + 1) / 2);
@@ -664,18 +643,14 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(await readAmountMinor(page, 'checkout-plan-leg-0'), 'S9: leg 1 is the amount').toBe(
 				first
 			);
-			const legOne = await page.getByTestId('checkout-plan-leg-1').innerText();
+			const legOne = digitsOf(await page.getByTestId('checkout-plan-leg-1').innerText());
 			if (grouped) {
-				const dp = decimalPlaces(legOne);
-				const amountDigits =
-					dp > 0
-						? `${Math.floor(planned[1] / unit)}${String(planned[1] % unit).padStart(dp, '0')}`
-						: String(planned[1]);
-				expect(digitsOf(legOne), 'S9: the two shares fold into one `Then 2 ×` pill').toBe(
-					`2${amountDigits}`
-				);
+				// `Then 2 × {amount}`: the run count, then the amount's digits as `readAmountMinor`
+				// reads them (formatting-independent, as every other amount read in this spec).
+				expect(legOne, 'S9: the two shares fold into one `Then 2 ×` pill').toMatch(/^2\d+$/);
+				expect(Number(legOne.slice(1)), 'S9: the folded pill carries the share').toBe(planned[1]);
 			} else {
-				expect(digitsOf(legOne), 'S9: leg 2 is the larger share').toBe(String(planned[1]));
+				expect(Number(legOne), 'S9: leg 2 is the larger share').toBe(planned[1]);
 				expect(
 					await readAmountMinor(page, 'checkout-plan-leg-2'),
 					'S9: leg 3 is the rest of the share'
@@ -706,6 +681,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			);
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
 			expect(
 				rows.map((row) => row.status),
 				'S9: every leg is captured'
@@ -775,16 +751,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'the picked-unit walk needs exactly one line with quantity 2'
 			);
 			const line = before.line_items![0];
-			const unit = minorUnitOf(before);
-			// A unit's price has its tax inside and the odd cent sits on the LAST unit: the first
-			// unit is the floor of the line's half.
-			const lineMinor = Math.round((Number(line.total) + Number(line.total_tax)) * unit);
-			const price = Math.floor(lineMinor / 2);
-			expect(price, 'S7: the server line has a positive tax-inclusive unit price').toBeGreaterThan(
-				unit
-			);
-			const first = price + unit;
-			expect(first, 'S7: a unit plus 1.00 leaves a positive second payment').toBeLessThan(balance);
 
 			await page.getByTestId('checkout-split-chip').click();
 			const pick = page
@@ -796,29 +762,36 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(pickId, 'S7: the line picker carries its POS uuid').toMatch(/^checkout-line-.+-pick$/);
 			const lineKey = pickId!.replace(/^checkout-line-/, '').replace(/-pick$/, '');
 			// A tap on the name picks every unpaid unit (both); the stepper's minus leaves one.
+			// The line's money is read from the pane (the server's figures are checked against
+			// it at the end, once a ledger amount gives the store's precision).
 			await pick.click();
-			await expect
-				.poll(() => readAmountMinor(page, 'checkout-entry'), {
-					timeout: 15_000,
-					message: 'S7: the name tap picks both units',
-				})
-				.toBe(lineMinor);
+			await expect(
+				page.getByTestId(`checkout-line-${lineKey}-units`),
+				'S7: the name tap picks both units'
+			).toHaveText(/\b2\b/);
+			const lineMinor = await readAmountMinor(page, 'checkout-entry');
+			expect(lineMinor, 'S7: two picked units are the whole line').toBeGreaterThan(2);
 			await page.getByTestId(`checkout-line-${lineKey}-minus`).click();
+			// A unit's price has its tax inside and the odd cent sits on the LAST unit: the first
+			// unit is the floor of the line's half.
+			const price = Math.floor(lineMinor / 2);
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), {
 					timeout: 15_000,
 					message: 'S7: one picked unit is priced with its tax inside',
 				})
 				.toBe(price);
+			// `+ amount`: one minor unit typed, so the walk needs no knowledge of the precision.
+			const first = price + 1;
+			expect(first, 'S7: a unit plus the extra leaves a positive second payment').toBeLessThan(
+				balance
+			);
 			await page.getByTestId('checkout-plus-amount').click();
-			// 1.00 in the store's precision: a 1 then one 0 per decimal.
-			for (const digit of String(unit)) {
-				await page.getByTestId(`checkout-keypad-key-${digit}`).click();
-			}
+			await page.getByTestId('checkout-keypad-key-1').click();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), {
 					timeout: 15_000,
-					message: 'S7: the typed 1.00 is added to the picked unit',
+					message: 'S7: the typed extra is added to the picked unit',
 				})
 				.toBe(first);
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
@@ -846,6 +819,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			);
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
 			expect(
 				rows.map((row) => row.status),
 				'S7: every leg is captured'
@@ -859,9 +833,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				'S7: the legs add up to the order total'
 			).toBeCloseTo(Number(server.total), 2);
 			expect(
-				Number(rows[0].amount),
-				'S7: the first server leg contains the unit plus 1.00'
-			).toBeCloseTo(first / unit, 6);
+				Math.round((Number(line.total) + Number(line.total_tax)) * unit),
+				'S7: the pane priced the line as the server has it, tax inside'
+			).toBe(lineMinor);
+			expect(
+				Math.round(Number(rows[0].amount) * unit),
+				'S7: the first server leg contains the unit plus the extra'
+			).toBe(first);
 			expect(rows[0].id, 'S7: the first leg has an id for its allocation').toEqual(
 				expect.any(String)
 			);
@@ -894,15 +872,6 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			const saved = await pollOrder(
-				request,
-				testInfo,
-				authorization,
-				orderId,
-				(order) => typeof order.total === 'string',
-				'S15: read the saved order for the store precision'
-			);
-			const unit = minorUnitOf(saved);
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
 			const first = Math.round(balance / 2);
@@ -966,6 +935,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			);
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
 			expect(rows[0].id, 'S15: the cancelled leg stays on the ledger').toBe(leg.id);
 			expect(
 				rows.map((row) => row.status),
