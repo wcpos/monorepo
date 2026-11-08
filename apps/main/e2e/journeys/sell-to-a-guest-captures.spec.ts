@@ -18,6 +18,8 @@ import {
 } from '../capture-matrix';
 import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
+import { pickDocsRegister, showStore } from './demo-register';
+import { showAllProducts } from './find-a-product';
 import { closeRegister, openRegister } from './open-register';
 import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
@@ -96,12 +98,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 				}, info) => {
 					// The walk, plus putting the register, theme and language back on the shared store.
 					test.setTimeout(420_000);
+					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
+					// The theme and language below belong to the store the app is on.
+					if (docsShoot) await showStore(posPage, request, info, storeAuthorization);
 					const restoreSettings = await ensureSystemTheme(posPage, { english: true });
 					let opened = false;
+					// Set only once the pick returned: it refuses a held register, so a session here is this run's.
+					let picked = false;
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
-					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
 						if (!(await hasScaleStyle(posPage))) {
@@ -150,8 +156,15 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						});
 					};
 					try {
+						if (docsShoot) {
+							await pickDocsRegister(posPage, request, info, storeAuthorization);
+							picked = true;
+						}
 						opened = await openRegister(posPage);
 						console.log(`[register] ${info.titlePath.at(-2)}: opened=${opened}`);
+						// A docs shoot with no register it opened has nothing to sell on.
+						if (docsShoot && !opened) throw new Error('the docs register did not open');
+						if (docsShoot) await showAllProducts(posPage);
 						unscale = await applyScale(posPage, step);
 						await sellToAGuest({
 							page: posPage,
@@ -189,7 +202,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 								},
 							],
 							['unscale', unscale],
-							['closeRegister', async () => opened && closeRegister(posPage)],
+							['closeRegister', async () => (opened || picked) && closeRegister(posPage)],
 							['restoreSettings', restoreSettings],
 						]);
 					}

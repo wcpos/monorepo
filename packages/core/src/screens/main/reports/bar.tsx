@@ -236,8 +236,8 @@ export function Bar({
 export function ClosuresCashierChip({
 	scope,
 	onScopeChange,
-	className,
-}: ScopeProps & { className?: string }) {
+	stretch,
+}: ScopeProps & { stretch?: boolean }) {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -247,7 +247,7 @@ export function ClosuresCashierChip({
 	const cashiers = useObservableState(source, []);
 	return (
 		<MenuChip
-			className={className}
+			stretch={stretch}
 			name="cashier"
 			icon="cashier"
 			scroll

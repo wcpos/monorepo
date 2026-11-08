@@ -197,9 +197,10 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
-		linesPaidBy: {},
+		picked: {},
+		splitOn: false,
+		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -420,3 +421,22 @@ jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle:
 jest.mock('../../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '14:04' }),
 }));
+
+it('leaves checkout from the offline state, keeping nothing but the order', () => {
+	const offline = (id: string) => ({
+		method: method({ id }),
+		disabled: true,
+		reason: 'offline' as const,
+		worksOffline: false,
+		settlesLater: false,
+	});
+	mockFlow = makeFlow({
+		online: false,
+		tiles: [offline('pos_cash'), offline('other')],
+	});
+	mountColumn();
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	fireEvent.click(screen.getByTestId('checkout-offline-leave'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+});

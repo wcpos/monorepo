@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useUnreadErrorCount } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
+import { useUnreadErrorCount } from '@wcpos/core/screens/main/components/drawer-content/use-unread-error-count';
 
 type UnreadLogsActions = { markAsRead: () => void };
 

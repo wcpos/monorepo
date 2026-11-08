@@ -428,7 +428,7 @@ function ReportsShell({
 												phone ? (
 													<TileGrid columns={2}>
 														<ClosuresCashierChip
-															className="self-stretch"
+															stretch
 															scope={scope}
 															onScopeChange={setSelection}
 														/>

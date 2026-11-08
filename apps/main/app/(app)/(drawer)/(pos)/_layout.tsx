@@ -18,6 +18,7 @@ import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-
 import { HeadlessAutoPrintHost } from '@wcpos/core/screens/main/pos/checkout/receipt-stage/headless-auto-print';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
+import { useStoreDeletedOrdersSettler } from '@wcpos/core/screens/main/pos/checkout/use-store-deleted-orders';
 import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
@@ -47,6 +48,7 @@ export default function POSLayout() {
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	useResetCheckoutModeOnStoreChange(storeID);
 	useRejectedOrderSavesSync(storeID);
+	useStoreDeletedOrdersSettler(storeID);
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();

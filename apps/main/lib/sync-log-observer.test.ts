@@ -1113,6 +1113,20 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
 	});
 
+	it.each([false, true])(
+		'records a gone refusal at warn unless revertPending=%s',
+		(revertPending) => {
+			observer.observe(
+				event({
+					type: 'push.rejected',
+					fields: { status: 404, reason: 'woo_rxdb_sync_record_not_found', revertPending },
+				})
+			);
+			expect(rows[0]).toMatchObject({ level: revertPending ? 'info' : 'warn' });
+			if (!revertPending) expect(rows[0].code).toBe('SYNC203');
+		}
+	);
+
 	// Drift guard: the screen's toast codes the same refusal through the shared
 	// rejectedWriteCode helper; this row and that toast must never disagree.
 	it.each([

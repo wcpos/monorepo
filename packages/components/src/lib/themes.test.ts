@@ -110,3 +110,11 @@ it.each(THEMES)('defines the moments for %s', (theme) => {
 	expect(THEME_TRAITS[theme].settle).toBe(true);
 	expect(THEME_TRAITS[theme].paidFlash).toBe(theme === 'bold');
 });
+
+// A link's ink is `--primary`; on these three themes that is the foreground, so the line marks the verb.
+it.each(THEMES)(
+	'underlines link verbs on %s only where the link ink is the foreground',
+	(theme) => {
+		expect(THEME_TRAITS[theme].linkUnderline).toBe(['bold', 'paper', 'monochrome'].includes(theme));
+	}
+);

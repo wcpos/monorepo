@@ -30,6 +30,7 @@ jest.mock('@wcpos/utils/logger', () => {
 
 jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
+	useQueryRuntime: () => ({ engine: {} }),
 	useDocField: (_store: unknown, selector: (value: { store_country: string }) => unknown) =>
 		selector({ store_country: 'ES' }),
 }));
@@ -202,4 +203,9 @@ jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/car
 
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
+}));
+
+jest.mock('./use-coupon-context', () => ({
+	...jest.requireActual('./use-coupon-context'),
+	readCatalogTaxStatuses: async () => () => undefined,
 }));
