@@ -6,7 +6,6 @@ import { Toast } from '@wcpos/components/toast';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	activeAwaitingCustomer,
-	type AwaitingCustomerStamp,
 	calculateCartLine,
 	type DeclaredValues,
 	derive,
@@ -104,7 +103,7 @@ import {
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
-import { rowsSince, type SplitView, splitView, useSplitStore } from './split-view';
+import { rowsSince, splitView, useSplitStore } from './split-view';
 import { restoredPlan, splitCommands } from './split-module';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
@@ -123,7 +122,6 @@ import {
 	initialReaderId,
 	legacyPaymentMethods,
 	selectableReaders,
-	type TenderTile,
 } from './tiles';
 import { writeZeroBalanceCompletion } from '../../commands/zero-balance-completion';
 import { type CloseOutcome, useCloseSale } from '../../commands/close-sale';
@@ -135,23 +133,18 @@ import {
 } from '../../commands/land-answer';
 
 import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
+import type { LedgerView } from './use-ledger-view';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 
-export interface TenderFlow {
-	/** The one confirmation (the offline tender, the Clear attempt); the host renders it. */
-	confirmDialog: React.ReactNode;
-	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
-	unansweredCommand: boolean;
-	retryCommand: () => Promise<void>;
+/** The card reader and the terminal leg's actions: the device keypad and `TerminalLegView` read these. */
+export interface TenderTerminal {
 	rememberedReaderId: string | null;
 	rememberReader: (reader: RememberedReader) => Promise<void>;
 	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	deviceTransport?: PaymentTransport | null;
 	pickTransport?: (transport: PaymentTransport) => void;
 	deviceReady?: boolean;
-	terminalLeg: TerminalLegState | null;
-	hasLiveTerminalLeg: boolean;
 	readers: ReturnType<typeof selectableReaders>['readers'];
 	lockToDefault: boolean;
 	pickReader: (id: string) => void;
@@ -160,39 +153,30 @@ export interface TenderFlow {
 	retryTerminalCapture: () => void;
 	dismissTerminalLeg: () => void;
 	retryTerminalLeg: () => void;
+}
+
+/** What the cashier does to the tender; every command is inert while `busy`. */
+export interface TenderCommands {
+	dispatch: React.Dispatch<TenderFlowAction>;
+	pickMethod: (methodId: string) => void;
+	takeTender: () => Promise<void>;
+	cancelPayment: () => Promise<void>;
+	/** Voids one recorded payment (after a confirm) and frees the units it paid for. */
+	cancelOnePayment: (paymentId: string) => Promise<void>;
+	setFieldValues: (next: DeclaredValues, changedId: string) => void;
+	cancelInvoice: () => Promise<void>;
+	clearAttempt: () => Promise<void>;
+	/** Sends the unanswered money command again (ADR 0040). */
+	retryCommand: () => Promise<void>;
+}
+
+/**
+ * The tender as its views read it. It is a `LedgerView` (rows, balance, split), so the bill
+ * reads it as the order view does; the reader is in `terminal`, every action in `commands`.
+ */
+export interface TenderFlow extends LedgerView {
 	/** The reducer's state, with an untouched balance prefill shown as the rounded cash due. */
 	state: TenderState;
-	dispatch: React.Dispatch<TenderFlowAction>;
-
-	/** Store decimal places; every `*Minor` number below is in these units. */
-	dp: number;
-	totalMinor: number;
-	paidMinor: number;
-	balanceMinor: number;
-	/** Every figure the keypad shows and commits (`tenderFigures`); the pane only formats them. */
-	figures: TenderFigures;
-	plan: TenderState['plan'];
-	planLabel: string | null;
-	/** The split as the bill reads it too (`splitView`): lines, picks, the Split chip, paid units. */
-	split: SplitView;
-	/** The order's discount (`discount_total`): picked prices already include it. */
-	discountMinor: number;
-
-	/** The order's ledger rows, in ledger order. */
-	rows: PaymentRow[];
-	/** Rows with status pending | authorized | captured — money that is currently held. */
-	liveRows: PaymentRow[];
-	/** The live rows a cancel keeps for a refund instead of voiding (order-math `partitionVoidableRows`). */
-	retainedRows: PaymentRow[];
-	hasLiveLeg: boolean;
-	online: boolean;
-
-	tiles: TenderTile[];
-	legacyMethods: PaymentMethodDescriptor[];
-
-	/** The descriptor for `state.methodId`, or null in the select view. */
-	method: PaymentMethodDescriptor | null;
-
 	/** A tender command holds the gate (in flight or confirming); every action is inert while true. */
 	busy: boolean;
 	/**
@@ -200,23 +184,36 @@ export interface TenderFlow {
 	 * button spins only for its own.
 	 */
 	running: TenderCommand | null;
+	hasLiveLeg: boolean;
+	terminalLeg: TerminalLegState | null;
+	hasLiveTerminalLeg: boolean;
+	unansweredAttempt: (GatewayAttempt & { title: string | null }) | null;
+	/** A money command was sent and its answer never arrived: only Try again (ADR 0040). */
+	unansweredCommand: boolean;
 	saveState: OrderSaveState | null;
-	pickMethod: (methodId: string) => void;
-	takeTender: () => Promise<void>;
-	cancelPayment: () => Promise<void>;
-	/** Voids one recorded payment (after a confirm) and frees the units it paid for. */
-	cancelOnePayment: (paymentId: string) => Promise<void>;
+	/** The one confirmation (the offline tender, the Clear attempt); the host renders it. */
+	confirmDialog: React.ReactNode;
 
+	/** Every figure the keypad shows and commits (`tenderFigures`); the pane only formats them. */
+	figures: TenderFigures;
+	planLabel: string | null;
+	/** The order's discount (`discount_total`): picked prices already include it. */
+	discountMinor: number;
+	/** Rows with status pending | authorized | captured — money that is currently held. */
+	liveRows: PaymentRow[];
+	/** The live rows a cancel keeps for a refund instead of voiding (order-math `partitionVoidableRows`). */
+	retainedRows: PaymentRow[];
+	online: boolean;
+	legacyMethods: PaymentMethodDescriptor[];
+	/** The descriptor for `state.methodId`, or null in the select view. */
+	method: PaymentMethodDescriptor | null;
 	/** Contract 1.2: the values typed into the method's declared components, prefilled per §1.2. */
 	fieldValues: DeclaredValues;
-	setFieldValues: (next: DeclaredValues, changedId: string) => void;
 	/** `wcpos_fields_invalid` lines keyed by component id, `_form` for the gateway's own. */
 	fieldErrors: Record<string, string>;
-	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
-	invoiceSent: AwaitingCustomerStamp | null;
-	cancelInvoice: () => Promise<void>;
-	unansweredAttempt: (GatewayAttempt & { title: string | null }) | null;
-	clearAttempt: () => Promise<void>;
+
+	terminal: TenderTerminal;
+	commands: TenderCommands;
 }
 
 type TenderCommand =
@@ -1735,31 +1732,42 @@ export function useTenderFlow(
 
 	return React.useMemo(
 		() => ({
-			rememberedReaderId: remembered,
-			rememberReader: remember,
+			terminal: {
+				rememberedReaderId: remembered,
+				rememberReader: remember,
+				bootstrapReader,
+				deviceTransport,
+				pickTransport,
+				deviceReady,
+				readers,
+				lockToDefault,
+				pickReader,
+				cancelTerminalLeg,
+				releaseTerminalLeg,
+				retryTerminalCapture,
+				dismissTerminalLeg,
+				retryTerminalLeg,
+			},
+			commands: {
+				dispatch,
+				pickMethod,
+				takeTender,
+				cancelPayment,
+				cancelOnePayment,
+				setFieldValues,
+				cancelInvoice,
+				clearAttempt,
+				retryCommand,
+			},
 			terminalLeg,
-			bootstrapReader,
-			deviceTransport,
-			pickTransport,
-			deviceReady,
-			readers,
-			lockToDefault,
-			pickReader,
-			cancelTerminalLeg,
-			releaseTerminalLeg,
-			retryTerminalCapture,
-			dismissTerminalLeg,
-			retryTerminalLeg,
 			// In percent entry the state keeps the typed share; the money is `entryAppliedMinor`.
 			state:
 				percentMinor !== null || entryMinor === state.entryMinor ? state : { ...state, entryMinor },
-			dispatch,
 			dp,
 			totalMinor,
 			paidMinor,
 			balanceMinor,
 			figures,
-			plan,
 			planLabel,
 			split,
 			discountMinor: toMinor(payload.discount_total ?? '0', dp),
@@ -1776,23 +1784,14 @@ export function useTenderFlow(
 			busy,
 			running: confirming ? null : running,
 			saveState,
-			pickMethod,
-			takeTender,
-			cancelPayment,
-			cancelOnePayment,
 			fieldValues,
-			setFieldValues,
 			fieldErrors,
 			invoiceSent,
-			cancelInvoice,
 			unansweredAttempt,
-			clearAttempt,
 			unansweredCommand,
-			retryCommand,
 			confirmDialog,
 		}),
 		[
-			plan,
 			split,
 			payload.discount_total,
 			figures,

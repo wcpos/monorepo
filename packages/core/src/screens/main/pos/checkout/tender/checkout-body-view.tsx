@@ -43,7 +43,7 @@ export function CheckoutBodyView({ flow, order, format, receiptHost, pane }: Bod
 						testID="checkout-complete-order"
 						loading={flow.running === 'takeTender'}
 						disabled={flow.busy}
-						onPress={() => void flow.takeTender()}
+						onPress={() => void flow.commands.takeTender()}
 					>
 						<ButtonText>{t('common.done')}</ButtonText>
 					</Button>
@@ -64,7 +64,7 @@ export function TenderTabs({ flow, hug, className }: TabsProps) {
 			<SegmentedControl
 				hug={hug}
 				value={flow.state.tab}
-				onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+				onValueChange={(tab) => flow.commands.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
 				segments={[
 					{
 						value: 'payments',
@@ -94,7 +94,7 @@ export function CancelPaymentButton({ flow, size }: { flow: TenderFlow; size?: '
 			testID="checkout-cancel-payment"
 			// The flow drops every action while a payment is in progress; the button says so.
 			disabled={flow.busy}
-			onPress={() => flow.dispatch({ type: 'request-cancel' })}
+			onPress={() => flow.commands.dispatch({ type: 'request-cancel' })}
 		>
 			<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
 		</Button>

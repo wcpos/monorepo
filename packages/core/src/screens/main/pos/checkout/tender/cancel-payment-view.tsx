@@ -64,7 +64,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 				<Button
 					testID="checkout-cancel-keep-going"
 					disabled={flow.busy}
-					onPress={() => flow.dispatch({ type: 'back' })}
+					onPress={() => flow.commands.dispatch({ type: 'back' })}
 				>
 					<ButtonText>{t('pos_checkout.keep_taking_payment')}</ButtonText>
 				</Button>
@@ -73,7 +73,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 					testID="checkout-cancel-confirm"
 					loading={flow.running === 'cancelPayment'}
 					disabled={flow.busy}
-					onPress={() => void flow.cancelPayment()}
+					onPress={() => void flow.commands.cancelPayment()}
 				>
 					<ButtonText>{t('pos_checkout.cancel_and_void')}</ButtonText>
 				</Button>

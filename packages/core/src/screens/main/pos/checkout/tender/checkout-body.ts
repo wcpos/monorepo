@@ -44,5 +44,5 @@ export const offersCancelPayment = (flow: TenderFlow) =>
  */
 export function leaveOrCancel(flow: TenderFlow, { leave }: { leave: () => void }) {
 	if (!holdsLiveManualLeg(flow)) leave();
-	else if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
+	else if (flow.state.view !== 'cancel') flow.commands.dispatch({ type: 'request-cancel' });
 }

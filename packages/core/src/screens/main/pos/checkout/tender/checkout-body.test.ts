@@ -20,7 +20,7 @@ function flowWith(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		balanceMinor: 1000,
 		unansweredAttempt: null,
 		state: initialTenderState,
-		dispatch: jest.fn(),
+		commands: { dispatch: jest.fn() },
 		...overrides,
 	} as TenderFlow;
 }
@@ -99,9 +99,9 @@ describe('leaveOrCancel and offersCancelPayment', () => {
 		leaveOrCancel(flow, { leave });
 		expect(leave).toHaveBeenCalledTimes(action === 'leave' ? 1 : 0);
 		if (action === 'request-cancel') {
-			expect(flow.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
+			expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
 		} else {
-			expect(flow.dispatch).not.toHaveBeenCalled();
+			expect(flow.commands.dispatch).not.toHaveBeenCalled();
 		}
 		expect(offersCancelPayment(flow)).toBe(offers);
 	});

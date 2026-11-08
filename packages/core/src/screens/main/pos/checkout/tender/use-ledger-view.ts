@@ -19,10 +19,12 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 
 export interface LedgerView {
+	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
 	/** Contract 1.2: the order was sent to the customer and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	tiles: TenderTile[];
+	/** Store decimal places; every `*Minor` number is in these units. */
 	dp: number;
 	totalMinor: number;
 	paidMinor: number;

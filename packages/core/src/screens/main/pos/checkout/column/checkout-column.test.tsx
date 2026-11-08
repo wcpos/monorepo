@@ -188,14 +188,29 @@ jest.mock('@wcpos/components/button', () => ({
 
 const order = { uuid: 'order-1' } as EngineRecord<'orders'>;
 
-function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
+type FlowOverrides = Partial<Omit<TenderFlow, 'terminal' | 'commands'>> & {
+	terminal?: Partial<TenderFlow['terminal']>;
+	commands?: Partial<TenderFlow['commands']>;
+};
+function makeFlow({ terminal, commands, ...overrides }: FlowOverrides = {}): TenderFlow {
 	return withFigures({
 		state: initialTenderState,
-		dispatch: jest.fn(),
+		terminal: {
+			readers: [],
+			lockToDefault: false,
+			deviceReady: false,
+			...terminal,
+		},
+		commands: {
+			dispatch: jest.fn(),
+			pickMethod: mockPickMethod,
+			takeTender: jest.fn(),
+			cancelPayment: jest.fn(),
+			...commands,
+		},
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
-		plan: null,
 		planLabel: null,
 		discountMinor: 0,
 		balanceMinor: 9295,
@@ -207,14 +222,8 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		tiles: [{ method: method(), disabled: false, reason: null, worksOffline: true }],
 		legacyMethods: [],
 		method: null,
-		readers: [],
-		lockToDefault: false,
-		deviceReady: false,
 		busy: false,
 		saveState: null,
-		pickMethod: mockPickMethod,
-		takeTender: jest.fn(),
-		cancelPayment: jest.fn(),
 		...overrides,
 	} as TenderFlow);
 }
@@ -269,7 +278,7 @@ it.each([
 	['the Legacy tab', { state: { ...initialTenderState, tab: 'legacy' as const } }],
 ])('%s with an unanswered command offers only Try again', (_, overrides) => {
 	const retryCommand = jest.fn(async () => undefined);
-	mockFlow = makeFlow({ ...overrides, unansweredCommand: true, retryCommand });
+	mockFlow = makeFlow({ ...overrides, unansweredCommand: true, commands: { retryCommand } });
 	mountColumn();
 	expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
 	expect(mockLegacyTab).not.toHaveBeenCalled();
@@ -290,7 +299,7 @@ it.each([
 // A paid sale re-opened from Orders: its captured payments cover it, so Done completes it.
 it('offers the completion action for a re-opened sale its payments cover', () => {
 	const takeTender = jest.fn();
-	mockFlow = makeFlow({ ...reopenedPaid, takeTender });
+	mockFlow = makeFlow({ ...reopenedPaid, commands: { takeTender } });
 	mountColumn();
 	expect(screen.queryByTestId('checkout-commit')).toBeNull();
 	fireEvent.click(screen.getByTestId('checkout-complete-order'));
@@ -313,14 +322,14 @@ it.each([false, true])('Cart protects a live leg: %s', (live) => {
 	mountColumn();
 	fireEvent.click(screen.getByTestId('checkout-close'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(live);
-	if (live) expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
+	if (live) expect(mockFlow.commands.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
 });
 it.each([false, true])('Escape uses the same back action: live %s', (live) => {
 	mockFlow = makeFlow({ hasLiveLeg: live });
 	mountColumn();
 	fireEvent.keyDown(document, { key: 'Escape' });
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(live);
-	if (live) expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
+	if (live) expect(mockFlow.commands.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
 });
 // The shared back decision (checkout-body): with the cancel view already open, back stays put.
 it('does not re-request cancel while the cancel view is open', () => {
@@ -329,7 +338,7 @@ it('does not re-request cancel while the cancel view is open', () => {
 	expect(screen.getByTestId('checkout-cancel-confirm')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('checkout-close'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
-	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 });
 it('leaves Escape to dialogs and editable fields', () => {
 	mountColumn();
@@ -418,7 +427,7 @@ it('leaves a live terminal leg without whole-order cancellation', () => {
 	mountColumn();
 	fireEvent.click(screen.getByTestId('checkout-close'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
-	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
 });
 it('offers whole-order cancellation after a final terminal result, not while live', () => {
@@ -505,7 +514,7 @@ it('keeps both segment selectors and removes the redundant order title', () => {
 	mountColumn();
 	expect(screen.getByTestId('checkout-tab-payments')).toBeTruthy();
 	fireEvent.click(screen.getByTestId('checkout-tab-legacy'));
-	expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'set-tab', tab: 'legacy' });
+	expect(mockFlow.commands.dispatch).toHaveBeenCalledWith({ type: 'set-tab', tab: 'legacy' });
 	expect(screen.queryByText('pos_checkout.checkout_order')).toBeNull();
 });
 
@@ -534,5 +543,5 @@ it('leaves checkout from the offline state, keeping nothing but the order', () =
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
 	fireEvent.click(screen.getByTestId('checkout-offline-leave'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
-	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 });
