@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { Hero, SalesScope } from './index';
@@ -314,7 +314,6 @@ beforeEach(() => {
 	mockStretch.clear();
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
 	mockPrint.mockReset().mockResolvedValue(true);
-	mockPrintDocument.templatesReady = true;
 });
 afterEach(() => jest.useRealTimers());
 // Removing calculateTotals or the live-day cutoff changes all the displayed comparisons.
@@ -332,12 +331,6 @@ it('renders the figure, delta and three companions using the store currency and 
 	}))
 		expect(screen.getByTestId(`hero-${id}`).textContent).toBe(value);
 	expect(screen.getByTestId('existing-chart')).toBeTruthy();
-	fireEvent.click(screen.getByTestId('hero-print'));
-	expect(screen.getByTestId('hero-print-sheet')).toBeTruthy();
-	expect(mockPrint).not.toHaveBeenCalled();
-	expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print summary');
-	fireEvent.click(screen.getByTestId('print-sheet-print'));
-	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 it('shows a muted dash when the comparison figure is zero', () => {
 	setup({ comparison: handleOf([]) });
@@ -573,64 +566,44 @@ it('its clear puts every order back', () => {
 	expect(screen.getByTestId('exclusions').textContent).toBe('');
 });
 
-// A missing template must block printing; failures must be visible and recover on the next press.
-it('disables Print with the shared waiting line until templates are ready', () => {
-	mockPrintDocument.templatesReady = false;
-	setup();
-	expect(screen.getByTestId('hero-print').hasAttribute('disabled')).toBe(false);
-	fireEvent.click(screen.getByTestId('hero-print'));
-	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading templates');
-	fireEvent.click(screen.getByTestId('hero-print'));
-	expect(mockPrint).not.toHaveBeenCalled();
-});
-it('builds a grouped report with the viewed scope', () => {
-	setup({ cashier: '7' });
-	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
-	const options = useReceiptDocument.mock.calls.at(-1)[0];
-	expect(options).toMatchObject({
-		templateType: 'report',
-		storeId: 9,
-		autoPrintAllowed: false,
-	});
-	expect(options.localReport.report).toMatchObject({
-		key: 'summary',
-		title: 'Sales summary',
-		rows: [],
-		has_groups: true,
-	});
-	expect(options.localReport.report.scope.label).toContain('Priya · Completed & processing');
-});
-it('shows false and thrown print failures and clears the error on success', async () => {
-	mockPrint.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('printer unavailable'));
-	setup();
-	fireEvent.click(screen.getByTestId('hero-print'));
-	for (let i = 0; i < 2; i++) {
-		fireEvent.click(screen.getByTestId('print-sheet-print'));
-		await waitFor(() =>
-			expect(screen.getByTestId('print-sheet-error').textContent).toBe(
-				'Could not print. Try again.'
-			)
+// The hero hands useReportPrint its summary spec, scope additions and readiness (the waiting reasons,
+// the scope's register and the print failures are use-report-print.test.tsx's).
+it('prints the grouped summary of the viewed scope once the refunds lane is complete', () => {
+	mockStores.next([
+		{ id: 9, name: 'Shop' },
+		{ id: 10, name: 'Annex' },
+	]);
+	const refunds = handleOf([]);
+	refunds.set({ laneProgress: { phase: 'fetching', loaded: 1, total: 2 } });
+	try {
+		setup({ store: 'woocommerce-pos', cashier: '7', refunds });
+		fireEvent.click(screen.getByTestId('hero-print'));
+		expect(screen.getByTestId('hero-print-sheet')).toBeTruthy();
+		expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
+			'Still loading refunds for this range'
 		);
+		act(() => refunds.set({ laneProgress: null }));
+		const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+		const options = useReceiptDocument.mock.calls.at(-1)[0];
+		expect(options).toMatchObject({ templateType: 'report', autoPrintAllowed: false });
+		expect(options.localReport.report).toMatchObject({
+			key: 'summary',
+			title: 'Sales summary',
+			rows: [],
+			has_groups: true,
+		});
+		expect(options.localReport.report.scope.label).toContain(
+			'All stores · Priya · Completed & processing'
+		);
+		// The paper breaks down by store: the bound directory cannot name other stores' registers.
+		expect(JSON.stringify(options.localReport.report.groups)).toContain('"Stores"');
+		expect(screen.getByTestId('print-sheet-print').textContent).toBe('Print summary');
+		fireEvent.click(screen.getByTestId('print-sheet-print'));
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	} finally {
+		mockStores.next([{ id: 9, name: 'Shop' }]);
 	}
-	fireEvent.click(screen.getByTestId('print-sheet-print'));
-	await waitFor(() => expect(screen.queryByTestId('print-sheet-error')).toBeNull());
-});
-
-// Downloading either lane must not print a document labelled as the whole period.
-it.each(['sales', 'refunds'] as const)('waits for the %s lane then enables Print', (lane) => {
-	const handle = handleOf(lane === 'sales' ? current : []);
-	handle.set({ laneProgress: { phase: 'fetching', loaded: 1, total: 2 } });
-	setup({ [lane]: handle });
-	fireEvent.click(screen.getByTestId('hero-print'));
-	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
-		lane === 'sales'
-			? 'Still loading orders for this range'
-			: 'Still loading refunds for this range'
-	);
-	act(() => handle.set({ laneProgress: null }));
-	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
 });
 
 jest.mock('../../receipt/receipt-body', () => ({
@@ -702,29 +675,4 @@ it.each([true, false])('renders unsettled scope without report data (phone: %s)'
 	expect(screen.getByTestId('hero-chip-status').textContent).toBe('Completed & processing');
 	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
 	expect(screen.getByRole('button', { name: 'Print summary' }).hasAttribute('disabled')).toBe(true);
-});
-
-it('names All stores in the summary print scope', () => {
-	mockStores.next([
-		{ id: 9, name: 'Shop' },
-		{ id: 10, name: 'Annex' },
-	]);
-	try {
-		setup({ store: 'woocommerce-pos' });
-		const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
-		const report = useReceiptDocument.mock.calls.at(-1)[0].localReport.report;
-		expect(report.scope.label).toContain('All stores');
-		// The paper breaks down by store: the bound directory cannot name other stores' registers.
-		expect(JSON.stringify(report.groups)).toContain('"Stores"');
-	} finally {
-		mockStores.next([{ id: 9, name: 'Shop' }]);
-	}
-});
-// Store 0's own scope is the same sentinel: a single-store till never prints "All stores".
-it('a single-store install keeps All registers under the sentinel', () => {
-	setup({ store: 'woocommerce-pos' });
-	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
-	const label = useReceiptDocument.mock.calls.at(-1)[0].localReport.report.scope.label;
-	expect(label).toContain('All registers');
-	expect(label).not.toContain('All stores');
 });
