@@ -220,7 +220,13 @@ describe('enqueueWriteIntent', () => {
 				payload: { id: 0 },
 			},
 		});
-		if (failed) await expect(writing).rejects.toThrow();
+		if (failed === 'renewal')
+			await expect(writing).rejects.toMatchObject({
+				status: 428,
+				reason: 'writer-admission-lapsed',
+				stage: 'before-dirty-mark',
+			});
+		else if (failed) await expect(writing).rejects.toThrow();
 		else {
 			expect(await writing).toMatchObject({ mutationId: 'slow', recordId: 'order' });
 			expect(data.local).toMatchObject({ dirty: true, pendingMutationIds: ['slow'] });
@@ -237,6 +243,52 @@ describe('enqueueWriteIntent', () => {
 		});
 		expect(push).toHaveBeenCalledTimes(failed ? 0 : 1);
 		expect(await queue.all()).toEqual([]);
+	});
+
+	// #3338: a failed renewal names its site, and calls a lapse a lapse only when the
+	// expired row is still this writer's own; a foreign or absent row stays a void.
+	it.each([
+		['own hold expired', 'writer-admission-lapsed'],
+		['foreign takeover', 'void-in-progress'],
+		['swept hold', 'void-in-progress'],
+	] as const)('first renewal after admission: %s', async (race, reason) => {
+		const storage = createFakeMutationCollection();
+		let now = Date.now();
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: vi.fn(async (modify: (row: typeof data) => typeof data) => {
+				data = modify(data);
+			}),
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: storage,
+			},
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const other = new RecordMutationQueue(new RxRecordMutationStorage(() => storage));
+		const admit = queue.admitWriter.bind(queue);
+		vi.spyOn(queue, 'admitWriter').mockImplementationOnce(async (name, record, token, time) => {
+			const admitted = await admit(name, record, token, time);
+			now += 30_001;
+			if (race === 'foreign takeover')
+				expect(await other.admitWriter(name, record, 'other-writer', now)).toBe(true);
+			if (race === 'swept hold') await other.clearExpiredAnnihilation(now);
+			return admitted;
+		});
+		const writing = enqueueWriteIntent({
+			db,
+			mintUuid: () => 'sale',
+			now: () => new Date(now).toISOString(),
+			intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: { id: 0 } },
+		});
+		await expect(writing).rejects.toMatchObject({ status: 428, reason, stage: 'before-enqueue' });
+		await expect(writing).rejects.toThrow(`write: ${reason} (before-enqueue)`);
+		expect(await queue.all()).toEqual([]);
+		expect(resident.incrementalModify).not.toHaveBeenCalled();
+		expect(data.local).toBeUndefined();
 	});
 
 	it('a late append after admission loss survives as a dead letter, not a resurrected sale', async () => {
@@ -1718,6 +1770,37 @@ describe('admission crash recovery', () => {
 			expect(storage.store.has('orders/order')).toBe(false);
 		}
 	);
+
+	it('a lapse before the coalesced dirty mark restores the prior row and names the lapse', async () => {
+		const { db, queue } = fixture();
+		let now = Date.now();
+		await queue.enqueue(prior);
+		const coalesce = queue.coalesceInto.bind(queue);
+		vi.spyOn(queue, 'coalesceInto').mockImplementationOnce(async (...args) => {
+			const swapped = await coalesce(...args);
+			now += 30_001;
+			return swapped;
+		});
+		await expect(
+			enqueueWriteIntent({
+				db,
+				mintUuid: () => 'replacement',
+				now: () => new Date(now).toISOString(),
+				intent: {
+					collection: 'orders',
+					operation: 'update',
+					recordId: 'order',
+					payload: { id: 2 },
+				},
+			})
+		).rejects.toMatchObject({
+			status: 428,
+			reason: 'writer-admission-lapsed',
+			stage: 'before-dirty-mark',
+		});
+		expect(queue.coalesceInto).toHaveBeenCalledTimes(1);
+		expect(await queue.all()).toEqual([expect.objectContaining({ ...prior, status: 'pending' })]);
+	});
 
 	it('restores resident ids after a crash following the coalesced dirty mark', async () => {
 		const { resident, collections, db, queue } = fixture();
