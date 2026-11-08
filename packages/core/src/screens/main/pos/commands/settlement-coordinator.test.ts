@@ -267,6 +267,17 @@ it('#963 continuation survives switching tabs and #952 owns demand until the las
 	expect(h.references$.observed).toBe(false);
 });
 
+it('hands settle a replay check that fails once the coupon references go stale', async () => {
+	const a = couponOrder();
+	const h = start([a]);
+	await emit(h.references$, { ready: true, generation: 'before' });
+	expect(h.settle).toHaveBeenCalledTimes(1);
+	const [, , allowed] = h.settle.mock.calls[0];
+	expect(allowed(a.payload)).toBe(true);
+	h.references$.next({ ready: false, generation: 'after' });
+	expect(allowed(a.payload)).toBe(false);
+});
+
 it.each(['failed', 'cancelled', 'captured'])(
 	'retains a coupon replay through a live leg ending %s with balance',
 	async (status) => {

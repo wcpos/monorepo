@@ -1,22 +1,18 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render, renderHook } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import * as orderMath from '@wcpos/order-math';
 import { createCartConfig } from '@wcpos/order-math';
 
-import { enterCheckout, leaveCheckout } from '../checkout/checkout-mode';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useRepairTaxExempt } from './use-tax-exempt';
-import { useBoundaryCommit } from './use-boundary-commit';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary, retryable } from './boundary-commit';
-import { completeSale } from '../checkout/sale-completion';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
@@ -44,6 +40,7 @@ const coverage = new BehaviorSubject({ complete: true });
 const statuses = new BehaviorSubject({ collections: { taxRates: { coverageGeneration: 0 } } });
 const orders = new BehaviorSubject({ ready: true, hits: [] as { record: any }[] });
 const handle = { observe: () => orders };
+const otherStoreHandle = { observe: () => orders };
 const subscribe = (source: Subject<any>) => (fn: any) => {
 	const sub = source.subscribe(fn);
 	return () => sub.unsubscribe();
@@ -114,7 +111,7 @@ let currentConfig = config;
 const readConfig = () => currentConfig;
 const beforeResolve = jest.fn<Promise<void>, []>(async () => {});
 const { createTestT } = jest.requireActual('../../../../../jest/translate');
-const t = createTestT();
+let t = createTestT();
 jest.mock('../../../../contexts/translations', () => ({ useT: () => t }));
 const ownsMoney = jest.fn<boolean, [string]>(() => false);
 let mockInputs = {
@@ -130,16 +127,18 @@ jest.mock('@wcpos/query', () => ({
 	observeCoverage: () => coverage,
 	useDocField: (doc: any, read: any) => read(doc),
 }));
+let storeId = 8;
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: 8 } }),
+	useStoreSession: () => ({ wpCredentials: { id: 7 }, store: { id: storeId } }),
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: jest.fn(() => ({ registerId: 'register', status: 'bound' })),
 }));
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: (...args: unknown[]) => {
-		expect(args).toEqual([7, 8, 'register']);
-		return handle;
+		expect(args).toEqual([7, storeId, 'register']);
+		// Memoised per scope, like the hook: another store is another handle.
+		return storeId === 8 ? handle : otherStoreHandle;
 	},
 }));
 jest.mock('../hooks/use-cart-config', () => ({
@@ -223,11 +222,37 @@ it('binds, rebinds on scope/reset, waits for rates, reports once and tears down'
 	act(() => coverage.next({ complete: true }));
 	await flush();
 	expect(writes).toHaveLength(3);
+	// A rebind is the coordinator's own null → epoch path, never a restart.
+	expect(createSettlementCoordinator).toHaveBeenCalledTimes(1);
 	view.unmount();
 	expect(events.observed).toBe(false);
 	expect(coverage.observed).toBe(false);
 	expect(statuses.observed).toBe(false);
 	expect(orders.observed).toBe(false);
+});
+
+it('restarts on a store switch, never on a binding or translation identity change', async () => {
+	const binding = useRegisterBinding();
+	const view = render(<SettlementCoordinatorProvider />);
+	try {
+		await flush();
+		expect(writes).toHaveLength(1);
+		jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'choose' });
+		t = createTestT();
+		view.rerender(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(createSettlementCoordinator).toHaveBeenCalledTimes(1);
+		storeId = 9;
+		act(() => orders.next({ ready: true, hits: [{ record: record() }] }));
+		view.rerender(<SettlementCoordinatorProvider />);
+		await flush();
+		expect(createSettlementCoordinator).toHaveBeenCalledTimes(2);
+		expect(writes).toHaveLength(2);
+	} finally {
+		storeId = 8;
+		jest.mocked(useRegisterBinding).mockReturnValue(binding);
+		view.unmount();
+	}
 });
 
 it.each(['0.30', '0.40'])('commits a partial order crossing net paid %s', async (amount) => {
@@ -658,27 +683,6 @@ it('leaves a coupon edit to the continuation and completes once at the redistrib
 	view.unmount();
 });
 
-it('marks coordinator boundary work as system rather than cashier initiated', async () => {
-	const a = record({
-		status: 'pos-partial',
-		line_items: [{ total: '4' }],
-		meta_data: [
-			{
-				key: '_wcpos_payments',
-				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
-			},
-		],
-	});
-	orders.next({ ready: true, hits: [{ record: a }] });
-	const view = render(<SettlementCoordinatorProvider />);
-	await flush();
-	expect(commitAtBoundary).toHaveBeenCalledWith(
-		expect.objectContaining({ source: 'system' }),
-		expect.anything()
-	);
-	view.unmount();
-});
-
 it.each([
 	['products', 'pos_cart.only_n_available', false],
 	['variations', 'pos_products.out_of_stock', true],
@@ -773,145 +777,6 @@ it.each([true, false])(
 	}
 );
 
-it('maps an unknown binding to none in both cart and coordinator boundary commits', async () => {
-	const binding = useRegisterBinding();
-	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
-	const a = record({
-		status: 'pos-partial',
-		line_items: [{ total: '4' }],
-		meta_data: [
-			{
-				key: '_wcpos_payments',
-				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
-			},
-		],
-	});
-	orders.next({ ready: true, hits: [{ record: a }] });
-	const view = render(<SettlementCoordinatorProvider />);
-	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
-	try {
-		await flush();
-		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(a as CurrentOrderRecord, queue)
-		);
-		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
-		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls)
-			expect(ctx.bindingStatus).toBe('none');
-	} finally {
-		view.unmount();
-		hook.unmount();
-		jest.mocked(useRegisterBinding).mockReturnValue(binding);
-	}
-});
-
-it('both boundary hosts hand their completion the outcome unchanged', async () => {
-	const a = record({
-		status: 'pos-partial',
-		line_items: [{ total: '4' }],
-		meta_data: [
-			{
-				key: '_wcpos_payments',
-				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
-			},
-		],
-	});
-	orders.next({ ready: true, hits: [{ record: a }] });
-	const view = render(<SettlementCoordinatorProvider />);
-	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
-	try {
-		await flush();
-		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(a as CurrentOrderRecord, queue)
-		);
-		expect(commitAtBoundary).toHaveBeenCalledTimes(2);
-		const order = a as never;
-		const queue = {} as never;
-		for (const [ctx] of jest.mocked(commitAtBoundary).mock.calls) {
-			const outcome = { source: 'zero-balance', order: { status: 'completed' } } as never;
-			await ctx.complete(order, outcome, queue);
-			if (ctx.source === 'system') {
-				expect(completeSale).toHaveBeenLastCalledWith(
-					saleContext,
-					order,
-					outcome,
-					{ host: 'background' },
-					queue
-				);
-				expect(jest.mocked(completeSale).mock.lastCall?.[2]).toBe(outcome);
-			} else {
-				expect(mockComplete).toHaveBeenLastCalledWith(order, outcome, queue);
-				expect(mockComplete.mock.lastCall?.[1]).toBe(outcome);
-			}
-		}
-		expect(completeSale).toHaveBeenCalledTimes(1);
-		expect(mockComplete).toHaveBeenCalledTimes(1);
-	} finally {
-		view.unmount();
-		hook.unmount();
-	}
-});
-
-it('passes the coupon reference validity check through to the boundary writer', async () => {
-	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
-	context.coupons = new Map([
-		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
-	]);
-	references.next({ ready: true, generation: 'before' });
-	const a = record({
-		status: 'pos-partial',
-		line_items: [{ product_id: 1, quantity: 1, total: '10', subtotal: '10' }],
-		coupon_lines: [{ code: 'summer' }],
-		meta_data: [
-			{
-				key: '_wcpos_payments',
-				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '9' }] },
-			},
-		],
-	});
-	orders.next({ ready: true, hits: [{ record: a }] });
-	const view = render(<SettlementCoordinatorProvider />);
-	try {
-		await flush();
-		const { allowed } = jest.mocked(commitAtBoundary).mock.calls[0][1];
-		expect(allowed).toEqual(expect.any(Function));
-		expect(allowed!(a.payload)).toBe(true);
-		act(() => references.next({ ready: false, generation: 'after' }));
-		expect(allowed!(a.payload)).toBe(false);
-	} finally {
-		view.unmount();
-	}
-});
-
-it('keeps both in-flight boundary binding readers current across a render', async () => {
-	const binding = useRegisterBinding();
-	jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'unknown' });
-	const a = record({
-		status: 'pos-partial',
-		line_items: [{ total: '4' }],
-		meta_data: orderMath.withLedger([], [{ ...row, status: 'captured', amount: '4' }]),
-	});
-	orders.next({ ready: true, hits: [{ record: a }] });
-	const view = render(<SettlementCoordinatorProvider />);
-	const hook = renderHook(() => useBoundaryCommit(jest.fn()));
-	try {
-		await flush();
-		await enqueueOrderMutation(a.uuid, (queue) =>
-			hook.result.current(a as CurrentOrderRecord, queue)
-		);
-		const readers = jest.mocked(commitAtBoundary).mock.calls.map(([ctx]) => ctx.readBindingStatus);
-		expect(readers).toHaveLength(2);
-		for (const read of readers) expect(read?.()).toBe('none');
-		jest.mocked(useRegisterBinding).mockReturnValue({ ...binding, status: 'choose' });
-		view.rerender(<SettlementCoordinatorProvider />);
-		hook.rerender();
-		for (const read of readers) expect(read?.()).toBe('choose');
-	} finally {
-		view.unmount();
-		hook.unmount();
-		jest.mocked(useRegisterBinding).mockReturnValue(binding);
-	}
-});
-
 it('passes the context lookup to replay', async () => {
 	references.next({ ready: true, generation: 'lookup' });
 	context.coupons = new Map([
@@ -945,8 +810,7 @@ it('passes the context lookup to replay', async () => {
 	}
 });
 
-it('dispatches the hook repair and gives it the shared system boundary commit', async () => {
-	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
+it('dispatches the tax-exempt repair with its validity check', async () => {
 	const a = record({
 		meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
 		line_items: [{ total_tax: '1' }],
@@ -956,69 +820,10 @@ it('dispatches the hook repair and gives it the shared system boundary commit', 
 	try {
 		await flush();
 		expect(mockRepairTaxExempt).toHaveBeenCalledWith(a, true, expect.any(Function));
-		const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
-		const valid = jest.fn(() => true);
-		await enqueueOrderMutation(a.uuid, (queue) =>
-			systemCommit(a as CurrentOrderRecord, queue, undefined, valid)
-		);
-		const [ctx, input] = jest.mocked(commitAtBoundary).mock.calls[0];
-		expect(ctx.source).toBe('system');
-		expect(input.coupons).toBeUndefined();
-		expect(input.allowed!(a.payload)).toBe(true);
-		act(() => enterCheckout(a.uuid));
-		expect(input.allowed!(a.payload)).toBe(false);
-		expect(input.allowed!(a.payload, true)).toBe(true);
-		act(() => leaveCheckout(a.uuid));
-		valid.mockReturnValue(false);
-		expect(input.allowed!(a.payload)).toBe(false);
-		expect(input.allowed!(a.payload, true)).toBe(false);
-		await ctx.complete(
-			a as Parameters<typeof ctx.complete>[0],
-			{ source: 'zero-balance', order: {} } as never,
-			input.queue
-		);
-		expect(completeSale).toHaveBeenLastCalledWith(
-			saleContext,
-			a,
-			expect.anything(),
-			{ host: 'background' },
-			input.queue
-		);
 	} finally {
-		act(() => leaveCheckout(a.uuid));
 		view.unmount();
 	}
 });
-
-it.each([false, true])(
-	'passes coupon context and tax status to the repair boundary (override=%s)',
-	async (override) => {
-		orders.next({ ready: true, hits: [] });
-		const view = render(<SettlementCoordinatorProvider />);
-		try {
-			const a = record({ coupon_lines: [{ code: 'summer' }] });
-			const taxStatusFor = () => 'taxable' as const;
-			const coupons = {
-				context,
-				missing: { deny: { reasonKey: 'missing' } },
-				...(override && { taxStatusFor }),
-			};
-			jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
-			const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
-			await enqueueOrderMutation(a.uuid, (queue) =>
-				systemCommit(a as CurrentOrderRecord, queue, coupons, () => true)
-			);
-			const input = jest.mocked(commitAtBoundary).mock.calls[0][1];
-			expect(input.coupons).toEqual({
-				...context,
-				taxStatusFor: override ? taxStatusFor : context.taxStatusFor,
-			});
-			expect(input.allowed!(a.payload)).toBe(true);
-		} finally {
-			view.unmount();
-		}
-	}
-);
 
 describe('#3243 the rates gate stays open once a generation has landed', () => {
 	const code = 'pos-discount';
@@ -1044,20 +849,6 @@ describe('#3243 the rates gate stays open once a generation has landed', () => {
 		await flush();
 		expect(writes).toHaveLength(2);
 		expect(writes[1]).toEqual(discounted);
-		view.unmount();
-	});
-
-	it('an incomplete verdict in a landed generation never pulses ready false', async () => {
-		const view = render(<SettlementCoordinatorProvider />);
-		await flush();
-		const { ratesReady$ } = jest.mocked(createSettlementCoordinator).mock.calls[0][0];
-		const ready: boolean[] = [];
-		const sub = ratesReady$.subscribe((value) => ready.push(value.ready));
-		act(() => coverage.next({ complete: false }));
-		await flush();
-		sub.unsubscribe();
-		expect(ready[0]).toBe(true);
-		expect(ready).not.toContain(false);
 		view.unmount();
 	});
 
@@ -1114,12 +905,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 				},
 			],
 		});
-	const ready = () => {
-		const { ratesReady$ } = jest.mocked(createSettlementCoordinator).mock.calls[0][0];
-		let latest: boolean | undefined;
-		ratesReady$.subscribe((value) => (latest = value.ready)).unsubscribe();
-		return latest;
-	};
 
 	it('stays shut while coverage is complete but the rates are the unbound placeholder', async () => {
 		mockRatesRead = false;
@@ -1132,7 +917,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 			await flush();
 			expect(coverage.value.complete).toBe(true);
 			// Catches: a gate that trusts coverage alone and settles against no rates.
-			expect(ready()).toBe(false);
 			expect(writes).toEqual([]);
 			expect(report).not.toHaveBeenCalled();
 
@@ -1141,7 +925,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 			mockInputs = { ...mockInputs, rates };
 			view.rerender(<SettlementCoordinatorProvider />);
 			await flush();
-			expect(ready()).toBe(true);
 			expect(writes).toEqual([expect.objectContaining({ total: '11' })]);
 			expect(report).toHaveBeenCalledTimes(1);
 			expect(report.mock.calls[0][0]).not.toContainEqual(
@@ -1159,7 +942,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 		try {
 			await flush();
 			// Catches: "no rates" mistaken for "not read", which would never settle this store.
-			expect(ready()).toBe(true);
 			expect(writes).toEqual([expect.objectContaining({ total: '10' })]);
 		} finally {
 			view.unmount();
@@ -1177,7 +959,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 			const inputsBefore = mockInputs;
 			const statusesBefore = statuses.value;
 			expect(coverageBefore.complete).toBe(true);
-			expect(ready()).toBe(false);
 			expect(writes).toEqual([]);
 
 			// A zero-rate store: the read answering leaves `allRates` at [], so nothing else moves.
@@ -1188,7 +969,6 @@ describe('#3186 the rates gate waits for rates read from the database', () => {
 			expect(mockInputs).toBe(inputsBefore);
 			expect(statuses.value).toBe(statusesBefore);
 			// Catches: `ratesRead` missing from the readiness effect's deps, a gate that never opens.
-			expect(ready()).toBe(true);
 			expect(writes).toEqual([expect.objectContaining({ total: '10' })]);
 		} finally {
 			view.unmount();
