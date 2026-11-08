@@ -714,6 +714,22 @@ jobs:
           pattern: gallery-shots-*
           path: apps/main/gallery/.shots
           merge-multiple: true
+      - name: Drop baselines the base branch has removed
+        # The update shards shoot the merge ref, so a cell the base deleted after this
+        # branch left it has no shot and no PNG in their artifacts, while the head checkout
+        # still carries its old baseline, which the orphan check would refuse. Remove what
+        # the merge ref lacks; the check below still refuses a PNG nobody shot.
+        env:
+          MERGE_REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          git fetch --depth=1 origin "+$MERGE_REF:refs/remotes/pull/merge"
+          comm -23 \
+            <(git ls-files -- 'apps/main/gallery/*-snapshots/*.png' | sort) \
+            <(git ls-tree -r --name-only refs/remotes/pull/merge -- apps/main/gallery | grep -E -- '-snapshots/.*\.png$' | sort) \
+          | while IFS= read -r path; do
+              echo "removing $path (not in the merge ref)"
+              git rm -q -- "$path"
+            done
       - name: Check orphaned baselines
         run: node apps/main/gallery/check-orphans.mjs
       - name: Commit baselines
