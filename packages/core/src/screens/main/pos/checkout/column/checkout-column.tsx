@@ -31,11 +31,11 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		[formatCurrency, flow.dp]
 	);
 	const t = useT();
+	const leave = React.useCallback(() => leaveCheckout(order.uuid), [order.uuid]);
 	const back = React.useCallback(() => {
-		if (flow.state.splitView) flow.dispatch({ type: 'close-split' });
-		else if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
-		else leaveCheckout(order.uuid);
-	}, [flow, order.uuid]);
+		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
+		else leave();
+	}, [flow, leave]);
 	useCheckoutBack(back);
 	const body = (() => {
 		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
@@ -47,7 +47,10 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		if (flow.state.tab === 'legacy') {
 			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
+		// press completes it (zero-balance close). An unanswered attempt keeps the pane (it is cleared first),
+		// and so does a terminal leg still on screen (a live leg is never hidden behind another view).
+		if (flow.balanceMinor === 0 && !flow.unansweredAttempt && !flow.terminalLeg) {
 			return (
 				<View className="p-4">
 					<Button
@@ -63,7 +66,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				</View>
 			);
 		}
-		return <TenderPane flow={flow} format={format} />;
+		return <TenderPane flow={flow} format={format} onLeave={leave} />;
 	})();
 
 	return (
@@ -72,18 +75,32 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				{payload.id}
 			</Text>
 			<HStack className="items-center gap-3 p-2">
-				<SegmentedControl
-					value={flow.state.tab}
-					onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-					segments={[
-						{
-							value: 'payments',
-							label: t('pos_checkout.payments_tab'),
-							testID: 'checkout-tab-payments',
-						},
-						{ value: 'legacy', label: t('pos_checkout.legacy_tab'), testID: 'checkout-tab-legacy' },
-					]}
-				/>
+				<View>
+					{/* A row beside the close: hug, or Yoga hands the control the whole row and the close,
+					    the cashier's way out of a checkout, falls off screen. */}
+					<SegmentedControl
+						hug
+						value={flow.state.tab}
+						onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+						segments={[
+							{
+								value: 'payments',
+								label: t('pos_checkout.payments_tab'),
+								testID: 'checkout-tab-payments',
+							},
+							{
+								value: 'legacy',
+								label: t('pos_checkout.legacy_tab'),
+								testID: 'checkout-tab-legacy',
+							},
+						]}
+					/>
+					{flow.hasLiveLeg ? (
+						<Text variant="help" className="text-right" testID="checkout-legacy-whole-bill">
+							{t('pos_checkout.whole_bill_only')}
+						</Text>
+					) : null}
+				</View>
 				{flow.saveState?.kind === 'saving' && !payload.number ? (
 					<Skeleton shape="line" className="w-40" testID="checkout-title-skeleton" />
 				) : null}

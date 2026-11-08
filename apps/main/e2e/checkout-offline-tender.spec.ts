@@ -35,11 +35,17 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { getStoreVariant, navigateToPage, wcposRestRoute } from './fixtures';
+import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { ensureRegisterOpen, getStoreVariant, navigateToPage, wcposRestRoute } from './fixtures';
 import {
+	cartRecordUuid,
+	createPushOrdersResponseMatcher,
 	expectOrderPaid,
 	liveOrderTest as liveTest,
+	newRunLabel,
+	readCartMoney,
 	readOrder,
+	stampRunLabel,
 	type TrackedOrder,
 } from './order-lifecycle';
 
@@ -297,6 +303,64 @@ liveTest.describe('POS offline cash tender (live store, ADR 0040 Decided 1)', ()
 				await expect(page.getByTestId('checkout-receipt-stage')).toBeHidden();
 				await expect(tab).toHaveCount(0);
 				await expect(chip).toHaveCount(0);
+			} finally {
+				await page.context().setOffline(false);
+			}
+		}
+	);
+
+	liveTest(
+		'keeps a sale rung up offline and goes back to the register',
+		async ({ posPage: page, trackOrder }) => {
+			liveTest.slow();
+			try {
+				await ensureRegisterOpen(page);
+				const added = await tryAddRunPrivateSimpleProduct(page);
+				liveTest.skip(!added, 'product-writer credentials are unavailable');
+				const label = newRunLabel();
+				await stampRunLabel(page, label);
+				const { total } = await readCartMoney(page);
+				const recordId = await cartRecordUuid(page);
+
+				// An order the store has never seen offers no tile offline (`tiles.ts`), so the pane
+				// is the offline notice rather than a keypad whose commit can never be pressed.
+				await page.context().setOffline(true);
+				await page.getByTestId('checkout-button').click();
+				const leave = page.getByTestId('checkout-offline-leave');
+				await expect(leave).toBeVisible({ timeout: 30_000 });
+				await expect(page.getByTestId('checkout-commit')).toBeHidden();
+
+				// One press leaves checkout, and the cart still holds the sale.
+				await leave.click();
+				await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
+				expect((await readCartMoney(page)).total, 'the cart keeps the sale').toBe(total);
+
+				// Checkout opened again is the same state, left the same way.
+				await page.getByTestId('checkout-button').click();
+				await expect(leave).toBeVisible({ timeout: 30_000 });
+				await leave.click();
+				await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
+
+				// Armed before the flip: the queued save goes out on the online event.
+				const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
+					timeout: 150_000,
+				});
+				// An unhandled rejection here takes down the whole worker process (#997).
+				saved.catch(() => {});
+				await page.context().setOffline(false);
+				const response = await saved;
+				expect(response.status(), 'the order saved offline must reach the store').toBeLessThan(400);
+				const ack = (await response.json().catch(() => null)) as {
+					document?: { id?: number };
+				} | null;
+				const id = Number(ack?.document?.id ?? 0);
+				expect(id, 'the push ack must carry the server order id').toBeGreaterThan(0);
+				trackOrder({ id, uuid: recordId, label });
+
+				// With the link back the keypad returns by itself.
+				await page.getByTestId('checkout-button').click();
+				await expect(page.getByTestId('checkout-commit')).toBeVisible({ timeout: 60_000 });
+				await expect(leave).toHaveCount(0);
 			} finally {
 				await page.context().setOffline(false);
 			}

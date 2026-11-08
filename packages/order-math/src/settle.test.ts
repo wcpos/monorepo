@@ -11,7 +11,7 @@ import { calculateCartLine } from './cart-line';
 import { createCartConfig } from './config';
 import { calculateOrderTotals } from './internal/order-totals';
 import { recalculateCoupons } from './internal/coupons/recalculate';
-import { settleAggregate, settleCart } from './settle';
+import { sameLineMoney, settleAggregate, settleCart } from './settle';
 
 import type { CartConfigInput } from './config';
 import type { CartSnapshot } from './snapshot';
@@ -927,6 +927,155 @@ describe('VAT-exempt settlement', () => {
 		if (!result.ok) throw new Error('settlement failed');
 		expect(result.patch).toMatchObject({ tax_lines: [], total_tax: '0', discount_tax: '0' });
 	});
+});
+
+it('settles unchanged after a fee and shipping server-ack round trip', () => {
+	const rates = [
+		{ id: 5, rate: '10', compound: false, order: 1, class: 'standard', shipping: true },
+		{ id: 4, rate: '5', compound: false, order: 2, class: 'standard', shipping: true },
+	];
+	const config = makeConfig({ rates, allRates: rates });
+	const snapshot: CartSnapshot = {
+		line_items: [makePosLineItem(1, 50.1)],
+		fee_lines: [makePercentFee(10)],
+		shipping_lines: [{ method_id: 'flat_rate', total: '5.01', meta_data: [] }],
+	};
+	const first = settleCart(snapshot, config);
+	expect(first.ok).toBe(true);
+	if (!first.ok) return;
+	expect(first.changed).toBe(true);
+	for (const field of ['fee_lines', 'shipping_lines'] as const) {
+		expect(first.patch[field]?.[0].taxes?.map((tax) => tax.id)).toEqual([5, 4]);
+	}
+
+	const moneyKeys = new Set([
+		'discount_total',
+		'discount_tax',
+		'shipping_total',
+		'shipping_tax',
+		'cart_tax',
+		'total',
+		'total_tax',
+		'subtotal',
+		'subtotal_tax',
+		'price',
+		'discount',
+		'amount',
+		'tax_total',
+		'shipping_tax_total',
+	]);
+	const adopted: CartSnapshot = JSON.parse(
+		JSON.stringify({ ...snapshot, ...first.patch }, (key, value) => {
+			if (key === 'taxes') {
+				return [...value]
+					.sort((a, b) => Number(a.id) - Number(b.id))
+					.map((tax) => ({ ...tax, subtotal: '' }));
+			}
+			return moneyKeys.has(key) && typeof value === 'string' && value !== ''
+				? Number(value).toFixed(6)
+				: value;
+		})
+	);
+	const result = settleCart(adopted, config);
+	expect(result.ok).toBe(true);
+	if (!result.ok) return;
+	expect(result.changed).toBe(false);
+	expect('fee_lines' in result.patch).toBe(false);
+	expect('shipping_lines' in result.patch).toBe(false);
+});
+
+describe.each(['shipping_lines', 'fee_lines'] as const)('ack-adopted %s', (field) => {
+	const rates = [
+		{ id: 5, rate: '10', compound: false, order: 1, class: 'standard', shipping: true },
+		{ id: 4, rate: '5', compound: false, order: 2, class: 'standard', shipping: true },
+	];
+	const config = makeConfig({ rates, allRates: rates });
+	const adopted = {
+		...(field === 'fee_lines'
+			? makePercentFee(10)
+			: { method_id: 'flat_rate', method_title: 'Flat rate', meta_data: [] }),
+		total: '5.010000',
+		total_tax: '0.750000',
+		taxes: [
+			{ id: 4, total: '0.250500', subtotal: '' },
+			{ id: 5, total: '0.501000', subtotal: '' },
+		],
+	};
+
+	it('omits the array when only ack spelling and tax order differ', () => {
+		const snapshot: CartSnapshot = {
+			line_items: [makePosLineItem(1, 50.1)],
+			[field]: [clone(adopted)],
+		};
+		const before = clone(snapshot);
+		const result = settleCart(snapshot, config);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		expect(field in result.patch).toBe(false);
+		expect(snapshot).toEqual(before);
+	});
+
+	it.each([
+		{ total_tax: '0.760000' },
+		{
+			taxes: [
+				{ id: 4, total: '0.501' },
+				{ id: 5, total: '0.2505' },
+			],
+		},
+	])('emits the recomputed array when tax money really differs: %j', (difference) => {
+		const result = settleCart(
+			{
+				line_items: [makePosLineItem(1, 50.1)],
+				[field]: [{ ...clone(adopted), ...difference }],
+			},
+			config
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		expect(result.patch[field]).toHaveLength(1);
+		expect(result.patch[field]![0]).toMatchObject({
+			total: '5.01',
+			total_tax: '0.75',
+			taxes: [
+				{ id: 5, total: '0.501' },
+				{ id: 4, total: '0.2505' },
+			],
+		});
+	});
+});
+
+it('sameLineMoney sorts non-numeric tax ids as zero and preserves their relative order', () => {
+	const first = { id: 'invalid', total: '0.25' };
+	const second = { total: '0.5' };
+	const numeric = { id: 5, total: '1' };
+	expect(
+		sameLineMoney({ taxes: [numeric, first, second] }, { taxes: [first, second, numeric] })
+	).toBe(true);
+	expect(
+		sameLineMoney({ taxes: [first, second, numeric] }, { taxes: [second, first, numeric] })
+	).toBe(false);
+});
+
+it('sameLineMoney ignores taxes array order', () => {
+	expect(
+		sameLineMoney(
+			{
+				taxes: [
+					{ id: 4, total: '0.25' },
+					{ id: 5, total: '0.5' },
+				],
+			},
+			{
+				taxes: [
+					{ id: 5, total: '0.5' },
+					{ id: 4, total: '0.25' },
+				],
+			}
+		)
+	).toBe(true);
 });
 
 it.each(['', undefined])(

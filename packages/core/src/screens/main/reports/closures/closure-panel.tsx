@@ -15,6 +15,7 @@ import {
 } from '@wcpos/query/register-session';
 import { log } from '@wcpos/utils/logger';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -128,6 +129,7 @@ export function ClosurePanel({
 	onBack?: () => void;
 	onRecountSaved?: () => void;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const http = useRestHttpClient();
 	const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -220,6 +222,7 @@ export function ClosurePanel({
 				}}
 			/>
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={doc}

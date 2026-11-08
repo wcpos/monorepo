@@ -32,6 +32,12 @@ type SegmentedControlProps = ViewProps & {
 		| readonly [Segment, Segment, Segment, Segment];
 	value: string;
 	onValueChange: (value: string) => void;
+	/**
+	 * In a row (a header beside a title or a close), say `hug`: Yoga gives an auto-width container
+	 * with growing children the whole row; in a column the control stretches to the column and the
+	 * segments share it equally.
+	 */
+	hug?: boolean;
 };
 
 export type SegmentedControlHandle = { focus: () => void };
@@ -43,6 +49,7 @@ export function SegmentedControl({
 	testID,
 	className,
 	ref,
+	hug,
 	...props
 }: SegmentedControlProps) {
 	const refs = React.useRef<Record<string, ViewInstance | null>>({});
@@ -107,24 +114,26 @@ export function SegmentedControl({
 							onKeyDown(event, segment.value),
 					}}
 					className={cn(
-						'min-w-ctl web:hover:bg-accent flex-1 flex-row items-center justify-center gap-1.5 px-3 py-1.5 active:opacity-70',
+						'min-w-ctl web:hover:bg-accent flex-row items-center justify-center gap-1.5 px-3 py-1.5 active:opacity-70',
+						// Equal shares of a definite width; `hug`: content width on native (basis auto,
+						// shrinking to truncate), where growing segments would take the whole row.
+						hug ? 'web:flex-1 native:shrink native:grow-0' : 'flex-1',
 						index > 0 && 'border-border border-l',
-						segment.value === value && 'bg-muted',
+						// The selected choice is the tinted block (the `--selected` pair, as a Chip's `on`).
+						segment.value === value && 'bg-selected web:hover:bg-selected',
 						segment.disabled && 'opacity-45'
 					)}
 				>
 					<TextClassContext.Provider
-						value={segment.value === value ? 'text-foreground' : 'text-muted-foreground'}
+						// One weight in both states: selection never changes weight (2026-10-30). The weight
+						// rides the context with the ink, so the label's own literal is only its size.
+						value={cn(
+							'font-medium',
+							segment.value === value ? 'text-selected-foreground' : 'text-muted-foreground'
+						)}
 					>
 						{segment.icon && <Icon name={segment.icon} />}
-						<Text
-							className={cn(
-								'shrink text-center text-base',
-								segment.value === value ? 'font-semibold' : 'font-medium'
-							)}
-						>
-							{segment.label}
-						</Text>
+						<Text className="shrink text-center text-base">{segment.label}</Text>
 					</TextClassContext.Provider>
 				</Pressable>
 			))}

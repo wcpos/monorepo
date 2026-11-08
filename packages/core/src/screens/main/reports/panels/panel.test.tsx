@@ -68,7 +68,7 @@ it('opens the payments panel with its title, scope line and footer count', async
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('dialog-shell').dataset).toMatchObject({
 		side: 'right',
-		host: 'reports',
+		host: 'scene:reports',
 	});
 	expect(screen.getByTestId('detail-panel').textContent).toContain('Sales by payment method');
 	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');

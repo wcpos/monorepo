@@ -165,7 +165,13 @@ function InputField({
 			editable={editable}
 			className={cn(
 				fieldText,
-				'w-full flex-1 bg-transparent px-3 py-2 leading-none outline-none',
+				// iOS places a single line's glyphs inside the line box by the font's own metrics: a
+				// 1em box draws them high, a taller one puts the spare leading above them. 1.2em is
+				// SF's ascent + descent, so the glyphs sit centred. Browsers centre input text
+				// themselves, so web keeps the tight box. The web class stays bare (`leading-none`, not
+				// `web:`): a caller's `text-amt` carries its own line-height, and only the bare utility
+				// outranks it in the cascade (the gallery's figure cell moved under the variant).
+				'native:leading-[1.2] w-full flex-1 bg-transparent px-3 py-2 leading-none outline-none',
 				// The root carries the disabled opacity; a second one here would compound to 20 %.
 				!editable && 'web:cursor-not-allowed',
 				className

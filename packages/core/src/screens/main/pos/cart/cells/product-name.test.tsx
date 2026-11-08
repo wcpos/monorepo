@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { ProductName } from './product-name';
 import { openLineQuantity } from '../../conditions/use-cart-conditions';
@@ -52,7 +52,22 @@ jest.mock('@wcpos/components/editable-field', () => ({
 	EditableField: () => <span data-testid="editable-name" />,
 }));
 jest.mock('@wcpos/components/status-badge', () => ({
-	StatusBadge: ({ label }: { label: string }) => <span data-testid="paid-by">{label}</span>,
+	StatusBadge: ({ label, testID }: { label: string; testID?: string }) => (
+		<span data-testid="paid-by" data-id={testID}>
+			{label}
+		</span>
+	),
+}));
+jest.mock('@wcpos/components/pressable-surface', () => ({
+	PressableSurface: ({
+		children,
+		testID,
+		onPress,
+	}: React.PropsWithChildren<{ testID?: string; onPress?: () => void }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
 }));
 
 it('joins public metadata into a decoded subline while keeping value-only selectors', () => {
@@ -160,24 +175,65 @@ describe('read-only (checkout and receipt)', () => {
 			original: {
 				uuid: 'line-7',
 				type: 'line_items',
-				item: { id: 7, name: 'Belt &amp; Buckle', meta_data: [] },
+				item: { id: 7, name: 'Belt &amp; Buckle', quantity: 2, meta_data: [] },
 			},
 		},
 		column: { columnDef: { meta: { show: () => false } } },
 		table: { options: { data: [], meta: { scrollToRow } } },
 	} as unknown as React.ComponentProps<typeof ProductName>;
 
-	it('shows the name as text, with no field to edit, and the split-payment annotation', () => {
+	it('shows the name as text, with no field to edit, and the units its payments covered', () => {
 		render(
-			<CartTableReadOnlyProvider value={{ paidBy: { 'line-7': ['Cash', 'Card'] } }}>
+			<CartTableReadOnlyProvider
+				value={{ paid: { 'line-7': { units: 1, methods: ['Cash', 'Card'] } } }}
+			>
 				<ProductName {...props} />
 			</CartTableReadOnlyProvider>
 		);
 		expect(screen.getByText('Belt & Buckle')).toBeTruthy();
 		expect(screen.queryByTestId('editable-name')).toBeNull();
+		expect(screen.queryByTestId('checkout-line-line-7-pick')).toBeNull();
 		expect(screen.getByTestId('paid-by').textContent).toBe(
-			'pos_checkout.line_paid_by {"methods":"Cash + Card"}'
+			'pos_checkout.units_paid_of {"n":1,"total":2,"methods":"Cash + Card"}'
 		);
+		expect(screen.getByTestId('paid-by').dataset.id).toBe('checkout-line-line-7-paid');
+	});
+
+	it('while Split is on, a tap on the name picks every unpaid unit; a picked line says its price each', () => {
+		const pick = jest.fn();
+		const picker = {
+			picked: {},
+			paid: { 'line-7': { units: 1, methods: ['Card'] } },
+			unitMinor: (_key: string | number, units: number) => units * 550,
+			format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
+			pick,
+		};
+		const { rerender } = render(
+			<CartTableReadOnlyProvider value={{ picker }}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByTestId('paid-by').textContent).toBe(
+			'pos_checkout.units_paid_of {"n":1,"total":2,"methods":"Card"}'
+		);
+		expect(screen.queryByText(/unit_price_each/)).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-line-line-7-pick'));
+		expect(pick).toHaveBeenCalledWith('line-7', 1);
+		rerender(
+			<CartTableReadOnlyProvider value={{ picker: { ...picker, picked: { 'line-7': 1 } } }}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByText('pos_checkout.unit_price_each {"amount":"$5.50"}')).toBeTruthy();
+		// A fully paid line is plain text again: nothing left to pick.
+		rerender(
+			<CartTableReadOnlyProvider
+				value={{ picker: { ...picker, paid: { 'line-7': { units: 2, methods: ['Card'] } } } }}
+			>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.queryByTestId('checkout-line-line-7-pick')).toBeNull();
 	});
 
 	it('keys the annotation by the server line id when the line has no POS uuid', () => {
@@ -186,7 +242,7 @@ describe('read-only (checkout and receipt)', () => {
 			row: { original: { ...props.row.original, uuid: '' } },
 		} as unknown as React.ComponentProps<typeof ProductName>;
 		render(
-			<CartTableReadOnlyProvider value={{ paidBy: { 7: ['Cash'] } }}>
+			<CartTableReadOnlyProvider value={{ paid: { 7: { units: 1, methods: ['Cash'] } } }}>
 				<ProductName {...serverOnly} />
 			</CartTableReadOnlyProvider>
 		);

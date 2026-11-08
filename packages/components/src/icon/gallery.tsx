@@ -24,4 +24,13 @@ export const stories = [
 		),
 	},
 	{ id: 'loading', render: () => <Icon name="cart" loading /> },
+	{
+		id: 'count',
+		render: () => (
+			<HStack>
+				<Icon name="notifications" count={3} />
+				<Icon name="health" size="xl" count={120} />
+			</HStack>
+		),
+	},
 ];

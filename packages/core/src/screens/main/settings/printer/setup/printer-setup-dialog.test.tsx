@@ -9,6 +9,7 @@ import { PRINTER_TEXT_WIDTHS } from '../options';
 import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
+	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
 	Linking: { sendIntent: jest.fn(async () => undefined) },
 	Platform: { OS: 'ios' },
 	Pressable: 'Pressable',

@@ -9,6 +9,7 @@ import {
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
 import {
+	cartRecordUuid,
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
@@ -242,7 +243,8 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// server's total against itself: green whatever the server did.
 			const cart = await readCartMoney(page);
 
-			const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+			const recordId = await cartRecordUuid(page);
+			const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 				timeout: 90_000,
 			});
 			saved.catch(() => {});

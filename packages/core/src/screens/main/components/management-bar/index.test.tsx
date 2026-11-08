@@ -1,9 +1,16 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render as renderUI, screen } from '@testing-library/react';
 
 import { ManagementBar } from './index';
+import { PageSheetHostContext } from '../page-sheet-host';
+
+const wrapper = ({ children }: React.PropsWithChildren) => (
+	<PageSheetHostContext.Provider value="scene:orders">{children}</PageSheetHostContext.Provider>
+);
+const render = (ui: React.ReactElement) => renderUI(ui, { wrapper });
+
 jest.mock('expo-haptics', () => ({}));
 // The entry hosts the register panel off the till; its derivation drags the table's worklets.
 jest.mock('../../pos/cart/register-panel', () => ({ RegisterPanel: () => null }));
@@ -74,7 +81,7 @@ it('leaves the drawer to the wide rail and keeps the avatar, its sheet beside th
 	bar();
 	expect(screen.queryByTestId('orders-bar-menu')).toBeNull();
 	fireEvent.click(screen.getByTestId('orders-bar-avatar'));
-	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
+	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene:orders');
 });
 it.each([
 	['offline', 'common.status_offline'],

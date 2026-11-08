@@ -20,8 +20,10 @@ import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -57,7 +59,7 @@ import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
 import { MenuChip } from '../menu-chip';
 
-function CashierChip() {
+function CashierChip({ stretch }: { stretch?: boolean }) {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -72,6 +74,7 @@ function CashierChip() {
 	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
 		<MenuChip
+			stretch={stretch}
 			name="cashier"
 			icon="cashier"
 			scroll
@@ -233,6 +236,7 @@ export function HeroShell() {
 }
 /** Printing has its own boundary so a loading directory never blanks the sales figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
@@ -377,6 +381,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				</Button>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={doc}
@@ -391,42 +396,73 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		</View>
 	);
 }
-function LeftOutChip() {
+function useLeftOutCount(): number {
+	const { allOrders } = useReportsData();
+	const included = useIncludedStatus();
+	const { unselectedRowIds } = useReportsSelection();
+	return allOrders.filter((order) => included(order) && unselectedRowIds[order.uuid]).length;
+}
+function LeftOutChip({ count, stretch }: { count: number; stretch?: boolean }) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
 	const { quantity } = useReportFormats(storeId);
 	const { setDetail } = useReportsScope();
-	const { allOrders } = useReportsData();
-	const included = useIncludedStatus();
-	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
-	const leftOut = allOrders.filter(
-		(order) => included(order) && unselectedRowIds[order.uuid]
-	).length;
-	return leftOut > 0 ? (
+	const { setUnselectedRowIds } = useReportsSelection();
+	return (
 		<Chip
+			stretch={stretch}
 			testID="hero-chip-left-out"
 			icon="cart"
 			on
-			label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
+			label={t('reports.orders_left_out', { count, n: quantity(count) })}
 			onClear={() => setUnselectedRowIds({})}
 			clearTestID="hero-chip-left-out-clear"
 			clearLabel={t('reports.put_them_back')}
 			onPress={() => setDetail('orders')}
 		/>
-	) : null;
+	);
+}
+function ChipsLayout({ phone, children }: { phone: boolean; children: React.ReactNode }) {
+	return phone ? (
+		<TileGrid columns={2} testID="hero-chips">
+			{children}
+		</TileGrid>
+	) : (
+		<View testID="hero-chips" className="flex-row flex-wrap gap-2">
+			{children}
+		</View>
+	);
+}
+function SettledChips({
+	phone,
+	stretch,
+	children,
+}: {
+	phone: boolean;
+	stretch?: boolean;
+	children: React.ReactNode;
+}) {
+	const count = useLeftOutCount();
+	return (
+		<ChipsLayout phone={phone}>
+			{children}
+			{count > 0 && <LeftOutChip count={count} stretch={stretch} />}
+		</ChipsLayout>
+	);
 }
 export function SalesScopeChips({ settled }: { settled: boolean }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { statusMode, setStatusMode } = useReportsScope();
-	return (
-		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
+	const shared = (
+		<>
 			<React.Suspense
 				fallback={<View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />}
 			>
-				<CashierChip />
+				<CashierChip stretch={phone} />
 			</React.Suspense>
 			<MenuChip
+				stretch={phone}
 				name="status"
 				icon="cartDone"
 				value={statusMode}
@@ -437,8 +473,14 @@ export function SalesScopeChips({ settled }: { settled: boolean }) {
 					{ value: 'all', label: t('reports.every_status'), hint: t('reports.every_status_hint') },
 				]}
 			/>
-			{settled && <LeftOutChip />}
-		</View>
+		</>
+	);
+	return settled ? (
+		<SettledChips phone={phone} stretch={phone}>
+			{shared}
+		</SettledChips>
+	) : (
+		<ChipsLayout phone={phone}>{shared}</ChipsLayout>
 	);
 }
 export function SalesScope({ date, settled }: { date: React.ReactNode; settled: boolean }) {

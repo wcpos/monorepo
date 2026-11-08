@@ -1,11 +1,9 @@
 import * as React from 'react';
-import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
-import { PortalHost } from '@wcpos/components/portal';
-import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
 import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
@@ -100,12 +98,6 @@ export function Closures({
 	const t = useT();
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
-	const registerContainer = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer(
-			'reports',
-			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
-		);
-	}, []);
 	const exportRows = async () => {
 		setError('');
 		try {
@@ -136,7 +128,7 @@ export function Closures({
 			</>
 		);
 	return (
-		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1">
+		<View testID="reports-closures" className="min-h-0 flex-1">
 			{header}
 			<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 				{!!error && <Text testID="closures-export-error">{error}</Text>}
@@ -214,7 +206,6 @@ export function Closures({
 					onClose={close}
 				/>
 			)}
-			<PortalHost name="reports" />
 		</View>
 	);
 }

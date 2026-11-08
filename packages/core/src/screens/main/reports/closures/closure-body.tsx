@@ -26,7 +26,12 @@ import {
 	formatClosureDate,
 } from '../../../../services/register-session/closure-document';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { countDecimals, countVariance, varianceText } from '../../pos/cart/register-count.helpers';
+import {
+	countDecimals,
+	countVariance,
+	varianceAmount,
+	varianceText,
+} from '../../pos/cart/register-count.helpers';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
@@ -113,6 +118,8 @@ type BodyProps = Pick<HeadingProps, 'row' | 'settled' | 'blind' | 'testID'> & {
 	context: ClosureContext;
 	/** The prints so far; the host counts a reprint it just dispatched (Codex, #3036). */
 	printCount?: number;
+	/** Open from the start (the written moment); never for a blind cashier, whose paper stays held. */
+	paperOpen?: boolean;
 };
 
 export function ClosureBody({
@@ -125,14 +132,16 @@ export function ClosureBody({
 	context,
 	testID,
 	printCount = row.print_count,
+	paperOpen = false,
 }: BodyProps) {
 	const t = useT();
-	const [preview, setPreview] = React.useState(false);
+	const [preview, setPreview] = React.useState(!!paperOpen && !blind);
 	const format = (value: number) => context.formatMoney(String(value));
 	const counted = settled.counted.cash ?? '0',
 		expected = settled.expected.cash ?? '0';
 	const decimals = countDecimals(context.store.price_num_decimals);
 	const variance = countVariance(counted, expected, decimals);
+	const signed = varianceAmount(variance, decimals, format);
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures;
 	// A row read back always carries breakdowns; a bare fixture may not.
 	const breakdowns = row.breakdowns ?? {};
@@ -204,19 +213,25 @@ export function ClosureBody({
 	const figures = [
 		['counted', t('register.counted'), context.formatMoney(counted)],
 		['expected', t('register.expected_label'), context.formatMoney(expected)],
-		['result', t('reports.result'), varianceText(variance, decimals, format, t)],
 	].filter(([key]) => !blind || key === 'counted');
 	return (
 		<View testID={testID} className="gap-4">
+			{!blind && (
+				<AmountFigure
+					testID="closure-figure-result"
+					size="hero"
+					center
+					tone={variance < 0 ? 'bad' : variance > 0 ? 'ok' : 'default'}
+					eyebrow={`${t('register.variance')} · ${variance < 0 ? t('register.short') : variance > 0 ? t('register.over') : t('register.exact')}`}
+				>
+					{signed}
+				</AmountFigure>
+			)}
 			<View className="flex-row gap-2">
 				{figures.map(([key, label, value]) => (
 					<View key={key} className="border-border flex-1 rounded-lg border px-3 py-2.5">
 						<Text variant="key">{label}</Text>
-						<AmountFigure
-							testID={`closure-figure-${key}`}
-							size="tile"
-							tone={key === 'result' ? (variance < 0 ? 'bad' : 'ok') : 'default'}
-						>
+						<AmountFigure testID={`closure-figure-${key}`} size="tile">
 							{value}
 						</AmountFigure>
 					</View>

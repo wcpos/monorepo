@@ -17,9 +17,14 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { type MetaDataEntry, readAwaitingCustomer } from '@wcpos/order-math';
 import { log } from '@wcpos/utils/logger';
 
-import { addCheckoutProbeProductAgain, checkoutProbeAddControl } from './checkout-probe';
+import {
+	addCheckoutProbeProductAgain,
+	checkoutProbeAddControl,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
+	decimalPlaces,
 	type Descriptor,
 	digitsOf,
 	ledgerRows,
@@ -64,6 +69,20 @@ async function enterAmount(page: Page, methodId: string, amountMinor: number): P
 	await expect
 		.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 10_000 })
 		.toBe(amountMinor);
+}
+
+/**
+ * The store's minor unit per major unit, from a ledger amount the app wrote: `fromMinor`
+ * renders every `_wcpos_payments` amount with the till's `price_num_decimals` and no
+ * thousands separator, where a shown `¥1,500` or an order read back at six decimals would
+ * both mislead.
+ */
+function minorUnitOf(rows: readonly { amount?: string }[]): number {
+	const amount = rows[0]?.amount;
+	expect(amount, 'a ledger amount is needed to read the store precision').toEqual(
+		expect.any(String)
+	);
+	return 10 ** decimalPlaces(amount!);
 }
 
 async function isSwitchOn(toggle: Locator): Promise<boolean> {
@@ -370,7 +389,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	);
 
 	liveTest(
-		'splits evenly through the split view and records two legs',
+		'splits evenly from the Split chip and records two legs',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -385,9 +404,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
+			// Split V1 (#3405): no sub-view; the Split chip turns the helpers row into the even row.
 			await page.getByTestId('checkout-split-chip').click();
-			await expect(page.getByTestId('checkout-split-tab-even')).toBeVisible();
-			await page.getByTestId('checkout-split-option-2').click();
+			await expect(page.getByTestId('checkout-even-2')).toBeVisible();
+			await page.getByTestId('checkout-even-2').click();
 			await expect(page.getByTestId('checkout-plan')).toBeVisible();
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
 			await expect(legs).toHaveCount(2);
@@ -403,11 +423,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect(page.getByTestId('checkout-label')).toBeVisible();
-			// Done pills have no state attribute; the view marks them with this success class.
-			await expect(page.getByTestId('checkout-plan-leg-0')).toHaveClass(/\bbg-success\/20\b/, {
+			// The taken payment is the done disclosure pill, marked with the success class; the
+			// payment to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
 				timeout: 60_000,
 			});
-			await expect(legs).toHaveCount(2);
+			await expect(legs).toHaveCount(1);
 			await expect(page.getByTestId('checkout-plan-leg-1')).not.toHaveClass(/\bbg-success\/20\b/);
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
@@ -438,7 +459,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	);
 
 	liveTest(
-		'shares a ticked line between two payments',
+		'an amount typed is one payment and the rest pays it off',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -452,15 +473,515 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+
+			const first = Math.floor(balance / 2);
+			await enterAmount(page, cash!.id, first);
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			// Store language is not pinned: the label's digits (`Payment 2 · {left} left` in any
+			// language) are the referent, never its words.
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 60_000,
+					message: 'S3: payment 2 is the unpaid rest, not the amount just typed',
+				})
+				.toBe(balance - first);
+			// `innerText`, not `textContent`: the label nests the balance, hidden once a payment is
+			// taken, and `textContent` would read its digits too (Codex on #3414).
+			const entryDigits = digitsOf(await page.getByTestId('checkout-entry').innerText());
+			await expect
+				.poll(async () => digitsOf(await page.getByTestId('checkout-label').innerText()), {
+					timeout: 15_000,
+					message: 'S3: the label advances to payment 2 with the rest left',
+				})
+				.toBe(`2${entryDigits}`);
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+
+			await expect(page.getByTestId('checkout-paid'), 'S3: the sale is paid').toBeVisible({
+				timeout: 120_000,
+			});
+			await page.getByTestId('receipt-new-sale').click();
+
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 2,
+				'S3: the server must record all 2 payment legs'
+			);
+			expectOrderPaid(server);
+			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
+			expect(
+				rows.map((row) => row.status),
+				'S3: every leg is captured'
+			).toEqual(['captured', 'captured']);
+			expect(
+				rows.map((row) => row.method_id),
+				'S3: every leg uses the selected cash method'
+			).toEqual([cash!.id, cash!.id]);
+			expect(
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
+				'S3: each leg is saved at the amount it was taken for'
+			).toEqual([first, balance - first]);
+			expect(
+				rows.reduce((sum, row) => sum + Number(row.amount), 0),
+				'S3: the legs add up to the order total'
+			).toBeCloseTo(Number(server.total), 2);
+		}
+	);
+
+	liveTest(
+		'a percent share is one payment',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+
+			const first = Math.floor((balance * 25 + 50) / 100);
 			await page.getByTestId('checkout-split-chip').click();
-			await page.getByTestId('checkout-split-tab-item').click();
-			const items = page.getByTestId(/^checkout-split-item-/);
-			liveTest.skip((await items.count()) === 0, 'checkout declares no splittable item rows');
-			await items.first().click();
-			await page.getByTestId('checkout-split-share-2').click();
+			await page.getByTestId('checkout-percent').click();
+			await page.getByTestId('checkout-percent-25').click();
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 15_000,
+					message: 'S4: the quarter share is rounded half-up to a minor unit',
+				})
+				.toBe(first);
+			await expect(
+				page.getByTestId('checkout-entry-hint'),
+				'S4: the hint identifies the share'
+			).toContainText('25 %');
+			await page.getByTestId(`checkout-method-${cash!.id}`).click();
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 60_000,
+					message: 'S4: the next payment is the rest, not another quarter',
+				})
+				.toBe(balance - first);
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+
+			await expect(page.getByTestId('checkout-paid'), 'S4: the sale is paid').toBeVisible({
+				timeout: 120_000,
+			});
+			await page.getByTestId('receipt-new-sale').click();
+
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 2,
+				'S4: the server must record all 2 payment legs'
+			);
+			expectOrderPaid(server);
+			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
+			expect(
+				rows.map((row) => row.status),
+				'S4: every leg is captured'
+			).toEqual(['captured', 'captured']);
+			expect(
+				rows.map((row) => row.method_id),
+				'S4: every leg uses the selected cash method'
+			).toEqual([cash!.id, cash!.id]);
+			expect(
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
+				'S4: each leg is saved at the amount it was taken for'
+			).toEqual([first, balance - first]);
+			expect(
+				rows.reduce((sum, row) => sum + Number(row.amount), 0),
+				'S4: the legs add up to the order total'
+			).toBeCloseTo(Number(server.total), 2);
+		}
+	);
+
+	liveTest(
+		'an amount plus an even split of the rest is planned in one tap',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			liveTest.skip(balance < 3, 'order balance is too small for three positive payment legs');
+			const first = Math.floor(balance / 3);
+			const second = Math.floor((balance - first + 1) / 2);
+			const planned = [first, second, balance - first - second];
+			await page.getByTestId('checkout-split-chip').click();
+			await enterAmount(page, cash!.id, first);
+			await page.getByTestId('checkout-even-2').click();
+			await expect(
+				page.getByTestId('checkout-plan'),
+				'S9: one tap plans all three payments'
+			).toBeVisible();
+			// Store language is not pinned: the strip's three legs and their money are the
+			// referent, never the commit's `1 of 3` sentence.
+			// Two equal payments to come fold into one `Then 2 × {amount}` pill, so the strip has
+			// two or three legs; the pill's digits are the run count then the amount.
+			const grouped = planned[1] === planned[2];
+			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
+			await expect(legs, 'S9: one tap plans the amount and the two shares').toHaveCount(
+				grouped ? 2 : 3
+			);
+			expect(await readAmountMinor(page, 'checkout-plan-leg-0'), 'S9: leg 1 is the amount').toBe(
+				first
+			);
+			const legOne = digitsOf(await page.getByTestId('checkout-plan-leg-1').innerText());
+			if (grouped) {
+				// `Then 2 × {amount}`: the run count, then the amount's digits as `readAmountMinor`
+				// reads them (formatting-independent, as every other amount read in this spec).
+				expect(legOne, 'S9: the two shares fold into one `Then 2 ×` pill').toMatch(/^2\d+$/);
+				expect(Number(legOne.slice(1)), 'S9: the folded pill carries the share').toBe(planned[1]);
+			} else {
+				expect(Number(legOne), 'S9: leg 2 is the larger share').toBe(planned[1]);
+				expect(
+					await readAmountMinor(page, 'checkout-plan-leg-2'),
+					'S9: leg 3 is the rest of the share'
+				).toBe(planned[2]);
+			}
+			for (const [index, amount] of planned.entries()) {
+				await expect
+					.poll(() => readAmountMinor(page, 'checkout-entry'), {
+						timeout: 60_000,
+						message: `S9: payment ${index + 1} follows the amount-plus-even plan`,
+					})
+					.toBe(amount);
+				await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			}
+
+			await expect(page.getByTestId('checkout-paid'), 'S9: the sale is paid').toBeVisible({
+				timeout: 120_000,
+			});
+			await page.getByTestId('receipt-new-sale').click();
+
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 3,
+				'S9: the server must record all 3 payment legs'
+			);
+			expectOrderPaid(server);
+			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
+			expect(
+				rows.map((row) => row.status),
+				'S9: every leg is captured'
+			).toEqual(['captured', 'captured', 'captured']);
+			expect(
+				rows.map((row) => row.method_id),
+				'S9: every leg uses the selected cash method'
+			).toEqual([cash!.id, cash!.id, cash!.id]);
+			expect(
+				rows.map((row) => Math.round(Number(row.amount) * unit)),
+				'S9: each leg is saved at its planned share'
+			).toEqual(planned);
+			expect(
+				rows.reduce((sum, row) => sum + Number(row.amount), 0),
+				'S9: the legs add up to the order total'
+			).toBeCloseTo(Number(server.total), 2);
+		}
+	);
+
+	liveTest(
+		'picked units plus an amount is one payment',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			// Two units of the probe product: on a one-line order a unit plus 1.00 would exceed
+			// the balance (the first CI run skipped the walk), so the line is doubled before
+			// checkout and ONE of its two units is picked.
+			await ensureRegisterOpen(page);
+			const added = await tryAddRunPrivateSimpleProduct(page);
+			liveTest.skip(!added, 'product-writer credentials are unavailable');
+			const { total: oneUnit } = await readCartMoney(page);
+			const add = checkoutProbeAddControl(page);
+			expect(add, 'S7: the run-private probe must carry its row testID').not.toBeNull();
+			await add!.click({ timeout: 30_000 });
+			await expect
+				.poll(async () => (await readCartMoney(page)).total, {
+					timeout: 30_000,
+					message: 'S7: the second add doubles the cart',
+				})
+				.not.toBe(oneUnit);
+			const label = newRunLabel();
+			await stampRunLabel(page, label);
+			await readCartMoney(page);
+			const { orderId, mode } = await openCheckout(page, (order) =>
+				trackOrder({ ...order, label })
+			);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+
+			const before = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => Array.isArray(order.line_items),
+				'S7: read the saved order lines before picking or paying'
+			);
+			liveTest.skip(
+				before.line_items!.length !== 1 || Number(before.line_items![0].quantity) !== 2,
+				'the picked-unit walk needs exactly one line with quantity 2'
+			);
+			const line = before.line_items![0];
+
+			await page.getByTestId('checkout-split-chip').click();
+			const pick = page
+				.getByTestId('checkout-line-row')
+				.getByTestId(/^checkout-line-.*-pick$/)
+				.first();
+			await expect(pick, 'S7: the bill exposes its pickable line').toBeVisible();
+			const pickId = await pick.getAttribute('data-testid');
+			expect(pickId, 'S7: the line picker carries its POS uuid').toMatch(/^checkout-line-.+-pick$/);
+			const lineKey = pickId!.replace(/^checkout-line-/, '').replace(/-pick$/, '');
+			// A tap on the name picks every unpaid unit (both); the stepper's minus leaves one.
+			// The line's money is read from the pane (the server's figures are checked against
+			// it at the end, once a ledger amount gives the store's precision).
+			await pick.click();
+			await expect(
+				page.getByTestId(`checkout-line-${lineKey}-units`),
+				'S7: the name tap picks both units'
+			).toHaveText(/\b2\b/);
+			const lineMinor = await readAmountMinor(page, 'checkout-entry');
+			expect(lineMinor, 'S7: two picked units are the whole line').toBeGreaterThan(2);
+			await page.getByTestId(`checkout-line-${lineKey}-minus`).click();
+			// A unit's price has its tax inside and the odd cent sits on the LAST unit: the first
+			// unit is the floor of the line's half.
+			const price = Math.floor(lineMinor / 2);
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 15_000,
+					message: 'S7: one picked unit is priced with its tax inside',
+				})
+				.toBe(price);
+			// `+ amount`: one minor unit typed, so the walk needs no knowledge of the precision.
+			const first = price + 1;
+			expect(first, 'S7: a unit plus the extra leaves a positive second payment').toBeLessThan(
+				balance
+			);
+			await page.getByTestId('checkout-plus-amount').click();
+			await page.getByTestId('checkout-keypad-key-1').click();
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 15_000,
+					message: 'S7: the typed extra is added to the picked unit',
+				})
+				.toBe(first);
+			await page.getByTestId(`checkout-method-${cash!.id}`).click();
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 60_000,
+					message: 'S7: the next payment is the balance less the unit and extra',
+				})
+				.toBe(balance - first);
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+
+			await expect(page.getByTestId('checkout-paid'), 'S7: the sale is paid').toBeVisible({
+				timeout: 120_000,
+			});
+			await page.getByTestId('receipt-new-sale').click();
+
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 2,
+				'S7: the server must record all 2 payment legs'
+			);
+			expectOrderPaid(server);
+			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
+			expect(
+				rows.map((row) => row.status),
+				'S7: every leg is captured'
+			).toEqual(['captured', 'captured']);
+			expect(
+				rows.map((row) => row.method_id),
+				'S7: every leg uses the selected cash method'
+			).toEqual([cash!.id, cash!.id]);
+			expect(
+				rows.reduce((sum, row) => sum + Number(row.amount), 0),
+				'S7: the legs add up to the order total'
+			).toBeCloseTo(Number(server.total), 2);
+			expect(
+				Math.round((Number(line.total) + Number(line.total_tax)) * unit),
+				'S7: the pane priced the line as the server has it, tax inside'
+			).toBe(lineMinor);
+			expect(
+				Math.round(Number(rows[0].amount) * unit),
+				'S7: the first server leg contains the unit plus the extra'
+			).toBe(first);
+			expect(rows[0].id, 'S7: the first leg has an id for its allocation').toEqual(
+				expect.any(String)
+			);
+			const meta = (server.meta_data as MetaDataEntry[] | undefined)?.find(
+				({ key }) => key === '_wcpos_paid_units'
+			)?.value;
+			expect(meta, 'S7: the completed order persists paid-unit provenance').toBeDefined();
+			const allocations = (typeof meta === 'string' ? JSON.parse(meta) : meta) as Record<
+				string,
+				Record<string, number>
+			>;
+			expect(
+				allocations[rows[0].id!],
+				'S7: only the picked unit is allocated to the first leg'
+			).toEqual({ [lineKey]: 1 });
+		}
+	);
+
+	liveTest(
+		'cancelling one payment from the done pill frees what it paid for',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+
+			const first = Math.round(balance / 2);
+			await enterAmount(page, cash!.id, first);
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			await expect(
+				page.getByTestId('checkout-plan-done'),
+				'S15: the taken payment has a done pill'
+			).toBeVisible({ timeout: 60_000 });
+			const taken = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 1,
+				'S15: the server records the partial cash payment before cancellation'
+			);
+			const [leg] = ledgerRows(taken);
+			expect(leg.status, 'S15: the leg to cancel is captured').toBe('captured');
+			expect(leg.id, 'S15: the taken leg has a stable server id').toEqual(expect.any(String));
+			await page.getByTestId('checkout-plan-done').click();
+			await expect(
+				page.getByTestId('checkout-plan-done-open'),
+				'S15: the done pill opens its payments'
+			).toBeVisible();
+			await page.getByTestId('checkout-plan-payment-0-cancel').click();
+			await clickAndExpectPaymentWrite(page, 'checkout-cancel-one-confirm', orderId, 'void');
+			await expect(
+				page.getByTestId('checkout-plan-done'),
+				'S15: no live done payment remains'
+			).toHaveCount(0);
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), {
+					timeout: 60_000,
+					message: 'S15: cancelling restores the full unpaid balance',
+				})
+				.toBe(balance);
+			await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).find((row) => row.id === leg.id)?.status === 'voided',
+				'S15: the same partial cash leg is voided on the server'
+			);
+			await page.getByTestId(`checkout-method-${cash!.id}`).click();
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+			await expect(
+				page.getByTestId('checkout-paid'),
+				'S15: one full payment finishes the sale'
+			).toBeVisible({ timeout: 120_000 });
+			await page.getByTestId('receipt-new-sale').click();
+
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => ledgerRows(order).length === 2,
+				'S15: the server keeps the voided leg and records the full payment'
+			);
+			expectOrderPaid(server);
+			const rows = ledgerRows(server);
+			const unit = minorUnitOf(rows);
+			expect(rows[0].id, 'S15: the cancelled leg stays on the ledger').toBe(leg.id);
+			expect(
+				rows.map((row) => row.status),
+				'S15: only the new payment is captured'
+			).toEqual(['voided', 'captured']);
+			expect(
+				rows.map((row) => row.method_id),
+				'S15: both records name the selected cash method'
+			).toEqual([cash!.id, cash!.id]);
+			expect(
+				Number(rows[0].amount),
+				'S15: the voided record keeps its original amount'
+			).toBeCloseTo(first / unit, 6);
+			expect(Number(rows[1].amount), 'S15: the sole captured leg pays the whole total').toBeCloseTo(
+				Number(server.total),
+				2
+			);
+		}
+	);
+
+	liveTest(
+		'shares picked units between two payments',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+			// Split V1: with Split on the bill is the picker; a tap on a line's name picks every
+			// unpaid unit of it into THIS payment, and Share divides that payment.
+			await page.getByTestId('checkout-split-chip').click();
+			const picks = page.getByTestId('checkout-line-row').getByTestId(/^checkout-line-.+-pick$/);
+			await expect(picks.first()).toBeVisible();
+			await picks.first().click();
+			await page.getByTestId('checkout-share').click();
+			await page.getByTestId('checkout-share-2').click();
 			await expect(page.getByTestId('checkout-plan')).toBeVisible();
-			// Item plans use line.total, excluding tax: a taxed order (or one with fees or
-			// shipping) carries a third "then X" leg for the rest of the balance.
+			// A unit's price has its tax inside, but fees and shipping stay in the rest: an order
+			// with either carries a third "then X" leg for the rest of the balance.
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
 			const legCount = await legs.count();
 			expect([2, 3]).toContain(legCount);
@@ -473,7 +994,8 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect.poll(() => readAmountMinor(page, 'checkout-entry')).toBe(plannedFirst);
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
-			await expect(page.getByTestId('checkout-plan-leg-0')).toHaveClass(/\bbg-success\/20\b/, {
+			// The taken payment folds into the done pill; the share to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
 				timeout: 60_000,
 			});
 			await expect

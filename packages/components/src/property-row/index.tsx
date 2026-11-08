@@ -69,7 +69,8 @@ export function PropertyList(props: {
  * slot (Paul, 2026-11-06, after the judged real-app render): on the key's line when the row is
  * stacked, under the key's last line when the row is one line, out of flow both times, so the
  * key, the value and the verb keep their place and the field keeps its width while it shows.
- * The trailing slot is the verb, then `control` (a Switch), which never moves.
+ * The trailing slot is the verb, then `control` (a Switch), which never moves; on a settings
+ * page's one line a control with no value is the value, at the start of the value column.
  */
 export function PropertyRow(props: {
 	/** The key; a row without one (a custom field, whose key is its first input) has no key column. */
@@ -137,8 +138,11 @@ export function PropertyRow(props: {
 	// The key column reads as one line (key, then the mark) when stacked or when it carries help.
 	const keyLine = !line || !!props.help;
 	// No value (a switch row): in a dialog the key and its help run to the trailing slot; on a
-	// settings page the value column stays so the switches line up (line 12).
+	// settings page's one line the switch is the value, so it sits in the value column (line 12).
 	const bare = keyed && value == null && !wide;
+	const controlIsValue = line && !!wide && value == null && !!props.control;
+	if (controlIsValue) value = props.control;
+	const control = controlIsValue ? null : props.control;
 	return (
 		<FormItem
 			nativeID={item}
@@ -186,6 +190,7 @@ export function PropertyRow(props: {
 						'min-w-0',
 						!phone && 'flex-1',
 						!phone && wide && 'max-w-80',
+						controlIsValue && 'items-start',
 						!keyed && props.indent && 'pl-4'
 					)}
 				>
@@ -200,7 +205,7 @@ export function PropertyRow(props: {
 					</TextClassContext.Provider>
 				</View>
 			)}
-			{end || props.control || (!keyed && mark) ? (
+			{end || control || (!keyed && mark) ? (
 				<View
 					className={cn(
 						'shrink-0 flex-row items-center gap-2',
@@ -212,7 +217,7 @@ export function PropertyRow(props: {
 				>
 					{!keyed ? mark : null}
 					{end}
-					{props.control}
+					{control}
 				</View>
 			) : null}
 		</FormItem>

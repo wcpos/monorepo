@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,12 +13,11 @@ import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { PortalHost } from '@wcpos/components/portal';
-import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
 import { useGround } from '@wcpos/components/lib/ground';
+import { TileGrid } from '@wcpos/components/tile-grid';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
@@ -203,14 +202,6 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 			onOpenClosure={onOpenClosure}
 		/>
 	);
-	// The Free pane portals into the `reports` host, which the settled page owns; while the first
-	// orders load, the fallback holds the host so the pane is never homeless (CodeRabbit, #3058).
-	const registerContainer = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer(
-			'reports',
-			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
-		);
-	}, []);
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
@@ -225,13 +216,12 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 						fallback={
 							// The same scrolling shell as the settled page: on a short phone the strip
 							// can push the date button below the fold (Codex, #2720).
-							<View ref={registerContainer} className="min-h-0 flex-1">
+							<View className="min-h-0 flex-1">
 								<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 									{strip}
 									<SalesScope date={date} settled={false} />
 									<HeroShell />
 								</ScrollView>
-								<PortalHost name="reports" />
 							</View>
 						}
 					>
@@ -423,7 +413,19 @@ function ReportsShell({
 													initialHistoryLimit={outsideHistory}
 												/>
 											}
-											chips={<ClosuresCashierChip scope={scope} onScopeChange={setSelection} />}
+											chips={
+												phone ? (
+													<TileGrid columns={2}>
+														<ClosuresCashierChip
+															stretch
+															scope={scope}
+															onScopeChange={setSelection}
+														/>
+													</TileGrid>
+												) : (
+													<ClosuresCashierChip scope={scope} onScopeChange={setSelection} />
+												)
+											}
 											actions={actions}
 										/>
 									</View>

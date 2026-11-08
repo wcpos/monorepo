@@ -183,9 +183,9 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 			    out the drawn track: the press area fills the track and grows to the control token,
 			    centred over it and overflowing it, out of layout. Not hitSlop: iOS drops a touch
 			    outside a parent that nothing overflows, so slop past a 20 pt row never reaches the
-			    switch; a real overflowing child is hit-tested on iOS and Android alike. The row a
-			    switch sits in is at least 44 on native (FormSwitch, SwitchWithLabel), so stacked
-			    switches' squares never overlap. */}
+			    switch; a real overflowing child is hit-tested on iOS and Android alike. Rows keep
+			    the web pitch, so two stacked switches' squares may overlap in the gap between
+			    their tracks (the later sibling takes that strip); each still covers its own track. */}
 			<View pointerEvents="box-none" className="absolute inset-0 items-center justify-center">
 				<SwitchPrimitives.Root
 					className="min-h-ctl min-w-ctl h-full w-full bg-transparent"
@@ -234,8 +234,8 @@ function SwitchWithLabel({ label, size, ref, onCheckedChange, ...props }: Switch
 	};
 
 	return (
-		// At least a row tall on native, so the switch's 44 pt square stays inside its own row.
-		<HStack className="native:min-h-row w-full">
+		// No row floor: the row keeps the web pitch; the switch's 44 pt square overflows it.
+		<HStack className="w-full">
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
 			<Label
 				nativeID={props.nativeID}

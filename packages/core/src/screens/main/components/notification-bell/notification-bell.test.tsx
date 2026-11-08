@@ -15,15 +15,18 @@ jest.mock('../../../../contexts/novu', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../pos/contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('./notification-panel', () => ({ NotificationPanelContent: () => mockPanel() }));
-function passthrough({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
-	return <div data-testid={testID}>{children}</div>;
+function opener({
+	onPress,
+	testID,
+	count,
+}: {
+	onPress?: () => void;
+	testID?: string;
+	count?: number;
+}) {
+	return <button data-testid={testID} data-count={count} onClick={onPress} />;
 }
-function opener({ onPress, testID }: { onPress?: () => void; testID?: string }) {
-	return <button data-testid={testID} onClick={onPress} />;
-}
-jest.mock('react-native', () => ({ View: passthrough }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: opener }));
-jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({
 		children,
@@ -71,4 +74,12 @@ it('opens the sheet and marks seen from the opener', () => {
 	expect(sheet.getAttribute('data-side')).toBe('right');
 	expect(sheet.getAttribute('data-size')).toBe('lg');
 	expect(sheet.getAttribute('data-host')).toBe('pos');
+});
+
+// The count is the glyph's (`IconButton count` → `Icon count`), so the bell's badge sits on its
+// glyph as Store health's sits on its own (Paul, 2026-11-08: "too high, it does not look like the
+// badge on the logs icon"); the bell places no Badge of its own.
+it('hands the unread count to the IconButton', () => {
+	render(<NotificationBell testID="page-bar-bell" />);
+	expect(screen.getByTestId('page-bar-bell').getAttribute('data-count')).toBe('2');
 });

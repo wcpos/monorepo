@@ -23,3 +23,29 @@ it.each([
 		);
 	}
 );
+
+it.each([
+	['completed', undefined, 404, 'woo_rxdb_sync_record_not_found', 'destroys-record'],
+	['pos-open', 'completed', 404, 'woo_rxdb_sync_record_not_found', 'keeps-record'],
+	[undefined, 'pos-open', 404, 'woo_rxdb_sync_record_not_found', 'keeps-record'],
+	[undefined, 'completed', 404, 'woo_rxdb_sync_record_not_found', 'destroys-record'],
+	['completed', undefined, 403, 'woo_rxdb_sync_record_not_found', 'keeps-record'],
+	['completed', undefined, 404, 'other', 'keeps-record'],
+])(
+	'gone order verdict: %s/%s %s %s → %s',
+	(status, payloadStatus, rejectedStatus, rejectedReason, expected) => {
+		expect(
+			discardConsequence({
+				row: {
+					collectionName: 'orders',
+					operation: 'update',
+					payload: {},
+					rejectedStatus,
+					rejectedReason,
+				},
+				resident: { remoteId: '42', status, payload: { status: payloadStatus } },
+				remoteIdField: 'remoteId',
+			})
+		).toBe(expected);
+	}
+);

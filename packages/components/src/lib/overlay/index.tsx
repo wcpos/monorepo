@@ -26,6 +26,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEdgeInsets, useTitleBarStrip } from '../../edge-surface';
+import { useSpacingUnit } from '../use-spacing-unit';
 import { KeyboardAvoidingView, useKeyboardState } from '../../keyboard-controller';
 import { TextClassContext } from '../../text/context';
 import { useIsPhone } from '../device';
@@ -50,6 +51,17 @@ export const isWeb = Platform.OS === 'web';
  * scrim. Native's primitives unmount at once and Reanimated plays the exit on the way out.
  */
 export const OVERLAY_EXIT_MOUNTED = isWeb;
+/**
+ * Native: a panel never claims the touch responder. The @rn-primitives native `Content`s
+ * (dialog `dist/dialog.js` ~173, and popover's and select's) set
+ * `onStartShouldSetResponder={() => true}` on the panel, which on RN 0.88 (new architecture)
+ * starves a ScrollView inside it: a long dialog body did not scroll at all on iOS. The shell's
+ * scrim is the panel's sibling, never its ancestor, so declining loses nothing. Spread it before
+ * a caller's props, so a caller can still claim.
+ */
+export const CONTENT_LETS_CHILDREN_SCROLL = isWeb
+	? null
+	: { onStartShouldSetResponder: () => false };
 // Only the native shell has a keyboard wrapper; web never reads the keyboard's state.
 const useKeyboardVisible = isWeb ? () => false : () => useKeyboardState((state) => state.isVisible);
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
@@ -115,6 +127,8 @@ export type OverlayContextValue = {
 	open: boolean;
 	deferAutoFocus: boolean;
 	onPanelNode: (node: HTMLElement | null) => void;
+	/** Native: the status-bar inset a full-height panel pads itself (0 under a surface that pads it). */
+	insetTop: number;
 };
 const OverlayContext = React.createContext<OverlayContextValue | undefined>(undefined);
 export function useOverlay(): OverlayContextValue {
@@ -125,20 +139,37 @@ export function useOverlay(): OverlayContextValue {
 export function useOverlayPresentation(): OverlayPresentation | undefined {
 	return React.useContext(OverlayContext)?.presentation;
 }
+type PanelInset = Partial<
+	Record<'paddingTop' | 'paddingBottom' | 'paddingLeft' | 'paddingRight', number>
+>;
 /**
- * The bottom inset a native phone sheet paints itself, in card colour: the shell leaves that
- * strip unpadded so the scrim never shows as a bar under the sheet (owner, 2026-10-13).
- * `padding` is the panel's own bottom padding on top of the inset. A panel that renders the
- * shell itself (the alert) is outside the shell's context and names its presentation.
+ * The safe-area insets a native panel that touches the screen's edges pads inside its own card:
+ * the shell leaves those strips unpadded so the scrim never shows as a band beside the panel.
+ * A phone sheet pads the bottom (owner, 2026-10-13); a side panel and the phone page pad the top
+ * and bottom and the side edges they touch (owner, iPad landscape, 2026-11-08: grey bands above
+ * and below the cart-settings panel). `units` is the panel's own top and bottom padding on top of
+ * the inset, in spacing units, so it follows Compact/Regular/Spacious the way the `py-4` class it
+ * stands in for does (a style wins over the class). A panel that renders the shell itself (the
+ * alert) is outside the shell's context and names its presentation.
  */
 export function useSheetInset(
-	padding: number,
+	units: number,
 	presentation?: OverlayPresentation
-): { paddingBottom: number } | undefined {
+): PanelInset | undefined {
 	const insets = useSafeAreaInsets();
-	const current = useOverlayPresentation();
-	if (isWeb || (presentation ?? current) !== 'bottom') return undefined;
-	return { paddingBottom: insets.bottom + padding };
+	const padding = units * useSpacingUnit();
+	const context = React.useContext(OverlayContext);
+	const current = presentation ?? context?.presentation;
+	if (isWeb) return undefined;
+	if (current === 'bottom') return { paddingBottom: insets.bottom + padding };
+	if (current !== 'left' && current !== 'right' && current !== 'page') return undefined;
+	const ends = {
+		paddingTop: (context?.insetTop ?? insets.top) + padding,
+		paddingBottom: insets.bottom + padding,
+	};
+	if (current === 'left') return { ...ends, paddingLeft: insets.left };
+	if (current === 'right') return { ...ends, paddingRight: insets.right };
+	return { ...ends, paddingLeft: insets.left, paddingRight: insets.right };
 }
 /**
  * Web: Radix mounts an auto-sized `role="dialog"` wrapper between the scrim and the panel.
@@ -248,7 +279,7 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
-	const inset = useSheetInset(8);
+	const inset = useSheetInset(2);
 	const setNode = React.useCallback(
 		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);
@@ -450,7 +481,14 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			}
 		};
 	}, [node, open, presentation, fullHeight, ownsDismiss]);
-	const context = { presentation, open, deferAutoFocus, onPanelNode, fill: !isWeb && fill };
+	const context = {
+		presentation,
+		open,
+		deferAutoFocus,
+		onPanelNode,
+		fill: !isWeb && fill,
+		insetTop: paddingTop,
+	};
 	if (presentation === 'anchored') {
 		/**
 		 * The primitive positions the panel; the shell supplies only the plumbing the
@@ -549,13 +587,16 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			collapsable={pinned ? false : undefined}
 			style={[
 				StyleSheet.absoluteFill,
-				{
-					paddingTop,
-					// A bottom sheet carries its own bottom inset (OverlaySheetPanel).
-					paddingBottom: presentation === 'bottom' ? 0 : insets.bottom,
-					paddingLeft: insets.left,
-					paddingRight: insets.right,
-				},
+				// A sheet carries its own bottom inset, a full-height panel all of its own
+				// (`useSheetInset`): its card runs under the bars, so no scrim band shows beside it.
+				fullHeight
+					? { paddingTop: 0, paddingBottom: 0, paddingLeft: 0, paddingRight: 0 }
+					: {
+							paddingTop,
+							paddingBottom: presentation === 'bottom' ? 0 : insets.bottom,
+							paddingLeft: insets.left,
+							paddingRight: insets.right,
+						},
 			]}
 			className={cn(
 				'flex bg-transparent',
@@ -584,7 +625,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				// behaviour still pads a bottom sheet ~9 dp off the screen edge. A sheet sits on
 				// the edge, so its wrapper is on only while the keyboard is up, and pushes the
 				// sheet (a searchable picker opens the keyboard on mount) from the edge.
-				keyboardVerticalOffset={presentation === 'bottom' ? 0 : insets.bottom}
+				// The offset stands for the wrapper's bottom padding, which a sheet and a full-height panel lack.
+				keyboardVerticalOffset={presentation === 'bottom' || fullHeight ? 0 : insets.bottom}
 				enabled={presentation !== 'bottom' || keyboardVisible}
 				// The sheet's height cap lives on the wrappers, not the panel: a percentage cap on
 				// the panel resolves against a wrapper that is itself sized by the panel, and the

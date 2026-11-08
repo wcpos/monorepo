@@ -57,6 +57,8 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
+// The split picker's stepper is not drawn here (no `picker`); its buttons stay out of jsdom.
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 
 const item = { id: 7, quantity: 2, total: '110.00', total_tax: '9.80', subtotal: '110.00' };
 const props = {

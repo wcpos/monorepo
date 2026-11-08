@@ -1,7 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { Badge } from '@wcpos/components/badge';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Dialog, DialogContent, DialogTrigger } from '@wcpos/components/dialog';
 
@@ -39,20 +37,16 @@ export function NotificationBell({
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
-			<View>
-				<DialogTrigger asChild>
-					<IconButton
-						name="notifications"
-						variant={bare ? 'bare' : undefined}
-						testID={testID}
-						accessibilityLabel={t('common.notifications')}
-					/>
-				</DialogTrigger>
-				{/* Always mounted: the badge has to be there to show the first one arrive. */}
-				<View pointerEvents="none" className="absolute -top-1 -right-0.5">
-					<Badge count={unreadCount} max={99} variant="bad" size="sm" />
-				</View>
-			</View>
+			{/* The count is the glyph's (`IconButton count`): always mounted, so the first arrival is seen. */}
+			<DialogTrigger asChild>
+				<IconButton
+					name="notifications"
+					variant={bare ? 'bare' : undefined}
+					count={unreadCount}
+					testID={testID}
+					accessibilityLabel={t('common.notifications')}
+				/>
+			</DialogTrigger>
 			<DialogContent side={side} size="lg" portalHost={portalHost} testID="notifications-sheet">
 				{isOpen && <NotificationPanelContent />}
 			</DialogContent>

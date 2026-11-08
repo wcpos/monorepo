@@ -17,8 +17,6 @@ jest.mock('@wcpos/components/error-boundary', () => {
 		),
 	};
 });
-jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
-jest.mock('@wcpos/components/lib/portal-container', () => ({ registerPortalContainer: jest.fn() }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => false,

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
 
@@ -11,7 +11,7 @@ export function ScopeRow({
 }: {
 	/** The DateButton: the row's title, left. */
 	date: React.ReactNode;
-	/** Chips that scope every card, in order. */
+	/** Chips that scope every card, in order; on the phone the provider renders them as a two-column `TileGrid`. */
 	chips?: React.ReactNode;
 	/** The row's right end: Print summary or Export CSV. */
 	actions?: React.ReactNode;
@@ -25,15 +25,7 @@ export function ScopeRow({
 					{date}
 					{actions}
 				</View>
-				{chips && (
-					<ScrollView
-						horizontal
-						showsHorizontalScrollIndicator={false}
-						contentContainerClassName="flex-row items-center gap-2"
-					>
-						{chips}
-					</ScrollView>
-				)}
+				{chips}
 			</View>
 		);
 	return (

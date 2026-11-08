@@ -321,11 +321,12 @@ The seven kept variants (decision 1[^board]) and the title bar's `bare`; nothing
 | `bare`                          | A desktop title-bar item: no surface on hover or press, the muted key-rank label turns to the foreground (Paul, 2026-10-30)                        | the title-bar strip only (`IconButton` has the same `bare`)                   | the title bar's store button, bell and avatar                                                                                             |
 | any, `disabled`                 | Unavailable, with one line beside it saying why                                                                                                    | in the SAME slot the live button uses                                         | _Connecting…_, _Installing…_                                                                                                              |
 
-| Size      | Height                          | Where                                                                        |
-| --------- | ------------------------------- | ---------------------------------------------------------------------------- |
-| `sm`      | 36 (`h-9`)                      | in table rows and dense toolbars                                             |
-| `default` | 44 (`h-ctl`, the control token) | everywhere else                                                              |
-| `lg`      | 56 (`h-14`)                     | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
+| Size      | Height                          | Where                                                                                                                                                         |
+| --------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sm`      | 36 (`h-9`)                      | in table rows and dense toolbars                                                                                                                              |
+| `default` | 44 (`h-ctl`, the control token) | everywhere else                                                                                                                                               |
+| `lg`      | 56 (`h-14`)                     | the pane's one sale button: Pay, Take payment, Open/Close register, New sale                                                                                  |
+| `stack`   | 56 at least (`min-h-14`)        | the control radius, the base label, the icon over the label; a labelled verb among equals (the register panel's Pay in · Pay out · No sale), never the commit |
 
 Heights are at the Regular scale step; Compact and Spacious scale them with `--spacing`, and `h-ctl`
 never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `IconButton size="sm"` and
@@ -388,6 +389,8 @@ becomes a page.
 | The cashier (switch user, register, store; sign out)                | `UserSheet` (`right` on every screen, the POS included)            | the one cashier surface on every screen; the stores and registers are its bands                  |
 | A switch needs a yes (hand over, store, register)                   | `SwitchConfirm` (one centred `AlertDialog` over the cashier sheet) | the verb carries its object (_Hand over to Amy_, _Switch to Front counter_); never `destructive` |
 | A multi-step task (checkout)                                        | full screen                                                        | never a centred modal that grew                                                                  |
+
+On wide, a sheet opened from a drawer page renders on the drawer layout's per-screen `Scene` host (`usePageSheetHost` reads the host the layout provides): beside the rail, over the page bar, as the cashier sheet (#3061); a sheet left open hides with its page. A phone has no rail, so the root; the POS passes its own `pos` host. A page never mounts a portal host of its own under its bar (the Reports `reports` host did, 2026-11-08, and its panels slid in under the bar).
 
 #### Chips, badges and switches
 

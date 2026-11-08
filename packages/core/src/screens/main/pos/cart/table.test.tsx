@@ -108,7 +108,15 @@ jest.mock('@wcpos/components/table', () => {
 		TableCell: Passthrough,
 		TableHead: Passthrough,
 		TableHeader: Passthrough,
-		TableRow: Passthrough,
+		TableRow: ({
+			children,
+			testID,
+			className,
+		}: React.PropsWithChildren<{ testID?: string; className?: string }>) => (
+			<div data-testid={testID} className={className}>
+				{children}
+			</div>
+		),
 	};
 });
 
@@ -280,11 +288,32 @@ describe('read-only (checkout and receipt)', () => {
 	});
 
 	it('renders the same rows stilled: no pulse rows, the footer inside, cells told read-only', () => {
-		render(<CartTable readOnly paidBy={{ 'line-a': ['Cash'] }} footer={<Probe />} />);
+		const paid = { 'line-a': { units: 1, methods: ['Cash'] } };
+		render(<CartTable readOnly paid={paid} footer={<Probe />} />);
 		expect(screen.queryAllByTestId('cart-row')).toHaveLength(0);
-		expect(screen.getByTestId('probe').textContent).toBe('{"paidBy":{"line-a":["Cash"]}}');
+		expect(screen.getByTestId('probe').textContent).toBe(JSON.stringify({ paid }));
 		for (const label of ['Qty', 'Item', 'Price', 'Total'])
 			expect(screen.getByText(label)).toBeTruthy();
+	});
+
+	it('while Split is on, the quantity column is This payment and a picked row is selected', () => {
+		mockCartLines.line_items = [line('line-a'), line('line-b')];
+		const picker = {
+			picked: { 'line-b': 1 },
+			paid: {},
+			unitMinor: () => 0,
+			format: String,
+			pick: jest.fn(),
+		};
+		render(<CartTable readOnly picker={picker} />);
+		expect(screen.getByText('This payment')).toBeTruthy();
+		expect(screen.queryByText('Qty')).toBeNull();
+		const rows = screen.getAllByTestId('checkout-line-row');
+		const picked = rows.filter((row) => row.className.includes('border-primary'));
+		expect(picked).toHaveLength(1);
+		expect(picked[0].className).toContain('bg-muted');
+		expect(picked[0].className).not.toContain('bg-card');
+		expect(rows.filter((row) => row.className.includes('bg-card'))).toHaveLength(1);
 	});
 
 	it('never pulses and never shows the empty-cart state', () => {

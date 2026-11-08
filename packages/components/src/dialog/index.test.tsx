@@ -31,6 +31,7 @@ const mockAutoFocusEvents: { preventDefault: jest.Mock }[] = [];
 const mockScrimProps: Primitive.OverlayProps[] = [];
 const mockPressableProps: PressableProps[] = [];
 const mockInteractOutside: NonNullable<Primitive.ContentProps['onInteractOutside']>[] = [];
+const mockResponders: Primitive.ContentProps['onStartShouldSetResponder'][] = [];
 
 jest.mock('react-native', () => {
 	const actual = jest.requireActual<typeof import('react-native')>('react-native');
@@ -159,9 +160,11 @@ jest.mock('@rn-primitives/dialog', () => {
 		children,
 		onOpenAutoFocus,
 		onInteractOutside,
+		onStartShouldSetResponder,
 		ref,
 	}: Omit<Primitive.ContentProps, 'ref'> & { ref?: React.Ref<HTMLDivElement> }) {
 		const { open } = useRootContext();
+		mockResponders.push(onStartShouldSetResponder);
 		if (onInteractOutside) mockInteractOutside.push(onInteractOutside);
 		const autofocus = React.useRef(onOpenAutoFocus);
 		// Keep the event callback current without retriggering the primitive's mount event.
@@ -277,6 +280,7 @@ beforeEach(() => {
 	mockScrimProps.length = 0;
 	mockPressableProps.length = 0;
 	mockInteractOutside.length = 0;
+	mockResponders.length = 0;
 });
 afterEach(() => jest.useRealTimers());
 
@@ -724,7 +728,8 @@ it('14. a bottom sheet pads the bottom inset the shell leaves (native answer: li
 				</DialogContent>
 			</Dialog>
 		);
-		expect(inset).toHaveBeenLastCalledWith(16);
+		// 4 spacing units: the `py-4` the inset style stands in for, so Compact/Spacious still scale it.
+		expect(inset).toHaveBeenLastCalledWith(4);
 		expect(screen.getByTestId('d')).toHaveStyle({ paddingBottom: '50px' });
 		expect(screen.getByTestId('d')).not.toHaveClass('max-h-[92%]');
 	} finally {
@@ -815,6 +820,7 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 		deferAutoFocus: false,
 		onPanelNode: jest.fn(),
 		fill,
+		insetTop: 0,
 	});
 	try {
 		render(
@@ -843,6 +849,44 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 		}
 	} finally {
 		context.mockRestore();
+	}
+});
+
+it('20. a native right panel keeps its close on the title row, under the inset it pads', () => {
+	jest.replaceProperty(overlay, 'isWeb', false);
+	jest.spyOn(overlay, 'useOverlay').mockReturnValue({
+		presentation: 'right',
+		open: true,
+		deferAutoFocus: false,
+		onPanelNode: jest.fn(),
+		fill: false,
+		insetTop: 20,
+	});
+	jest.spyOn(overlay, 'useSheetInset').mockReturnValue({
+		paddingTop: 36,
+		paddingBottom: 50,
+		paddingRight: 12,
+	});
+	const native = jest.requireMock<typeof import('react-native')>('react-native');
+	const View = native.View;
+	const views: ViewProps[] = [];
+	jest.spyOn(native, 'View').mockImplementation((props: ViewProps) => {
+		views.push(props);
+		return <View {...props} />;
+	});
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side="right">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		// The wrapper drops `top-1` / `right-1`: under the status bar the panel now pads, inside its padded edge.
+		const close = views.find((props) => props.className === 'absolute');
+		expect(close?.style).toEqual({ top: 20 + 4, right: 12 + 4 });
+	} finally {
+		jest.restoreAllMocks();
 	}
 });
 
@@ -929,4 +973,35 @@ it('uses the root portal when its host is explicitly null', () => {
 	expect(mockPortalCalls).toContainEqual(
 		expect.objectContaining({ hostName: undefined, container: undefined })
 	);
+});
+
+// The native primitive's Content claims the touch responder (`() => true`), which on RN 0.88
+// starved the body's ScrollView: a long dialog did not scroll on iOS (owner, iPad, 2026-11-08).
+it('21. a native panel never claims the touch responder, so its body scrolls', () => {
+	// The shared constant as the native build evaluates it.
+	let native: typeof overlay.CONTENT_LETS_CHILDREN_SCROLL = null;
+	const { Platform } = jest.requireMock<typeof import('react-native')>('react-native');
+	jest.replaceProperty(Platform, 'OS', 'ios');
+	jest.isolateModules(() => {
+		native = jest.requireActual<typeof overlay>('../lib/overlay').CONTENT_LETS_CHILDREN_SCROLL;
+	});
+	jest.restoreAllMocks();
+	// The web build declines nothing; the native build declines the claim.
+	expect(overlay.CONTENT_LETS_CHILDREN_SCROLL).toBeNull();
+	expect(native).toEqual({ onStartShouldSetResponder: expect.any(Function) });
+	jest.replaceProperty(overlay, 'CONTENT_LETS_CHILDREN_SCROLL', native);
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		const claim = mockResponders.at(-1);
+		expect(claim).toBeInstanceOf(Function);
+		expect(claim?.({} as never)).toBe(false);
+	} finally {
+		jest.restoreAllMocks();
+	}
 });

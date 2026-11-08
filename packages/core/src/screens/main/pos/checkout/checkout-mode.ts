@@ -28,7 +28,11 @@ export type OrderSaveState =
 	  };
 
 export interface CheckoutModeSnapshot {
-	readonly linesPaidBy: ReadonlyMap<string, Record<TenderLineId, string[]>>;
+	readonly allocations: ReadonlyMap<string, Record<string, Record<TenderLineId, number>>>;
+	/** THIS payment's picked units: the bill (cart column) writes them, the pane reads them. */
+	readonly pickedUnits: ReadonlyMap<string, Record<TenderLineId, number>>;
+	/** Orders whose Split chip is on: the bill is the picker while it is. */
+	readonly splitOn: ReadonlySet<string>;
 	readonly tenderPlans: ReadonlyMap<string, TenderPlan>;
 	readonly tenderMethods: ReadonlyMap<string, string>;
 	readonly saveStates: ReadonlyMap<string, OrderSaveState>;
@@ -38,9 +42,11 @@ export interface CheckoutModeSnapshot {
 }
 
 let snapshot: CheckoutModeSnapshot = {
+	allocations: new Map(),
 	tenderMethods: new Map(),
 	tenderPlans: new Map(),
-	linesPaidBy: new Map(),
+	pickedUnits: new Map(),
+	splitOn: new Set(),
 	saveStates: new Map(),
 	checkoutOrders: new Set(),
 	receiptOrders: new Set(),
@@ -142,18 +148,52 @@ export function setTenderPlan(uuid: string, plan: TenderPlan | null) {
 	else tenderPlans.set(uuid, plan);
 	publish({ ...snapshot, tenderPlans });
 }
-/** Client-only split badges shared with the separately mounted checkout ledger. */
-export function setLinesPaidBy(uuid: string, paidBy: Record<TenderLineId, string[]> | null) {
-	const linesPaidBy = new Map(snapshot.linesPaidBy);
-	if (paidBy === null) linesPaidBy.delete(uuid);
-	else linesPaidBy.set(uuid, paidBy);
-	publish({ ...snapshot, linesPaidBy });
+export function setPickedUnits(uuid: string, picked: Record<TenderLineId, number> | null) {
+	if (picked === null && !snapshot.pickedUnits.has(uuid)) return;
+	const pickedUnits = new Map(snapshot.pickedUnits);
+	if (picked === null) pickedUnits.delete(uuid);
+	else pickedUnits.set(uuid, picked);
+	publish({ ...snapshot, pickedUnits });
+}
+/** Zero units unpicks the line. A pick replaces a stored plan: the picks are the payment now. */
+export function pickUnits(uuid: string, lineId: TenderLineId, units: number) {
+	const { [lineId]: _dropped, ...rest } = snapshot.pickedUnits.get(uuid) ?? {};
+	if (units > 0) setTenderPlan(uuid, null);
+	setPickedUnits(uuid, units > 0 ? { ...rest, [lineId]: units } : rest);
+}
+export function setSplitOn(uuid: string, on: boolean) {
+	if (snapshot.splitOn.has(uuid) === on) return;
+	const splitOn = new Set(snapshot.splitOn);
+	if (on) splitOn.add(uuid);
+	else splitOn.delete(uuid);
+	publish({ ...snapshot, splitOn });
+}
+export function setAllocations(
+	uuid: string,
+	allocations: Record<string, Record<TenderLineId, number>> | null
+) {
+	const next = new Map(snapshot.allocations);
+	if (allocations === null) next.delete(uuid);
+	else next.set(uuid, allocations);
+	publish({ ...snapshot, allocations: next });
 }
 export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
+/** Subscribed, so the pane re-renders when a payment's allocation lands or is dropped. */
+export function useAllocations(uuid: string) {
+	return useCheckoutMode().allocations.get(uuid) ?? null;
+}
+export function usePickedUnits(uuid: string) {
+	return useCheckoutMode().pickedUnits.get(uuid) ?? null;
+}
+export function useSplitOn(uuid: string) {
+	return useCheckoutMode().splitOn.has(uuid);
+}
 export function leaveCheckout(uuid: string) {
-	setLinesPaidBy(uuid, null);
+	setPickedUnits(uuid, null);
+	setSplitOn(uuid, false);
+	setAllocations(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	if (!snapshot.checkoutOrders.has(uuid)) return;
@@ -175,6 +215,8 @@ function withoutProvisional(uuid: string) {
  */
 export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
 	if (!select && finishedBeforeCompletion.delete(uuid)) return;
+	setPickedUnits(uuid, null);
+	setSplitOn(uuid, false);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
@@ -189,7 +231,7 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 export function finishReceipt(uuid: string) {
 	if (snapshot.checkoutOrders.has(uuid)) finishedBeforeCompletion.add(uuid);
 	leaveCheckout(uuid);
-	setLinesPaidBy(uuid, null);
+	setAllocations(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	receiptPrintAttempts.delete(uuid);
@@ -247,8 +289,10 @@ export function resetCheckoutMode() {
 	publishHeadlessPrints(new Set());
 	publish({
 		tenderMethods: new Map(),
+		allocations: new Map(),
 		tenderPlans: new Map(),
-		linesPaidBy: new Map(),
+		pickedUnits: new Map(),
+		splitOn: new Set(),
 		saveStates: new Map(),
 		checkoutOrders: new Set(),
 		receiptOrders: new Set(),

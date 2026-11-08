@@ -49,10 +49,16 @@ export function ProductRow({
 	record,
 	expanded,
 	className,
+	footerSpace,
+	onTrailingLayout,
 }: {
 	record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	expanded?: boolean;
 	className?: string;
+	/** Reserve a variations line under the body (`VariableRowContent` lays its button over it). */
+	footerSpace?: boolean;
+	/** The trailing column's width, so the button over the reserved line stops before it. */
+	onTrailingLayout?: (width: number) => void;
 }) {
 	const product = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
@@ -87,6 +93,8 @@ export function ProductRow({
 		<ListRow
 			testID={`products-row-${record.uuid}`}
 			className={className}
+			// The sm button's 36 plus the 8 above it, so the trailing centres on the whole card.
+			bodyClassName={footerSpace ? 'pb-11' : undefined}
 			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
 			// lost the expanded state of a variable product.
 			// The drill style's row (no `expanded`) is no expander.
@@ -113,11 +121,17 @@ export function ProductRow({
 				<Image
 					source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
 					recyclingKey={record.uuid}
-					className="size-10 rounded"
+					// With a variations line the image stays beside the name, not centred on the card.
+					className={footerSpace ? 'size-10 self-start rounded' : 'size-10 rounded'}
 				/>
 			}
 			trailing={
-				<>
+				<View
+					className="flex-row items-center gap-3"
+					onLayout={
+						footerSpace ? (event) => onTrailingLayout?.(event.nativeEvent.layout.width) : undefined
+					}
+				>
 					<View className="items-end gap-1 tabular-nums">
 						<View className="flex-row items-center gap-1">
 							{price(range?.min ?? product.price ?? '')}
@@ -134,7 +148,7 @@ export function ProductRow({
 						/>
 					</View>
 					<Icon name="chevronRight" className="text-muted-foreground" />
-				</>
+				</View>
 			}
 		>
 			<Text decodeHtml numberOfLines={1}>
@@ -159,22 +173,35 @@ export function VariableRow(props: VariableRowProps) {
 		</VariationRowProvider>
 	);
 }
+/** ListRow's `gap-3` before the trailing plus its `px-3` after it: the trailing's distance from the edge. */
+const TRAILING_GAP = 24;
 function VariableRowContent({ item, table }: VariableRowProps) {
 	const meta = table.options.meta;
+	// Until the first layout the button is bounded by the gap alone, for one frame.
+	const [trailingWidth, setTrailingWidth] = React.useState(0);
 	const { expanded } = useRowExpansion(item, table);
 	// The drill style slides the variations in from the button; nothing renders under the row.
 	const inline = !meta?.drill;
 	return (
 		<>
-			<ProductRow
-				record={item.original.record}
-				expanded={inline ? expanded : undefined}
-				className="border-b-0"
-			/>
-			{/* The button sits under the row, not in it: a button may not nest in the row's button. */}
-			{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units. */}
-			<View className="border-border border-b pb-2 pl-16">
-				<VariationsButton row={item} table={table} />
+			{/* The button lies over the row's reserved bottom, not in it: a button may not nest in the
+			    row's button. The row keeps its height, so its trailing centres on the whole card. */}
+			<View className="relative">
+				<ProductRow
+					record={item.original.record}
+					expanded={inline ? expanded : undefined}
+					footerSpace
+					onTrailingLayout={setTrailingWidth}
+				/>
+				{/* Inset to the row's body: ListRow's px-3 + the image's size-10 + gap-3 = 16 units; it
+				    stops at the trailing column, so a long label truncates instead of covering the stock. */}
+				<View
+					className="absolute bottom-2 left-16"
+					style={{ right: trailingWidth + TRAILING_GAP }}
+					testID="products-variations-overlay"
+				>
+					<VariationsButton row={item} table={table} />
+				</View>
 			</View>
 			{inline && expanded && (
 				<InlineVariations row={item} stockStatus={meta?.variationStockStatus} />

@@ -78,6 +78,8 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
+// The covered sale's unanswered-attempt line formats its send time; its date hooks stay out of jsdom.
+jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
 // The receipt stage's finishing-error notice links to docs; keep expo-linking out of jsdom.
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
@@ -197,9 +199,10 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
-		linesPaidBy: {},
+		picked: {},
+		splitOn: false,
+		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -226,6 +229,24 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 	} as TenderFlow;
 }
 
+const reopenedPaid = {
+	totalMinor: 1683,
+	balanceMinor: 0,
+	paidMinor: 1683,
+	allocations: {},
+	rows: [
+		{ id: 'r1', method_id: 'pos_cash', amount: '16.83', status: 'captured', kind: 'cash' },
+	] as TenderFlow['rows'],
+};
+const strandedAttempt = {
+	id: 'attempt-9',
+	methodId: 'wcpos_email_invoice',
+	cashierId: 7,
+	sentAtGmt: '2026-10-08T10:35:00.000Z',
+	awaiting: null,
+	flagged: false,
+	title: 'Email Invoice',
+} as TenderFlow['unansweredAttempt'];
 function mountColumn() {
 	return render(<CheckoutColumn order={order} />);
 }
@@ -239,6 +260,19 @@ beforeEach(() => {
 	mockFlow = makeFlow();
 	mockFlow satisfies LedgerView;
 });
+it('shows the whole-bill restriction only while a payment leg is live', () => {
+	const { rerender } = render(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+	mockFlow = makeFlow({ hasLiveLeg: true });
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.getByTestId('checkout-legacy-whole-bill').textContent).toBe(
+		'pos_checkout.whole_bill_only'
+	);
+	mockFlow = makeFlow();
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+});
+
 // Codex 4346411060 on #2837: an unanswered close gates the checkout before the Done shortcut.
 // Codex 4346556708 on #2837: and before the Legacy tab.
 it.each([
@@ -263,6 +297,22 @@ it.each([
 	const done = screen.getByTestId('checkout-complete-order');
 	expect(done.hasAttribute('data-loading')).toBe(spins);
 	expect(done.hasAttribute('disabled')).toBe(true);
+});
+// A paid sale re-opened from Orders: its captured payments cover it, so Done completes it.
+it('offers the completion action for a re-opened sale its payments cover', () => {
+	const takeTender = jest.fn();
+	mockFlow = makeFlow({ ...reopenedPaid, takeTender });
+	mountColumn();
+	expect(screen.queryByTestId('checkout-commit')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-complete-order'));
+	expect(takeTender).toHaveBeenCalledTimes(1);
+});
+// The covered sale's unanswered attempt is cleared in the pane first, then the sale completes.
+it('keeps the pane for a covered sale with an unanswered attempt', () => {
+	mockFlow = makeFlow({ ...reopenedPaid, unansweredAttempt: strandedAttempt });
+	mountColumn();
+	expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
+	expect(screen.getByTestId('checkout-commit')).not.toBeNull();
 });
 it('hosts the Legacy tab with the in-pane receipt (receiptHost="stage")', () => {
 	mockFlow = makeFlow({ state: { ...initialTenderState, tab: 'legacy' } });
@@ -404,6 +454,29 @@ it('shows a title skeleton while saving an unnumbered order', () => {
 	expect(screen.queryByTestId('checkout-title-skeleton')).toBeNull();
 });
 
+// The real control renders; its props are recorded so the header's `hug` is pinned.
+const mockSegmentedProps: { hug?: boolean; value?: string }[] = [];
+jest.mock('@wcpos/components/segmented-control', () => {
+	const actual = jest.requireActual('@wcpos/components/segmented-control');
+	const react = jest.requireActual<typeof import('react')>('react');
+	return {
+		...actual,
+		SegmentedControl: (props: { hug?: boolean; value?: string }) => {
+			mockSegmentedProps.push(props);
+			return react.createElement(actual.SegmentedControl, props);
+		},
+	};
+});
+
+// Yoga hands an auto-width control with growing segments the whole row: without `hug` the
+// Payments | Legacy switch filled the header and hid the close (owner, iPad, 2026-11-08).
+it("the header's segmented control hugs, so the close stays on screen", () => {
+	mockSegmentedProps.length = 0;
+	mountColumn();
+	expect(mockSegmentedProps.at(-1)?.hug).toBe(true);
+	expect(screen.getByTestId('checkout-close')).toBeTruthy();
+});
+
 it('keeps both segment selectors and removes the redundant order title', () => {
 	mountColumn();
 	expect(screen.getByTestId('checkout-tab-payments')).toBeTruthy();
@@ -420,3 +493,22 @@ jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle:
 jest.mock('../../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '14:04' }),
 }));
+
+it('leaves checkout from the offline state, keeping nothing but the order', () => {
+	const offline = (id: string) => ({
+		method: method({ id }),
+		disabled: true,
+		reason: 'offline' as const,
+		worksOffline: false,
+		settlesLater: false,
+	});
+	mockFlow = makeFlow({
+		online: false,
+		tiles: [offline('pos_cash'), offline('other')],
+	});
+	mountColumn();
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	fireEvent.click(screen.getByTestId('checkout-offline-leave'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+});
