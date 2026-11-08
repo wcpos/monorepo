@@ -407,8 +407,14 @@ jobs:
           set -euo pipefail
           source "$RUNNER_TEMP/cdn-verify.sh"
           # A size 403 on a tree the gate measured is jsDelivr's stale verdict (runs 42441099287, 42478472683).
+          # On a re-dispatch of an already-published SHA the publish step is skipped and its output is
+          # empty, so measure the branch this step verifies (check_tree_size sets the same flag).
           # shellcheck disable=SC2034 # Read by verify_cdn_paths.
-          if [[ -n "$TREE_BYTES" ]] && ((TREE_BYTES <= WEB_BUNDLE_TREE_LIMIT_BYTES)); then CDN_TREE_UNDER_GATE=1; fi
+          if [[ -n "$TREE_BYTES" ]]; then
+            if ((TREE_BYTES <= WEB_BUNDLE_TREE_LIMIT_BYTES)); then CDN_TREE_UNDER_GATE=1; fi
+          else
+            check_tree_size "$BRANCH" || true
+          fi
           BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
           purge_cdn_root "$BRANCH"
           if [ -f "$BUILD_DIR/metadata.json" ]; then
