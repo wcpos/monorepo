@@ -300,6 +300,19 @@ describe('TenderCheckout', () => {
 		mockFlow = makeFlow();
 	});
 
+	it('shows the whole-bill restriction only while a payment leg is live', () => {
+		const { rerender } = render(<TenderCheckout order={order} />);
+		expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+		mockFlow = makeFlow({ hasLiveLeg: true });
+		rerender(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-legacy-whole-bill').textContent).toBe(
+			'pos_checkout.whole_bill_only'
+		);
+		mockFlow = makeFlow();
+		rerender(<TenderCheckout order={order} />);
+		expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+	});
+
 	it('replaces the phone tenders with the receipt and finishes on close', () => {
 		mockStage = 'receipt';
 		mockScreenSize = 'sm';

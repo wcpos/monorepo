@@ -260,6 +260,19 @@ beforeEach(() => {
 	mockFlow = makeFlow();
 	mockFlow satisfies LedgerView;
 });
+it('shows the whole-bill restriction only while a payment leg is live', () => {
+	const { rerender } = render(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+	mockFlow = makeFlow({ hasLiveLeg: true });
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.getByTestId('checkout-legacy-whole-bill').textContent).toBe(
+		'pos_checkout.whole_bill_only'
+	);
+	mockFlow = makeFlow();
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+});
+
 // Codex 4346411060 on #2837: an unanswered close gates the checkout before the Done shortcut.
 // Codex 4346556708 on #2837: and before the Legacy tab.
 it.each([

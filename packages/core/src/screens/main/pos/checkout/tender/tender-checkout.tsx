@@ -158,23 +158,29 @@ export function TenderCheckout({ order }: Props) {
 	}
 
 	const tabs = (
-		<SegmentedControl
-			className={compact ? 'flex-1' : undefined}
-			value={flow.state.tab}
-			onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-			segments={[
-				{
-					value: 'payments',
-					label: t('pos_checkout.payments_tab'),
-					testID: 'checkout-tab-payments',
-				},
-				{
-					value: 'legacy',
-					label: t('pos_checkout.legacy_tab'),
-					testID: 'checkout-tab-legacy',
-				},
-			]}
-		/>
+		<View className={compact ? 'flex-1' : undefined}>
+			<SegmentedControl
+				value={flow.state.tab}
+				onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+				segments={[
+					{
+						value: 'payments',
+						label: t('pos_checkout.payments_tab'),
+						testID: 'checkout-tab-payments',
+					},
+					{
+						value: 'legacy',
+						label: t('pos_checkout.legacy_tab'),
+						testID: 'checkout-tab-legacy',
+					},
+				]}
+			/>
+			{flow.hasLiveLeg ? (
+				<Text variant="help" className="text-right" testID="checkout-legacy-whole-bill">
+					{t('pos_checkout.whole_bill_only')}
+				</Text>
+			) : null}
+		</View>
 	);
 	const cancelPayment =
 		flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
