@@ -390,7 +390,7 @@ becomes a page.
 | A switch needs a yes (hand over, store, register)                   | `SwitchConfirm` (one centred `AlertDialog` over the cashier sheet) | the verb carries its object (_Hand over to Amy_, _Switch to Front counter_); never `destructive` |
 | A multi-step task (checkout)                                        | full screen                                                        | never a centred modal that grew                                                                  |
 
-On wide, a sheet opened from a drawer page renders on the drawer layout's `scene` host (`usePageSheetHost` in `screens/main/components/page-sheet-host.ts`): beside the rail, over the page bar, as the cashier sheet (#3061). A phone has no rail, so the root; the POS passes its own `pos` host. A page never mounts a portal host of its own under its bar (the Reports `reports` host did, 2026-11-08, and its panels slid in under the bar).
+On wide, a sheet opened from a drawer page renders on the drawer layout's per-screen `Scene` host (`usePageSheetHost` reads the host the layout provides): beside the rail, over the page bar, as the cashier sheet (#3061); a sheet left open hides with its page. A phone has no rail, so the root; the POS passes its own `pos` host. A page never mounts a portal host of its own under its bar (the Reports `reports` host did, 2026-11-08, and its panels slid in under the bar).
 
 #### Chips, badges and switches
 

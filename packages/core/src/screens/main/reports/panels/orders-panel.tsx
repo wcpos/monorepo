@@ -15,7 +15,7 @@ export function OrdersPanel({
 	quantity,
 	selection,
 }: {
-	// read on the panel's side of the portal: the host is outside the provider on native
+	// Read on the trigger side and passed in: on native the `scene` host sits outside `ReportsProvider`.
 	selection: ReportsSelection;
 	spec: PanelSpec;
 	quantity: (n: number) => string;
