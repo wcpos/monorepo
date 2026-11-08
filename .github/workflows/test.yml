@@ -560,12 +560,16 @@ jobs:
       - &gallery-checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # The update job must shoot the PR head, whose baselines gallery-commit pushes
-          # back to the branch. The read-only shoot takes the default merge ref, so a PR
-          # opened before the gallery landed on its base is still shot with the gallery
+          # Both jobs shoot the default merge ref, so what the update job writes is what
+          # the compare job sees. It used to shoot the PR head (whose baselines
+          # gallery-commit pushes back to the branch): on 2026-11-08 #3401 landed on main
+          # between #3402's branch point and its label, the head build drew the
+          # personality themes in the system font and the merge build in their
+          # typefaces, and every compare run failed one theme per component (four
+          # rounds) until the compare run's own shots replaced the bot's. The merge ref
+          # also keeps a PR opened before the gallery landed on its base shootable
           # (on 2026-09-18 #2176's head predated it and the compare step had no
           # config to run).
-          ref: ${{ github.job == 'gallery-update' && github.event.pull_request.head.sha || '' }}
           submodules: false
       - &gallery-setup
         name: Setup monorepo
