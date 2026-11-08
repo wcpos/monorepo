@@ -6,6 +6,11 @@ import { render, renderHook, screen } from '@testing-library/react';
 import { TitleBarStripProvider } from '@wcpos/components/edge-surface/title-bar-strip';
 
 import { BarControls, useBarMenu, useBarStatus, useOnlineBadge } from './index';
+import { PageSheetHostContext, setFocusedPageSheetHost } from '../page-sheet-host';
+
+const wrapper = ({ children }: React.PropsWithChildren) => (
+	<PageSheetHostContext.Provider value="scene:orders">{children}</PageSheetHostContext.Provider>
+);
 
 let mockSize: 'sm' | 'lg' = 'sm';
 let mockStatus = 'online-website-available';
@@ -48,25 +53,29 @@ it.each([
 	result.current?.onPress();
 	expect(mockOpenDrawer).toHaveBeenCalledTimes(below ? 1 : 0);
 
-	render(<BarControls testID="register-bar" portalHost="pos" />);
+	render(<BarControls testID="register-bar" portalHost="pos" />, { wrapper });
 	expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
 });
 
-// The cashier sheet opens beside the rail on wide (the drawer layout's `scene` host, #3061), never
-// over it; a phone has no rail, so the root. The bell stays on the root; a named host wins.
+// The bell shares the entry's host: with no host named, the drawer layout's per-screen Scene
+// host on wide, beside the rail (#3061), and the root on a phone. A named host wins for both.
 it.each([
-	['sm', 'null'],
-	['lg', 'scene'],
-] as const)('on %s puts the entry on the %s host unless the bar names one', (size, host) => {
-	mockSize = size;
-	const { unmount } = render(<BarControls testID="orders-bar" />);
-	expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe('undefined');
-	expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
-	unmount();
-	render(<BarControls testID="register-bar" portalHost="pos" />);
-	expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
-});
+	['sm', 'null', 'undefined'],
+	['lg', 'scene:orders', 'scene:orders'],
+] as const)(
+	'on %s puts the entry on the %s host unless the bar names one',
+	(size, host, bellHost) => {
+		mockSize = size;
+		const { unmount } = render(<BarControls testID="orders-bar" />, { wrapper });
+		expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe(bellHost);
+		expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
+		unmount();
+		render(<BarControls testID="register-bar" portalHost="pos" />, { wrapper });
+		expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
+		expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
+	}
+);
 
 // One form for every bar: Offline as a StatusBadge in the warning tone, an unreachable store
 // included; nothing while the store answers.
@@ -88,7 +97,9 @@ it.each([
 ])('with a title-bar strip of %s a bar carries its controls: %s', (height, carried) => {
 	mockStatus = 'offline';
 	const strip = ({ children }: React.PropsWithChildren) => (
-		<TitleBarStripProvider value={{ node: null, height }}>{children}</TitleBarStripProvider>
+		<PageSheetHostContext.Provider value="scene:orders">
+			<TitleBarStripProvider value={{ node: null, height }}>{children}</TitleBarStripProvider>
+		</PageSheetHostContext.Provider>
 	);
 	render(<BarControls testID="orders-bar" />, { wrapper: strip });
 	expect(screen.queryByTestId('orders-bar-bell') !== null).toBe(carried);
@@ -99,4 +110,21 @@ it.each([
 	render(<BarControls testID="title-bar" inTitleBar />, { wrapper: strip });
 	expect(screen.getByTestId('title-bar-bell')).toBeTruthy();
 	expect(screen.getByTestId('title-bar-avatar')).toBeTruthy();
+});
+
+// The title bar sits above every screen, outside any Scene's provider: its pair follows the
+// focused screen's host, never the root, which would cover the rail (Greptile, #3419).
+it('puts the title bar pair on the focused screen host', () => {
+	mockSize = 'lg';
+	setFocusedPageSheetHost('scene:orders');
+	try {
+		const strip = ({ children }: React.PropsWithChildren) => (
+			<TitleBarStripProvider value={{ node: null, height: 28 }}>{children}</TitleBarStripProvider>
+		);
+		render(<BarControls testID="title-bar" inTitleBar />, { wrapper: strip });
+		expect(screen.getByTestId('title-bar-bell').getAttribute('data-host')).toBe('scene:orders');
+		expect(screen.getByTestId('title-bar-avatar').getAttribute('data-host')).toBe('scene:orders');
+	} finally {
+		setFocusedPageSheetHost(undefined);
+	}
 });

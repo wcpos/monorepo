@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { Platform, View, type ViewInstance } from 'react-native';
 
+import { useIsFocused, useRoute } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
-import { useIsFocused } from 'expo-router/react-navigation';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { EdgeSurface } from '@wcpos/components/edge-surface';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { isLightTheme } from '@wcpos/components/lib/themes';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -16,6 +17,10 @@ import type { IconName } from '@wcpos/components/icon';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { TitleBarStripContent } from '@wcpos/core/screens/main/components/bar-controls/title-bar';
+import {
+	PageSheetHostContext,
+	setFocusedPageSheetHost,
+} from '@wcpos/core/screens/main/components/page-sheet-host';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { useRailWidth } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import {
@@ -149,26 +154,46 @@ function ThemedDrawer({
 }
 
 /**
- * The scene host: the focused screen's overlay surface beside the rail, where a page bar's cashier
- * sheet renders on wide (the root host wraps the rail too, and a sheet there covered it; Paul, 2026-10-29).
- * Only the focused scene carries the host and the web container: the drawer keeps its other
- * screens mounted, and two hosts of one name would draw the sheet twice. The POS keeps its own
- * `pos` host inside its providers for the till's dialogs.
+ * Each drawer screen's own host, `scene:<route>`, beside the rail and over its page bar. One name
+ * per screen, so a sheet left open hides with its page instead of following a shared host onto
+ * the next screen (on native the scrim leaves the rail tappable; Codex review, #3419). The web
+ * container is registered under the same name (dialog ledger 7). The POS keeps its own `pos` host
+ * inside its providers for the till's dialogs.
  */
 function Scene({ children }: { children: React.ReactNode }) {
+	const { name } = useRoute();
+	const host = `scene:${name}`;
+	// The title bar's controls sit above every screen and cannot read this provider: the focused
+	// screen publishes its host for them (Greptile, #3419).
 	const focused = useIsFocused();
-	// On web the dialog portals into the registered DOM container, not the RN host (dialog ledger 7).
-	const register = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer(
-			'scene',
-			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
-		);
-	}, []);
+	React.useEffect(() => {
+		if (focused) setFocusedPageSheetHost(host);
+	}, [focused, host]);
+	const register = React.useCallback(
+		(node: ViewInstance | null) => {
+			registerPortalContainer(
+				host,
+				Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+			);
+		},
+		[host]
+	);
 	return (
-		<View ref={focused ? register : undefined} className="flex-1">
-			{children}
-			{focused && <PortalHost name="scene" />}
-		</View>
+		<PageSheetHostContext.Provider value={host}>
+			<View ref={register} className="flex-1">
+				{children}
+				{/* The native host only while focused: a blurred page's open sheet unmounts with it
+				    (its Android back listener too, which would otherwise eat the next page's Back;
+				    Codex, #3419) and remounts on return, its open state kept by its owner. The portal
+				    keeps the entry by name meanwhile; the web container above stays registered, so a
+				    web sheet hides with its page. */}
+				{focused && (
+					<ErrorBoundary>
+						<PortalHost name={host} />
+					</ErrorBoundary>
+				)}
+			</View>
+		</PageSheetHostContext.Provider>
 	);
 }
 

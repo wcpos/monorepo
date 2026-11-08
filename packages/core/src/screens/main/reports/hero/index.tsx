@@ -23,6 +23,7 @@ import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -235,6 +236,7 @@ export function HeroShell() {
 }
 /** Printing has its own boundary so a loading directory never blanks the sales figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
@@ -379,6 +381,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				</Button>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={doc}

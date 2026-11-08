@@ -19,6 +19,7 @@ import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
 
+import { usePageSheetHost } from '../components/page-sheet-host';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useTheme } from '../../../contexts/theme';
 import { useT } from '../../../contexts/translations';
@@ -41,6 +42,7 @@ export function TillStrip({
 	onOpenClosures?: () => void;
 	onOpenClosure?: (closure: ClosureRow) => void;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const { roomy } = useTheme();
 	const phone = useIsPhone();
@@ -398,6 +400,7 @@ export function TillStrip({
 				</Text>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={printDoc}

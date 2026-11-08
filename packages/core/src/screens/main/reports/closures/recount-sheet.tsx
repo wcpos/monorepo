@@ -19,6 +19,7 @@ import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
 import { type ClosureRow, mintUuid } from '@wcpos/query/register-session';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
@@ -52,6 +53,7 @@ export function RecountSheet({
 	onSaved: () => void | Promise<void>;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const http = useRestHttpClient();
 	const { wpCredentials } = useAppState();
@@ -128,6 +130,7 @@ export function RecountSheet({
 			}}
 		>
 			<DialogContent
+				portalHost={host}
 				side={phone ? 'bottom' : 'right'}
 				testID="recount-sheet"
 				closeLabel={t('common.close')}

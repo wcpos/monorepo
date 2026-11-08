@@ -2,14 +2,20 @@
 import * as React from 'react';
 
 import { of } from 'rxjs';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderUI, screen, waitFor } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
 import type { PrinterProfile } from '@wcpos/printer';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
 import { ClosurePanel } from './closure-panel';
+import { PageSheetHostContext } from '../../components/page-sheet-host';
 import { mergeAvailablePrinterProfiles } from '../../settings/printer/available-printer-profiles';
+
+const wrapper = ({ children }: React.PropsWithChildren) => (
+	<PageSheetHostContext.Provider value="scene:reports">{children}</PageSheetHostContext.Provider>
+);
+const render = (ui: React.ReactElement) => renderUI(ui, { wrapper });
 
 // Keep routing real without loading printer transports/encoders in jsdom.
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
@@ -423,12 +429,12 @@ it('opens recount online and reloads the closure after success', async () => {
 	expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 
-// Revert: use the unnamed portal, thumbnail preview, or omit the panel close action.
-it('hosts the tablet panel in Reports with a full-width document and close action', () => {
+// Revert: use the root or a page-mounted host, thumbnail preview, or omit the panel close action.
+it("hosts the tablet panel on the drawer's scene host with a full-width document and close action", () => {
 	mockPhone = false;
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
-	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
+	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('scene:reports');
 	fireEvent.click(screen.getByTestId('closure-paper'));
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
 	expect(screen.getByTestId('closure-panel-close')).toBeTruthy();

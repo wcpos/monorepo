@@ -12,6 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { readClosure, type RegisterSessionRow } from '@wcpos/query/register-session';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -117,6 +118,7 @@ function SessionCardContent({
 	storeId?: number;
 	cashier?: number;
 }) {
+	const host = usePageSheetHost();
 	const active = session?.status === 'open' || session?.status === 'counting';
 	const { site } = useStoreSession();
 	const source = React.useMemo(
@@ -204,6 +206,7 @@ function SessionCardContent({
 				</Text>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={onOpenChange}
 				doc={doc}

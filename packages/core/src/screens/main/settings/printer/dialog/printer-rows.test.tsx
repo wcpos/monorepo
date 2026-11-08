@@ -14,6 +14,7 @@ jest.mock('@wcpos/components/property-row', () =>
 	jest.requireActual('../../../../../../jest/property-row.test-utils')
 );
 jest.mock('react-native', () => ({
+	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
 	View: ({
 		children,
 		className,
