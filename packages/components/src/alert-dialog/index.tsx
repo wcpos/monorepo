@@ -47,8 +47,8 @@ function AlertDialogContent({
 		}
 		return Scrim;
 	}, []);
-	// The bottom sheet paints its own inset; 16 keeps the `py-4` the class gives.
-	const inset = useSheetInset(16, presentation);
+	// The bottom sheet paints its own inset; 4 units keep the `py-4` the class gives.
+	const inset = useSheetInset(4, presentation);
 	const shell = (
 		<OverlayShell
 			presentation={presentation}
