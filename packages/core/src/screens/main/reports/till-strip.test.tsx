@@ -230,6 +230,14 @@ it('shows closed Expected · Counted = short result and dispatches the local rep
 	expect(report).toHaveBeenLastCalledWith(data.lastClosure, true, undefined);
 	expect(get).not.toHaveBeenCalled();
 });
+// Pins the figure the strip shows: the RECORDED (written) variance, as the closures list does;
+// counted less expected would read £2.00 over here. Moving it to settled is a ruling, not a refactor.
+it('shows the last closure’s RECORDED result, never counted less expected', () => {
+	data.session = null;
+	data.lastClosure = { ...data.lastClosure, counted: { cash: '424' } };
+	render(<TillStrip onOpenClosures={jest.fn()} />);
+	expect(screen.getByTestId('till-result').textContent).toContain('£10.00 short');
+});
 it.each(['open', 'counting'])(
 	'hides the equation for a blind %s cashier while keeping actions',
 	(status) => {
