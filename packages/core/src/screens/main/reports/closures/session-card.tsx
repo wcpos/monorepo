@@ -1,11 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import { format as formatDate } from 'date-fns/format';
-import { useObservableState } from 'observable-hooks';
 
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { ListRow } from '@wcpos/components/list-row';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
@@ -23,6 +20,7 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useLastClosure } from './use-last-closure';
+import { useReportsDirectories } from '../scope';
 
 import type { SessionCardData, SessionSummary } from './use-last-closure';
 
@@ -120,12 +118,7 @@ function SessionCardContent({
 }) {
 	const host = usePageSheetHost();
 	const active = session?.status === 'open' || session?.status === 'counting';
-	const { site } = useStoreSession();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const cashiers = useObservableState(source, []);
+	const cashiers = useReportsDirectories().cashiers ?? [];
 	const { timezone } = useStoreDay(storeId);
 	const viewedStore = useViewedStore(storeId);
 	const settings = useDocField(viewedStore, (value) => value);

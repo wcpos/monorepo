@@ -1,13 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import { format as formatDate } from 'date-fns/format';
 import { subDays } from 'date-fns/subDays';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { useObservableState } from 'observable-hooks';
 
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -32,6 +29,7 @@ import { useReceiptDocument } from '../receipt/use-receipt-document';
 import { PrintSheet } from '../receipt/print-sheet';
 import { normalizeClosureRow } from './closures/use-closure-rows';
 import { useLastClosure } from './closures/use-last-closure';
+import { useReportsDirectories } from './scope';
 
 type Term = [id: string, sign: string, label: string, amount: string];
 
@@ -48,7 +46,7 @@ export function TillStrip({
 	const phone = useIsPhone();
 	const { session, binding, terms, expected, blind, lastClosure, sessionsOn } =
 		useRegisterSession();
-	const { store, site } = useStoreSession();
+	const { store } = useStoreSession();
 	const bound = sessionsOn && !!binding.registerId;
 	const active = bound && (session?.status === 'open' || session?.status === 'counting');
 	const remote = useLastClosure(
@@ -100,11 +98,7 @@ export function TillStrip({
 		storeId: store.id,
 		autoPrintAllowed: false,
 	});
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const cashiers = useObservableState(source, []);
+	const cashiers = useReportsDirectories().cashiers ?? [];
 	const settings = useDocField(useViewedStore(store.id), (value) => value);
 	const { format } = useCurrencyFormat({
 		currency: settings?.currency,

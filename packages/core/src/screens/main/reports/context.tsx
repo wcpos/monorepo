@@ -12,7 +12,6 @@ import { subMonths } from 'date-fns/subMonths';
 import { useObservableState } from 'observable-hooks';
 import { startWith } from 'rxjs';
 
-import { wooMetaCarrier } from '@wcpos/sync-core';
 import { saleMomentOf } from '@wcpos/query/query-state';
 import type { EngineRecord } from '@wcpos/query';
 import { observeLocalRecordsById, useDocField, useQueryRuntime } from '@wcpos/query';
@@ -25,6 +24,7 @@ import {
 	zoneOptions,
 } from '../../../hooks/use-store-day';
 import { calculateTotals } from './report/utils';
+import { inRoom, useReportsFilterScope } from './scope';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
 
@@ -116,7 +116,7 @@ export function useReportsScope() {
 export function useReportsPeriod() {
 	const { cmp } = useReportsScope();
 	const filters = useQueryState<'orders'>().filters;
-	const storeId = Number.isFinite(Number(filters.store)) ? Number(filters.store) : undefined;
+	const { storeId } = useReportsFilterScope();
 	const { presets, timezone, dayBounds, rangeToFilter } = useStoreDay(storeId);
 	const ranges = presets();
 	const today = ranges.today;
@@ -355,7 +355,7 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
 	const { refundsHandle } = useReportsHandles();
 	const { unselectedRowIds } = useReportsSelection();
-	const { filters } = useQueryState<'orders'>();
+	const scope = useReportsFilterScope();
 	const { result } = useQuerySnapshot(useDrawnHandle(refundsHandle), []);
 	const refunds = result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload);
 	const runtime = useQueryRuntime();
@@ -388,18 +388,9 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 		refunds.flatMap((refund) => {
 			const parent = parents.get(refund.parent_id);
 			if (parent && unselectedRowIds[parent.uuid]) return [];
-			const identity = wooMetaCarrier.readIdentity((parent ?? refund).meta_data);
-			const inRoom =
-				held.has(refund.parent_id) ||
-				((!filters.store ||
-					(!filters.register && parent && parent.created_via !== 'woocommerce-pos') ||
-					(parent && !/^\d+$/.test(String(filters.store))
-						? parent.created_via === filters.store
-						: identity.storeId ===
-							String(filters.store === 'woocommerce-pos' ? 0 : filters.store))) &&
-					(!filters.register || identity.registerId === filters.register) &&
-					(!filters.cashier || identity.cashierId === String(filters.cashier)));
-			return inRoom ? [{ ...refund, parentNumber: parent?.number }] : [];
+			return held.has(refund.parent_id) || inRoom(scope, refund, parent)
+				? [{ ...refund, parentNumber: parent?.number }]
+				: [];
 		});
 	return (
 		<ReportsDataContext.Provider value={{ ...data, periodRefunds }}>

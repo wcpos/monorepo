@@ -1,16 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import roundTo from 'lodash/round';
-import { useObservableState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import {
-	observeCredentialStores,
-	observeSiteCredentials,
-	PENDING_USER_DB_READ,
-} from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
@@ -23,11 +16,10 @@ import { TileGrid } from '@wcpos/components/tile-grid';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { usePageSheetHost } from '../../components/page-sheet-host';
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useQueryState, useQueryStateActions } from '../../../../query';
+import { useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import { stores as storeRows, tenders } from '../cards/aggregate';
@@ -44,10 +36,7 @@ import { calculateTotals } from '../report/utils';
 import { summarySpec } from '../report/summary';
 import { useReportCashier } from '../report/use-report-cashier';
 import { useReportPrint } from '../panels/use-report-print';
-import {
-	useRegisterNames,
-	useRegisterNamesReady,
-} from '../../../../services/register/use-register-names';
+import { useReportsDirectories, useReportsFilterScope } from '../scope';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
@@ -55,15 +44,10 @@ import { MenuChip } from '../menu-chip';
 
 function CashierChip({ stretch }: { stretch?: boolean }) {
 	const t = useT();
-	const { site } = useStoreSession();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
 	// Undefined until the directory emits: a chip built from an empty list would offer Everyone
 	// as the only choice while the credentials are still being read.
-	const cashiers = useObservableState(source);
-	const value = useQueryState<'orders'>().filters.cashier;
+	const { cashiers } = useReportsDirectories();
+	const value = useReportsFilterScope().cashierId;
 	const actions = useQueryStateActions<'orders'>();
 	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
@@ -72,7 +56,7 @@ function CashierChip({ stretch }: { stretch?: boolean }) {
 			name="cashier"
 			icon="cashier"
 			scroll
-			value={value === undefined ? 'all' : String(value)}
+			value={value ?? 'all'}
 			defaultValue="all"
 			onChange={(next) => actions.setFilter('cashier', next === 'all' ? undefined : next)}
 			choices={[
@@ -236,30 +220,9 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
-	const { store: storeFilter } = useQueryState<'orders'>().filters;
-	const names = useRegisterNames(storeId),
-		namesLoaded = useRegisterNamesReady(storeId);
-	const { site, wpCredentials } = useStoreSession();
-	const storesSource = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const storeDirectory = useObservableState(storesSource);
-	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
-	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
-	const storeNames = Object.fromEntries(
-		(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
-	);
+	const { allStores, names, namesReady } = useReportsFilterScope();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const directory = useObservableState(source);
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
@@ -267,13 +230,11 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 			orders: selectedOrders.length,
 			payments: tenders(selectedOrders, totals, formats.store?.price_num_decimals),
 			periodRefunds,
-			registerNames: names,
+			registerNames: names.register,
 			stores: allStores
-				? { rows: storeRows(selectedOrders, totals), names: storeNames }
+				? { rows: storeRows(selectedOrders, totals), names: names.store }
 				: undefined,
-			cashierNames: Object.fromEntries(
-				(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
-			),
+			cashierNames: names.cashier,
 			num_decimals: formats.store?.price_num_decimals,
 		},
 		t,
@@ -290,12 +251,12 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(totals.userStoreArray.length < 2 || !!directory) &&
+			(totals.userStoreArray.length < 2 || namesReady.cashier) &&
 			(allStores ||
-				namesLoaded ||
+				namesReady.register ||
 				!online ||
 				totals.registerArray.length < 2 ||
-				totals.registerArray.every(({ registerId }) => !!names[registerId])),
+				totals.registerArray.every(({ registerId }) => !!names.register[registerId])),
 		needsRefunds: true,
 	});
 	return (

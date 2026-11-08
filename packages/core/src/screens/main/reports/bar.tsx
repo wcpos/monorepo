@@ -1,15 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
-import { useObservableState } from 'observable-hooks';
 
-import {
-	observeCredentialStores,
-	observeSiteCredentials,
-	PENDING_USER_DB_READ,
-} from '@wcpos/query/user-db';
 import { Button } from '@wcpos/components/button';
 import { MenuRow, MenuRowGroup } from '@wcpos/components/menu-row';
 import { Icon } from '@wcpos/components/icon';
@@ -30,6 +23,7 @@ import {
 import { ManagementBar } from '../components/management-bar';
 import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 import { MenuChip } from './menu-chip';
+import { useReportsDirectories } from './scope';
 
 type ScopeProps = { scope: ClosureScope; onScopeChange: (scope: ClosureScope) => void };
 
@@ -64,17 +58,10 @@ export function Bar({
 }: ScopeProps & { room: 'sales' | 'closures'; onBack: () => void }) {
 	const t = useT();
 	const phone = useIsPhone();
-	const { store, site, wpCredentials } = useStoreSession();
+	const { store, site } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
-	const source = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const stores = useObservableState(source, []);
+	const stores = useReportsDirectories().stores ?? [];
 	// Store 0 is also a single-store install's own id: All stores only with stores to choose from.
 	const allStores = room === 'sales' && scope.storeId === 0 && stores.length > 1;
 	const directory = useRegisterDirectory(
@@ -239,12 +226,7 @@ export function ClosuresCashierChip({
 	stretch,
 }: ScopeProps & { stretch?: boolean }) {
 	const t = useT();
-	const { site } = useStoreSession();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const cashiers = useObservableState(source, []);
+	const cashiers = useReportsDirectories().cashiers ?? [];
 	return (
 		<MenuChip
 			stretch={stretch}

@@ -1,30 +1,18 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
-import { useObservableState } from 'observable-hooks';
 
 import { saleMomentOf } from '@wcpos/query/query-state';
-import {
-	observeCredentialStores,
-	observeSiteCredentials,
-	PENDING_USER_DB_READ,
-} from '@wcpos/query/user-db';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 
 import { usePageSheetHost } from '../../components/page-sheet-host';
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
-import {
-	useRegisterNames,
-	useRegisterNamesReady,
-} from '../../../../services/register/use-register-names';
 import {
 	cashiers,
 	categories,
@@ -49,6 +37,7 @@ import { useLocalCategories } from '../cards/use-local-categories';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
 import { MenuChip } from '../menu-chip';
+import { useReportsFilterScope } from '../scope';
 import { brandChoices, categoryChoices, filterLines } from './line-filters';
 import { panelCsv } from './export-csv';
 import { panelSpec } from './specs';
@@ -82,22 +71,7 @@ function DetailPanelContent() {
 		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
-	const names = useRegisterNames(storeId),
-		registerNamesReady = useRegisterNamesReady(storeId);
-	const { site, wpCredentials } = useStoreSession();
-	const storesSource = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const storeDirectory = useObservableState(storesSource);
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const directory = useObservableState(source);
+	const { names, namesReady } = useReportsFilterScope();
 	const ids = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);
@@ -144,9 +118,9 @@ function DetailPanelContent() {
 		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		((detail !== 'categories' && detail !== 'products') || tree) &&
-		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
-		(detail !== 'registers' || registerNamesReady) &&
-		(detail !== 'stores' || !!storeDirectory);
+		(detail !== 'cashiers' && detail !== 'orders' ? true : namesReady.cashier) &&
+		(detail !== 'registers' || namesReady.register) &&
+		(detail !== 'stores' || namesReady.store);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
 		cogs:
@@ -172,11 +146,9 @@ function DetailPanelContent() {
 		cashiers: cashiers(totals),
 		channels: channels(selectedOrders, totals),
 		registers: registers(selectedOrders, totals),
-		registerNames: names,
+		registerNames: names.register,
 		stores: stores(selectedOrders, totals),
-		storeNames: Object.fromEntries(
-			(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
-		),
+		storeNames: names.store,
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,
@@ -189,9 +161,7 @@ function DetailPanelContent() {
 		totals,
 		formats,
 		t,
-		cashierNames: Object.fromEntries(
-			(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
-		),
+		cashierNames: names.cashier,
 	});
 	const titles: Record<NonNullable<typeof detail>, string> = {
 		orders: t('reports.panel_orders'),

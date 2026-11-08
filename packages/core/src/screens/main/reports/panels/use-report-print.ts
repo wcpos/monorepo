@@ -1,22 +1,16 @@
 import * as React from 'react';
 
-import { filter } from 'rxjs';
 import { format } from 'date-fns/format';
-import { useObservableState } from 'observable-hooks';
 
-import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
-
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useQueryHandleFields, useQueryState } from '../../../../query';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useRegisterNames } from '../../../../services/register/use-register-names';
+import { useQueryHandleFields } from '../../../../query';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useReportsHandles, useReportsPeriod } from '../context';
 import { periodLabel } from '../date-button';
+import { useReportsFilterScope } from '../scope';
 import { useReportFormats } from '../use-report-formats';
 import { buildReportDocument } from './document';
 import { usePrintWaiting } from './use-print-waiting';
@@ -54,27 +48,7 @@ export function useReportPrint({
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { text: period } = periodLabel({ scope: days, timezone, ranges: presets(), t, formatDate });
-	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
-	const names = useRegisterNames(storeId),
-		binding = useRegisterBinding();
-	const { wpCredentials } = useStoreSession();
-	const storesSource = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const storeDirectory = useObservableState(storesSource);
-	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
-	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
-	const register = allStores
-		? t('reports.all_stores')
-		: registerId
-			? names[registerId] ||
-				(binding.registerId === registerId ? binding.registerName : '') ||
-				t('common.unknown')
-			: t('reports.all_registers');
+	const { registerId, registerLabel: register } = useReportsFilterScope();
 	const scopeLine = t('reports.panel_scope', { period, register });
 	const label = [scopeLine, ...scope].filter(Boolean).join(' · ');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
