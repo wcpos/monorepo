@@ -160,7 +160,9 @@ it('count puts the badge on a box the glyph size, pointer-less', () => {
 	expect(outer.children[0]?.getAttribute('data-class')).toContain('size-6');
 	expect(outer.children[0]?.querySelector('svg')).not.toBeNull();
 	const shoulder = outer.children[1] as HTMLElement;
-	expect(shoulder.dataset.class).toBe('absolute bottom-3/4 left-full -ml-1 w-0 items-center');
+	expect(shoulder.dataset.class).toBe(
+		'absolute bottom-3/4 left-full -ml-1 w-16 -translate-x-8 items-center'
+	);
 	expect(shoulder.dataset.pointerEvents).toBe('none');
 	expect(screen.getByTestId('badge-text').textContent).toBe('3');
 });
