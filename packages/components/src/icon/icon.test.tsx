@@ -149,8 +149,8 @@ it.each(Object.keys(TONE) as (keyof typeof TONE)[])(
 	}
 );
 
-// The count is measured from the glyph's own box (icon LEDGER line 8): the outer box carries the
-// glyph's size class, so the badge's `-top-1 -right-0.5` lands on the same shoulder whatever the
+// The count is measured from the glyph's own box (icon LEDGER lines 8 and 9): the outer box carries
+// the glyph's size class, so the badge's quarter-height, 4px-inside placement lands on the same shoulder whatever the
 // parent, a 44 button or a 48 drawer row (Paul, 2026-11-08: "too high, it does not look like the
 // badge on the logs icon").
 it('count puts the badge on a box the glyph size, pointer-less', () => {
@@ -160,7 +160,7 @@ it('count puts the badge on a box the glyph size, pointer-less', () => {
 	expect(outer.children[0]?.getAttribute('data-class')).toContain('size-6');
 	expect(outer.children[0]?.querySelector('svg')).not.toBeNull();
 	const shoulder = outer.children[1] as HTMLElement;
-	expect(shoulder.dataset.class).toBe('absolute -top-1 -right-0.5');
+	expect(shoulder.dataset.class).toBe('absolute bottom-3/4 left-full -ml-1 w-0 items-center');
 	expect(shoulder.dataset.pointerEvents).toBe('none');
 	expect(screen.getByTestId('badge-text').textContent).toBe('3');
 });

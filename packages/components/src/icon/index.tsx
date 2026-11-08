@@ -155,7 +155,10 @@ export function Icon({
 			{...props}
 		>
 			<View className={combinedClassName}>{body}</View>
-			<View pointerEvents="none" className="absolute -top-1 -right-0.5">
+			{/* Centred 4px inside the glyph's right edge, bottom edge at a quarter of the glyph's
+			    height: a zero-width box the badge centres in, whatever its width (the /mockup climb
+			    of 2026-11-08; the drawer's -top-1 -right-0.5 on an 18 glyph sat on its centre). */}
+			<View pointerEvents="none" className="absolute bottom-3/4 left-full -ml-1 w-0 items-center">
 				<Badge count={count} max={max} variant="bad" size="sm" />
 			</View>
 		</View>
