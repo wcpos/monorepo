@@ -28,7 +28,6 @@ jest.mock('@rn-primitives/label', () => ({
 	),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
-jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
@@ -38,7 +37,6 @@ jest.mock('../../../../services/register-session/audit', () => ({
 	...jest.requireActual('../../../../services/register-session/audit'),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
