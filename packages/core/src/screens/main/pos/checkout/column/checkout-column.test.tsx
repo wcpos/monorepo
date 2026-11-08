@@ -197,7 +197,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
 		linesPaidBy: {},
 		balanceMinor: 9295,
