@@ -1796,6 +1796,24 @@ describe('useTenderFlow', () => {
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 
+	it('cancelOnePayment re-plans the next payment over what is left (Greptile on #3405)', async () => {
+		// 92.95 three ways: 10.00 taken, then 45.00 (37.95 is the last share). Cancelling the
+		// 10.00 leaves 47.95 over two payments, so the untouched entry becomes 23.98, not 37.95.
+		const plan = { kind: 'even' as const, ways: 3, from: 0 };
+		setTenderPlan(order.uuid, plan);
+		const first = payment({ id: 'a', amount: '10.00', tendered: null });
+		const second = payment({ id: 'b', amount: '45.00', tendered: null });
+		mockPayload.meta_data = withLedger([], [first, second]);
+		mockVoidPayments.mockResolvedValue({ rows: [{ ...first, status: 'voided' }], failed: [] });
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.entryMinor).toBe(3795);
+
+		await act(async () => result.current.cancelOnePayment('a'));
+
+		expect(result.current.state.entryMinor).toBe(2398);
+	});
+
 	it('cancelOnePayment voids nothing when the cashier keeps the payment', async () => {
 		mockPayload.meta_data = withLedger([], [payment({ id: 'b' })]);
 		mockConfirm.mockResolvedValueOnce(false);

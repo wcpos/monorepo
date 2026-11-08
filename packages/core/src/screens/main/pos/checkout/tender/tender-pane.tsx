@@ -213,7 +213,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const n = counted.length + 1;
 	const toCome = flow.planLegs.filter((leg) => leg.state === 'todo').length;
 	const ways =
-		(plan?.from ?? 0) +
+		flow.rows.slice(0, plan?.from ?? 0).filter(countsTowardPaid).length +
 		(plan?.kind === 'fixed'
 			? 1 + (plan.thenWays ?? 1)
 			: Math.max(plan?.ways ?? 1, done.length + 1));

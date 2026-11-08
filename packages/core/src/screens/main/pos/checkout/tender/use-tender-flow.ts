@@ -610,8 +610,10 @@ export function useTenderFlow(
 			: null;
 	const label = figures?.label;
 	// Payments are numbered across the bill: those taken before the plan count too (ruled 2026-11-08).
+	// `plan.from` indexes every ledger row; only the counted ones before it are payments.
 	const billN = rows.filter(countsTowardPaid).length + 1;
-	const billWays = (plan?.from ?? 0) + (label?.ways ?? 0);
+	const billWays =
+		rows.slice(0, plan?.from ?? 0).filter(countsTowardPaid).length + (label?.ways ?? 0);
 	const planLabel = !label
 		? null
 		: label.rest
@@ -1938,6 +1940,23 @@ export function useTenderFlow(
 		const { [paymentId]: _dropped, ...kept } =
 			getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
 		setAllocations(order.uuid, kept);
+		// The next payment is re-planned over what is left: the untouched entry follows the
+		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405).
+		const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
+			candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
+		);
+		const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
+		reducerDispatch({
+			type: 'tender-recorded',
+			balanceMinor: toMinor(balance, dp),
+			rowsSinceFrom: latest
+				.slice(state.plan?.from ?? latest.length)
+				.filter(countsTowardPaid)
+				.map((candidate) => ({
+					amountMinor: toMinor(candidate.amount, dp),
+					title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
+				})),
+		});
 		logger.info(t('pos_checkout.payment_cancelled'), {
 			actor,
 			showToast: true,

@@ -1224,6 +1224,30 @@ describe('split V1: the pane builds each payment', () => {
 	// S10 (Paul's table): A and B are taken, then C plans $20.00 and 3 ways; numbering is bill-wide.
 	const s10 = { kind: 'fixed', firstMinor: 2000, title: null, thenWays: 3, from: 2 } as const;
 	const ab = [row('a', '23.00', 'pos_card'), row('b', '15.00')];
+	it('a failed row before the plan is not a payment: the bill-wide total skips it (Greptile on #3405)', () => {
+		const failed = { ...row('x', '23.00', 'pos_card'), status: 'failed' as const };
+		const flow = splitFlow(
+			{
+				rows: [failed, ...ab],
+				paidMinor: 3800,
+				balanceMinor: 14450,
+				thisPaymentMinor: 2000,
+				roundedDueMinor: 14450,
+				entryAppliedMinor: 2000,
+				plan: { ...s10, from: 3 },
+				planLegs: [
+					{ minor: 2000, state: 'now' },
+					{ minor: 4150, state: 'todo' },
+					{ minor: 4150, state: 'todo' },
+					{ minor: 4150, state: 'todo' },
+				],
+			},
+			{ entryMinor: 2000, entryDirty: true }
+		);
+		render(<TenderPane flow={flow} format={String} />);
+		expect(text('checkout-commit')).toBe('Take 2000 in Cash · 3 of 6');
+	});
+
 	it('S10 C reads 3 of 6, its taken payments folded and the three to come as one pill', () => {
 		const flow = splitFlow(
 			{
