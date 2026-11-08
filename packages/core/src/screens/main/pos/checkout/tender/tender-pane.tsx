@@ -330,7 +330,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const restMinor = flow.balanceMinor - (typed ? flow.entryAppliedMinor : 0);
 	const shareMinor = flow.pickedMinor + (extraMinor ?? 0);
 	// While the taken payments are unfolded, their list has the keypad's place and no helpers.
-	const showDone = doneOpen && counted.length >= 2;
+	const showDone = doneOpen && counted.length >= 1;
 	const legs: (PlanLeg & { index: number; run: number })[] = [];
 	(plan
 		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...flow.planLegs]
@@ -341,8 +341,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			]
 	).forEach((leg, index) => {
 		const last = legs.at(-1);
-		// Two or more taken fold into one pill; a run of equal payments to come is one pill.
-		if (leg.state === 'done' && counted.length >= 2) return;
+		// The taken payments are one disclosure pill (two or more fold into a count); a run of
+		// equal payments to come is one pill.
+		if (leg.state === 'done' && counted.length >= 1) return;
 		if (leg.state === 'todo' && last?.state === 'todo' && last.minor === leg.minor) last.run += 1;
 		else legs.push({ ...leg, index, run: 1 });
 	});
@@ -516,7 +517,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								<ButtonText>{t('pos_checkout.hide')}</ButtonText>
 							</Button>
 						</View>
-					) : counted.length >= 2 ? (
+					) : counted.length >= 1 ? (
 						<PressableSurface
 							testID="checkout-plan-done"
 							role="button"
@@ -525,11 +526,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							className="bg-success/20 border-success/30 min-h-ctl flex-row items-center gap-1 rounded-full border px-3"
 						>
 							<Icon name="check" size="xs" className="text-success" />
-							<Text className="text-foreground text-xs">
-								{t('pos_checkout.n_paid_amount', {
-									n: counted.length,
-									amount: format(flow.paidMinor),
-								})}
+							<Text className="text-foreground text-xs" decodeHtml>
+								{counted.length === 1
+									? `${(done[0] ?? doneLeg(counted[0])).title} ${format(toMinor(counted[0].amount, flow.dp))}`
+									: t('pos_checkout.n_paid_amount', {
+											n: counted.length,
+											amount: format(flow.paidMinor),
+										})}
 							</Text>
 							<Icon name="chevronDown" size="xs" className="text-muted-foreground" />
 						</PressableSurface>

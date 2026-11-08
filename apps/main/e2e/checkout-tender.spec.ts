@@ -404,11 +404,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect(page.getByTestId('checkout-label')).toBeVisible();
-			// Done pills have no state attribute; the view marks them with this success class.
-			await expect(page.getByTestId('checkout-plan-leg-0')).toHaveClass(/\bbg-success\/20\b/, {
+			// The taken payment is the done disclosure pill, marked with the success class; the
+			// payment to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
 				timeout: 60_000,
 			});
-			await expect(legs).toHaveCount(2);
+			await expect(legs).toHaveCount(1);
 			await expect(page.getByTestId('checkout-plan-leg-1')).not.toHaveClass(/\bbg-success\/20\b/);
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })

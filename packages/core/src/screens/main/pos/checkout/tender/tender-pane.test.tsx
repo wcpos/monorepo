@@ -702,7 +702,7 @@ it('shows plan legs, labels, a short entry hint and numbered commit tail', () =>
 	};
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-label').textContent).toContain('Payment 2 of 3 · 900 left');
-	expect(screen.getByTestId('checkout-plan-leg-0').textContent).toContain('Card 100');
+	expect(screen.getByTestId('checkout-plan-done').textContent).toContain('Card 100');
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
 		'Less than planned · 250 moves to the next payment'
 	);
@@ -1347,7 +1347,8 @@ describe('split V1: the pane builds each payment', () => {
 		const methods = screen.getByTestId('checkout-method-pos_cash');
 		const strip = screen.getByTestId('checkout-plan');
 		expect(methods.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-		expect(text('checkout-plan-leg-0')).toBe('Cash 2300');
+		// A lone taken payment is the disclosure pill too, so it can be cancelled (Codex on #3405).
+		expect(text('checkout-plan-done')).toBe('Cash 2300');
 	});
 });
 
