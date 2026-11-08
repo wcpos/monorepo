@@ -27,9 +27,11 @@ function subscribe(notify: () => void) {
  * one), beside the rail and over the page bar, as the page bar's cashier sheet (#3061); a phone
  * has no rail, so the root (the host's `phoneUsesRoot`). It is the outermost host provided, so a
  * Reports sheet the till's register panel reuses keeps the page's, not the till's `pos`. Above
- * every screen (the title bar) it is the focused screen's host. A page never mounts a host of its own.
+ * every screen (the title bar) it is the focused screen's host. The root is `null`, never
+ * `undefined`, which a `DialogContent` reads as "the nearest host" (the till's, under the till).
+ * A page never mounts a host of its own.
  */
-export function usePageSheetHost(): string | undefined {
+export function usePageSheetHost(): string | null {
 	const own = useOverlayHost('outermost');
 	const focused = React.useSyncExternalStore(
 		subscribe,
@@ -37,5 +39,5 @@ export function usePageSheetHost(): string | undefined {
 		() => undefined
 	);
 	const phone = useIsPhone();
-	return own ?? (phone ? undefined : focused);
+	return own ?? (phone ? undefined : focused) ?? null;
 }

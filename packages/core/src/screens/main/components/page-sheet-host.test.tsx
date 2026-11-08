@@ -24,7 +24,7 @@ afterEach(() => setFocusedPageSheetHost(undefined));
 // A wide sheet must leave the rail outside its host; a phone has no rail.
 it.each([
 	['lg', 'scene:reports'],
-	['sm', undefined],
+	['sm', null],
 ] as const)('on %s renders the page sheet on %s', (size, host) => {
 	mockSize = size;
 	const { result } = renderHook(() => usePageSheetHost(), { wrapper });
@@ -35,7 +35,7 @@ it.each([
 it('uses the root on wide with no provider and no focused screen', () => {
 	mockSize = 'lg';
 	const { result } = renderHook(() => usePageSheetHost());
-	expect(result.current).toBeUndefined();
+	expect(result.current).toBeNull();
 });
 
 // Revert: drop the focused-host fallback; the title bar's cashier sheet falls to the root and
@@ -56,7 +56,7 @@ it('follows the focused screen above every screen, and its own provider under on
 // nearest host; this reads `pos` on both sizes.
 it.each([
 	['lg', 'scene:(pos)'],
-	['sm', undefined],
+	['sm', null],
 ] as const)('under the till on %s reads the page host %s', (size, host) => {
 	mockSize = size;
 	const { result } = renderHook(() => usePageSheetHost(), {

@@ -129,9 +129,7 @@ export function ClosurePanel({
 	onBack?: () => void;
 	onRecountSaved?: () => void;
 }) {
-	// The page's host, else the root (`null`): left unnamed, the sheet would take the till's `pos`
-	// where the register panel reuses this panel.
-	const host = usePageSheetHost() ?? null;
+	const host = usePageSheetHost();
 	const t = useT();
 	const http = useRestHttpClient();
 	const [sheetOpen, setSheetOpen] = React.useState(false);

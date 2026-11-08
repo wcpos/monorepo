@@ -86,7 +86,7 @@ export function BarControls({
 	// The title bar sits above every screen, outside any host: its pair takes the focused page's
 	// host, never the root, which would cover the rail (Greptile, #3419).
 	return inTitleBar ? (
-		<OverlayHostProvider name={pageHost}>{controls}</OverlayHostProvider>
+		<OverlayHostProvider name={pageHost ?? undefined}>{controls}</OverlayHostProvider>
 	) : (
 		controls
 	);
