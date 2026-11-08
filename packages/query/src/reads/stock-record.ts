@@ -2,7 +2,7 @@ import { normalizeMangoQuery, prepareQuery } from 'rxdb';
 import { combineLatest, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { remoteIdOrNull, remoteKeyFor } from '@wcpos/sync-core';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { observeEngineDatabases } from '../engine-query';
@@ -21,7 +21,11 @@ export async function readStockPayload(
 	if (!collection) return null;
 	const remoteId = remoteIdOrNull(wooId);
 	if (remoteId === null) return null;
-	const result = await collection.findOne({ selector: { remoteId } }).exec();
+	// `remoteKey` is the indexed spelling of `remoteId` (the catalogue schemas index remoteKey,
+	// never remoteId), so the stock guard's lookup on every cart add reads through the index
+	// instead of scanning the collection.
+	const remoteKey = remoteKeyFor(remoteId);
+	const result = await collection.findOne({ selector: { remoteKey } }).exec();
 	if (result) {
 		return result.getLatest().payload as StockPayload;
 	}
@@ -34,7 +38,7 @@ export async function readStockPayload(
 		prepareQuery(
 			schema,
 			normalizeMangoQuery(schema, {
-				selector: { remoteId, _deleted: true },
+				selector: { remoteKey, _deleted: true },
 				limit: 1,
 			})
 		)
