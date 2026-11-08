@@ -155,9 +155,10 @@ export function setPickedUnits(uuid: string, picked: Record<TenderLineId, number
 	else pickedUnits.set(uuid, picked);
 	publish({ ...snapshot, pickedUnits });
 }
-/** Zero units unpicks the line. */
+/** Zero units unpicks the line. A pick replaces a stored plan: the picks are the payment now. */
 export function pickUnits(uuid: string, lineId: TenderLineId, units: number) {
 	const { [lineId]: _dropped, ...rest } = snapshot.pickedUnits.get(uuid) ?? {};
+	if (units > 0) setTenderPlan(uuid, null);
 	setPickedUnits(uuid, units > 0 ? { ...rest, [lineId]: units } : rest);
 }
 export function setSplitOn(uuid: string, on: boolean) {

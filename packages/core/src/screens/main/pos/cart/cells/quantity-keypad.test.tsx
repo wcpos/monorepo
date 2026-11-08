@@ -193,6 +193,14 @@ describe('the bill as the split picker (read-only, Split on)', () => {
 		expect(screen.queryByTestId('cart-quantity-input')).toBeNull();
 	});
 
+	it('steps a fractional last unit to the remainder, never past it (Greptile on #3412)', () => {
+		pick.mockClear();
+		renderPicker(1.5, 1, 0);
+		expect(screen.getByTestId('checkout-line-line-4-units').textContent).toBe('1 of 1.5');
+		fireEvent.click(screen.getByTestId('checkout-line-line-4-plus'));
+		expect(pick).toHaveBeenCalledWith('line-4', 1.5);
+	});
+
 	it('disables − at none picked and + at every unpaid unit picked', () => {
 		const { unmount } = renderPicker(4, 0, 0);
 		expect(screen.getByTestId('checkout-line-line-4-minus').hasAttribute('disabled')).toBe(true);

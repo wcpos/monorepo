@@ -36,7 +36,8 @@ export function UnitStepper({ picked, unpaid, onChange, testIDBase }: Props) {
 				accessibilityLabel={t('pos_cart.quantity_increase')}
 				testID={`${testIDBase}-plus`}
 				disabled={picked >= unpaid}
-				onPress={() => onChange(picked + 1)}
+				// A fractional last unit (1.5 unpaid) steps to the remainder, never past it.
+				onPress={() => onChange(Math.min(picked + 1, unpaid))}
 			/>
 		</HStack>
 	);

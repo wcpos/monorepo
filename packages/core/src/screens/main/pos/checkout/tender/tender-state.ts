@@ -68,7 +68,7 @@ export type TenderAction =
 	  }
 	| { type: 'set-plan'; plan: TenderPlan; balanceMinor: number }
 	/** `keepSplit`: `Change split` drops the plan but leaves the Split chip on. */
-	| { type: 'clear-plan'; balanceMinor: number; keepSplit?: true }
+	| { type: 'clear-plan'; balanceMinor: number; keepSplit?: true; keepPicks?: true }
 	| { type: 'arm-custom' }
 	| { type: 'request-cancel' }
 	| { type: 'reset' };

@@ -325,7 +325,8 @@ function mirrorSplitMode(uuid: string, action: TenderAction) {
 		(action.type === 'clear-plan' && !action.keepSplit) ||
 		(action.type === 'tender-recorded' && action.balanceMinor <= 0);
 	if (off) setSplitOn(uuid, false);
-	if (CLEARS_PICKS.includes(action.type)) setPickedUnits(uuid, null);
+	if (CLEARS_PICKS.includes(action.type) && !(action.type === 'clear-plan' && action.keepPicks))
+		setPickedUnits(uuid, null);
 }
 
 export function useTenderFlow(
@@ -478,9 +479,14 @@ export function useTenderFlow(
 		[order.uuid]
 	);
 	// Picks the bill (the other column) changed are the entry again, as the pane's own are.
+	// Picks replace an active plan (its cap would otherwise charge a planned share for a bigger
+	// pick and mark the whole pick paid); the store's `pickUnits` dropped the stored plan, the
+	// reducer's goes here. The Split chip and the picks stay.
 	const [seenPicks, setSeenPicks] = React.useState(picked);
 	if (seenPicks !== picked) {
 		setSeenPicks(picked);
+		if (state.plan && Object.keys(picked).length > 0)
+			rawDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
 		rawDispatch({ type: 'picks-changed' });
 	}
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
@@ -753,6 +759,8 @@ export function useTenderFlow(
 			if (action.type === 'split-on') return setSplitOn(order.uuid, true);
 			if (action.type === 'pick-units') {
 				pickUnits(order.uuid, action.lineId, action.units);
+				if (state.plan && action.units > 0)
+					reducerDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
 				return reducerDispatch({ type: 'picks-changed' });
 			}
 			// The rounded prefill (or the picks' price) is what the cashier sees, so a backspace edits
@@ -896,12 +904,11 @@ export function useTenderFlow(
 			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
 			// of a short split must come back with the plan, or that leg wipes the split record.
 			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
-			if (legUnits) {
-				setAllocations(order.uuid, {
-					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
-					[row.id]: legUnits,
-				});
-			}
+			// The allocation frozen at the press wins: picks made while a terminal leg waited belong
+			// to the next payment, not to the one settling (Greptile on #3412).
+			const stored = getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
+			if (legUnits && !stored[row.id])
+				setAllocations(order.uuid, { ...stored, [row.id]: legUnits });
 		},
 		[order, state, dp, byId, actor, orderContext, legUnits, reducerDispatch]
 	);
@@ -1449,6 +1456,7 @@ export function useTenderFlow(
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 || legUnits ? uuidv4() : undefined;
 			const extraMeta = withPaidUnits(paymentId);
+			if (paymentId) freezePicks(paymentId);
 			// The id is also minted for picked units; only a rounded leg carries a fee.
 			if (roundingMinor !== 0 && paymentId)
 				await patchFees(roundingFee(target.getLatest().payload, paymentId));

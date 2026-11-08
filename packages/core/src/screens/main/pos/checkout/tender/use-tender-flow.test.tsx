@@ -1487,6 +1487,29 @@ describe('useTenderFlow', () => {
 		expect(result.current.pickedMinor).toBe(0);
 		await act(async () => {});
 	});
+
+	it('a pick replaces an active plan: the Split chip and the picks stay, the plan goes (Greptile on #3412)', async () => {
+		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
+		expect(result.current.plan).not.toBeNull();
+		expect(result.current.state.entryMinor).toBe(4648);
+		// The bill picks a unit worth more than the planned share: the pick is the payment now.
+		act(() => pickUnits(order.uuid, 1, 4));
+		expect(result.current.plan).toBeNull();
+		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toBeUndefined();
+		expect(result.current.splitOn).toBe(true);
+		expect(result.current.picked).toEqual({ 1: 4 });
+		expect(result.current.state.entryMinor).toBe(2000);
+		expect(result.current.entryAppliedMinor).toBe(2000);
+	});
 	it('Split on lives in the store; Split off clears it and the picks, and a paid sale ends both', async () => {
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -2224,6 +2247,25 @@ describe('server tender', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.state.readerId).toBe('reader');
 		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
+	});
+	it('a settlement keeps the allocation frozen at the press; picks made meanwhile are the next payment (Greptile on #3412)', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			row: payment({ id: 'frozen', capture_mode: 'device', status: 'captured' }),
+		});
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: false };
+		setAllocations(order.uuid, { frozen: { 1: 1 } });
+		setPickedUnits(order.uuid, { 2: 2 });
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ frozen: { 1: 1 } });
+		setAllocations(order.uuid, null);
+		setPickedUnits(order.uuid, null);
 	});
 	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
 		mockPayload.line_items = [
