@@ -371,7 +371,9 @@ export function useRegisterSession() {
 		unsyncedCount:
 			orders.filter(({ record }) => pendingMoney(record)).length +
 			entries.filter((row) => row.sync_status !== 'synced').length +
-			(session?.sync_status === 'pending' ? 1 : 0),
+			// The closure's own count (session-store.ts): a held retry (#3304) is `failed` until its
+			// closure is rewritten: still unsynced.
+			(['pending', 'failed'].includes(session?.sync_status ?? '') ? 1 : 0),
 		sessionsOn,
 		overdue,
 		/** The store's HH:MM close time; what `overdue` is measured against. */

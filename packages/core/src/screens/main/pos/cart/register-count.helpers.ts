@@ -31,3 +31,14 @@ export function varianceText(
 	if (!variance) return t('register.exact');
 	return `${varianceAmount(variance, decimals, format)} ${variance < 0 ? t('register.short') : t('register.over')}`;
 }
+
+/**
+ * Whether leaving the count abandons it to selling (#2016): a count in progress does, and so
+ * does a close the store refused, the count kept. A closed session awaiting its closure write is
+ * not one to reopen; one already back at open needs no second abandon. The count's back and the
+ * panel's close share this rule.
+ */
+export const mayAbandonCount = (
+	session: { status?: string } | null | undefined,
+	refusedClose: boolean | undefined
+) => session?.status === 'counting' || (!!refusedClose && session?.status !== 'open');

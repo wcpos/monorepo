@@ -45,6 +45,7 @@ import {
 	countDecimals,
 	countVariance,
 	denominationTotal,
+	mayAbandonCount,
 	overThreshold,
 	validAmount,
 	varianceAmount,
@@ -516,11 +517,7 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							// A closed session awaiting its closure write is not one to reopen; a close the
-							// store refused is (#2016): back to selling is its abandon, the count kept. One
-							// already back at open needs no second abandon.
-							if (session?.status === 'counting' || (refusedClose && session?.status !== 'open'))
-								await actions.backToSelling();
+							if (mayAbandonCount(session, refusedClose)) await actions.backToSelling();
 							onBack();
 						})
 					}

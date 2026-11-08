@@ -5,6 +5,7 @@ import {
 	countDecimals,
 	countVariance,
 	denominationTotal,
+	mayAbandonCount,
 	overThreshold,
 	validAmount,
 	varianceText,
@@ -61,4 +62,14 @@ it('counts coins on a store that shows no decimals', () => {
 	expect(fromMinor(denominationTotal({ '0.25': 4 }, countDecimals(0)), countDecimals(0))).toBe(
 		'1.00'
 	);
+});
+it.each([
+	['counting', false, true],
+	['counting', true, true],
+	['open', true, false],
+	['closed', true, true],
+	['open', false, false],
+	['closed', false, false],
+])('leaving the count at %s (refused %s) abandons it: %s', (status, refused, result) => {
+	expect(mayAbandonCount({ status }, refused)).toBe(result);
 });
