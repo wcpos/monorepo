@@ -25,7 +25,7 @@
 		"./hooks/use-site-info": "./src/hooks/use-site-info.ts",
 		"./screens/auth/connect": "./src/screens/auth/connect.tsx",
 		"./screens/main/components/drawer-content": "./src/screens/main/components/drawer-content/index.tsx",
-		"./screens/main/components/drawer-content/logs-badge": "./src/screens/main/components/drawer-content/logs-badge.tsx",
+		"./screens/main/components/drawer-content/use-unread-error-count": "./src/screens/main/components/drawer-content/use-unread-error-count.ts",
 		"./screens/main/components/navigation-area": "./src/screens/main/components/navigation-area/index.tsx",
 		"./screens/main/components/navigation-area/area-page": "./src/screens/main/components/navigation-area/area-page.tsx",
 		"./screens/main/components/pro-guard": "./src/screens/main/components/pro-guard.tsx",
