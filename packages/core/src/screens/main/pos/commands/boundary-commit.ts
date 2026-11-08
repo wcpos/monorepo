@@ -9,7 +9,7 @@ import { type EngineRecord, observeCatalogChanges, readCatalogGeneration } from 
 import { findOpenSession, RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
-import { CHOOSE_REGISTER_REASON } from '../checkout/tender/tender-guards';
+import { CHOOSE_REGISTER_REASON, SESSION_REQUIRED_REASON } from '../checkout/tender/tender-guards';
 import { conditionRules } from '../conditions/evaluate';
 import { countConditionsInSlot } from '../conditions/snapshot';
 import {
@@ -28,11 +28,43 @@ import { landAnswer } from './land-answer';
 import { settlePayload } from './settle-payload';
 import { writeZeroBalanceCompletion } from './zero-balance-completion';
 
-import type { useCloseSale } from './close-sale';
+import type { CloseOutcome, useCloseSale } from './close-sale';
+import type { UnmetCondition } from '../conditions/evaluate';
 import type { OrderPayload } from './cart-config-for-order';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
 const logger = getLogger(['wcpos', 'pos', 'settlement']);
+
+/**
+ * Every reason a boundary pass stops short, with its one retry decision. `true`: a later input (a
+ * catalog write, a register or session change, the till leaving checkout) can clear it, so the
+ * coordinator settles again when one arrives; a shortage that persists waits, it never spins.
+ * `false`: the cashier must act (choose or open a register) before a pass can close.
+ */
+const RETRY_ON_NEW_INPUTS = {
+	catalog_changed: true,
+	register_changed: true,
+	session_changed: true,
+	in_checkout: true,
+	'pos_cart.only_n_available': true,
+	'pos_products.out_of_stock': true,
+	[CHOOSE_REGISTER_REASON]: false,
+	[SESSION_REQUIRED_REASON]: false,
+} as const satisfies Record<UnmetCondition['reasonKey'], boolean> & Record<string, boolean>;
+export type BoundaryReason = keyof typeof RETRY_ON_NEW_INPUTS;
+// A refusal's key is any registrant's string; one this table does not name is never retried.
+export const retryable = (reason: string): boolean =>
+	RETRY_ON_NEW_INPUTS[reason as BoundaryReason] === true;
+
+/** What a boundary pass did; `commitAtBoundary` alone builds it. */
+export type BoundaryOutcome =
+	| { kind: 'closed' }
+	| { kind: 'superseded'; reason?: BoundaryReason; retry: boolean }
+	| { kind: 'refused'; refusal: ActionRefusal; retry: boolean }
+	| { kind: 'offline' }
+	/** The store answered without closing: money still moving, an attempt unanswered, a refusal. */
+	| { kind: 'unclosed'; close: Exclude<CloseOutcome, { kind: 'answered' | 'offline' }> };
+
 export async function commitAtBoundary(
 	ctx: SaleContext & {
 		bindingStatus: SaleCommitRequest['bindingStatus'];
@@ -62,7 +94,7 @@ export async function commitAtBoundary(
 		order: EngineRecord<'orders'>;
 		queue: OrderMutationContext;
 	}
-) {
+): Promise<BoundaryOutcome> {
 	const catalog = observeCatalogChanges(ctx.runtime.engine).subscribe();
 	const outcome = await commitSale(
 		ctx,
@@ -72,9 +104,12 @@ export async function commitAtBoundary(
 			bindingStatus: ctx.bindingStatus,
 			amounts: { kind: 'retained-captures' },
 		},
-		async ({ registerId, sessionId, completing }, slot) => {
+		async (
+			{ registerId, sessionId, completing },
+			slot
+		): Promise<BoundaryOutcome | ActionRefusal> => {
 			await recordSaleAttempt(ctx, { order, source: 'zero-balance', completing });
-			let conditionReason: string | undefined;
+			let conditionReason: BoundaryReason | undefined;
 			let session: Awaited<ReturnType<typeof findOpenSession>> | undefined;
 			let validatedGeneration: number | undefined;
 			// Once checkout takes over, this pass cannot resume completion without provenance.
@@ -178,32 +213,30 @@ export async function commitAtBoundary(
 			});
 			// A system pass that cannot close (offline, refused) leaves the order pos-partial; the
 			// coordinator retries an offline one when the till reconnects.
-			if (completion && typeof completion === 'object' && 'kind' in completion) {
+			if (completion.kind !== 'closed' && completion.kind !== 'superseded') {
 				logger.debug('settlement.boundary-not-closed', {
 					context: { orderId: order.uuid, outcome: completion.kind },
 				});
-				return completion;
+				return completion.kind === 'offline' ? completion : { kind: 'unclosed', close: completion };
 			}
-			// An answered close returns nothing (it landed in complete above): a truthy non-kind result
-			// is only a supersession.
-			if (completion) {
+			// An answered close landed in complete above.
+			if (completion.kind === 'superseded') {
 				await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 				logger.warn('settlement.boundary-superseded', {
 					context: { orderId: order.uuid, ...(conditionReason && { reason: conditionReason }) },
 				});
 			} else if (overpaid) logger.warn('settlement.boundary-overpaid', { context: overpaid });
-			return (
-				refusal ??
-				(completion && conditionReason
-					? { superseded: true as const, reason: conditionReason }
-					: completion)
-			);
+			if (refusal) return refusal;
+			if (completion.kind === 'closed') return completion;
+			return conditionReason
+				? { kind: 'superseded', reason: conditionReason, retry: retryable(conditionReason) }
+				: { kind: 'superseded', retry: false };
 		},
 		{ queue, source: ctx.source }
 	).finally(() => catalog.unsubscribe());
-	if (isActionRefusal(outcome))
-		logger.warn('settlement.boundary-deferred', {
-			context: { orderId: order.uuid, reason: outcome.deny.reasonKey },
-		});
-	return outcome;
+	if (!isActionRefusal(outcome)) return outcome;
+	logger.warn('settlement.boundary-deferred', {
+		context: { orderId: order.uuid, reason: outcome.deny.reasonKey },
+	});
+	return { kind: 'refused', refusal: outcome, retry: retryable(outcome.deny.reasonKey) };
 }

@@ -8,6 +8,7 @@ import { type CouponContext, withAwaitingCustomer } from '@wcpos/order-math';
 import { createSettlementCoordinator, needsTaxRepair } from './settlement-coordinator';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 
+import type { BoundaryOutcome } from './boundary-commit';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { CartConfigInputs, OrderPayload } from './cart-config-for-order';
 
@@ -44,9 +45,9 @@ function start(records = [order()], ready = true) {
 	const openOrders$ = new BehaviorSubject<CurrentOrderRecord[] | null>(records);
 	const ratesReady$ = new BehaviorSubject({ ready, generation: 0 });
 	const settle = jest.fn<
-		Promise<unknown>,
+		Promise<BoundaryOutcome | undefined>,
 		[string, CurrentOrderRecord, (payload: OrderPayload) => boolean]
-	>(async () => {});
+	>(async () => undefined);
 	const serverOwnsMoney = jest.fn<boolean, [string]>(() => false);
 	const orderSaveState = jest.fn<{ kind: string } | null, [string]>(() => null);
 	const inCheckout = jest.fn(() => false);
@@ -168,6 +169,7 @@ it('coalesces rates gaps and serializes uuid order behind the existing mutation 
 	h.settle.mockImplementationOnce(async (_uuid, record, allowed) => {
 		h.ratesReady$.next({ ready: false, generation: 2 });
 		expect(allowed(record.payload)).toBe(false);
+		return undefined;
 	});
 	await emit(h.inputs$, inputs);
 	await emit(h.ratesReady$, { ready: true, generation: 2 });
@@ -296,6 +298,7 @@ it.each(['content', 'stop', 'rebind', 'generation'])(
 		h.settle.mockImplementation(async (_uuid, record, allowed) => {
 			expect(allowed(record.payload)).toBe(true);
 			expect(allowed({ ...record.payload, id: 99 })).toBe(false);
+			return undefined;
 		});
 		await emit(h.references$, { ready: true, generation: '0:0' });
 		// Context reads never hold the slot; a newer key can finish before the old read.
@@ -502,7 +505,11 @@ it.each([false, true])(
 	async (stillShort) => {
 		const h = start([couponOrder()], false);
 		let release!: () => void;
-		const refusal = { deny: { reasonKey: 'pos_products.out_of_stock' } };
+		const refusal: BoundaryOutcome = {
+			kind: 'refused',
+			refusal: { deny: { reasonKey: 'pos_products.out_of_stock' } },
+			retry: true,
+		};
 		h.settle.mockImplementationOnce(async () => {
 			await new Promise<void>((resolve) => {
 				release = resolve;
@@ -531,7 +538,11 @@ it.each([false, true])(
 	async (emitted) => {
 		const h = start([couponOrder()], false);
 		let release!: () => void;
-		const superseded = { superseded: true, reason: 'pos_products.out_of_stock' };
+		const superseded: BoundaryOutcome = {
+			kind: 'superseded',
+			reason: 'pos_products.out_of_stock',
+			retry: true,
+		};
 		h.settle.mockImplementationOnce(async () => {
 			await new Promise<void>((resolve) => {
 				release = resolve;
@@ -556,7 +567,7 @@ it('re-drains catalog-generation supersession after an in-flight emission', asyn
 	const h = start([couponOrder()], false);
 	h.settle.mockImplementationOnce(async () => {
 		await emit(h.inputs$, h.inputs$.value);
-		return { superseded: true, reason: 'catalog_changed' };
+		return { kind: 'superseded', reason: 'catalog_changed', retry: true };
 	});
 	await emit(h.references$, { ready: true, generation: '0' });
 	await emit(h.ratesReady$, { ready: true, generation: 0 });
@@ -564,13 +575,13 @@ it('re-drains catalog-generation supersession after an in-flight emission', asyn
 	expect(h.settle).toHaveBeenCalledTimes(2);
 });
 
-it.each(['register_changed', 'session_changed'])(
+it.each(['register_changed', 'session_changed'] as const)(
 	're-drains %s after an in-flight emission',
 	async (reason) => {
 		const h = start([couponOrder()], false);
 		h.settle.mockImplementationOnce(async () => {
 			await emit(h.inputs$, h.inputs$.value);
-			return { superseded: true, reason };
+			return { kind: 'superseded', reason, retry: true };
 		});
 		await emit(h.references$, { ready: true, generation: '0' });
 		await emit(h.ratesReady$, { ready: true, generation: 0 });
@@ -578,6 +589,28 @@ it.each(['register_changed', 'session_changed'])(
 		expect(h.settle).toHaveBeenCalledTimes(2);
 	}
 );
+
+// The outcome carries its retry decision; the coordinator keeps no list of reasons of its own.
+it.each<BoundaryOutcome>([
+	{ kind: 'superseded', retry: false },
+	{
+		kind: 'refused',
+		refusal: { deny: { reasonKey: 'pos_checkout.choose_register_first' } },
+		retry: false,
+	},
+	{ kind: 'unclosed', close: { kind: 'unanswered', attemptId: 'attempt' } },
+	{ kind: 'closed' },
+])('does not re-drain a %j outcome after an in-flight emission', async (outcome) => {
+	const h = start([couponOrder()], false);
+	h.settle.mockImplementationOnce(async () => {
+		await emit(h.inputs$, h.inputs$.value);
+		return outcome;
+	});
+	await emit(h.references$, { ready: true, generation: '0' });
+	await emit(h.ratesReady$, { ready: true, generation: 0 });
+	await flush();
+	expect(h.settle).toHaveBeenCalledTimes(1);
+});
 
 const exemptMeta = (value = 'yes') => [{ key: 'is_vat_exempt', value }];
 it.each([

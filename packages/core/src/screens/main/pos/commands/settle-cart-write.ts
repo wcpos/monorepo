@@ -6,6 +6,7 @@ import type { CartConfig, CouponContext, SettleOptions } from '@wcpos/order-math
 import { type SettleOutcome, settlePayload } from './settle-payload';
 import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
 
+import type { BoundaryOutcome } from './boundary-commit';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
@@ -31,7 +32,7 @@ export type BoundaryCommit = (
 	order: CurrentOrderRecord,
 	queue: OrderMutationContext,
 	coupons?: Input['coupons']
-) => Promise<unknown>;
+) => Promise<BoundaryOutcome>;
 
 // Birth intents remain synchronous; persisted cart commands await completion in their held slot.
 export function settleCartWrite<T>(
@@ -119,7 +120,7 @@ export function settleCartWrite<T>(
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
 		if (boundary && value) {
 			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
-			if (isActionRefusal(outcome)) return outcome;
+			if (outcome.kind === 'refused') return outcome.refusal;
 		}
 		return value;
 	});

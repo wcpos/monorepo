@@ -218,7 +218,7 @@ it('returns undefined when catalog is unavailable', async () => {
 });
 
 it('threads the repair validity and coupons into its system boundary', async () => {
-	const systemBoundary = jest.fn(async () => undefined);
+	const systemBoundary = jest.fn(async () => ({ kind: 'closed' as const }));
 	const valid = () => false;
 	const order = { uuid: 'target' } as CurrentOrderRecord;
 	const { result } = renderHook(() => useRepairTaxExempt(systemBoundary));

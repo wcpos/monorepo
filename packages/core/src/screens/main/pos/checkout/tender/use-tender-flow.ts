@@ -1210,7 +1210,7 @@ export function useTenderFlow(
 						return closeSale.close(target, { sessionId, approval: closeApproval });
 					},
 				});
-				if (closed && typeof closed === 'object' && 'kind' in closed) {
+				if (closed.kind !== 'closed' && closed.kind !== 'superseded') {
 					const context = {
 						orderId: payload.id ?? null,
 						orderUUID: order.uuid,

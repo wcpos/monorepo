@@ -10,6 +10,7 @@ import { isActionRefusal } from '../../../../extensions/actions';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import { readQuickDiscountIntent } from '../hooks/quick-discount';
 
+import type { BoundaryOutcome } from './boundary-commit';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { CartConfigInputs, OrderPayload } from './cart-config-for-order';
 
@@ -29,13 +30,14 @@ interface Deps {
 	orderSaveState: (uuid: string) => { kind: string } | null;
 	inCheckout: (uuid: string) => boolean;
 	repairTaxExempt(order: CurrentOrderRecord, flag: boolean, valid: () => boolean): Promise<unknown>;
+	/** Resolves undefined when the pass wrote no boundary. */
 	settle: (
 		uuid: string,
 		record: CurrentOrderRecord,
 		allowed: (payload: OrderPayload, ignoreCheckout?: boolean) => boolean,
 		coupons: CouponContext | undefined,
 		queue: OrderMutationContext
-	) => Promise<unknown>;
+	) => Promise<BoundaryOutcome | undefined>;
 	now: () => number;
 	observe: (event: SettlementDiagnostic) => void;
 }
@@ -114,31 +116,11 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	const settle = async (...args: Parameters<Deps['settle']>) => {
 		const generation = inputGeneration;
 		const outcome = await deps.settle(...args);
-		const reason = isActionRefusal(outcome)
-			? outcome.deny.reasonKey
-			: outcome &&
-				  typeof outcome === 'object' &&
-				  'superseded' in outcome &&
-				  outcome.superseded === true &&
-				  'reason' in outcome
-				? outcome.reason
-				: undefined;
 		// A boundary that could not close offline is retried on the next reconnect, whatever else
 		// changed: connectivity is not part of the fingerprint.
-		if (outcome && typeof outcome === 'object' && 'kind' in outcome && outcome.kind === 'offline')
-			seen.delete(args[0]);
+		if (outcome?.kind === 'offline') seen.delete(args[0]);
 		// Do not lose catalog or checkout-exit emissions consumed while a pass awaited its guards.
-		if (
-			typeof reason === 'string' &&
-			[
-				'pos_cart.only_n_available',
-				'pos_products.out_of_stock',
-				'catalog_changed',
-				'in_checkout',
-				'register_changed',
-				'session_changed',
-			].includes(reason)
-		) {
+		if ((outcome?.kind === 'superseded' || outcome?.kind === 'refused') && outcome.retry) {
 			seen.delete(args[0]);
 			// Retry only for new inputs; persistent shortages must not spin.
 			if (generation !== inputGeneration) {

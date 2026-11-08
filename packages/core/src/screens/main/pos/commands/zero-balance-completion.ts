@@ -7,6 +7,12 @@ import type { CloseOutcome } from './close-sale';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
+/** A close the store answered landed in `complete`; every other close outcome is returned. */
+export type ZeroBalanceResult =
+	| { kind: 'closed' }
+	| { kind: 'superseded'; reason?: string }
+	| Exclude<CloseOutcome, { kind: 'answered' }>;
+
 /**
  * The manual tender and paid-balance boundary share one atomic line/provenance write, then the
  * server completes the sale through `close` (ADR 0040 D2): the till never writes `completed`.
@@ -48,15 +54,10 @@ export async function writeZeroBalanceCompletion(
 		online: () => boolean;
 		close: (order: EngineRecord<'orders'>) => Promise<CloseOutcome>;
 	}
-): Promise<
-	| 'superseded'
-	| { superseded: true; reason: string }
-	| Exclude<CloseOutcome, { kind: 'answered' }>
-	| undefined
-> {
+): Promise<ZeroBalanceResult> {
 	const latest = order.getLatest().payload;
 	// Reject an obsolete boundary before allocating irreversible sale provenance.
-	if (changes(latest) === null) return 'superseded';
+	if (changes(latest) === null) return { kind: 'superseded' };
 	const unfinished = async (outcome: Exclude<CloseOutcome, { kind: 'answered' }>) => {
 		if (outcome.kind !== 'outstanding') await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return outcome;
@@ -70,7 +71,7 @@ export async function writeZeroBalanceCompletion(
 		return unfinished({ kind: 'offline' });
 	}
 	const preflightReason = await revalidate?.();
-	if (preflightReason) return { superseded: true, reason: preflightReason };
+	if (preflightReason) return { kind: 'superseded', reason: preflightReason };
 	const stamped = aggregateOnly?.()
 		? (latest.meta_data ?? [])
 		: await completionMetaFor(ctx, latest.meta_data, { sessionId });
@@ -81,7 +82,7 @@ export async function writeZeroBalanceCompletion(
 	// A late supersession can leave a counter gap. Re-read stock AFTER allocation, then keep
 	// synchronous payload validity in the resolver; never await provenance after this fence.
 	const reason = await revalidate?.();
-	if (reason) return { superseded: true, reason };
+	if (reason) return { kind: 'superseded', reason };
 	let superseded = false;
 	const written = await write((current) => {
 		const patch = changes(current);
@@ -96,9 +97,10 @@ export async function writeZeroBalanceCompletion(
 			],
 		};
 	});
-	if (superseded) return 'superseded';
+	if (superseded) return { kind: 'superseded' };
 	if (!written) throw new Error('zero_balance_completion_failed');
 	const closed = await close(order);
 	if (closed.kind !== 'answered') return unfinished(closed);
 	await complete(order, queue, closed);
+	return { kind: 'closed' };
 }
