@@ -416,6 +416,8 @@ it('lists an offline queue-capable device method as unavailable until offline te
 				worksOffline: false,
 				settlesLater: false,
 			},
+			// A method that records offline keeps the keypad; with none, the pane is the offline notice.
+			{ method, disabled: false, reason: null, worksOffline: true, settlesLater: true },
 		],
 	};
 	render(<TenderPane flow={flow} format={String} />);
@@ -1778,6 +1780,103 @@ it('a settlesLater tile says Sent later and Store may refuse; a plain manual til
 		'Sent laterStore may refuse'
 	);
 	expect(screen.queryByTestId('checkout-method-sent-later-other')).toBeNull();
+});
+
+describe('offline with no method that can take the sale', () => {
+	const offlineTile = (id: string): TenderFlow['tiles'][number] => ({
+		method: { ...method, id, title: id },
+		disabled: true,
+		reason: 'offline',
+		worksOffline: false,
+		settlesLater: false,
+	});
+	const choosable = {
+		method,
+		disabled: false,
+		reason: null,
+		worksOffline: true,
+		settlesLater: true,
+	};
+	const offlineFlow = (overrides: Partial<TenderFlow> = {}): TenderFlow => ({
+		...makeFlow(),
+		saveState: null,
+		online: false,
+		method: null,
+		tiles: [offlineTile('pos_cash'), offlineTile('other')],
+		...overrides,
+	});
+	const pane = (flow: TenderFlow, onLeave = jest.fn()) => (
+		<TenderPane flow={flow} format={String} onLeave={onLeave} />
+	);
+
+	it('says the sale is kept and offers the way out when no method can take it offline', () => {
+		const onLeave = jest.fn();
+		render(pane(offlineFlow(), onLeave));
+		const notice = screen.getByTestId('checkout-offline');
+		expect(notice.textContent).toContain('No connection');
+		expect(notice.textContent).toContain(
+			'Payments need one; the sale is saved in your open orders.'
+		);
+		expect(screen.queryByTestId('checkout-commit')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-offline-leave'));
+		expect(onLeave).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the keypad when a method can still record offline', () => {
+		render(pane(offlineFlow({ tiles: [offlineTile('other'), choosable] })));
+		expect(screen.getByTestId('checkout-commit')).toBeTruthy();
+		expect(screen.queryByTestId('checkout-offline-leave')).toBeNull();
+	});
+
+	it('keeps the keypad while money is held on the order', () => {
+		render(pane(offlineFlow({ hasLiveLeg: true })));
+		expect(screen.getByTestId('checkout-commit')).toBeTruthy();
+		expect(screen.queryByTestId('checkout-offline-leave')).toBeNull();
+	});
+
+	it('is not the offline state when nothing is disabled for the connection', () => {
+		const noDriver = (id: string) => ({ ...offlineTile(id), reason: 'no_driver' as const });
+		render(pane(offlineFlow({ online: true, tiles: [noDriver('pos_cash'), noDriver('other')] })));
+		expect(screen.queryByTestId('checkout-offline-leave')).toBeNull();
+	});
+
+	it('counts a tile disabled for another reason as blocked too', () => {
+		const noDriver = { ...offlineTile('other'), reason: 'no_driver' as const };
+		render(pane(offlineFlow({ tiles: [offlineTile('pos_cash'), noDriver] })));
+		expect(screen.getByTestId('checkout-offline-leave')).toBeTruthy();
+	});
+
+	it('returns to the keypad when the connection comes back', () => {
+		const flow = offlineFlow();
+		const { rerender } = render(pane(flow));
+		expect(screen.getByTestId('checkout-offline-leave')).toBeTruthy();
+		rerender(pane({ ...flow, tiles: [offlineTile('other'), choosable] }));
+		expect(screen.getByTestId('checkout-commit')).toBeTruthy();
+		expect(screen.queryByTestId('checkout-offline-leave')).toBeNull();
+	});
+
+	describe('leaves a live terminal leg, a refusal and a save in flight on their own panes', () => {
+		it.each<[string, Partial<TenderFlow>]>([
+			['a live terminal leg', { terminalLeg: {} as TenderFlow['terminalLeg'] }],
+			[
+				'a refusal',
+				{
+					saveState: {
+						kind: 'rejected',
+						status: 400,
+						reason: 'rest_invalid_param',
+						message: null,
+						refused: null,
+						parked: false,
+					},
+				},
+			],
+			['a save in flight', { saveState: { kind: 'saving' } }],
+		])('%s', (_, overrides) => {
+			render(pane(offlineFlow(overrides)));
+			expect(screen.queryByTestId('checkout-offline-leave')).toBeNull();
+		});
+	});
 });
 
 describe('change due leads once tendered exceeds the amount due', () => {

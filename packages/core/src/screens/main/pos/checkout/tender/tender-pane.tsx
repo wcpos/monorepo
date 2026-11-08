@@ -98,7 +98,16 @@ export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 	);
 }
 
-export function TenderPane({ flow, format, compact }: Props) {
+/** Offline with nothing choosable and no money held: no payment can start until the link returns. */
+function waitsForConnection(flow: TenderFlow) {
+	return (
+		!flow.hasLiveLeg &&
+		flow.tiles.some((tile) => tile.reason === 'offline') &&
+		flow.tiles.every((tile) => tile.disabled)
+	);
+}
+
+export function TenderPane({ flow, format, compact, onLeave }: Props & { onLeave?: () => void }) {
 	const t = useT();
 
 	const slow = useElapsed(flow.saveState?.kind === 'saving', SLOW_SAVE_NOTICE_MS);
@@ -115,6 +124,7 @@ export function TenderPane({ flow, format, compact }: Props) {
 	if (flow.saveState?.kind === 'saving') {
 		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
 	}
+	if (waitsForConnection(flow)) return <OfflinePane onLeave={onLeave} />;
 
 	if (flow.tiles.length === 0) {
 		return <EmptyState kind="empty" size="inline" title={t('pos_checkout.no_payment_methods')} />;
@@ -146,6 +156,21 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 					onPress: () => router.push('/health/database'),
 				},
 			]}
+		/>
+	);
+}
+
+/** Offline with nothing to take the sale: the order is already kept, so the way out is back to the cart. */
+function OfflinePane({ onLeave }: { onLeave?: () => void }) {
+	const t = useT();
+	const leave = { label: t('pos_checkout.offline_leave'), testID: 'checkout-offline-leave' };
+	return (
+		<Notice
+			testID="checkout-offline"
+			tone="warning"
+			title={t('pos_checkout.offline_title')}
+			description={t('pos_checkout.offline_description')}
+			actions={onLeave && [{ ...leave, onPress: onLeave }]}
 		/>
 	);
 }

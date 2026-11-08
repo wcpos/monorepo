@@ -31,10 +31,11 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		[formatCurrency, flow.dp]
 	);
 	const t = useT();
+	const leave = React.useCallback(() => leaveCheckout(order.uuid), [order.uuid]);
 	const back = React.useCallback(() => {
 		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
-		else leaveCheckout(order.uuid);
-	}, [flow, order.uuid]);
+		else leave();
+	}, [flow, leave]);
 	useCheckoutBack(back);
 	const body = (() => {
 		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
@@ -62,7 +63,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				</View>
 			);
 		}
-		return <TenderPane flow={flow} format={format} />;
+		return <TenderPane flow={flow} format={format} onLeave={leave} />;
 	})();
 
 	return (
