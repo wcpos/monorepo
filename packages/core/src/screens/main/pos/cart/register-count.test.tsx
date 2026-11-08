@@ -90,11 +90,19 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
 }));
+// The mark only draws its state: a press on it lands on its row, as on a device.
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({ checked }: { checked?: boolean }) => <span aria-checked={!!checked} />,
+}));
 let mockSessionStatus = 'counting';
+let mockMovements: { id: string; amount: string | null; sync_status: string }[] = [];
 let count_note: string | null = null;
 let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
+let mockRefusedClose = false;
+let mockCounted: Record<string, string> | null = null;
+let mockLastClosure: Record<string, unknown> | null = null;
 let figuresPending = false;
 let blind = false,
 	approval_required = false,
@@ -117,10 +125,14 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			approved_counted,
 			count_note,
 			count_denominations,
+			counted: mockCounted,
 		},
 		binding: { registerName: 'Front' },
 		expected: { cash: expectedCash, card: '20' },
 		unsyncedCount,
+		refusedClose: mockRefusedClose,
+		lastClosure: mockLastClosure,
+		movements: mockMovements,
 		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),
@@ -169,10 +181,14 @@ const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
 	mockSessionStatus = 'counting';
+	mockMovements = [];
 	approved_counted = null;
 	count_note = null;
 	count_denominations = null;
 	unsyncedCount = 3;
+	mockRefusedClose = false;
+	mockCounted = null;
+	mockLastClosure = null;
 	figuresPending = false;
 	blind = false;
 	approval_required = false;
@@ -248,7 +264,7 @@ it('the keypad types into the count and collapses on blur, reopens on focus', ()
 	expect(screen.getByTestId('count-keypad')).toBeTruthy();
 	fireEvent.blur(amount);
 	expect(screen.queryByTestId('count-keypad')).toBeNull();
-	expect(screen.getByTestId('count-tap-to-change').textContent).toBe('Tap the amount to change it');
+	expect(screen.getByTestId('count-tap-to-change').textContent).toBe('Tap the amount to edit it');
 	fireEvent.focus(amount);
 	expect(screen.getByTestId('count-keypad')).toBeTruthy();
 	expect(screen.queryByTestId('count-tap-to-change')).toBeNull();
@@ -702,4 +718,199 @@ it('restores the note and denomination tiles when the count pane reopens', () =>
 	fireEvent.click(screen.getByTestId('count-denominations'));
 	expect(screen.getByTestId('den-tile-20-badge').textContent).toBe('2');
 	expect(screen.getByTestId('den-tile-5-badge').textContent).toBe('1');
+});
+
+describe('#2016: a refused close', () => {
+	const refused = (status: string) => {
+		mockSessionStatus = status;
+		mockRefusedClose = true;
+		mockCounted = { cash: '40.00' };
+		mockLastClosure = {
+			id: 's',
+			counted: { cash: '40.00' },
+			breakdowns: {
+				variance_note: 'Short a note',
+				denominations: [{ value: '20', pieces: 2, amount: '40' }],
+			},
+		};
+	};
+	it.each(['closed', 'counting'])(
+		'at %s shows the band with the count kept and no Retry; the footer is the retry',
+		async (status) => {
+			refused(status);
+			render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+			const band = screen.getByTestId('register-panel-refused-close').textContent;
+			expect(band).toContain('The store refused this close. Your count is kept.');
+			expect(band).not.toContain('Sales are blocked while this register is being counted');
+			expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+			expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.00');
+			expect(screen.getByTestId('count-close').textContent).toBe('Retry');
+			await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+			expect(closeSession).toHaveBeenCalledWith(
+				expect.objectContaining({ counted: { cash: '40.00' }, note: 'Short a note' })
+			);
+		}
+	);
+	it('asks for the manager before a retry over the threshold', async () => {
+		refused('counting');
+		varianceThreshold = '5';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByTestId('count-close').textContent).toBe('Approve & close');
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+	it('back from a refused close already at open does not abandon it again', async () => {
+		refused('open');
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+		expect(backToSelling).not.toHaveBeenCalled();
+	});
+	it('shows no band at a count the store has not refused', () => {
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+	});
+	it('back to selling abandons a refused close that reads closed', async () => {
+		refused('closed');
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('count-back'));
+		await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+		expect(backToSelling).toHaveBeenCalledTimes(1);
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+	const pane = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />;
+	const shown = () => {
+		fireEvent.click(screen.getByTestId('count-denominations'));
+		return {
+			amount: (screen.getByTestId('count-amount') as HTMLInputElement).value,
+			note: (screen.getByTestId('count-note') as HTMLInputElement).value,
+			twenties: screen.queryByTestId('den-tile-20-badge')?.textContent ?? null,
+		};
+	};
+	const kept = { amount: '40.00', note: 'Short a note', twenties: '2' };
+	it('starts the pane from the kept count, note and pieces', () => {
+		refused('counting');
+		render(pane());
+		expect(shown()).toEqual(kept);
+	});
+	it('fills a pane that was open before the refusal landed', () => {
+		const { rerender } = render(pane());
+		refused('counting');
+		rerender(pane());
+		expect(shown()).toEqual(kept);
+	});
+	it('leaves the pane alone when the close was not refused', () => {
+		refused('counting');
+		mockRefusedClose = false;
+		mockCounted = { cash: '12.00' };
+		const { rerender } = render(pane());
+		rerender(pane());
+		expect(shown()).toEqual({ amount: '12.00', note: '', twenties: '0' });
+	});
+	it('Retry sends the count as edited from the kept one', async () => {
+		refused('counting');
+		render(pane());
+		enter('41.50');
+		fireEvent.change(screen.getByTestId('count-note'), { target: { value: 'Recounted' } });
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(closeSession).toHaveBeenCalledWith(
+			expect.objectContaining({ counted: { cash: '41.50' }, note: 'Recounted' })
+		);
+	});
+});
+
+describe('cash the store refused (#3271)', () => {
+	const refused = (id: string, amount: string | null = '20.0000') => ({
+		id,
+		amount,
+		sync_status: 'failed',
+	});
+	const close = () => screen.getByTestId('count-close') as HTMLButtonElement;
+	const view = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />;
+
+	it('names the refused cash and closes only after one acknowledgement', async () => {
+		mockMovements = [refused('m1'), { id: 'm2', amount: '5.0000', sync_status: 'synced' }];
+		render(view());
+		enter('480.80');
+		expect(screen.getByTestId('count-refused-cash-title').textContent).toBe(
+			'£20.00 in cash was refused by the store'
+		);
+		expect(close().disabled).toBe(true);
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(screen.getByTestId('count-refused-cash-ack').getAttribute('aria-checked')).toBe('true');
+		expect(close().disabled).toBe(false);
+		await act(async () => fireEvent.click(close()));
+		expect(closeSession).toHaveBeenCalledTimes(1);
+	});
+
+	it('pressing the label ticks it too, and pressing again unticks it', () => {
+		mockMovements = [refused('m1')];
+		render(view());
+		enter('480.80');
+		fireEvent.click(screen.getByText('I understand, close anyway'));
+		expect(close().disabled).toBe(false);
+		fireEvent.click(screen.getByText('I understand, close anyway'));
+		expect(close().disabled).toBe(true);
+	});
+
+	it('on the manager path the press opens the approval only after the tick', () => {
+		mockMovements = [refused('m1')];
+		varianceThreshold = '5';
+		render(view());
+		enter('463.30');
+		expect(close().textContent).toBe('Approve & close');
+		fireEvent.click(close());
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		expect(closeSession).not.toHaveBeenCalled();
+	});
+
+	it('a further refusal closes an open approval sheet until the new tick', () => {
+		mockMovements = [refused('m1')];
+		varianceThreshold = '5';
+		const { rerender } = render(view());
+		enter('463.30');
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+		mockMovements = [refused('m1'), refused('m2', '7.5000')];
+		rerender(view());
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		expect(close().disabled).toBe(true);
+		expect(closeSession).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(screen.queryByTestId('approve-sheet')).toBeNull();
+		fireEvent.click(close());
+		expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+	});
+
+	it.each([
+		['a refused no-sale moves no cash', [refused('m1', '0')]],
+		['nothing refused', [{ id: 'm1', amount: '20.0000', sync_status: 'pending' }]],
+	])('%s: no notice, Close enabled', (_, movements) => {
+		mockMovements = movements;
+		render(view());
+		enter('480.80');
+		expect(screen.queryByTestId('count-refused-cash')).toBeNull();
+		expect(close().disabled).toBe(false);
+	});
+
+	it('a further refusal after the tick asks again', () => {
+		mockMovements = [refused('m1')];
+		const { rerender } = render(view());
+		enter('480.80');
+		fireEvent.click(screen.getByTestId('count-refused-cash-ack'));
+		expect(close().disabled).toBe(false);
+		mockMovements = [refused('m1'), refused('m2', '7.5000')];
+		rerender(view());
+		expect(screen.getByTestId('count-refused-cash-title').textContent).toBe(
+			'£27.50 in cash was refused by the store'
+		);
+		expect(close().disabled).toBe(true);
+	});
 });

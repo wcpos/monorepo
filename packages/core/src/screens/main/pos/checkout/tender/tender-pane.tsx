@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
+import { decode } from 'html-entities';
 import { useCSSVariable } from 'uniwind';
 
 import { EmptyState } from '@wcpos/components/empty-state';
@@ -14,13 +15,15 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { ListItem } from '@wcpos/components/list-item';
 import { Notice } from '@wcpos/components/notice';
+import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { VStack } from '@wcpos/components/vstack';
-import { fromMinor } from '@wcpos/order-math';
+import { countsTowardPaid, fromMinor, toMinor } from '@wcpos/order-math';
 
 import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
@@ -28,7 +31,8 @@ import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { selectableReaders } from './tiles';
 import { disabledReasonText } from './labels';
-import { SplitView } from './split-view';
+import { evenSplitShareMinor, type PlanLeg, type TenderKey, unitsMinor } from './tender-state';
+import { UnitStepper } from './unit-stepper';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { CARD_READER_DOCS_URL } from '../../../settings/card-readers/docs';
@@ -36,7 +40,6 @@ import { useT } from '../../../../../contexts/translations';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
 import type { OrderSaveState } from '../checkout-mode';
-import type { TenderKey } from './tender-state';
 import type { TenderTile } from './tiles';
 import type { TenderFlow } from './use-tender-flow';
 
@@ -96,7 +99,16 @@ export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 	);
 }
 
-export function TenderPane({ flow, format, compact }: Props) {
+/** Offline with nothing choosable and no money held: no payment can start until the link returns. */
+function waitsForConnection(flow: TenderFlow) {
+	return (
+		!flow.hasLiveLeg &&
+		flow.tiles.some((tile) => tile.reason === 'offline') &&
+		flow.tiles.every((tile) => tile.disabled)
+	);
+}
+
+export function TenderPane({ flow, format, compact, onLeave }: Props & { onLeave?: () => void }) {
 	const t = useT();
 
 	const slow = useElapsed(flow.saveState?.kind === 'saving', SLOW_SAVE_NOTICE_MS);
@@ -113,16 +125,13 @@ export function TenderPane({ flow, format, compact }: Props) {
 	if (flow.saveState?.kind === 'saving') {
 		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
 	}
+	if (waitsForConnection(flow)) return <OfflinePane onLeave={onLeave} />;
 
 	if (flow.tiles.length === 0) {
 		return <EmptyState kind="empty" size="inline" title={t('pos_checkout.no_payment_methods')} />;
 	}
 
-	return flow.state.splitView ? (
-		<SplitView flow={flow} format={format} compact={compact} />
-	) : (
-		<TenderKeypad flow={flow} format={format} compact={compact} />
-	);
+	return <TenderKeypad flow={flow} format={format} compact={compact} />;
 }
 
 /**
@@ -151,6 +160,23 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 		/>
 	);
 }
+
+/** Offline with nothing to take the sale: the order is already kept, so the way out is back to the cart. */
+function OfflinePane({ onLeave }: { onLeave?: () => void }) {
+	const t = useT();
+	const leave = { label: t('pos_checkout.offline_leave'), testID: 'checkout-offline-leave' };
+	return (
+		<Notice
+			testID="checkout-offline"
+			tone="warning"
+			title={t('pos_checkout.offline_title')}
+			description={t('pos_checkout.offline_description')}
+			actions={onLeave && [{ ...leave, onPress: onLeave }]}
+		/>
+	);
+}
+
+const PERCENTS = [10, 20, 25, 50];
 
 const keypadRows = (backspace: string): KeypadKey[][] => [
 	...DIGIT_ROWS,
@@ -204,11 +230,36 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
 	const plan = flow.plan;
+	const { extraMinor, shareOpen, doneOpen, pickerOpen } = flow.state;
+	const { splitOn, picked } = flow;
+	const picking = Object.keys(picked).length > 0;
+	const pickedCount = Object.values(picked).reduce((sum, units) => sum + units, 0);
+	// On a phone there is no bill on screen: its picks are a list in the keypad's place.
+	const pickList = splitOn && phone && pickerOpen && !doneOpen;
+	const percent = flow.state.entryMode === 'percent';
 	const done = flow.planLegs.filter((leg) => leg.state === 'done');
-	const n = done.length + 1;
-	const ways = plan?.kind === 'fixed' ? 2 : Math.max(plan?.ways ?? 1, n);
+	const counted = flow.rows.filter(countsTowardPaid);
+	// Payments are numbered across the bill: those before the plan count too (ruled 2026-11-08).
+	const n = counted.length + 1;
+	const toCome = flow.planLegs.filter((leg) => leg.state === 'todo').length;
+	const ways =
+		flow.rows.slice(0, plan?.from ?? 0).filter(countsTowardPaid).length +
+		(plan?.kind === 'fixed'
+			? 1 + (plan.thenWays ?? 1)
+			: Math.max(plan?.ways ?? 1, done.length + 1));
 	const groupDone =
 		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
+	const shared = plan?.kind === 'items' && plan.ways > 1 && !groupDone;
+	const name = (id: string | number) =>
+		decode(flow.lines.find((line) => String(line.id) === String(id))?.name ?? '');
+	const doneLeg = (row: TenderFlow['rows'][number]): PlanLeg => ({
+		minor: toMinor(row.amount, flow.dp),
+		state: 'done',
+		title:
+			flow.tiles.find((item) => item.method.id === row.method_id)?.method.title ?? row.method_id,
+	});
+	const setPlan = (next: NonNullable<typeof plan>) =>
+		flow.dispatch({ type: 'set-plan', plan: next, balanceMinor: flow.balanceMinor });
 	// A cash entry the cash.rounding hook will settle is due the rounded amount (#66, #84); the
 	// Exact chip offers it whenever this leg is the whole balance, since tapping it settles.
 	const due = flow.roundingMinor !== 0 ? flow.roundedDueMinor : flow.thisPaymentMinor;
@@ -216,14 +267,15 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const exact = { amount: format(exactMinor) };
 	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
 	const noChange = Boolean(
-		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
+		method && !givesChange && !fixedAmount && !percent && flow.state.entryMinor > flow.balanceMinor
 	);
 	const left = flow.balanceMinor + flow.roundingMinor - flow.entryAppliedMinor;
 	// The big figure. The eyebrow and the Full balance chip repeat an amount only when it differs.
+	// Once tendered exceeds the amount due, the change takes the lead and this drops to a line under it.
 	const shownMinor =
 		flow.state.view === 'select'
 			? due
-			: fixedAmount
+			: fixedAmount || percent
 				? flow.entryAppliedMinor
 				: flow.state.entryMinor;
 	// A disabled tile, an offline reader included (only manual records journal offline), is listed as
@@ -265,6 +317,70 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							})
 						: t('pos_checkout.part_payment_left', { left: format(left) })
 					: '';
+	// The split's one fact, after the field, no-change and change lines; the less-than and
+	// part-payment lines follow it.
+	const splitHint = percent
+		? t('pos_checkout.percent_of_amount_type', {
+				percent: flow.state.entryMinor,
+				amount: format(flow.balanceMinor),
+			})
+		: shared && done.length === 0
+			? t('pos_checkout.share_hint', {
+					ways: plan.ways,
+					amount: format(plan.firstMinor),
+					last: format(
+						plan.firstMinor - evenSplitShareMinor(plan.firstMinor, plan.ways) * (plan.ways - 1)
+					),
+				})
+			: plan && toCome > 1 && flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+				? toCome === 2
+					? t('pos_checkout.less_than_planned_n', {
+							amount: format(due - flow.entryAppliedMinor),
+							from: n + 1,
+							to: n + 2,
+						})
+					: t('pos_checkout.less_than_planned_next_n', {
+							amount: format(due - flow.entryAppliedMinor),
+							n: toCome,
+						})
+				: '';
+	const rounding =
+		flow.allUnpaidPicked && flow.balanceMinor > flow.pickedMinor
+			? t('pos_checkout.includes_rounding_left', {
+					amount: format(flow.balanceMinor - flow.pickedMinor),
+				})
+			: '';
+	const fact =
+		missing || noChange || flow.entryChangeMinor > 0 ? hint : splitHint || hint || rounding;
+	// Split helpers: an amount typed below the balance is THIS payment; the tiles divide the rest.
+	const typed =
+		flow.state.entryDirty &&
+		flow.entryAppliedMinor > 0 &&
+		flow.entryAppliedMinor < flow.balanceMinor;
+	const restMinor = flow.balanceMinor - (typed ? flow.entryAppliedMinor : 0);
+	const shareMinor = flow.pickedMinor + (extraMinor ?? 0);
+	// While the taken payments are unfolded, their list has the keypad's place and no helpers.
+	const showDone = doneOpen && counted.length >= 1;
+	const legs: (PlanLeg & { index: number; run: number })[] = [];
+	(plan
+		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...flow.planLegs]
+		: [
+				...counted.map(doneLeg),
+				{ minor: flow.entryAppliedMinor, state: 'now' as const },
+				...(left > 0 ? [{ minor: left, state: 'rest' as const }] : []),
+			]
+	).forEach((leg, index) => {
+		const last = legs.at(-1);
+		// The taken payments are one disclosure pill (two or more fold into a count); a run of
+		// equal payments to come is one pill.
+		if (leg.state === 'done' && counted.length >= 1) return;
+		if (leg.state === 'todo' && last?.state === 'todo' && last.minor === leg.minor) last.run += 1;
+		else legs.push({ ...leg, index, run: 1 });
+	});
+	const choice = (testID: string, title: string, sub: string | undefined, onPress: () => void) => (
+		<Tile key={testID} testID={testID} disabled={busy} onPress={onPress} title={title} sub={sub} />
+	);
+	const changeLeads = !missing && !noChange && flow.entryChangeMinor > 0;
 	const entry = { amount: format(flow.entryAppliedMinor), method: method?.title };
 	const commit = method
 		? (fields
@@ -297,28 +413,42 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
 				<Text testID="checkout-label" decodeHtml variant="caption">
-					{plan
-						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
-						: flow.balanceMinor < flow.totalMinor
-							? t('pos_checkout.remaining')
-							: t('pos_checkout.to_pay')}{' '}
+					{shared
+						? t('pos_checkout.shared_payment_n_of', { n, ways })
+						: plan
+							? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
+							: counted.length > 0
+								? t('pos_checkout.payment_n_left', {
+										n: counted.length + 1,
+										amount: format(flow.balanceMinor),
+									})
+								: flow.balanceMinor < flow.totalMinor
+									? t('pos_checkout.remaining')
+									: t('pos_checkout.to_pay')}{' '}
 					<Text
 						testID="checkout-balance"
-						className={plan || flow.balanceMinor === shownMinor ? 'hidden' : 'tabular-nums'}
+						className={
+							plan || counted.length > 0 || flow.balanceMinor === shownMinor
+								? 'hidden'
+								: 'tabular-nums'
+						}
 					>
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
 				{flow.balanceMinor > 0 && !fixedAmount ? (
 					<Chip
-						on={!!plan}
+						on={splitOn}
 						label={t('pos_checkout.split')}
 						testID="checkout-split-chip"
 						disabled={busy}
+						// Off clears the plan and the picks; nothing taken is touched.
 						onPress={() =>
-							flow.dispatch({
-								type: 'open-split',
-							})
+							flow.dispatch(
+								splitOn
+									? { type: 'clear-plan', balanceMinor: flow.balanceMinor }
+									: { type: 'split-on' }
+							)
 						}
 					/>
 				) : null}
@@ -328,17 +458,39 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</Text>
 				) : null}
 			</HStack>
-			<AmountFigure testID="checkout-entry" className={flow.state.entryDirty ? '' : 'opacity-70'}>
-				{format(shownMinor)}
-			</AmountFigure>
-			<Text
-				testID="checkout-entry-hint"
-				variant="key"
-				className={`min-h-6 ${noChange ? 'text-warning-text' : flow.entryChangeMinor > 0 ? 'text-success' : ''}`}
-				decodeHtml
-			>
-				{hint}
-			</Text>
+			{changeLeads ? (
+				<>
+					<AmountFigure testID="checkout-entry-hint" tone="ok" decodeHtml>
+						{hint}
+					</AmountFigure>
+					<Text testID="checkout-tendered-line" variant="key" className="min-h-6">
+						{t('pos_checkout.tendered')}{' '}
+						<Text testID="checkout-entry" className="tabular-nums">
+							{format(shownMinor)}
+						</Text>
+						{flow.totalMinor !== flow.balanceMinor
+							? ` · ${t('common.total')} ${format(flow.totalMinor)}`
+							: ''}
+					</Text>
+				</>
+			) : (
+				<>
+					<AmountFigure
+						testID="checkout-entry"
+						className={flow.state.entryDirty ? '' : 'opacity-70'}
+					>
+						{format(shownMinor)}
+					</AmountFigure>
+					<Text
+						testID="checkout-entry-hint"
+						variant="key"
+						className={`min-h-6 ${noChange ? 'text-warning-text' : ''}`}
+						decodeHtml
+					>
+						{fact}
+					</Text>
+				</>
+			)}
 			{flow.roundingMinor !== 0 ? (
 				<Text testID="checkout-rounded-from" variant="key" decodeHtml>
 					{t('pos_checkout.rounded_from', { amount: format(flow.balanceMinor) })}
@@ -346,16 +498,80 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			) : null}
 			{flow.invoiceSent ? <InvoiceSentLine flow={flow} busy={busy} /> : null}
 			{flow.unansweredAttempt ? <AttemptUnansweredLine flow={flow} busy={busy} /> : null}
-			{plan ? (
+			{/* Two columns on a phone so six gateways' names fit (three rows), never an ellipsis. */}
+			<TileGrid columns={phone ? 2 : 5}>
+				{pills.length > 0 || !saving
+					? pills
+					: Array.from({ length: 4 }, (_, index) => (
+							<Skeleton key={index} shape="tile" testID="checkout-tile-skeleton" />
+						))}
+			</TileGrid>
+			{plan || counted.length > 0 ? (
 				<View
 					testID="checkout-plan"
-					className="flex-row flex-wrap items-center justify-center gap-2"
+					className="w-full flex-row flex-wrap items-center justify-center gap-2"
 				>
-					{flow.planLegs.map((leg, index) => (
+					{showDone ? (
+						<View testID="checkout-plan-done-open" className="w-full gap-2">
+							{counted.map((row, index) => (
+								<ListItem
+									key={row.id}
+									testID={`checkout-plan-payment-${index}`}
+									leading={<Icon name="check" className="text-success" />}
+									title={decode(`${doneLeg(row).title} · ${format(toMinor(row.amount, flow.dp))}`)}
+									subtitle={Object.entries(flow.allocations[row.id] ?? {})
+										.map(([id, units]) =>
+											t('pos_checkout.units_of_name', { units, name: name(id) })
+										)
+										.join(', ')}
+									trailing={
+										<Button
+											variant="ghost-destructive"
+											size="sm"
+											testID={`checkout-plan-payment-${index}-cancel`}
+											disabled={busy}
+											onPress={() => void flow.cancelOnePayment(row.id)}
+										>
+											<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
+										</Button>
+									}
+								/>
+							))}
+							<Button
+								variant="ghost"
+								className="self-center"
+								testID="checkout-plan-hide"
+								disabled={busy}
+								onPress={() => flow.dispatch({ type: 'toggle-done' })}
+							>
+								<ButtonText>{t('pos_checkout.hide')}</ButtonText>
+							</Button>
+						</View>
+					) : counted.length >= 1 ? (
+						<PressableSurface
+							testID="checkout-plan-done"
+							role="button"
+							disabled={busy}
+							onPress={() => flow.dispatch({ type: 'toggle-done' })}
+							className="bg-success/20 border-success/30 min-h-ctl flex-row items-center gap-1 rounded-full border px-3"
+						>
+							<Icon name="check" size="xs" className="text-success" />
+							<Text className="text-foreground text-xs" decodeHtml>
+								{counted.length === 1
+									? `${(done[0] ?? doneLeg(counted[0])).title} ${format(toMinor(counted[0].amount, flow.dp))}`
+									: t('pos_checkout.n_paid_amount', {
+											n: counted.length,
+											amount: format(flow.paidMinor),
+										})}
+							</Text>
+							<Icon name="chevronDown" size="xs" className="text-muted-foreground" />
+						</PressableSurface>
+					) : null}
+					{legs.map((leg) => (
 						<View
-							key={index}
-							testID={`checkout-plan-leg-${index}`}
-							className={`flex-row items-center gap-1 rounded-full border px-3 py-2 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-primary' : 'border-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
+							key={leg.index}
+							testID={`checkout-plan-leg-${leg.index}`}
+							className={`min-h-ctl flex-row items-center gap-1 rounded-full border px-3 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-primary' : 'border-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
 						>
 							{leg.state === 'done' ? (
 								<Icon name="check" size="xs" className="text-success" />
@@ -365,44 +581,33 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							<Text className="text-foreground text-xs" decodeHtml>
 								{leg.state === 'rest'
 									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
-									: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
+									: leg.run > 1
+										? t('pos_checkout.then_n_times', { n: leg.run, amount: format(leg.minor) })
+										: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
 							</Text>
 						</View>
 					))}
-					{flow.planMore ? (
+					{plan ? (
 						<Button
 							variant="ghost"
 							size="sm"
-							testID="checkout-plan-pick-items"
+							testID="checkout-plan-change"
 							disabled={busy}
-							onPress={() => {
-								flow.dispatch({ type: 'set-split-tab', tab: 'item' });
-								flow.dispatch({ type: 'open-split' });
-							}}
+							// The even row comes back over what is left; payments taken never move.
+							onPress={() =>
+								flow.dispatch({
+									type: 'clear-plan',
+									balanceMinor: flow.balanceMinor,
+									keepSplit: true,
+								})
+							}
 						>
-							<ButtonText className="underline">{t('pos_checkout.pick_next_items')}</ButtonText>
+							<ButtonText className="underline">{t('pos_checkout.change_split')}</ButtonText>
 						</Button>
 					) : null}
-					<Button
-						variant="ghost"
-						size="sm"
-						testID="checkout-plan-change"
-						disabled={busy}
-						onPress={() => flow.dispatch({ type: 'open-split' })}
-					>
-						<ButtonText className="underline">{t('pos_checkout.change_split')}</ButtonText>
-					</Button>
 				</View>
 			) : null}
 
-			{/* Two columns on a phone so six gateways' names fit (three rows), never an ellipsis. */}
-			<TileGrid columns={phone ? 2 : 5}>
-				{pills.length > 0 || !saving
-					? pills
-					: Array.from({ length: 4 }, (_, index) => (
-							<Skeleton key={index} shape="tile" testID="checkout-tile-skeleton" />
-						))}
-			</TileGrid>
 			{slow ? (
 				<Text testID="checkout-save-slow" className="text-warning-text text-sm">
 					{t('pos_checkout.store_not_answering')}
@@ -535,9 +740,161 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				/>
 			) : null}
 
-			{method && !fixedAmount ? (
-				<View className="flex-row flex-wrap justify-center gap-2">
-					{(givesChange && !remote ? flow.quickAmountsMinor : []).map((minor) => (
+			{showDone ? null : (
+				<View testID="checkout-helpers" className="w-full flex-row flex-wrap justify-center gap-2">
+					{splitOn && phone ? (
+						<Chip
+							label={pickerOpen ? t('pos_checkout.back_to_keypad') : t('pos_checkout.pick_items')}
+							count={pickerOpen ? pickedCount : undefined}
+							on={pickerOpen}
+							testID="checkout-pick-items"
+							disabled={busy}
+							onPress={() => flow.dispatch({ type: 'toggle-picker' })}
+						/>
+					) : null}
+					{splitOn && !picking && !plan && !percent ? (
+						<>
+							<Text variant="key" className="w-full text-center">
+								{typed
+									? t('pos_checkout.after_this_payment', { amount: format(restMinor) })
+									: t('pos_checkout.split_the_rest')}
+							</Text>
+							<TileGrid columns={phone ? 2 : 5}>
+								{choice(
+									'checkout-percent',
+									t('pos_checkout.percent_tile'),
+									t('pos_checkout.percent_tile_sub'),
+									() => flow.dispatch({ type: 'set-entry-mode', mode: 'percent' })
+								)}
+								{[2, 3, 4, 5, 6].map((count) =>
+									choice(
+										`checkout-even-${count}`,
+										t('pos_checkout.n_ways', { ways: count }),
+										t('pos_checkout.amount_each', {
+											amount: format(evenSplitShareMinor(restMinor, count)),
+										}),
+										() =>
+											setPlan(
+												typed
+													? {
+															kind: 'fixed',
+															firstMinor: flow.entryAppliedMinor,
+															title: null,
+															thenWays: count,
+															from: flow.rows.length,
+														}
+													: { kind: 'even', ways: count, from: flow.rows.length }
+											)
+									)
+								)}
+							</TileGrid>
+						</>
+					) : null}
+					{percent ? (
+						<>
+							<Text variant="key" className="w-full text-center">
+								{t('pos_checkout.percent_of_the_rest')}
+							</Text>
+							{PERCENTS.map((value) => (
+								<Chip
+									key={value}
+									label={t('pos_checkout.split_percent_value', { percent: value })}
+									on={flow.state.entryMinor === value}
+									testID={`checkout-percent-${value}`}
+									disabled={busy}
+									onPress={() => flow.dispatch({ type: 'set-entry', minor: value })}
+								/>
+							))}
+							<Chip
+								label={t('pos_checkout.percent_type')}
+								on={!PERCENTS.includes(flow.state.entryMinor)}
+								testID="checkout-percent-type"
+								disabled={busy}
+								onPress={() => flow.dispatch({ type: 'set-entry', minor: 0 })}
+							/>
+						</>
+					) : null}
+					{Object.entries(picked).map(([lineId, units]) => (
+						<Chip
+							key={lineId}
+							label={t('pos_checkout.units_of_name', { units, name: name(lineId) })}
+							testID={`checkout-leg-${lineId}`}
+							disabled={busy}
+							action={{
+								icon: 'close',
+								accessibilityLabel: t('common.remove'),
+								onPress: () => flow.dispatch({ type: 'pick-units', lineId, units: 0 }),
+							}}
+						/>
+					))}
+					{picking && flow.discountMinor > 0 ? (
+						<Text testID="checkout-discount-note" variant="help" className="w-full text-center">
+							{t('pos_checkout.prices_include_discount')}
+						</Text>
+					) : null}
+					{picking ? (
+						<>
+							<Chip
+								add
+								on={extraMinor !== null}
+								label={
+									extraMinor === null
+										? t('pos_checkout.plus_amount')
+										: t('pos_checkout.plus_amount_value', { amount: format(extraMinor) })
+								}
+								testID="checkout-plus-amount"
+								disabled={busy}
+								onPress={() => flow.dispatch({ type: 'arm-extra' })}
+							/>
+							<Chip
+								add
+								on={shareOpen}
+								label={t('pos_checkout.share')}
+								testID="checkout-share"
+								disabled={busy}
+								onPress={() => flow.dispatch({ type: 'toggle-share' })}
+							/>
+						</>
+					) : null}
+					{picking && shareOpen ? (
+						<>
+							<Text variant="key" className="w-full text-center">
+								{t('pos_checkout.share_this_payment')}
+							</Text>
+							<TileGrid columns={3}>
+								{[2, 3, 4].map((count) =>
+									choice(
+										`checkout-share-${count}`,
+										t('pos_checkout.ways_each', {
+											ways: count,
+											amount: format(evenSplitShareMinor(shareMinor, count)),
+										}),
+										undefined,
+										() =>
+											setPlan({
+												kind: 'items',
+												units: picked,
+												firstMinor: shareMinor,
+												ways: count,
+												from: flow.rows.length,
+											})
+									)
+								)}
+							</TileGrid>
+						</>
+					) : null}
+					{plan && toCome === 0 && shownMinor !== flow.balanceMinor ? (
+						<Chip
+							label={t('pos_checkout.the_rest_amount', { amount: format(flow.balanceMinor) })}
+							testID="checkout-the-rest"
+							disabled={busy}
+							onPress={() => flow.dispatch({ type: 'set-entry', minor: flow.balanceMinor })}
+						/>
+					) : null}
+					{(method && !fixedAmount && !percent && givesChange && !remote
+						? flow.quickAmountsMinor
+						: []
+					).map((minor) => (
 						<Chip
 							key={minor}
 							label={format(minor)}
@@ -546,31 +903,100 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							onPress={() => flow.dispatch({ type: 'set-entry', minor })}
 						/>
 					))}
-					<Chip
-						label={
-							(givesChange && !remote) || plan
-								? t('pos_checkout.exact_amount', exact)
-								: exactMinor === shownMinor
-									? t('pos_checkout.full_balance_label', exact)
-									: t('pos_checkout.full_balance', exact)
-						}
-						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
-						disabled={busy}
-						onPress={() => flow.dispatch({ type: 'set-entry', minor: exactMinor })}
-					/>
+					{method && !fixedAmount && !percent ? (
+						<Chip
+							label={
+								(givesChange && !remote) || plan
+									? t('pos_checkout.exact_amount', exact)
+									: exactMinor === shownMinor
+										? t('pos_checkout.full_balance_label', exact)
+										: t('pos_checkout.full_balance', exact)
+							}
+							testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
+							disabled={busy}
+							onPress={() => flow.dispatch({ type: 'set-entry', minor: exactMinor })}
+						/>
+					) : null}
+				</View>
+			)}
+
+			{pickList ? (
+				<View testID="checkout-pick-list" className="w-full gap-2">
+					{flow.lines.map((line) => {
+						const key = String(line.id);
+						const units = picked[key] ?? 0;
+						const unpaid = flow.unpaidUnits(line.id);
+						const paid = flow.paidUnits[key];
+						const paidN = paid?.units ?? 0;
+						const { totalMinor: total, quantity } = line;
+						return (
+							<ListItem
+								key={key}
+								selected={units > 0}
+								trailing={
+									unpaid > 0 ? (
+										<>
+											<UnitStepper
+												picked={units}
+												unpaid={unpaid}
+												testIDBase={`checkout-line-${key}`}
+												onChange={(next) =>
+													flow.dispatch({ type: 'pick-units', lineId: key, units: next })
+												}
+											/>
+											{units > 0 ? (
+												<Text className="font-semibold tabular-nums">
+													{format(
+														unitsMinor(total, quantity, paidN + units) -
+															unitsMinor(total, quantity, paidN)
+													)}
+												</Text>
+											) : null}
+										</>
+									) : null
+								}
+							>
+								{/* A tap on the name picks every unpaid unit; the stepper beside it is not inside it. */}
+								<PressableSurface
+									role="button"
+									minTarget
+									testID={`checkout-line-${key}-pick`}
+									disabled={busy || unpaid === 0}
+									onPress={() => flow.dispatch({ type: 'pick-units', lineId: key, units: unpaid })}
+								>
+									<Text variant="subheading" className="leading-tight">
+										{decode(line.name)}
+									</Text>
+									<Text variant="key" className="leading-tight" decodeHtml>
+										{paid
+											? t('pos_checkout.units_paid_of', {
+													n: paid.units,
+													total: line.quantity,
+													methods: paid.methods.join(' + '),
+												})
+											: t('pos_checkout.unit_price_each', {
+													amount: format(unitsMinor(line.totalMinor, line.quantity, 1)),
+												})}
+									</Text>
+								</PressableSurface>
+							</ListItem>
+						);
+					})}
 				</View>
 			) : null}
-
-			<Keypad
-				rows={KEYPAD_ROWS.map((row) =>
-					row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
-				)}
-				onPress={(name) => flow.dispatch({ type: 'key', key: name as TenderKey })}
-				fit={shrink ? 'shrink' : 'tile'}
-				testID="checkout-keypad"
-				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
-				className="w-full"
-			/>
+			{/* The opened payments and the phone's pick list take the keypad's place: gone, not shrunk. */}
+			{showDone || pickList ? null : (
+				<Keypad
+					rows={KEYPAD_ROWS.map((row) =>
+						row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
+					)}
+					onPress={(name) => flow.dispatch({ type: 'key', key: name as TenderKey })}
+					fit={shrink ? 'shrink' : 'tile'}
+					testID="checkout-keypad"
+					onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
+					className="w-full"
+				/>
+			)}
 			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
 			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
 				<Button

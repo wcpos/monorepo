@@ -1,7 +1,7 @@
 import * as React from 'react';
 
+import { Badge } from '@wcpos/components/badge';
 import { useT } from '@wcpos/core/contexts/translations';
-import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import type { NavigationAreaItem } from '@wcpos/core/screens/main/components/navigation-area';
 
 export function useHealthNavigationItems(unreadErrorCount: number): NavigationAreaItem[] {
@@ -22,7 +22,7 @@ export function useHealthNavigationItems(unreadErrorCount: number): NavigationAr
 			href: '/health/logs',
 			label: t('common.logs'),
 			testID: 'health-nav-logs',
-			badge: <LogsBadge unread={unreadErrorCount} />,
+			badge: <Badge count={unreadErrorCount} max={99} variant="bad" size="sm" />,
 		},
 	];
 }

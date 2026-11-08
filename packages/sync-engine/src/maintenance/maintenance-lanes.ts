@@ -4,7 +4,11 @@
  *
  *  - ORDER OPEN-RECENT WINDOW SEED: orders aren't covered by the change
  *    signal, so the open/recent window is re-seeded on an interval (windowed
- *    lane, one bounded fetch — never a bulk pull; guardrail G3).
+ *    lane, one bounded fetch — never a bulk pull; guardrail G3). The same tick
+ *    re-seeds a targeted fetch of every held `pos-open` cart that has a
+ *    remoteId and no local work, so a cart the store trashed is removed here
+ *    (the targeted fetch treats an omitted id as gone) — a POS-only session
+ *    runs neither tombstone lane.
  *  - PRODUCT BROWSE-WINDOW SEED (ADR 0027 §2): so a cold grid shows products
  *    without a search, a bounded result window by the POS default catalog sort
  *    is re-seeded on an interval (windowed lane, never a bulk pull; guardrail
@@ -29,7 +33,7 @@
  */
 
 import { REFERENCE_COLLECTIONS } from '@wcpos/sync-core';
-import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type { OrderDocument, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import {
 	censusCollectionFromQueryKey,
@@ -51,6 +55,7 @@ import {
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
 	seedRefundWindowLane,
+	seedTargetedOrderSchedulerTask,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
 import {
@@ -70,6 +75,9 @@ import {
 } from './lane-registry';
 import { scopeBoundFailureStreak } from '../failure-streak';
 import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
+import { findAllUncached } from '../collections/find-all-uncached';
+import { hasPendingLocalWork } from '../write-path/local-work-guard';
+import { OPEN_CART_ORDER_STATUS } from '../write-path/open-cart-hold';
 
 import type {
 	BarcodeSelectors,
@@ -636,7 +644,32 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			// manual-mode harnesses advance one deterministic clock).
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
-		return seedSummary('Orders open-recent window seed (windowed, not a bulk pull)', result);
+		// Uncached: a bare `.exec()` every tick would pin this query and its cart documents in
+		// RxDB's query cache with no subscriber (the #2541 background-read class).
+		const heldOpenCarts = await findAllUncached(db.collections.orders, {
+			selector: { status: OPEN_CART_ORDER_STATUS },
+		});
+		const remoteIds = heldOpenCarts
+			.map((doc): OrderDocument => doc.toJSON())
+			.flatMap((doc) => (doc.remoteId !== null && !hasPendingLocalWork(doc) ? [doc.remoteId] : []));
+		if (remoteIds.length > 0) {
+			const seeded = await seedTargetedOrderSchedulerTask({
+				remoteIds,
+				priority: ORDER_OPEN_RECENT_PRIORITY,
+				completedDedupeForMs: 0,
+				database: db,
+				...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+			});
+			// Fold the second seed into the summary like the reference lane does: a claim lost on
+			// it must raise the level, and the window seed alone usually dedupes to nothing.
+			result.inserted += seeded.inserted;
+			result.requeued += seeded.requeued;
+			result.claimLost += seeded.claimLost;
+		}
+		return seedSummary(
+			`Orders open-recent window seed (windowed, not a bulk pull); queued a check of ${remoteIds.length} held open carts`,
+			result
+		);
 	});
 
 	const productBrowseWindowSeed = lane('product-browse-window-seed', async (db) => {

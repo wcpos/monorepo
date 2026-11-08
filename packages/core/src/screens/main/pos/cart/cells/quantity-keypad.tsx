@@ -11,6 +11,7 @@ import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 import { useSplitLineItem } from '../../hooks/use-split-line-item';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
+import { UnitStepper } from '../../checkout/tender/unit-stepper';
 import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
 type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
@@ -22,17 +23,38 @@ export function Quantity(props: CellContext<Props, 'quantity'>) {
 	return useCartTableReadOnly() ? <ReadOnlyQuantity {...props} /> : <EditableQuantity {...props} />;
 }
 
-/** The quantity as the input shows it, centred in the same cell, with nothing to press. */
+/**
+ * The quantity as the input shows it, centred in the same cell, with nothing to press; while
+ * the bill is the split picker, a line with unpaid units is THIS payment's stepper instead.
+ */
 function ReadOnlyQuantity({ row }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	// The store's separators, as the quantity input shows a fractional quantity.
 	const { format } = useNumberFormat(QUANTITY_FORMAT);
+	const picker = useCartTableReadOnly()?.picker;
+	const key = readOnlyLineKey(uuid, item);
+	const unpaid = (item.quantity ?? 1) - (picker?.paid[key]?.units ?? 0);
+	if (picker && unpaid > 0) {
+		const units = picker.picked[key] ?? 0;
+		return (
+			<VStack className="min-h-row items-center justify-center gap-1">
+				<UnitStepper
+					picked={units}
+					unpaid={unpaid}
+					testIDBase={`checkout-line-${key}`}
+					onChange={(next) => picker.pick(key, next)}
+				/>
+				{units > 0 ? (
+					<Text className="font-semibold tabular-nums">
+						{picker.format(picker.unitMinor(key, units))}
+					</Text>
+				) : null}
+			</VStack>
+		);
+	}
 	return (
 		<VStack className="min-h-row items-center justify-center">
-			<Text
-				testID={readOnlyTestID('qty', readOnlyLineKey(uuid, item))}
-				className="text-center font-semibold tabular-nums"
-			>
+			<Text testID={readOnlyTestID('qty', key)} className="text-center font-semibold tabular-nums">
 				{format(item.quantity ?? 1)}
 			</Text>
 		</VStack>

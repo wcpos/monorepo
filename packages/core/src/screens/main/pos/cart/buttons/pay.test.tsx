@@ -27,6 +27,7 @@ const mockOrder = { isNew: false, uuid: 'order-1', payload: { total: '10.00', li
 let mockUnmet: { id: string; lineUuid: string }[] = [];
 const mockScrollToLine = jest.fn();
 const mockInfo = jest.fn();
+const mockError = jest.fn();
 jest.mock('../../conditions/use-cart-conditions', () => ({
 	useCartUnmet: () => mockUnmet,
 	scrollToLine: (uuid: string) => mockScrollToLine(uuid),
@@ -34,7 +35,7 @@ jest.mock('../../conditions/use-cart-conditions', () => ({
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = {
 		info: (...args: unknown[]) => mockInfo(...args),
-		error: jest.fn(),
+		error: (...args: unknown[]) => mockError(...args),
 		with: () => logger,
 	};
 	return { ...jest.requireActual('@wcpos/utils/logger'), getLogger: () => logger };
@@ -349,3 +350,23 @@ it.each(['counting', 'closed'])(
 		}
 	}
 );
+
+it('leaves the known-gone refusal to the settler without a generic toast or error', async () => {
+	mockSave.mockResolvedValue({
+		outcome: 'rejected',
+		rejection: {
+			status: 404,
+			reason: 'woo_rxdb_sync_record_not_found',
+			message: 'No record for recordId.',
+		},
+	});
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
+	expect(mockRefusal).not.toHaveBeenCalled();
+	expect(mockError).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith(
+		'Checkout refused: the store no longer has this order; settling',
+		{ context: { orderId: 'order-1', orderNumber: undefined } }
+	);
+});

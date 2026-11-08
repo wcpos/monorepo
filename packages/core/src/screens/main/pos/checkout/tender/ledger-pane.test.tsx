@@ -26,8 +26,14 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(''),
-	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<span data-testid={testID}>{children}</span>
+	Text: ({
+		children,
+		testID,
+		className,
+	}: React.PropsWithChildren<{ testID?: string; className?: string }>) => (
+		<span data-testid={testID} className={className}>
+			{children}
+		</span>
 	),
 }));
 jest.mock('react-native', () => ({
@@ -82,6 +88,9 @@ const view: LedgerView = {
 	totalMinor: 3000,
 	paidMinor: 2000,
 	balanceMinor: 1000,
+	allocations: {},
+	lines: [],
+	paidUnits: {},
 };
 const format = (minor: number) => `£${minor / 100}`;
 it('lists the legs without a bar or timeline: event times, Next, and cash-only change', () => {
@@ -99,6 +108,29 @@ it('lists the legs without a bar or timeline: event times, Next, and cash-only c
 	expect(screen.getByTestId('checkout-leg-card').textContent).not.toContain('Tendered');
 	// Without `closing` (the phone pane) there are no closing rows.
 	expect(screen.queryByTestId('checkout-ledger-totals')).toBeNull();
+});
+it('lists what each payment paid for, and keeps a cancelled one struck through as Cancelled', () => {
+	render(
+		<LedgerLegs
+			view={{
+				...view,
+				rows: [row, { ...row, id: 'void', status: 'voided' }],
+				allocations: { cash: { fw: 1, burger: 1 }, void: { fw: 1 } },
+				lines: [
+					{ id: 'fw', name: 'Flat white', quantity: 2, totalMinor: 900 },
+					{ id: 'burger', name: 'Burger', quantity: 3, totalMinor: 5550 },
+				],
+			}}
+			format={format}
+		/>
+	);
+	expect(screen.getByTestId('checkout-leg-cash').textContent).toContain('1 Flat white, 1 Burger');
+	expect(screen.queryByTestId('checkout-payment-0-cancelled')).toBeNull();
+	const voided = screen.getByTestId('checkout-leg-void');
+	expect(screen.getByTestId('checkout-payment-1-cancelled').textContent).toBe('Cancelled');
+	expect(voided.textContent).not.toContain('Voided');
+	expect(within(voided).getByText('£10').className).toContain('line-through');
+	expect(within(voided).getByText('cash').className).toContain('line-through');
 });
 it('shows paid in full at zero balance and keeps the empty state', () => {
 	const { rerender } = render(

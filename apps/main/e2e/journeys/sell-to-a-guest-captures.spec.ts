@@ -12,10 +12,14 @@ import {
 	CAPTURE_SCHEMES,
 	CAPTURE_STEPS,
 	captureViewport,
+	cleanUp,
 	ensureSystemTheme,
+	hasScaleStyle,
 } from '../capture-matrix';
 import { getStoreUrl, getStoreVariant } from '../fixtures';
 import { liveOrderTest as test } from '../order-lifecycle';
+import { pickDocsRegister, showStore } from './demo-register';
+import { showAllProducts } from './find-a-product';
 import { closeRegister, openRegister } from './open-register';
 import { SELL_TO_A_GUEST, sellToAGuest } from './sell-to-a-guest';
 
@@ -23,21 +27,6 @@ test.skip(process.env.CAPTURES !== '1', 'J2 captures run only with CAPTURES=1');
 // `recordCapture` read-modifies-writes one manifest per page and locale, and this file runs under
 // `fullyParallel`, so serial is what makes that safe; one `--project` per run.
 test.describe.configure({ mode: 'serial' });
-
-/**
- * Every cleanup runs even when one before it fails. After a failed walk a cleanup failure is only
- * logged, so it never hides the walk's own error; after a passed walk the first one fails the test.
- */
-async function cleanUp(walked: boolean, steps: [string, () => Promise<unknown>][]): Promise<void> {
-	const failures: unknown[] = [];
-	for (const [name, step] of steps) {
-		await step().catch((error: unknown) => {
-			if (walked) failures.push(error);
-			else console.error(`[cleanup] ${name} failed after the walk failed:`, error);
-		});
-	}
-	if (failures.length > 0) throw failures[0];
-}
 
 /** What each step's docs call-outs point at. A testID not on screen is left out of the manifest. */
 const PINS_BY_STEP: Record<number, readonly string[]> = {
@@ -85,15 +74,6 @@ const LABELLED_STEPS = [3, 5, 6];
 /** Docs shots come only from demo; dev stores differ (no register bar, their own receipt templates). */
 const DOCS_STORE = 'demo.wcpos.com';
 
-/** Whether the scale style tag `applyScale` adds is still in the document. */
-function hasScaleStyle(page: Page): Promise<boolean> {
-	return page.evaluate(() =>
-		Array.from(document.querySelectorAll('style')).some((style) =>
-			style.textContent?.startsWith(':root, [style*="--spacing:"]')
-		)
-	);
-}
-
 /** Step 6 waits for the receipt to finish drawing; a store with no receipt to draw counts as drawn. */
 async function receiptDrawn(page: Page): Promise<void> {
 	if (!(await page.getByTestId('checkout-receipt-stage').isVisible())) return;
@@ -118,12 +98,16 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 				}, info) => {
 					// The walk, plus putting the register, theme and language back on the shared store.
 					test.setTimeout(420_000);
+					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
+					// The theme and language below belong to the store the app is on.
+					if (docsShoot) await showStore(posPage, request, info, storeAuthorization);
 					const restoreSettings = await ensureSystemTheme(posPage, { english: true });
 					let opened = false;
+					// Set only once the pick returned: it refuses a held register, so a session here is this run's.
+					let picked = false;
 					let walked = false;
 					let unscale = async () => {};
 					let cashEntryShot = false;
-					const docsShoot = new URL(getStoreUrl(info)).hostname === DOCS_STORE;
 					const shoot = async (number: number, slug: string): Promise<void> => {
 						// A navigation or reload drops the added style tag; re-scale before the shot.
 						if (!(await hasScaleStyle(posPage))) {
@@ -172,8 +156,15 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						});
 					};
 					try {
+						if (docsShoot) {
+							await pickDocsRegister(posPage, request, info, storeAuthorization);
+							picked = true;
+						}
 						opened = await openRegister(posPage);
 						console.log(`[register] ${info.titlePath.at(-2)}: opened=${opened}`);
+						// A docs shoot with no register it opened has nothing to sell on.
+						if (docsShoot && !opened) throw new Error('the docs register did not open');
+						if (docsShoot) await showAllProducts(posPage);
 						unscale = await applyScale(posPage, step);
 						await sellToAGuest({
 							page: posPage,
@@ -211,7 +202,7 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 								},
 							],
 							['unscale', unscale],
-							['closeRegister', async () => opened && closeRegister(posPage)],
+							['closeRegister', async () => (opened || picked) && closeRegister(posPage)],
 							['restoreSettings', restoreSettings],
 						]);
 					}

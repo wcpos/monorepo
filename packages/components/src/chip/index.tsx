@@ -41,6 +41,12 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	 * on-state at both sizes (ruled 2026-10-16, decision 10).
 	 */
 	size?: 'default' | 'sm';
+	/**
+	 * A chip in a grid tile fills the tile (the phone Reports chips): the label half takes the
+	 * slack, so a clear control or action sits at the tile's edge. A zero basis is safe there
+	 * because the tile gives the pill an exact width.
+	 */
+	stretch?: boolean;
 };
 
 /**
@@ -70,6 +76,7 @@ export function Chip({
 	clearTestID,
 	action,
 	size = 'default',
+	stretch = false,
 	disabled,
 	testID,
 	className,
@@ -145,8 +152,9 @@ export function Chip({
 			className={cn(
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
-				// drawn chip is inline-flex.
+				// drawn chip is inline-flex. `stretch` is the one opt-in to fill (the merge drops `self-start`).
 				'bg-chip rounded-chip max-w-full flex-row items-center gap-1.5 self-start border-[length:var(--shape-ctl-border)]',
+				stretch && 'self-stretch',
 				sm ? 'h-8 px-2.5' : 'h-ctl px-3',
 				// With an action each cell fills on its own (the strip rule, 2026-10-09), so the
 				// label half carries the padding and the pill neither fills nor pads.
@@ -168,8 +176,14 @@ export function Chip({
 							role="button"
 							{...selectedState(on)}
 							disabled={inactive}
+							// `shrink`, never a zero basis: with `flex-1` the half's width was whatever Yoga had
+							// measured for the pill's parent, and the cart header's shrinking wrapper gave it
+							// zero on a cold start, so the customer chip showed only its avatar and pin until a
+							// hot reload re-measured it (owner, iPad, 2026-11-08). Content width, shrinking to
+							// truncate, is what a hugging pill's half wants; `stretch` is the one case that fills.
 							className={cn(
-								'flex-1 flex-row items-center gap-1.5 self-stretch',
+								stretch ? 'flex-1' : 'shrink',
+								'flex-row items-center gap-1.5 self-stretch',
 								!action
 									? 'active:opacity-70'
 									: cn(

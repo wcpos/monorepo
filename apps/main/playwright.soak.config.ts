@@ -65,5 +65,25 @@ export default defineConfig<WcposTestOptions>({
 				},
 			},
 		},
+		{
+			name: 'open-the-register-soak',
+			testMatch: /journeys\/open-the-register-soak\.live\.spec\.ts/,
+			use: {
+				...soakStore,
+				launchOptions: {
+					args: ['--enable-blink-features=UnrestrictedMeasureUserAgentSpecificMemory'],
+				},
+			},
+		},
+		{
+			name: 'find-a-product-soak',
+			testMatch: /journeys\/find-a-product-soak\.live\.spec\.ts/,
+			use: {
+				...soakStore,
+				launchOptions: {
+					args: ['--enable-blink-features=UnrestrictedMeasureUserAgentSpecificMemory'],
+				},
+			},
+		},
 	],
 });

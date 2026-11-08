@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { loadAsync } from 'expo-font';
 import { BehaviorSubject } from 'rxjs';
 
@@ -9,7 +9,7 @@ import { FONT_FACES } from '@wcpos/components/lib/fonts';
 import { SYSTEM_TYPE, useThemeTraits } from '@wcpos/components/lib/theme-traits';
 import { THEME_TYPE, TYPE_SETS } from '@wcpos/components/lib/themes';
 
-import { resolveTypeSet, ThemeTraitsSettingProvider } from './index';
+import { resolveTypeSet, ThemeTraitsSettingProvider, useThemeType } from './index';
 
 const store: { theme?: string; fonts?: string; $?: BehaviorSubject<{ theme: string }> } = {};
 jest.mock('../app-state', () => ({ useAppState: () => ({ store }) }));
@@ -52,6 +52,27 @@ beforeEach(() => {
 	store.fonts = undefined;
 	delete store.$;
 	jest.mocked(loadAsync).mockReset();
+});
+
+it('publishes the loaded type and reports failure independently of the provider', async () => {
+	const loaded = pendingLoad();
+	const failed = pendingLoad();
+	jest.mocked(loadAsync).mockReturnValueOnce(loaded.promise).mockReturnValueOnce(failed.promise);
+	const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+	try {
+		const success = renderHook(() => useThemeType('manrope'));
+		expect(success.result.current).toEqual({ status: 'loading', type: SYSTEM_TYPE });
+		await act(async () => loaded.resolve());
+		expect(success.result.current).toEqual({ status: 'loaded', type: TYPE_SETS.manrope });
+		success.unmount();
+
+		const failure = renderHook(() => useThemeType('manrope'));
+		expect(failure.result.current).toEqual({ status: 'loading', type: SYSTEM_TYPE });
+		await act(async () => failed.reject(new Error('Failed to load font')));
+		expect(failure.result.current).toEqual({ status: 'failed', type: SYSTEM_TYPE });
+	} finally {
+		warn.mockRestore();
+	}
 });
 
 it('draws system type on light without loading fonts', () => {

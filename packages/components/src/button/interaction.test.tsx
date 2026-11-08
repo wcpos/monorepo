@@ -94,3 +94,30 @@ it('sizes icon roots separately from their glyphs and supports on', () => {
 	rerender(<IconButton name="plus" accessibilityLabel="Add" />);
 	expect(pressable.className).toContain('size-ctl');
 });
+
+it('a link verb is underlined only on a theme whose trait says its link ink is the foreground', () => {
+	const { ThemeTraitsContext, DEFAULT_TRAITS } =
+		jest.requireActual<typeof import('../lib/theme-traits')>('../lib/theme-traits');
+	const { rerender } = render(
+		<Button variant="link">
+			<Probe />
+		</Button>
+	);
+	expect(screen.getByTestId('context').className.split(' ')).not.toContain('underline');
+	rerender(
+		<ThemeTraitsContext.Provider value={{ ...DEFAULT_TRAITS, linkUnderline: true }}>
+			<Button variant="link">
+				<Probe />
+			</Button>
+		</ThemeTraitsContext.Provider>
+	);
+	expect(screen.getByTestId('context').className.split(' ')).toContain('underline');
+	rerender(
+		<ThemeTraitsContext.Provider value={{ ...DEFAULT_TRAITS, linkUnderline: true }}>
+			<Button variant="outline">
+				<Probe />
+			</Button>
+		</ThemeTraitsContext.Provider>
+	);
+	expect(screen.getByTestId('context').className.split(' ')).not.toContain('underline');
+});

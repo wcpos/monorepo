@@ -35,6 +35,8 @@ test('public value surface is exactly the spec', () => {
 		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
+		// Added 2026-11-08 (split V1 slice 1): per-payment item provenance, read back for the receipt's "n of m paid" mark.
+		'paidUnitsMeta',
 		'parsePaymentsContract',
 		'partitionVoidableRows',
 		'readAwaitingCustomer',
@@ -43,6 +45,8 @@ test('public value surface is exactly the spec', () => {
 		// the awaiting stamp is derived from them, as the plugin's Attempt_Log::awaiting() does.
 		'readGatewayAttempts',
 		'readLedger',
+		// Added 2026-11-08 (split V1 slice 1): per-payment item provenance, read back for the receipt's "n of m paid" mark.
+		'readPaidUnits',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then
 		// deducts a total. Without a shared rule for "what one refund is worth" the
 		// rows and the deduction were computed differently and could disagree on
@@ -81,6 +85,11 @@ test('public value surface is exactly the spec', () => {
 		'withMetaReplaced',
 		'withSaleProvenance',
 	]);
+});
+
+// Added 2026-11-08 (split V1 slice 1): per-payment item provenance, read back for the receipt's "n of m paid" mark.
+test('paid-unit metadata key is part of the public surface', () => {
+	expect(api.PAID_UNITS_META_KEY).toBe('_wcpos_paid_units');
 });
 
 test('settlementPatch returns the settlement money patch', () => {

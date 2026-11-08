@@ -1,22 +1,27 @@
 import * as React from 'react';
-import { type TextInputInstance, View } from 'react-native';
+import { type TextInputInstance } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Input } from '@wcpos/components/input';
 import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
 import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { amountFigure } from '@wcpos/components/amount-figure';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
+import { TileGrid } from '@wcpos/components/tile-grid';
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
@@ -49,7 +54,10 @@ export function RegisterAmount({
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
-} & Pick<React.ComponentProps<typeof Input.InputField>, 'onBlur' | 'onFocus' | 'onPressIn'>) {
+} & Pick<
+	React.ComponentProps<typeof Input.InputField> & React.AriaAttributes,
+	'onBlur' | 'onFocus' | 'onPressIn' | 'aria-invalid' | 'aria-describedby'
+>) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
 	// The locale's own zero, without the symbol that already sits beside it.
 	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
@@ -105,7 +113,9 @@ export function MovementSheet({
 	onDone: (id: string, type: MovementType, amount: string) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { actions, expected, blind } = useRegisterSession();
+	const { actions, expected, blind, binding } = useRegisterSession();
+	const phone = useIsPhone();
+	const invalidId = React.useId();
 	const { openDrawer } = useSessionReport();
 	const { format } = useCurrencyFormat();
 	const [amount, setAmount] = React.useState('');
@@ -121,6 +131,9 @@ export function MovementSheet({
 		paid_in: t('register.question_paid_in'),
 		paid_out: t('register.question_paid_out'),
 		no_sale: t('register.question_no_sale'),
+		title_paid_in: t('register.paid_in'),
+		title_paid_out: t('register.paid_out'),
+		title_no_sale: t('register.no_sale'),
 		amount: t('register.movement_needs_amount'),
 		reason: t('register.movement_needs_reason'),
 		supplier: t('register.reason_supplier'),
@@ -195,20 +208,11 @@ export function MovementSheet({
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost={portalHost}>
 				<DialogHeader>
-					<DialogTitle>{type ? words[type] : ''}</DialogTitle>
-				</DialogHeader>
-				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
-				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
-					{type !== 'no_sale' && (
-						<RegisterAmount
-							testID="movement-amount"
-							value={amount.replace('.', separator)}
-							onChangeText={(value) => setAmount(value.replace(separator, '.'))}
-						/>
-					)}
+					<DialogTitle>{type ? words[`title_${type}`] : ''}</DialogTitle>
 					{/* The consequence, said once: what the drawer holds, and what it will after. */}
 					{!blind && (
-						<Text testID="movement-after" variant="key" tabular>
+						<DialogDescription testID="movement-after">
+							{binding.registerName} ·{' '}
 							{hasAmount ? (
 								<>
 									{beforeAfter}
@@ -220,9 +224,31 @@ export function MovementSheet({
 							) : (
 								t('register.drawer_holds', { drawer: holds })
 							)}
-						</Text>
+						</DialogDescription>
 					)}
-					<View className="flex-row flex-wrap gap-2">
+				</DialogHeader>
+				{/* Taps on the keypad and chips must land while the note's keyboard is up (native). */}
+				<DialogBody className="gap-3" keyboardShouldPersistTaps="handled">
+					<Text variant="section">{type ? words[type] : ''}</Text>
+					{type !== 'no_sale' && (
+						<>
+							<RegisterAmount
+								testID="movement-amount"
+								aria-invalid={invalid === 'amount'}
+								aria-describedby={invalid === 'amount' ? invalidId : undefined}
+								value={amount.replace('.', separator)}
+								onChangeText={(value) => setAmount(value.replace(separator, '.'))}
+							/>
+							<Keypad
+								rows={keypadRows}
+								onPress={press}
+								fit={phone ? 'shrink' : 'tile'}
+								testID="movement"
+							/>
+						</>
+					)}
+					<Text className="text-muted-foreground">{t('register.reason')}</Text>
+					<TileGrid columns={phone ? 2 : 3}>
 						{type &&
 							[...REASONS[type], 'other'].map((key) => {
 								const label = words[key];
@@ -230,6 +256,8 @@ export function MovementSheet({
 								return (
 									<Chip
 										key={key}
+										stretch
+										className="justify-center"
 										label={label}
 										on={!other && reason === label}
 										testID={`movement-reason-${key.replace(/_/g, '-')}`}
@@ -240,26 +268,34 @@ export function MovementSheet({
 									/>
 								);
 							})}
-					</View>
+					</TileGrid>
 					<Input
 						ref={noteRef}
 						testID="movement-reason"
+						aria-invalid={invalid === 'reason'}
+						aria-describedby={invalid === 'reason' ? invalidId : undefined}
 						placeholder={t('register.reason')}
 						value={reason}
 						onChangeText={setReason}
 					/>
-					{!!invalid && (
-						<Text testID="movement-invalid" variant="key">
-							{words[invalid]}
-						</Text>
-					)}
 					{!!error && <Text className="text-bad text-sm">{error}</Text>}
-					{type !== 'no_sale' && (
-						<Keypad rows={keypadRows} onPress={press} fit="tile" testID="movement" />
-					)}
 				</DialogBody>
 				<DialogFooter
 					size="lg"
+					aside={
+						!!invalid && (
+							<HStack className="items-center gap-1">
+								<Icon name="info" size="sm" className="text-muted-foreground" />
+								<Text
+									testID="movement-invalid"
+									nativeID={invalidId}
+									className="text-muted-foreground"
+								>
+									{words[invalid]}
+								</Text>
+							</HStack>
+						)
+					}
 					intent={{
 						label: verb,
 						testID: 'movement-confirm',

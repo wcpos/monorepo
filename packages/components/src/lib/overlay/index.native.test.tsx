@@ -3,6 +3,7 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 
 import { render, screen } from '@testing-library/react';
 
+import { EdgeSurface } from '../../edge-surface';
 import { EASE, EASE_EXIT } from '../motion';
 import {
 	OVERLAY_MOTION,
@@ -38,6 +39,9 @@ jest.mock('react-native', () => {
 		},
 	};
 });
+// The spacing unit: Regular's 4 unless a test steps it (Spacious 5).
+let mockSpacingUnit = 4;
+jest.mock('../use-spacing-unit', () => ({ useSpacingUnit: () => mockSpacingUnit }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
@@ -153,29 +157,32 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		// Not blocking: the primitives' Overlay dismisses on a press, so the scrim keeps its touches.
 		expect(scrim.pointerEvents).toBeUndefined();
 		expect(scrim.style).toBe(StyleSheet.absoluteFill);
-		// A bottom sheet paints its own bottom inset (OverlaySheetPanel), so the shell leaves
-		// that strip unpadded: no scrim bar under the sheet.
-		const bottomInset = presentation === 'bottom' ? 0 : 34;
-		expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
-			paddingTop: 20,
-			paddingBottom: bottomInset,
-			paddingLeft: 12,
-			paddingRight: 12,
-		});
-		expect(container.firstElementChild).toHaveStyle({
-			paddingTop: '20px',
-			paddingBottom: `${bottomInset}px`,
-			paddingLeft: '12px',
-			paddingRight: '12px',
-		});
+		// A bottom sheet paints its own bottom inset (OverlaySheetPanel), and a full-height panel
+		// all of its own (owner, iPad landscape, 2026-11-08), so the shell leaves those strips
+		// unpadded: no scrim band beside the panel.
 		const fullHeight = ['left', 'right', 'page'].includes(presentation);
 		const bottom = presentation === 'bottom';
+		const owed = fullHeight
+			? { top: 0, bottom: 0, side: 0 }
+			: { top: 20, bottom: bottom ? 0 : 34, side: 12 };
+		expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
+			paddingTop: owed.top,
+			paddingBottom: owed.bottom,
+			paddingLeft: owed.side,
+			paddingRight: owed.side,
+		});
+		expect(container.firstElementChild).toHaveStyle({
+			paddingTop: `${owed.top}px`,
+			paddingBottom: `${owed.bottom}px`,
+			paddingLeft: `${owed.side}px`,
+			paddingRight: `${owed.side}px`,
+		});
 		// A bottom sheet sits on the screen edge: the keyboard wrapper is off (with the keyboard
 		// hidden it still padded the sheet ~9 dp up) and carries the sheet's height cap.
 		expect(mockViews).toContainEqual(
 			expect.objectContaining({
 				behavior: 'padding',
-				keyboardVerticalOffset: bottom ? 0 : 34,
+				keyboardVerticalOffset: bottom || fullHeight ? 0 : 34,
 				enabled: !bottom,
 				className: bottom
 					? 'max-w-full max-h-[92%] w-full'
@@ -232,19 +239,86 @@ it('takes no touches on a blocking scrim (a confirmation)', () => {
 it.each([
 	['bottom', { paddingBottom: 34 + 16 }],
 	['center', undefined],
-] as const)('pads only a native bottom sheet with the inset (%s)', (presentation, expected) => {
-	const seen: unknown[] = [];
-	function InsetProbe() {
-		seen.push(useSheetInset(16));
-		return null;
+	['left', { paddingTop: 20 + 16, paddingBottom: 34 + 16, paddingLeft: 12 }],
+	['right', { paddingTop: 20 + 16, paddingBottom: 34 + 16, paddingRight: 12 }],
+	['page', { paddingTop: 20 + 16, paddingBottom: 34 + 16, paddingLeft: 12, paddingRight: 12 }],
+] as const)(
+	"pads a native sheet's bottom and a full-height panel's edges (%s)",
+	(presentation, expected) => {
+		const seen: unknown[] = [];
+		function InsetProbe() {
+			seen.push(useSheetInset(4));
+			return null;
+		}
+		render(
+			<OverlayShell presentation={presentation} open Scrim={Pressable}>
+				<InsetProbe />
+			</OverlayShell>
+		);
+		expect(seen.at(-1)).toEqual(expected);
 	}
-	render(
-		<OverlayShell presentation={presentation} open Scrim={Pressable}>
-			<InsetProbe />
-		</OverlayShell>
-	);
-	expect(seen.at(-1)).toEqual(expected);
+);
+
+it.each(['left', 'right', 'page', 'center', 'bottom'] as OverlayPresentation[])(
+	'hands the %s panel the owed top inset through its context (insetTop)',
+	(presentation) => {
+		const seen: number[] = [];
+		function TopProbe() {
+			seen.push(useOverlay().insetTop);
+			return null;
+		}
+		render(
+			<OverlayShell presentation={presentation} open Scrim={Pressable}>
+				<TopProbe />
+			</OverlayShell>
+		);
+		// The owed top (`useEdgeInsets`), whoever pads it: the panel for a full-height one, the wrapper otherwise.
+		expect(seen.at(-1)).toBe(20);
+		const wrapperTop = StyleSheet.flatten(mockViews[0].style)?.paddingTop;
+		expect(wrapperTop).toBe(['left', 'right', 'page'].includes(presentation) ? 0 : seen.at(-1));
+	}
+);
+
+it('scales the panel padding with the spacing step, on top of the inset (Spacious)', () => {
+	mockSpacingUnit = 5;
+	try {
+		const seen: ReturnType<typeof useSheetInset>[] = [];
+		function Probe() {
+			seen.push(useSheetInset(4));
+			return null;
+		}
+		render(
+			<OverlayShell presentation="right" open Scrim={Pressable}>
+				<Probe />
+			</OverlayShell>
+		);
+		// `py-4` would be 20 on Spacious; the inset style stands in for it, so it must be 20 too.
+		expect(seen.at(-1)).toEqual({ paddingTop: 20 + 20, paddingBottom: 34 + 20, paddingRight: 12 });
+	} finally {
+		mockSpacingUnit = 4;
+	}
 });
+
+it.each(['left', 'right', 'page'] as const)(
+	'owes no top inset for a %s panel under a host surface that pads the status bar',
+	(presentation) => {
+		const seen: { top: number; inset: ReturnType<typeof useSheetInset> }[] = [];
+		function Probe() {
+			seen.push({ top: useOverlay().insetTop, inset: useSheetInset(4) });
+			return null;
+		}
+		render(
+			<EdgeSurface edges={['top']}>
+				<OverlayShell presentation={presentation} open Scrim={Pressable}>
+					<Probe />
+				</OverlayShell>
+			</EdgeSurface>
+		);
+		// The host padded the status bar once (`useEdgeInsets`); the panel keeps only its own 16.
+		expect(seen.at(-1)?.top).toBe(0);
+		expect(seen.at(-1)?.inset).toMatchObject({ paddingTop: 16, paddingBottom: 34 + 16 });
+	}
+);
 
 it('caps the native sheet on the wrappers, so its panel only fills them', () => {
 	expect(OVERLAY_PANEL.bottom).toContain('max-h-full');

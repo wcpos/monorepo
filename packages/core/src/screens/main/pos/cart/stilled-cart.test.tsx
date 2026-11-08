@@ -35,8 +35,12 @@ jest.mock('../contexts/current-order', () => {
 			},
 	};
 });
+let mockSplitOn = false;
+const mockPickUnits = jest.fn();
 jest.mock('../checkout/checkout-mode', () => ({
-	useCheckoutMode: () => ({ linesPaidBy: new Map([['order-9', { 'line-1': ['Cash'] }]]) }),
+	useSplitOn: () => mockSplitOn,
+	usePickedUnits: () => ({ 'line-1': 1 }),
+	pickUnits: (...args: unknown[]) => mockPickUnits(...args),
 }));
 jest.mock('../checkout/tender/use-ledger-view', () => ({
 	useLedgerView: () => ({
@@ -44,6 +48,10 @@ jest.mock('../checkout/tender/use-ledger-view', () => ({
 		paidMinor: 705,
 		balanceMinor: 4295,
 		rows: [],
+		allocations: {},
+		// 10.00 over three units: 3.33, 3.33, then 3.34 on the last.
+		lines: [{ id: 'line-1', name: 'Tea', quantity: 3, totalMinor: 1000 }],
+		paidUnits: { 'line-1': { units: 1, methods: ['Cash'] } },
 		format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
 	}),
 }));
@@ -163,7 +171,9 @@ describe('StilledCart', () => {
 		expect(screen.getByTestId('checkout-ledger-customer').textContent).toBe('Grace');
 		const props = mockCartTable.mock.calls.at(-1)?.[0];
 		expect(props.readOnly).toBe(true);
-		expect(props.paidBy).toEqual({ 'line-1': ['Cash'] });
+		// The paid marks show whether or not Split is on; the picker only while it is.
+		expect(props.paid).toEqual({ 'line-1': { units: 1, methods: ['Cash'] } });
+		expect(props.picker).toBeUndefined();
 		expect(props.order).toBe(receipt);
 		// Totals, then the payments and their closing rows, all inside the rows' scroll.
 		const table = screen.getByTestId('cart-table');
@@ -176,5 +186,20 @@ describe('StilledCart', () => {
 		expect(closing.textContent).toContain('$7.05');
 		// Nothing pinned under the scroll.
 		expect(screen.getAllByTestId('checkout-ledger-totals')).toHaveLength(1);
+	});
+
+	it('is the split picker while Split is on: the store’s picks, priced after the paid units', () => {
+		mockSplitOn = true;
+		render(<StilledCart order={receipt} />);
+		const { picker } = mockCartTable.mock.calls.at(-1)?.[0];
+		expect(picker.picked).toEqual({ 'line-1': 1 });
+		expect(picker.paid).toEqual({ 'line-1': { units: 1, methods: ['Cash'] } });
+		// One unit paid: the next costs 3.33, the last two 6.67 (the remainder cents on the last).
+		expect(picker.unitMinor('line-1', 1)).toBe(333);
+		expect(picker.unitMinor('line-1', 2)).toBe(667);
+		expect(picker.format(667)).toBe('$6.67');
+		picker.pick('line-1', 2);
+		expect(mockPickUnits).toHaveBeenCalledWith('order-9', 'line-1', 2);
+		mockSplitOn = false;
 	});
 });

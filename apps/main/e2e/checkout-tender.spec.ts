@@ -370,7 +370,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	);
 
 	liveTest(
-		'splits evenly through the split view and records two legs',
+		'splits evenly from the Split chip and records two legs',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -385,9 +385,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
 
+			// Split V1 (#3405): no sub-view; the Split chip turns the helpers row into the even row.
 			await page.getByTestId('checkout-split-chip').click();
-			await expect(page.getByTestId('checkout-split-tab-even')).toBeVisible();
-			await page.getByTestId('checkout-split-option-2').click();
+			await expect(page.getByTestId('checkout-even-2')).toBeVisible();
+			await page.getByTestId('checkout-even-2').click();
 			await expect(page.getByTestId('checkout-plan')).toBeVisible();
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
 			await expect(legs).toHaveCount(2);
@@ -403,11 +404,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect(page.getByTestId('checkout-label')).toBeVisible();
-			// Done pills have no state attribute; the view marks them with this success class.
-			await expect(page.getByTestId('checkout-plan-leg-0')).toHaveClass(/\bbg-success\/20\b/, {
+			// The taken payment is the done disclosure pill, marked with the success class; the
+			// payment to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
 				timeout: 60_000,
 			});
-			await expect(legs).toHaveCount(2);
+			await expect(legs).toHaveCount(1);
 			await expect(page.getByTestId('checkout-plan-leg-1')).not.toHaveClass(/\bbg-success\/20\b/);
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
@@ -438,7 +440,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	);
 
 	liveTest(
-		'shares a ticked line between two payments',
+		'shares picked units between two payments',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -452,15 +454,17 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			liveTest.skip(balance < 2, 'order balance is too small for two positive payment legs');
+			// Split V1: with Split on the bill is the picker; a tap on a line's name picks every
+			// unpaid unit of it into THIS payment, and Share divides that payment.
 			await page.getByTestId('checkout-split-chip').click();
-			await page.getByTestId('checkout-split-tab-item').click();
-			const items = page.getByTestId(/^checkout-split-item-/);
-			liveTest.skip((await items.count()) === 0, 'checkout declares no splittable item rows');
-			await items.first().click();
-			await page.getByTestId('checkout-split-share-2').click();
+			const picks = page.getByTestId('checkout-line-row').getByTestId(/^checkout-line-.+-pick$/);
+			await expect(picks.first()).toBeVisible();
+			await picks.first().click();
+			await page.getByTestId('checkout-share').click();
+			await page.getByTestId('checkout-share-2').click();
 			await expect(page.getByTestId('checkout-plan')).toBeVisible();
-			// Item plans use line.total, excluding tax: a taxed order (or one with fees or
-			// shipping) carries a third "then X" leg for the rest of the balance.
+			// A unit's price has its tax inside, but fees and shipping stay in the rest: an order
+			// with either carries a third "then X" leg for the rest of the balance.
 			const legs = page.getByTestId(/^checkout-plan-leg-\d+$/);
 			const legCount = await legs.count();
 			expect([2, 3]).toContain(legCount);
@@ -473,7 +477,8 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect.poll(() => readAmountMinor(page, 'checkout-entry')).toBe(plannedFirst);
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
-			await expect(page.getByTestId('checkout-plan-leg-0')).toHaveClass(/\bbg-success\/20\b/, {
+			// The taken payment folds into the done pill; the share to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
 				timeout: 60_000,
 			});
 			await expect

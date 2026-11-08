@@ -19,11 +19,15 @@ import {
 	markOrderQueuedOffline,
 	markOrderSaveRejected,
 	markOrderSaving,
+	pickUnits,
 	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
+	setAllocations,
+	setPickedUnits,
+	setSplitOn,
 	setTenderMethod,
 	settleHeadlessPrint,
 	subscribeCheckoutMode,
@@ -47,6 +51,75 @@ beforeEach(() => {
 	resetCheckoutMode();
 	mockStatus = 'online-website-available';
 });
+
+it('sets, replaces and deletes allocations independently per order', () => {
+	expect(getCheckoutModeSnapshot().allocations.size).toBe(0);
+	setAllocations('a', { first: { lemonade: 1 } });
+	const before = getCheckoutModeSnapshot();
+	setAllocations('a', { second: { lemonade: 2 } });
+	setAllocations('b', { third: { burger: 1 } });
+	expect(before.allocations.get('a')).toEqual({ first: { lemonade: 1 } });
+	expect(getCheckoutModeSnapshot().allocations.get('a')).toEqual({ second: { lemonade: 2 } });
+	setAllocations('a', null);
+	expect(getCheckoutModeSnapshot().allocations.has('a')).toBe(false);
+	expect(getCheckoutModeSnapshot().allocations.get('b')).toEqual({ third: { burger: 1 } });
+});
+
+it.each([leaveCheckout, finishReceipt, resetCheckoutMode])('%p clears allocations', (clear) => {
+	enterCheckout('a');
+	setAllocations('a', { first: { lemonade: 1 } });
+	clear('a');
+	expect(getCheckoutModeSnapshot().allocations.has('a')).toBe(false);
+});
+
+it('picks units per order: sets, replaces, unpicks a line at zero, and clears', () => {
+	pickUnits('a', 'lemonade', 2);
+	pickUnits('a', 7, 1);
+	pickUnits('b', 'burger', 3);
+	const before = getCheckoutModeSnapshot();
+	pickUnits('a', 'lemonade', 3);
+	expect(before.pickedUnits.get('a')).toEqual({ lemonade: 2, 7: 1 });
+	expect(getCheckoutModeSnapshot().pickedUnits.get('a')).toEqual({ lemonade: 3, 7: 1 });
+	pickUnits('a', 'lemonade', 0);
+	expect(getCheckoutModeSnapshot().pickedUnits.get('a')).toEqual({ 7: 1 });
+	setPickedUnits('a', { burger: 1 });
+	expect(getCheckoutModeSnapshot().pickedUnits.get('a')).toEqual({ burger: 1 });
+	setPickedUnits('a', null);
+	expect(getCheckoutModeSnapshot().pickedUnits.has('a')).toBe(false);
+	expect(getCheckoutModeSnapshot().pickedUnits.get('b')).toEqual({ burger: 3 });
+	// Clearing what is not there publishes nothing.
+	const listener = jest.fn();
+	const unsubscribe = subscribeCheckoutMode(listener);
+	setPickedUnits('a', null);
+	setSplitOn('a', false);
+	expect(listener).not.toHaveBeenCalled();
+	unsubscribe();
+});
+
+it('turns Split on and off per order, publishing only a change', () => {
+	const listener = jest.fn();
+	const unsubscribe = subscribeCheckoutMode(listener);
+	setSplitOn('a', true);
+	setSplitOn('a', true);
+	expect(getCheckoutModeSnapshot().splitOn.has('a')).toBe(true);
+	expect(getCheckoutModeSnapshot().splitOn.has('b')).toBe(false);
+	setSplitOn('a', false);
+	expect(getCheckoutModeSnapshot().splitOn.has('a')).toBe(false);
+	expect(listener).toHaveBeenCalledTimes(2);
+	unsubscribe();
+});
+
+it.each([leaveCheckout, enterReceipt, finishReceipt, resetCheckoutMode])(
+	'%p clears the picks and the Split chip',
+	(exit) => {
+		enterCheckout('a');
+		setSplitOn('a', true);
+		pickUnits('a', 'lemonade', 1);
+		exit('a');
+		expect(getCheckoutModeSnapshot().pickedUnits.has('a')).toBe(false);
+		expect(getCheckoutModeSnapshot().splitOn.has('a')).toBe(false);
+	}
+);
 
 it('defaults to cart and ignores ended legs', () => {
 	expect(resolveStage('a', getCheckoutModeSnapshot(), [], 'pos-open')).toBe('cart');

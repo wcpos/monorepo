@@ -36,6 +36,7 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
+import { RefusedCloseNotice } from './refused-close-notice';
 import { ageLabel } from './register-bar.helpers';
 import { Ticking } from './ticking';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
@@ -75,14 +76,17 @@ export function RegisterPanel({
 		closeTime,
 		movements,
 		refusedMovements,
+		refusedClose,
 		lastClosure,
 		actions,
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
-	// This device's own count, or a close awaiting its closure write, opens on the count pane.
+	// This device's own count, or a close awaiting its closure write, opens on the count pane;
+	// so does a close the store refused (#2016), whose count mark the close already cleared.
 	const landing =
-		(session?.status === 'counting' && countingHere) || session?.status === 'closed'
+		(session?.status === 'counting' && (countingHere || refusedClose)) ||
+		session?.status === 'closed'
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
@@ -95,6 +99,16 @@ export function RegisterPanel({
 		if (open) setPane(landing);
 	}
 	const [written, setWritten] = React.useState<ClosureCount | null>(null);
+	// A refusal that lands after the local write leaves the written pane (#2016). It is the
+	// change that counts: a retry's write can finish while the last refusal still reads true.
+	const [wasRefused, setWasRefused] = React.useState(refusedClose);
+	if (refusedClose !== wasRefused) {
+		setWasRefused(refusedClose);
+		if (refusedClose && pane === 'written') {
+			setPane(landing);
+			setWritten(null);
+		}
+	}
 	const [countBusy, setCountBusy] = React.useState(false);
 	const { format } = useCurrencyFormat();
 	const { print, doc } = useSessionReport();
@@ -129,7 +143,7 @@ export function RegisterPanel({
 			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
 			// would write `open` over the closed session.
 			if (!next && countBusy) return;
-			if (!next && pane === 'count' && session?.status === 'counting')
+			if (!next && pane === 'count' && (session?.status === 'counting' || refusedClose))
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
@@ -297,6 +311,17 @@ export function RegisterPanel({
 						testID="register-panel-figures-pending"
 						className="mx-4"
 						title={t('register.figures_after_sync')}
+					/>
+				)}
+				{refusedClose && session && (
+					<RefusedCloseNotice
+						className="mx-4"
+						onRetry={() =>
+							void attempt(async () => {
+								if (session.status === 'open') await actions.startCounting();
+								setPane('count');
+							})
+						}
 					/>
 				)}
 				{refused.length > 0 && (

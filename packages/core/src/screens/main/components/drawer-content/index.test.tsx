@@ -61,11 +61,15 @@ jest.mock('expo-router/react-navigation', () => ({
 	DrawerActions: { closeDrawer: () => ({ type: 'CLOSE_DRAWER' }) },
 }));
 jest.mock('@wcpos/components/icon', () => ({
-	Icon: ({ name, className }: { name: string; className?: string }) => {
+	Icon: ({ name, className, count }: { name: string; className?: string; count?: number }) => {
 		const { TextClassContext } = jest.requireActual('@wcpos/components/text');
 		const { cn } = jest.requireActual('@wcpos/components/lib/utils');
 		return (
-			<span data-icon={name} data-classes={cn(React.useContext(TextClassContext), className)} />
+			<span
+				data-icon={name}
+				data-count={count}
+				data-classes={cn(React.useContext(TextClassContext), className)}
+			/>
 		);
 	},
 }));
@@ -119,7 +123,7 @@ function Drawer({
 				{...drawerProps}
 				presentation={presentation}
 				icons={{ '(pos)': 'register', orders: 'receipt', health: 'health', settings: 'settings' }}
-				badges={{ health: <span data-testid="health-badge" /> }}
+				counts={{ health: 3 }}
 			/>
 		</DrawerPanelVisibilityProvider>
 	);
@@ -148,9 +152,11 @@ describe.each(['rail', 'front'] as const)('the %s', (presentation) => {
 			container.querySelector(`[data-icon="${name}"]`)?.getAttribute('data-classes');
 		expect(tint('register')).toContain('text-rail-selected-foreground');
 		expect(tint('receipt')).toContain('text-sidebar-foreground');
+		// Store health's count rides its icon (`NavItem count` → `Icon count`); no other item has one.
+		const counted = Array.from(container.querySelectorAll('[data-count]'));
 		expect(
-			screen.getByTestId('drawer-bottom-group').contains(screen.getByTestId('health-badge'))
-		).toBe(true);
+			counted.map((node) => [node.getAttribute('data-icon'), node.getAttribute('data-count')])
+		).toEqual([['health', '3']]);
 	});
 
 	it('navigates to another route, or closes on the focused one, with one dispatch each', () => {

@@ -10,11 +10,12 @@ import { GALLERY_COMPONENTS } from './inventory';
 const SETTLE_BOUND_MS = 2_000;
 
 // Light and dark are shot at every scale step and pointer. A theme swaps colour tokens and a
-// step swaps size variables, and the two are independent, so the three extra themes are shot at
-// one step: every story in all five themes (decision 12, 2026-10-16) without shooting the
-// same geometry three more times. Keep in step with `THEMES` in components/gallery/registry.tsx.
+// step swaps size variables, and the two are independent, so the other themes are shot at
+// one step: every story in all nine themes (decision 12, 2026-10-16; the four personality themes
+// since 2026-11-06) without shooting the same geometry again. Keep in step with `THEMES` in
+// components/gallery/registry.tsx.
 const FULL_THEMES = ['light', 'dark'] as const;
-const COLOUR_THEMES = ['ocean', 'sunset', 'monochrome'] as const;
+const COLOUR_THEMES = ['ocean', 'sunset', 'monochrome', 'paper', 'warm', 'bold', 'market'] as const;
 const COLOUR_THEME_CELL = '--regular-coarse';
 
 // A minute a page and theme (its isolated cells included). Each component is its own test,

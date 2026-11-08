@@ -47,7 +47,11 @@ import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-or
 import { useCartLines } from '../hooks/use-cart-lines';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
-import { type CartTableReadOnly, CartTableReadOnlyProvider } from './cells/read-only';
+import {
+	type CartTableReadOnly,
+	CartTableReadOnlyProvider,
+	readOnlyLineKey,
+} from './cells/read-only';
 
 import type { Column, ColumnDef } from '../../../../table-types';
 const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
@@ -68,6 +72,8 @@ const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined>
 	subtotal: TEXT_COLUMN,
 	total: TEXT_COLUMN,
 };
+/** The split picker's quantity column holds `− n of m +`: two 44 buttons and the count. */
+const PICKER_QUANTITY_COLUMN = { head: 'w-40 flex-none px-2', cell: 'w-40 flex-none px-2' };
 /**
  * Under this cart width the Price column folds away. With it, the item name is left about
  * 50 px at 273 (a 768-wide tablet: "Affirm Wat…", "Beani / e wi…") and about 100 px at 300,
@@ -154,13 +160,27 @@ interface CartTableProps {
 	 * add pulse and no scroll-to-row. See `cells/read-only.tsx`.
 	 */
 	readOnly?: boolean;
-	/** Read-only only: the split-payment annotation per line (`useCheckoutMode().linesPaidBy`). */
-	paidBy?: CartTableReadOnly['paidBy'];
+	/** Read-only only: the units each line's payments covered, with their methods. */
+	paid?: CartTableReadOnly['paid'];
+	/** Read-only only, while Split is on: the bill picks THIS payment's units. */
+	picker?: CartTableReadOnly['picker'];
 	/** Read-only only: rendered inside the rows' scroll after the last row (the payments block). */
 	footer?: React.ReactNode;
 }
-export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: CartTableProps) {
-	const readOnlyValue = React.useMemo(() => (readOnly ? { paidBy } : null), [readOnly, paidBy]);
+export function CartTable({
+	lastDraftOrderUuidRef,
+	readOnly,
+	paid,
+	picker,
+	footer,
+}: CartTableProps) {
+	const readOnlyValue = React.useMemo(
+		() => (readOnly ? { paid, picker } : null),
+		[readOnly, paid, picker]
+	);
+	const picking = readOnly && picker !== undefined;
+	const columnClasses = (id: string) =>
+		picking && id === 'quantity' ? PICKER_QUANTITY_COLUMN : AMOUNT_COLUMNS[id];
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const t = useT();
 	// The decided cart line at phone width has no Price column (the cart board, 2026-09-17):
@@ -255,7 +275,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
 						<Text numberOfLines={1}>
 							{{
-								quantity: t('pos_cart.col_qty'),
+								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.col_qty'),
 								name: t('pos_cart.col_item'),
 								price: t('pos_cart.col_price'),
 								total: t('pos_cart.col_total'),
@@ -283,7 +303,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 					},
 				} as ColumnDef<CartTableLine, unknown, CartTableFeatures>;
 			});
-	}, [uiColumns, getUILabel, t, isPhone]);
+	}, [uiColumns, getUILabel, t, isPhone, picking]);
 	const table = useTable({
 		features: cartTableFeatures,
 		data,
@@ -307,7 +327,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 		meta: Column<CartTableLine, unknown, CartTableFeatures>['columnDef']['meta']
 	) => {
 		return {
-			className: AMOUNT_COLUMNS[id]?.cell,
+			className: columnClasses(id)?.cell,
 			style: AMOUNT_COLUMNS[id]
 				? { alignItems: getFlexAlign(meta?.align || 'left') }
 				: {
@@ -343,7 +363,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 								return (
 									<TableHead
 										key={header.id}
-										className={cn('min-h-row', AMOUNT_COLUMNS[header.column.id]?.head)}
+										className={cn('min-h-row', columnClasses(header.column.id)?.head)}
 										style={
 											AMOUNT_COLUMNS[header.column.id]
 												? { alignItems: getFlexAlign(meta?.align || 'left') }
@@ -371,7 +391,14 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 								<TableRow
 									key={row.id}
 									testID="checkout-line-row"
-									className="bg-card border-border min-h-row border-b [border-style:var(--shape-rule-style)]"
+									// A picked line takes the shared selected treatment (ListItem's), no coloured edge.
+									className={
+										row.original.type === 'line_items' &&
+										picker &&
+										(picker.picked[readOnlyLineKey(row.original.uuid, row.original.item)] ?? 0) > 0
+											? 'border-primary bg-muted rounded-tile min-h-row border'
+											: 'bg-card border-border min-h-row border-b [border-style:var(--shape-rule-style)]'
+									}
 								>
 									{row.getVisibleCells().map((cell) => (
 										<TableCell

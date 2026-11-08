@@ -67,6 +67,9 @@ const viewWith = (rows: LedgerView['rows'], paidMinor: number): typeof mockView 
 	totalMinor: 770,
 	paidMinor,
 	balanceMinor: 770 - paidMinor,
+	allocations: {},
+	lines: [],
+	paidUnits: {},
 	format: minorFormat,
 });
 const record = (payload: Record<string, unknown>) =>

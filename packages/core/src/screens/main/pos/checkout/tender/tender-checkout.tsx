@@ -64,6 +64,10 @@ export function TenderCheckout({ order }: Props) {
 		(minor: number) => formatCurrency(Number(fromMinor(minor, flow.dp))),
 		[formatCurrency, flow.dp]
 	);
+	const leave = React.useCallback(() => {
+		leaveCheckout(order.uuid);
+		router.back();
+	}, [router, order.uuid]);
 
 	// Closing on a half-paid order is the same decision as pressing Cancel
 	// payment: money has been taken and something has to happen to it. Dropping
@@ -74,17 +78,12 @@ export function TenderCheckout({ order }: Props) {
 			finishSale();
 			return;
 		}
-		if (flow.state.splitView) {
-			flow.dispatch({ type: 'close-split' });
-			return;
-		}
 		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
-		leaveCheckout(order.uuid);
-		router.back();
-	}, [flow, router, stage, finishSale, order.uuid]);
+		leave();
+	}, [flow, leave, stage, finishSale]);
 
 	const lines = React.useMemo(
 		() =>
@@ -127,7 +126,7 @@ export function TenderCheckout({ order }: Props) {
 			return (
 				// The pane's own label row now carries the balance; no bar above it on a phone.
 				<View className="bg-card flex-1 px-3">
-					<TenderPane flow={flow} format={format} compact />
+					<TenderPane flow={flow} format={format} compact onLeave={leave} />
 				</View>
 			);
 		}
@@ -137,7 +136,7 @@ export function TenderCheckout({ order }: Props) {
 					<LedgerPane flow={flow} lines={lines} format={format} />
 				</View>
 				<View className="flex-1 p-4">
-					<TenderPane flow={flow} format={format} />
+					<TenderPane flow={flow} format={format} onLeave={leave} />
 				</View>
 			</View>
 		);

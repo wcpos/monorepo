@@ -19,7 +19,10 @@ export function MenuChip({
 	hint,
 	scroll = false,
 	ids,
+	stretch,
 }: {
+	/** Fills its grid tile on a phone (`Chip`'s `stretch`). */
+	stretch?: boolean;
 	name: string;
 	icon: React.ComponentProps<typeof Chip>['icon'];
 	value: string;
@@ -41,6 +44,7 @@ export function MenuChip({
 		<Popover>
 			<PopoverTrigger ref={trigger} asChild>
 				<Chip
+					stretch={stretch}
 					testID={ids?.trigger ?? `hero-chip-${name}`}
 					icon={icon}
 					label={choices.find((row) => row.value === value)?.label ?? value}

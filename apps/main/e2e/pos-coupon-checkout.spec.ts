@@ -26,6 +26,7 @@ import {
 } from './fixtures';
 import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
 import {
+	cartRecordUuid,
 	checkoutSurfaceLocator,
 	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
@@ -203,7 +204,8 @@ for (const targetStoreId of storeTargets) {
 						const cart = await readCartMoney(page, { discounted: true });
 						expect(Number(cart.discountTotal)).toBeGreaterThan(0);
 
-						const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+						const recordId = await cartRecordUuid(page);
+						const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 							timeout: 90_000,
 						});
 						saved.catch(() => {}); // Await below still fails; avoid an orphan rejection if click fails.
@@ -347,7 +349,8 @@ for (const targetStoreId of storeTargets) {
 					// 1. Save: the coupon line comes back from the store WITH an id. That id is the
 					// precondition — a coupon removed before the first save is deleted outright and
 					// never carried the marker.
-					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+					const recordId = await cartRecordUuid(page);
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});
@@ -399,7 +402,8 @@ for (const targetStoreId of storeTargets) {
 						.toBe(0);
 
 					// 3. Checkout pushes the full document with the removal; the store must take it.
-					const pushed = page.waitForResponse(createPushOrdersResponseMatcher(), {
+					const checkoutRecordId = await cartRecordUuid(page);
+					const pushed = page.waitForResponse(createPushOrdersResponseMatcher(checkoutRecordId), {
 						timeout: 90_000,
 					});
 					pushed.catch(() => {});

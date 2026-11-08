@@ -7,6 +7,7 @@ import { log } from '@wcpos/utils/logger';
 import { getStoreUrl, openOrderSheet } from './fixtures';
 import { assertDiscriminating, linesOf } from './money-oracle-guards';
 import {
+	cartRecordUuid,
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
@@ -49,7 +50,8 @@ export async function saveAndCapture(
 	// against itself and go green whatever the server did (pos-cart.spec.ts).
 	const cart = await readCartMoney(page);
 
-	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+	const recordId = await cartRecordUuid(page);
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
 		timeout: 90_000,
 	});
 	saved.catch(() => {});

@@ -1,4 +1,8 @@
-import { AUTO_SYNCED_STORE_FIELDS, storesLiteral } from './schemas/stores';
+import {
+	APP_EDITABLE_STORE_FIELDS,
+	AUTO_SYNCED_STORE_FIELDS,
+	storesLiteral,
+} from './schemas/stores';
 
 describe('stores schema', () => {
 	it('defaults scale to auto', () => {
@@ -40,6 +44,30 @@ describe('stores schema', () => {
 		});
 		expect(AUTO_SYNCED_STORE_FIELDS).toContain('decimal_qty');
 		expect(storesLiteral.version).toBe(1);
+	});
+
+	// Settings > Tax lets the till pick how tax is based and how prices and tax
+	// totals are shown; a hydration or cashier sync must not put the store's value
+	// back (monorepo#3377). The calculation inputs stay server-owned and synced.
+	it('keeps the tax display choices local and syncs the calculation inputs', () => {
+		for (const field of [
+			'tax_based_on',
+			'tax_display_shop',
+			'tax_display_cart',
+			'price_display_suffix',
+			'tax_total_display',
+		]) {
+			expect(APP_EDITABLE_STORE_FIELDS).toContain(field);
+			expect(AUTO_SYNCED_STORE_FIELDS).not.toContain(field);
+		}
+		for (const field of [
+			'calc_taxes',
+			'prices_include_tax',
+			'shipping_tax_class',
+			'tax_round_at_subtotal',
+		]) {
+			expect(AUTO_SYNCED_STORE_FIELDS).toContain(field);
+		}
 	});
 
 	// The scale step is a device preference beside the theme: a login or a cashier

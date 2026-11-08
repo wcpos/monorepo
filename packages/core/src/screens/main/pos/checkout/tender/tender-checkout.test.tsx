@@ -8,6 +8,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
 
@@ -233,9 +234,10 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
-		linesPaidBy: {},
+		picked: {},
+		splitOn: false,
+		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -315,7 +317,7 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
-	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+	it('keeps an offline line paid mark after the server assigns a numeric ID', () => {
 		mockLineItems = [
 			{
 				id: 123,
@@ -325,11 +327,11 @@ describe('TenderCheckout', () => {
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
 			},
 		];
-		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+		mockFlow = makeFlow({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } });
 
 		render(<TenderCheckout order={order} />);
 
-		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
+		expect(document.body.textContent).toContain('pos_checkout.units_paid_of');
 	});
 
 	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
@@ -415,6 +417,31 @@ describe('TenderCheckout', () => {
 		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
 		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 	});
+
+	it.each(['sm', 'lg'] as const)(
+		'leaves and closes the sheet from the offline state (%s)',
+		(size) => {
+			const offline = (id: string) => ({
+				method: method({ id }),
+				disabled: true,
+				reason: 'offline' as const,
+				worksOffline: false,
+				settlesLater: false,
+			});
+			mockScreenSize = size;
+			resetCheckoutMode();
+			enterCheckout('order-1');
+			mockFlow = makeFlow({
+				online: false,
+				tiles: [offline('pos_cash'), offline('other')],
+			});
+			render(<TenderCheckout order={order} />);
+			fireEvent.click(screen.getByTestId('checkout-offline-leave'));
+			expect(mockBack).toHaveBeenCalledTimes(1);
+			expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
+			expect(mockFlow.dispatch).not.toHaveBeenCalled();
+		}
+	);
 
 	it('offers a completion action for a zero-total order', () => {
 		const takeTender = jest.fn();

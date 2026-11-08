@@ -132,6 +132,27 @@ describe('RecordMutationQueue', () => {
 		expect(await storage.list()).toEqual([]);
 	});
 
+	it('writerHoldLapsed names only an own unreleased expired hold, and writes nothing', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.admitWriter('products', 'rec-A', 'writer', 1000);
+		await storage.append({
+			...mut({ mutationId: 'products/rec-R', recordId: 'rec-R', payload: { phase: 'released' } }),
+			status: 'internal',
+			expiresAt: 0,
+			admittedBy: 'writer',
+			admittedAt: 1000,
+		});
+		const before = await storage.listStored();
+		expect(await q.writerHoldLapsed('products', 'rec-A', 'writer', 31_000)).toBe(true);
+		expect(await q.writerHoldLapsed('products', 'rec-A', 'writer', 30_999)).toBe(false);
+		expect(await q.writerHoldLapsed('products', 'rec-A', 'other', 31_000)).toBe(false);
+		expect(await q.writerHoldLapsed('products', 'rec-B', 'writer', 31_000)).toBe(false);
+		expect(await q.writerHoldLapsed('products', 'rec-R', 'writer', 31_000)).toBe(false);
+		expect(await storage.listStored()).toEqual(before);
+		expect((await storage.list()).map((row) => row.mutationId)).toContain('products/rec-A');
+	});
+
 	it('a marked row cannot be coalesced or claimed by another queue instance', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
