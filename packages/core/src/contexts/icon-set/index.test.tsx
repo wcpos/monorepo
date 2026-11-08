@@ -25,9 +25,13 @@ jest.mock('@wcpos/components/icon', () => {
 	};
 });
 jest.mock('@wcpos/components/lib/themes', () => ({
+	...jest.requireActual('@wcpos/components/lib/themes'),
 	iconSetForTheme: (theme: string | undefined) =>
 		theme === 'ocean' || theme === 'sunset' ? 'phosphor' : 'tabler',
 }));
+// The family reaches the screens through the one theme-setting owner, which also applies the theme.
+jest.mock('uniwind', () => ({ Uniwind: { setTheme: jest.fn() } }));
+jest.mock('expo-font', () => ({ loadAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../app-state', () => ({ useAppState: () => appState }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -37,7 +41,7 @@ jest.mock('@wcpos/query', () => ({
 import { useIconSet } from '@wcpos/components/icon';
 
 // eslint-disable-next-line import/first
-import { IconSetSettingProvider } from './index';
+import { ThemeSettingProvider } from '../theme-setting';
 
 function Probe() {
 	return <span data-testid="set">{useIconSet()}</span>;
@@ -45,9 +49,9 @@ function Probe() {
 
 function renderedSet() {
 	const { getByTestId } = render(
-		<IconSetSettingProvider>
+		<ThemeSettingProvider>
 			<Probe />
-		</IconSetSettingProvider>
+		</ThemeSettingProvider>
 	);
 	return getByTestId('set');
 }
@@ -59,7 +63,7 @@ beforeEach(() => {
 	appState.store = store;
 });
 
-describe('IconSetSettingProvider', () => {
+describe('ThemeSettingProvider: the icon family', () => {
 	it('draws the default set with no store, so the auth screens have icons', () => {
 		appState.store = null;
 		expect(renderedSet().textContent).toBe('tabler');

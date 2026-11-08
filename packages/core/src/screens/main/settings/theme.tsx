@@ -42,6 +42,7 @@ import { PropertyRow } from '@wcpos/components/property-row';
 
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
+import { useThemeSetting } from '../../../contexts/theme-setting';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -220,13 +221,13 @@ const ICON_OPTIONS = [ICON_SETTING_AUTO, ...ICON_SET_IDS] as const;
 
 /**
  * The Icons section: one row per candidate family, its samples drawn in that
- * family. The choice reaches the screens through `IconSetSettingProvider`.
+ * family. The choice reaches the screens through `ThemeSettingProvider`.
  */
 function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const icons = useDocField(store, (latest) => latest.icons) ?? ICON_SETTING_AUTO;
-	const theme = useDocField(store, (latest) => latest.theme);
+	const { theme, icons: saved } = useThemeSetting();
+	const icons = saved ?? ICON_SETTING_AUTO;
 	const labels: Record<IconSetId | typeof ICON_SETTING_AUTO, string> = {
 		auto: t('settings.icons.auto'),
 		tabler: t('settings.icons.tabler'),
@@ -291,8 +292,8 @@ const FONT_OPTIONS = [TYPE_SETTING_AUTO, ...TYPE_SET_IDS] as const;
 function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const fonts = useDocField(store, (latest) => latest.fonts) ?? TYPE_SETTING_AUTO;
-	const theme = useDocField(store, (latest) => latest.theme);
+	const { theme, fonts: saved } = useThemeSetting();
+	const fonts = saved ?? TYPE_SETTING_AUTO;
 	const traits = useThemeTraits();
 	const labels: Record<TypeSetId | typeof TYPE_SETTING_AUTO, string> = {
 		auto: t('settings.fonts.auto'),
