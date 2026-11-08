@@ -11,12 +11,12 @@ import { readLedger } from '@wcpos/order-math';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import {
-	backToSelling,
+	abandonCount,
+	beginCount,
 	closeSession,
 	createSessionAccountingState,
 	deriveDrawerTerms,
 	deriveExpected,
-	markCountingHere,
 	observeCashMovements,
 	observeRegister$,
 	observeRegisterClosures,
@@ -33,7 +33,6 @@ import {
 	requireOpenSession,
 	retryMovement,
 	sessionRefreshRequests,
-	startCounting,
 	voidMovement,
 	writeClosure,
 } from '@wcpos/query/register-session';
@@ -442,70 +441,11 @@ export function useRegisterSession() {
 			startCounting: async () => {
 				if (figuresPending) throw new Error('register_figures_pending');
 				if (!session) throw new RegisterSessionRequiredError();
-				const row = await startCounting(storeDB, session.id);
-				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
-				await recordLiveSession(userDB, site.uuid!, row.register_id, {
-					session_id: row.id,
-					status: 'counting',
-					opened_at_gmt: row.opened_at_gmt,
-					opened_by:
-						row.opened_by == null
-							? null
-							: {
-									id: row.opened_by,
-									name:
-										opener?.id === row.opened_by
-											? opener.name
-											: row.opened_by === wpCredentials.id
-												? (wpCredentials.display_name ?? '')
-												: '',
-								},
-					acknowledged: session.sync_status === 'synced' || session.server_status != null,
-					expected_float: row.expected_float ?? null,
-					counted_float: row.counted_float ?? null,
-					business_day: row.business_day ?? null,
-				});
-				await markCountingHere(userDB, site.uuid!, row.register_id, true);
-				recordRegisterFact({
-					kind: 'counting-started',
-					actor,
-					sessionId: row.id,
-					registerId: row.register_id,
-				});
-				return row;
+				return beginCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
 			},
 			backToSelling: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
-				const row = await backToSelling(storeDB, session.id);
-				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
-				await recordLiveSession(userDB, site.uuid!, row.register_id, {
-					session_id: row.id,
-					status: 'open',
-					opened_at_gmt: row.opened_at_gmt,
-					opened_by:
-						row.opened_by == null
-							? null
-							: {
-									id: row.opened_by,
-									name:
-										opener?.id === row.opened_by
-											? opener.name
-											: row.opened_by === wpCredentials.id
-												? (wpCredentials.display_name ?? '')
-												: '',
-								},
-					acknowledged: session.sync_status === 'synced' || session.server_status != null,
-					expected_float: row.expected_float ?? null,
-					counted_float: row.counted_float ?? null,
-					business_day: row.business_day ?? null,
-				});
-				recordRegisterFact({
-					kind: 'counting-abandoned',
-					actor,
-					sessionId: row.id,
-					registerId: row.register_id,
-				});
-				return row;
+				return abandonCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
 			},
 			closeSession: async (input: {
 				counted: Record<string, string>;

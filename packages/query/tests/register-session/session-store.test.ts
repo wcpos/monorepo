@@ -10,6 +10,7 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 import {
 	backToSelling,
 	closeSession,
+	IllegalSessionTransitionError,
 	isRegisterCounting,
 	openSession,
 	recordApproval,
@@ -59,6 +60,37 @@ it('opens pending and retains the pending transition through each local state', 
 		pending_status: 'closed',
 		counted: { cash: '105' },
 	});
+});
+// The allowed-from table, read from today's callers: every other move is refused, unwritten.
+const moves = {
+	counting: (id: string) => startCounting(db, id),
+	open: (id: string) => backToSelling(db, id),
+	closed: (id: string) => closeSession(db, id, { counted: { cash: '100' } }),
+};
+it.each([
+	['open', 'counting', true],
+	['counting', 'counting', true],
+	['closed', 'counting', false],
+	['counting', 'open', true],
+	['closed', 'open', true],
+	['open', 'open', false],
+	['counting', 'closed', true],
+	['open', 'closed', true],
+	['closed', 'closed', true],
+] as const)('a session moves from %s to %s: %p', async (from, to, allowed) => {
+	const doc = await openSession(db, input);
+	await doc.incrementalPatch({ status: from, sync_status: 'synced' });
+	const move = moves[to](doc.id);
+	if (allowed) {
+		await move;
+		expect(doc.getLatest()).toMatchObject({ status: to, pending_status: to });
+	} else {
+		await expect(move).rejects.toEqual(
+			expect.objectContaining({ name: 'IllegalSessionTransitionError', from, to })
+		);
+		await expect(move).rejects.toBeInstanceOf(IllegalSessionTransitionError);
+		expect(doc.getLatest()).toMatchObject({ status: from, sync_status: 'synced' });
+	}
 });
 it('void inserts a write-once reversal and marks its target', async () => {
 	const session = await openSession(db, input);

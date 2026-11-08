@@ -1,7 +1,7 @@
 import { map } from 'rxjs';
 
 import { fromMinor, toMinor } from '@wcpos/order-math';
-import type { ClosureRow, UserDatabase } from '@wcpos/database';
+import type { ClosureRow, RegisterSessionRow, UserDatabase } from '@wcpos/database';
 import { readTillAnchor, writeTillAnchor } from '@wcpos/database/till-anchor';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
@@ -703,6 +703,44 @@ export async function recordLiveSession(
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});
 	currentRegister = updated.toJSON(true).data;
+}
+
+/**
+ * The live copy of an open or counting session row. The opener's name is the one the copy
+ * already holds for that opener, else the signed-in user's when they opened it, else blank.
+ */
+export function recordLiveSessionFrom(
+	userDB: UserDatabase,
+	siteUuid: string,
+	row: Pick<
+		RegisterSessionRow,
+		| 'id'
+		| 'register_id'
+		| 'opened_at_gmt'
+		| 'opened_by'
+		| 'expected_float'
+		| 'counted_float'
+		| 'business_day'
+		| 'sync_status'
+		| 'server_status'
+	> & { status: LiveSession['status'] },
+	signedIn: { id: string; name: string } | null
+) {
+	const held = readLiveSession(siteUuid, row.register_id)?.opened_by;
+	const opener = (id: number) => ({
+		id,
+		name: held?.id === id ? held.name : signedIn && String(id) === signedIn.id ? signedIn.name : '',
+	});
+	return recordLiveSession(userDB, siteUuid, row.register_id, {
+		session_id: row.id,
+		status: row.status,
+		opened_at_gmt: row.opened_at_gmt,
+		opened_by: row.opened_by == null ? null : opener(row.opened_by),
+		acknowledged: row.sync_status === 'synced' || row.server_status != null,
+		expected_float: row.expected_float ?? null,
+		counted_float: row.counted_float ?? null,
+		business_day: row.business_day ?? null,
+	});
 }
 
 export async function markSeededIn(

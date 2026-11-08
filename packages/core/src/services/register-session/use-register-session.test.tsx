@@ -51,9 +51,8 @@ jest.mock('@wcpos/query/register-session', () => ({
 	),
 	openSession: jest.fn(),
 	recordLiveSession: jest.fn(),
-	markCountingHere: jest.fn(),
-	startCounting: jest.fn(),
-	backToSelling: jest.fn(),
+	beginCount: jest.fn(),
+	abandonCount: jest.fn(),
 	closeSession: jest.fn(),
 	recordMovement: jest.fn(),
 	readMovement: jest.fn(),
@@ -322,50 +321,22 @@ describe('refusedMovements', () => {
 });
 
 // Removing any of the action's log calls must lose its typed, cashier-attributed row.
-it.each([
-	['openSession', 'Register session opened', 'register.session-opened'],
-	['startCounting', 'Register session counting started', 'register.counting-started'],
-	['backToSelling', 'Register session counting abandoned', 'register.counting-abandoned'],
-] as const)('logs %s with the cashier only after it succeeds', async (action, message, type) => {
-	jest
-		.mocked(
-			{
-				openSession: actions.openSession,
-				startCounting: actions.startCounting,
-				backToSelling: actions.backToSelling,
-			}[action]
-		)
-		.mockResolvedValue(session as never);
+it('logs openSession with the cashier only after it succeeds', async () => {
+	jest.mocked(actions.openSession).mockResolvedValue(session as never);
 	const result = await settled();
-	if (action === 'openSession') {
-		await result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' });
-	} else await result.current.actions[action]();
+	await result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' });
 	expect(logger.info).toHaveBeenCalledWith(
-		message,
+		'Register session opened',
 		expect.objectContaining({
 			actor: { id: '7', name: 'Pat' },
-			context: expect.objectContaining({ type, sessionId: 'session', registerId: 'register' }),
+			context: expect.objectContaining({
+				type: 'register.session-opened',
+				sessionId: 'session',
+				registerId: 'register',
+			}),
 		})
 	);
 });
-
-it.each(['startCounting', 'backToSelling'] as const)(
-	'keeps repeated %s actions as distinct audit attempts',
-	async (action) => {
-		jest
-			.mocked(
-				{ startCounting: actions.startCounting, backToSelling: actions.backToSelling }[action]
-			)
-			.mockResolvedValue(session as never);
-		const result = await settled();
-		await result.current.actions[action]();
-		await result.current.actions[action]();
-		expect(logger.info).toHaveBeenCalledTimes(2);
-		const ids = logger.info.mock.calls.map(([, options]) => options?.terminal?.operationId);
-		for (const id of ids) expect(id).toEqual(expect.stringMatching(/^[0-9a-f]{32}$/));
-		expect(new Set(ids).size).toBe(2);
-	}
-);
 
 it('logs a manual retry with the current cashier and the movement session', async () => {
 	jest.mocked(actions.retryMovement).mockResolvedValue({
@@ -1834,8 +1805,8 @@ it.each(['startCounting', 'backToSelling', 'closeSession'] as const)(
 		await expect(
 			missing.result.current.actions[action]({ counted: { cash: '100' } })
 		).rejects.toBeInstanceOf(actions.RegisterSessionRequiredError);
-		expect(actions.startCounting).not.toHaveBeenCalled();
-		expect(actions.backToSelling).not.toHaveBeenCalled();
+		expect(actions.beginCount).not.toHaveBeenCalled();
+		expect(actions.abandonCount).not.toHaveBeenCalled();
 		expect(actions.closeSession).not.toHaveBeenCalled();
 	}
 );
@@ -1872,11 +1843,12 @@ it.each(['store', 'register', 'generation'] as const)(
 	}
 );
 
-it('records the live session and the counting mark on the device as the session moves', async () => {
+// The count's own moves (status, live copy, mark, fact) are query's: count.test.ts.
+it('records the live session on the device as the session opens and closes; the count moves through the commands', async () => {
 	const row = { ...session, opened_by: 7, expected_float: '90', business_day: '2026-10-28' };
 	jest.mocked(actions.openSession).mockResolvedValue(row as never);
-	jest.mocked(actions.startCounting).mockResolvedValue({ ...row, status: 'counting' } as never);
-	jest.mocked(actions.backToSelling).mockResolvedValue(row as never);
+	jest.mocked(actions.beginCount).mockResolvedValue({ ...row, status: 'counting' } as never);
+	jest.mocked(actions.abandonCount).mockResolvedValue(row as never);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...row, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockResolvedValue({ id: 'closure' } as never);
 	const result = await settled();
@@ -1896,33 +1868,16 @@ it('records the live session and the counting mark on the device as the session 
 			business_day: '2026-10-28',
 		}
 	);
+	const ctx = {
+		storeDB: mockStoreSession.storeDB,
+		userDB: mockStoreSession.userDB,
+		siteUuid: 'site',
+		actor: { id: '7', name: 'Pat' },
+	};
 	await act(() => result.current.actions.startCounting());
-	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
-		mockStoreSession.userDB,
-		'site',
-		'register',
-		expect.objectContaining({
-			status: 'counting',
-			acknowledged: true,
-			opened_by: { id: 7, name: 'Pat' },
-		})
-	);
-	expect(actions.markCountingHere).toHaveBeenLastCalledWith(
-		mockStoreSession.userDB,
-		'site',
-		'register',
-		true
-	);
-	expect(jest.mocked(actions.recordLiveSession).mock.invocationCallOrder.at(-1)).toBeLessThan(
-		jest.mocked(actions.markCountingHere).mock.invocationCallOrder.at(-1)!
-	);
+	expect(actions.beginCount).toHaveBeenCalledWith(ctx, 'session');
 	await act(() => result.current.actions.backToSelling());
-	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
-		mockStoreSession.userDB,
-		'site',
-		'register',
-		expect.objectContaining({ status: 'open', acknowledged: true })
-	);
+	expect(actions.abandonCount).toHaveBeenCalledWith(ctx, 'session');
 	await act(() => result.current.actions.closeSession({ counted: { cash: '100' } }));
 	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(
 		mockStoreSession.userDB,
@@ -1972,7 +1927,7 @@ it.each(['synced', 'pending'])(
 			await expect(result.current.actions.startCounting()).rejects.toThrow(
 				'register_figures_pending'
 			);
-			expect(actions.startCounting).not.toHaveBeenCalled();
+			expect(actions.beginCount).not.toHaveBeenCalled();
 			await expect(
 				result.current.actions.closeSession({ counted: { cash: '100' } })
 			).rejects.toThrow('register_figures_pending');
@@ -1983,10 +1938,13 @@ it.each(['synced', 'pending'])(
 			});
 			await waitFor(() => expect(result.current).toHaveProperty('figuresPending', false));
 			jest
-				.mocked(actions.startCounting)
+				.mocked(actions.beginCount)
 				.mockResolvedValue({ ...session, status: 'counting' } as never);
 			await act(() => result.current.actions.startCounting());
-			expect(actions.startCounting).toHaveBeenCalledWith(storeDB, 'session');
+			expect(actions.beginCount).toHaveBeenCalledWith(
+				expect.objectContaining({ storeDB, userDB }),
+				'session'
+			);
 			await act(async () => {
 				active = [{ ...active[0], server_expected_at: null }];
 				mockSessionChanges.next();

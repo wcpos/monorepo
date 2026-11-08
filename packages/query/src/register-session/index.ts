@@ -28,6 +28,7 @@ export {
 	backToSelling,
 	closeSession,
 	findOpenSession,
+	IllegalSessionTransitionError,
 	isRegisterCounting,
 	openSession,
 	recordMovement,
@@ -60,5 +61,6 @@ export {
 	observeSessionAccounting,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
+export { abandonCount, beginCount, type CountContext } from './count';
 
 export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';
