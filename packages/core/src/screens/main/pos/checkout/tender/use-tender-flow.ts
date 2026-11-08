@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
@@ -15,22 +14,15 @@ import {
 	type GatewayAttempt,
 	isLivePaymentStatus,
 	isOfflineDeviceAuthorization,
-	type MetaDataEntry,
 	mintDevicePayment,
 	mintServerPayment,
-	PAID_UNITS_META_KEY,
-	paidUnitsMeta,
 	partitionVoidableRows,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
 	readGatewayAttempts,
 	readLedger,
-	readPaidUnits,
-	SPLIT_META_KEY,
-	splitPlanMeta,
 	toMinor,
-	withMetaReplaced,
 } from '@wcpos/order-math';
 import {
 	type EngineRecord,
@@ -82,15 +74,10 @@ import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
-	pickUnits,
 	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	selectReceipt,
-	setAllocations,
-	setPickedUnits,
-	setSplitOn,
 	setTenderMethod,
-	setTenderPlan,
 	useTenderMethod,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
@@ -117,20 +104,14 @@ import {
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
-import {
-	mergedAllocations,
-	rowsSince,
-	type SplitView,
-	splitView,
-	useSplitStore,
-} from './split-view';
+import { rowsSince, type SplitView, splitView, useSplitStore } from './split-view';
+import { restoredPlan, splitCommands } from './split-module';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
 import {
 	activePlan,
 	initTenderState,
 	planLegs,
-	type TenderAction,
 	type TenderFlowAction,
 	tenderReducer,
 	type TenderState,
@@ -283,20 +264,6 @@ type LandOptions = {
 	press?: boolean;
 };
 
-const SPLIT_OFF: string[] = ['arm-custom', 'back', 'reset'];
-const CLEARS_PICKS = [...SPLIT_OFF, 'tender-started', 'tender-recorded', 'set-plan', 'clear-plan'];
-/** The picks and the Split chip live in the checkout store (the bill reads them); each action that reset them in the reducer resets them there. */
-function mirrorSplitMode(uuid: string, action: TenderAction) {
-	if (action.type === 'set-plan') setSplitOn(uuid, true);
-	const off =
-		SPLIT_OFF.includes(action.type) ||
-		(action.type === 'clear-plan' && !action.keepSplit) ||
-		(action.type === 'tender-recorded' && action.balanceMinor <= 0);
-	if (off) setSplitOn(uuid, false);
-	if (CLEARS_PICKS.includes(action.type) && !(action.type === 'clear-plan' && action.keepPicks))
-		setPickedUnits(uuid, null);
-}
-
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
 	host: CheckoutHost,
@@ -403,7 +370,8 @@ export function useTenderFlow(
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
 		const methodId = stored?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
-		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
+		// A stored plan is a split: `restoredPlan` turns its chip on (a no-op unless the store lost it).
+		const storedPlan = restoredPlan(order.uuid, balanceMinor);
 		const planRows = rowsSince(storedPlan, rows, dp, titleOf);
 		// The active view of the plan decides only what the keypad shows (legs, entry prefill).
 		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
@@ -412,8 +380,6 @@ export function useTenderFlow(
 			service?.readersInUse(),
 			order.uuid
 		);
-		// A stored plan is a split: its chip is on (a no-op unless the store lost it).
-		if (balanceMinor > 0 && storedPlan !== null) setSplitOn(order.uuid, true);
 		return {
 			...initial,
 			// The reducer starts from the STORED plan, not the active view of it: a split whose planned
@@ -426,24 +392,39 @@ export function useTenderFlow(
 			readerId: initialReaderId(readers, lockToDefault, null, only),
 		};
 	});
-	const [state, rawDispatch] = React.useReducer(tenderReducer, initialState);
-	const reducerDispatch = React.useCallback(
-		(action: TenderAction) => {
-			rawDispatch(action);
-			mirrorSplitMode(order.uuid, action);
-		},
-		[order.uuid]
+	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
+	// Every row this flow writes names the order it is about. Without it the Logs
+	// screen cannot answer "what happened on order 1041?", which is the only question
+	// a merchant actually asks of a checkout row.
+	const orderContext = React.useMemo(
+		() => ({ orderId: payload.id ?? null, orderUUID: order.uuid }),
+		[payload.id, order.uuid]
 	);
-	// Picks the bill (the other column) changed are the entry again, as the pane's own are.
-	// Picks replace an active plan (its cap would otherwise charge a planned share for a bigger
+	// Partial legs' paid-unit stamps, one after another for this mount (`splitCommands`).
+	const [stamps] = React.useState(() => ({ current: Promise.resolve() }));
+	// The split's write side: the plan (store and reducer), the chip, the picks, the units.
+	const splitting = React.useMemo(
+		() =>
+			splitCommands({
+				order,
+				write: (changes) => writeLedgerChanges(order, changes),
+				dispatch: reducerDispatch,
+				state,
+				dp,
+				titleOf,
+				stamps,
+				logContext: orderContext,
+			}),
+		[order, writeLedgerChanges, state, dp, titleOf, stamps, orderContext]
+	);
+	// Picks changed, the pane's or the bill's (the other column): they are the entry again, and
+	// they replace an active plan (its cap would otherwise charge a planned share for a bigger
 	// pick and mark the whole pick paid); the store's `pickUnits` dropped the stored plan, the
-	// reducer's goes here. The Split chip and the picks stay.
+	// reducer's goes here, the one site. The Split chip and the picks stay.
 	const [seenPicks, setSeenPicks] = React.useState(picked);
 	if (seenPicks !== picked) {
 		setSeenPicks(picked);
-		if (state.plan && Object.keys(picked).length > 0)
-			rawDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
-		rawDispatch({ type: 'picks-changed' });
+		splitting.picksChanged(picked, balanceMinor);
 	}
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const {
@@ -573,7 +554,6 @@ export function useTenderFlow(
 	const { readers, lockToDefault, only } = selectableReaders(method, readersInUse, order.uuid);
 	// Every split fact, once per render: the pane, the takes and the bill read the same numbers.
 	const split = splitView({ payload, rows, dp, titleOf, store: splitStore, plan: state.plan });
-	const { rowsSinceFrom, legUnits } = split;
 	const figures = tenderFigures({ dp, balanceMinor, rows, method, state, split });
 	const {
 		fixedAmount,
@@ -612,13 +592,9 @@ export function useTenderFlow(
 	const dispatch = React.useCallback<React.Dispatch<TenderFlowAction>>(
 		(action) => {
 			if (busyNow()) return;
-			if (action.type === 'split-on') return setSplitOn(order.uuid, true);
-			if (action.type === 'pick-units') {
-				pickUnits(order.uuid, action.lineId, action.units);
-				if (state.plan && action.units > 0)
-					reducerDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
-				return reducerDispatch({ type: 'picks-changed' });
-			}
+			if (action.type === 'split-on') return splitting.on();
+			// The render that follows the store's new picks replans the entry (`picksChanged`).
+			if (action.type === 'pick-units') return splitting.pick(action.lineId, action.units);
 			// The rounded prefill (or the picks' price) is what the cashier sees, so a backspace edits
 			// that figure; a percent share and a `+ amount` edit their own number.
 			if (
@@ -629,16 +605,19 @@ export function useTenderFlow(
 				entryMinor !== state.entryMinor
 			)
 				reducerDispatch({ type: 'set-entry', minor: entryMinor });
-			reducerDispatch(action);
-			if (action.type === 'set-plan') setTenderPlan(order.uuid, action.plan);
-			if (action.type === 'clear-plan' || action.type === 'arm-custom' || action.type === 'reset')
-				setTenderPlan(order.uuid, null);
+			if (action.type === 'set-plan') splitting.setPlan(action.plan, action.balanceMinor);
+			else if (action.type === 'clear-plan') splitting.clear(action);
+			else if (action.type === 'back' || action.type === 'arm-custom' || action.type === 'reset')
+				splitting.leave(action);
+			else if (action.type === 'tender-started') splitting.legStarted();
+			else reducerDispatch(action);
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
 		[
 			busyNow,
 			order.uuid,
+			splitting,
 			reducerDispatch,
 			entryMinor,
 			state.entryMinor,
@@ -670,10 +649,7 @@ export function useTenderFlow(
 			// balance into it: `entryAppliedMinor` applies the balance for it instead. A split plan
 			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
 			const dropsPlan = runsWholeOrder(tile.method) && state.plan !== null;
-			if (dropsPlan) {
-				reducerDispatch({ type: 'clear-plan', balanceMinor });
-				setTenderPlan(order.uuid, null);
-			}
+			if (dropsPlan) splitting.clear({ balanceMinor });
 			if (methodId !== state.methodId) attemptRef.current = null;
 			// With the plan gone its share is gone too: the next pill starts from the balance.
 			const prefillMinor = dropsPlan
@@ -705,97 +681,11 @@ export function useTenderFlow(
 			state.plan,
 			tiles,
 			service,
+			splitting,
 			reducerDispatch,
 			getLoaded,
 			busyNow,
 		]
-	);
-
-	// Every row this flow writes names the order it is about. Without it the Logs
-	// screen cannot answer "what happened on order 1041?", which is the only question
-	// a merchant actually asks of a checkout row.
-	const orderContext = React.useMemo(
-		() => ({ orderId: payload.id ?? null, orderUUID: order.uuid }),
-		[payload.id, order.uuid]
-	);
-
-	/**
-	 * The allocations to journal: the order's `_wcpos_paid_units` under the till's, for the rows
-	 * of `ledger` that are live. The caller passes the ledger it knows to be current: the stored
-	 * meta can lag the row that just landed or the void that just answered.
-	 */
-	const journaledPaidUnits = React.useCallback(
-		(
-			meta: MetaDataEntry[] | undefined,
-			ledger: PaymentRow[],
-			paymentId?: string,
-			legUnits?: Record<string, number> | null
-		) => {
-			const live = new Set(
-				ledger.filter(({ status }) => isLivePaymentStatus(status)).map(({ id }) => id)
-			);
-			const stored = Object.fromEntries(
-				Object.entries(
-					mergedAllocations(meta, getCheckoutModeSnapshot().allocations.get(order.uuid) ?? null)
-				).filter(([id]) => live.has(id))
-			);
-			// The completing leg can be journaled before its row exists in the ledger.
-			return paymentId && legUnits ? { ...stored, [paymentId]: legUnits } : stored;
-		},
-		[order.uuid]
-	);
-
-	/**
-	 * Stamps run one after another and read the order at write time, never at call time: a
-	 * partial leg's stamp that a later leg or cancel overtook would otherwise put its older
-	 * units back (Greptile on #3421). `rows` are the caller's newer facts (the row that just
-	 * landed, the void that just answered), laid over the ledger as the order has it.
-	 */
-	const writePaidUnits = React.useCallback(
-		async (rows: PaymentRow[]) => {
-			try {
-				// Resolved inside the atomic write against the payload as it is then: an adoption
-				// from the store or another till between the call and the commit is merged, not
-				// overwritten (Codex on #3421). An unchanged key is no write at all.
-				await writeLedgerChanges(order, (payload) => {
-					const meta = payload.meta_data as MetaDataEntry[] | undefined;
-					const ledger = readLedger(meta).map(
-						(row) => rows.find((candidate) => candidate.id === row.id) ?? row
-					);
-					for (const row of rows) if (!ledger.some(({ id }) => id === row.id)) ledger.push(row);
-					const allocations = journaledPaidUnits(meta, ledger);
-					const hasUnits = Object.keys(allocations).length > 0;
-					if (
-						hasUnits
-							? isEqual(allocations, readPaidUnits(meta))
-							: !(meta ?? []).some(
-									({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
-								)
-					)
-						return {};
-					return {
-						meta_data: withMetaReplaced(meta, [
-							hasUnits ? paidUnitsMeta(allocations) : { key: PAID_UNITS_META_KEY, value: null },
-						]),
-					};
-				});
-			} catch (error) {
-				// Best effort: a local meta write must never fail a sale; completion journals again.
-				logger.warn('Failed to journal paid units', {
-					context: { ...orderContext, error: getErrorMessage(error) },
-				});
-			}
-		},
-		[order, orderContext, journaledPaidUnits, writeLedgerChanges]
-	);
-	const stampChain = React.useRef<Promise<void>>(Promise.resolve());
-	const stampPaidUnits = React.useCallback(
-		(rows: PaymentRow[]) => {
-			const next = stampChain.current.then(() => writePaidUnits(rows));
-			stampChain.current = next;
-			return next;
-		},
-		[writePaidUnits]
 	);
 
 	const tenderRecorded = React.useCallback(
@@ -813,30 +703,9 @@ export function useTenderFlow(
 					},
 				});
 			}
-			const latest = readLedger(order.getLatest().payload.meta_data);
-			const index = latest.findIndex((candidate) => candidate.id === row.id);
-			if (index < 0) latest.push(row);
-			else latest[index] = row;
-			// The balance the summary shows (`derive()`): captured money only (ADR 0040 D6), and a
-			// succeeded refund on a reopened sale due again (Codex 4342609028 on #2831).
-			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
-			const action: TenderAction = {
-				type: 'tender-recorded',
-				balanceMinor: toMinor(balance, dp),
-				rowsSinceFrom: rowsSince(state.plan, latest, dp, titleOf),
-			};
-			reducerDispatch(action);
-			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
-			// of a short split must come back with the plan, or that leg wipes the split record.
-			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
-			// A leg's allocation is frozen at the press (`freezePicks`, every manual and terminal leg);
-			// nothing is read from the picks when it settles, or units picked while a terminal
-			// payment waited would land on it (Greptile and Codex on #3412). A gateway leg carries none.
-			// Journaled on the order after every partial leg (the completing leg's provenance write
-			// carries them), so a reload or another till mid-split keeps the paid marks.
-			if (action.balanceMinor > 0) void stampPaidUnits(latest);
+			splitting.legRecorded(row);
 		},
-		[order, state, dp, titleOf, actor, orderContext, reducerDispatch, stampPaidUnits]
+		[actor, orderContext, splitting]
 	);
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
@@ -1007,17 +876,6 @@ export function useTenderFlow(
 		// The cashier's approval, frozen at the press before any provenance save or push (ADR 0040).
 		const approval = { total: String(order.getLatest().payload.total ?? ''), currency };
 		let savingProvenance = false;
-		// The split as the cashier saw it, written with whichever leg completes the sale —
-		// cash included, which does not pass through saveProvenance below. With no plan, a
-		// split an earlier abandoned attempt left on the order is cleared: it must not
-		// describe a sale that was then completed in one go. Otherwise nothing is sent.
-		const hasStaleSplit = (payload.meta_data ?? []).some(
-			({ key, value }) => key === SPLIT_META_KEY && value !== null
-		);
-		// The STORED plan is journaled, not the active one: the last leg of a finished split still
-		// records its shares (activePlan is null once the legs are done). A whole-order gateway
-		// never has one.
-		const journaledPlan = fixedAmount ? null : state.plan;
 		// Once answered, a throw is a failed status check (PAYMENT101), never "nothing was taken".
 		let answered = false;
 		// A gateway submit or a close the store did not answer stays journaled: it may have taken money.
@@ -1025,39 +883,15 @@ export function useTenderFlow(
 		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
 			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
-			const splitMeta = journaledPlan
-				? [
-						splitPlanMeta({
-							kind: journaledPlan.kind,
-							ways: planLegs(journaledPlan, rowsSinceFrom, balanceMinor).label.ways,
-							shares: [
-								...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
-								fromMinor(amountMinor, dp),
-							],
-						}),
-					]
-				: hasStaleSplit
-					? [{ key: SPLIT_META_KEY, value: null }]
-					: undefined;
-			// The per-payment allocations, THIS leg's included: a manual leg with picked units mints
-			// its row id before the write, and a terminal leg has `minted.row.id` before its
-			// provenance save, so the completing payment's own units are never missing from
-			// `_wcpos_paid_units` (Greptile on #3400).
-			// Only live rows' allocations are journaled: a failed or cancelled leg's picks stay
-			// in the store until the sale ends but never describe the completed sale.
-			const withPaidUnits = (paymentId: string | undefined) => {
-				const meta = order.getLatest().payload.meta_data;
-				const allocations = journaledPaidUnits(meta, readLedger(meta), paymentId, legUnits);
-				if (Object.keys(allocations).length > 0)
-					return [...(splitMeta ?? []), paidUnitsMeta(allocations)];
-				// A refused completing attempt can leave its units on the order: cleared like a stale split.
-				const stale = (meta ?? []).some(
-					({ key, value }) => key === PAID_UNITS_META_KEY && value !== null
-				);
-				return stale
-					? [...(splitMeta ?? []), { key: PAID_UNITS_META_KEY, value: null }]
-					: splitMeta;
-			};
+			// The split as the cashier saw it, written with whichever leg completes the sale —
+			// cash included, which does not pass through saveProvenance below.
+			const leg = splitting.press({
+				view: split,
+				meta: payload.meta_data,
+				wholeOrder: fixedAmount,
+				balanceMinor,
+				amountMinor,
+			});
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
 			// push and the store's ledger all see the rounded due; it names the row it rounds.
 			const target = queue.order ?? order;
@@ -1101,27 +935,12 @@ export function useTenderFlow(
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
 			});
-			// A terminal leg clears the entry (`tender-started`) long before it settles, so its picks
-			// are frozen under the minted row id here; `tenderRecorded` then finds them in the store.
-			const freezePicks = (paymentId: string) => {
-				if (!legUnits) return;
-				setAllocations(order.uuid, {
-					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
-					[paymentId]: legUnits,
-				});
-			};
 			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 				// A stamp the last leg left in flight lands before this leg's own provenance write.
-				await stampChain.current;
-
+				const extraMeta = await leg.completionMeta(paymentId);
 				savingProvenance = sale.lane === 'online';
-				await persistSaleProvenance(ctx, {
-					order,
-					sessionId,
-					online: savingProvenance,
-					extraMeta: withPaidUnits(paymentId),
-				});
+				await persistSaleProvenance(ctx, { order, sessionId, online: savingProvenance, extraMeta });
 				savingProvenance = false;
 			};
 			// A cash due rounded to nothing completes here too, its fee in the same write.
@@ -1240,7 +1059,8 @@ export function useTenderFlow(
 				});
 				if (!minted.ok) throw new Error(minted.reason);
 				await saveProvenance(minted.row.id);
-				freezePicks(minted.row.id);
+				// A terminal leg clears the entry long before it settles: its picks freeze here.
+				leg.legPressed(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1260,7 +1080,7 @@ export function useTenderFlow(
 							? amountMinor
 							: null,
 				});
-				reducerDispatch({ type: 'tender-started' });
+				splitting.legStarted();
 				return;
 			}
 			if (method.capture.mode === 'server') {
@@ -1292,7 +1112,7 @@ export function useTenderFlow(
 				});
 				if (!minted.ok) throw new Error(minted.reason);
 				await saveProvenance(minted.row.id);
-				freezePicks(minted.row.id);
+				leg.legPressed(minted.row.id);
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -1304,7 +1124,7 @@ export function useTenderFlow(
 					approval,
 				});
 				void remember(reader);
-				reducerDispatch({ type: 'tender-started' });
+				splitting.legStarted();
 				return;
 			}
 
@@ -1376,11 +1196,10 @@ export function useTenderFlow(
 
 			if (!sale.lane) throw new Error('press_lane_missing');
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
-			const paymentId = roundingMinor !== 0 || legUnits ? uuidv4() : undefined;
+			const paymentId = roundingMinor !== 0 || split.legUnits ? uuidv4() : undefined;
 			// A stamp the last leg left in flight lands before this leg's meta is composed.
-			await stampChain.current;
-			const extraMeta = withPaidUnits(paymentId);
-			if (paymentId) freezePicks(paymentId);
+			const extraMeta = await leg.completionMeta(paymentId);
+			if (paymentId) leg.legPressed(paymentId);
 			// The id is also minted for picked units; only a rounded leg carries a fee.
 			if (roundingMinor !== 0 && paymentId)
 				await patchFees(roundingFee(target.getLatest().payload, paymentId));
@@ -1414,13 +1233,13 @@ export function useTenderFlow(
 				return;
 			}
 			if (outcome.kind === 'refused') {
-				reducerDispatch({ type: 'back' });
+				splitting.leave({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
 			}
 			// An unanswered record was already reported (PAYMENT_OUTCOME_UNKNOWN); no second toast.
 			if (outcome.kind === 'failed' || outcome.kind === 'unknown') {
-				reducerDispatch({ type: 'back' });
+				splitting.leave({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
 			}
@@ -1527,11 +1346,9 @@ export function useTenderFlow(
 		remember,
 		saveState,
 		bindingStatus,
-		state.plan,
-		legUnits,
-		journaledPaidUnits,
+		split,
+		splitting,
 		fixedAmount,
-		rowsSinceFrom,
 		state.readerId,
 		payload.id,
 		payload.number,
@@ -1541,7 +1358,6 @@ export function useTenderFlow(
 		wpCredentials,
 		t,
 		tiles,
-		reducerDispatch,
 	]);
 	const takeTender = React.useCallback(
 		() => exclusive('takeTender', runPress),
@@ -1878,11 +1694,11 @@ export function useTenderFlow(
 			actor,
 			context: { ...orderContext, type: 'checkout.cancelled', voided },
 		});
-		reducerDispatch({ type: 'reset' });
+		splitting.leave({ type: 'reset' });
 		setTenderMethod(order.uuid, null);
 		leaveCheckout(order.uuid);
 		leaveHost('cart');
-	}, [order, leaveHost, voidAndReport, service, reducerDispatch, actor, orderContext]);
+	}, [order, leaveHost, voidAndReport, service, splitting, actor, orderContext]);
 	const cancelPayment = React.useCallback(
 		() => exclusive('cancelPayment', runCancelPayment),
 		[exclusive, runCancelPayment]
@@ -1906,24 +1722,8 @@ export function useTenderFlow(
 			testID: 'checkout-cancel-one',
 		}).catch(() => false);
 		if (!confirmed || (await voidAndReport([paymentId])) === false) return;
-		const { [paymentId]: _dropped, ...kept } =
-			getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
-		setAllocations(order.uuid, kept);
-		const latest = readLedger(order.getLatest().payload.meta_data).map((candidate) =>
-			candidate.id === paymentId ? { ...candidate, status: 'voided' as const } : candidate
-		);
-		await stampPaidUnits(latest);
-		// The next payment is re-planned over what is left: an untouched entry follows the
-		// balance and the surviving legs, as it does after a leg lands (Greptile on #3405); an
-		// amount the cashier typed stays theirs (CodeRabbit).
-		if (!state.entryDirty) {
-			const { balance } = derive(order.getLatest().payload.total, latest, [], { dp });
-			reducerDispatch({
-				type: 'tender-recorded',
-				balanceMinor: toMinor(balance, dp),
-				rowsSinceFrom: rowsSince(state.plan, latest, dp, titleOf),
-			});
-		}
+		// Its units are unpaid again, and the next payment is re-planned over what is left.
+		await splitting.legVoided(paymentId);
 		logger.info(t('pos_checkout.payment_cancelled'), {
 			actor,
 			showToast: true,

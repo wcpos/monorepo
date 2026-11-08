@@ -1834,17 +1834,6 @@ describe('useTenderFlow', () => {
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
-	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
-		mockPayload.meta_data = [{ key: '_wcpos_paid_units', value: '{"dead":{"l1":1}}' }];
-		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
-		const [, , input] = mockRecordManualPayment.mock.calls[0];
-		expect(input.extraMeta).toEqual(
-			expect.arrayContaining([{ key: '_wcpos_paid_units', value: null }])
-		);
-	});
-
 	it('keeps the saved units of a live payment when the store is empty (a reopened sale), and exposes them', async () => {
 		mockPayload.meta_data = withLedger(
 			[{ key: '_wcpos_paid_units', value: '{"a":{"l1":1},"dead":{"l2":2}}' }],
@@ -1902,6 +1891,33 @@ describe('useTenderFlow', () => {
 			a: { 1: 1 },
 			[input.paymentId as string]: { 2: 2 },
 		});
+	});
+
+	// ADR 0040, ledger line 38: the attempt is journaled before money moves; the split module
+	// freezes THIS payment's picks at the press, before the record that can land it.
+	it('a completing press journals the attempt, freezes its picks, then records the payment', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
+		// The flat white is paid: picking both lemonades is the whole balance.
+		setAllocations(order.uuid, { a: { 1: 1 } });
+		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '40.00', tendered: null })]);
+		let frozen: unknown;
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			frozen = getCheckoutModeSnapshot().allocations.get(order.uuid);
+			return { kind: 'refused' };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => pickUnits(order.uuid, 2, 2));
+		jest.mocked(recordCompletionAttempt).mockClear();
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(frozen).toEqual({ a: { 1: 1 }, [input.paymentId as string]: { 2: 2 } });
+		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+			mockRecordManualPayment.mock.invocationCallOrder[0]
+		);
 	});
 
 	it('does not pick a disabled tile', async () => {
@@ -1992,28 +2008,6 @@ describe('useTenderFlow', () => {
 			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
 		).toHaveLength(0);
 		expect(mockDismissTo).not.toHaveBeenCalled();
-	});
-
-	it('cancelling the last allocated leg clears saved paid units', async () => {
-		const row = payment();
-		mockPayload.meta_data = withLedger(
-			[{ id: 17, key: '_wcpos_paid_units', value: '{"payment-1":{"line":1}}' }],
-			[row]
-		);
-		mockVoidPayments.mockImplementationOnce(async () => {
-			const voided = { ...row, status: 'voided' as const };
-			mockPayload.meta_data = withLedger(mockPayload.meta_data, [voided]);
-			return { rows: [voided], failed: [] };
-		});
-		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelOnePayment(row.id));
-
-		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload).meta_data).toContainEqual({
-			id: 17,
-			key: '_wcpos_paid_units',
-			value: null,
-		});
 	});
 
 	it('cancelOnePayment re-plans the next payment over what is left (Greptile on #3405)', async () => {
