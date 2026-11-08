@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
-
-import { mockState } from '../cards/test-utils';
+import { mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
 import { calculateTotals } from '../report/utils';
 import { PageSheetHostContext } from '../../components/page-sheet-host';

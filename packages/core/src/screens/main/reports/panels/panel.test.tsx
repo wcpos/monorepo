@@ -323,7 +323,7 @@ it("a single-store install's sentinel scope is not All stores", () => {
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');
 });
-it('the Stores panel waits for store names before Export and Print', () => {
+it('the Stores panel reads the names the card already has, with Export and Print ready', () => {
 	mockState.storeFilter = 'woocommerce-pos';
 	mockState.register = undefined;
 	mockStores.next([
@@ -332,18 +332,9 @@ it('the Stores panel waits for store names before Export and Print', () => {
 	]);
 	room();
 	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-stores'));
-	// The card has names; the newly mounted panel must wait for its own directory read.
+	// One directory read for the room: a pending re-read never reaches a panel opened after it answered.
 	act(() => mockStores.next(PENDING_USER_DB_READ));
 	fireEvent.click(screen.getByTestId('card-where-sold-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
-	act(() =>
-		mockStores.next([
-			{ id: 7, name: 'Front shop' },
-			{ id: 9, name: 'Back shop' },
-		])
-	);
 	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('detail-panel-scope').textContent).toContain('All stores');

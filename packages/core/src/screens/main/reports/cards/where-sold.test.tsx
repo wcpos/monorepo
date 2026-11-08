@@ -1,9 +1,9 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 
-import { mockState, mockStores, setOrders } from './test-utils';
+import { mockState, mockStores, render, setOrders } from './test-utils';
 import { WhereSoldCard } from './where-sold';
 
 import type { ReportOrder } from '../context';

@@ -13,6 +13,7 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
+import { ReportsDirectoriesProvider, ReportsFilterScopeProvider } from '../scope';
 import { QueryStateProvider, useQueryState } from '../../../../query';
 
 import type { ReportOrder } from '../context';
@@ -287,25 +288,33 @@ function setup({
 				},
 			}}
 		>
-			<ReportsScopeProvider>
-				{!settled ? (
-					<SalesScope date={<span>Today</span>} settled={false} />
-				) : (
-					<React.Suspense fallback={null}>
-						<ReportsProvider handle={sales} comparisonHandle={comparison} refundsHandle={refunds}>
-							<SalesScope date={<span>Today</span>} settled />
-							<Hero />
-							{probe && (
-								<React.Suspense fallback={null}>
-									<ReportsComparison>
-										<Probe />
-									</ReportsComparison>
-								</React.Suspense>
-							)}
-						</ReportsProvider>
-					</React.Suspense>
-				)}
-			</ReportsScopeProvider>
+			<ReportsDirectoriesProvider>
+				<ReportsFilterScopeProvider>
+					<ReportsScopeProvider>
+						{!settled ? (
+							<SalesScope date={<span>Today</span>} settled={false} />
+						) : (
+							<React.Suspense fallback={null}>
+								<ReportsProvider
+									handle={sales}
+									comparisonHandle={comparison}
+									refundsHandle={refunds}
+								>
+									<SalesScope date={<span>Today</span>} settled />
+									<Hero />
+									{probe && (
+										<React.Suspense fallback={null}>
+											<ReportsComparison>
+												<Probe />
+											</ReportsComparison>
+										</React.Suspense>
+									)}
+								</ReportsProvider>
+							</React.Suspense>
+						)}
+					</ReportsScopeProvider>
+				</ReportsFilterScopeProvider>
+			</ReportsDirectoriesProvider>
 		</QueryStateProvider>
 	);
 }

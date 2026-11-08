@@ -1,6 +1,8 @@
 /** @jest-environment jsdom */
+import * as React from 'react';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { createTestT } from '../../../../../jest/translate';
 import {
@@ -13,6 +15,7 @@ import {
 	topProducts,
 } from '../cards/aggregate';
 import { calculateTotals } from '../report/utils';
+import { ReportsDirectoriesProvider, ReportsFilterScopeProvider } from '../scope';
 import { panelSpec } from './specs';
 import { useReportPrint } from './use-report-print';
 import fixture from './__fixtures__/report-sales.json';
@@ -76,6 +79,7 @@ jest.mock('../../../../query', () => ({
 }));
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => mockState.names,
+	useRegisterNamesReady: () => true,
 }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'bound', registerName: 'Bound till' }),
@@ -86,6 +90,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: () => mockStores,
+	observeSiteCredentials: () => of([]),
 }));
 jest.mock('../../../../services/register-session/use-closure-document-context', () => ({
 	useClosureDocumentContext: () => ({
@@ -119,16 +124,25 @@ const spec = panelSpec('payments', {
 	t: createTestT(),
 });
 
+function Scope({ children }: React.PropsWithChildren) {
+	return (
+		<ReportsDirectoriesProvider>
+			<ReportsFilterScopeProvider>{children}</ReportsFilterScopeProvider>
+		</ReportsDirectoriesProvider>
+	);
+}
 function print(options: Partial<Parameters<typeof useReportPrint>[0]> = {}) {
-	return renderHook(() =>
-		useReportPrint({
-			key: 'payments',
-			title: 'Sales by payment method',
-			spec,
-			dataReady: true,
-			needsRefunds: false,
-			...options,
-		})
+	return renderHook(
+		() =>
+			useReportPrint({
+				key: 'payments',
+				title: 'Sales by payment method',
+				spec,
+				dataReady: true,
+				needsRefunds: false,
+				...options,
+			}),
+		{ wrapper: Scope }
 	);
 }
 function printed() {
