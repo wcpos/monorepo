@@ -234,7 +234,9 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		planLegs: [],
 		planLabel: null,
 		lines: [],
-		linesPaidBy: {},
+		picked: {},
+		splitOn: false,
+		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -314,7 +316,7 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
-	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+	it('keeps an offline line paid mark after the server assigns a numeric ID', () => {
 		mockLineItems = [
 			{
 				id: 123,
@@ -324,11 +326,11 @@ describe('TenderCheckout', () => {
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
 			},
 		];
-		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+		mockFlow = makeFlow({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } });
 
 		render(<TenderCheckout order={order} />);
 
-		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
+		expect(document.body.textContent).toContain('pos_checkout.units_paid_of');
 	});
 
 	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
