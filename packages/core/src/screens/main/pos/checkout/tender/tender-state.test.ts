@@ -84,7 +84,6 @@ describe('split V1 money rules', () => {
 
 describe('split V1 entry', () => {
 	const fresh = {
-		picked: {},
 		extraMinor: null,
 		entryMode: 'money',
 		pickerOpen: false,
@@ -94,19 +93,16 @@ describe('split V1 entry', () => {
 		...initialTenderState,
 		view: 'amount',
 		entryMinor: 500,
-		picked: { lemonade: 1 },
 	};
-	it('starts empty and picks, replaces and removes units without changing other lines', () => {
+	it('starts empty; changed picks (the checkout store) are the entry again until typed over', () => {
 		expect(initialTenderState).toMatchObject(fresh);
-		const picked = tenderReducer(state, { type: 'pick-units', lineId: 42, units: 2 });
-		expect(picked.picked).toEqual({ lemonade: 1, 42: 2 });
-		expect(tenderReducer(picked, { type: 'pick-units', lineId: 42, units: 3 }).picked[42]).toBe(3);
-		for (const units of [0, -1]) {
-			expect(tenderReducer(picked, { type: 'pick-units', lineId: 42, units }).picked).toEqual({
-				lemonade: 1,
-			});
-		}
-		expect(state.picked).toEqual({ lemonade: 1 });
+		expect(initialTenderState).not.toHaveProperty('picked');
+		expect(initialTenderState).not.toHaveProperty('splitOn');
+		const typed = { ...state, entryDirty: true };
+		expect(tenderReducer(typed, { type: 'picks-changed' })).toEqual({
+			...typed,
+			entryDirty: false,
+		});
 	});
 	it('arms only in amount view and edits the extra without changing the picked subtotal', () => {
 		for (const view of ['select', 'cancel'] as const) {
@@ -171,6 +167,19 @@ describe('split V1 entry', () => {
 });
 
 describe('tenderReducer', () => {
+	it('picks-changed ends percent entry and makes the picks the entry again (Codex on #3412)', () => {
+		const percent = tenderReducer(
+			{ ...initialTenderState, view: 'amount', entryDirty: true },
+			{ type: 'set-entry-mode', mode: 'percent' }
+		);
+		const typed = tenderReducer(percent, { type: 'set-entry', minor: 50 });
+		expect(tenderReducer(typed, { type: 'picks-changed' })).toMatchObject({
+			entryMode: 'money',
+			entryDirty: false,
+			// The typed 50 % never becomes $0.50 once the picks are gone (Greptile on #3412).
+			entryMinor: 0,
+		});
+	});
 	it('replaces the pre-fill on the first digit, then shifts later digits in from the right', () => {
 		const picked = tenderReducer(initialTenderState, {
 			type: 'pick-method',
@@ -318,66 +327,38 @@ it('keeps the chosen transport with the keypad and clears it when going back', (
 	expect(tenderReducer(chosen, { type: 'back' }).transport).toBeNull();
 });
 
-it('turns Split on, sets, clears and arms plans', () => {
-	const state = { ...initialTenderState, view: 'amount' as const, linesPaidBy: { 1: ['Cash'] } };
-	const on = tenderReducer(state, { type: 'split-on' });
-	expect(on.splitOn).toBe(true);
-	expect(tenderReducer(on, { type: 'set-tab', tab: 'legacy' })).toMatchObject({
-		tab: 'legacy',
-		splitOn: true,
-	});
-	const picked = tenderReducer(on, { type: 'pick-units', lineId: 2, units: 1 });
-	const set = tenderReducer(picked, {
+it('sets, clears and arms plans', () => {
+	const state = { ...initialTenderState, view: 'amount' as const };
+	const set = tenderReducer(state, {
 		type: 'set-plan',
 		plan: { kind: 'even', ways: 3, from: 1 },
 		balanceMinor: 1000,
 	});
-	expect(set).toMatchObject({ splitOn: true, picked: {}, entryMinor: 333, entryDirty: false });
-	// The Split chip off: the plan and the picks go, nothing taken is touched.
-	expect(tenderReducer(set, { type: 'clear-plan', balanceMinor: 1000 })).toMatchObject({
-		plan: null,
-		splitOn: false,
-		entryMinor: 1000,
-		linesPaidBy: { 1: ['Cash'] },
-	});
-	// Change split keeps Split on, so the even row comes back over what is left.
-	expect(
-		tenderReducer(set, { type: 'clear-plan', balanceMinor: 1000, keepSplit: true })
-	).toMatchObject({ plan: null, splitOn: true, entryMinor: 1000 });
+	expect(set).toMatchObject({ entryMinor: 333, entryDirty: false });
+	// The Split chip off (or Change split): the plan goes, nothing taken is touched.
+	for (const keepSplit of [undefined, true] as const)
+		expect(tenderReducer(set, { type: 'clear-plan', balanceMinor: 1000, keepSplit })).toMatchObject(
+			{ plan: null, entryMinor: 1000 }
+		);
 	expect(tenderReducer(set, { type: 'arm-custom' })).toMatchObject({
 		plan: null,
-		splitOn: false,
 		entryMinor: 0,
 		entryDirty: false,
 	});
-	for (const type of ['back', 'reset'] as const)
-		expect(tenderReducer(set, { type }).splitOn).toBe(false);
-});
-
-it('keeps Split on across payments until the balance is paid', () => {
-	const on = tenderReducer(initialTenderState, { type: 'split-on' });
-	const recorded = (balanceMinor: number) =>
-		tenderReducer(on, { type: 'tender-recorded', rowsSinceFrom: [], balanceMinor });
-	expect(recorded(500).splitOn).toBe(true);
-	expect(recorded(0).splitOn).toBe(false);
 });
 
 it('opens and closes the share choice, which a new payment or a plan closes', () => {
-	const picked = tenderReducer(
-		{ ...initialTenderState, view: 'amount' },
-		{ type: 'pick-units', lineId: 'a', units: 2 }
-	);
-	const open = tenderReducer(picked, { type: 'toggle-share' });
+	const open = tenderReducer({ ...initialTenderState, view: 'amount' }, { type: 'toggle-share' });
 	expect(open.shareOpen).toBe(true);
 	expect(tenderReducer(open, { type: 'toggle-share' }).shareOpen).toBe(false);
 	expect(tenderReducer(open, { type: 'tender-started' }).shareOpen).toBe(false);
 	expect(
 		tenderReducer(open, {
 			type: 'set-plan',
-			plan: { kind: 'items', lineIds: ['a'], units: { a: 2 }, firstMinor: 900, ways: 3, from: 0 },
+			plan: { kind: 'items', units: { a: 2 }, firstMinor: 900, ways: 3, from: 0 },
 			balanceMinor: 1000,
 		})
-	).toMatchObject({ shareOpen: false, picked: {}, entryMinor: 300 });
+	).toMatchObject({ shareOpen: false, entryMinor: 300 });
 });
 
 it('derives even shares again after a short leg, with the rounding on the last', () => {
@@ -410,8 +391,14 @@ it('derives a fixed first payment and then the entire rest', () => {
 	expect(activePlan(plan, 2, 10)).toBeNull();
 });
 
-it('loops item groups, preserves their paying methods, and only marks covered groups', () => {
-	const plan = { kind: 'items' as const, lineIds: [1, 2], firstMinor: 1000, ways: 3, from: 0 };
+it('loops item groups and keeps the group plan once it is paid', () => {
+	const plan = {
+		kind: 'items' as const,
+		units: { 1: 1, 2: 1 },
+		firstMinor: 1000,
+		ways: 3,
+		from: 0,
+	};
 	const rows = [{ minor: 100, title: 'Card' }];
 	expect(planLegs(plan, rows, 1500).legs.map((l) => [l.minor, l.state])).toEqual([
 		[100, 'done'],
@@ -429,10 +416,8 @@ it('loops item groups, preserves their paying methods, and only marks covered gr
 				title: amountMinor === 100 ? 'Card' : 'SumUp',
 			})),
 		});
-	expect(record([100, 450]).linesPaidBy).toEqual({});
 	const done = record([100, 450, 450]);
 	expect(done.plan).toEqual(plan);
-	expect(done.linesPaidBy).toEqual({ 1: ['Card', 'SumUp'], 2: ['Card', 'SumUp'] });
 	const legs = planLegs(
 		plan,
 		[...rows, { minor: 450, title: 'SumUp' }, { minor: 450, title: 'SumUp' }],
@@ -441,11 +426,5 @@ it('loops item groups, preserves their paying methods, and only marks covered gr
 	expect(legs).toMatchObject({ thisPaymentMinor: 600, label: { rest: true } });
 	expect(legs.legs.at(-1)).toMatchObject({ minor: 600, state: 'now' });
 	expect(activePlan(plan, 3, 600)).toBe(plan);
-	const next = tenderReducer(done, {
-		type: 'set-plan',
-		plan: { ...plan, from: 3, lineIds: [3], firstMinor: 600, ways: 1 },
-		balanceMinor: 600,
-	});
-	expect(next.linesPaidBy).toEqual(done.linesPaidBy);
 	expect(planLegs(plan, [...rows, ...rows, ...rows], 1300).thisPaymentMinor).toBe(700);
 });

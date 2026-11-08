@@ -44,7 +44,7 @@ export function LedgerPane({ flow, lines, format }: Props) {
 				lines={lines}
 				totalMinor={flow.totalMinor}
 				format={format}
-				paidBy={flow.linesPaidBy}
+				paid={flow.paidUnits}
 			/>
 			<LedgerLegs view={flow} format={format} />
 		</VStack>
@@ -56,11 +56,11 @@ export function LedgerLines({
 	totalMinor,
 	format,
 	withTotal = true,
-	paidBy,
+	paid,
 }: Pick<Props, 'lines' | 'format'> & {
 	totalMinor: number;
 	withTotal?: boolean;
-	paidBy?: Record<TenderLineId, string[]>;
+	paid?: TenderFlow['paidUnits'];
 }) {
 	const t = useT();
 	return (
@@ -70,10 +70,14 @@ export function LedgerLines({
 					key={`${line.name}-${index}`}
 					label={`${line.quantity ?? 1} × ${line.name ?? ''}`}
 					beside={
-						line.id !== undefined && paidBy?.[line.id] ? (
+						line.id !== undefined && paid?.[line.id] ? (
 							<StatusBadge
 								variant="ok"
-								label={t('pos_checkout.line_paid_by', { methods: paidBy[line.id].join(' + ') })}
+								label={t('pos_checkout.units_paid_of', {
+									n: paid[line.id].units,
+									total: line.quantity ?? 1,
+									methods: paid[line.id].methods.join(' + '),
+								})}
 							/>
 						) : null
 					}
@@ -162,9 +166,10 @@ export function LedgerLegs({
 			)
 		) : (
 			<VStack space="xs" testID="checkout-ledger">
-				{view.rows.map((row) => (
+				{view.rows.map((row, index) => (
 					<LedgerLeg
 						key={row.id}
+						index={index}
 						row={row}
 						view={view}
 						format={format}
@@ -207,11 +212,13 @@ export function LedgerLegs({
 }
 
 function LedgerLeg({
+	index,
 	row,
 	view,
 	format,
 	next,
 }: {
+	index: number;
 	next: boolean;
 	row: PaymentRow;
 	view: LedgerView;
@@ -229,19 +236,43 @@ function LedgerLeg({
 					change: format(toMinor(row.change ?? 0, view.dp)),
 				}
 			: null;
+	// What the payment paid for, from its allocation: `1 Flat white, 1 Burger`.
+	const paidFor = Object.entries(view.allocations[row.id] ?? {})
+		.map(([id, units]) =>
+			t('pos_checkout.units_of_name', {
+				units,
+				name: view.lines.find((line) => String(line.id) === id)?.name ?? '',
+			})
+		)
+		.join(', ');
+	// A cancelled payment stays listed, struck through (one way to cancel: the pane's disclosure).
+	const voided = row.status === 'voided';
 
 	return (
 		<VStack space="xs" testID={`checkout-leg-${row.id}`} className="border-border border-b py-2">
 			<HStack className="items-center justify-between gap-2">
-				<Text variant="subheading" className="flex-1" decodeHtml>
+				<Text variant="subheading" className={voided ? 'flex-1 line-through' : 'flex-1'} decodeHtml>
 					{title ?? row.method_id}
 				</Text>
-				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
-				<StatusBadge label={statusLabel(row.status, t)} variant={statusVariant(row.status)} />
+				<Text className={voided ? 'text-sm tabular-nums line-through' : 'text-sm tabular-nums'}>
+					{format(toMinor(row.amount, view.dp))}
+				</Text>
+				{voided ? (
+					<Text variant="help" testID={`checkout-payment-${index}-cancelled`}>
+						{t('pos_checkout.cancelled')}
+					</Text>
+				) : (
+					<StatusBadge label={statusLabel(row.status, t)} variant={statusVariant(row.status)} />
+				)}
 			</HStack>
 			{time ? (
 				<Text variant="help" tabular>
 					{formatDate(new Date(time), 'p')}
+				</Text>
+			) : null}
+			{paidFor ? (
+				<Text variant="help" decodeHtml>
+					{paidFor}
 				</Text>
 			) : null}
 			{next ? <Text variant="help">{t('pos_checkout.next_leg')}</Text> : null}

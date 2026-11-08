@@ -31,7 +31,8 @@ import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { selectableReaders } from './tiles';
 import { disabledReasonText } from './labels';
-import { evenSplitShareMinor, type PlanLeg, type TenderKey } from './tender-state';
+import { evenSplitShareMinor, type PlanLeg, type TenderKey, unitsMinor } from './tender-state';
+import { UnitStepper } from './unit-stepper';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { CARD_READER_DOCS_URL } from '../../../settings/card-readers/docs';
@@ -229,8 +230,12 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
 	const plan = flow.plan;
-	const { splitOn, picked, extraMinor, shareOpen, doneOpen } = flow.state;
+	const { extraMinor, shareOpen, doneOpen, pickerOpen } = flow.state;
+	const { splitOn, picked } = flow;
 	const picking = Object.keys(picked).length > 0;
+	const pickedCount = Object.values(picked).reduce((sum, units) => sum + units, 0);
+	// On a phone there is no bill on screen: its picks are a list in the keypad's place.
+	const pickList = splitOn && phone && pickerOpen && !doneOpen;
 	const percent = flow.state.entryMode === 'percent';
 	const done = flow.planLegs.filter((leg) => leg.state === 'done');
 	const counted = flow.rows.filter(countsTowardPaid);
@@ -737,6 +742,16 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 			{showDone ? null : (
 				<View testID="checkout-helpers" className="w-full flex-row flex-wrap justify-center gap-2">
+					{splitOn && phone ? (
+						<Chip
+							label={pickerOpen ? t('pos_checkout.back_to_keypad') : t('pos_checkout.pick_items')}
+							count={pickerOpen ? pickedCount : undefined}
+							on={pickerOpen}
+							testID="checkout-pick-items"
+							disabled={busy}
+							onPress={() => flow.dispatch({ type: 'toggle-picker' })}
+						/>
+					) : null}
 					{splitOn && !picking && !plan && !percent ? (
 						<>
 							<Text variant="key" className="w-full text-center">
@@ -812,6 +827,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							}}
 						/>
 					))}
+					{picking && flow.discountMinor > 0 ? (
+						<Text testID="checkout-discount-note" variant="help" className="w-full text-center">
+							{t('pos_checkout.prices_include_discount')}
+						</Text>
+					) : null}
 					{picking ? (
 						<>
 							<Chip
@@ -853,9 +873,6 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 										() =>
 											setPlan({
 												kind: 'items',
-												lineIds: flow.lines
-													.filter((line) => String(line.id) in picked)
-													.map((line) => line.id),
 												units: picked,
 												firstMinor: shareMinor,
 												ways: count,
@@ -903,8 +920,72 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</View>
 			)}
 
-			{/* The opened payments take the keypad's place: the keypad is gone, not shrunk. */}
-			{showDone ? null : (
+			{pickList ? (
+				<View testID="checkout-pick-list" className="w-full gap-2">
+					{flow.lines.map((line) => {
+						const key = String(line.id);
+						const units = picked[key] ?? 0;
+						const unpaid = flow.unpaidUnits(line.id);
+						const paid = flow.paidUnits[key];
+						const paidN = paid?.units ?? 0;
+						const { totalMinor: total, quantity } = line;
+						return (
+							<ListItem
+								key={key}
+								selected={units > 0}
+								trailing={
+									unpaid > 0 ? (
+										<>
+											<UnitStepper
+												picked={units}
+												unpaid={unpaid}
+												testIDBase={`checkout-line-${key}`}
+												onChange={(next) =>
+													flow.dispatch({ type: 'pick-units', lineId: key, units: next })
+												}
+											/>
+											{units > 0 ? (
+												<Text className="font-semibold tabular-nums">
+													{format(
+														unitsMinor(total, quantity, paidN + units) -
+															unitsMinor(total, quantity, paidN)
+													)}
+												</Text>
+											) : null}
+										</>
+									) : null
+								}
+							>
+								{/* A tap on the name picks every unpaid unit; the stepper beside it is not inside it. */}
+								<PressableSurface
+									role="button"
+									minTarget
+									testID={`checkout-line-${key}-pick`}
+									disabled={busy || unpaid === 0}
+									onPress={() => flow.dispatch({ type: 'pick-units', lineId: key, units: unpaid })}
+								>
+									<Text variant="subheading" className="leading-tight">
+										{decode(line.name)}
+									</Text>
+									<Text variant="key" className="leading-tight" decodeHtml>
+										{paid
+											? t('pos_checkout.units_paid_of', {
+													n: paid.units,
+													total: line.quantity,
+													methods: paid.methods.join(' + '),
+												})
+											: t('pos_checkout.unit_price_each', {
+													amount: format(unitsMinor(line.totalMinor, line.quantity, 1)),
+												})}
+									</Text>
+								</PressableSurface>
+							</ListItem>
+						);
+					})}
+				</View>
+			) : null}
+			{/* The opened payments and the phone's pick list take the keypad's place: gone, not shrunk. */}
+			{showDone || pickList ? null : (
 				<Keypad
 					rows={KEYPAD_ROWS.map((row) =>
 						row.map((key) => ({ ...key, disabled: busy || fixedAmount }))

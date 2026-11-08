@@ -82,14 +82,18 @@ import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	pickUnits,
 	queueHeadlessPrint,
 	releaseUnconfirmedReceipt,
 	selectReceipt,
 	setAllocations,
-	setLinesPaidBy,
+	setPickedUnits,
+	setSplitOn,
 	setTenderMethod,
 	setTenderPlan,
 	useAllocations,
+	usePickedUnits,
+	useSplitOn,
 	useTenderMethod,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
@@ -103,7 +107,6 @@ import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
-import { getUuidFromLineItem } from '../../hooks/utils';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
@@ -117,6 +120,7 @@ import {
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
+import { tenderLines } from './use-ledger-view';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
 import {
@@ -130,6 +134,7 @@ import {
 	planLegs,
 	quickTenderedAmounts,
 	type TenderAction,
+	type TenderFlowAction,
 	type TenderLineId,
 	tenderReducer,
 	type TenderState,
@@ -183,7 +188,7 @@ export interface TenderFlow {
 	retryTerminalLeg: () => void;
 	/** The reducer's state, with an untouched balance prefill shown as the rounded cash due. */
 	state: TenderState;
-	dispatch: React.Dispatch<TenderAction>;
+	dispatch: React.Dispatch<TenderFlowAction>;
 
 	/** Store decimal places; every `*Minor` number below is in these units. */
 	dp: number;
@@ -196,10 +201,15 @@ export interface TenderFlow {
 	planLegs: ReturnType<typeof planLegs>['legs'];
 	planLabel: string | null;
 	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
-	linesPaidBy: TenderState['linesPaidBy'];
+	/** THIS payment's picked units per line (checkout store, shared with the bill). */
+	picked: Record<TenderLineId, number>;
+	/** The Split chip is on (checkout store): the bill picks and the helpers offer the split. */
+	splitOn: boolean;
 	allocations: Record<string, Record<TenderLineId, number>>;
 	/** Units of each line the live payments covered, with their methods (`paidUnitsByLine`). */
 	paidUnits: ReturnType<typeof paidUnitsByLine>;
+	/** The order's discount (`discount_total`): picked prices already include it. */
+	discountMinor: number;
 	/** What THIS payment's picked units add up to. */
 	pickedMinor: number;
 	/** Every unpaid unit is picked: the hero is the balance, stray rounding cents included. */
@@ -304,6 +314,21 @@ type LandOptions = {
 	press?: boolean;
 };
 
+const NO_PICKS: Record<TenderLineId, number> = {};
+const SPLIT_OFF: string[] = ['arm-custom', 'back', 'reset'];
+const CLEARS_PICKS = [...SPLIT_OFF, 'tender-started', 'tender-recorded', 'set-plan', 'clear-plan'];
+/** The picks and the Split chip live in the checkout store (the bill reads them); each action that reset them in the reducer resets them there. */
+function mirrorSplitMode(uuid: string, action: TenderAction) {
+	if (action.type === 'set-plan') setSplitOn(uuid, true);
+	const off =
+		SPLIT_OFF.includes(action.type) ||
+		(action.type === 'clear-plan' && !action.keepSplit) ||
+		(action.type === 'tender-recorded' && action.balanceMinor <= 0);
+	if (off) setSplitOn(uuid, false);
+	if (CLEARS_PICKS.includes(action.type) && !(action.type === 'clear-plan' && action.keepPicks))
+		setPickedUnits(uuid, null);
+}
+
 export function useTenderFlow(
 	order: EngineRecord<'orders'>,
 	host: CheckoutHost,
@@ -315,6 +340,8 @@ export function useTenderFlow(
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const storeAllocations = useAllocations(order.uuid);
+	const picked = usePickedUnits(order.uuid) ?? NO_PICKS;
+	const splitOn = useSplitOn(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
@@ -429,21 +456,39 @@ export function useTenderFlow(
 			service?.readersInUse(),
 			order.uuid
 		);
+		// A stored plan is a split: its chip is on (a no-op unless the store lost it).
+		if (balanceMinor > 0 && storedPlan !== null) setSplitOn(order.uuid, true);
 		return {
 			...initial,
 			// The reducer starts from the STORED plan, not the active view of it: a split whose planned
 			// legs are all taken but which still owes money (a short leg) is still that split, and its
 			// last leg must journal every share.
 			plan: balanceMinor > 0 ? storedPlan : null,
-			splitOn: balanceMinor > 0 && storedPlan !== null,
 			entryMinor: plan
 				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
 				: initial.entryMinor,
-			linesPaidBy: getCheckoutModeSnapshot().linesPaidBy.get(order.uuid) ?? {},
 			readerId: initialReaderId(readers, lockToDefault, null, only),
 		};
 	});
-	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
+	const [state, rawDispatch] = React.useReducer(tenderReducer, initialState);
+	const reducerDispatch = React.useCallback(
+		(action: TenderAction) => {
+			rawDispatch(action);
+			mirrorSplitMode(order.uuid, action);
+		},
+		[order.uuid]
+	);
+	// Picks the bill (the other column) changed are the entry again, as the pane's own are.
+	// Picks replace an active plan (its cap would otherwise charge a planned share for a bigger
+	// pick and mark the whole pick paid); the store's `pickUnits` dropped the stored plan, the
+	// reducer's goes here. The Split chip and the picks stay.
+	const [seenPicks, setSeenPicks] = React.useState(picked);
+	if (seenPicks !== picked) {
+		setSeenPicks(picked);
+		if (state.plan && Object.keys(picked).length > 0)
+			rawDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
+		rawDispatch({ type: 'picks-changed' });
+	}
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const {
 		readerId: remembered,
@@ -587,24 +632,11 @@ export function useTenderFlow(
 	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
 	const plan = fixedAmount ? null : activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
 	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
-	const lines = (payload.line_items ?? []).flatMap((line) => {
-		const id = getUuidFromLineItem(line) ?? line.id;
-		return id === undefined
-			? []
-			: [
-					{
-						id,
-						name: line.name ?? '',
-						quantity: line.quantity ?? 1,
-						// Tax is always inside the money a unit adds to a payment, whatever the cart shows.
-						totalMinor: toMinor(line.total ?? '0', dp) + toMinor(line.total_tax ?? '0', dp),
-					},
-				];
-	});
+	const lines = tenderLines(payload.line_items, dp);
 	const itemTitle =
 		plan?.kind === 'items'
 			? lines
-					.filter((line) => plan.lineIds.includes(line.id))
+					.filter((line) => String(line.id) in plan.units)
 					.map((line) => line.name)
 					.join(' + ')
 			: null;
@@ -651,10 +683,10 @@ export function useTenderFlow(
 	};
 	const pickedMinor = lines.reduce((sum, { id, quantity, totalMinor }) => {
 		const paid = Math.min(paidOf(id), quantity);
-		const units = paid + (state.picked[id] ?? 0);
+		const units = paid + (picked[id] ?? 0);
 		return sum + unitsMinor(totalMinor, quantity, units) - unitsMinor(totalMinor, quantity, paid);
 	}, 0);
-	const picking = Object.keys(state.picked).length > 0;
+	const picking = Object.keys(picked).length > 0;
 	// The units THIS payment records. A shared item payment allocates the whole group's units to
 	// the group's first leg; the later legs pay the rest of the group's money and carry none, or
 	// the units would count as paid once per leg.
@@ -664,9 +696,9 @@ export function useTenderFlow(
 			.slice(state.plan.from)
 			.some((row) => isLivePaymentStatus(row.status) && allocations[row.id]);
 	const legUnits = picking
-		? state.picked
+		? picked
 		: state.plan?.kind === 'items' && !groupAllocated
-			? (state.plan.units ?? null)
+			? state.plan.units
 			: null;
 	// Every unpaid unit picked, and what is left is only the cents `unitsMinor` floors away
 	// (under one minor unit per unit): shipping, fees and a rounding fee stay in the rest,
@@ -674,7 +706,7 @@ export function useTenderFlow(
 	const strayMinor = balanceMinor - pickedMinor;
 	const allUnpaidPicked =
 		picking &&
-		lines.every(({ id }) => (state.picked[id] ?? 0) >= unpaidUnits(id)) &&
+		lines.every(({ id }) => (picked[id] ?? 0) >= unpaidUnits(id)) &&
 		strayMinor >= 0 &&
 		strayMinor < lines.reduce((sum, { quantity }) => sum + quantity, 0);
 	const pickedEntryMinor =
@@ -721,9 +753,16 @@ export function useTenderFlow(
 		[thisPaymentMinor, dp, method, state.view, entryAppliedMinor]
 	);
 
-	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
+	const dispatch = React.useCallback<React.Dispatch<TenderFlowAction>>(
 		(action) => {
 			if (busyNow()) return;
+			if (action.type === 'split-on') return setSplitOn(order.uuid, true);
+			if (action.type === 'pick-units') {
+				pickUnits(order.uuid, action.lineId, action.units);
+				if (state.plan && action.units > 0)
+					reducerDispatch({ type: 'clear-plan', balanceMinor, keepSplit: true, keepPicks: true });
+				return reducerDispatch({ type: 'picks-changed' });
+			}
 			// The rounded prefill (or the picks' price) is what the cashier sees, so a backspace edits
 			// that figure; a percent share and a `+ amount` edit their own number.
 			if (
@@ -861,20 +900,15 @@ export function useTenderFlow(
 						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
 					})),
 			};
-			const next = tenderReducer(state, action);
 			reducerDispatch(action);
 			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
 			// of a short split must come back with the plan, or that leg wipes the split record.
 			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
-			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
-			if (legUnits) {
-				setAllocations(order.uuid, {
-					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
-					[row.id]: legUnits,
-				});
-			}
+			// A leg's allocation is frozen at the press (`freezePicks`, every manual and terminal leg);
+			// nothing is read from the picks when it settles, or units picked while a terminal
+			// payment waited would land on it (Greptile and Codex on #3412). A gateway leg carries none.
 		},
-		[order, state, dp, byId, actor, orderContext, legUnits]
+		[order, state, dp, byId, actor, orderContext, reducerDispatch]
 	);
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
@@ -1420,6 +1454,7 @@ export function useTenderFlow(
 			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 || legUnits ? uuidv4() : undefined;
 			const extraMeta = withPaidUnits(paymentId);
+			if (paymentId) freezePicks(paymentId);
 			// The id is also minted for picked units; only a rounded leg carries a fee.
 			if (roundingMinor !== 0 && paymentId)
 				await patchFees(roundingFee(target.getLatest().payload, paymentId));
@@ -2007,8 +2042,10 @@ export function useTenderFlow(
 			planLegs: figures?.legs ?? [],
 			planLabel,
 			lines,
-			linesPaidBy: state.linesPaidBy,
+			picked,
+			splitOn,
 			allocations,
+			discountMinor: toMinor(payload.discount_total ?? '0', dp),
 			paidUnits,
 			pickedMinor,
 			allUnpaidPicked,
@@ -2050,6 +2087,9 @@ export function useTenderFlow(
 		}),
 		[
 			plan,
+			picked,
+			splitOn,
+			payload.discount_total,
 			allocations,
 			figures,
 			planLabel,

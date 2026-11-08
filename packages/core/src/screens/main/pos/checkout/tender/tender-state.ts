@@ -9,8 +9,7 @@ export type TenderPlan =
 	| { kind: 'fixed'; firstMinor: number; title: string | null; thenWays?: number; from: number }
 	| {
 			kind: 'items';
-			lineIds: TenderLineId[];
-			units?: Record<TenderLineId, number>;
+			units: Record<TenderLineId, number>;
 			firstMinor: number;
 			ways: number;
 			from: number;
@@ -28,12 +27,8 @@ export interface TenderState {
 	/** False until the cashier has touched the keypad since the entry was pre-filled. */
 	entryDirty: boolean;
 	plan: TenderPlan | null;
-	/** The Split chip: the pane offers the split helpers and the pick list. */
-	splitOn: boolean;
 	/** `Share` is choosing how many ways THIS payment's picked lines are shared. */
 	shareOpen: boolean;
-	linesPaidBy: Record<TenderLineId, string[]>;
-	picked: Record<TenderLineId, number>;
 	extraMinor: number | null;
 	entryMode: 'money' | 'percent';
 	pickerOpen: boolean;
@@ -57,13 +52,13 @@ export type TenderAction =
 	| { type: 'tender-started' }
 	| { type: 'key'; key: TenderKey }
 	| { type: 'set-entry'; minor: number }
-	| { type: 'pick-units'; lineId: TenderLineId; units: number }
+	/** The picks (checkout store) changed: they are the entry again until typed over. */
+	| { type: 'picks-changed' }
 	| { type: 'arm-extra' }
 	| { type: 'set-entry-mode'; mode: 'money' | 'percent' }
 	| { type: 'toggle-picker' }
 	| { type: 'toggle-done' }
 	| { type: 'toggle-share' }
-	| { type: 'split-on' }
 	| { type: 'back' }
 	| {
 			type: 'tender-recorded';
@@ -73,14 +68,16 @@ export type TenderAction =
 	  }
 	| { type: 'set-plan'; plan: TenderPlan; balanceMinor: number }
 	/** `keepSplit`: `Change split` drops the plan but leaves the Split chip on. */
-	| { type: 'clear-plan'; balanceMinor: number; keepSplit?: true }
+	| { type: 'clear-plan'; balanceMinor: number; keepSplit?: true; keepPicks?: true }
 	| { type: 'arm-custom' }
 	| { type: 'request-cancel' }
 	| { type: 'reset' };
+/** The picks and the Split chip live in the checkout store; the flow's dispatch routes these there. */
+export type TenderFlowAction =
+	TenderAction | { type: 'pick-units'; lineId: TenderLineId; units: number } | { type: 'split-on' };
 /** $9,999,999.99 at two decimals — a till will never legitimately take more, and it stops a stuck key running the display off the screen. */
 export const MAX_TENDER_MINOR = 999999999;
 const emptyPickedEntry = {
-	picked: {},
 	extraMinor: null,
 	entryMode: 'money' as const,
 	pickerOpen: false,
@@ -97,8 +94,6 @@ export const initialTenderState: TenderState = {
 	entryMinor: 0,
 	entryDirty: false,
 	plan: null,
-	splitOn: false,
-	linesPaidBy: {},
 };
 
 /**
@@ -135,13 +130,15 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return { ...state, transport: action.transport };
 		case 'pick-reader':
 			return { ...state, readerId: action.readerId };
-		case 'pick-units': {
-			const picked = { ...state.picked };
-			if (action.units <= 0) delete picked[action.lineId];
-			else picked[action.lineId] = action.units;
-			// The picks are the entry again until the cashier types over them (the flow derives it).
-			return { ...state, picked, entryDirty: false };
-		}
+		case 'picks-changed':
+			// Picking is a different way to build the payment: a percent share ends, and the typed
+			// share is cleared with it so it can never be read back as money (Greptile on #3412).
+			return {
+				...state,
+				entryDirty: false,
+				entryMode: 'money',
+				entryMinor: state.entryMode === 'percent' ? 0 : state.entryMinor,
+			};
 		case 'arm-extra':
 			return state.view === 'amount'
 				? { ...state, extraMinor: 0, entryMinor: 0, entryDirty: false }
@@ -154,8 +151,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return { ...state, doneOpen: !state.doneOpen };
 		case 'toggle-share':
 			return { ...state, shareOpen: !state.shareOpen };
-		case 'split-on':
-			return { ...state, splitOn: true };
 		case 'key': {
 			if (state.view !== 'amount') {
 				return state;
@@ -192,7 +187,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return {
 				...state,
 				...emptyPickedEntry,
-				splitOn: false,
 				view: 'select',
 				methodId: null,
 				readerId: null,
@@ -201,16 +195,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				entryDirty: false,
 			};
 		case 'tender-recorded': {
-			const linesPaidBy = { ...state.linesPaidBy };
-			if (
-				state.plan?.kind === 'items' &&
-				action.rowsSinceFrom.reduce((sum, row) => sum + row.amountMinor, 0) >= state.plan.firstMinor
-			) {
-				for (const id of state.plan.lineIds) {
-					// Preserve the group's original methods when subsequently taking the rest.
-					linesPaidBy[id] ??= [...new Set(action.rowsSinceFrom.map((row) => row.title))];
-				}
-			}
 			// The method stays chosen for the next leg (the selector is always on screen now);
 			// the entry pre-types the next planned leg, or the balance when no plan is left.
 			const rows = action.rowsSinceFrom.map((row) => ({
@@ -224,14 +208,11 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return {
 				...state,
 				view: state.methodId ? 'amount' : 'select',
-				picked: {},
 				extraMinor: null,
 				entryMode: 'money',
 				shareOpen: false,
 				entryMinor,
 				entryDirty: false,
-				splitOn: state.splitOn && action.balanceMinor > 0,
-				linesPaidBy,
 			};
 		}
 		case 'set-plan':
@@ -239,7 +220,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				...state,
 				...emptyPickedEntry,
 				plan: action.plan,
-				splitOn: true,
 				entryMinor:
 					state.view === 'amount'
 						? planLegs(action.plan, [], action.balanceMinor).thisPaymentMinor
@@ -252,7 +232,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				...state,
 				...emptyPickedEntry,
 				plan: null,
-				splitOn: action.type === 'clear-plan' && action.keepSplit === true,
 				view: action.type === 'arm-custom' ? 'amount' : state.view,
 				entryMinor: action.type === 'clear-plan' ? action.balanceMinor : 0,
 				entryDirty: false,

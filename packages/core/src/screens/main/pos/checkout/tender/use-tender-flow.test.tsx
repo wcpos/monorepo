@@ -47,9 +47,11 @@ import {
 	getCheckoutModeSnapshot,
 	markOrderQueuedOffline,
 	markOrderSaving,
+	pickUnits,
 	resetCheckoutMode,
 	resolveStage,
 	setAllocations,
+	setPickedUnits,
 	setTenderMethod,
 	setTenderPlan,
 	useOrderCheckoutStage,
@@ -279,6 +281,7 @@ let mockPayload: {
 	billing?: { email?: string; phone?: string };
 	line_items?: {
 		id?: number;
+		product_id?: number | null;
 		name: string;
 		quantity: number;
 		total: string;
@@ -1425,7 +1428,7 @@ describe('useTenderFlow', () => {
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
-	it('exposes item lines, derives their shared group and publishes completed badges for the ledger', async () => {
+	it('exposes item lines, derives their shared group and allocates its units to the first leg', async () => {
 		mockPayload.total = '46.00';
 		mockPayload.line_items = [
 			{ id: 1, name: 'Scarf', quantity: 1, total: '22.00' },
@@ -1436,19 +1439,24 @@ describe('useTenderFlow', () => {
 		act(() =>
 			result.current.dispatch({
 				type: 'set-plan',
-				plan: { kind: 'items', lineIds: [1], ways: 2, firstMinor: 2200, from: 0 },
+				plan: { kind: 'items', units: { 1: 1 }, ways: 2, firstMinor: 2200, from: 0 },
 				balanceMinor: 4600,
 			})
 		);
 		expect(result.current.planLabel).toBe('pos_checkout.item_payment_n_of');
-		const first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
-		mockRecordManualPayment.mockImplementationOnce(async () => {
+		// A plan turns the store's Split on: the bill (the other column) is the picker.
+		expect(result.current.splitOn).toBe(true);
+		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(true);
+		// The row lands under the id the flow minted and froze the allocation with, as the writer does.
+		let first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
+		mockRecordManualPayment.mockImplementationOnce(async (_order, _method, input) => {
+			first = { ...first, id: input.paymentId ?? first.id };
 			mockPayload.meta_data = withLedger([], [first]);
 			return { ...recorded, row: first };
 		});
 		act(() => result.current.pickMethod('pos_card'));
 		await act(async () => result.current.takeTender());
-		expect(result.current.linesPaidBy).toEqual({});
+		expect(result.current.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
 		const second = payment({ id: 'second', amount: '11.00' });
 		mockRecordManualPayment.mockImplementationOnce(async () => {
 			mockPayload.meta_data = withLedger([], [first, second]);
@@ -1459,10 +1467,76 @@ describe('useTenderFlow', () => {
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.rest_of_the_order');
 		expect(result.current.thisPaymentMinor).toBe(2400);
-		expect(result.current.linesPaidBy).toEqual({ 1: ['Card', 'Cash'] });
-		expect(getCheckoutModeSnapshot().linesPaidBy.get(order.uuid)).toEqual(
-			result.current.linesPaidBy
+		// The group's later leg carries no units: they count once, under the first leg.
+		expect(result.current.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
+		expect(result.current.splitOn).toBe(true);
+	});
+	it('picks in the checkout store (the bill) drive the picked money and the entry', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00', total_tax: '2.00' },
+		];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'key', key: '7' }));
+		expect(result.current.state.entryDirty).toBe(true);
+		// The other column writes the store; the pane's typed entry gives way to the picks.
+		act(() => pickUnits(order.uuid, 1, 2));
+		expect(result.current.picked).toEqual({ 1: 2 });
+		expect(result.current.pickedMinor).toBe(1100);
+		expect(result.current.state.entryDirty).toBe(false);
+		expect(result.current.state.entryMinor).toBe(1100);
+		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 0 }));
+		expect(getCheckoutModeSnapshot().pickedUnits.get(order.uuid)).toEqual({});
+		expect(result.current.pickedMinor).toBe(0);
+		await act(async () => {});
+	});
+
+	it('a pick replaces an active plan: the Split chip and the picks stay, the plan goes (Greptile on #3412)', async () => {
+		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
 		);
+		expect(result.current.plan).not.toBeNull();
+		expect(result.current.state.entryMinor).toBe(4648);
+		// The bill picks a unit worth more than the planned share: the pick is the payment now.
+		act(() => pickUnits(order.uuid, 1, 4));
+		expect(result.current.plan).toBeNull();
+		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toBeUndefined();
+		expect(result.current.splitOn).toBe(true);
+		expect(result.current.picked).toEqual({ 1: 4 });
+		expect(result.current.state.entryMinor).toBe(2000);
+		expect(result.current.entryAppliedMinor).toBe(2000);
+	});
+	it('Split on lives in the store; Split off clears it and the picks, and a paid sale ends both', async () => {
+		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.dispatch({ type: 'split-on' }));
+		expect(result.current.splitOn).toBe(true);
+		act(() => pickUnits(order.uuid, 1, 1));
+		act(() => result.current.dispatch({ type: 'clear-plan', balanceMinor: 9295, keepSplit: true }));
+		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(true);
+		expect(getCheckoutModeSnapshot().pickedUnits.has(order.uuid)).toBe(false);
+		act(() => pickUnits(order.uuid, 1, 1));
+		act(() => result.current.dispatch({ type: 'clear-plan', balanceMinor: 9295 }));
+		expect(result.current.splitOn).toBe(false);
+		expect(result.current.picked).toEqual({});
+		act(() => result.current.dispatch({ type: 'split-on' }));
+		act(() => pickUnits(order.uuid, 1, 4));
+		act(() => result.current.pickMethod('pos_cash'));
+		const paid = payment({ id: 'all', amount: '92.95' });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [paid]);
+			return { ...recorded, row: paid };
+		});
+		await act(async () => result.current.takeTender());
+		expect(getCheckoutModeSnapshot().pickedUnits.has(order.uuid)).toBe(false);
+		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(false);
 	});
 	it('uses the tax-inclusive cart amount for item splits when configured', async () => {
 		mockTaxDisplayCart = 'incl';
@@ -1473,6 +1547,15 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
 		expect(result.current.lines[0]?.totalMinor).toBe(1200);
+		await act(async () => {});
+	});
+	it('a line removed offline (a product_id null tombstone) is not on the bill to pick (Codex on #3412)', async () => {
+		mockPayload.line_items = [
+			{ id: 1, product_id: null, name: 'Gone', quantity: 1, total: '10.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '10.00' },
+		];
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.lines.map(({ id }) => id)).toEqual([2]);
 		await act(async () => {});
 	});
 	it('prices a unit with its tax inside on an exclusive-display store', async () => {
@@ -1508,7 +1591,6 @@ describe('useTenderFlow', () => {
 		const units = { 1: 3 };
 		const plan = {
 			kind: 'items' as const,
-			lineIds: [1],
 			units,
 			firstMinor: 1500,
 			ways: 3,
@@ -1712,7 +1794,7 @@ describe('useTenderFlow', () => {
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 2, units: 2 }));
+		act(() => pickUnits(order.uuid, 2, 2));
 		await act(async () => result.current.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
@@ -1733,10 +1815,12 @@ describe('useTenderFlow', () => {
 		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 2, units: 2 }));
+		act(() => pickUnits(order.uuid, 2, 2));
 		await act(async () => result.current.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
+		// The leg recorded: THIS payment's picks leave the store.
+		expect(getCheckoutModeSnapshot().pickedUnits.has(order.uuid)).toBe(false);
 		const paidUnits = input.extraMeta?.find(
 			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
 		);
@@ -2176,6 +2260,35 @@ describe('server tender', () => {
 		expect(result.current.state.readerId).toBe('reader');
 		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
 	});
+	it('a settlement keeps the allocation frozen at the press; picks made meanwhile are the next payment (Greptile on #3412)', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			row: payment({ id: 'frozen', capture_mode: 'device', status: 'captured' }),
+		});
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: false };
+		setAllocations(order.uuid, { frozen: { 1: 1 } });
+		setPickedUnits(order.uuid, { 2: 2 });
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ frozen: { 1: 1 } });
+		// An amount-only leg froze nothing: its settlement adopts no picks either (Codex on #3412).
+		setAllocations(order.uuid, null);
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			row: payment({ id: 'plain', capture_mode: 'device', status: 'captured' }),
+		});
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: false };
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toBeUndefined();
+		setPickedUnits(order.uuid, null);
+	});
 	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
 		mockPayload.line_items = [
 			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
@@ -2183,10 +2296,10 @@ describe('server tender', () => {
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('terminal'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 1 }));
+		act(() => setPickedUnits(order.uuid, { 1: 1 }));
 		await act(async () => result.current.takeTender());
 		const [{ row }] = mockBegin.mock.calls[0];
-		expect(result.current.state.picked).toEqual({});
+		expect(result.current.picked).toEqual({});
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { 1: 1 } });
 	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {

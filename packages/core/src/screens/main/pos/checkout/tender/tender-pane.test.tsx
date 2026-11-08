@@ -236,8 +236,10 @@ function makeFlow(count = 1): TenderFlow {
 		planLegs: [],
 		planLabel: null,
 		lines: [],
-		linesPaidBy: {},
+		picked: {},
+		splitOn: false,
 		allocations: {},
+		discountMinor: 0,
 		paidUnits: {},
 		pickedMinor: 0,
 		allUnpaidPicked: false,
@@ -721,7 +723,7 @@ it('renders a paid line badge beside an items plan', () => {
 	const flow: TenderFlow = {
 		...makeFlow(),
 		saveState: null,
-		plan: { kind: 'items', ways: 1, firstMinor: 100, lineIds: [1], from: 0 },
+		plan: { kind: 'items', ways: 1, firstMinor: 100, units: { 1: 1 }, from: 0 },
 		planLabel: 'Rest of the order',
 		planLegs: [
 			{ minor: 100, state: 'done', title: 'Card' },
@@ -732,15 +734,15 @@ it('renders a paid line badge beside an items plan', () => {
 		<>
 			<TenderPane flow={flow} format={String} />
 			<LedgerLines
-				lines={[{ id: 1, name: 'Belt' }]}
+				lines={[{ id: 1, name: 'Belt', quantity: 2 }]}
 				totalMinor={600}
 				format={String}
-				paidBy={{ 1: ['Card', 'SumUp'] }}
+				paid={{ 1: { units: 1, methods: ['Card', 'SumUp'] } }}
 			/>
 		</>
 	);
 	expect(screen.queryByTestId('checkout-plan-pick-items')).toBeNull();
-	expect(screen.getByText('paid · Card + SumUp')).toBeTruthy();
+	expect(screen.getByText('1 of 2 paid · Card + SumUp')).toBeTruthy();
 });
 
 it('keeps the keypad visible without a method and disables commit', () => {
@@ -1021,7 +1023,7 @@ it('keeps fixed plans numbered out of two, but stops numbering a completed item 
 		<TenderPane
 			flow={{
 				...flow,
-				plan: { kind: 'items', firstMinor: 100, lineIds: [1], ways: 1, from: 0 },
+				plan: { kind: 'items', firstMinor: 100, units: { 1: 1 }, ways: 1, from: 0 },
 				planLegs: [
 					{ minor: 100, state: 'done', title: 'Cash' },
 					{ minor: 1, state: 'now' },
@@ -1063,13 +1065,13 @@ describe('split V1: the pane builds each payment', () => {
 		entryAppliedMinor: 18250,
 		lines,
 		unpaidUnits: (id) => lines.find((line) => line.id === id)?.quantity ?? 0,
+		splitOn: true,
 		...over,
 		state: {
 			...initialTenderState,
 			view: 'amount',
 			methodId: method.id,
 			entryMinor: 18250,
-			splitOn: true,
 			...state,
 		},
 	});
@@ -1133,7 +1135,7 @@ describe('split V1: the pane builds each payment', () => {
 	});
 
 	it('picked lines show their leg chips, + amount and Share', () => {
-		const flow = splitFlow({ pickedMinor: 3700 }, { picked: { l1: 3, l2: 1 } });
+		const flow = splitFlow({ pickedMinor: 3700, picked: { l1: 3, l2: 1 } });
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-leg-l1')).toBe('3 Lemonade');
 		expect(text('checkout-leg-l2')).toBe('1 Fish & chips');
@@ -1150,8 +1152,8 @@ describe('split V1: the pane builds each payment', () => {
 
 	it('Share then 3 ways plans the picked units shared three ways', () => {
 		const flow = splitFlow(
-			{ pickedMinor: 3700 },
-			{ picked: { l1: 3, l2: 1 }, shareOpen: true, extraMinor: 0 }
+			{ pickedMinor: 3700, picked: { l1: 3, l2: 1 } },
+			{ shareOpen: true, extraMinor: 0 }
 		);
 		render(<TenderPane flow={flow} format={String} />);
 		expect(text('checkout-helpers')).toContain('Share this payment');
@@ -1162,7 +1164,6 @@ describe('split V1: the pane builds each payment', () => {
 			type: 'set-plan',
 			plan: {
 				kind: 'items',
-				lineIds: ['l1', 'l2'],
 				units: { l1: 3, l2: 1 },
 				firstMinor: 3700,
 				ways: 3,
@@ -1170,6 +1171,77 @@ describe('split V1: the pane builds each payment', () => {
 			},
 			balanceMinor: 18250,
 		});
+	});
+
+	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
+		const paid = { l2: { units: 1, methods: ['Card'] } };
+		const unpaidUnits = (id: string | number) => (id === 'l2' ? 2 : 4);
+		const flow = splitFlow({ paidUnits: paid, unpaidUnits });
+		const { rerender } = render(
+			<DeviceScope phone>
+				<TenderPane flow={flow} format={String} />
+			</DeviceScope>
+		);
+		expect(text('checkout-pick-items')).toBe('Pick items');
+		expect(screen.queryByTestId('checkout-pick-list')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-pick-items'));
+		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'toggle-picker' });
+		const open = splitFlow(
+			{ paidUnits: paid, unpaidUnits, picked: { l1: 2 }, pickedMinor: 1000 },
+			{ pickerOpen: true }
+		);
+		rerender(
+			<DeviceScope phone>
+				<TenderPane flow={open} format={String} />
+			</DeviceScope>
+		);
+		expect(screen.queryByTestId('checkout-keypad')).toBeNull();
+		expect(text('checkout-pick-items')).toBe('Back to keypad2');
+		expect(text('checkout-line-l1-pick')).toContain('Lemonade');
+		expect(text('checkout-line-l1-pick')).toContain('500 each');
+		expect(text('checkout-line-l1-units')).toBe('2 of 4');
+		expect(screen.getByText('1000')).toBeTruthy();
+		expect(text('checkout-line-l2-pick')).toContain('Fish & chips');
+		expect(text('checkout-line-l2-pick')).toContain('1 of 3 paid · Card');
+		expect(text('checkout-line-l2-units')).toBe('0 of 2');
+		expect(screen.getByTestId('checkout-line-l2-minus').getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(screen.getByTestId('checkout-line-l1-plus'));
+		expect(open.dispatch).toHaveBeenLastCalledWith({ type: 'pick-units', lineId: 'l1', units: 3 });
+		fireEvent.click(screen.getByTestId('checkout-line-l2-pick'));
+		expect(open.dispatch).toHaveBeenLastCalledWith({ type: 'pick-units', lineId: 'l2', units: 2 });
+		rerender(
+			<DeviceScope phone>
+				<TenderPane
+					flow={{ ...open, state: { ...open.state, pickerOpen: false } }}
+					format={String}
+				/>
+			</DeviceScope>
+		);
+		expect(screen.getByTestId('checkout-keypad')).toBeTruthy();
+		expect(screen.queryByTestId('checkout-pick-list')).toBeNull();
+	});
+
+	it('the tablet has no pick list: the bill is the picker', () => {
+		render(
+			<DeviceScope phone={false}>
+				<TenderPane flow={splitFlow({}, { pickerOpen: true })} format={String} />
+			</DeviceScope>
+		);
+		expect(screen.queryByTestId('checkout-pick-items')).toBeNull();
+		expect(screen.queryByTestId('checkout-pick-list')).toBeNull();
+		expect(screen.getByTestId('checkout-keypad')).toBeTruthy();
+	});
+
+	it('picks on a discounted order say the prices include the discount', () => {
+		const { rerender } = render(
+			<TenderPane flow={splitFlow({ discountMinor: 1825 })} format={String} />
+		);
+		expect(screen.queryByTestId('checkout-discount-note')).toBeNull();
+		const picks = { picked: { l1: 1 }, pickedMinor: 500 };
+		rerender(<TenderPane flow={splitFlow({ ...picks, discountMinor: 1825 })} format={String} />);
+		expect(text('checkout-discount-note')).toBe('Prices include the discount');
+		rerender(<TenderPane flow={splitFlow(picks)} format={String} />);
+		expect(screen.queryByTestId('checkout-discount-note')).toBeNull();
 	});
 
 	it('three payments taken fold into one pill that unfolds into them, each cancellable', () => {
@@ -1332,7 +1404,7 @@ describe('split V1: the pane builds each payment', () => {
 	});
 
 	it('the Split chip turns Split on, and off clears the plan', () => {
-		const off = splitFlow({}, { splitOn: false });
+		const off = splitFlow({ splitOn: false });
 		const { rerender } = render(<TenderPane flow={off} format={String} />);
 		expect(pressed('checkout-split-chip')).toBe('false');
 		expect(screen.queryByTestId('checkout-even-2')).toBeNull();
