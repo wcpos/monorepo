@@ -59,7 +59,7 @@ jest.mock('../register/use-register-binding', () => ({
 const mockRefreshRequests = new Subject<unknown>();
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
-	observeSessionAccounting: () => ({ stream: of({ orders: { hits: [] } }) }),
+	observeSessionAccounting: () => of({ orders: { hits: [] } }),
 	get sessionRefreshRequests() {
 		return mockRefreshRequests;
 	},
