@@ -31,7 +31,7 @@ import {
 	countVariance,
 	varianceAmount,
 	varianceText,
-} from '../../pos/cart/register-count.helpers';
+} from '../../../../services/register-session/count-money';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { TemplateSwitcher } from '../../receipt/template-switcher';

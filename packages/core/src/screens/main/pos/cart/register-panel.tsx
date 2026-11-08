@@ -36,7 +36,7 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
-import { mayAbandonCount } from './register-count.helpers';
+import { mayAbandonCount } from '../../../../services/register-session/count-decision';
 import { RefusedCloseNotice } from './refused-close-notice';
 import { ageLabel } from './register-bar.helpers';
 import { Ticking } from './ticking';

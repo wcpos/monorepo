@@ -28,12 +28,12 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { ApprovalFields } from '../../pos/cart/approve-sheet';
 import { RegisterAmount } from '../../pos/cart/movement-sheet';
 import { DenominationTile } from '../../pos/cart/register-count';
-import { denominations } from '../../pos/cart/register-count.denominations';
 import {
 	countDecimals,
 	denominationTotal,
 	validAmount,
-} from '../../pos/cart/register-count.helpers';
+} from '../../../../services/register-session/count-money';
+import { denominations } from '../../../../services/register-session/count-denominations';
 import {
 	type Correction,
 	deriveSettled,
