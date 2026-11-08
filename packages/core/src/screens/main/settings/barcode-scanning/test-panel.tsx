@@ -23,7 +23,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 
-const DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
+const DOCS_URL = 'https://docs.wcpos.com/hardware/scanners/setup-wizard#test-panel';
 const BAR_HEIGHT_CAP_MS = 60;
 
 function keyGlyph(key: string): string {

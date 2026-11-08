@@ -63,7 +63,7 @@ function reportScannerSettingFailure(action: string, error: unknown): void {
 		context: { action, error: getErrorMessage(error) },
 	});
 }
-const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
+const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanners/setup-wizard';
 
 /**
  * What a saved scanner's status line says.
