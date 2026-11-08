@@ -1,26 +1,27 @@
-import { RxDBBackend, TRANSLATION_VERSION } from './rxdb-backend';
+import { RxDBBackend } from './rxdb-backend';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-// Widened to string: on main the version is a CalVer literal and `=== 'next'` would be a
-// TypeScript no-overlap error (TS2367); the comparison still decides which cases run.
-const rolling = (TRANSLATION_VERSION as string) === 'next';
-const itPinned = rolling ? it.skip : it;
-const itRolling = rolling ? it : it.skip;
+// Both lanes run every case: a pinned CalVer tag and the rolling `next` branch ref.
+const PINNED = '2026.11.12';
+const ROLLING = 'next';
 
-function createBackend(options: { translationsState?: any } = {}) {
+/** A cache port over a plain record; `set` stores what it is given, as the app's port does. */
+function createCache(entries: Record<string, unknown> = {}) {
+	const store = { ...entries };
+	return {
+		store,
+		get: (key: string) => store[key],
+		set: jest.fn((key: string, catalogue: Record<string, string>, _cached: unknown) => {
+			store[key] = catalogue;
+		}),
+	};
+}
+
+function createBackend(cache = createCache(), { rolling = false }: { rolling?: boolean } = {}) {
 	const backend = new RxDBBackend();
-	const translationsState = options.translationsState;
-	backend.init(
-		{},
-		{
-			translationsState: translationsState
-				? { get: (key: string) => translationsState[key] }
-				: undefined,
-			userDB: { states: { translations_v2: translationsState } },
-		}
-	);
+	backend.init({}, { version: rolling ? ROLLING : PINNED, rolling, cache });
 	return backend;
 }
 
@@ -37,7 +38,6 @@ function mockFetchResponse(data: Record<string, string> | null) {
 		json: () => Promise.resolve(data),
 	});
 }
-
 describe('RxDBBackend', () => {
 	describe('static properties', () => {
 		it('has type "backend"', () => {
@@ -47,21 +47,19 @@ describe('RxDBBackend', () => {
 	});
 
 	describe('buildUrl', () => {
-		it('constructs the correct jsDelivr CDN URL', () => {
-			const backend = createBackend();
+		it.each([PINNED, ROLLING])('constructs the correct jsDelivr CDN URL for %s', (version) => {
+			const backend = createBackend(createCache(), { rolling: version === ROLLING });
 			const url = backend.buildUrl('fr_CA', 'core');
 			expect(url).toBe(
-				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_CA/monorepo/core.json`
+				`https://cdn.jsdelivr.net/gh/wcpos/translations@${version}/translations/js/fr_CA/monorepo/core.json`
 			);
 		});
 	});
 
 	describe('read — cache behavior', () => {
-		itPinned('returns cached translations immediately without fetching', () => {
+		it('returns cached translations immediately without fetching', () => {
 			const cached = { 'pos_cart.add_to_cart': 'Ajouter au panier' };
-			const backend = createBackend({
-				translationsState: { [`fr_CA@${TRANSLATION_VERSION}`]: cached },
-			});
+			const backend = createBackend(createCache({ [`fr_CA@${PINNED}`]: cached }));
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -70,11 +68,9 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		itPinned('returns cached falsy translations without fetching', () => {
+		it('returns cached falsy translations without fetching', () => {
 			const cached = '';
-			const backend = createBackend({
-				translationsState: { [`fr_CA@${TRANSLATION_VERSION}`]: cached },
-			});
+			const backend = createBackend(createCache({ [`fr_CA@${PINNED}`]: cached }));
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -83,15 +79,12 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		itRolling('fetches fresh translations even when the rolling version is cached', async () => {
+		it('fetches fresh translations even when the rolling version is cached', async () => {
 			const cached = { 'common.cancel': 'Ancienne traduction' };
 			const freshData = { 'common.cancel': 'Nouvelle traduction' };
 			mockFetchResponse(freshData);
-			const translationsState = {
-				[`fr_CA@${TRANSLATION_VERSION}`]: cached,
-				set: jest.fn(),
-			};
-			const backend = createBackend({ translationsState });
+			const cache = createCache({ [`fr_CA@${ROLLING}`]: cached });
+			const backend = createBackend(cache, { rolling: true });
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
 
@@ -101,48 +94,37 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(callback).toHaveBeenCalledTimes(1);
 			expect(callback).toHaveBeenCalledWith(null, freshData);
-			expect(translationsState.set).toHaveBeenCalledWith(
-				`fr_CA@${TRANSLATION_VERSION}`,
-				expect.any(Function)
-			);
-			expect(translationsState.set.mock.calls[0][1]()).toEqual(freshData);
+			expect(cache.set).toHaveBeenCalledWith(`fr_CA@${ROLLING}`, freshData, cached);
 		});
 
-		itRolling(
-			'does not rewrite the cache when the rolling fetch returns what is stored',
-			async () => {
-				const cached = { 'common.cancel': 'Annuler' };
-				mockFetchResponse({ ...cached });
-				const translationsState = {
-					[`fr_CA@${TRANSLATION_VERSION}`]: cached,
-					set: jest.fn(),
-				};
-				const backend = createBackend({ translationsState });
-				const callback = jest.fn();
-				backend.read('fr_CA', 'core', callback);
+		// The cache skips an unchanged catalogue by comparing it with this snapshot; the skip
+		// itself is pinned in packages/query/tests/user-db/state.test.ts.
+		it('hands the cache the fetch-start snapshot when the rolling fetch returns what is stored', async () => {
+			const cached = { 'common.cancel': 'Annuler' };
+			mockFetchResponse({ ...cached });
+			const cache = createCache({ [`fr_CA@${ROLLING}`]: cached });
+			const backend = createBackend(cache, { rolling: true });
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
 
-				await new Promise((r) => setTimeout(r, 0));
+			await new Promise((r) => setTimeout(r, 0));
 
-				expect(mockFetch).toHaveBeenCalledTimes(1);
-				expect(callback).toHaveBeenCalledWith(null, cached);
-				expect(translationsState.set).not.toHaveBeenCalled();
-			}
-		);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith(null, cached);
+			expect(cache.set).toHaveBeenCalledTimes(1);
+			expect(cache.set.mock.calls[0][2]).toBe(cached);
+		});
 
-		itRolling('fetches a rolling ref once per backend and then serves the cache', async () => {
+		it('fetches a rolling ref once per backend and then serves the cache', async () => {
 			const freshData = { 'common.cancel': 'Nouvelle traduction' };
 			mockFetchResponse(freshData);
-			const translationsState: Record<string, unknown> & { set: jest.Mock } = {
-				set: jest.fn((key: string, next: () => unknown) => {
-					translationsState[key] = next();
-				}),
-			};
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache, { rolling: true });
 			const first = jest.fn();
 			backend.read('fr_CA', 'core', first);
 			await new Promise((r) => setTimeout(r, 0));
 			expect(first).toHaveBeenCalledWith(null, freshData);
-			expect(translationsState.set).toHaveBeenCalledTimes(1);
+			expect(cache.set).toHaveBeenCalledTimes(1);
 
 			// The write wakes the app state; the read it provokes must not fetch or write again.
 			const second = jest.fn();
@@ -151,10 +133,10 @@ describe('RxDBBackend', () => {
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(second).toHaveBeenCalledWith(null, freshData);
-			expect(translationsState.set).toHaveBeenCalledTimes(1);
+			expect(cache.set).toHaveBeenCalledTimes(1);
 		});
 
-		itRolling.each(['network error', 'missing translations'])(
+		it.each(['network error', 'missing translations'])(
 			'falls back to the rolling cache on %s',
 			async (failure) => {
 				const cached = { 'common.cancel': 'Annuler' };
@@ -164,11 +146,8 @@ describe('RxDBBackend', () => {
 					mockFetchResponse(null);
 					mockFetchResponse(null);
 				}
-				const translationsState = {
-					[`fr_CA@${TRANSLATION_VERSION}`]: cached,
-					set: jest.fn(),
-				};
-				const backend = createBackend({ translationsState });
+				const cache = createCache({ [`fr_CA@${ROLLING}`]: cached });
+				const backend = createBackend(cache, { rolling: true });
 				const callback = jest.fn();
 				backend.read('fr_CA', 'core', callback);
 
@@ -177,7 +156,7 @@ describe('RxDBBackend', () => {
 				expect(mockFetch).toHaveBeenCalledTimes(failure === 'network error' ? 1 : 2);
 				expect(callback).toHaveBeenCalledTimes(1);
 				expect(callback).toHaveBeenCalledWith(null, cached);
-				expect(translationsState.set).not.toHaveBeenCalled();
+				expect(cache.set).not.toHaveBeenCalled();
 			}
 		);
 
@@ -186,11 +165,8 @@ describe('RxDBBackend', () => {
 			const freshData = { 'common.cancel': 'Nouvelle traduction' };
 			mockFetchResponse(freshData);
 
-			const translationsState = {
-				fr_CA: staleCached,
-				set: jest.fn(),
-			};
-			const backend = createBackend({ translationsState });
+			const cache = createCache({ fr_CA: staleCached });
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -200,10 +176,7 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(callback).toHaveBeenCalledWith(null, freshData);
 			expect(callback).not.toHaveBeenCalledWith(null, staleCached);
-			expect(translationsState.set).toHaveBeenCalledWith(
-				`fr_CA@${TRANSLATION_VERSION}`,
-				expect.any(Function)
-			);
+			expect(cache.set).toHaveBeenCalledWith(`fr_CA@${PINNED}`, freshData, undefined);
 		});
 	});
 
@@ -212,8 +185,8 @@ describe('RxDBBackend', () => {
 			const frCAData = { 'common.cancel': 'Annuler (CA)' };
 			mockFetchResponse(frCAData);
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -223,10 +196,7 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/fr_CA/monorepo/core.json'));
 			expect(callback).toHaveBeenCalledWith(null, frCAData);
-			expect(translationsState.set).toHaveBeenCalledWith(
-				`fr_CA@${TRANSLATION_VERSION}`,
-				expect.any(Function)
-			);
+			expect(cache.set).toHaveBeenCalledWith(`fr_CA@${PINNED}`, frCAData, undefined);
 		});
 
 		it('falls back to base language (fr) when regional locale (fr_CA) is empty', async () => {
@@ -234,8 +204,8 @@ describe('RxDBBackend', () => {
 			const frData = { 'common.cancel': 'Annuler' };
 			mockFetchResponse(frData); // fr returns data
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -253,10 +223,7 @@ describe('RxDBBackend', () => {
 			);
 			expect(callback).toHaveBeenCalledWith(null, frData);
 			// Caches under original language + version key so we don't re-fetch fr_CA next time
-			expect(translationsState.set).toHaveBeenCalledWith(
-				`fr_CA@${TRANSLATION_VERSION}`,
-				expect.any(Function)
-			);
+			expect(cache.set).toHaveBeenCalledWith(`fr_CA@${PINNED}`, frData, undefined);
 		});
 
 		it('falls back to base language (fr) when regional locale (fr_CA) returns 404', async () => {
@@ -264,8 +231,8 @@ describe('RxDBBackend', () => {
 			const frData = { 'common.cancel': 'Annuler' };
 			mockFetchResponse(frData); // fr returns data
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -280,8 +247,8 @@ describe('RxDBBackend', () => {
 			mockFetchResponse(null); // fr_CA 404
 			mockFetchResponse(null); // fr 404
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -291,14 +258,14 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 			// Returns empty object — i18next will use bundled en.json fallback
 			expect(callback).toHaveBeenCalledWith(null, {});
-			expect(translationsState.set).not.toHaveBeenCalled();
+			expect(cache.set).not.toHaveBeenCalled();
 		});
 
 		it('returns empty without base fallback for non-regional locales (e.g. "xx")', async () => {
 			mockFetchResponse(null); // xx 404
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('xx', 'core', callback);
@@ -315,8 +282,8 @@ describe('RxDBBackend', () => {
 		it('returns empty on network error (triggers en fallback)', async () => {
 			mockFetch.mockRejectedValue(new Error('Network error'));
 
-			const translationsState = { set: jest.fn() };
-			const backend = createBackend({ translationsState });
+			const cache = createCache();
+			const backend = createBackend(cache);
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
@@ -324,21 +291,7 @@ describe('RxDBBackend', () => {
 			await new Promise((r) => setTimeout(r, 0));
 
 			expect(callback).toHaveBeenCalledWith(null, {});
-			expect(translationsState.set).not.toHaveBeenCalled();
-		});
-
-		it('works when translationsState is null', async () => {
-			mockFetchResponse(null);
-
-			const backend = createBackend({ translationsState: null });
-
-			const callback = jest.fn();
-			backend.read('fr', 'core', callback);
-
-			await new Promise((r) => setTimeout(r, 0));
-
-			// Should not throw
-			expect(callback).toHaveBeenCalledWith(null, {});
+			expect(cache.set).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -25,7 +25,9 @@ jobs:
           VERSION: ${{ github.event.client_payload.version }}
         run: |
           echo "Updating translation version to $VERSION"
-          sed -i "s/TRANSLATION_VERSION = '.*'/TRANSLATION_VERSION = '${VERSION}'/" packages/core/src/contexts/translations/rxdb-backend.ts
+          FILE=packages/core/src/contexts/translations/translation-version.json
+          jq --tab --arg v "$VERSION" '.version = $v' "$FILE" > "$FILE.tmp"
+          mv "$FILE.tmp" "$FILE"
 
       - name: Create PR
         env:
@@ -34,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/core/src/contexts/translations/rxdb-backend.ts
+          git add packages/core/src/contexts/translations/translation-version.json
           if ! git diff --staged --quiet; then
             BRANCH="chore/translation-version-${VERSION}"
             git checkout -b "$BRANCH"
