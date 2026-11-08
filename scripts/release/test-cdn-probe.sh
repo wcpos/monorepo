@@ -124,6 +124,16 @@ run_probe 1
 contains "stale mirror build fails" 'FAIL mirror 2.0: build_id build-999 is neither current nor previous of lane 2.0 (build-123 build-122)' "$tmpdir/out"
 
 reset_case
+printf '{"build_id":"build-123 build-122"}' > "$MOCK_DIR/mirror/1/body"
+run_probe 1
+contains "a build_id spanning both ids is not a match" 'FAIL mirror 2.0: build_id build-123 build-122 is neither current nor previous' "$tmpdir/out"
+
+reset_case
+printf '{}' > "$MOCK_DIR/versions/1/body"
+run_probe 1
+contains "a 200 that names no builds fails the mirror line" 'FAIL mirror 2.0: build_id build-123 is neither current nor previous of lane 2.0 (versions.json names no builds)' "$tmpdir/out"
+
+reset_case
 printf 500 > "$MOCK_DIR/versions/1/status"
 printf '{"build_id":"build-999"}' > "$MOCK_DIR/mirror/1/body"
 run_probe 0

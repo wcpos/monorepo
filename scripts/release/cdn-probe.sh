@@ -36,10 +36,12 @@ probe_once() (
 		jq -e '.build_id | type == "string" and length > 0' "$tmpdir/body" >/dev/null 2>&1 || {
 			echo 'invalid JSON or missing non-empty build_id'; return 1;
 		}
-		if [[ "$what" == 'mirror 2.0' && -n "$allowed" ]]; then
+		if [[ "$what" == 'mirror 2.0' && "$allowed" != skip ]]; then
 			build_id=$(jq -r '.build_id' "$tmpdir/body")
-			if [[ " $allowed " != *" $build_id "* ]]; then
-				echo "build_id $build_id is neither current nor previous of lane 2.0 ($allowed)"
+			local id match=false
+			for id in $allowed; do [[ "$id" == "$build_id" ]] && match=true; done
+			if [[ "$match" == false ]]; then
+				echo "build_id $build_id is neither current nor previous of lane 2.0 (${allowed:-versions.json names no builds})"
 				return 1
 			fi
 		fi
@@ -61,11 +63,13 @@ probe_with_retry() {
 
 main() {
 	local lane what url result failures="" verdict=0 issue run_url body
-	local allowed='' tmpdir code
+	# `skip` = the lane pointer could not be read (the manifest line already alarms for that);
+	# a 200 that names no builds is a real finding and leaves the list empty, which fails the mirror line.
+	local allowed=skip tmpdir code
 	if tmpdir=$(mktemp -d); then
 		if code=$(curl -g -sS --max-time "$CURL_MAX_TIME" -D "$tmpdir/headers" \
 			-o "$tmpdir/body" -w '%{http_code}' "$VERSIONS_URL" 2> "$tmpdir/error") && [[ "$code" == 200 ]]; then
-			allowed=$(jq -r '[.lanes["2.0"] | .current, .previous | select(. != null)] | join(" ")' \
+			allowed=$(jq -r '[.lanes["2.0"]? | .current?, .previous? | strings] | join(" ")' \
 				"$tmpdir/body" 2>/dev/null) || allowed=''
 		fi
 		rm -rf "$tmpdir"
