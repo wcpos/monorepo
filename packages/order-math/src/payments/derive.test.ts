@@ -2,7 +2,7 @@
  * These fixtures pin the balance and status decisions shared with the server ledger.
  */
 
-import { derive } from './derive';
+import { allowedOrderStatuses, derive } from './derive';
 
 import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
 
@@ -342,5 +342,29 @@ describe('derive', () => {
 			balance: '0.00',
 			status: 'pos-open',
 		});
+	});
+});
+
+describe('allowedOrderStatuses', () => {
+	const base = ['pos-open', 'pending', 'on-hold', 'cancelled'] as const;
+
+	it('hides Cancelled when a row counts toward paid', () => {
+		expect(allowedOrderStatuses(base, 'pos-open', [row({ amount: '10.00' })])).toEqual([
+			'pos-open',
+			'pending',
+			'on-hold',
+		]);
+	});
+
+	it('keeps Cancelled when unpaid', () => {
+		expect(allowedOrderStatuses(base, 'pos-open', [])).toEqual(base);
+	});
+
+	it('keeps the current Cancelled status even when paid', () => {
+		expect(allowedOrderStatuses(base, 'cancelled', [row({ amount: '10.00' })])).toEqual(base);
+	});
+
+	it.each(['voided', 'failed'] as const)('does not hide Cancelled for a %s row', (status) => {
+		expect(allowedOrderStatuses(base, 'pos-open', [row({ status })])).toEqual(base);
 	});
 });

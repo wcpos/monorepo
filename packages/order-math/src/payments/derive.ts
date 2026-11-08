@@ -15,6 +15,16 @@ export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
 	return COUNTING_STATUSES.has(row.status);
 }
 
+/** Captured money was taken: the exits are completing the sale or a refund, never Cancelled. */
+export function allowedOrderStatuses(
+	base: readonly string[],
+	currentStatus: string,
+	rows: readonly PaymentRow[]
+): string[] {
+	const paid = rows.some(countsTowardPaid);
+	return base.filter((status) => status !== 'cancelled' || !paid || status === currentStatus);
+}
+
 /** Σ succeeded refund allocations over every row (wire rows may omit `refunds`). */
 function refunded(payments: readonly PaymentRow[], dp: number): number {
 	return payments.reduce((sum, row) => {

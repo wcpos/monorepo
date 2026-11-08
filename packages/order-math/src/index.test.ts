@@ -7,6 +7,7 @@ test('public value surface is exactly the spec', () => {
 			.sort()
 	).toEqual([
 		'activeAwaitingCustomer',
+		'allowedOrderStatuses',
 		'calculateCartLine',
 		'captureEntry',
 		'countsTowardPaid',
