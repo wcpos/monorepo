@@ -167,6 +167,16 @@ describe('split V1 entry', () => {
 });
 
 describe('tenderReducer', () => {
+	it('picks-changed ends percent entry and makes the picks the entry again (Codex on #3412)', () => {
+		const percent = tenderReducer(
+			{ ...initialTenderState, view: 'amount', entryDirty: true },
+			{ type: 'set-entry-mode', mode: 'percent' }
+		);
+		expect(tenderReducer(percent, { type: 'picks-changed' })).toMatchObject({
+			entryMode: 'money',
+			entryDirty: false,
+		});
+	});
 	it('replaces the pre-fill on the first digit, then shifts later digits in from the right', () => {
 		const picked = tenderReducer(initialTenderState, {
 			type: 'pick-method',

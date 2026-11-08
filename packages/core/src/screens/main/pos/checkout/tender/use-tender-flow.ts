@@ -904,13 +904,11 @@ export function useTenderFlow(
 			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
 			// of a short split must come back with the plan, or that leg wipes the split record.
 			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
-			// The allocation frozen at the press wins: picks made while a terminal leg waited belong
-			// to the next payment, not to the one settling (Greptile on #3412).
-			const stored = getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {};
-			if (legUnits && !stored[row.id])
-				setAllocations(order.uuid, { ...stored, [row.id]: legUnits });
+			// A leg's allocation is frozen at the press (`freezePicks`, every manual and terminal leg);
+			// nothing is read from the picks when it settles, or units picked while a terminal
+			// payment waited would land on it (Greptile and Codex on #3412). A gateway leg carries none.
 		},
-		[order, state, dp, byId, actor, orderContext, legUnits, reducerDispatch]
+		[order, state, dp, byId, actor, orderContext, reducerDispatch]
 	);
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */

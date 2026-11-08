@@ -1447,8 +1447,10 @@ describe('useTenderFlow', () => {
 		// A plan turns the store's Split on: the bill (the other column) is the picker.
 		expect(result.current.splitOn).toBe(true);
 		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(true);
-		const first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
-		mockRecordManualPayment.mockImplementationOnce(async () => {
+		// The row lands under the id the flow minted and froze the allocation with, as the writer does.
+		let first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
+		mockRecordManualPayment.mockImplementationOnce(async (_order, _method, input) => {
+			first = { ...first, id: input.paymentId ?? first.id };
 			mockPayload.meta_data = withLedger([], [first]);
 			return { ...recorded, row: first };
 		});
@@ -2274,7 +2276,17 @@ describe('server tender', () => {
 		renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => {});
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ frozen: { 1: 1 } });
+		// An amount-only leg froze nothing: its settlement adopts no picks either (Codex on #3412).
 		setAllocations(order.uuid, null);
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			row: payment({ id: 'plain', capture_mode: 'device', status: 'captured' }),
+		});
+		mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: false };
+		renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {});
+		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toBeUndefined();
 		setPickedUnits(order.uuid, null);
 	});
 	it('a terminal leg freezes its picked units under the minted row id before the entry clears (Codex on #3400)', async () => {
