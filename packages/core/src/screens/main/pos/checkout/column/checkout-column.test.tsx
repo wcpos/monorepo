@@ -446,22 +446,29 @@ it('offers whole-order cancellation after a final terminal result, not while liv
 });
 // Ledger line 23: the column hosts the Legacy tab like the modal, so a terminal leg on
 // screen keeps the pane when the cashier picks Legacy.
-it('keeps the terminal leg on screen when the Legacy tab is picked', () => {
-	mockFlow = makeFlow({
-		state: { ...initialTenderState, tab: 'legacy' },
-		hasLiveLeg: true,
-		hasLiveTerminalLeg: true,
-		terminalLeg: {
-			phase: 'polling',
-			outcome: null,
-			row: { method_id: 'card', amount: '5.00', provider_refs: {} },
-			clientEvents: [],
-		} as unknown as NonNullable<TenderFlow['terminalLeg']>,
-	});
-	mountColumn();
-	expect(screen.getByTestId('checkout-terminal-leg')).not.toBeNull();
-	expect(screen.queryByTestId('legacy-tab')).toBeNull();
-});
+// A final leg is no longer live but still on screen, so the guard reads terminalLeg, as the modal's does.
+it.each([
+	['polling', null, true],
+	['final', 'failed', false],
+] as const)(
+	'keeps the %s terminal leg on screen when the Legacy tab is picked',
+	(phase, outcome, live) => {
+		mockFlow = makeFlow({
+			state: { ...initialTenderState, tab: 'legacy' },
+			hasLiveLeg: live,
+			hasLiveTerminalLeg: live,
+			terminalLeg: {
+				phase,
+				outcome,
+				row: { method_id: 'card', amount: '5.00', provider_refs: {} },
+				clientEvents: [],
+			} as unknown as NonNullable<TenderFlow['terminalLeg']>,
+		});
+		mountColumn();
+		expect(screen.getByTestId('checkout-terminal-leg')).not.toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
+	}
+);
 
 it('shows a title skeleton while saving an unnumbered order', () => {
 	mockNumber = '';
