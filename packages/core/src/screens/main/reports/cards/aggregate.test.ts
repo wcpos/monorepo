@@ -284,6 +284,12 @@ describe('tenders', () => {
 			orders: 1,
 		});
 	});
+	it('an order with no method that needs no payment is the unknown tender', () => {
+		const rows = orders([{ total: '15', needs_payment: false }]);
+		expect(tenders(rows, totals(rows), 2)).toEqual([
+			{ key: 'unknown', label: '', amount: 15, orders: 1, share: 1 },
+		]);
+	});
 	it('a ledger row that is not captured is not a tender', () => {
 		const rows = orders([
 			{

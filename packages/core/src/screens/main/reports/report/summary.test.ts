@@ -1,6 +1,9 @@
 import { createTestT } from '../../../../../jest/translate';
+import { tenders } from '../cards/aggregate';
 import { summarySpec } from './summary';
 import { calculateTotals } from './utils';
+
+import type { ReportOrder } from '../context';
 
 const t = createTestT();
 const formats = {
@@ -24,6 +27,7 @@ const orders = ['cash', 'card'].map((method) => ({
 const inputs = () => ({
 	totals: calculateTotals({ orders }),
 	orders: 2,
+	payments: tenders(orders as ReportOrder[], calculateTotals({ orders }), 2),
 	registerNames: { front: 'Front', back: 'Back' },
 	cashierNames: { '7': 'Priya', '8': 'Alex' },
 	num_decimals: 2,
@@ -113,4 +117,40 @@ it('includes shipping and cashier names, with empty cells left empty', () => {
 		raw: ['pickup', '', 2],
 		cells: ['pickup', '', '£2.00'],
 	});
+});
+// A split sale printed under one method, or Taken counting what is owed, puts the paper at odds
+// with the Payments card and panel, which read the same ledger rows.
+it('prints a split sale by tender from the ledger, and Taken leaves out what is unpaid', () => {
+	const split = [
+		{
+			total: '100',
+			payment_method: 'pos_cash',
+			payment_method_title: 'Cash drawer',
+			meta_data: [
+				{
+					key: '_wcpos_payments',
+					value: JSON.stringify({
+						schema: 1,
+						payments: [
+							{ id: 'a', kind: 'cash', method_id: 'pos_cash', status: 'captured', amount: '40' },
+							{ id: 'b', kind: 'card', method_id: 'stripe', status: 'captured', amount: '60' },
+						],
+					}),
+				},
+			],
+		},
+		{ total: '25', needs_payment: true },
+	] as ReportOrder[];
+	const totals = calculateTotals({ orders: split });
+	const group = summarySpec(
+		{ ...inputs(), totals, orders: 2, payments: tenders(split, totals, 2) },
+		t,
+		formats
+	).groups?.find((group) => group.key === 'payments');
+	expect(group?.rows.map((row) => row.cells)).toEqual([
+		['stripe', '', '£60.00'],
+		['Cash drawer', '', '£40.00'],
+		['UNPAID', '', '£25.00'],
+	]);
+	expect(group?.totalRaw).toEqual(['Taken', '', 100]);
 });

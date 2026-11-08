@@ -2,6 +2,7 @@ import sumBy from 'lodash/sumBy';
 
 import { refundsSummary } from '../cards/aggregate';
 
+import type { tenders } from '../cards/aggregate';
 import type { RefundRow } from '../context';
 import type { PanelSpec } from '../panels/specs';
 import type { useReportFormats } from '../use-report-formats';
@@ -10,6 +11,8 @@ import type { calculateTotals } from './utils';
 type Inputs = {
 	totals: ReturnType<typeof calculateTotals>;
 	orders: number;
+	/** The period's tenders from the payment ledger: the rows the Payments card and panel show. */
+	payments: ReturnType<typeof tenders>;
 	periodRefunds?: RefundRow[];
 	registerNames: Record<string, string>;
 	cashierNames: Record<string, string>;
@@ -21,7 +24,16 @@ type Inputs = {
 	num_decimals?: number;
 };
 export function summarySpec(
-	{ totals, orders, periodRefunds, registerNames, cashierNames, stores, num_decimals }: Inputs,
+	{
+		totals,
+		orders,
+		payments,
+		periodRefunds,
+		registerNames,
+		cashierNames,
+		stores,
+		num_decimals,
+	}: Inputs,
 	t: (key: string) => string,
 	{
 		money,
@@ -44,6 +56,11 @@ export function summarySpec(
 		groups.push({ key, label, rows, total: subtotal.cells, totalRaw: subtotal.raw });
 	};
 	const totalLabel = t('reports.total_sales_line');
+	const tenderLabels: Record<string, string> = {
+		cash: t('common.cash'),
+		unpaid: t('reports.unpaid'),
+		unknown: t('common.unknown'),
+	};
 	const refunded =
 		periodRefunds === undefined
 			? totals.refundTotal
@@ -65,19 +82,24 @@ export function summarySpec(
 	group(
 		'payments',
 		t('reports.payment_methods'),
-		totals.paymentMethodsArray.map((method) =>
+		payments.map((tender) =>
 			row(
-				method.payment_method,
-				method.payment_method === 'unpaid'
-					? t('reports.unpaid')
-					: method.payment_method === 'unknown'
-						? t('common.unknown')
-						: method.payment_method_title,
+				tender.key,
+				tender.label || tenderLabels[tender.key] || t('common.unknown'),
 				'',
-				method.total
+				tender.amount
 			)
 		),
-		row('total', t('reports.taken'), '', sumBy(totals.paymentMethodsArray, 'total'))
+		// Taken is money taken: what an order still owes is not in it.
+		row(
+			'total',
+			t('reports.taken'),
+			'',
+			sumBy(
+				payments.filter((tender) => tender.key !== 'unpaid'),
+				'amount'
+			)
+		)
 	);
 	if (totals.taxTotalsArray.length)
 		group(
